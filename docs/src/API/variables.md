@@ -1,8 +1,22 @@
-# [Symbolic Metadata](@id symbolic_metadata)
+# Symbolic variables and variable metadata
 
-It is possible to add metadata to symbolic variables, the metadata will be displayed when calling help on a variable.
+ModelingToolkit uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) for the symbolic
+manipulation infrastructure. In fact, the `@variables` macro is defined in Symbolics.jl. In
+addition to `@variables`, ModelingToolkit defines `@parameters`, `@independent_variables`,
+`@constants` and `@brownians`. These macros function identically to `@variables` but allow
+ModelingToolkit to attach additional metadata.
 
-The following information can be added (note, it's possible to extend this to user-defined metadata as well)
+```@docs
+Symbolics.@variables
+@independent_variables
+@parameters
+@constants
+@brownians
+```
+
+Symbolic variables can have metadata attached to them. The defaults and guesses assigned
+at variable construction time are examples of this metadata. ModelingToolkit also defines
+additional types of metadata.
 
 ## Variable descriptions
 
@@ -39,6 +53,11 @@ help?> u
   Symbolics.VariableSource: (:variables, :u)
 ```
 
+```@docs
+hasdescription
+getdescription
+```
+
 ## Connect
 
 Variables in connectors can have `connect` metadata which describes the type of connections.
@@ -61,6 +80,16 @@ hasconnect(i)
 getconnect(k)
 ```
 
+```@docs
+hasconnect
+getconnect
+```
+
+```@docs; canonical = false
+Flow
+Stream
+```
+
 ## Input or output
 
 Designate a variable as either an input or an output using the following
@@ -78,16 +107,20 @@ isinput(u)
 isoutput(y)
 ```
 
+```@docs
+isinput
+isoutput
+ModelingToolkit.setinput
+ModelingToolkit.setoutput
+```
+
 ## Bounds
 
 Bounds are useful when parameters are to be optimized, or to express intervals of uncertainty.
 
-```@example metadata
-@variables u [bounds = (-1, 1)]
+```@repl metadata
+@variables u [bounds = (-1, 1)];
 hasbounds(u)
-```
-
-```@example metadata
 getbounds(u)
 ```
 
@@ -95,51 +128,45 @@ Bounds can also be specified for array variables. A scalar array bound is applie
 element of the array. A bound may also be specified as an array, in which case the size of
 the array must match the size of the symbolic variable.
 
-```@example metadata
-@variables x[1:2, 1:2] [bounds = (-1, 1)]
+```@repl metadata
+@variables x[1:2, 1:2] [bounds = (-1, 1)];
 hasbounds(x)
-```
-
-```@example metadata
 getbounds(x)
-```
-
-```@example metadata
 getbounds(x[1, 1])
-```
-
-```@example metadata
 getbounds(x[1:2, 1])
-```
-
-```@example metadata
-@variables x[1:2] [bounds = (-Inf, [1.0, Inf])]
+@variables x[1:2] [bounds = (-Inf, [1.0, Inf])];
 hasbounds(x)
-```
-
-```@example metadata
 getbounds(x)
-```
-
-```@example metadata
 getbounds(x[2])
+hasbounds(x[2])
 ```
 
-```@example metadata
-hasbounds(x[2])
+```@docs
+hasbounds
+getbounds
 ```
 
 ## Guess
 
-Specify an initial guess for custom initial conditions of an `ODESystem`.
+Specify an initial guess for variables of a `System`. This is used when building the
+[`InitializationProblem`](@ref).
 
-```@example metadata
-@variables u [guess = 1]
+```@repl metadata
+@variables u [guess = 1];
 hasguess(u)
+getguess(u)
 ```
 
-```@example metadata
-getguess(u)
+```@docs
+hasguess
+getguess
+```
+
+When a system is constructed, the guesses of the involved variables are stored in a `Dict`
+in the system. After this point, the guess metadata of the variable is irrelevant.
+
+```@docs; canonical = false
+guesses
 ```
 
 ## Mark input as a disturbance
@@ -151,6 +178,10 @@ Indicate that an input is not available for control, i.e., it's a disturbance in
 isdisturbance(u)
 ```
 
+```@docs
+isdisturbance
+```
+
 ## Mark parameter as tunable
 
 Indicate that a parameter can be automatically tuned by parameter optimization or automatic control tuning apps.
@@ -160,20 +191,32 @@ Indicate that a parameter can be automatically tuned by parameter optimization o
 istunable(Kp)
 ```
 
+```@docs
+istunable
+ModelingToolkit.isconstant
+```
+
+!!! note
+    
+    [`@constants`](@ref) is a convenient way to create `@parameters` with `tunable = false`
+    metadata
+
 ## Probability distributions
 
 A probability distribution may be associated with a parameter to indicate either
 uncertainty about its value, or as a prior distribution for Bayesian optimization.
 
-```julia
-using Distributions
-d = Normal(10, 1)
-@parameters m [dist = d]
+```@repl metadata
+using Distributions;
+d = Normal(10, 1);
+@parameters m [dist = d];
 hasdist(m)
+getdist(m)
 ```
 
-```julia
-getdist(m)
+```@docs
+hasdist
+getdist
 ```
 
 ## Irreducible
@@ -187,6 +230,10 @@ it can be accessed in [callbacks](@ref events)
 isirreducible(important_value)
 ```
 
+```@docs
+isirreducible
+```
+
 ## State Priority
 
 When a model is structurally simplified, the algorithm will try to ensure that the variables with higher state priority become states of the system. A variable's state priority is a number set using the `state_priority` metadata.
@@ -196,18 +243,24 @@ When a model is structurally simplified, the algorithm will try to ensure that t
 state_priority(important_dof)
 ```
 
+```@docs
+state_priority
+```
+
 ## Units
 
 Units for variables can be designated using symbolic metadata. For more information, please see the [model validation and units](@ref units) section of the docs. Note that `getunit` is not equivalent to `get_unit` - the former is a metadata getter for individual variables (and is provided so the same interface function for `unit` exists like other metadata), while the latter is used to handle more general symbolic expressions.
 
-```@example metadata
-using DynamicQuantities
-@variables speed [unit = u"m/s"]
+```@repl metadata
+using DynamicQuantities;
+@variables speed [unit = u"m/s"];
 hasunit(speed)
+getunit(speed)
 ```
 
-```@example metadata
-getunit(speed)
+```@docs
+hasunit
+getunit
 ```
 
 ## Miscellaneous metadata
@@ -215,13 +268,23 @@ getunit(speed)
 User-defined metadata can be added using the `misc` metadata. This can be queried
 using the `hasmisc` and `getmisc` functions.
 
-```@example metadata
-@variables u [misc = :conserved_parameter] y [misc = [2, 4, 6]]
+```@repl metadata
+@variables u [misc = :conserved_parameter] y [misc = [2, 4, 6]];
 hasmisc(u)
+getmisc(y)
 ```
 
-```@example metadata
-getmisc(y)
+```@docs
+hasmisc
+getmisc
+```
+
+## Dumping metadata
+
+ModelingToolkit allows dumping the metadata of a variable as a `NamedTuple`.
+
+```@docs
+ModelingToolkit.dump_variable_metadata
 ```
 
 ## Additional functions
@@ -250,25 +313,52 @@ lb, ub = getbounds(p) # operating on a vector, we get lower and upper bound vect
 b = getbounds(sys) # Operating on the system, we get a dict
 ```
 
-See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref),
-[`ModelingToolkit.dump_unknowns`](@ref).
+See also:
 
-## Index
-
-```@index
-Pages = ["Variable_metadata.md"]
+```@docs; canonical = false
+tunable_parameters
+ModelingToolkit.dump_unknowns
+ModelingToolkit.dump_parameters
 ```
 
-## Docstrings
+## Symbolic operators
 
-```@autodocs
-Modules = [ModelingToolkit]
-Pages = ["variables.jl"]
-Private = false
-```
+ModelingToolkit makes heavy use of "operators". These are custom functions that are applied
+to symbolic variables. The most common operator is the `Differential` operator, defined in
+Symbolics.jl.
 
 ```@docs
-ModelingToolkit.dump_variable_metadata
-ModelingToolkit.dump_parameters
-ModelingToolkit.dump_unknowns
+Symbolics.Differential
+```
+
+ModelingToolkit also defines a plethora of custom operators.
+
+```@docs
+Pre
+Initial
+Shift
+```
+
+While not an operator, `ShiftIndex` is commonly used to use `Shift` operators in a more
+convenient way when writing discrete systems.
+
+```@docs
+ShiftIndex
+```
+
+### Sampled time operators
+
+The following operators are used in hybrid ODE systems, where part of the dynamics of the
+system happen at discrete intervals on a clock. While ModelingToolkit cannot yet simulate
+such systems, it has the capability to represent them.
+
+!!! warn
+    
+    These operators are considered experimental API.
+
+```@docs
+Sample
+Hold
+SampleTime
+sampletime
 ```
