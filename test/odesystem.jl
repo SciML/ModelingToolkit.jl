@@ -1008,11 +1008,37 @@ for sys in [sys1, sys2]
     end
 end
 
-@testset "Non-1-indexed variable array (issue #2670)" begin
-    @variables x(t)[0:1] # 0-indexed variable array
+@testset "Non-1-indexed variable array (issue #2670 + #3659)" begin
+    # 0-indexed vector
+    @variables x(t)[0:1]
     @named sys = System([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
     @test_nowarn sys = mtkcompile(sys)
     @test equations(sys) == [D(x[1]) ~ 0.0]
+
+    # 1-indexed vector
+    @variables x(t)[1:3]
+    @named M = System([D(x[i]) ~ 0 for i in eachindex(x)], t)
+    prob = ODEProblem(mtkcompile(M), [x[1] => 1, x[2] => 2, x[3] => 3], (0.0, 1.0))
+    @test prob[x[1]] == 1
+    @test prob[x[2]] == 2
+    @test prob[x[3]] == 3
+
+    # non-1-indexed vector
+    @variables x(t)[3:5]
+    @named M = System([D(x[i]) ~ 0 for i in eachindex(x)], t)
+    prob = ODEProblem(mtkcompile(M), [x[3] => 3, x[4] => 4, x[5] => 5], (0.0, 1.0))
+    @test prob[x[3]] == 3
+    @test prob[x[4]] == 4
+    @test prob[x[5]] == 5
+
+    # non-(1,1)-indexed matrix
+    @variables x(t)[3:4,7:8]
+    @named M = System(vec([D(x[i]) ~ 0 for i in eachindex(x)]), t)
+    prob = ODEProblem(mtkcompile(M), [x[3,7] => 37, x[3,8] => 38, x[4,7] => 47, x[4,8] => 48], (0.0, 1.0))
+    @test prob[x[3,7]] == 37
+    @test prob[x[3,8]] == 38
+    @test prob[x[4,7]] == 47
+    @test prob[x[4,8]] == 48
 end
 
 # Namespacing of array variables
