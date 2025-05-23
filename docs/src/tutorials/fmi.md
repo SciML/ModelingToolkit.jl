@@ -76,7 +76,7 @@ initialization semantics.
 We can simulate this model like any other ModelingToolkit system.
 
 ```@repl fmi
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 prob = ODEProblem(sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 5.0))
 sol = solve(prob, Tsit5())
 ```
@@ -105,11 +105,11 @@ constant until the next time the callback triggers. The periodic interval must b
 `communication_step_size` keyword argument. A smaller step size typically leads to less error but is
 more computationally expensive.
 
-This model alone does not have any differential variables, and calling `structural_simplify` will lead
+This model alone does not have any differential variables, and calling `mtkcompile` will lead
 to an `ODESystem` with no unknowns.
 
 ```@example fmi
-structural_simplify(inner)
+mtkcompile(inner)
 ```
 
 Simulating this model will cause the OrdinaryDiffEq integrator to immediately finish, and will not
@@ -117,7 +117,7 @@ trigger the callback. Thus, we wrap this system in a trivial system with a diffe
 
 ```@example fmi
 @variables x(t) = 1.0
-@mtkbuild sys = ODESystem([D(x) ~ x], t; systems = [inner])
+@mtkcompile sys = System([D(x) ~ x], t; systems = [inner])
 ```
 
 We can now simulate `sys`.
@@ -184,7 +184,7 @@ metadata. We can now use this component as a subcomponent of a larger system.
 
 ```@repl fmi
 @variables a(t) b(t) c(t) [guess = 1.0];
-@mtkbuild sys = ODESystem(
+@mtkcompile sys = System(
     [adder.a ~ a, adder.b ~ b, D(a) ~ t,
         D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
     t;
@@ -198,8 +198,9 @@ FMUs in initialization to solve for initial states. As mentioned earlier, we can
 through an FMU. Thus, automatic differentiation has to be disabled for the solver.
 
 ```@example fmi
-prob = ODEProblem(sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0],
-    (0.0, 1.0), [sys.adder.value => 2.0])
+prob = ODEProblem(
+    sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
+    (0.0, 1.0))
 solve(prob, Rodas5P(autodiff = false))
 ```
 
@@ -217,12 +218,13 @@ fmu = loadFMU(
 @named adder = ModelingToolkit.FMIComponent(
     Val(2); fmu, type = :CS, communication_step_size = 1e-3,
     reinitializealg = BrownFullBasicInit())
-@mtkbuild sys = ODESystem(
+@mtkcompile sys = System(
     [adder.a ~ a, adder.b ~ b, D(a) ~ t,
         D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
     t;
     systems = [adder])
-prob = ODEProblem(sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0],
-    (0.0, 1.0), [sys.adder.value => 2.0])
+prob = ODEProblem(
+    sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
+    (0.0, 1.0))
 solve(prob, Rodas5P())
 ```

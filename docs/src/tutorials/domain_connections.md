@@ -20,7 +20,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         dm(t), [connect = Flow]
     end
 
-    ODESystem(Equation[], t, vars, pars; name, defaults = [dm => 0])
+    System(Equation[], t, vars, pars; name, defaults = [dm => 0])
 end
 nothing #hide
 ```
@@ -47,7 +47,7 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
         dm ~ 0
     ]
 
-    ODESystem(eqs, t, vars, pars; name, defaults = [dm => 0])
+    System(eqs, t, vars, pars; name, defaults = [dm => 0])
 end
 nothing #hide
 ```
@@ -63,7 +63,7 @@ Now, we can connect a `HydraulicFluid` component to any `HydraulicPort` connecto
 
     eqs = [port.p ~ p]
 
-    ODESystem(eqs, t, [], pars; name, systems)
+    System(eqs, t, [], pars; name, systems)
 end
 
 @component function FixedVolume(; vol, p_int, name)
@@ -89,7 +89,7 @@ end
            rho ~ port.ρ * (1 + p / port.β)
            dm ~ drho * vol]
 
-    ODESystem(eqs, t, vars, pars; name, systems)
+    System(eqs, t, vars, pars; name, systems)
 end
 nothing #hide
 ```
@@ -97,7 +97,7 @@ nothing #hide
 When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.
 
 ```@example domain
-@component function System(; name)
+@component function HydraulicSystem(; name)
     systems = @named begin
         src = FixedPressure(; p = 200e5)
         vol = FixedVolume(; vol = 0.1, p_int = 200e5)
@@ -108,17 +108,17 @@ When the system is defined we can generate a fluid component and connect it to t
     eqs = [connect(fluid, src.port)
            connect(src.port, vol.port)]
 
-    ODESystem(eqs, t, [], []; systems, name)
+    System(eqs, t, [], []; systems, name)
 end
 
-@named odesys = System()
+@named odesys = HydraulicSystem()
 nothing #hide
 ```
 
-To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
+To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `mtkcompile()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
 
 ```@repl domain
-sys = structural_simplify(odesys)
+sys = mtkcompile(odesys)
 ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]
 ```
 
@@ -151,7 +151,7 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
            port_a.dm ~ +(port_a.ρ) * dx * area
            port_b.dm ~ -(port_b.ρ) * dx * area]
 
-    ODESystem(eqs, t, vars, pars; name, systems)
+    System(eqs, t, vars, pars; name, systems)
 end
 nothing #hide
 ```
@@ -174,14 +174,14 @@ A system with 2 different fluids is defined and connected to each separate domai
            connect(src_a.port, act.port_a)
            connect(src_b.port, act.port_b)]
 
-    ODESystem(eqs, t, [], []; systems, name)
+    System(eqs, t, [], []; systems, name)
 end
 
 @named actsys2 = ActuatorSystem2()
 nothing #hide
 ```
 
-After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
+After running `mtkcompile()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfere with the mathematical equations of the system, since no unknown variables are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
@@ -198,7 +198,7 @@ After running `structural_simplify()` on `actsys2`, the defaults will show that 
            connect(src_a.port, act.port_a)
            connect(src_b.port, act.port_b)]
 
-    ODESystem(eqs, t, [], []; systems, name)
+    System(eqs, t, [], []; systems, name)
 end
 
 @named actsys1 = ActuatorSystem1()
@@ -224,7 +224,7 @@ In some cases a component will be defined with 2 connectors of the same domain, 
     eqs = [port_a.dm ~ (port_a.p - port_b.p) * K
            0 ~ port_a.dm + port_b.dm]
 
-    ODESystem(eqs, t, [], pars; systems, name)
+    System(eqs, t, [], pars; systems, name)
 end
 nothing #hide
 ```
@@ -245,14 +245,14 @@ Adding the `Restrictor` to the original system example will cause a break in the
            connect(src.port, res.port_a)
            connect(res.port_b, vol.port)]
 
-    ODESystem(eqs, t, [], []; systems, name)
+    System(eqs, t, [], []; systems, name)
 end
 
-@mtkbuild ressys = RestrictorSystem()
+@mtkcompile ressys = RestrictorSystem()
 nothing #hide
 ```
 
-When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
+When `mtkcompile()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
 ```@repl domain
 ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
@@ -278,10 +278,10 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
            port_a.dm ~ (port_a.p - port_b.p) * K
            0 ~ port_a.dm + port_b.dm]
 
-    ODESystem(eqs, t, [], pars; systems, name)
+    System(eqs, t, [], pars; systems, name)
 end
 
-@mtkbuild ressys = RestrictorSystem()
+@mtkcompile ressys = RestrictorSystem()
 nothing #hide
 ```
 
