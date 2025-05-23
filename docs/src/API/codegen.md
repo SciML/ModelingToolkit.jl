@@ -1,0 +1,45 @@
+# Code generation utilities
+
+These are lower-level functions that ModelingToolkit leverages to generate code for
+building numerical problems.
+
+```@docs
+ModelingToolkit.generate_rhs
+ModelingToolkit.generate_diffusion_function
+ModelingToolkit.generate_jacobian
+ModelingToolkit.generate_tgrad
+ModelingToolkit.generate_hessian
+ModelingToolkit.generate_W
+ModelingToolkit.generate_dae_jacobian
+ModelingToolkit.generate_history
+ModelingToolkit.generate_boundary_conditions
+ModelingToolkit.generate_cost
+ModelingToolkit.generate_cost_gradient
+ModelingToolkit.generate_cost_hessian
+ModelingToolkit.generate_cons
+ModelingToolkit.generate_constraint_jacobian
+ModelingToolkit.generate_constraint_hessian
+ModelingToolkit.generate_control_jacobian
+ModelingToolkit.build_explicit_observed_function
+```
+
+For functions such as jacobian calculation which require symbolic computation, there
+are `calculate_*` equivalents to obtain the symbolic result without building a function.
+
+```@docs
+ModelingToolkit.calculate_tgrad
+ModelingToolkit.calculate_jacobian
+ModelingToolkit.jacobian_sparsity
+ModelingToolkit.jacobian_dae_sparsity
+ModelingToolkit.calculate_hessian
+ModelingToolkit.hessian_sparsity
+ModelingToolkit.calculate_massmatrix
+ModelingToolkit.W_sparsity
+ModelingToolkit.calculate_W_prototype
+ModelingToolkit.calculate_cost_gradient
+ModelingToolkit.calculate_cost_hessian
+ModelingToolkit.cost_hessian_sparsity
+ModelingToolkit.calculate_constraint_jacobian
+ModelingToolkit.calculate_constraint_hessian
+ModelingToolkit.calculate_control_jacobian
+```
