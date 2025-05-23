@@ -955,6 +955,14 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
+"""
+    Base.getproperty(sys::AbstractSystem, name::Symbol)
+
+Access the subsystem, variable or analysis point of `sys` named `name`. To check if `sys`
+will namespace the returned value, use `ModelingToolkit.does_namespacing(sys)`.
+
+See also: [`ModelingToolkit.does_namespacing`](@ref).
+"""
 function Base.getproperty(
         sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
