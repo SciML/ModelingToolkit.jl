@@ -898,13 +898,9 @@ $(TYPEDFIELDS)
 """
 struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
-    The `u0map` used to construct the initialization.
+    The operating point used to construct the initialization.
     """
-    u0map::Dict{Any, Any}
-    """
-    The `pmap` used to construct the initialization.
-    """
-    pmap::Dict{Any, Any}
+    op::Dict{Any, Any}
     """
     The `guesses` used to construct the initialization.
     """
@@ -1019,14 +1015,14 @@ end
     $(TYPEDSIGNATURES)
 
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
-to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`,
-user-provided `u0map` and `pmap`, initial time `t`, system defaults `defs`, user-provided
-`guesses`, and list of unknowns which don't have a value in `op`. The keyword `implicit_dae`
-denotes whether the `SciMLProblem` being constructed is in implicit DAE form (`DAEProblem`).
-All other keyword arguments are forwarded to `InitializationProblem`.
+to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`, initial
+time `t`, system defaults `defs`, user-provided `guesses`, and list of unknowns which don't
+have a value in `op`. The keyword `implicit_dae` denotes whether the `SciMLProblem` being
+constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments are forwarded
+to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, u0map, pmap, t, defs,
+        sys::AbstractSystem, iip, op::AbstractDict, t, defs,
         guesses, missing_unknowns; implicit_dae = false,
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
@@ -1038,7 +1034,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
-        sys, t, u0map, pmap; guesses, time_dependent_init, initialization_eqs,
+        sys, t, op; guesses, time_dependent_init, initialization_eqs,
         use_scc, u0_constructor, p_constructor, kwargs...)
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1072,7 +1068,7 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        u0map, pmap, guesses, Vector{Equation}(initialization_eqs),
+        copy(op), copy(guesses), Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor, p_constructor),
@@ -1108,7 +1104,7 @@ function maybe_build_initialization_problem(
     end
 
     for p in punknowns
-        is_parameter_solvable(p, pmap, defs, guesses) || continue
+        is_parameter_solvable(p, op, defs, guesses) || continue
         get(op, p, missing) === missing || continue
         p = unwrap(p)
         op[p] = getu(initializeprob, p)(initializeprob)
@@ -1281,7 +1277,7 @@ function process_SciMLProblem(
     u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
-        add_observed_equations!(u0map, obs)
+        add_observed_equations!(op, obs)
     end
     if u0_constructor === identity && u0Type <: StaticArray
         u0_constructor = vals -> SymbolicUtils.Code.create_array(
@@ -1295,7 +1291,7 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, u0map, pmap, t, defs, guesses, missing_unknowns;
+            op, t, defs, guesses, missing_unknowns;
             implicit_dae, warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,

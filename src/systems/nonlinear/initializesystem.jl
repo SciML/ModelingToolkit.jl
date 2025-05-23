@@ -564,11 +564,11 @@ function SciMLBase.remake_initialization_data(
     defs = defaults(sys)
     use_scc = true
     initialization_eqs = Equation[]
+    op = anydict()
 
     if oldinitdata !== nothing && oldinitdata.metadata isa InitializationMetadata
         meta = oldinitdata.metadata
-        u0map = merge(meta.u0map, u0map)
-        pmap = merge(meta.pmap, pmap)
+        op = copy(meta.op)
         merge!(guesses, meta.guesses)
         use_scc = meta.use_scc
         initialization_eqs = meta.additional_initialization_eqs
@@ -612,11 +612,9 @@ function SciMLBase.remake_initialization_data(
     if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
-    filter_missing_values!(u0map)
-    filter_missing_values!(pmap)
+    merge!(op, u0map, pmap)
+    filter_missing_values!(op)
 
-    merge!(u0map, pmap)
-    op = u0map
     u0map = anydict()
     pmap = anydict()
     missing_unknowns, missing_pars = build_operating_point!(sys, op,
@@ -632,7 +630,7 @@ function SciMLBase.remake_initialization_data(
             typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
     end
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, u0map, pmap, t0, defs, guesses,
+        sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
         missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
         u0_constructor, p_constructor, allow_incomplete = true)
 
