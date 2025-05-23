@@ -76,8 +76,10 @@ function MTK.CasADiDynamicOptProblem(sys::System, u0map, tspan, pmap;
         steps = nothing,
         guesses = Dict(), kwargs...)
     MTK.warn_overdetermined(sys, u0map)
-    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
-    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
+    _u0map = has_alg_eqs(sys) ? MTK.to_varmap(u0map, unknowns(sys)) :
+             merge(Dict(u0map), Dict(guesses))
+    pmap = MTK.to_varmap(pmap, parameters(sys))
+    f, u0, p = MTK.process_SciMLProblem(ODEInputFunction, sys, merge(_u0map, pmap);
         t = tspan !== nothing ? tspan[1] : tspan, output_type = MX, kwargs...)
 
     pmap = MTK.recursive_unwrap(MTK.AnyDict(pmap))
