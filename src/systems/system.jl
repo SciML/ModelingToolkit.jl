@@ -301,6 +301,22 @@ function default_consolidate(costs, subcosts)
     return reduce(+, costs; init = 0.0) + reduce(+, subcosts; init = 0.0)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Construct a system using the given equations `eqs`, independent variable `iv` (`nothing`)
+for time-independent systems, unknowns `dvs`, parameters `ps` and brownian variables
+`brownians`.
+
+## Keyword Arguments
+
+- `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
+  system to obtain defaults and/or guesses.
+- `checks`: Whether to perform sanity checks on the passed values.
+
+All other keyword arguments are named identically to the corresponding fields in
+[`System`](@ref).
+"""
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = [],
         costs = BasicSymbolic[], consolidate = default_consolidate,
@@ -394,10 +410,23 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         initializesystem, is_initializesystem; checks)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Create a time-independent [`System`](@ref) with the given equations `eqs`, unknowns `dvs`
+and parameters `ps`.
+"""
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     System(eqs, nothing, dvs, ps; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Create a time-dependent system with the given equations `eqs` and independent variable `iv`.
+Discover variables, parameters and brownians in the system by parsing the equations and
+other symbolic expressions passed to the system.
+"""
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
 
@@ -486,6 +515,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Create a time-independent system with the given equations `eqs`. Discover variables and
+parameters in the system by parsing the equations and other symbolic expressions passed to
+the system.
+"""
 function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
 
@@ -516,6 +552,11 @@ function System(eqs::Vector{Equation}; kwargs...)
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Create a `System` with a single equation `eq`.
+"""
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
 function gather_array_params(ps)
