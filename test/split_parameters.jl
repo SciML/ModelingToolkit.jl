@@ -82,7 +82,7 @@ eqs = [y ~ src.output.u
 
 @named sys = System(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 prob = ODEProblem(
     sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
     tofloat = false)
@@ -108,7 +108,7 @@ eqs = [D(y) ~ dy * a
        ddy ~ sin(t) * c]
 
 @named model = System(eqs, t, vars, pars)
-sys = structural_simplify(model; split = false)
+sys = mtkcompile(model; split = false)
 
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, []; build_initializeprob = false)
@@ -236,7 +236,7 @@ end
         (::Foo)(x) = 3x
         @variables x(t)
         @parameters fn(::Real) = _f1
-        @mtkbuild sys = System(D(x) ~ fn(t), t)
+        @mtkcompile sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
         @test ModelingToolkit.defaults(sys)[fn] == _f1
 
@@ -260,7 +260,7 @@ end
         interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
-        @mtkbuild sys = System(D(x) ~ fn(x), t)
+        @mtkcompile sys = System(D(x) ~ fn(x), t)
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])

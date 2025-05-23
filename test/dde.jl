@@ -38,7 +38,7 @@ eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 
        D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
                (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
 prob = DDEProblem(sys,
@@ -81,7 +81,7 @@ sol = solve(prob, RKMil(), seed = 100)
 @brownian η
 τ = 1.0
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η, delx ~ x(t - τ)]
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 @test ModelingToolkit.has_observed_with_lhs(sys, delx)
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
@@ -119,11 +119,11 @@ eqs = [osc1.jcn ~ osc2.delx,
 @test ModelingToolkit.is_dde(coupledOsc2)
 @test !is_markovian(coupledOsc2)
 for coupledOsc in [coupledOsc, coupledOsc2]
-    local sys = structural_simplify(coupledOsc)
+    local sys = mtkcompile(coupledOsc)
     @test length(equations(sys)) == 4
     @test length(unknowns(sys)) == 4
 end
-sys = structural_simplify(coupledOsc)
+sys = mtkcompile(coupledOsc)
 prob = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ])
 sol = solve(prob, MethodOfSteps(Tsit5()))
 obsfn = ModelingToolkit.build_explicit_observed_function(
@@ -162,7 +162,7 @@ prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc
         return System([D(x) ~ dx], t; name = name)
     end
 
-    @mtkbuild ssys = System(
+    @mtkcompile ssys = System(
         Equation[], t; systems = [valve(name = :valve), veccy(name = :vvecs)])
     prob = DDEProblem(ssys, [ssys.valve.opening => 1.0], (0.0, 1.0))
     sol = solve(prob, MethodOfSteps(Tsit5()))
@@ -178,7 +178,7 @@ end
     eqs = [D(x(t)) ~ -w * x(t - τ)]
 
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     prob = DDEProblem(sys,
         [],
@@ -191,7 +191,7 @@ end
     @brownian r
     eqs = [D(x(t)) ~ -w * x(t - τ) + r]
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = SDDEProblem(sys,
         [],
         (0.0, 10.0),

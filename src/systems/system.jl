@@ -739,7 +739,7 @@ end
 
 function Base.showerror(io::IO, err::SystemNotCompleteError)
     print(io, """
-    A completed system is required. Call `complete` or `structural_simplify` on the \
+    A completed system is required. Call `complete` or `mtkcompile` on the \
     system before creating a `$(err.obj)`.
     """)
 end

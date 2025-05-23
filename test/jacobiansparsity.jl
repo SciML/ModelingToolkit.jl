@@ -91,7 +91,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = System(eqs, t)
+    @mtkcompile pend = System(eqs, t)
 
     u0 = [x => 1, y => 0]
     prob = ODEProblem(
@@ -125,7 +125,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    @mtkbuild pend = System(eqs, t)
+    @mtkcompile pend = System(eqs, t)
     prob = ODEProblem(pend, [x => 0.0, D(x) => 1.0], (0.0, 1.0), [g => 1.0];
         guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true)
     J = deepcopy(prob.f.jac_prototype)

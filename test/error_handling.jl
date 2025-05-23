@@ -43,7 +43,7 @@ rc_eqs = [connect(source.p, resistor.p)
           connect(capacitor.n, source.n)]
 
 @named rc_model = System(rc_eqs, t, systems = [resistor, capacitor, source])
-@test_throws ModelingToolkit.ExtraVariablesSystemException structural_simplify(rc_model)
+@test_throws ModelingToolkit.ExtraVariablesSystemException mtkcompile(rc_model)
 
 @named source2 = OverdefinedConstantVoltage(V = V, I = V / R)
 rc_eqs2 = [connect(source2.p, resistor.p)
@@ -51,4 +51,4 @@ rc_eqs2 = [connect(source2.p, resistor.p)
            connect(capacitor.n, source2.n)]
 
 @named rc_model2 = System(rc_eqs2, t, systems = [resistor, capacitor, source2])
-@test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(rc_model2)
+@test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(rc_model2)

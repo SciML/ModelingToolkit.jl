@@ -6,7 +6,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @variables X(t)
     @parameters p d
     eqs = [D(X) ~ p - d * X]
-    @mtkbuild osys = System(eqs, t)
+    @mtkcompile osys = System(eqs, t)
 
     p = "I accidentally renamed p"
     u0 = [X => 1.0]
@@ -23,7 +23,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @variables x(t) y(t) z(t)
     @parameters a b c d
     eqs = [D(x) ~ x * a, D(y) ~ y * c, D(z) ~ b + d]
-    @mtkbuild sys = System(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     pmap = [a => 1, b => 2, c => 3, d => 4, "b" => 2]
     u0map = [x => 1, y => 2, z => 3]
     @test_throws InvalidKeyError ODEProblem(sys, u0map, (0.0, 1.0), pmap)

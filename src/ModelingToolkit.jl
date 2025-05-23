@@ -214,6 +214,7 @@ include("structural_transformation/StructuralTransformations.jl")
 include("inputoutput.jl")
 
 include("adjoints.jl")
+include("deprecations.jl")
 
 const t_nounits = let
     only(@independent_variables t)
@@ -233,7 +234,7 @@ PrecompileTools.@compile_workload begin
     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
     @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
-    prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
+    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), [], jac = true)
     @mtkmodel __testmod__ begin
         @constants begin
             c = 1.0
@@ -288,7 +289,7 @@ export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
 export initial_state, transition, activeState, entry, ticksInState, timeInState
-export @component, @mtkmodel, @mtkbuild
+export @component, @mtkmodel, @mtkcompile, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,
@@ -304,8 +305,8 @@ export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, controls, observed, full_equations, jumps, cost,
        brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
-export structural_simplify, expand_connections, linearize, linearization_function,
-       LinearizationProblem
+export mtkcompile, expand_connections, linearize, linearization_function,
+       LinearizationProblem, structural_simplify
 export solve
 export Pre
 

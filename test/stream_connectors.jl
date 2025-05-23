@@ -134,7 +134,7 @@ eqns = [domain_connect(fluid, n1m1.port_a)
 
 @named n1m1Test = System(eqns, t, [], []; systems = [fluid, n1m1, pipe, sink])
 
-@test_nowarn structural_simplify(n1m1Test)
+@test_nowarn mtkcompile(n1m1Test)
 @unpack source, port_a = n1m1
 ssort(eqs) = sort(eqs, by = string)
 @test ssort(equations(expand_connections(n1m1))) == ssort([0 ~ port_a.m_flow
@@ -205,7 +205,7 @@ eqns = [connect(n1m2.port_a, sink1.port)
 
 @named sys = System(eqns, t)
 @named n1m2Test = compose(sys, n1m2, sink1, sink2)
-@test_nowarn structural_simplify(n1m2Test)
+@test_nowarn mtkcompile(n1m2Test)
 
 @named n1m2 = N1M2()
 @named pipe1 = AdiabaticStraightPipe()
@@ -220,7 +220,7 @@ eqns = [connect(n1m2.port_a, pipe1.port_a)
 
 @named sys = System(eqns, t)
 @named n1m2AltTest = compose(sys, n1m2, pipe1, pipe2, sink1, sink2)
-@test_nowarn structural_simplify(n1m2AltTest)
+@test_nowarn mtkcompile(n1m2AltTest)
 
 # N2M2 model and test code.
 function N2M2(; name,
@@ -249,7 +249,7 @@ eqns = [connect(source.port, n2m2.port_a)
 
 @named sys = System(eqns, t)
 @named n2m2Test = compose(sys, n2m2, source, sink)
-@test_nowarn structural_simplify(n2m2Test)
+@test_nowarn mtkcompile(n2m2Test)
 
 # stream var
 @named sp1 = TwoPhaseFluidPort()
@@ -472,7 +472,7 @@ csys = complete(two_fluid_system)
 @test Symbol(sys_defs[csys.volume_a.H.rho]) == Symbol(csys.fluid_a.rho)
 @test Symbol(sys_defs[csys.volume_b.H.rho]) == Symbol(csys.fluid_b.rho)
 
-@test_nowarn structural_simplify(two_fluid_system)
+@test_nowarn mtkcompile(two_fluid_system)
 
 function OneFluidSystem(; name)
     pars = []
@@ -510,4 +510,4 @@ csys = complete(one_fluid_system)
 @test Symbol(sys_defs[csys.volume_a.H.rho]) == Symbol(csys.fluid.rho)
 @test Symbol(sys_defs[csys.volume_b.H.rho]) == Symbol(csys.fluid.rho)
 
-@test_nowarn structural_simplify(one_fluid_system)
+@test_nowarn mtkcompile(one_fluid_system)

@@ -279,7 +279,7 @@ ps = [k => 1.0]
 @test_nowarn jp3 = JumpProblem(js3, u0, tspan, ps; aggregator = Direct())
 @test_nowarn jp4 = JumpProblem(js4, u0, tspan; aggregator = Direct())
 
-# Ensure `structural_simplify` (and `@mtkbuild`) works on JumpSystem (by doing nothing)
+# Ensure `mtkcompile` (and `@mtkcompile`) works on JumpSystem (by doing nothing)
 # Issue#2558
 @parameters k
 @variables X(t)
@@ -287,7 +287,7 @@ rate = k
 affect = [X ~ Pre(X) - 1]
 
 j1 = ConstantRateJump(k, [X ~ Pre(X) - 1])
-@test_nowarn @mtkbuild js1 = JumpSystem([j1], t, [X], [k])
+@test_nowarn @mtkcompile js1 = JumpSystem([j1], t, [X], [k])
 
 # test correct autosolver is selected, which implies appropriate dep graphs are available
 @testset "Autosolver test" begin
@@ -550,7 +550,7 @@ end
     j2 = ConstantRateJump(rate2, affect2)
 
     # Works.
-    @mtkbuild js = JumpSystem([j1, j2], t, [X], [p, d])
+    @mtkcompile js = JumpSystem([j1, j2], t, [X], [p, d])
     jprob = JumpProblem(
         js, [X => 15], (0.0, 10.0), [p => 2.0, d => 0.5]; aggregator = Direct())
     sol = solve(jprob, SSAStepper())

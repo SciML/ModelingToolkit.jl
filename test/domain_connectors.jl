@@ -148,7 +148,7 @@ esys = ModelingToolkit.expand_connections(odesys)
 
 csys = complete(odesys)
 
-sys = structural_simplify(odesys)
+sys = mtkcompile(odesys)
 @test length(equations(sys)) == length(unknowns(sys))
 
 sys_defs = ModelingToolkit.defaults(sys)

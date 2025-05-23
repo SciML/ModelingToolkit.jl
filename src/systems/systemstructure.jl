@@ -24,7 +24,7 @@ function quick_cancel_expr(expr)
             kws...))(expr)
 end
 
-export SystemStructure, TransformationState, TearingState, structural_simplify!
+export SystemStructure, TransformationState, TearingState, mtkcompile!
 export isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
@@ -695,7 +695,7 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
-function structural_simplify!(state::TearingState; simplify = false,
+function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
@@ -723,13 +723,13 @@ function structural_simplify!(state::TearingState; simplify = false,
         state.structure.only_discrete = true
     end
 
-    sys = _structural_simplify!(state; simplify, check_consistency,
+    sys = _mtkcompile!(state; simplify, check_consistency,
         inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
     return sys
 end
 
-function _structural_simplify!(state::TearingState; simplify = false,
+function _mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
         dummy_derivative = true,
         inputs = Any[], outputs = Any[],

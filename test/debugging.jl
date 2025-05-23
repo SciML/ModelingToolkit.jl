@@ -6,8 +6,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 @brownian a
 @named inner_ode = System(D(x) ~ -sqrt(x), t; assertions = [(x > 0) => "ohno"])
 @named inner_sde = System([D(x) ~ -10sqrt(x) + 0.01a], t; assertions = [(x > 0) => "ohno"])
-sys_ode = structural_simplify(inner_ode)
-sys_sde = structural_simplify(inner_sde)
+sys_ode = mtkcompile(inner_ode)
+sys_sde = mtkcompile(inner_sde)
 SEED = 42
 
 @testset "assertions are present in generated `f`" begin
@@ -42,7 +42,7 @@ end
         (System, ODEProblem, inner_ode, Tsit5()),
         (System, SDEProblem, inner_sde, ImplicitEM())]
         kwargs = Problem == SDEProblem ? (; seed = SEED) : (;)
-        @mtkbuild outer = ctor(Equation[], t; systems = [inner])
+        @mtkcompile outer = ctor(Equation[], t; systems = [inner])
         dsys = debug_system(outer; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [inner.x => 0.1], (0.0, 5.0); kwargs...)

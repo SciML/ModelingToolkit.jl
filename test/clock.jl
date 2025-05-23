@@ -65,10 +65,10 @@ By inference:
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-sss = ModelingToolkit._structural_simplify!(
+sss = ModelingToolkit._mtkcompile!(
     deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
 @test equations(sss) == [D(x) ~ u - x]
-sss = ModelingToolkit._structural_simplify!(
+sss = ModelingToolkit._mtkcompile!(
     deepcopy(tss[1]), inputs = inputs[1], outputs = [])
 @test isempty(equations(sss))
 d = Clock(dt)
@@ -116,7 +116,7 @@ eqs = [yd ~ Sample(dt)(y)
        D(x) ~ -x + u
        y ~ x]
 @named sys = System(eqs, t)
-@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=structural_simplify(sys);
+@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=mtkcompile(sys);
 
 @test_skip begin
     Tf = 1.0
@@ -129,7 +129,7 @@ eqs = [yd ~ Sample(dt)(y)
         [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
-    ss_nosplit = structural_simplify(sys; split = false)
+    ss_nosplit = mtkcompile(sys; split = false)
     prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
         [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
     int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
@@ -295,8 +295,8 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[y] == ContinuousClock()
     @test varmap[u] == ContinuousClock()
 
-    ss = structural_simplify(cl)
-    ss_nosplit = structural_simplify(cl; split = false)
+    ss = mtkcompile(cl)
+    ss_nosplit = mtkcompile(cl; split = false)
 
     if VERSION >= v"1.7"
         prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
@@ -427,7 +427,7 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[_model.feedback.output.u] == d
     @test varmap[_model.feedback.input2.u] == d
 
-    ssys = structural_simplify(model)
+    ssys = mtkcompile(model)
 
     Tf = 0.2
     timevec = 0:(d.dt):Tf
@@ -518,7 +518,7 @@ eqs = [yd ~ Sample(dt)(y)
         end
     end
 
-    @mtkbuild model = FirstOrderWithStepCounter()
+    @mtkcompile model = FirstOrderWithStepCounter()
     prob = ODEProblem(model, [], (0.0, 10.0))
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
@@ -529,7 +529,7 @@ eqs = [yd ~ Sample(dt)(y)
     @variables x(t)=1.0 y(t)=1.0
     eqs = [D(y) ~ Hold(x)
            x ~ x(k - 1) + x(k - 2)]
-    @mtkbuild sys = System(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     prob = ODEProblem(sys, [], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 2.0

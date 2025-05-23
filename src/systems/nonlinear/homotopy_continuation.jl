@@ -491,7 +491,7 @@ function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
-        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationFunction`")
+        error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationFunction`")
     end
     transformation = PolynomialTransformation(sys)
     if transformation isa NotPolynomialError
@@ -552,7 +552,7 @@ function HomotopyContinuationProblem{iip, spec}(
         sys::System, u0map, pmap = SciMLBase.NullParameters();
         kwargs...) where {iip, spec}
     if !iscomplete(sys)
-        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `HomotopyContinuationProblem`")
+        error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationProblem`")
     end
     f, u0, p = process_SciMLProblem(
         HomotopyNonlinearFunction{iip, spec}, sys, u0map, pmap; kwargs...)

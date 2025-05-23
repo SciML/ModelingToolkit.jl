@@ -74,7 +74,7 @@ Any extra equations `eqs` involving the new and old independent variables will b
 # Usage before structural simplification
 
 The variable change must take place before structural simplification.
-In following calls to `structural_simplify`, consider passing `allow_symbolic = true` to avoid undesired constraint equations between between dummy variables.
+In following calls to `mtkcompile`, consider passing `allow_symbolic = true` to avoid undesired constraint equations between between dummy variables.
 
 # Usage with non-autonomous systems
 
@@ -99,7 +99,7 @@ julia> @named M = System([D(D(y)) ~ -9.81, D(D(x)) ~ 0.0], t);
 
 julia> M = change_independent_variable(M, x);
 
-julia> M = structural_simplify(M; allow_symbolic = true);
+julia> M = mtkcompile(M; allow_symbolic = true);
 
 julia> unknowns(M)
 3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
@@ -248,7 +248,7 @@ function stochastic_integral_transform(sys::System, correction_factor)
         throw(ArgumentError("""
         `$stochastic_integral_transform` expects a system with noise_eqs. If your \
         noise is specified using brownian variables, consider calling \
-        `structural_simplify`.
+        `mtkcompile`.
         """))
     end
     name = nameof(sys)

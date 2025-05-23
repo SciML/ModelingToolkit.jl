@@ -84,7 +84,7 @@ end
             z ~ y - x^2
             z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())
@@ -323,7 +323,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x = 1.0
-    @mtkbuild sys = OptimizationSystem((x - 3)^2, [x], [])
+    @mtkcompile sys = OptimizationSystem((x - 3)^2, [x], [])
     prob = @test_nowarn OptimizationProblem(sys, nothing)
     @test_nowarn solve(prob, NelderMead())
 end
@@ -335,14 +335,14 @@ end
     obj = x^2 + y^2 + z^2
     cons = [y ~ 2x
             z ~ 2y]
-    @mtkbuild sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
+    @mtkcompile sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
     @test is_variable(sys, z)
     @test !is_variable(sys, y)
 
     @variables x[1:3] [bounds = ([-Inf, -1.0, -2.0], [Inf, 1.0, 2.0])]
     obj = x[1]^2 + x[2]^2 + x[3]^2
     cons = [x[2] ~ 2x[1] + 3, x[3] ~ x[1] + x[2]]
-    @mtkbuild sys = OptimizationSystem(obj, [x], []; constraints = cons)
+    @mtkcompile sys = OptimizationSystem(obj, [x], []; constraints = cons)
     @test length(unknowns(sys)) == 2
     @test !is_variable(sys, x[1])
     @test is_variable(sys, x[2])
@@ -352,7 +352,7 @@ end
 @testset "Constraints work with nonnumeric parameters" begin
     @variables x
     @parameters p f(::Real)
-    @mtkbuild sys = OptimizationSystem(
+    @mtkcompile sys = OptimizationSystem(
         x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p])
     prob = OptimizationProblem(sys, [x => 1.0], [p => 1.0, f => (x -> 2x)])
     @test abs(prob.f.cons(prob.u0, prob.p)[1]) ≈ 1.0

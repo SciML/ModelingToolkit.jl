@@ -9,7 +9,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(z) ~ x * y - β * z]
 
 @named sys = System(eqs, t)
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 
 u0 = @SVector [D(x) => 2.0,
     x => 1.0,

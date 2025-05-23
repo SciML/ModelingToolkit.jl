@@ -113,24 +113,24 @@ noiseeqs = [0.1us"W" 0.1us"W"
 eqs = [D(L) ~ v,
     V ~ L^3]
 @named sys = System(eqs, t)
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
 @named sys = System(eqs, t)
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
 @named sys = System(eqs, [V, L], [t, r])
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
 @named sys = System(eqs, [V, L], [t, r, v])
-sys_simple = structural_simplify(sys)
+sys_simple = mtkcompile(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] jumpmol [
@@ -211,7 +211,7 @@ end
             x^2 + y^2 ~ L^2
         end
     end
-    @mtkbuild pend = PendulumUnits()
+    @mtkcompile pend = PendulumUnits()
     u0 = [pend.x => 1.0, pend.y => 0.0]
     p = [pend.g => 1.0, pend.L => 1.0]
     guess = [pend.λ => 0.0]
@@ -279,7 +279,7 @@ using DynamicQuantities
     end
 end
 
-@mtkbuild pend = UnitsExample()
+@mtkcompile pend = UnitsExample()
 @test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) ==
       [u"m/s", u"m/s"]
 end

@@ -21,7 +21,7 @@ u0 = [x => zeros(3),
 ps = [p => zeros(3, 3),
     q => 1.0]
 tspan = (0.0, 10.0)
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 prob = ODEProblem(sys, u0, tspan, ps)
 sol = solve(prob, Tsit5())
 
@@ -47,7 +47,7 @@ end
             Th0 => (4 / 11)^(1 / 3) * Tγ0,
             Tγ0 => (15 / π^2 * ργ0 * (2 * h)^2 / 7)^(1 / 4) / 5
         ])
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     function x_at_0(θ)
         prob = ODEProblem(sys, [sys.x => 1.0], (0.0, 1.0), [sys.ργ0 => θ[1], sys.h => θ[2]])
@@ -113,7 +113,7 @@ fwd, back = ChainRulesCore.rrule(remake_buffer, sys, ps, idxs, vals)
     eqs = [D(D(y)) ~ -9.81]
     initialization_eqs = [y^2 ~ 0] # initialize y = 0 in a way that builds an initialization problem
     @named sys = System(eqs, t; initialization_eqs)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     # Find initial throw velocity that reaches exactly 10 m after 1 s
     dprob0 = ODEProblem(sys, [D(y) => NaN], (0.0, 1.0), []; guesses = [y => 0.0])
@@ -129,7 +129,7 @@ end
 
 @testset "`sys.var` is non-differentiable" begin
     @variables x(t)
-    @mtkbuild sys = System(D(x) ~ x, t)
+    @mtkcompile sys = System(D(x) ~ x, t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
 
     grad = Zygote.gradient(prob) do prob

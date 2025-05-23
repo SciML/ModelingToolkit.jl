@@ -13,9 +13,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
         end
     end
     @named sys = SimpleAbs()
-    ss1 = structural_simplify(sys)
+    ss1 = mtkcompile(sys)
     @test length(equations(ss1)) == 1
-    ss2 = structural_simplify(sys, additional_passes = [IfLifting])
+    ss2 = mtkcompile(sys, additional_passes = [IfLifting])
     @test length(equations(ss2)) == 1
     @test length(parameters(ss2)) == 1
     @test operation(only(equations(ss2)).rhs) === ifelse
@@ -71,7 +71,7 @@ end
     end
 
     @named sys = BigModel()
-    ss = structural_simplify(sys, additional_passes = [IfLifting])
+    ss = mtkcompile(sys, additional_passes = [IfLifting])
 
     ps = parameters(ss)
     @test length(ps) == 9
@@ -111,7 +111,7 @@ end
     end
 end
 
-@testset "`@mtkbuild` macro accepts `additional_passes`" begin
+@testset "`@mtkcompile` macro accepts `additional_passes`" begin
     @mtkmodel SimpleAbs begin
         @variables begin
             x(t)
@@ -122,7 +122,7 @@ end
             y ~ sin(t)
         end
     end
-    @test_nowarn @mtkbuild sys=SimpleAbs() additional_passes=[IfLifting]
+    @test_nowarn @mtkcompile sys=SimpleAbs() additional_passes=[IfLifting]
 end
 
 @testset "Nested conditions are handled properly" begin
@@ -144,8 +144,8 @@ end
             D(x) ~ y
         end
     end
-    @mtkbuild sys = RampModel()
-    @mtkbuild sys2=RampModel() additional_passes=[IfLifting]
+    @mtkcompile sys = RampModel()
+    @mtkcompile sys2=RampModel() additional_passes=[IfLifting]
     prob = ODEProblem(sys, [sys.x => 1.0], (0.0, 3.0))
     prob2 = ODEProblem(sys2, [sys.x => 1.0], (0.0, 3.0))
     sol = solve(prob)

@@ -55,7 +55,7 @@ end
 end
 
 @named model = ModelWithInputs() # Model with load disturbance
-ssys = structural_simplify(model)
+ssys = mtkcompile(model)
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 # plot(sol)
@@ -94,10 +94,10 @@ dist(; name) = System(1 / s; name)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
-# ssys = structural_simplify(open_loop(model_with_disturbance, :d)) # Open loop worked, but it's a bit awkward that we have to use it here
+# ssys = mtkcompile(open_loop(model_with_disturbance, :d)) # Open loop worked, but it's a bit awkward that we have to use it here
 # lsys2 = named_ss(model_with_disturbance, [:u, :d1],
 # [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w])
-ssys = structural_simplify(model_with_disturbance)
+ssys = mtkcompile(model_with_disturbance)
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
@@ -137,10 +137,10 @@ dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
-# ssys = structural_simplify(open_loop(model_with_disturbance, :d)) # Open loop worked, but it's a bit awkward that we have to use it here
+# ssys = mtkcompile(open_loop(model_with_disturbance, :d)) # Open loop worked, but it's a bit awkward that we have to use it here
 # lsys3 = named_ss(model_with_disturbance, [:u, :d1],
 #     [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w])
-ssys = structural_simplify(model_with_disturbance)
+ssys = mtkcompile(model_with_disturbance)
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)

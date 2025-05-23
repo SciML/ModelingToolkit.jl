@@ -73,11 +73,11 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, u0map,
         parammap = SciMLBase.NullParameters(); eval_expression = false, eval_module = @__MODULE__,
         cse = true, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
-        error("A simplified `System` is required. Call `structural_simplify` on the system before creating an `SCCNonlinearProblem`.")
+        error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
 
     if !is_split(sys)
-        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `structural_simplify` to use `SCCNonlinearProblem`.")
+        error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `mtkcompile` to use `SCCNonlinearProblem`.")
     end
 
     ts = get_tearing_state(sys)

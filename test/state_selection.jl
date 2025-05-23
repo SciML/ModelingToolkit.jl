@@ -117,7 +117,7 @@ let
 
     @named system = HydraulicSystem(L = 10)
     @unpack supply_pipe, return_pipe = system
-    sys = structural_simplify(system)
+    sys = mtkcompile(system)
     u0 = [
         sys.supply_pipe.v => 0.1, sys.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
         D(return_pipe.fluid_port_a.m) => 0.0,
@@ -168,7 +168,7 @@ let
 
     @named trans = System(eqs, t)
 
-    sys = structural_simplify(trans)
+    sys = mtkcompile(trans)
 
     n = 3
     u = 0 * ones(n)
@@ -273,7 +273,7 @@ let
 
     # solution -------------------------------------------------------------------
     @named catapult = System(eqs, t, vars, params, defaults = defs)
-    sys = structural_simplify(catapult)
+    sys = mtkcompile(catapult)
     prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success
 end

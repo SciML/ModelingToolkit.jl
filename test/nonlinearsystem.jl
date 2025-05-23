@@ -117,7 +117,7 @@ using OrdinaryDiffEq
 D = Differential(t)
 @named subsys = convert_system_indepvar(lorenz1, t)
 @named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 u0 = [subsys.x => 1, subsys.z => 2.0, subsys.y => 1.0]
 prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
@@ -195,7 +195,7 @@ eq = [v1 ~ sin(2pi * t * h)
       v2 ~ i2
       i1 ~ i2]
 @named sys = System(eq, t)
-@test length(equations(structural_simplify(sys))) == 0
+@test length(equations(mtkcompile(sys))) == 0
 
 @testset "Remake" begin
     @parameters a=1.0 b=1.0 c=1.0
@@ -229,7 +229,7 @@ end
     @named ns = System(eqs, [x, y, z], [])
     ns = complete(ns)
     vs = [unknowns(ns); parameters(ns)]
-    ss_mtk = structural_simplify(ns)
+    ss_mtk = mtkcompile(ns)
     prob = NonlinearProblem(ss_mtk, vs .=> 1.0)
     sol = solve(prob)
     @test_nowarn sol[unknowns(ns)]
@@ -249,16 +249,16 @@ sys = @test_nowarn System(alg_eqs; name = :name)
 @parameters u3 u4
 eqs = [u3 ~ u1 + u2, u4 ~ 2 * (u1 + u2), u3 + u4 ~ 3 * (u1 + u2)]
 @named ns = System(eqs, [u1, u2], [u3, u4])
-sys = structural_simplify(ns; fully_determined = false)
+sys = mtkcompile(ns; fully_determined = false)
 @test length(unknowns(sys)) == 1
 
 # Conservative
 @variables X(t)
 alg_eqs = [1 ~ 2X]
 @named ns = System(alg_eqs)
-sys = structural_simplify(ns)
+sys = mtkcompile(ns)
 @test length(equations(sys)) == 0
-sys = structural_simplify(ns; conservative = true)
+sys = mtkcompile(ns; conservative = true)
 @test length(equations(sys)) == 1
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2858
@@ -270,7 +270,7 @@ sys = structural_simplify(ns; conservative = true)
            0 ~ x * y - β * z]
     guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkbuild ns = System(eqs)
+    @mtkcompile ns = System(eqs)
 
     @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
                                            2x*(-z + ρ) -β-(x^2)])
@@ -287,7 +287,7 @@ sys = structural_simplify(ns; conservative = true)
     # system that contains a chain of observed variables when simplified
     @variables x y z
     eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkbuild ns = System(eqs) # solve for y with observed chain z -> y -> x
+    @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
     @test isequal(expand.(calculate_jacobian(ns)), [-3 // 2 - x;;])
     @test isequal(calculate_hessian(ns), [[-1;;]])
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
@@ -297,7 +297,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x = 1
-    @mtkbuild sys = System([0 ~ x^2 - x^3 + 3])
+    @mtkcompile sys = System([0 ~ x^2 - x^3 + 3])
     prob = @test_nowarn NonlinearProblem(sys, nothing)
     @test_nowarn solve(prob)
 end
@@ -310,7 +310,7 @@ end
          -1 1/2 -1]
     b = [1, -2, 0]
     @named sys = System(A * x ~ b, [x], [])
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = NonlinearProblem(sys, unknowns(sys) .=> 0.0)
     sol = solve(prob)
     @test all(sol[x] .≈ A \ b)
@@ -321,8 +321,8 @@ end
     @parameters p
     @named sys = System([x ~ 1, x^2 - p ~ 0])
     for sys in [
-        structural_simplify(sys, fully_determined = false),
-        structural_simplify(sys, fully_determined = false, split = false)
+        mtkcompile(sys, fully_determined = false),
+        mtkcompile(sys, fully_determined = false, split = false)
     ]
         @test length(equations(sys)) == 1
         @test length(unknowns(sys)) == 0
@@ -348,7 +348,7 @@ end
     end
 
     @variables y
-    @mtkbuild sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
+    @mtkcompile sys = System([0 ~ x * x - p * x + p, 0 ~ x * y + p])
     @test_throws ["single unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
     @test_throws ["single unknown"] IntervalNonlinearFunction(sys)
     @test_throws ["single unknown"] IntervalNonlinearProblem(
@@ -361,7 +361,7 @@ end
     @variables x y
     @parameters p[1:2] (f::Function)(..)
 
-    @mtkbuild sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    @mtkcompile sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
     @test !any(isequal(p[1]), parameters(sys))
     @test is_parameter(sys, p)
 end
@@ -397,7 +397,7 @@ end
     @test ModelingToolkit.iscomplete(nlsys)
     @test ModelingToolkit.is_split(nlsys)
 
-    sys3 = structural_simplify(sys)
+    sys3 = mtkcompile(sys)
     nlsys = NonlinearSystem(sys3)
     @test length(equations(nlsys)) == length(ModelingToolkit.observed(nlsys)) == 1
 

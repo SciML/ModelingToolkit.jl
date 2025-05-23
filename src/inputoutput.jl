@@ -202,7 +202,7 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         kwargs...)
     # Remove this when the ControlFunction gets merged.
     if check_simplified && !iscomplete(sys)
-        error("A completed `ODESystem` is required. Call `complete` or `structural_simplify` on the system before creating the control function.")
+        error("A completed `ODESystem` is required. Call `complete` or `mtkcompile` on the system before creating the control function.")
     end
     isempty(inputs) && @warn("No unbound inputs were found in system.")
     if disturbance_inputs !== nothing
@@ -417,7 +417,7 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = Any[]; kwar
            dist.input ~ u + dsys.output.u[1]]
     augmented_sys = System(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
-    ssys = structural_simplify(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
+    ssys = mtkcompile(augmented_sys, inputs = all_inputs, disturbance_inputs = [d])
 
     f, dvs, p, io_sys = generate_control_function(ssys, all_inputs,
         [d]; kwargs...)

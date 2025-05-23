@@ -391,7 +391,7 @@ sys = complete(sys)
 @testset "Issue#1109" begin
     @variables x(t)[1:3, 1:3]
     @named sys = System(D(x) ~ x, t)
-    @test_nowarn structural_simplify(sys)
+    @test_nowarn mtkcompile(sys)
 end
 
 # Array vars
@@ -402,7 +402,7 @@ ps = @parameters p[1:3] = [1, 2, 3]
 eqs = [collect(D.(x) .~ x)
        D(y) ~ norm(collect(x)) * y - x[1]]
 @named sys = System(eqs, t, sts, ps)
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 @test isequal(@nonamespace(sys.x), x)
 @test isequal(@nonamespace(sys.y), y)
 @test isequal(@nonamespace(sys.p), p)
@@ -453,7 +453,7 @@ foo(a, ms::AbstractVector) = a + sum(ms)
 eqs = [D(x) ~ foo(x, ms); D(ms) ~ ones(3)]
 @named sys = System(eqs, t, [x; ms], [])
 @named emptysys = System(Equation[], t)
-@mtkbuild outersys = compose(emptysys, sys)
+@mtkcompile outersys = compose(emptysys, sys)
 prob = ODEProblem(
     outersys, [outersys.sys.x => 1.0; collect(outersys.sys.ms .=> 1:3)], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
@@ -468,7 +468,7 @@ end
 eqs = [D(x) ~ foo(x, ms); D(ms) ~ bar(ms, p)]
 @named sys = System(eqs, t)
 @named emptysys = System(Equation[], t)
-@mtkbuild outersys = compose(emptysys, sys)
+@mtkcompile outersys = compose(emptysys, sys)
 prob = ODEProblem(
     outersys, [sys.x => 1.0, sys.ms => 1:3], (0.0, 1.0), [sys.p => ones(3, 3)])
 @test_nowarn solve(prob, Tsit5())
@@ -574,7 +574,7 @@ let
            D(x[2]) ~ -x[1] - 0.5 * x[2] + k
            y ~ 0.9 * x[1] + x[2]]
     @named sys = System(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     u0 = [0.5, 0]
     du0 = 0 .* copy(u0)
@@ -656,7 +656,7 @@ let
            0 ~ q / C - R * F]
 
     @named sys = System(eqs, t)
-    @test length(equations(structural_simplify(sys))) == 2
+    @test length(equations(mtkcompile(sys))) == 2
 end
 
 let
@@ -669,7 +669,7 @@ let
            spm ~ 0
            sph ~ a]
     @named sys = System(eqs, t, vars, pars)
-    @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
+    @test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(sys)
 end
 
 # 1561
@@ -693,9 +693,9 @@ let
     ps = []
 
     @named sys = System(eqs, t, u, ps)
-    @test_nowarn simpsys = structural_simplify(sys)
+    @test_nowarn simpsys = mtkcompile(sys)
 
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     u0 = ModelingToolkit.missing_variable_defaults(sys)
     u0_expected = Pair[s => 0.0 for s in unknowns(sys)]
@@ -781,7 +781,7 @@ let
     @named connected = System(connections, t)
     @named sys_con = compose(connected, sys, ctrl)
 
-    sys_simp = structural_simplify(sys_con)
+    sys_simp = mtkcompile(sys_con)
     true_eqs = [D(sys.x) ~ sys.v
                 D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
     @test issetequal(full_equations(sys_simp), true_eqs)
@@ -792,7 +792,7 @@ let
     @variables y(t) = 1
     @parameters pp = -1
     @named sys4 = System([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
-    sys4s = structural_simplify(sys4)
+    sys4s = mtkcompile(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
     @test string.(parameters(prob.f.sys)) == ["pp"]
@@ -813,7 +813,7 @@ let
     @parameters pp = -1
     der = Differential(t)
     @named sys4 = System([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
-    sys4s = structural_simplify(sys4)
+    sys4s = mtkcompile(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test !isnothing(prob.f.sys)
 end
@@ -849,7 +849,7 @@ let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
 
     sys = System(eqs, t; name = :kjshdf)
 
-    sys_simp = structural_simplify(sys)
+    sys_simp = mtkcompile(sys)
 
     @test a ∈ keys(ModelingToolkit.defaults(sys_simp))
 
@@ -862,7 +862,7 @@ end
 # Issue#2599
 @variables x(t) y(t)
 eqs = [D(x) ~ x * t, y ~ 2x]
-@mtkbuild sys = System(eqs, t; continuous_events = [[y ~ 3] => [x ~ 2]])
+@mtkcompile sys = System(eqs, t; continuous_events = [[y ~ 3] => [x ~ 2]])
 prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
 @test_nowarn solve(prob, Tsit5())
 
@@ -873,14 +873,14 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
     eqs = [
         D(x) ~ p * x
     ]
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         eqs, t; continuous_events = [[norm(x) ~ 3.0] => [x ~ ones(3)]])
     # array affect equations used to not work
     prob1 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
     sol1 = @test_nowarn solve(prob1, Tsit5())
 
     # array condition equations also used to not work
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         eqs, t; continuous_events = [[x ~ sqrt(3) * ones(3)] => [x ~ ones(3)]])
     # array affect equations used to not work
     prob2 = @test_nowarn ODEProblem(sys, [x => ones(3)], (0.0, 10.0), [p => ones(3, 3)])
@@ -893,7 +893,7 @@ end
 @test_skip begin
     @variables x(t)[1:3] y(t)
     @parameters p[1:3, 1:3]
-    @test_nowarn @mtkbuild sys = System([D(x) ~ p * x, D(y) ~ x' * p * x], t)
+    @test_nowarn @mtkcompile sys = System([D(x) ~ p * x, D(y) ~ x' * p * x], t)
     @test_nowarn ODEProblem(sys, [x => ones(3), y => 2], (0.0, 10.0), [p => ones(3, 3)])
 end
 
@@ -917,7 +917,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [D(x) => 2.0,
     x => 1.0,
@@ -952,7 +952,7 @@ function FML2(; name)
     System(eqs, t; systems, name)
 end
 
-@mtkbuild model = FML2()
+@mtkcompile model = FML2()
 
 @test isequal(ModelingToolkit.defaults(model)[model.constant.k], model.k2[1])
 @test_nowarn ODEProblem(model, [], (0.0, 10.0))
@@ -993,7 +993,7 @@ orig_vars = unknowns(sys)
 @named outer = System(
     [D(y) ~ sys.x + t, 0 ~ t + y - sys.x * y], t, [y], []; systems = [sys])
 @test ModelingToolkit.guesses(outer)[sys.x] == 1.0
-outer = structural_simplify(outer)
+outer = mtkcompile(outer)
 @test ModelingToolkit.get_guesses(outer)[sys.x] == 1.0
 prob = ODEProblem(outer, [outer.y => 2.0], (0.0, 10.0))
 int = init(prob, Rodas4())
@@ -1029,7 +1029,7 @@ end
 @testset "Non-1-indexed variable array (issue #2670)" begin
     @variables x(t)[0:1] # 0-indexed variable array
     @named sys = System([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
-    @test_nowarn sys = structural_simplify(sys)
+    @test_nowarn sys = mtkcompile(sys)
     @test equations(sys) == [D(x[1]) ~ 0.0]
 end
 
@@ -1045,7 +1045,7 @@ end
 @testset "ForwardDiff through ODEProblem constructor" begin
     @parameters P
     @variables x(t)
-    sys = structural_simplify(System([D(x) ~ P], t, [x], [P]; name = :sys))
+    sys = mtkcompile(System([D(x) ~ P], t, [x], [P]; name = :sys))
 
     function x_at_1(P)
         prob = ODEProblem(sys, [x => P], (0.0, 1.0), [sys.P => P])
@@ -1058,7 +1058,7 @@ end
 @testset "Inplace observed functions" begin
     @parameters P
     @variables x(t)
-    sys = structural_simplify(System([D(x) ~ P], t, [x], [P]; name = :sys))
+    sys = mtkcompile(System([D(x) ~ P], t, [x], [P]; name = :sys))
     obsfn = ModelingToolkit.build_explicit_observed_function(
         sys, [x + 1, x + P, x + t], return_inplace = true)[2]
     ps = ModelingToolkit.MTKParameters(sys, [P => 2.0])
@@ -1083,7 +1083,7 @@ end
             y ~ 0
         end
     end
-    @test_nowarn @mtkbuild sys = MyModel()
+    @test_nowarn @mtkcompile sys = MyModel()
 
     @variables x y(x)
     @test_logs (:warn,) @named sys = System([y ~ 0], x)
@@ -1095,7 +1095,7 @@ end
     initialization_eqs = [x ~ T]
     guesses = [x => 0.0]
     @named sys2 = System(eqs, T; initialization_eqs, guesses)
-    prob2 = ODEProblem(structural_simplify(sys2), [], (1.0, 2.0), [])
+    prob2 = ODEProblem(mtkcompile(sys2), [], (1.0, 2.0), [])
     sol2 = solve(prob2)
     @test all(sol2[x] .== 1.0)
 end
@@ -1127,7 +1127,7 @@ end
     eqs = [D(x) ~ 0, y ~ x, D(z) ~ 0]
     defaults = [x => 1, z => y]
     @named sys = System(eqs, t; defaults)
-    ssys = structural_simplify(sys)
+    ssys = mtkcompile(sys)
     prob = ODEProblem(ssys, [], (0.0, 1.0), [])
     @test prob[x] == prob[y] == prob[z] == 1.0
 
@@ -1136,7 +1136,7 @@ end
     eqs = [D(x) ~ 0, y ~ y0 / x, D(z) ~ y]
     defaults = [y0 => 1, x => 1, z => y]
     @named sys = System(eqs, t; defaults)
-    ssys = structural_simplify(sys)
+    ssys = mtkcompile(sys)
     prob = ODEProblem(ssys, [], (0.0, 1.0), [])
     @test prob[x] == prob[y] == prob[z] == 1.0
 end
@@ -1147,11 +1147,11 @@ end
     @named sys = System(
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
         t, [u..., x..., o...], [p...])
-    sys1 = structural_simplify(sys, inputs = [x...], outputs = [])
+    sys1 = mtkcompile(sys, inputs = [x...], outputs = [])
     fn1, = ModelingToolkit.generate_rhs(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
     @test_nowarn fn1(ones(4), ps, 4.0)
-    sys2 = structural_simplify(sys, inputs = [x...], outputs = [], split = false)
+    sys2 = mtkcompile(sys, inputs = [x...], outputs = [], split = false)
     fn2, = ModelingToolkit.generate_rhs(sys2; expression = Val{false})
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
@@ -1236,10 +1236,10 @@ end
     @named outersys = System(
         [D(innersys.y) ~ innersys.y + p4], t; parameter_dependencies = [p4 ~ 3p3],
         defaults = [p3 => 3.0, p4 => 9.0], guesses = [p4 => 10.0], systems = [innersys])
-    @test_nowarn structural_simplify(outersys)
+    @test_nowarn mtkcompile(outersys)
     @parameters p5
     sys2 = substitute(outersys, [p4 => p5])
-    @test_nowarn structural_simplify(sys2)
+    @test_nowarn mtkcompile(sys2)
     @test length(equations(sys2)) == 2
     @test length(parameters(sys2)) == 2
     @test length(full_parameters(sys2)) == 4
@@ -1261,7 +1261,7 @@ end
            o[2] ~ sum(p) * sum(x)]
 
     @named sys = System(eqs, t, [u..., x..., o], [p...])
-    sys1 = structural_simplify(sys, inputs = [x...], outputs = [o...], split = false)
+    sys1 = mtkcompile(sys, inputs = [x...], outputs = [o...], split = false)
 
     @test_nowarn ModelingToolkit.build_explicit_observed_function(sys1, u; inputs = [x...])
 
@@ -1273,7 +1273,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
-    @mtkbuild sys = System(D(x) ~ t, t)
+    @mtkcompile sys = System(D(x) ~ t, t)
     prob = @test_nowarn ODEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob)
 end
@@ -1299,7 +1299,7 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    r"array (equations|unknowns)", "mtkcompile", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0))
             end
         end
@@ -1312,7 +1312,7 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "structural_simplify", "scalarize"] ODEProblem(
+                    r"array (equations|unknowns)", "mtkcompile", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0))
             end
         end
@@ -1335,7 +1335,7 @@ end
 @testset "Inplace observed" begin
     @variables x(t)
     @parameters p[1:2] q
-    @mtkbuild sys = System(D(x) ~ sum(p) * x + q * t, t)
+    @mtkcompile sys = System(D(x) ~ sum(p) * x + q * t, t)
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [p => ones(2), q => 2])
     obsfn = ModelingToolkit.build_explicit_observed_function(
         sys, [p..., q], return_inplace = true)[2]
@@ -1375,7 +1375,7 @@ end
 @testset "`complete` with `split = false` removes the index cache" begin
     @variables x(t)
     @parameters p
-    @mtkbuild sys = System(D(x) ~ p * t, t)
+    @mtkcompile sys = System(D(x) ~ p * t, t)
     @test ModelingToolkit.get_index_cache(sys) !== nothing
     sys2 = complete(sys; split = false)
     @test ModelingToolkit.get_index_cache(sys2) === nothing
@@ -1385,7 +1385,7 @@ end
 @testset "Observed variables dependent on discrete parameters" begin
     @variables x(t) obs(t)
     @parameters c(t)
-    @mtkbuild sys = System([D(x) ~ c * cos(x), obs ~ c],
+    @mtkcompile sys = System([D(x) ~ c * cos(x), obs ~ c],
         t,
         [x, obs],
         [c];
@@ -1399,7 +1399,7 @@ end
 @testset "DAEProblem with array parameters" begin
     @variables x(t)=1.0 y(t) [guess = 1.0]
     @parameters p[1:2] = [1.0, 2.0]
-    @mtkbuild sys = System([D(x) ~ x, y^2 ~ x + sum(p)], t)
+    @mtkcompile sys = System([D(x) ~ x, y^2 ~ x + sum(p)], t)
     prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], [], (0.0, 1.0))
     sol = solve(prob, DFBDF(), abstol = 1e-8, reltol = 1e-8)
     @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
@@ -1408,7 +1408,7 @@ end
 @testset "Symbolic tstops" begin
     @variables x(t) = 1.0
     @parameters p=0.15 q=0.25 r[1:2]=[0.35, 0.45]
-    @mtkbuild sys = System(
+    @mtkcompile sys = System(
         [D(x) ~ p * x + q * t + sum(r)], t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
     prob = ODEProblem(sys, [], (0.0, 5.0))
     sol = solve(prob)
@@ -1420,7 +1420,7 @@ end
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
 
     @variables y(t) [guess = 1.0]
-    @mtkbuild sys = System([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
+    @mtkcompile sys = System([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
         t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
     prob = DAEProblem(
         sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], [], (0.0, 5.0))
@@ -1437,11 +1437,11 @@ end
     @parameters p d
     @variables X(t)::Int64
     eq = D(X) ~ p - d * X
-    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkbuild osys = System(
+    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkcompile osys = System(
         [eq], t)
     @variables Y(t)[1:3]::String
     eq = D(Y) ~ [p, p, p]
-    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkbuild osys = System(
+    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkcompile osys = System(
         [eq], t)
 
     @variables X(t)::Complex
@@ -1483,32 +1483,32 @@ end
     cons = [x(0.3) ~ c * d, y(0.7) ~ 3]
 
     # Test variables + parameters infer correctly.
-    @mtkbuild sys = System(eqs, t; constraints = cons)
+    @mtkcompile sys = System(eqs, t; constraints = cons)
     @test issetequal(parameters(sys), [a, c, d, e])
     @test issetequal(unknowns(sys), [x(t), y(t), z(t)])
 
     @parameters t_c
     cons = [x(t_c) ~ 3]
-    @mtkbuild sys = System(eqs, t; constraints = cons)
+    @mtkcompile sys = System(eqs, t; constraints = cons)
     @test issetequal(parameters(sys), [a, e, t_c])
 
     @parameters g(..) h i
     cons = [g(h, i) * x(3) ~ c]
-    @mtkbuild sys = System(eqs, t; constraints = cons)
+    @mtkcompile sys = System(eqs, t; constraints = cons)
     @test issetequal(parameters(sys), [g, h, i, a, e, c])
 
     # Test that bad constraints throw errors.
     cons = [x(3, 4) ~ 3] # unknowns cannot have multiple args.
-    @test_throws ArgumentError @mtkbuild sys = System(eqs, t; constraints = cons)
+    @test_throws ArgumentError @mtkcompile sys = System(eqs, t; constraints = cons)
 
     cons = [x(y(t)) ~ 2] # unknown arg must be parameter, value, or t
-    @test_throws ArgumentError @mtkbuild sys = System(eqs, t; constraints = cons)
+    @test_throws ArgumentError @mtkcompile sys = System(eqs, t; constraints = cons)
 
     @variables u(t) v
     cons = [x(t) * u ~ 3]
-    @test_throws ArgumentError @mtkbuild sys = System(eqs, t; constraints = cons)
+    @test_throws ArgumentError @mtkcompile sys = System(eqs, t; constraints = cons)
     cons = [x(t) * v ~ 3]
-    @test_throws ArgumentError @mtkbuild sys = System(eqs, t; constraints = cons) # Need time argument.
+    @test_throws ArgumentError @mtkcompile sys = System(eqs, t; constraints = cons) # Need time argument.
 
     # Test array variables
     @variables x(..)[1:5]
@@ -1519,13 +1519,13 @@ end
            0 0 2 0 5]
     eqs = D(x(t)) ~ mat * x(t)
     cons = [x(3) ~ [2, 3, 3, 5, 4]]
-    @mtkbuild ode = System(D(x(t)) ~ mat * x(t), t; constraints = cons)
+    @mtkcompile ode = System(D(x(t)) ~ mat * x(t), t; constraints = cons)
     @test length(constraints(ode)) == 1
 end
 
 @testset "`build_explicit_observed_function` with `expression = true` returns `Expr`" begin
     @variables x(t)
-    @mtkbuild sys = System(D(x) ~ 2x, t)
+    @mtkcompile sys = System(D(x) ~ 2x, t)
     obsfn_expr = ModelingToolkit.build_explicit_observed_function(
         sys, 2x + 1, expression = true)
     @test obsfn_expr isa Expr
@@ -1543,7 +1543,7 @@ end
         D(y) ~ x * (ρ - z) - y,
         D(z) ~ x * y - β * z]
 
-    @mtkbuild sys=System(eqs, t) split=false
+    @mtkcompile sys=System(eqs, t) split=false
 
     u0 = SA[D(x) => 2.0f0,
         x => 1.0f0,
@@ -1579,6 +1579,6 @@ end
         @named subsys = SysB(; var1 = x)
         return System(D(x) ~ x, t; systems = [subsys], name)
     end
-    @mtkbuild sys = SysC()
+    @mtkcompile sys = SysC()
     @test length(unknowns(sys)) == 3
 end

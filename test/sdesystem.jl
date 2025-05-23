@@ -597,7 +597,7 @@ eqs = [D(x) ~ σ * (y - x) + x * β,
     D(y) ~ x * (ρ - z) - y + y * β + x * η,
     D(z) ~ x * y - β * z + (x * z) * β]
 @named sys1 = System(eqs, tt)
-sys1 = structural_simplify(sys1)
+sys1 = mtkcompile(sys1)
 
 drift_eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
@@ -636,7 +636,7 @@ ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
 @variables x(tt)
 @brownian a
 eqs = [D(x) ~ p - d * x + a * sqrt(p)]
-@mtkbuild sys = System(eqs, tt)
+@mtkcompile sys = System(eqs, tt)
 u0 = @SVector[x => 10.0]
 tspan = (0.0, 10.0)
 ps = @SVector[p => 5.0, d => 0.5]
@@ -650,7 +650,7 @@ sprob = SDEProblem(sys, u0, tspan, ps)
 @brownian b
 eqs = [D(x) ~ p - d * x + a * sqrt(p)
        D(y) ~ p - d * y + b * sqrt(d)]
-@mtkbuild sys = System(eqs, tt)
+@mtkcompile sys = System(eqs, tt)
 u0 = @SVector[x => 10.0, y => 20.0]
 tspan = (0.0, 10.0)
 ps = @SVector[p => 5.0, d => 0.5]
@@ -666,7 +666,7 @@ let
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
         D(z) ~ x * y - β * z + 0.1a * z]
 
-    @mtkbuild de = System(eqs, t)
+    @mtkcompile de = System(eqs, t)
 
     u0map = [
         x => 1.0,
@@ -690,7 +690,7 @@ let # test to make sure that scalar noise always receive the same kicks
     eqs = [D(x) ~ a,
         D(y) ~ a]
 
-    @mtkbuild de = System(eqs, t)
+    @mtkcompile de = System(eqs, t)
     prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0), [])
     sol = solve(prob, SOSRI())
     @test sol.u[end][1] == sol.u[end][2]
@@ -704,7 +704,7 @@ let # test that diagonal noise is correctly handled
         D(y) ~ x * (ρ - z) - y + 0.1b * y,
         D(z) ~ x * y - β * z + 0.1c * z]
 
-    @mtkbuild de = System(eqs, t)
+    @mtkcompile de = System(eqs, t)
 
     u0map = [
         x => 1.0,
@@ -730,7 +730,7 @@ end
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x + d,
         D(y) ~ x * (ρ - z) - y + 0.1b * y + e,
         D(z) ~ x * y - β * z + 0.1c * z + f]
-    @mtkbuild de = System(eqs, tt)
+    @mtkcompile de = System(eqs, tt)
 
     u0map = [
         x => 1.0,
@@ -759,7 +759,7 @@ end
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,     # One brownian
         D(y) ~ x * (ρ - z) - y + 0.1b * y, # Another brownian
         D(z) ~ x * y - β * z]              # no brownians -- still diagonal
-    @mtkbuild de = System(eqs, tt)
+    @mtkcompile de = System(eqs, tt)
 
     u0map = [
         x => 1.0,
@@ -780,7 +780,7 @@ end
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
     @brownian b
-    @mtkbuild sys = System([D(x) ~ x + b], t)
+    @mtkcompile sys = System([D(x) ~ x + b], t)
     prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob, ImplicitEM())
 end
@@ -798,16 +798,16 @@ end
            input ~ 0.0]
 
     sys = System(eqs, t, sts, ps, browns; name = :name)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     @test ModelingToolkit.get_noise_eqs(sys) ≈ [1.0]
     prob = SDEProblem(sys, [], (0.0, 1.0), [])
     @test_nowarn solve(prob, RKMil())
 end
 
-@testset "Observed variables retained after `structural_simplify`" begin
+@testset "Observed variables retained after `mtkcompile`" begin
     @variables x(t) y(t) z(t)
     @brownian a
-    @mtkbuild sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
+    @mtkcompile sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
     @test length(observed(sys)) == 1
     prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
     @test prob[z] ≈ 2.0
@@ -860,9 +860,9 @@ end
     end
 end
 
-@testset "`structural_simplify(::SDESystem)`" begin
+@testset "`mtkcompile(::SDESystem)`" begin
     @variables x(t) y(t)
-    @mtkbuild sys = SDESystem(
+    @mtkcompile sys = SDESystem(
         [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], [])
     @test length(equations(sys)) == 1
     @test length(ModelingToolkit.get_noise_eqs(sys)) == 1
@@ -875,7 +875,7 @@ end
     @variables X(t)::Int64
     @brownian z
     eq2 = D(X) ~ p - d * X + z
-    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkbuild ssys = System(
+    @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkcompile ssys = System(
         [eq2], t)
     noiseeq = [1]
     @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @named ssys = SDESystem(
@@ -929,27 +929,27 @@ end
     @parameters p d
     @brownian a
     seq = D(X) ~ p - d * X + a
-    @mtkbuild ssys1 = System([seq], t; name = :ssys)
-    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @mtkcompile ssys1 = System([seq], t; name = :ssys)
+    @mtkcompile ssys2 = System([seq], t; name = :ssys)
     @test ssys1 == ssys2 # true
 
     continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
     discrete_events = [5.0 => [d ~ d / 2.0]]
 
-    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
-    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @mtkcompile ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkcompile ssys2 = System([seq], t; name = :ssys)
     @test ssys1 !== ssys2
 
-    @mtkbuild ssys1 = System([seq], t; name = :ssys, discrete_events)
-    @mtkbuild ssys2 = System([seq], t; name = :ssys)
+    @mtkcompile ssys1 = System([seq], t; name = :ssys, discrete_events)
+    @mtkcompile ssys2 = System([seq], t; name = :ssys)
     @test ssys1 !== ssys2
 
-    @mtkbuild ssys1 = System([seq], t; name = :ssys, continuous_events)
-    @mtkbuild ssys2 = System([seq], t; name = :ssys, discrete_events)
+    @mtkcompile ssys1 = System([seq], t; name = :ssys, continuous_events)
+    @mtkcompile ssys2 = System([seq], t; name = :ssys, discrete_events)
     @test ssys1 !== ssys2
 end
 
-@testset "Error when constructing SDEProblem without `structural_simplify`" begin
+@testset "Error when constructing SDEProblem without `mtkcompile`" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownian a
@@ -963,8 +963,8 @@ end
     u0map = [x => 1.0, y => 0.0, z => 0.0]
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
-    @test_throws ["Brownian", "structural_simplify"] SDEProblem(
+    @test_throws ["Brownian", "mtkcompile"] SDEProblem(
         de, u0map, (0.0, 100.0), parammap)
-    de = structural_simplify(de)
+    de = mtkcompile(de)
     @test SDEProblem(de, u0map, (0.0, 100.0), parammap) isa SDEProblem
 end
