@@ -99,6 +99,7 @@ const DQ = DynamicQuantities
 
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
+import SciMLPublic: @public
 
 export @derivatives
 
@@ -357,5 +358,7 @@ include("systems/optimal_control_interface.jl")
 export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
        CasADiDynamicOptProblem
 export DynamicOptSolution
+
+@public apply_to_variables
 
 end # module
