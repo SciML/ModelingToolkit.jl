@@ -197,7 +197,18 @@ end
 
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the name of `sys`.
+"""
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the description associated with `sys` if present, and an empty
+string otherwise.
+"""
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 """
