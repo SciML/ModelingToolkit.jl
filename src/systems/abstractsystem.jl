@@ -1679,6 +1679,12 @@ function equations_toplevel(sys::AbstractSystem)
     return get_eqs(sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get the flattened jumps of the system. In other words, obtain all of the jumps in `sys` and
+all the subsystems of `sys` (appropriately namespaced).
+"""
 function jumps(sys::AbstractSystem)
     js = get_jumps(sys)
     systems = get_systems(sys)
@@ -1688,6 +1694,12 @@ function jumps(sys::AbstractSystem)
     return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get all of the brownian variables involved in the system `sys` and all subsystems,
+appropriately namespaced.
+"""
 function brownians(sys::AbstractSystem)
     bs = get_brownians(sys)
     systems = get_systems(sys)
@@ -1697,6 +1709,12 @@ function brownians(sys::AbstractSystem)
     return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively consolidate the cost vector of `sys` and all subsystems of `sys`, returning the
+final scalar cost function.
+"""
 function cost(sys::AbstractSystem)
     cs = get_costs(sys)
     consolidate = get_consolidate(sys)
@@ -1726,7 +1744,12 @@ function namespace_constraints(sys)
     map(cstr -> namespace_constraint(cstr, sys), cstrs)
 end
 
-function constraints(sys)
+"""
+    $(TYPEDSIGNATURES)
+
+Get all constraints in the system `sys` and all of its subsystems, appropriately namespaced.
+"""
+function constraints(sys::AbstractSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
     isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
@@ -1753,6 +1776,11 @@ function initialization_equations(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get the tstops present in `sys` and its subsystems, appropriately namespaced.
+"""
 function symbolic_tstops(sys::AbstractSystem)
     tstops = get_tstops(sys)
     systems = get_systems(sys)
@@ -1761,6 +1789,12 @@ function symbolic_tstops(sys::AbstractSystem)
     return tstops
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the preface associated with `sys` and all of its subsystems, appropriately
+namespaced.
+"""
 function preface(sys::AbstractSystem)
     has_preface(sys) || return nothing
     pre = get_preface(sys)
