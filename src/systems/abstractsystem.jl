@@ -197,33 +197,8 @@ end
 
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
-mutable struct Substitutions
-    subs::Vector{Equation}
-    deps::Vector{Vector{Int}}
-    subed_eqs::Union{Nothing, Vector{Equation}}
-end
-Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
-
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
-
-#Deprecated
-function independent_variable(sys::AbstractSystem)
-    Base.depwarn(
-        "`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
-        :independent_variable)
-    isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
-end
-
-function independent_variables(sys::AbstractTimeDependentSystem)
-    return [getfield(sys, :iv)]
-end
-
-independent_variables(::AbstractTimeIndependentSystem) = []
-
-function independent_variables(sys::AbstractMultivariateSystem)
-    return getfield(sys, :ivs)
-end
 
 """
 $(TYPEDSIGNATURES)
@@ -233,9 +208,6 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    if !(sys isa System)
-        @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
-    end
     if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
@@ -309,10 +281,8 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
     return nothing
 end
 
-SymbolicIndexingInterface.variable_symbols(sys::AbstractMultivariateSystem) = sys.dvs
-
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
-    return solved_unknowns(sys)
+    return unknowns(sys)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
@@ -416,7 +386,12 @@ function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
     return build_explicit_observed_function(sys, sym; param_only = true)
 end
 
-function has_observed_with_lhs(sys, sym)
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains an observed equation with LHS `sym`.
+"""
+function has_observed_with_lhs(sys::AbstractSystem, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.observed_syms_to_timeseries, sym)
@@ -425,6 +400,11 @@ function has_observed_with_lhs(sys, sym)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains a parameter dependency equation with LHS `sym`.
+"""
 function has_parameter_dependency_with_lhs(sys, sym)
     has_parameter_dependencies(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
@@ -560,9 +540,6 @@ function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
         defaults(sys)
     )
 end
-
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false
 
 SymbolicIndexingInterface.is_markovian(sys::AbstractSystem) = !is_dde(sys)
 
@@ -856,7 +833,6 @@ end
 
 for prop in [:eqs
              :tag
-             :noiseeqs # TODO: remove
              :noise_eqs
              :iv
              :unknowns
@@ -867,30 +843,17 @@ for prop in [:eqs
              :name
              :description
              :var_to_name
-             :ctrls
              :defaults
              :guesses
              :observed
-             :tgrad
-             :jac
-             :ctrl_jac
-             :Wfact
-             :Wfact_t
              :systems
-             :structure
-             :op
              :constraints
-             :constraintsystem
-             :controls
-             :loss
              :bcs
              :domain
              :ivs
              :dvs
              :connector_type
-             :connections
              :preface
-             :torn_matching
              :initializesystem
              :initialization_eqs
              :schedule
@@ -898,17 +861,13 @@ for prop in [:eqs
              :metadata
              :gui_metadata
              :is_initializesystem
-             :discrete_subsystems
              :parameter_dependencies
              :assertions
-             :solved_unknowns
-             :split_idxs
              :ignored_connections
              :parent
              :is_dde
              :tstops
              :index_cache
-             :is_scalar_noise
              :isscheduled
              :costs
              :consolidate]
@@ -940,26 +899,12 @@ end
 
 has_equations(::AbstractSystem) = true
 
-const EMPTY_TGRAD = Vector{Num}(undef, 0)
-const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
-function invalidate_cache!(sys::AbstractSystem)
-    if has_tgrad(sys)
-        get_tgrad(sys)[] = EMPTY_TGRAD
-    end
-    if has_jac(sys)
-        get_jac(sys)[] = EMPTY_JAC
-    end
-    if has_ctrl_jac(sys)
-        get_ctrl_jac(sys)[] = EMPTY_JAC
-    end
-    if has_Wfact(sys)
-        get_Wfact(sys)[] = EMPTY_JAC
-    end
-    if has_Wfact_t(sys)
-        get_Wfact_t(sys)[] = EMPTY_JAC
-    end
-    return sys
-end
+"""
+    $(TYPEDSIGNATURES)
+
+Invalidate cached jacobians, etc.
+"""
+invalidate_cache!(sys::AbstractSystem) = sys
 
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
@@ -1227,7 +1172,6 @@ end
 
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
-namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
@@ -1609,12 +1553,6 @@ end
 # required in `src/connectors.jl:437`
 parameters(_) = []
 
-function controls(sys::AbstractSystem)
-    ctrls = get_ctrls(sys)
-    systems = get_systems(sys)
-    isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -1644,9 +1582,6 @@ See also [`observed`](@ref).
 function observables(sys::AbstractSystem)
     return map(eq -> eq.lhs, observed(sys))
 end
-
-Base.@deprecate default_u0(x) defaults(x) false
-Base.@deprecate default_p(x) defaults(x) false
 
 """
 $(TYPEDSIGNATURES)
@@ -1836,19 +1771,6 @@ function isaffine(sys::AbstractSystem)
     rhs = [eq.rhs for eq in equations(sys)]
 
     all(isaffine(r, unknowns(sys)) for r in rhs)
-end
-
-"""
-$(SIGNATURES)
-
-Return a list of actual unknowns needed to be solved by solvers.
-"""
-function solved_unknowns(sys::AbstractSystem)
-    sts = unknowns(sys)
-    if has_solved_unknowns(sys)
-        sts = something(get_solved_unknowns(sys), sts)
-    end
-    return sts
 end
 
 ###
@@ -2043,18 +1965,6 @@ end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
 
-function get_or_construct_tearing_state(sys)
-    if has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        if state === nothing
-            state = TearingState(sys)
-        end
-    else
-        state = nothing
-    end
-    state
-end
-
 """
     n_expanded_connection_equations(sys::AbstractSystem)
 
@@ -2188,15 +2098,6 @@ function Base.show(
     nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
-end
-
-function Graphs.incidence_matrix(sys)
-    if has_torn_matching(sys) && has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        incidence_matrix(state.structure.graph, Num(Sym{Real}(:×)))
-    else
-        return nothing
-    end
 end
 
 function split_assign(expr)
@@ -2898,8 +2799,8 @@ ModelingToolkit.dump_unknowns(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = varmap_with_toterm(defaults(sys))
-    gs = varmap_with_toterm(guesses(sys))
+    defs = add_toterms(defaults(sys))
+    gs = add_toterms(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))

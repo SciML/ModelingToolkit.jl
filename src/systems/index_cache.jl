@@ -64,7 +64,7 @@ struct IndexCache
 end
 
 function IndexCache(sys::AbstractSystem)
-    unks = solved_unknowns(sys)
+    unks = unknowns(sys)
     unk_idxs = UnknownIndexMap()
     symbol_to_variable = Dict{Symbol, SymbolicParam}()
 

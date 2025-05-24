@@ -352,8 +352,14 @@ function but_ordered_incidence(ts::TearingState, varmask = highest_order_variabl
     mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
 end
 
-# debugging use
-function reordered_matrix(sys, torn_matching)
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system `sys` and torn variable-equation matching `torn_matching`, return the sparse
+incidence matrix of the system with SCCs grouped together, and each SCC sorted to contain
+the analytically solved equations/variables before the unsolved ones.
+"""
+function reordered_matrix(sys::System, torn_matching)
     s = TearingState(sys)
     complete!(s.structure)
     @unpack graph = s.structure
@@ -430,23 +436,6 @@ function torn_system_jacobian_sparsity(sys)
         end
     end
     return sparse(I, J, true, neqs, neqs)
-end
-
-###
-### Nonlinear equation(s) solving
-###
-
-@noinline function nlsolve_failure(rc)
-    error("The nonlinear solver failed with the return code $rc.")
-end
-
-function numerical_nlsolve(f, u0, p)
-    prob = NonlinearProblem{false}(f, u0, p)
-    sol = solve(prob, SimpleNewtonRaphson())
-    rc = sol.retcode
-    (rc == ReturnCode.Success) || nlsolve_failure(rc)
-    # TODO: robust initial guess, better debugging info, and residual check
-    sol.u
 end
 
 ###

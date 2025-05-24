@@ -11,21 +11,11 @@ end
 
 get_iv(D::Differential) = D.x
 
-function make_operation(@nospecialize(op), args)
-    if op === (*)
-        args = filter(!_isone, args)
-        if isempty(args)
-            return 1
-        end
-    elseif op === (+)
-        args = filter(!_iszero, args)
-        if isempty(args)
-            return 0
-        end
-    end
-    return op(args...)
-end
+"""
+    $(TYPEDSIGNATURES)
 
+Turn `x(t)` into `x`
+"""
 function detime_dvs(op)
     if !iscall(op)
         op
@@ -37,6 +27,11 @@ function detime_dvs(op)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
+"""
 function retime_dvs(op, dvs, iv)
     issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     iscall(op) ?
@@ -49,25 +44,10 @@ function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
     get_variables!(munknowns, e.lhs, unknownlist)
 end
 
-macro showarr(x)
-    n = string(x)
-    quote
-        y = $(esc(x))
-        println($n, " = ", summary(y))
-        Base.print_array(stdout, y)
-        println()
-        y
-    end
-end
-
-@deprecate substitute_expr!(expr, s) substitute(expr, s)
-
 function todict(d)
     eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
     d isa Dict ? d : Dict(d)
 end
-
-_merge(d1, d2) = merge(todict(d1), todict(d2))
 
 function _readable_code(ex)
     ex isa Expr || return ex
@@ -250,10 +230,6 @@ end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(Symbolics.getdefaultval(v))
-function getdefaulttype(v)
-    def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
-    def === nothing ? Float64 : typeof(def)
-end
 function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
@@ -512,18 +488,6 @@ function collect_applied_operators(x, op)
     end
 end
 
-function find_derivatives!(vars, expr::Equation, f = identity)
-    (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
-end
-function find_derivatives!(vars, expr, f)
-    !iscall(O) && return vars
-    operation(O) isa Differential && push!(vars, f(O))
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-    return vars
-end
-
 """
     $(TYPEDSIGNATURES)
 
@@ -562,9 +526,6 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             eqtype_supports_collect_vars(eq) || continue
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
-    end
-    if has_op(sys)
-        collect_vars!(unknowns, parameters, objective(sys), iv; depth, op)
     end
 end
 
@@ -730,24 +691,6 @@ function check_scope_depth(scope, depth)
     end
 end
 
-"""
-$(SIGNATURES)
-
-find duplicates in an iterable object.
-"""
-function find_duplicates(xs, ::Val{Ret} = Val(false)) where {Ret}
-    appeared = Set()
-    duplicates = Set()
-    for x in xs
-        if x in appeared
-            push!(duplicates, x)
-        else
-            push!(appeared, x)
-        end
-    end
-    return Ret ? (appeared, duplicates) : duplicates
-end
-
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 
 function empty_substitutions(sys)
@@ -756,30 +699,6 @@ end
 
 function get_substitutions(sys)
     Dict([eq.lhs => eq.rhs for eq in observed(sys)])
-end
-
-function mergedefaults(defaults, varmap, vars)
-    defs = if varmap isa Dict
-        merge(defaults, varmap)
-    elseif eltype(varmap) <: Pair
-        merge(defaults, Dict(varmap))
-    elseif eltype(varmap) <: Number
-        merge(defaults, Dict(zip(vars, varmap)))
-    else
-        defaults
-    end
-end
-
-function mergedefaults(defaults, observedmap, varmap, vars)
-    defs = if varmap isa Dict
-        merge(observedmap, defaults, varmap)
-    elseif eltype(varmap) <: Pair
-        merge(observedmap, defaults, Dict(varmap))
-    elseif eltype(varmap) <: Number
-        merge(observedmap, defaults, Dict(zip(vars, varmap)))
-    else
-        merge(observedmap, defaults)
-    end
 end
 
 @noinline function throw_missingvars_in_sys(vars)
@@ -834,119 +753,6 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     end
 
     return y
-end
-
-struct BitDict <: AbstractDict{Int, Int}
-    keys::Vector{Int}
-    values::Vector{Union{Nothing, Int}}
-end
-BitDict(n::Integer) = BitDict(Int[], Union{Nothing, Int}[nothing for _ in 1:n])
-struct BitDictKeySet <: AbstractSet{Int}
-    d::BitDict
-end
-
-Base.keys(d::BitDict) = BitDictKeySet(d)
-Base.in(v::Integer, s::BitDictKeySet) = s.d.values[v] !== nothing
-Base.iterate(s::BitDictKeySet, state...) = iterate(s.d.keys, state...)
-function Base.setindex!(d::BitDict, val::Integer, ind::Integer)
-    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
-        push!(d.keys, ind)
-    end
-    d.values[ind] = val
-end
-function Base.getindex(d::BitDict, ind::Integer)
-    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
-        return d.values[ind]
-    else
-        throw(KeyError(ind))
-    end
-end
-function Base.iterate(d::BitDict, state...)
-    r = Base.iterate(d.keys, state...)
-    r === nothing && return nothing
-    k, state = r
-    (k => d.values[k]), state
-end
-function Base.empty!(d::BitDict)
-    for v in d.keys
-        d.values[v] = nothing
-    end
-    empty!(d.keys)
-    d
-end
-
-abstract type AbstractSimpleTreeIter{T} end
-Base.IteratorSize(::Type{<:AbstractSimpleTreeIter}) = Base.SizeUnknown()
-Base.eltype(::Type{<:AbstractSimpleTreeIter{T}}) where {T} = childtype(T)
-has_fast_reverse(::Type{<:AbstractSimpleTreeIter}) = true
-has_fast_reverse(::T) where {T <: AbstractSimpleTreeIter} = has_fast_reverse(T)
-reverse_buffer(it::AbstractSimpleTreeIter) = has_fast_reverse(it) ? nothing : eltype(it)[]
-reverse_children!(::Nothing, cs) = Iterators.reverse(cs)
-function reverse_children!(rev_buff, cs)
-    Iterators.reverse(cs)
-    empty!(rev_buff)
-    for c in cs
-        push!(rev_buff, c)
-    end
-    Iterators.reverse(rev_buff)
-end
-
-struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
-    t::T
-end
-function Base.iterate(it::StatefulPreOrderDFS,
-        state = (eltype(it)[it.t], reverse_buffer(it)))
-    stack, rev_buff = state
-    isempty(stack) && return nothing
-    t = pop!(stack)
-    for c in reverse_children!(rev_buff, children(t))
-        push!(stack, c)
-    end
-    return t, state
-end
-struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
-    t::T
-end
-function Base.iterate(it::StatefulPostOrderDFS,
-        state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
-    isempty(state[2]) && return nothing
-    vstack, sstack, rev_buff = state
-    while true
-        t = pop!(vstack)
-        isresume = pop!(sstack)
-        isresume && return t, state
-        push!(vstack, t)
-        push!(sstack, true)
-        for c in reverse_children!(rev_buff, children(t))
-            push!(vstack, c)
-            push!(sstack, false)
-        end
-    end
-end
-
-# Note that StatefulBFS also returns the depth.
-struct StatefulBFS{T} <: AbstractSimpleTreeIter{T}
-    t::T
-end
-Base.eltype(::Type{<:StatefulBFS{T}}) where {T} = Tuple{Int, childtype(T)}
-function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
-    isempty(queue) && return nothing
-    lv, t = popfirst!(queue)
-    nextlv = lv + 1
-    for c in children(t)
-        push!(queue, (nextlv, c))
-    end
-    return (lv, t), queue
-end
-
-normalize_to_differential(s) = s
-
-function restrict_array_to_union(arr)
-    isempty(arr) && return arr
-    T = foldl(arr; init = Union{}) do prev, cur
-        Union{prev, typeof(cur)}
-    end
-    return Array{T, ndims(arr)}(arr)
 end
 
 function _with_unit(f, x, t, args...)
@@ -1142,22 +948,6 @@ function similar_variable(var::BasicSymbolic, name = :anon; use_gensym = true)
         sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
     end
     return sym
-end
-
-function guesses_from_metadata!(guesses, vars)
-    varguesses = [getguess(v) for v in vars]
-    hasaguess = findall(!isnothing, varguesses)
-    for i in hasaguess
-        haskey(guesses, vars[i]) && continue
-        guesses[vars[i]] = varguesses[i]
-    end
-end
-
-function has_diffvar_type(diffvar)
-    st = symtype(diffvar)
-    st === Real || eltype(st) === Real || st === Complex || eltype(st) === Complex ||
-        st === Number || eltype(st) === Number || st === AbstractFloat ||
-        eltype(st) === AbstractFloat
 end
 
 """

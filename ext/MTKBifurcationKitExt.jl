@@ -113,11 +113,12 @@ function BifurcationKit.BifurcationProblem(nsys::System,
     J = jac ? ofun.jac : nothing
 
     # Converts the input state guess.
-    u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif,
-        unknowns(nsys);
-        defaults = ModelingToolkit.get_defaults(nsys))
-    p_vals = ModelingToolkit.varmap_to_vars(
-        ps, parameters(nsys); defaults = ModelingToolkit.get_defaults(nsys))
+    u0_bif = ModelingToolkit.to_varmap(u0_bif, unknowns(nsys))
+    u0_buf = merge(ModelingToolkit.get_defaults(nsys), u0_bif)
+    u0_bif_vals = ModelingToolkit.varmap_to_vars(u0_bif, unknowns(nsys))
+    ps = ModelingToolkit.to_varmap(ps, parameters(nsys))
+    ps = merge(ModelingToolkit.get_defaults(nsys), ps)
+    p_vals = ModelingToolkit.varmap_to_vars(ps, parameters(nsys))
 
     # Computes bifurcation parameter and the plotting function.
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))

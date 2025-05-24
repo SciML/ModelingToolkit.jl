@@ -135,6 +135,8 @@ setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
+normalize_to_differential(x) = x
+
 function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
@@ -147,133 +149,6 @@ function default_toterm(x)
     else
         x
     end
-end
-
-"""
-$(SIGNATURES)
-
-Takes a list of pairs of `variables=>values` and an ordered list of variables
-and creates the array of values in the correct order with default values when
-applicable.
-"""
-function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
-        toterm = default_toterm, promotetoconcrete = nothing,
-        tofloat = true, use_union = true)
-    varlist = collect(map(unwrap, varlist))
-
-    # Edge cases where one of the arguments is effectively empty.
-    is_incomplete_initialization = varmap isa DiffEqBase.NullParameters ||
-                                   varmap === nothing
-    if is_incomplete_initialization || isempty(varmap)
-        if isempty(defaults)
-            if !is_incomplete_initialization && check
-                isempty(varlist) || throw(MissingVariablesError(varlist))
-            end
-            return nothing
-        else
-            varmap = Dict()
-        end
-    end
-
-    # We respect the input type if it's a static array
-    # otherwise canonicalize to a normal array
-    # container_type = T <: Union{Dict,Tuple} ? Array : T
-    if varmap isa StaticArray
-        container_type = typeof(varmap)
-    else
-        container_type = Array
-    end
-
-    vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
-        varmap = todict(varmap)
-        _varmap_to_vars(varmap, varlist; defaults, check, toterm)
-    else # plain array-like initialization
-        varmap
-    end
-
-    promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
-    if promotetoconcrete
-        vals = promote_to_concrete(vals; tofloat, use_union)
-    end
-
-    if isempty(vals)
-        return nothing
-    elseif container_type <: Tuple
-        (vals...,)
-    else
-        SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),
-            Val(length(vals)), vals...)
-    end
-end
-
-const MISSING_VARIABLES_MESSAGE = """
-                                Initial condition underdefined. Some are missing from the variable map.
-                                Please provide a default (`u0`), initialization equation, or guess
-                                for the following variables:
-                                """
-
-struct MissingVariablesError <: Exception
-    vars::Any
-end
-
-function Base.showerror(io::IO, e::MissingVariablesError)
-    println(io, MISSING_VARIABLES_MESSAGE)
-    println(io, join(e.vars, ", "))
-end
-
-function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-        toterm = Symbolics.diff2term, initialization_phase = false)
-    varmap = canonicalize_varmap(varmap; toterm)
-    defaults = canonicalize_varmap(defaults; toterm)
-    varmap = merge(defaults, varmap)
-    values = Dict()
-
-    T = Union{}
-    for var in varlist
-        var = unwrap(var)
-        val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
-        if !isequal(val, var)
-            values[var] = val
-        end
-    end
-    missingvars = setdiff(varlist, collect(keys(values)))
-    check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
-    return [values[unwrap(var)] for var in varlist]
-end
-
-function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
-    return merge(todict(varmap), Dict(toterm(unwrap(k)) => v for (k, v) in varmap))
-end
-
-function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
-    new_varmap = Dict()
-    for (k, v) in varmap
-        k = unwrap(k)
-        v = unwrap(v)
-        new_varmap[k] = v
-        new_varmap[toterm(k)] = v
-        if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
-            for i in eachindex(k)
-                new_varmap[k[i]] = v[i]
-                new_varmap[toterm(k[i])] = v[i]
-            end
-        end
-    end
-    return new_varmap
-end
-
-@noinline function throw_missingvars(vars)
-    throw(ArgumentError("$vars are missing from the variable map."))
-end
-
-struct IsHistory end
-ishistory(x::Num) = ishistory(unwrap(x))
-ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
-hist(x, t) = wrap(hist(unwrap(x), t))
-function hist(x::Symbolic, t)
-    setmetadata(
-        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], metadata(x))),
-        IsHistory, true)
 end
 
 ## Bounds ======================================================================

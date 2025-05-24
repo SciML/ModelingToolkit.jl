@@ -734,7 +734,6 @@ function update_simplified_system!(
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
-    # @set! sys.substitutions = Substitutions(subeqs, deps)
 
     # Only makes sense for time-dependent
     if ModelingToolkit.has_schedule(sys)
