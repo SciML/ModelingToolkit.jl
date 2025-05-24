@@ -2471,6 +2471,26 @@ function component_post_processing(expr, isconnector)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Mark a system constructor function as building a component. For example,
+
+```julia
+@component function AddOne(; name)
+    @variables in(t) out(t)
+    eqs = [out ~ in + 1]
+    return System(eqs, t, [in, out], []; name)
+end
+```
+
+ModelingToolkit systems are either components or connectors. Components define dynamics of
+the model. Connectors are used to connect components together. See the
+[Model building reference](@ref model_building_api) section of the documentation for more
+information.
+
+See also: [`@connector`](@ref).
+"""
 macro component(expr)
     esc(component_post_processing(expr, false))
 end

@@ -20,6 +20,37 @@ function get_connection_type(s)
     getmetadata(s, VariableConnectType, Equality)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Mark a system constructor function as building a connector. For example,
+
+```julia
+@connector function ElectricalPin(; name, v = nothing, i = nothing)
+    @variables begin
+        v(t) = v, [description = "Potential at the pin [V]"]
+        i(t) = i, [connect = Flow, description = "Current flowing into the pin [A]"]
+    end
+    return System(Equation[], t, [v, i], []; name)
+end
+```
+
+Since connectors only declare variables, the equivalent shorthand syntax can also be used:
+
+```julia
+@connector Pin begin
+    v(t), [description = "Potential at the pin [V]"]
+    i(t), [connect = Flow, description = "Current flowing into the pin [A]"]
+end
+```
+
+ModelingToolkit systems are either components or connectors. Components define dynamics of
+the model. Connectors are used to connect components together. See the
+[Model building reference](@ref model_building_api) section of the documentation for more
+information.
+
+See also: [`@component`](@ref).
+"""
 macro connector(expr)
     esc(component_post_processing(expr, true))
 end
