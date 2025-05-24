@@ -732,6 +732,9 @@ the global structure of the system.
 
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+
+This namespacing functionality can also be toggled independently of `complete`
+using [`toggle_namespacing`](@ref).
 """
 function complete(
         sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
@@ -2495,6 +2498,22 @@ macro component(expr)
     esc(component_post_processing(expr, false))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Macro shorthand for building and compiling a system in one step.
+
+```julia
+@mtkcompile sys = Constructor(args...; kwargs....)
+```
+
+Is shorthand for
+
+```julia
+@named sys = Constructor(args...; kwargs...)
+sys = mtkcompile(sys)
+```
+"""
 macro mtkcompile(exprs...)
     expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
