@@ -74,8 +74,7 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
                  VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-                 initial_state, transition, activeState, entry, hasnode,
-                 ticksInState, timeInState, fixpoint_sub, fast_substitute,
+                 hasnode, fixpoint_sub, fast_substitute,
                  CallWithMetadata, CallWithParent
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
@@ -163,6 +162,7 @@ include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
+include("systems/state_machines.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
