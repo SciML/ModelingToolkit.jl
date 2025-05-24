@@ -1682,6 +1682,57 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expression
+if `simplify == true`.
+"""
+function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
+    simplify ? Symbolics.simplify(expr) : expr
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively substitute the observed equations of `sys` into `expr`. If `simplify`, call
+`Symbolics.simplify` on the resultant expression.
+"""
+function substitute_observed(sys::AbstractSystem, expr; simplify = false)
+    empty_substitutions(sys) && return expr
+    substitutions = get_substitutions(sys)
+    return substitute_and_simplify(expr, substitutions, simplify)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Like `equations(sys)`, but also substitutes the observed equations eliminated from the
+equations during `mtkcompile`. These equations matches generated numerical code.
+
+See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+"""
+function full_equations(sys::AbstractSystem; simplify = false)
+    empty_substitutions(sys) && return equations(sys)
+    subs = get_substitutions(sys)
+    neweqs = map(equations(sys)) do eq
+        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+                eq.rhs, subs,
+                simplify)
+        else
+            if !_iszero(eq.lhs)
+                eq = 0 ~ eq.rhs - eq.lhs
+            end
+            rhs = substitute_and_simplify(eq.rhs, subs, simplify)
+            return 0 ~ rhs
+        end
+        eq
+    end
+    return neweqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Get the flattened jumps of the system. In other words, obtain all of the jumps in `sys` and
 all the subsystems of `sys` (appropriately namespaced).
 """

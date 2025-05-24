@@ -99,48 +99,6 @@ function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
     return eq_diff
 end
 
-function tearing_sub(expr, dict, s)
-    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
-    s ? simplify(expr) : expr
-end
-
-function tearing_substitute_expr(sys::AbstractSystem, expr; simplify = false)
-    empty_substitutions(sys) && return expr
-    substitutions = get_substitutions(sys)
-    return tearing_sub(expr, substitutions, simplify)
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Like `equations(sys)`, but includes substitutions done by the tearing process.
-These equations matches generated numerical code.
-
-See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
-"""
-function full_equations(sys::AbstractSystem; simplify = false)
-    isempty(observed(sys)) && return equations(sys)
-    subs = Dict([eq.lhs => eq.rhs for eq in observed(sys)])
-    neweqs = map(equations(sys)) do eq
-        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return tearing_sub(eq.lhs, subs, simplify) ~ tearing_sub(eq.rhs, subs,
-                simplify)
-        else
-            if !(eq.lhs isa Number && eq.lhs == 0)
-                eq = 0 ~ eq.rhs - eq.lhs
-            end
-            rhs = tearing_sub(eq.rhs, subs, simplify)
-            if rhs isa Symbolic
-                return 0 ~ rhs
-            else # a number
-                error("tearing failed because the system is singular")
-            end
-        end
-        eq
-    end
-    return neweqs
-end
-
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
