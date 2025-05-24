@@ -2619,6 +2619,11 @@ end
     hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
 
 Print a tree of a system's hierarchy of subsystems.
+
+# Keyword arguments
+
+- `describe`: Whether to also print the description of each subsystem, if present.
+- `bold`: Whether to print the name of the system in **bold** font.
 """
 function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
     print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
@@ -2661,8 +2666,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend `basesys` with `sys`.
+Extend `basesys` with `sys`. This can be thought of as the `merge` operation on systems.
+Values in `sys` take priority over duplicates in `basesys` (for example, defaults).
+
 By default, the resulting system inherits `sys`'s name and description.
+
+The `&` operator can also be used for this purpose. `sys & basesys` is equivalent to
+`extend(sys, basesys)`.
 
 See also [`compose`](@ref).
 """
@@ -2710,14 +2720,31 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     return T(args...; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Extend `sys` with all systems in `basesys` in order.
+"""
 function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
     foldl(extend, basesys, init = sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+
+See also: [`extend`](@ref).
+"""
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
     extend(sys, basesys; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+"""
 function Base.:(&)(
         sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
     extend(sys, basesys; kwargs...)
@@ -2726,8 +2753,11 @@ end
 """
 $(SIGNATURES)
 
-Compose multiple systems together. The resulting system would inherit the first
-system's name.
+Compose multiple systems together. This adds all of `systems` as subsystems of `sys`.
+The resulting system inherits the name of `sys` by default.
+
+The `∘` operator can also be used for this purpose. `sys ∘ basesys` is equivalent to
+`compose(sys, basesys)`.
 
 See also [`extend`](@ref).
 """
@@ -2749,9 +2779,22 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     return sys
 end
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for adding all systems in `syss` as the subsystems of `first(syss)`.
+"""
 function compose(syss...; name = nameof(first(syss)))
     compose(first(syss), collect(syss[2:end]); name = name)
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `compose(sys1, sys2)`.
+
+See also: [`compose`](@ref).
+"""
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
