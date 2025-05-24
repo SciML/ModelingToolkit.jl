@@ -693,10 +693,21 @@ end
 
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if any variables were eliminated from the system as part of `mtkcompile`.
+"""
 function empty_substitutions(sys)
     isempty(observed(sys))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get a dictionary mapping variables eliminated from the system during `mtkcompile` to the
+expressions used to calculate them.
+"""
 function get_substitutions(sys)
     Dict([eq.lhs => eq.rhs for eq in observed(sys)])
 end
