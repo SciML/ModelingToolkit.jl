@@ -94,6 +94,15 @@ is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConne
 
 get_systems(c::Connection) = c.systems
 
+"""
+    $(TYPEDSIGNATURES)
+
+`instream` is used when modeling stream connections. It is only allowed to be used on
+`Stream` variables.
+
+Refer to the [Connection semantics](@ref connect_semantics) section of the docs for more
+information.
+"""
 instream(a) = term(instream, unwrap(a), type = symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
