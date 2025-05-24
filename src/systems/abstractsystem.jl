@@ -1048,8 +1048,18 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     """)
 end
 
-apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
-apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+"""
+    $(TYPEDSIGNATURES)
+
+Apply function `f` to each variable in expression `ex`. `f` should be a function that takes
+a variable and returns the replacement to use. A "variable" in this context refers to a
+symbolic quantity created directly from a variable creation macro such as
+[`Symbolics.@variables`](@ref), [`@independent_variables`](@ref), [`@parameters`](@ref),
+[`@constants`](@ref) or [`@brownians`](@ref).
+"""
+apply_to_variables(f, ex) = _apply_to_variables(f, ex)
+apply_to_variables(f, ex::Num) = wrap(_apply_to_variables(f, unwrap(ex)))
+apply_to_variables(f, ex::Symbolics.Arr) = wrap(_apply_to_variables(f, unwrap(ex)))
 function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
