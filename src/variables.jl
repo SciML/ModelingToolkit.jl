@@ -102,7 +102,7 @@ potential is equated at a junction.
 For more information, refer to the [Connection semantics](@ref connect_semantics) section
 of the docs.
 
-See also: [`Symbolics.connect`](@ref), [`@connector`](@ref), [`Flow`](@ref),
+See also: [`connect`](@ref), [`@connector`](@ref), [`Flow`](@ref),
 [`Stream`](@ref).
 """
 struct Equality <: AbstractConnectType end # Equality connection
@@ -118,7 +118,7 @@ for current flowing in and out of the function).
 For more information, refer to the [Connection semantics](@ref connect_semantics) section
 of the docs.
 
-See also: [`Symbolics.connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
 [`Stream`](@ref).
 """
 struct Flow <: AbstractConnectType end     # sum to 0
@@ -132,7 +132,7 @@ the variable is part of a special stream connector.
 For more information, refer to the [Connection semantics](@ref connect_semantics) section
 of the docs.
 
-See also: [`Symbolics.connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
 [`Flow`](@ref).
 """
 struct Stream <: AbstractConnectType end   # special stream connector

@@ -1,4 +1,48 @@
 using Symbolics: StateMachineOperator
+
+"""
+    $(TYPEDEF)
+
+Struct used to represent a connection equation. A connection equation is an `Equation`
+where the LHS is an empty `Connection(nothing)` and the RHS is a `Connection` containing
+the connected connectors.
+
+For special types of connections, the LHS `Connection` can contain relevant metadata.
+"""
+struct Connection
+    systems::Any
+end
+
+Base.broadcastable(x::Connection) = Ref(x)
+Connection() = Connection(nothing)
+Base.hash(c::Connection, seed::UInt) = hash(c.systems, (0xc80093537bdc1311 % UInt) ⊻ seed)
+Symbolics.hide_lhs(_::Connection) = true
+
+"""
+    $(TYPEDSIGNATURES)
+
+Connect multiple connectors created via `@connector`. All connected connectors
+must be unique.
+"""
+function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
+    syss = (sys1, sys2, syss...)
+    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
+    Equation(Connection(), Connection(syss)) # the RHS are connected systems
+end
+
+function Base.show(io::IO, c::Connection)
+    print(io, "connect(")
+    if c.systems isa AbstractArray || c.systems isa Tuple
+        n = length(c.systems)
+        for (i, s) in enumerate(c.systems)
+            str = join(split(string(nameof(s)), NAMESPACE_SEPARATOR), '.')
+            print(io, str)
+            i != n && print(io, ", ")
+        end
+    end
+    print(io, ")")
+end
+
 isconnection(_) = false
 isconnection(_::Connection) = true
 """
@@ -188,7 +232,7 @@ var1 ~ var3
 # ...
 ```
 """
-function Symbolics.connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
+function connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
         vars::ConnectableSymbolicT...)
     allvars = (var1, var2, vars...)
     validate_causal_variables_connection(allvars)

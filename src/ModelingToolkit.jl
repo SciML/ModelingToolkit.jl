@@ -72,7 +72,7 @@ using RuntimeGeneratedFunctions: drop_expr
 using Symbolics: degree
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
-                 VariableSource, getname, variable, Connection, connect,
+                 VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
                  initial_state, transition, activeState, entry, hasnode,
                  ticksInState, timeInState, fixpoint_sub, fast_substitute,
