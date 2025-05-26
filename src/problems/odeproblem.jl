@@ -83,20 +83,6 @@ end
     maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
 end
 
-"""
-```julia
-SciMLBase.SteadyStateProblem(sys::System, u0map,
-                             parammap = DiffEqBase.NullParameters();
-                             version = nothing, tgrad = false,
-                             jac = false,
-                             checkbounds = false, sparse = false,
-                             linenumbers = true, parallel = SerialForm(),
-                             kwargs...) where {iip}
-```
-
-Generates an SteadyStateProblem from a `System` of ODEs and allows for automatically
-symbolically calculating numerical enhancements.
-"""
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
         sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...) where {iip, spec}
