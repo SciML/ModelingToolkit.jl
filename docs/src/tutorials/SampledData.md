@@ -1,4 +1,4 @@
-# Clocks and Sampled-Data Systems
+# [Clocks and Sampled-Data Systems](@id hybrid)
 
 A sampled-data system contains both continuous-time and discrete-time components, such as a continuous-time plant model and a discrete-time control system. ModelingToolkit supports the modeling and simulation of sampled-data systems by means of *clocks*.
 

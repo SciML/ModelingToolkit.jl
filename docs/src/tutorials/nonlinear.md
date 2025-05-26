@@ -1,4 +1,4 @@
-# Modeling Nonlinear Systems
+# [Modeling Nonlinear Systems](@id nonlinear)
 
 ModelingToolkit.jl is not only useful for generating initial value problems (`ODEProblem`).
 The package can also build nonlinear systems.

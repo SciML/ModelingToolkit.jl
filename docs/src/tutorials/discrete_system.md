@@ -1,4 +1,4 @@
-# (Experimental) Modeling Discrete Systems
+# [(Experimental) Modeling Discrete Systems](@id discrete)
 
 In this example, we will use the new [`DiscreteSystem`](@ref) API
 to create an SIR model.
