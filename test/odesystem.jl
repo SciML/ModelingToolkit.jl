@@ -434,14 +434,6 @@ end
 
 @named sys = System([0 ~ sys1.y + sys2.y], t; systems = [sys1, sys2])
 
-# DelayDiffEq
-using ModelingToolkit: hist
-@variables x(t) y(t)
-xₜ₋₁ = hist(x, t - 1)
-eqs = [D(x) ~ x * y
-       D(y) ~ y * x - xₜ₋₁]
-@named sys = System(eqs, t)
-
 # register
 using StaticArrays
 using SymbolicUtils: term
@@ -657,7 +649,8 @@ end
 # 1561
 let
     vars = @variables x y
-    arr = ModelingToolkit.varmap_to_vars([x => 0.0, y => [0.0, 1.0]], vars) #error
+    arr = ModelingToolkit.varmap_to_vars(
+        Dict([x => 0.0, y => [0.0, 1.0]]), vars; use_union = true) #error
     sol = Union{Float64, Vector{Float64}}[0.0, [0.0, 1.0]]
     @test arr == sol
     @test typeof(arr) == typeof(sol)

@@ -328,11 +328,26 @@ function Base.showerror(io::IO, err::MissingGuessError)
         In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
 end
 
+const MISSING_VARIABLES_MESSAGE = """
+                                Initial condition underdefined. Some are missing from the variable map.
+                                Please provide a default (`u0`), initialization equation, or guess
+                                for the following variables:
+                                """
+
+struct MissingVariablesError <: Exception
+    vars::Any
+end
+
+function Base.showerror(io::IO, e::MissingVariablesError)
+    println(io, MISSING_VARIABLES_MESSAGE)
+    println(io, join(e.vars, ", "))
+end
+
 """
     $(TYPEDSIGNATURES)
 
 Return an array of values where the `i`th element corresponds to the value of `vars[i]`
-in `varmap`. Does not perform symbolic substitution in the values of `varmap`.
+in `varmap`. Will mutate `varmap` by symbolically substituting it into itself.
 
 Keyword arguments:
 - `container_type`: The type of the returned container.
@@ -348,11 +363,13 @@ Keyword arguments:
 - `check`: Whether to check if all of `vars` are keys of `varmap`.
 - `is_initializeprob`: Whether an initialization problem is being constructed. Used for
   better error messages.
+- `substitution_limit`: The maximum number of times to recursively substitute `varmap` into
+  itself to get a numeric value for each variable in `vars`.
 """
-function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
+function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
-        is_initializeprob = false)
+        is_initializeprob = false, substitution_limit = 100)
     isempty(vars) && return nothing
 
     varmap = recursive_unwrap(varmap)
@@ -369,6 +386,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
             end
         end
     end
+    evaluate_varmap!(varmap, vars; limit = substitution_limit)
     vals = map(x -> varmap[x], vars)
     if !allow_symbolic
         missingsyms = Any[]
@@ -386,7 +404,7 @@ function better_varmap_to_vars(varmap::AbstractDict, vars::Vector;
         if buffer_eltype == Nothing
             vals = promote_to_concrete(vals; tofloat, use_union)
         else
-            vals = buffer_eltype.(vals)
+            vals = Vector{buffer_eltype}(vals)
         end
     end
 
@@ -1197,11 +1215,11 @@ Keyword arguments:
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `check_initialization_units`: Enable or disable unit checks when constructing the
   initialization problem.
-- `tofloat`: Passed to [`better_varmap_to_vars`](@ref) when building the parameter vector of
+- `tofloat`: Passed to [`varmap_to_vars`](@ref) when building the parameter vector of
   a non-split system.
 - `u0_eltype`: The `eltype` of the `u0` vector. If `nothing`, finds the promoted floating point
   type from `op`.
-- `u0_constructor`: A function to apply to the `u0` value returned from `better_varmap_to_vars`
+- `u0_constructor`: A function to apply to the `u0` value returned from `varmap_to_vars`
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
 - `check_length`: Whether to check the number of equations along with number of unknowns and
@@ -1322,11 +1340,10 @@ function process_SciMLProblem(
             @warn "Cycles in unknowns:\n$msg"
         end
     end
-    evaluate_varmap!(op, dvs; limit = substitution_limit)
 
-    u0 = better_varmap_to_vars(
-        op, dvs; buffer_eltype = u0_eltype,
-        container_type = u0Type, allow_symbolic = symbolic_u0, is_initializeprob)
+    u0 = varmap_to_vars(
+        op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+        allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit)
 
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -1347,7 +1364,7 @@ function process_SciMLProblem(
             @warn "Cycles in parameters:\n$msg"
         end
     end
-    evaluate_varmap!(op, ps; limit = substitution_limit)
+
     if is_split(sys)
         # `pType` is usually `Dict` when the user passes key-value pairs.
         if !(pType <: AbstractArray)
@@ -1355,7 +1372,7 @@ function process_SciMLProblem(
         end
         p = MTKParameters(sys, op; floatT = floatT, p_constructor)
     else
-        p = p_constructor(better_varmap_to_vars(op, ps; tofloat, container_type = pType))
+        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
 
     if implicit_dae
@@ -1681,97 +1698,47 @@ function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwa
     remake(T(args...; kwargs...))
 end
 
-##############
-# Legacy functions for backward compatibility
-##############
-
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
+    $(TYPEDSIGNATURES)
 
-Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
+Return the `u0` vector for the given system `sys` and variable-value mapping `varmap`. All
+keyword arguments are forwarded to [`varmap_to_vars`](@ref).
 """
-function get_u0_p(sys,
-        u0map,
-        parammap = nothing;
-        t0 = nothing,
-        tofloat = true,
-        use_union = true,
-        symbolic_u0 = false)
+function get_u0(sys::AbstractSystem, varmap; kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
+    op = to_varmap(varmap, dvs)
+    add_observed!(sys, op)
+    add_parameter_dependencies!(sys, op)
+    missing_dvs, _ = build_operating_point!(
+        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
 
-    defs = defaults(sys)
-    if t0 !== nothing
-        defs[get_iv(sys)] = t0
-    end
-    if parammap !== nothing
-        defs = mergedefaults(defs, parammap, ps)
-    end
-    if u0map isa Vector && eltype(u0map) <: Pair
-        u0map = Dict(u0map)
-    end
-    if u0map isa Dict
-        allobs = Set(observables(sys))
-        if any(in(allobs), keys(u0map))
-            u0s_in_obs = filter(in(allobs), keys(u0map))
-            @warn "Observed variables cannot be assigned initial values. Initial values for $u0s_in_obs will be ignored."
-        end
-    end
-    obs = filter!(x -> !(x[1] isa Number), map(x -> x.rhs => x.lhs, observed(sys)))
-    observedmap = isempty(obs) ? Dict() : todict(obs)
-    defs = mergedefaults(defs, observedmap, u0map, dvs)
-    for (k, v) in defs
-        if Symbolics.isarraysymbolic(k)
-            ks = scalarize(k)
-            length(ks) == length(v) || error("$k has default value $v with unmatched size")
-            for (kk, vv) in zip(ks, v)
-                if !haskey(defs, kk)
-                    defs[kk] = vv
-                end
-            end
-        end
-    end
+    isempty(missing_dvs) || throw(MissingVariablesError(collect(missing_dvs)))
 
-    if symbolic_u0
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
-    else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat, use_union)
-    end
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
-    p = p === nothing ? SciMLBase.NullParameters() : p
-    t0 !== nothing && delete!(defs, get_iv(sys))
-    u0, p, defs
+    return varmap_to_vars(op, dvs; kwargs...)
 end
 
-function get_u0(
-        sys, u0map, parammap = nothing; symbolic_u0 = false,
-        toterm = default_toterm, t0 = nothing, use_union = true)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `u0` vector for the given system `sys` and variable-value mapping `varmap`. All
+keyword arguments are forwarded to [`MTKParameters`](@ref) for split systems and
+[`varmap_to_vars`](@ref) for non-split systems.
+"""
+function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     dvs = unknowns(sys)
-    ps = parameters(sys)
-    defs = defaults(sys)
-    if t0 !== nothing
-        defs[get_iv(sys)] = t0
-    end
-    if parammap !== nothing
-        defs = mergedefaults(defs, parammap, ps)
-    end
+    ps = parameters(sys; initial_parameters = true)
+    op = to_varmap(varmap, dvs)
+    add_observed!(sys, op)
+    add_parameter_dependencies!(sys, op)
+    _, missing_ps = build_operating_point!(
+        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
 
-    # Convert observed equations "lhs ~ rhs" into defaults.
-    # Use the order "lhs => rhs" by default, but flip it to "rhs => lhs"
-    # if "lhs" is known by other means (parameter, another default, ...)
-    # TODO: Is there a better way to determine which equations to flip?
-    obs = map(x -> x.lhs => x.rhs, observed(sys))
-    obs = map(x -> x[1] in keys(defs) ? reverse(x) : x, obs)
-    obs = filter!(x -> !(x[1] isa Number), obs) # exclude e.g. "0 => x^2 + y^2 - 25"
-    obsmap = isempty(obs) ? Dict() : todict(obs)
+    isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
 
-    defs = mergedefaults(defs, obsmap, u0map, dvs)
-    if symbolic_u0
-        u0 = varmap_to_vars(
-            u0map, dvs; defaults = defs, tofloat = false, use_union = false, toterm)
+    if split
+        MTKParameters(sys, op; kwargs...)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true, use_union, toterm)
+        varmap_to_vars(op, ps; kwargs...)
     end
-    t0 !== nothing && delete!(defs, get_iv(sys))
-    return u0, defs
 end

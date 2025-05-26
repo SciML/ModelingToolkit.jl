@@ -114,9 +114,14 @@ function SciMLBase.OptimizationProblem{iip}(
     end
 
     ps = parameters(sys)
-    defs = merge(defaults(sys), to_varmap(op, dvs))
-    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false)
-    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false)
+    defs = defaults(sys)
+    op = to_varmap(op, dvs)
+    lbmap = merge(op, AnyDict(dvs .=> lb))
+    _, _ = build_operating_point!(sys, lbmap, Dict(), Dict(), defs, dvs, ps)
+    lb = varmap_to_vars(lbmap, dvs; tofloat = false)
+    ubmap = merge(op, AnyDict(dvs .=> ub))
+    _, _ = build_operating_point!(sys, ubmap, Dict(), Dict(), defs, dvs, ps)
+    ub = varmap_to_vars(ubmap, dvs; tofloat = false)
 
     if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
         lb = nothing

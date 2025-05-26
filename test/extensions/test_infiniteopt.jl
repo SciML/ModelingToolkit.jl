@@ -35,9 +35,9 @@ permutation = [findfirst(isequal(x), expected_state_order) for x in dvs] # This 
 
 ##
 
-ub = varmap_to_vars([model.θ => 2pi, model.ω => 10], dvs)
-lb = varmap_to_vars([model.θ => -2pi, model.ω => -10], dvs)
-xf = varmap_to_vars([model.θ => pi, model.ω => 0], dvs)
+ub = varmap_to_vars(Dict{Any, Any}([model.θ => 2pi, model.ω => 10]), dvs)
+lb = varmap_to_vars(Dict{Any, Any}([model.θ => -2pi, model.ω => -10]), dvs)
+xf = varmap_to_vars(Dict{Any, Any}([model.θ => pi, model.ω => 0]), dvs)
 nx = length(dvs)
 nu = length(inputs)
 ny = length(outputs)
@@ -62,7 +62,8 @@ InfiniteOpt.@variables(m,
     end)
 
 # Trace the dynamics
-x0, p = ModelingToolkit.get_u0_p(io_sys, [model.θ => 0, model.ω => 0], [model.L => L])
+x0 = ModelingToolkit.get_u0(io_sys, [model.θ => 0, model.ω => 0])
+p = ModelingToolkit.get_p(io_sys, [model.L => L]; split = false, buffer_eltype = Any)
 
 xp = f[1](x, u, p, τ)
 cp = f_obs(x, u, p, τ) # Test that it's possible to trace through an observed function
@@ -71,8 +72,8 @@ cp = f_obs(x, u, p, τ) # Test that it's possible to trace through an observed f
 @constraint(m, [i = 1:nx], x[i](0)==x0[i]) # Initial condition
 @constraint(m, [i = 1:nx], x[i](1)==xf[i]) # Terminal state
 
-x_scale = varmap_to_vars([model.θ => 1
-                          model.ω => 1], dvs)
+x_scale = varmap_to_vars(Dict{Any, Any}([model.θ => 1
+                                         model.ω => 1]), dvs)
 
 # Add dynamics constraints
 @constraint(m, [i = 1:nx], (∂(x[i], τ) - tf * xp[i]) / x_scale[i]==0)
