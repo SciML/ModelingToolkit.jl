@@ -404,7 +404,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         if buffer_eltype == Nothing
             vals = promote_to_concrete(vals; tofloat, use_union)
         else
-            vals = buffer_eltype.(vals)
+            vals = Vector{buffer_eltype}(vals)
         end
     end
 
