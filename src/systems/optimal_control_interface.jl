@@ -47,16 +47,10 @@ end
 
 is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
-"""
-Generate the control function f(x, u, p, t) from the ODESystem. 
-Input variables are automatically inferred but can be manually specified.
-"""
-function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
-        dvs = unknowns(sys),
-        ps = parameters(sys), u0 = nothing,
+@fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(sys::System;
         inputs = unbound_inputs(sys),
-        disturbance_inputs = disturbances(sys);
-        version = nothing, tgrad = false,
+        disturbance_inputs = disturbances(sys),
+        u0 = nothing, tgrad = false,
         jac = false, controljac = false,
         p = nothing, t = nothing,
         eval_expression = false,
@@ -66,7 +60,6 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
         checkbounds = false,
         sparsity = false,
         analytic = nothing,
-        split_idxs = nothing,
         initialization_data = nothing,
         cse = true,
         kwargs...) where {iip, specialize}
@@ -75,61 +68,49 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
     f = f[1]
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps;
+        _tgrad = generate_tgrad(sys;
             simplify = simplify,
             expression = Val{true},
+            wrap_gfw = Val{true},
             expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
-        tgrad_oop, tgrad_iip = eval_or_rgf.(tgrad_gen; eval_expression, eval_module)
-        _tgrad = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(tgrad_oop, tgrad_iip)
     else
         _tgrad = nothing
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps;
+        _jac = generate_jacobian(sys;
             simplify = simplify, sparse = sparse,
             expression = Val{true},
+            wrap_gfw = Val{true},
             expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
-        jac_oop, jac_iip = eval_or_rgf.(jac_gen; eval_expression, eval_module)
-
-        _jac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(jac_oop, jac_iip)
     else
         _jac = nothing
     end
 
     if controljac
-        cjac_gen = generate_control_jacobian(sys, dvs, ps;
+        _cjac = generate_control_jacobian(sys;
             simplify = simplify, sparse = sparse,
-            expression = Val{true},
+            expression = Val{true}, wrap_gfw = Val{true},
             expression_module = eval_module, cse,
             checkbounds = checkbounds, kwargs...)
-        cjac_oop, cjac_iip = eval_or_rgf.(cjac_gen; eval_expression, eval_module)
-
-        _cjac = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(cjac_oop, cjac_iip)
     else
         _cjac = nothing
     end
 
     M = calculate_massmatrix(sys)
-    _M = if sparse && !(u0 === nothing || M === I)
-        SparseArrays.sparse(M)
-    elseif u0 === nothing || M === I
-        M
-    else
-        ArrayInterface.restructure(u0 .* u0', M)
-    end
+    _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
         sys; steady_state, eval_expression, eval_module, checkbounds, cse)
 
+    _W_sparsity = W_sparsity(sys)
+    W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
     if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
-        W_prototype = similar(W_sparsity(sys), uElType)
         controljac_prototype = similar(calculate_control_jacobian(sys), uElType)
     else
-        W_prototype = nothing
         controljac_prototype = nothing
     end
 
@@ -142,23 +123,9 @@ function SciMLBase.ODEInputFunction{iip, specialize}(sys::System,
         jac_prototype = W_prototype,
         controljac_prototype = controljac_prototype,
         observed = observedfun,
-        sparsity = sparsity ? W_sparsity(sys) : nothing,
+        sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
         initialization_data)
-end
-
-function SciMLBase.ODEInputFunction(sys::System, args...; kwargs...)
-    ODEInputFunction{true}(sys, args...; kwargs...)
-end
-
-function SciMLBase.ODEInputFunction{true}(sys::System, args...;
-        kwargs...)
-    ODEInputFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
-end
-
-function SciMLBase.ODEInputFunction{false}(sys::System, args...;
-        kwargs...)
-    ODEInputFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
