@@ -6,6 +6,7 @@ using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDi
 using Ipopt
 using DataInterpolations
 using CasADi
+using Pyomo
 
 import DiffEqBase: solve
 const M = ModelingToolkit

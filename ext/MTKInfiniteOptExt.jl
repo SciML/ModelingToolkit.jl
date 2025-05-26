@@ -186,6 +186,7 @@ function MTK.prepare_and_optimize!(prob::JuMPDynamicOptProblem, solver::JuMPColl
     add_solve_constraints!(prob, solver.tableau)
     set_optimizer(model, solver.solver)
     optimize!(model)
+    model
 end
 
 function MTK.prepare_and_optimize!(prob::InfiniteOptDynamicOptProblem, solver::InfiniteOptCollocation; verbose = false, kwargs...)
@@ -194,26 +195,26 @@ function MTK.prepare_and_optimize!(prob::InfiniteOptDynamicOptProblem, solver::I
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)
     optimize!(model)
+    model
 end
 
-function MTK.get_V_values(m::InfiniteOptModel)
-    nt = length(supports(m.model[:t]))
-    if !isempty(m.V)
-        V_vals = value.(m.V)
+function MTK.get_V_values(m::InfiniteModel)
+    nt = length(supports(m[:t]))
+    if !isempty(m[:V])
+        V_vals = value.(m[:V])
         V_vals = [[V_vals[i][j] for i in 1:length(V_vals)] for j in 1:nt]
     else
         nothing
     end
 end
-function MTK.get_U_values(m::InfiniteOptModel)
-    nt = length(supports(m.model[:t]))
-    U_vals = value.(m.U)
+function MTK.get_U_values(m::InfiniteModel)
+    nt = length(supports(m[:t]))
+    U_vals = value.(m[:U])
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
 end
-MTK.get_t_values(model) = value(model.tₛ) * supports(model.model[:t])
+MTK.get_t_values(m::InfiniteModel) = value(m[:tₛ]) * supports(m[:t])
 
-function MTK.successful_solve(m::InfiniteOptModel)
-    model = m.model
+function MTK.successful_solve(model::InfiniteModel)
     tstatus = termination_status(model)
     pstatus = primal_status(model)
     !has_values(model) &&
