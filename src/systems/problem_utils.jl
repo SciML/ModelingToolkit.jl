@@ -1217,7 +1217,7 @@ function process_SciMLProblem(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
-        force_initialization_time_independent = false, algebraic_only = false,
+        algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1276,8 +1276,8 @@ function process_SciMLProblem(
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, p_constructor, floatT, time_dependent_init)
+            algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
+            time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end

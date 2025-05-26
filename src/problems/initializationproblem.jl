@@ -28,7 +28,6 @@ initial conditions for the given DAE.
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
-        force_time_independent = false,
         algebraic_only = false,
         time_dependent_init = is_time_dependent(sys),
         kwargs...) where {iip, specialize}
@@ -58,7 +57,7 @@ initial conditions for the given DAE.
 
     # useful for `SteadyStateProblem` since `f` has to be autonomous and the
     # initialization should be too
-    if force_time_independent
+    if !time_dependent_init
         idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
         idx === nothing || deleteat!(get_ps(isys), idx)
     end

@@ -91,7 +91,7 @@ end
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
-        force_initialization_time_independent = true, kwargs...)
+        time_dependent_init = false, kwargs...)
 
     kwargs = process_kwargs(sys; expression, kwargs...)
     args = (; f, u0, p)
