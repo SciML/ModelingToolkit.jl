@@ -7,9 +7,7 @@
     check_complete(sys, DiscreteFunction)
     check_compatibility && check_compatible_system(DiscreteFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -45,7 +43,7 @@ end
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
     dvs = unknowns(sys)
-    u0map = to_varmap(u0map, dvs)
+    u0map = to_varmap(op, dvs)
     add_toterms!(u0map; replace = true)
     f, u0, p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,

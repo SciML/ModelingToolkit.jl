@@ -6,10 +6,7 @@
     check_complete(sys, DDEFunction)
     check_compatibility && check_compatible_system(DDEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 

@@ -7,9 +7,7 @@
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -26,7 +24,7 @@
 
     if tgrad
         _tgrad = generate_tgrad(
-            sys, dvs, ps; expression, wrap_gfw = Val{true},
+            sys; expression, wrap_gfw = Val{true},
             simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _tgrad = nothing

@@ -6,9 +6,7 @@ function SciMLBase.IntervalNonlinearFunction(
     check_complete(sys, IntervalNonlinearFunction)
     check_compatibility && check_compatible_system(IntervalNonlinearFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         scalar = true, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     observedfun = ObservedFunctionCache(

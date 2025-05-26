@@ -9,8 +9,7 @@
 
     iv = get_iv(sys)
     dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         override_discrete = true, kwargs...)
 
