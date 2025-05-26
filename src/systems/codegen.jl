@@ -1,18 +1,38 @@
+const GENERATE_X_KWARGS = """
+- `expression`: `Val{true}` if this should return an `Expr` (or tuple of `Expr`s) of the
+  generated code. `Val{false}` otherwise.
+- `wrap_gfw`: `Val{true}` if the returned functions should be wrapped in a callable
+  struct to make them callable using the expected syntax. The callable struct itself is
+  internal API. If `expression == Val{true}`, the returned expression will construct the
+  callable struct. If this function returns a tuple of functions/expressions, both will
+  be identical if `wrap_gfw == Val{true}`.
+$EVAL_EXPR_MOD_KWARGS
+"""
+
 """
     $(TYPEDSIGNATURES)
 
-Generate the RHS function for the `equations` of a `System`.
-
-# Arguments
+Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
 
 # Keyword Arguments
 
+$GENERATE_X_KWARGS
+- `implicit_dae`: Whether the generated function should be in the implicit form. Applicable
+  only for ODEs/DAEs or discrete systems. Instead of `f(u, p, t)` (`f(du, u, p, t)` for the
+  in-place form) the function is `f(du, u, p, t)` (respectively `f(resid, du, u, p, t)`).
+- `override_discrete`: Whether to assume the system is discrete regardless of
+  `is_discrete_system(sys)`.
+- `scalar`: Whether to generate a single-out-of-place function that returns a scalar for
+  the only equation in the system.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_rhs(sys::System, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); implicit_dae = false,
+function generate_rhs(sys::System; implicit_dae = false,
         scalar = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
         kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
@@ -81,10 +101,22 @@ function generate_rhs(sys::System, dvs = unknowns(sys),
         res; eval_expression, eval_module)
 end
 
-function generate_diffusion_function(sys::System, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); expression = Val{true},
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the diffusion function for the noise equations of a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_diffusion_function(sys::System; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false,
         eval_module = @__MODULE__, kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     eqs = get_noise_eqs(sys)
     if ndims(eqs) == 2 && size(eqs, 2) == 1
         # scalar noise
@@ -106,6 +138,12 @@ function generate_diffusion_function(sys::System, dvs = unknowns(sys),
         expression, wrap_gfw, (p_start, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the gradient of the equations of `sys` with respect to the independent variable.
+`simplify` is forwarded to `Symbolics.expand_derivatives`.
+"""
 function calculate_tgrad(sys::System; simplify = false)
     # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
@@ -121,6 +159,16 @@ function calculate_tgrad(sys::System; simplify = false)
     return tgrad
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the jacobian of the equations of `sys`.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
+- `dvs`: The variables with respect to which the jacobian should be computed.
+"""
 function calculate_jacobian(sys::System;
         sparse = false, simplify = false, dvs = unknowns(sys))
     obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
@@ -147,6 +195,18 @@ function calculate_jacobian(sys::System;
     return jac
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the jacobian function for the equations of a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_jacobian(sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
@@ -182,11 +242,24 @@ function assert_jac_length_header(sys)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the tgrad function for the equations of a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`: Forwarded to [`calculate_tgrad`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_tgrad(
-        sys::System, dvs = unknowns(sys), ps = parameters(
-            sys; initial_parameters = true);
+        sys::System;
         simplify = false, eval_expression = false, eval_module = @__MODULE__,
         expression = Val{true}, wrap_gfw = Val{false}, kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, tgrad,
@@ -215,6 +288,11 @@ function calculate_hessian(sys::System; simplify = false, sparse = false)
     return hess
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sparsity pattern of the hessian of the equations of `sys`.
+"""
 function Symbolics.hessian_sparsity(sys::System)
     hess = calculate_hessian(sys; sparse = true)
     return similar.(hess, Float64)
@@ -222,10 +300,23 @@ end
 
 const W_GAMMA = only(@variables ˍ₋gamma)
 
-function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true);
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the `W = γ * M + J` function for the equations of a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_W(sys::System;
         simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
     if sparse
         M = SparseArrays.sparse(M)
@@ -244,10 +335,25 @@ function generate_W(sys::System, γ = 1.0, dvs = unknowns(sys),
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module)
 end
 
-function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true); simplify = false, sparse = false,
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the DAE jacobian `γ * J′ + J` function for the equations of a [`System`](@ref).
+`J′` is the jacobian of the equations with respect to the `du` vector, and `J` is the
+standard jacobian.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_dae_jacobian(sys::System; simplify = false, sparse = false,
         expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
         eval_module = @__MODULE__, kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     t = get_iv(sys)
     derivatives = Differential(t).(unknowns(sys))
@@ -262,6 +368,18 @@ function generate_dae_jacobian(sys::System, dvs = unknowns(sys),
         expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the history function for a [`System`](@ref), given a symbolic representation of
+the `u0` vector prior to the initial time.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_history(sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     p = reorder_parameters(sys)
@@ -272,6 +390,13 @@ function generate_history(sys::System, u0; expression = Val{true}, wrap_gfw = Va
         expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the mass matrix of `sys`. `simplify` controls whether `Symbolics.simplify` is
+applied to the symbolic mass matrix. Returns a `Diagonal` or `LinearAlgebra.I` wherever
+possible.
+"""
 function calculate_massmatrix(sys::System; simplify = false)
     eqs = [eq for eq in equations(sys)]
     M = zeros(length(eqs), length(eqs))
@@ -285,7 +410,7 @@ function calculate_massmatrix(sys::System; simplify = false)
                 error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
         end
     end
-    M = simplify ? simplify.(M) : M
+    M = simplify ? Symbolics.simplify.(M) : M
     if isdiag(M)
         M = Diagonal(M)
     end
@@ -293,6 +418,12 @@ function calculate_massmatrix(sys::System; simplify = false)
     M == I ? I : M
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return a modified version of mass matrix `M` which is of a similar type to `u0`. `sparse`
+controls whether the mass matrix should be a sparse matrix.
+"""
 function concrete_massmatrix(M; sparse = false, u0 = nothing)
     if sparse && !(u0 === nothing || M === I)
         SparseArrays.sparse(M)
@@ -305,6 +436,11 @@ function concrete_massmatrix(M; sparse = false, u0 = nothing)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sparsity pattern of the jacobian of `sys` as a matrix.
+"""
 function jacobian_sparsity(sys::System)
     sparsity = torn_system_jacobian_sparsity(sys)
     sparsity === nothing || return sparsity
@@ -313,6 +449,13 @@ function jacobian_sparsity(sys::System)
         [dv for dv in unknowns(sys)])
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sparsity pattern of the DAE jacobian of `sys` as a matrix.
+
+See also: [`generate_dae_jacobian`](@ref).
+"""
 function jacobian_dae_sparsity(sys::System)
     J1 = jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
         [dv for dv in unknowns(sys)])
@@ -322,6 +465,13 @@ function jacobian_dae_sparsity(sys::System)
     J1 + J2
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sparsity pattern of the `W` matrix of `sys`.
+
+See also: [`generate_W`](@ref).
+"""
 function W_sparsity(sys::System)
     jac_sparsity = jacobian_sparsity(sys)
     (n, n) = size(jac_sparsity)
@@ -359,6 +509,18 @@ function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, 
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the boundary condition function for a [`System`](@ref) given the state vector `u0`,
+the indexes of `u0` to consider as hard constraints `u0_idxs` and the initial time `t0`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
         kwargs...)
@@ -393,6 +555,17 @@ function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression =
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the cost function for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     obj = cost(sys)
@@ -429,6 +602,18 @@ function calculate_cost_gradient(sys::System; simplify = false)
     return Symbolics.gradient(obj, dvs; simplify)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the gradient of the cost function with respect to unknowns for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`: Forwarded to [`calculate_cost_gradient`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_cost_gradient(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...)
@@ -452,10 +637,29 @@ function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the sparsity pattern for the hessian of the cost function of `sys`.
+"""
 function cost_hessian_sparsity(sys::System)
     return similar(calculate_cost_hessian(sys; sparse = true), Float64)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the hessian of the cost function for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_cost_hessian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of the hessian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_cost_hessian(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, simplify = false,
@@ -481,6 +685,17 @@ function canonical_constraints(sys::System)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the constraint function for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_cons(sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...)
     cons = canonical_constraints(sys)
@@ -491,13 +706,20 @@ function generate_cons(sys::System; expression = Val{true}, wrap_gfw = Val{false
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
-function generate_constraint_jacobian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the jacobian of the constraints of `sys` with respect to unknowns.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian.
+"""
+function calculate_constraint_jacobian(sys::System; simplify = false, sparse = false,
+        return_sparsity = false)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
-    ps = reorder_parameters(sys)
     sparsity = nothing
     if sparse
         jac = Symbolics.sparsejacobian(cons, dvs; simplify)::AbstractSparseArray
@@ -505,19 +727,51 @@ function generate_constraint_jacobian(
     else
         jac = Symbolics.jacobian(cons, dvs; simplify)
     end
+    return return_sparsity ? (jac, sparsity) : jac
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the jacobian of the constraint function for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_constraint_jacobian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_constraint_jacobian(
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
+        simplify = false, sparse = false, kwargs...)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    jac, sparsity = calculate_constraint_jacobian(
+        sys; simplify, sparse, return_sparsity = true)
     res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
     return return_sparsity ? (fn, sparsity) : fn
 end
 
-function generate_constraint_hessian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the hessian of the constraints of `sys` with respect to unknowns.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.hessian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of the hessian.
+"""
+function calculate_constraint_hessian(
+        sys::System; simplify = false, sparse = false, return_sparsity = false)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
-    ps = reorder_parameters(sys)
     sparsity = nothing
     if sparse
         hess = map(cons) do cstr
@@ -527,12 +781,46 @@ function generate_constraint_hessian(
     else
         hess = [Symbolics.hessian(cstr, dvs; simplify) for cstr in cons]
     end
+    return return_sparsity ? (hess, sparsity) : hess
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the hessian of the constraint function for a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_constraint_hessian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of the hessian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_constraint_hessian(
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
+        simplify = false, sparse = false, kwargs...)
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    hess, sparsity = calculate_constraint_hessian(
+        sys; simplify, sparse, return_sparsity = true)
     res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
     return return_sparsity ? (fn, sparsity) : fn
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the jacobian of the equations of `sys` with respect to the inputs.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
+"""
 function calculate_control_jacobian(sys::AbstractSystem;
         sparse = false, simplify = false)
     rhs = [eq.rhs for eq in full_equations(sys)]
@@ -547,10 +835,23 @@ function calculate_control_jacobian(sys::AbstractSystem;
     return jac
 end
 
-function generate_control_jacobian(sys::AbstractSystem, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true);
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the jacobian function of the equations of `sys` with respect to the inputs.
+
+# Keyword arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_constraint_hessian`](@ref).
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_control_jacobian(sys::AbstractSystem;
         expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
         eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
