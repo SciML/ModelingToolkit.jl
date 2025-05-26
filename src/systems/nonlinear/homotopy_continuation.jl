@@ -514,6 +514,9 @@ end
 
 struct HomotopyContinuationProblem{iip, specialization} end
 
+@doc problem_docstring(
+    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false) HomotopyContinuationProblem
+
 function HomotopyContinuationProblem(sys::System, args...; kwargs...)
     HomotopyContinuationProblem{true}(sys, args...; kwargs...)
 end
