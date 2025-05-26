@@ -395,6 +395,7 @@ function add_equational_constraints!(model, sys, pmap, tspan)
     diff_eqs = substitute_params(pmap, diff_eqs)
     diff_eqs = substitute_differentials(model, sys, diff_eqs)
     for eq in diff_eqs
+        @show typeof(eq.lhs)
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
 
@@ -411,7 +412,7 @@ function substitute_differentials(model, sys, eqs)
     t = get_iv(sys)
     D = Differential(t)
     diffsubmap = Dict([D(lowered_var(model, :U, i, t)) => lowered_derivative(model, i) for i in 1:length(unknowns(sys))])
-    map(c -> Symbolics.substitute(c, diffsubmap), eqs)
+    eqs = map(c -> Symbolics.substitute(c, diffsubmap), eqs)
 end
 
 function substitute_toterm(vars, exprs)
@@ -451,21 +452,21 @@ function successful_solve end
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
 function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
-    prepare_and_optimize!(prob, solver; verbose, kwargs...)
+    solved_model = prepare_and_optimize!(prob, solver; verbose, kwargs...)
     
-    ts = get_t_values(prob.wrapped_model)
-    Us = get_U_values(prob.wrapped_model)
-    Vs = get_V_values(prob.wrapped_model)
+    ts = get_t_values(solved_model)
+    Us = get_U_values(solved_model)
+    Vs = get_V_values(solved_model)
     is_free_final(prob.wrapped_model) && (ts .+ prob.tspan[1])
 
     ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
     input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
 
-    if !successful_solve(prob.wrapped_model)
+    if !successful_solve(solved_model)
         ode_sol = SciMLBase.solution_new_retcode(
             ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
         !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
             input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
     end
-    DynamicOptSolution(prob.wrapped_model.model, ode_sol, input_sol)
+    DynamicOptSolution(solved_model, ode_sol, input_sol)
 end
