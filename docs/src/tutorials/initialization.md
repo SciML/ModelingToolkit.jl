@@ -1,4 +1,4 @@
-# Initialization of ODESystems
+# [Initialization of Systems](@id initialization)
 
 While for simple numerical ODEs choosing an initial condition can be an easy
 affair, with ModelingToolkit's more general differential-algebraic equation
