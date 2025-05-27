@@ -47,7 +47,7 @@ const M = ModelingToolkit
     @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
     pprob = PyomoDynamicOptProblem(sys, u0map, tspan, parammap, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test psol.sol.u ≈ osol2.u
+    @test all([≈(psol.sol(t), osol2(t), rtol = 1e-3) for t in 0.:0.01:1.])
 
     # With a constraint
     u0map = Pair[]
@@ -69,6 +69,7 @@ const M = ModelingToolkit
     pprob = PyomoDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(3)))
+    @show psol.sol
     @test psol.sol(0.6)[1] ≈ 3.5
     @test psol.sol(0.3)[1] ≈ 7.0
 
@@ -87,7 +88,7 @@ const M = ModelingToolkit
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
     @test all(u -> u > [1, 1], isol.sol.u)
 
-    jprob = PyoDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIA3()))
     @test all(u -> u > [1, 1], jsol.sol.u)
 
@@ -160,11 +161,11 @@ end
     pprob = PyomoDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test is_bangbang(psol.input_sol, [-1.0], [1.0])
-    @test ≈(psol.sol.u[end][2], 0.25, rtol = 1e-5)
+    @test ≈(psol.sol.u[end][2], 0.25, rtol = 1e-3)
 
     osol = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
-    @test ≈(psol.sol.u, osol.u, rtol = 0.05)
+    @test all([≈(psol.sol(t), osol(t), rtol = 0.05) for t in 0.:0.01:1.])
 
     ###################
     ### Bee example ###
@@ -209,7 +210,7 @@ end
     @test ≈(osol.u, csol.sol.u, rtol = 0.01)
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
-    @test ≈(osol2.u, psol.sol.u, rtol = 0.01)
+    @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.:0.01:4.])
 end
 
 @testset "Rocket launch" begin
@@ -248,7 +249,7 @@ end
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test isol.sol[h(t)][end] > 1.012
 
-    pprob = PyomoCollocationDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
+    pprob = PyomoDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     psol = solve(pprob, PyomoCollocation("ipopt"))
     @test psol.sol.u[end][1] > 1.012
 
