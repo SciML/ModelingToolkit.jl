@@ -183,6 +183,7 @@ function MTK.prepare_and_optimize!(prob::CasADiDynamicOptProblem, solver::CasADi
     catch ErrorException
     end
     prob.wrapped_model.solver_opti = solver_opti
+    prob.wrapped_model
 end
 
 function MTK.get_U_values(model::CasADiModel)

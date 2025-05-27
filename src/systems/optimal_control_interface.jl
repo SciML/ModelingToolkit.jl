@@ -328,8 +328,7 @@ function substitute_integral(model, exprs, tspan)
         lo, hi = process_integral_bounds(model, (lo, hi), tspan)
         intmap[int] = lowered_integral(model, arg, lo, hi)
     end
-    exprs = map(c -> Symbolics.substitute(c, intmap), exprs)
-    value.(exprs)
+    exprs = map(c -> Symbolics.substitute(c, intmap), value.(exprs))
 end
 
 """Substitute variables like x(1.5), x(t), etc. with the corresponding model variables."""
@@ -339,14 +338,14 @@ function substitute_model_vars(model, sys, exprs, tspan)
     t = get_iv(sys)
 
     exprs = map(c -> Symbolics.fast_substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
-    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
 
     (ti, tf) = tspan
     if symbolic_type(tf) === ScalarSymbolic()
         _tf = model.tₛ + ti
+        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
         exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
-        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map(model, _tf, x_ops, c_ops)), exprs)
     end
+    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
     exprs
 end
 
@@ -395,7 +394,6 @@ function add_equational_constraints!(model, sys, pmap, tspan)
     diff_eqs = substitute_params(pmap, diff_eqs)
     diff_eqs = substitute_differentials(model, sys, diff_eqs)
     for eq in diff_eqs
-        @show typeof(eq.lhs)
         add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
     end
 

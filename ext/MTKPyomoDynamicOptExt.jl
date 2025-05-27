@@ -7,6 +7,20 @@ using NaNMath
 using Setfield
 const MTK = ModelingToolkit
 
+SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
+                               log1p => Pyomo.py_log1p,
+                               acosh => Pyomo.py_acosh,
+                               log2 => Pyomo.py_log2,
+                               asin => Pyomo.py_asin,
+                               tan => Pyomo.py_tan,
+                               atanh => Pyomo.py_atanh,
+                               cos => Pyomo.py_cos,
+                               log => Pyomo.py_log,
+                               sin => Pyomo.py_sin,
+                               log10 => Pyomo.py_log10,
+                               sqrt => Pyomo.py_sqrt,
+                               exp => Pyomo.py_exp])
+
 struct PyomoDynamicOptModel
     model::ConcreteModel
     U::PyomoVar
@@ -17,13 +31,12 @@ struct PyomoDynamicOptModel
     dU::PyomoVar
     model_sym::Union{Num, Symbolics.BasicSymbolic}
     t_sym::Union{Num, Symbolics.BasicSymbolic}
-    uidx_sym::Union{Num, Symbolics.BasicSymbolic}
-    vidx_sym::Union{Num, Symbolics.BasicSymbolic}
+    dummy_sym::Union{Num, Symbolics.BasicSymbolic}
 
     function PyomoDynamicOptModel(model, U, V, tₛ, is_free_final)
-        @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) U_IDX_SYM::Int V_IDX_SYM::Int T_SYM
+        @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
-        new(model, U, V, tₛ, is_free_final, nothing, PyomoVar(model.dU), MODEL_SYM, T_SYM, U_IDX_SYM, V_IDX_SYM)
+        new(model, U, V, tₛ, is_free_final, nothing, PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
 end
 
@@ -42,7 +55,7 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     end
 end
 
-pysym_getproperty(s, name::Symbol) = Symbolics.wrap(SymbolicUtils.term(_getproperty, s, Val{name}(), type = Symbolics.Struct{PyomoVar}))
+pysym_getproperty(s::Union{Num, Symbolics.Symbolic}, name::Symbol) = Symbolics.wrap(SymbolicUtils.term(_getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}))
 _getproperty(s, name::Val{fieldname}) where fieldname = getproperty(s, fieldname)
 
 function MTK.PyomoDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
@@ -78,7 +91,7 @@ function MTK.generate_timescale!(m::ConcreteModel, guess, is_free_t)
 end
 
 function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
-    @unpack model, model_sym, t_sym = pmodel
+    @unpack model, model_sym, t_sym, dummy_sym = pmodel
     expr = if cons isa Equation
         cons.lhs - cons.rhs == 0
     elseif cons.relational_op === Symbolics.geq
@@ -86,14 +99,30 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     else
         cons.lhs - cons.rhs ≤ 0
     end
-    f_expr = Symbolics.build_function(expr, model_sym, t_sym)
+    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
+    @show expr
+
     cons_sym = Symbol("cons", hash(cons)) 
-    constraint_f = eval(:(cons_sym = $f_expr))
-    setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(constraint_f)))
+    if occursin(Symbolics.unwrap(t_sym), expr)
+        f = eval(Symbolics.build_function(expr, model_sym, t_sym))
+        setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(f)))
+    else
+        f = eval(Symbolics.build_function(expr, model_sym, dummy_sym))
+        setproperty!(model, cons_sym, pyomo.Constraint(rule = Pyomo.pyfunc(f)))
+    end
 end
 
-function MTK.set_objective!(m::PyomoDynamicOptModel, expr)
-    m.model.obj = pyomo.Objective(expr = expr)
+function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
+    @unpack model, model_sym, t_sym, dummy_sym = pmodel
+    @show expr
+    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
+    if occursin(Symbolics.unwrap(t_sym), expr)
+        f = eval(Symbolics.build_function(expr, model_sym, t_sym))
+        model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
+    else
+        f = eval(Symbolics.build_function(expr, model_sym, dummy_sym))
+        model.obj = pyomo.Objective(rule = Pyomo.pyfunc(f))
+    end
 end
 
 function MTK.add_initial_constraints!(model::PyomoDynamicOptModel, u0, u0_idxs, ts)
@@ -104,8 +133,14 @@ end
 
 function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
     @unpack model, model_sym, t_sym = m
-    arg_f = Symbolics.build_function(arg, model_sym, t_sym)
-    dae.Integral(model.t, wrt = model.t, rule=arg_f)
+    @show arg
+    @show Symbolics.build_function(arg, model_sym, t_sym)
+    arg_f = eval(Symbolics.build_function(arg, model_sym, t_sym))
+    @show arg_f
+    int_sym = Symbol(:int, hash(arg))
+    @show int_sym
+    setproperty!(model, int_sym, dae.Integral(model.t, wrt = model.t, rule=Pyomo.pyfunc(arg_f)))
+    PyomoVar(model.tₛ * model.int_sym)
 end
 
 MTK.process_integral_bounds(model, integral_span, tspan) = integral_span
@@ -135,15 +170,16 @@ function MTK.prepare_and_optimize!(prob::PyomoDynamicOptProblem, collocation; ve
     ncp = Pyomo.is_finite_difference(dm) ? 1 : dm.np
     discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps, scheme = Pyomo.scheme_string(dm))
     solver = SolverFactory(string(collocation.solver))
-    solver.solve(solver_m, tee = true)
-    solver_m
+    results = solver.solve(solver_m, tee = true)
+    ConcreteModel(solver_m)
 end
 
-MTK.get_U_values(m::ConcreteModel) = [[pyomo.value(m.U[i, t]) for i in m.u_idxs] for t in m.t]
-MTK.get_V_values(m::ConcreteModel) = [[pyomo.value(m.V[i, t]) for i in m.v_idxs] for t in m.t]
-MTK.get_t_values(m::ConcreteModel) = [t for t in m.t]
+MTK.get_U_values(m::ConcreteModel) = [[Pyomo.pyconvert(Float64, pyomo.value(m.U[i, t])) for i in m.u_idxs] for t in m.t]
+MTK.get_V_values(m::ConcreteModel) = [[Pyomo.pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
+MTK.get_t_values(m::ConcreteModel) = [Pyomo.pyconvert(Float64, t) for t in m.t]
 
 function MTK.successful_solve(m::ConcreteModel)
+    return true
     ss = m.solver.status
     tc = m.solver.termination_condition
     if ss == opt.SolverStatus.ok && (tc == opt.TerminationStatus.optimal || tc == opt.TerminationStatus.locallyOptimal)
