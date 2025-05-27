@@ -41,6 +41,15 @@ function Base.show(io::IO, c::Connection)
     print(io, ")")
 end
 
+@latexrecipe function f(c::Connection)
+    index --> :subscript
+    return Expr(:call, :connect, map(nameof, c.systems)...)
+end
+
+function Base.show(io::IO, ::MIME"text/latex", ap::Connection)
+    print(io, latexify(ap))
+end
+
 isconnection(_) = false
 isconnection(_::Connection) = true
 """

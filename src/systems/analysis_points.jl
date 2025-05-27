@@ -140,6 +140,8 @@ function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
     end
 end
 
+Symbolics.hide_lhs(::AnalysisPoint) = true
+
 @latexrecipe function f(ap::AnalysisPoint)
     index --> :subscript
     snakecase --> true
