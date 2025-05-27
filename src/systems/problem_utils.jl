@@ -1080,7 +1080,7 @@ function maybe_build_initialization_problem(
     end
     initializeprob = remake(initializeprob; p = initp)
 
-    get_initial_unknowns = if is_time_dependent(sys)
+    get_initial_unknowns = if time_dependent_init
         GetUpdatedU0(sys, initializeprob.f.sys, op)
     else
         nothing
@@ -1092,9 +1092,6 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; u0_constructor, p_constructor),
         get_initial_unknowns, SetInitialUnknowns(sys))
 
-    if time_dependent_init === nothing
-        time_dependent_init = is_time_dependent(sys)
-    end
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
