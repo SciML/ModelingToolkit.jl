@@ -295,7 +295,7 @@ function has_parameter_dependency_with_lhs(sys, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
     else
-        return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
+        return any(isequal(sym), [eq.lhs for eq in get_parameter_dependencies(sys)])
     end
 end
 
@@ -565,7 +565,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
         D = Differential(get_iv(sys))
         union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
     end
-    for eq in parameter_dependencies(sys)
+    for eq in get_parameter_dependencies(sys)
         is_variable_floatingpoint(eq.lhs) || continue
         push!(all_initialvars, eq.lhs)
     end
@@ -1314,8 +1314,15 @@ function parameter_dependencies(sys::AbstractSystem)
     get_parameter_dependencies(sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return all of the parameters of the system, including hidden initial parameters and ones
+eliminated via `parameter_dependencies`.
+"""
 function full_parameters(sys::AbstractSystem)
-    vcat(parameters(sys; initial_parameters = true), dependent_parameters(sys))
+    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
+    vcat(parameters(sys; initial_parameters = true), dep_ps)
 end
 
 """
@@ -2095,7 +2102,7 @@ function Base.show(
     end
 
     # Print parameter dependencies
-    npdeps = has_parameter_dependencies(sys) ? length(parameter_dependencies(sys)) : 0
+    npdeps = has_parameter_dependencies(sys) ? length(get_parameter_dependencies(sys)) : 0
     npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
     npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
 
@@ -2604,7 +2611,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union(parameter_dependencies(basesys), parameter_dependencies(sys))
+    dep_ps = union(get_parameter_dependencies(basesys), get_parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
@@ -2612,7 +2619,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     meta = merge(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
-    kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
+    kwargs = (observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
         name = name, description = description, gui_metadata = gui_metadata)
 
@@ -2626,7 +2633,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
             kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys))))
     end
 
-    return T(args...; kwargs...)
+    newsys = T(args...; kwargs...)
+    @set! newsys.parameter_dependencies = dep_ps
+
+    return newsys
 end
 
 """
@@ -2768,9 +2778,10 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
         cstrs = fast_substitute(get_constraints(sys), rules)
         subsys = map(s -> substitute(s, rules), get_systems(sys))
-        System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys, noise_eqs,
+        newsys = System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, systems = subsys, noise_eqs,
             observed, initialization_eqs, constraints = cstrs)
+        @set! newsys.parameter_dependencies = pdeps
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
@@ -2846,7 +2857,7 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    pdeps = parameter_dependencies(sys)
+    pdeps = get_parameter_dependencies(sys)
     metas = map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))

@@ -723,8 +723,8 @@ function flatten(sys::System, noeqs = false)
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
-        parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
-        guesses = guesses(sys), continuous_events = continuous_events(sys),
+        defaults = defaults(sys), guesses = guesses(sys),
+        continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
@@ -924,12 +924,12 @@ function NonlinearSystem(sys::System)
         fast_substitute(eq, subrules)
     end
     nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
-        parameter_dependencies = parameter_dependencies(sys),
         defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),
         initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs)
+        observed = obs, systems = map(NonlinearSystem, get_systems(sys)))
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
+        @set! nsys.parameter_dependencies = get_parameter_dependencies(sys)
     end
     return nsys
 end
@@ -983,25 +983,29 @@ end
 
 Construct a system of equations with associated noise terms.
 """
-function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
+function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
+        parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    return System(eqs, iv; noise_eqs = noise, kwargs...)
+    sys = System(eqs, iv; noise_eqs = noise, kwargs...)
+    @set sys.parameter_dependencies = parameter_dependencies
 end
 
 function SDESystem(
-        eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false, kwargs...)
+        eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
+        parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    return System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
+    sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
+    @set sys.parameter_dependencies = parameter_dependencies
 end
 
 function SDESystem(sys::System, noise; kwargs...)

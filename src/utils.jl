@@ -512,15 +512,6 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
     end
-    if has_parameter_dependencies(sys)
-        for eq in parameter_dependencies(sys)
-            if eq isa Pair
-                collect_vars!(unknowns, parameters, eq, iv; depth, op)
-            else
-                collect_vars!(unknowns, parameters, eq, iv; depth, op)
-            end
-        end
-    end
     if has_constraints(sys)
         for eq in constraints(sys)
             eqtype_supports_collect_vars(eq) || continue
