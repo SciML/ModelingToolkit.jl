@@ -105,6 +105,11 @@ struct System <: AbstractSystem
     equation.
     """
     observed::Vector{Equation}
+    """
+    $INTERNAL_FIELD_WARNING
+    All the explicit equations relating parameters. Equations here only contain parameters
+    and are in the same format as `observed`.
+    """
     parameter_dependencies::Vector{Equation}
     """
     $INTERNAL_FIELD_WARNING
