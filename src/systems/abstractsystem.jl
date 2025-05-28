@@ -597,6 +597,22 @@ function isinitial(p)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Find [`GlobalScope`](@ref)d variables in `sys` and add them to the unknowns/parameters.
+"""
+function discover_globalscoped(sys::AbstractSystem)
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    setdiff!(newunknowns, observables(sys))
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
+    return sys
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Mark a system as completed. A completed system is a system which is done being
@@ -612,13 +628,7 @@ using [`toggle_namespacing`](@ref).
 """
 function complete(
         sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
-    newunknowns = OrderedSet()
-    newparams = OrderedSet()
-    iv = has_iv(sys) ? get_iv(sys) : nothing
-    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-    # don't update unknowns to not disturb `mtkcompile` order
-    # `GlobalScope`d unknowns will be picked up and added there
-    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    sys = discover_globalscoped(sys)
 
     if flatten
         eqs = equations(sys)
