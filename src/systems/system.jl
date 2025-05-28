@@ -336,6 +336,13 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         initializesystem = nothing, is_initializesystem = false, preface = [],
         checks = true)
     name === nothing && throw(NoNameError())
+    if !isempty(parameter_dependencies)
+        @warn """
+        The `parameter_dependencies` keyword argument is deprecated. Please provide all
+        such equations as part of the normal equations of the system.
+        """
+        eqs = Equation[eqs; parameter_dependencies]
+    end
 
     iv = unwrap(iv)
     ps = unwrap.(ps)
@@ -356,7 +363,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         costs = Union{BasicSymbolic, Real}[]
     end
 
-    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     defaults = anydict(defaults)
     guesses = anydict(guesses)
     var_to_name = anydict()
@@ -366,10 +372,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
-        process_variables!(
-            var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-        process_variables!(
-            var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
         process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in observed])
         process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in observed])
     end
@@ -408,7 +410,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         metadata = meta
     end
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
-        costs, consolidate, dvs, ps, brownians, iv, observed, parameter_dependencies,
+        costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
