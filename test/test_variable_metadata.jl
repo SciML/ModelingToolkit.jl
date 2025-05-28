@@ -176,8 +176,9 @@ sp = Set(p)
 # Defaults, guesses overridden by system, parameter dependencies
 @variables x(t)=1.0 y(t) [guess = 1.0]
 @parameters p=2.0 q
-@named sys = System(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
-    guesses = Dict(y => 2.0), parameter_dependencies = [q => 2p])
+@named sys = System([q ~ 2p], t, [x, y], [p, q]; defaults = Dict(x => 2.0, p => 3.0),
+    guesses = Dict(y => 2.0))
+sys = complete(sys)
 unks_meta = ModelingToolkit.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
 @test unks_meta[:x].default == 2.0

@@ -368,12 +368,13 @@ end
 @testset "Can convert from `System`" begin
     @variables x(t) y(t)
     @parameters p q r
-    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r, r ~ 3p], t;
         defaults = [x => 1.0, p => missing], guesses = [p => 1.0],
-        initialization_eqs = [p^3 + q^3 ~ 4r], parameter_dependencies = [r ~ 3p])
+        initialization_eqs = [p^3 + q^3 ~ 4r])
     nlsys = NonlinearSystem(sys)
+    nlsys = complete(nlsys)
     defs = defaults(nlsys)
-    @test length(defs) == 3
+    @test length(defs) == 6
     @test defs[x] == 1.0
     @test defs[p] === missing
     @test isinf(defs[t])
@@ -384,7 +385,7 @@ end
     @test length(equations(nlsys)) == 2
     @test all(iszero, [eq.lhs for eq in equations(nlsys)])
     @test nameof(nlsys) == nameof(sys)
-    @test !ModelingToolkit.iscomplete(nlsys)
+    @test ModelingToolkit.iscomplete(nlsys)
 
     sys1 = complete(sys; split = false)
     nlsys = NonlinearSystem(sys1)

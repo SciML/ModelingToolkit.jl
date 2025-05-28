@@ -9,7 +9,7 @@ using JET
 
 @parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = System(
-    Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b ~ 2a],
+    [b ~ 2a], t, [], [a, b, c, d, e, f, g, h];
     continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
         [a ~ 0] => [c ~ 0], discrete_parameters = c)], defaults = Dict(a => 0.0))
 sys = complete(sys)
@@ -178,10 +178,11 @@ function level1()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p2 * x * y
-           D(y) ~ -p3 * y + p4 * x * y]
+           D(y) ~ -p3 * y + p4 * x * y
+           y0 ~ 2p4]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+        eqs, t, name = :sys)))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
@@ -192,10 +193,11 @@ function level2()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+           D(y) ~ -p23[2] * y + p4 * x * y
+           y0 ~ 2p4]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+        eqs, t, name = :sys)))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
@@ -206,10 +208,11 @@ function level3()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+           D(y) ~ -p23[2] * y + p4 * x * y
+           y0 ~ 2p4]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, parameter_dependencies = [y0 => 2p4])))
+        eqs, t, name = :sys)))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 

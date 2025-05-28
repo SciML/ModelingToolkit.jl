@@ -208,7 +208,7 @@ end
 @testset "Parameter dependencies as symbols" begin
     @variables x(t) = 1.0
     @parameters a=1 b
-    @named model = System(D(x) ~ x + a - b, t, parameter_dependencies = [b ~ a + 1])
+    @named model = System([D(x) ~ x + a - b, b ~ a + 1], t)
     sys = complete(model)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
