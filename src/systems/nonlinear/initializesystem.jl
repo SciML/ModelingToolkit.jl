@@ -44,6 +44,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     pmap = anydict()
     build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
         parameters(sys; initial_parameters = true))
+    merge!(defs, op)
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
             pmap[k] = v
@@ -207,6 +208,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     pmap = anydict()
     build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
         parameters(sys; initial_parameters = true))
+    merge!(defs, op)
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
             pmap[k] = v
