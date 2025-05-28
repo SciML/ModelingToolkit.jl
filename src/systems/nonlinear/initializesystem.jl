@@ -167,15 +167,15 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    return System(eqs_ics,
+    isys = System(eqs_ics,
         vars,
         pars;
         defaults = defs,
         checks = check_units,
-        parameter_dependencies = new_parameter_deps,
         name,
         is_initializesystem = true,
         kwargs...)
+    @set isys.parameter_dependencies = new_parameter_deps
 end
 
 """
@@ -280,15 +280,15 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    return System(eqs_ics,
+    isys = System(eqs_ics,
         vars,
         pars;
         defaults = defs,
         checks = check_units,
-        parameter_dependencies = new_parameter_deps,
         name,
         is_initializesystem = true,
         kwargs...)
+    @set isys.parameter_dependencies = new_parameter_deps
 end
 
 """

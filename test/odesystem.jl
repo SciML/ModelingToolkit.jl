@@ -881,6 +881,7 @@ eqs = [D(D(q₁)) ~ -λ * q₁,
     q₂ ~ L * cos(θ)]
 
 @named pend = System(eqs, t)
+pend = complete(pend)
 @test_nowarn generate_initializesystem(
     pend; op = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
 
@@ -1189,14 +1190,15 @@ end
 @testset "Substituting preserves parameter dependencies, defaults, guesses" begin
     @parameters p1 p2
     @variables x(t) y(t)
-    @named sys = System([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+    @named sys = System([D(x) ~ y + p2, p2 ~ 2p1], t;
         defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
     @parameters p3
     sys2 = substitute(sys, [p1 => p3])
+    sys2 = complete(sys2)
     @test length(parameters(sys2)) == 1
     @test is_parameter(sys2, p3)
     @test !is_parameter(sys2, p1)
-    @test length(ModelingToolkit.defaults(sys2)) == 2
+    @test length(ModelingToolkit.defaults(sys2)) == 7
     @test ModelingToolkit.defaults(sys2)[p3] == 1.0
     @test length(ModelingToolkit.guesses(sys2)) == 2
     @test ModelingToolkit.guesses(sys2)[p3] == 2.0
@@ -1205,22 +1207,23 @@ end
 @testset "Substituting with nested systems" begin
     @parameters p1 p2
     @variables x(t) y(t)
-    @named innersys = System([D(x) ~ y + p2], t; parameter_dependencies = [p2 ~ 2p1],
+    @named innersys = System([D(x) ~ y + p2; p2 ~ 2p1], t;
         defaults = [p1 => 1.0, p2 => 2.0], guesses = [p1 => 2.0, p2 => 3.0])
     @parameters p3 p4
     @named outersys = System(
-        [D(innersys.y) ~ innersys.y + p4], t; parameter_dependencies = [p4 ~ 3p3],
+        [D(innersys.y) ~ innersys.y + p4, p4 ~ 3p3], t;
         defaults = [p3 => 3.0, p4 => 9.0], guesses = [p4 => 10.0], systems = [innersys])
     @test_nowarn mtkcompile(outersys)
     @parameters p5
     sys2 = substitute(outersys, [p4 => p5])
+    sys2 = complete(sys2)
     @test_nowarn mtkcompile(sys2)
     @test length(equations(sys2)) == 2
     @test length(parameters(sys2)) == 2
-    @test length(full_parameters(sys2)) == 4
+    @test length(full_parameters(sys2)) == 10
     @test all(!isequal(p4), full_parameters(sys2))
     @test any(isequal(p5), full_parameters(sys2))
-    @test length(ModelingToolkit.defaults(sys2)) == 4
+    @test length(ModelingToolkit.defaults(sys2)) == 10
     @test ModelingToolkit.defaults(sys2)[p5] == 9.0
     @test length(ModelingToolkit.guesses(sys2)) == 3
     @test ModelingToolkit.guesses(sys2)[p5] == 10.0
@@ -1296,7 +1299,7 @@ end
 
 @testset "Parameter dependencies with constant RHS" begin
     @parameters p
-    @test_nowarn System(Equation[], t; parameter_dependencies = [p ~ 1.0], name = :a)
+    @test_nowarn System([p ~ 1.0], t; name = :a)
 end
 
 @testset "Variable discovery in arrays of `Num` inside callable symbolic" begin

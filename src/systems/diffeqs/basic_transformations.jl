@@ -223,12 +223,13 @@ function change_independent_variable(
         wasflat = isempty(systems)
         sys = typeof(sys)( # recreate system with transformed fields
             eqs, iv2, unknowns, ps; observed, initialization_eqs,
-            parameter_dependencies, defaults, guesses, connector_type,
+            defaults, guesses, connector_type,
             assertions, name = nameof(sys), description = description(sys)
         )
         sys = compose(sys, systems) # rebuild hierarchical system
         if wascomplete
             sys = complete(sys; split = wassplit, flatten = wasflat) # complete output if input was complete
+            @set! sys.parameter_dependencies = parameter_dependencies
         end
         return sys
     end

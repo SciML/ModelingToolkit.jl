@@ -246,7 +246,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_start += 1
         p_end += 1
     end
-    pdeps = parameter_dependencies(sys)
+    pdeps = get_parameter_dependencies(sys)
 
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)

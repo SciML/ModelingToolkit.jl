@@ -123,7 +123,7 @@ defs = ModelingToolkit.defaults(bar)
     @test length(parameters(sys3)) == 3
     @test any(isequal(p3), parameters(sys3))
     sys4 = complete(sys3)
-    @test length(unknowns(sys4)) == 3
+    @test length(unknowns(sys4)) == 4
     @test length(parameters(sys4)) == 4
     sys5 = mtkcompile(sys3)
     @test length(unknowns(sys5)) == 4

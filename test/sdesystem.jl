@@ -936,8 +936,8 @@ end
     @mtkcompile ssys2 = System([seq], t; name = :ssys)
     @test ssys1 == ssys2 # true
 
-    continuous_events = [[X ~ 1.0] => [X ~ X + 5.0]]
-    discrete_events = [5.0 => [d ~ d / 2.0]]
+    continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
+    discrete_events = [5.0 => [d ~ Pre(d) / 2.0]]
 
     @mtkcompile ssys1 = System([seq], t; name = :ssys, continuous_events)
     @mtkcompile ssys2 = System([seq], t; name = :ssys)

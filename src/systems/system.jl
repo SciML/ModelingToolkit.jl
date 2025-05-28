@@ -105,6 +105,11 @@ struct System <: AbstractSystem
     equation.
     """
     observed::Vector{Equation}
+    """
+    $INTERNAL_FIELD_WARNING
+    All the explicit equations relating parameters. Equations here only contain parameters
+    and are in the same format as `observed`.
+    """
     parameter_dependencies::Vector{Equation}
     """
     $INTERNAL_FIELD_WARNING
@@ -331,6 +336,13 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         initializesystem = nothing, is_initializesystem = false, preface = [],
         checks = true)
     name === nothing && throw(NoNameError())
+    if !isempty(parameter_dependencies)
+        @warn """
+        The `parameter_dependencies` keyword argument is deprecated. Please provide all
+        such equations as part of the normal equations of the system.
+        """
+        eqs = Equation[eqs; parameter_dependencies]
+    end
 
     iv = unwrap(iv)
     ps = unwrap.(ps)
@@ -351,7 +363,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         costs = Union{BasicSymbolic, Real}[]
     end
 
-    parameter_dependencies, ps = process_parameter_dependencies(parameter_dependencies, ps)
     defaults = anydict(defaults)
     guesses = anydict(guesses)
     var_to_name = anydict()
@@ -361,10 +372,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
-        process_variables!(
-            var_to_name, defaults, guesses, [eq.lhs for eq in parameter_dependencies])
-        process_variables!(
-            var_to_name, defaults, guesses, [eq.rhs for eq in parameter_dependencies])
         process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in observed])
         process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in observed])
     end
@@ -403,7 +410,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         metadata = meta
     end
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
-        costs, consolidate, dvs, ps, brownians, iv, observed, parameter_dependencies,
+        costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
@@ -716,8 +723,8 @@ function flatten(sys::System, noeqs = false)
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
-        parameter_dependencies = parameter_dependencies(sys), defaults = defaults(sys),
-        guesses = guesses(sys), continuous_events = continuous_events(sys),
+        defaults = defaults(sys), guesses = guesses(sys),
+        continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
@@ -917,12 +924,12 @@ function NonlinearSystem(sys::System)
         fast_substitute(eq, subrules)
     end
     nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
-        parameter_dependencies = parameter_dependencies(sys),
         defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),
         initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs)
+        observed = obs, systems = map(NonlinearSystem, get_systems(sys)))
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
+        @set! nsys.parameter_dependencies = get_parameter_dependencies(sys)
     end
     return nsys
 end
@@ -976,25 +983,29 @@ end
 
 Construct a system of equations with associated noise terms.
 """
-function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
+function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
+        parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    return System(eqs, iv; noise_eqs = noise, kwargs...)
+    sys = System(eqs, iv; noise_eqs = noise, kwargs...)
+    @set sys.parameter_dependencies = parameter_dependencies
 end
 
 function SDESystem(
-        eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false, kwargs...)
+        eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
+        parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    return System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
+    sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
+    @set sys.parameter_dependencies = parameter_dependencies
 end
 
 function SDESystem(sys::System, noise; kwargs...)

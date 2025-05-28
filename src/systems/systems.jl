@@ -159,10 +159,12 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         ssys = System(Vector{Equation}(full_equations(ode_sys)),
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
             name = nameof(ode_sys), observed = observed(ode_sys), defaults = defaults(sys),
-            parameter_dependencies = parameter_dependencies(sys), assertions = assertions(sys),
+            assertions = assertions(sys),
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys))
+        @set! ssys.parameter_dependencies = get_parameter_dependencies(sys)
+        return ssys
     end
 end
 

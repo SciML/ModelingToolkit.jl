@@ -486,7 +486,7 @@ sys = mtkcompile(unsimp; fully_determined = false)
 @variables x(t) y(t)
 @named sysx = System([D(x) ~ 0], t; initialization_eqs = [x ~ 1])
 @named sysy = System([D(y) ~ 0], t; initialization_eqs = [y^2 ~ 2], guesses = [y => 1])
-sys = extend(sysx, sysy)
+sys = complete(extend(sysx, sysy))
 @test length(equations(generate_initializesystem(sys))) == 2
 @test length(ModelingToolkit.guesses(sys)) == 1
 
@@ -920,7 +920,7 @@ end
         (ModelingToolkit.System, SDDEProblem, ImplicitEM(), _x(t - 0.1) + a)
     ]
         @mtkcompile sys = System(
-            [D(x) ~ 2x + r + rhss], t; parameter_dependencies = [r ~ p + 2q, q ~ p + 3],
+            [D(x) ~ 2x + r + rhss, r ~ p + 2q, q ~ p + 3], t;
             guesses = [p => 1.0])
         prob = Problem(sys, [x => 1.0, p => missing], (0.0, 1.0))
         @test length(equations(ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys))) ==
@@ -1061,8 +1061,8 @@ end
 @testset "Nonnumeric parameter dependencies are retained" begin
     @variables x(t) y(t)
     @parameters foo(::Real, ::Real) p
-    @mtkcompile sys = System([D(x) ~ t, 0 ~ foo(x, y)], t;
-        parameter_dependencies = [foo ~ Multiplier(p, 2p)], guesses = [y => -1.0])
+    @mtkcompile sys = System([D(x) ~ t, 0 ~ foo(x, y), foo ~ Multiplier(p, 2p)], t;
+        guesses = [y => -1.0])
     prob = ODEProblem(sys, [x => 1.0, p => 1.0], (0.0, 1.0))
     integ = init(prob, Rosenbrock23())
     @test integ[y] ≈ -0.5
@@ -1241,7 +1241,7 @@ end
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p [guess = 1.0] q [guess = 1.0]
     @mtkcompile sys = System(
-        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+        [D(x) ~ p * x + q * y, y ~ 2x, q ~ 2p], t)
     prob = ODEProblem(sys, [x => 1.0, p => 1.0], (0.0, 1.0))
     test_dummy_initialization_equation(prob, x)
     prob2 = remake(prob; u0 = [x => 2.0])
@@ -1262,7 +1262,7 @@ end
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
     @parameters p [guess = 1.0] q [guess = 1.0]
     @mtkcompile sys = System(
-        [D(x) ~ p * x + q * y, y ~ 2x], t; parameter_dependencies = [q ~ 2p])
+        [D(x) ~ p * x + q * y, y ~ 2x, q ~ 2p], t)
     prob = ODEProblem(sys, [:x => 1.0, p => 1.0], (0.0, 1.0))
     test_dummy_initialization_equation(prob, x)
     prob2 = remake(prob; u0 = [:x => 2.0])
@@ -1442,8 +1442,7 @@ end
     end
     @testset "$Problem" for Problem in [NonlinearProblem, NonlinearLeastSquaresProblem]
         @parameters p1 p2
-        @mtkcompile sys = System([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2];
-            parameter_dependencies = [p2 ~ 2p1],
+        @mtkcompile sys = System([x^2 + y^2 ~ p1, (x - 1)^2 + (y - 1)^2 ~ p2, p2 ~ 2p1];
             guesses = [p1 => 0.0], defaults = [p1 => missing])
         prob = Problem(sys, [x => 1.0, y => 1.0, p2 => 6.0])
         @test prob.ps[p1] ≈ 3.0

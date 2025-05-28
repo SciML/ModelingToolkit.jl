@@ -295,7 +295,7 @@ function has_parameter_dependency_with_lhs(sys, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
     else
-        return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
+        return any(isequal(sym), [eq.lhs for eq in get_parameter_dependencies(sys)])
     end
 end
 
@@ -565,7 +565,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
         D = Differential(get_iv(sys))
         union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
     end
-    for eq in parameter_dependencies(sys)
+    for eq in get_parameter_dependencies(sys)
         is_variable_floatingpoint(eq.lhs) || continue
         push!(all_initialvars, eq.lhs)
     end
@@ -597,6 +597,22 @@ function isinitial(p)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Find [`GlobalScope`](@ref)d variables in `sys` and add them to the unknowns/parameters.
+"""
+function discover_globalscoped(sys::AbstractSystem)
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    setdiff!(newunknowns, observables(sys))
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
+    return sys
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Mark a system as completed. A completed system is a system which is done being
@@ -612,13 +628,7 @@ using [`toggle_namespacing`](@ref).
 """
 function complete(
         sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
-    newunknowns = OrderedSet()
-    newparams = OrderedSet()
-    iv = has_iv(sys) ? get_iv(sys) : nothing
-    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-    # don't update unknowns to not disturb `mtkcompile` order
-    # `GlobalScope`d unknowns will be picked up and added there
-    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    sys = discover_globalscoped(sys)
 
     if flatten
         eqs = equations(sys)
@@ -632,6 +642,7 @@ function complete(
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
+        sys = process_parameter_equations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)
         end
@@ -1263,6 +1274,12 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
 end
 
 function dependent_parameters(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `dependent_parameters` requires that the system is marked as complete. Call
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     return map(eq -> eq.lhs, parameter_dependencies(sys))
 end
 
@@ -1279,27 +1296,33 @@ function parameters_toplevel(sys::AbstractSystem)
 end
 
 """
-$(TYPEDSIGNATURES)
-Get the parameter dependencies of the system `sys` and its subsystems.
+    $(TYPEDSIGNATURES)
 
-See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
+Get the parameter dependencies of the system `sys` and its subsystems. Requires that the
+system is `complete`d.
 """
 function parameter_dependencies(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `parameter_dependencies` requires that the system is marked as complete. Call \
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     if !has_parameter_dependencies(sys)
         return Equation[]
     end
-    pdeps = get_parameter_dependencies(sys)
-    systems = get_systems(sys)
-    # put pdeps after those of subsystems to maintain topological sorted order
-    namespaced_deps = mapreduce(
-        s -> map(eq -> namespace_equation(eq, s), parameter_dependencies(s)), vcat,
-        systems; init = Equation[])
-
-    return vcat(namespaced_deps, pdeps)
+    get_parameter_dependencies(sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return all of the parameters of the system, including hidden initial parameters and ones
+eliminated via `parameter_dependencies`.
+"""
 function full_parameters(sys::AbstractSystem)
-    vcat(parameters(sys; initial_parameters = true), dependent_parameters(sys))
+    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
+    vcat(parameters(sys; initial_parameters = true), dep_ps)
 end
 
 """
@@ -2079,7 +2102,7 @@ function Base.show(
     end
 
     # Print parameter dependencies
-    npdeps = has_parameter_dependencies(sys) ? length(parameter_dependencies(sys)) : 0
+    npdeps = has_parameter_dependencies(sys) ? length(get_parameter_dependencies(sys)) : 0
     npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
     npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
 
@@ -2588,7 +2611,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union(parameter_dependencies(basesys), parameter_dependencies(sys))
+    dep_ps = union(get_parameter_dependencies(basesys), get_parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
@@ -2596,7 +2619,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     meta = merge(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
-    kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
+    kwargs = (observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
         name = name, description = description, gui_metadata = gui_metadata)
 
@@ -2610,7 +2633,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
             kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys))))
     end
 
-    return T(args...; kwargs...)
+    newsys = T(args...; kwargs...)
+    @set! newsys.parameter_dependencies = dep_ps
+
+    return newsys
 end
 
 """
@@ -2752,60 +2778,62 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
         cstrs = fast_substitute(get_constraints(sys), rules)
         subsys = map(s -> substitute(s, rules), get_systems(sys))
-        System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys, noise_eqs,
+        newsys = System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, systems = subsys, noise_eqs,
             observed, initialization_eqs, constraints = cstrs)
+        @set! newsys.parameter_dependencies = pdeps
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
 end
 
-struct InvalidParameterDependenciesType
-    got::Any
-end
+"""
+    $(TYPEDSIGNATURES)
 
-function Base.showerror(io::IO, err::InvalidParameterDependenciesType)
-    print(
-        io, "Parameter dependencies must be a `Dict`, or an array of `Pair` or `Equation`.")
-    if err.got !== nothing
-        print(io, " Got ", err.got)
+Find equations of `sys` involving only parameters and separate them out into the
+`parameter_dependencies` field. Relative ordering of equations is maintained.
+Parameter-only equations are validated to be explicit and sorted topologically. All such
+explicitly determined parameters are removed from the parameters of `sys`. Return the new
+system.
+"""
+function process_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
     end
-end
+    varsbuf = Set()
+    pareq_idxs = Int[]
+    eqs = equations(sys)
+    for (i, eq) in enumerate(eqs)
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
+        # singular equations
+        isempty(varsbuf) && continue
+        if all(varsbuf) do sym
+            is_parameter(sys, sym) ||
+                symbolic_type(sym) == ArraySymbolic() &&
+                    is_sized_array_symbolic(sym) &&
+                    all(Base.Fix1(is_parameter, sys), collect(sym))
+        end
+            if !isparameter(eq.lhs)
+                throw(ArgumentError("""
+                LHS of parameter dependency equation must be a single parameter. Found \
+                $(eq.lhs).
+                """))
+            end
+            push!(pareq_idxs, i)
+        end
+    end
 
-function process_parameter_dependencies(pdeps, ps)
-    if pdeps === nothing || isempty(pdeps)
-        return Equation[], ps
-    end
-    if pdeps isa Dict
-        pdeps = [k ~ v for (k, v) in pdeps]
-    else
-        pdeps isa AbstractArray || throw(InvalidParameterDependenciesType(pdeps))
-        pdeps = [if p isa Pair
-                     p[1] ~ p[2]
-                 elseif p isa Equation
-                     p
-                 else
-                     error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
-                 end
-                 for p in pdeps]
-    end
-    lhss = []
-    for p in pdeps
-        if !isparameter(p.lhs)
-            error("LHS of parameter dependency must be a single parameter. Found $(p.lhs).")
-        end
-        syms = vars(p.rhs)
-        if !all(isparameter, syms)
-            error("RHS of parameter dependency must only include parameters. Found $(p.rhs)")
-        end
-        push!(lhss, p.lhs)
-    end
-    lhss = map(identity, lhss)
-    pdeps = topsort_equations(pdeps, union(ps, lhss))
-    ps = filter(ps) do p
-        !any(isequal(p), lhss)
-    end
-    return pdeps, ps
+    pareqs = [get_parameter_dependencies(sys); eqs[pareq_idxs]]
+    explicitpars = [eq.lhs for eq in pareqs]
+    pareqs = topsort_equations(pareqs, explicitpars)
+
+    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
+
+    @set! sys.eqs = eqs
+    @set! sys.parameter_dependencies = pareqs
+    @set! sys.ps = setdiff(get_ps(sys), explicitpars)
+    return sys
 end
 
 """
@@ -2829,7 +2857,7 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    pdeps = parameter_dependencies(sys)
+    pdeps = get_parameter_dependencies(sys)
     metas = map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))

@@ -315,7 +315,7 @@ function IndexCache(sys::AbstractSystem)
     dependent_pars_to_timeseries = Dict{
         Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}()
 
-    for eq in parameter_dependencies(sys)
+    for eq in get_parameter_dependencies(sys)
         sym = eq.lhs
         vs = vars(eq.rhs)
         timeseries = TimeseriesSetType()
