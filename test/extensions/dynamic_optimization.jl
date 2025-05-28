@@ -250,7 +250,7 @@ end
     @test isol.sol[h(t)][end] > 1.012
 
     pprob = PyomoDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
-    psol = solve(pprob, PyomoCollocation("ipopt"))
+    psol = solve(pprob, PyomoCollocation("ipopt", MidpointEuler()))
     @test psol.sol.u[end][1] > 1.012
 
     # Test solution
@@ -319,7 +319,7 @@ end
 
     u0map = [x(t) => 1.0, v(t) => 0.0]
     tspan = (0.0, tf)
-    parammap = [u(t) => 0.0, tf => 1.0]
+    parammap = [u(t) => 1.0, tf => 1.0]
     jprob = JuMPDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()))
     @test isapprox(jsol.sol.t[end], 2.0, atol = 1e-5)
@@ -329,11 +329,11 @@ end
     @test isapprox(csol.sol.t[end], 2.0, atol = 1e-5)
 
     iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
-    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer), verbose = true)
     @test isapprox(isol.sol.t[end], 2.0, atol = 1e-5)
 
     pprob = PyomoDynamicOptProblem(block, u0map, tspan, parammap; steps = 51)
-    psol = solve(pprob, PyomoCollocation("ipopt"))
+    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test isapprox(psol.sol.t[end], 2.0, atol = 1e-5)
 end
 

@@ -76,18 +76,21 @@ end
 
 function MTK.generate_state_variable!(m::ConcreteModel, u0, ns, ts) 
     m.u_idxs = pyomo.RangeSet(1, ns)
-    m.U = pyomo.Var(m.u_idxs, m.t, initialize = 0)
+    init_f = Pyomo.pyfunc((m, i, t) -> (u0[Pyomo.pyconvert(Int, i)]))
+    m.U = pyomo.Var(m.u_idxs, m.t, initialize = init_f)
     PyomoVar(m.U)
 end
 
 function MTK.generate_input_variable!(m::ConcreteModel, c0, nc, ts)
     m.v_idxs = pyomo.RangeSet(1, nc)
-    m.V = pyomo.Var(m.v_idxs, m.t, initialize = 0)
+    init_f = Pyomo.pyfunc((m, i, t) -> (c0[Pyomo.pyconvert(Int, i)]))
+    m.V = pyomo.Var(m.v_idxs, m.t, initialize = init_f)
     PyomoVar(m.V)
 end
 
 function MTK.generate_timescale!(m::ConcreteModel, guess, is_free_t)
-    m.tₛ = is_free_t ? PyomoVar(pyomo.Var(initialize = guess, bounds = (0, Inf))) : PyomoVar(Pyomo.Py(1))
+    m.tₛ = is_free_t ? pyomo.Var(initialize = guess, bounds = (0, Inf)) : Pyomo.Py(1)
+    PyomoVar(m.tₛ)
 end
 
 function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
@@ -100,7 +103,6 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
         cons.lhs - cons.rhs ≤ 0
     end
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
-    @show expr
 
     cons_sym = Symbol("cons", hash(cons)) 
     if occursin(Symbolics.unwrap(t_sym), expr)
@@ -133,12 +135,8 @@ end
 
 function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
     @unpack model, model_sym, t_sym = m
-    @show arg
-    @show Symbolics.build_function(arg, model_sym, t_sym)
     arg_f = eval(Symbolics.build_function(arg, model_sym, t_sym))
-    @show arg_f
     int_sym = Symbol(:int, hash(arg))
-    @show int_sym
     setproperty!(model, int_sym, dae.Integral(model.t, wrt = model.t, rule=Pyomo.pyfunc(arg_f)))
     PyomoVar(model.tₛ * model.int_sym)
 end
@@ -168,21 +166,36 @@ function MTK.prepare_and_optimize!(prob::PyomoDynamicOptProblem, collocation; ve
     dm = collocation.derivative_method
     discretizer = TransformationFactory(dm)
     ncp = Pyomo.is_finite_difference(dm) ? 1 : dm.np
-    discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps, scheme = Pyomo.scheme_string(dm))
+    discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps - 1, scheme = Pyomo.scheme_string(dm))
     solver = SolverFactory(string(collocation.solver))
     results = solver.solve(solver_m, tee = true)
-    ConcreteModel(solver_m)
+    PyomoOutput(results, solver_m)
 end
 
-MTK.get_U_values(m::ConcreteModel) = [[Pyomo.pyconvert(Float64, pyomo.value(m.U[i, t])) for i in m.u_idxs] for t in m.t]
-MTK.get_V_values(m::ConcreteModel) = [[Pyomo.pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
-MTK.get_t_values(m::ConcreteModel) = [Pyomo.pyconvert(Float64, t) for t in m.t]
+struct PyomoOutput
+    result::Pyomo.Py
+    model::Pyomo.Py
+end
 
-function MTK.successful_solve(m::ConcreteModel)
-    return true
-    ss = m.solver.status
-    tc = m.solver.termination_condition
-    if ss == opt.SolverStatus.ok && (tc == opt.TerminationStatus.optimal || tc == opt.TerminationStatus.locallyOptimal)
+function MTK.get_U_values(output::PyomoOutput)
+    m = output.model
+    [[Pyomo.pyconvert(Float64, pyomo.value(m.U[i, t])) for i in m.u_idxs] for t in m.t]
+end
+function MTK.get_V_values(output::PyomoOutput)
+    m = output.model
+    [[Pyomo.pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
+end
+function MTK.get_t_values(output::PyomoOutput)
+    m = output.model
+    Pyomo.pyconvert(Float64, pyomo.value(m.tₛ)) * [Pyomo.pyconvert(Float64, t) for t in m.t]
+end
+
+function MTK.successful_solve(output::PyomoOutput)
+    r = output.result
+    ss = r.solver.status
+    Main.xx[] = ss
+    tc = r.solver.termination_condition
+    if Bool(ss == opt.SolverStatus.ok) && (Bool(tc == opt.TerminationCondition.optimal) || Bool(tc == opt.TerminationCondition.locallyOptimal))
         return true
     else
         return false
