@@ -9,10 +9,18 @@ end
 """
 $(SIGNATURES)
 
-Structurally simplify algebraic equations in a system and compute the
-topological sort of the observed equations in `sys`.
+Compile the given system into a form that ModelingToolkit can generate code for. Also
+performs a variety of symbolic-numeric enhancements. For ODEs, this includes processes
+such as order reduction, index reduction, alias elimination and tearing. A subset of the
+unknowns of the system may be eliminated as observables, eliminating the need for the
+numerical solver to solve for these variables.
 
-### Optional Keyword Arguments:
+Does not rely on metadata to identify variables/parameters/brownians. Instead, queries
+the system for which symbolic quantites belong to which category. Any variables not
+present in the equations of the system will be removed in this process.
+
+# Keyword Arguments
+
 + When `simplify=true`, the `simplify` function will be applied during the tearing process.
 + `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
@@ -147,7 +155,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
             is_scalar_noise = false
         end
 
-        noise_eqs = StructuralTransformations.tearing_substitute_expr(ode_sys, noise_eqs)
+        noise_eqs = substitute_observed(ode_sys, noise_eqs)
         ssys = System(Vector{Equation}(full_equations(ode_sys)),
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
             name = nameof(ode_sys), observed = observed(ode_sys), defaults = defaults(sys),

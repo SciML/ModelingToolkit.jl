@@ -72,10 +72,9 @@ using RuntimeGeneratedFunctions: drop_expr
 using Symbolics: degree
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
-                 VariableSource, getname, variable, Connection, connect,
+                 VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
-                 initial_state, transition, activeState, entry, hasnode,
-                 ticksInState, timeInState, fixpoint_sub, fast_substitute,
+                 hasnode, fixpoint_sub, fast_substitute,
                  CallWithMetadata, CallWithParent
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
@@ -99,6 +98,7 @@ const DQ = DynamicQuantities
 
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
+import SciMLPublic: @public
 
 export @derivatives
 
@@ -121,6 +121,16 @@ for fun in [:toexpr]
         $fun(x::AbstractFloat; kw...) = x
     end
 end
+
+const INTERNAL_FIELD_WARNING = """
+This field is internal API. It may be removed or changed without notice in a non-breaking \
+release. Usage of this field is not advised.
+"""
+
+const INTERNAL_ARGS_WARNING = """
+The following arguments are internal API. They may be removed or changed without notice \
+in a non-breaking release. Usage of these arguments is not advised.
+"""
 
 """
 $(TYPEDEF)
@@ -152,11 +162,13 @@ include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
 include("systems/model_parsing.jl")
 include("systems/connectors.jl")
+include("systems/state_machines.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/codegen_utils.jl")
+include("problems/docs.jl")
 include("systems/codegen.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
@@ -285,7 +297,7 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc, state_priority
 export liouville_transform, change_independent_variable, substitute_component,
-       add_accumulations, noise_to_brownians
+       add_accumulations, noise_to_brownians, Girsanov_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
@@ -347,5 +359,7 @@ include("systems/optimal_control_interface.jl")
 export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
        CasADiDynamicOptProblem
 export DynamicOptSolution
+
+@public apply_to_variables
 
 end # module

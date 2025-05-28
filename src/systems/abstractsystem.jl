@@ -10,132 +10,6 @@ GUIMetadata(type) = GUIMetadata(type, nothing)
 
 """
 ```julia
-calculate_tgrad(sys::AbstractTimeDependentSystem)
-```
-
-Calculate the time gradient of a system.
-
-Returns a vector of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_tgrad end
-
-"""
-```julia
-calculate_gradient(sys::AbstractSystem)
-```
-
-Calculate the gradient of a scalar system.
-
-Returns a vector of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_gradient end
-
-"""
-```julia
-calculate_jacobian(sys::AbstractSystem)
-```
-
-Calculate the Jacobian matrix of a system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_jacobian end
-
-"""
-```julia
-calculate_control_jacobian(sys::AbstractSystem)
-```
-
-Calculate the Jacobian matrix of a system with respect to the system's controls.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_control_jacobian end
-
-"""
-```julia
-calculate_factorized_W(sys::AbstractSystem)
-```
-
-Calculate the factorized W-matrix of a system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_factorized_W end
-
-"""
-```julia
-calculate_hessian(sys::AbstractSystem)
-```
-
-Calculate the hessian matrix of a scalar system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_hessian end
-
-"""
-```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = parameters(sys),
-               expression = Val{true}; kwargs...)
-```
-
-Generates a function for the time gradient of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_tgrad end
-
-"""
-```julia
-generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; kwargs...)
-```
-
-Generates a function for the gradient of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_gradient end
-
-"""
-```julia
-generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the Jacobian matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_jacobian end
-
-"""
-```julia
-generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                 expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the hessian matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_hessian end
-
-"""
-```julia
-generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; kwargs...)
-```
-
-Generate a function to evaluate the system's equations.
-"""
-function generate_rhs end
-
-"""
-```julia
 generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
                          ps = parameters(sys); kwargs...)
 ```
@@ -197,7 +71,18 @@ end
 
 const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the name of `sys`.
+"""
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the description associated with `sys` if present, and an empty
+string otherwise.
+"""
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 """
@@ -721,6 +606,9 @@ the global structure of the system.
 
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+
+This namespacing functionality can also be toggled independently of `complete`
+using [`toggle_namespacing`](@ref).
 """
 function complete(
         sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
@@ -955,6 +843,14 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
+"""
+    Base.getproperty(sys::AbstractSystem, name::Symbol)
+
+Access the subsystem, variable or analysis point of `sys` named `name`. To check if `sys`
+will namespace the returned value, use `ModelingToolkit.does_namespacing(sys)`.
+
+See also: [`ModelingToolkit.does_namespacing`](@ref).
+"""
 function Base.getproperty(
         sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
@@ -1029,8 +925,18 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     """)
 end
 
-apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
-apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+"""
+    $(TYPEDSIGNATURES)
+
+Apply function `f` to each variable in expression `ex`. `f` should be a function that takes
+a variable and returns the replacement to use. A "variable" in this context refers to a
+symbolic quantity created directly from a variable creation macro such as
+[`Symbolics.@variables`](@ref), [`@independent_variables`](@ref), [`@parameters`](@ref),
+[`@constants`](@ref) or [`@brownians`](@ref).
+"""
+apply_to_variables(f, ex) = _apply_to_variables(f, ex)
+apply_to_variables(f, ex::Num) = wrap(_apply_to_variables(f, unwrap(ex)))
+apply_to_variables(f, ex::Symbolics.Arr) = wrap(_apply_to_variables(f, unwrap(ex)))
 function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
@@ -1660,6 +1566,63 @@ function equations_toplevel(sys::AbstractSystem)
     return get_eqs(sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expression
+if `simplify == true`.
+"""
+function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
+    simplify ? Symbolics.simplify(expr) : expr
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively substitute the observed equations of `sys` into `expr`. If `simplify`, call
+`Symbolics.simplify` on the resultant expression.
+"""
+function substitute_observed(sys::AbstractSystem, expr; simplify = false)
+    empty_substitutions(sys) && return expr
+    substitutions = get_substitutions(sys)
+    return substitute_and_simplify(expr, substitutions, simplify)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Like `equations(sys)`, but also substitutes the observed equations eliminated from the
+equations during `mtkcompile`. These equations matches generated numerical code.
+
+See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+"""
+function full_equations(sys::AbstractSystem; simplify = false)
+    empty_substitutions(sys) && return equations(sys)
+    subs = get_substitutions(sys)
+    neweqs = map(equations(sys)) do eq
+        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+                eq.rhs, subs,
+                simplify)
+        else
+            if !_iszero(eq.lhs)
+                eq = 0 ~ eq.rhs - eq.lhs
+            end
+            rhs = substitute_and_simplify(eq.rhs, subs, simplify)
+            return 0 ~ rhs
+        end
+        eq
+    end
+    return neweqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get the flattened jumps of the system. In other words, obtain all of the jumps in `sys` and
+all the subsystems of `sys` (appropriately namespaced).
+"""
 function jumps(sys::AbstractSystem)
     js = get_jumps(sys)
     systems = get_systems(sys)
@@ -1669,6 +1632,12 @@ function jumps(sys::AbstractSystem)
     return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get all of the brownian variables involved in the system `sys` and all subsystems,
+appropriately namespaced.
+"""
 function brownians(sys::AbstractSystem)
     bs = get_brownians(sys)
     systems = get_systems(sys)
@@ -1678,6 +1647,12 @@ function brownians(sys::AbstractSystem)
     return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively consolidate the cost vector of `sys` and all subsystems of `sys`, returning the
+final scalar cost function.
+"""
 function cost(sys::AbstractSystem)
     cs = get_costs(sys)
     consolidate = get_consolidate(sys)
@@ -1707,7 +1682,12 @@ function namespace_constraints(sys)
     map(cstr -> namespace_constraint(cstr, sys), cstrs)
 end
 
-function constraints(sys)
+"""
+    $(TYPEDSIGNATURES)
+
+Get all constraints in the system `sys` and all of its subsystems, appropriately namespaced.
+"""
+function constraints(sys::AbstractSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
     isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
@@ -1734,6 +1714,11 @@ function initialization_equations(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get the tstops present in `sys` and its subsystems, appropriately namespaced.
+"""
 function symbolic_tstops(sys::AbstractSystem)
     tstops = get_tstops(sys)
     systems = get_systems(sys)
@@ -1742,6 +1727,12 @@ function symbolic_tstops(sys::AbstractSystem)
     return tstops
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the preface associated with `sys` and all of its subsystems, appropriately
+namespaced.
+"""
 function preface(sys::AbstractSystem)
     has_preface(sys) || return nothing
     pre = get_preface(sys)
@@ -2357,10 +2348,46 @@ function component_post_processing(expr, isconnector)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Mark a system constructor function as building a component. For example,
+
+```julia
+@component function AddOne(; name)
+    @variables in(t) out(t)
+    eqs = [out ~ in + 1]
+    return System(eqs, t, [in, out], []; name)
+end
+```
+
+ModelingToolkit systems are either components or connectors. Components define dynamics of
+the model. Connectors are used to connect components together. See the
+[Model building reference](@ref model_building_api) section of the documentation for more
+information.
+
+See also: [`@connector`](@ref).
+"""
 macro component(expr)
     esc(component_post_processing(expr, false))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Macro shorthand for building and compiling a system in one step.
+
+```julia
+@mtkcompile sys = Constructor(args...; kwargs....)
+```
+
+Is shorthand for
+
+```julia
+@named sys = Constructor(args...; kwargs...)
+sys = mtkcompile(sys)
+```
+"""
 macro mtkcompile(exprs...)
     expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
@@ -2485,6 +2512,11 @@ end
     hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
 
 Print a tree of a system's hierarchy of subsystems.
+
+# Keyword arguments
+
+- `describe`: Whether to also print the description of each subsystem, if present.
+- `bold`: Whether to print the name of the system in **bold** font.
 """
 function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
     print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
@@ -2527,8 +2559,13 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Extend `basesys` with `sys`.
+Extend `basesys` with `sys`. This can be thought of as the `merge` operation on systems.
+Values in `sys` take priority over duplicates in `basesys` (for example, defaults).
+
 By default, the resulting system inherits `sys`'s name and description.
+
+The `&` operator can also be used for this purpose. `sys & basesys` is equivalent to
+`extend(sys, basesys)`.
 
 See also [`compose`](@ref).
 """
@@ -2576,14 +2613,31 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     return T(args...; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Extend `sys` with all systems in `basesys` in order.
+"""
 function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
     foldl(extend, basesys, init = sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+
+See also: [`extend`](@ref).
+"""
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
     extend(sys, basesys; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+"""
 function Base.:(&)(
         sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
     extend(sys, basesys; kwargs...)
@@ -2592,8 +2646,11 @@ end
 """
 $(SIGNATURES)
 
-Compose multiple systems together. The resulting system would inherit the first
-system's name.
+Compose multiple systems together. This adds all of `systems` as subsystems of `sys`.
+The resulting system inherits the name of `sys` by default.
+
+The `∘` operator can also be used for this purpose. `sys ∘ basesys` is equivalent to
+`compose(sys, basesys)`.
 
 See also [`extend`](@ref).
 """
@@ -2615,9 +2672,22 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     return sys
 end
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for adding all systems in `syss` as the subsystems of `first(syss)`.
+"""
 function compose(syss...; name = nameof(first(syss)))
     compose(first(syss), collect(syss[2:end]); name = name)
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `compose(sys1, sys2)`.
+
+See also: [`compose`](@ref).
+"""
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}

@@ -6,12 +6,9 @@
     check_complete(sys, SDDEFunction)
     check_compatibility && check_compatible_system(SDDEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse, kwargs...)
-    g = generate_diffusion_function(sys, dvs, ps; expression,
+    g = generate_diffusion_function(sys; expression,
         wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip

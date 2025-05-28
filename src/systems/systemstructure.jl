@@ -1,11 +1,11 @@
 using DataStructures
-using Symbolics: linear_expansion, unwrap, Connection
+using Symbolics: linear_expansion, unwrap
 using SymbolicUtils: iscall, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter,
+                          isparameter, Connection,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,

@@ -7,9 +7,7 @@
     check_complete(sys, DAEFunction)
     check_compatibility && check_compatible_system(DAEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -25,7 +23,7 @@
     end
 
     if jac
-        _jac = generate_dae_jacobian(sys, dvs, ps; expression,
+        _jac = generate_dae_jacobian(sys; expression,
             wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
             checkbounds, kwargs...)
     else

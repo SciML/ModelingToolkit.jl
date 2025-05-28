@@ -140,6 +140,8 @@ function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
     end
 end
 
+Symbolics.hide_lhs(::AnalysisPoint) = true
+
 @latexrecipe function f(ap::AnalysisPoint)
     index --> :subscript
     snakecase --> true
@@ -176,7 +178,7 @@ function renamespace(sys, ap::AnalysisPoint)
 end
 
 # create analysis points via `connect`
-function Symbolics.connect(in, ap::AnalysisPoint, outs...; verbose = true)
+function connect(in, ap::AnalysisPoint, outs...; verbose = true)
     return AnalysisPoint() ~ AnalysisPoint(in, ap.name, collect(outs); verbose)
 end
 
@@ -217,11 +219,11 @@ typically is not (unless the model is an inverse model).
 - `verbose`: Warn if an input is connected to an output (reverse causality). Silence this
   warning if you are analyzing an inverse model.
 """
-function Symbolics.connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
+function connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
     return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
 end
 
-function Symbolics.connect(
+function connect(
         in::ConnectableSymbolicT, name::Symbol, out::ConnectableSymbolicT,
         outs::ConnectableSymbolicT...; verbose = true)
     allvars = (in, out, outs...)

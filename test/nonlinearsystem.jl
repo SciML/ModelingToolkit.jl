@@ -29,7 +29,7 @@ eqs = [0 ~ σ * (y - x) * h,
 @test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β, h))
 @test begin
-    f = generate_rhs(ns, [x, y, z], [σ, ρ, β, h], expression = Val{false})[2]
+    f = generate_rhs(ns, expression = Val{false})[2]
     du = [0.0, 0.0, 0.0]
     f(du, [1, 2, 3], [1, 2, 3, 1])
     du ≈ [1, -3, -7]
@@ -65,7 +65,7 @@ eqs = [0 ~ σ * a * h,
     0 ~ x * y - β * z]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 ns = complete(ns)
-nlsys_func = generate_rhs(ns, [x, y, z], [σ, ρ, β, h])
+nlsys_func = generate_rhs(ns)
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 

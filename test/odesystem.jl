@@ -148,7 +148,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3, 1], 5.0)
 eqs = [D(x) ~ x + 10σ(t - 1) + 100σ(t - 2) + 1000σ(t^2)]
 @named de = System(eqs, t)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
-f = generate_rhs(de, [x], [σ], expression = Val{false}, wrap_gfw = Val{true})
+f = generate_rhs(de, expression = Val{false}, wrap_gfw = Val{true})
 du = [0.0]
 f(du, [1.0], [t -> t + 2], 5.0)
 @test du ≈ [27561]
@@ -173,7 +173,7 @@ eqs = [D(x) ~ -A * x,
 @named de = System(eqs, t)
 @test begin
     local f, du
-    f = generate_rhs(de, [x, y], [A, B, C], expression = Val{false}, wrap_gfw = Val{true})
+    f = generate_rhs(de, expression = Val{false}, wrap_gfw = Val{true})
     du = [0.0, 0.0]
     f(du, [1.0, 2.0], [1, 2, 3], 0.0)
     du ≈ [-1, -1 / 3]

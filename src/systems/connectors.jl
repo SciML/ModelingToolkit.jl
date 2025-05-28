@@ -1,4 +1,55 @@
-using Symbolics: StateMachineOperator
+"""
+    $(TYPEDEF)
+
+Struct used to represent a connection equation. A connection equation is an `Equation`
+where the LHS is an empty `Connection(nothing)` and the RHS is a `Connection` containing
+the connected connectors.
+
+For special types of connections, the LHS `Connection` can contain relevant metadata.
+"""
+struct Connection
+    systems::Any
+end
+
+Base.broadcastable(x::Connection) = Ref(x)
+Connection() = Connection(nothing)
+Base.hash(c::Connection, seed::UInt) = hash(c.systems, (0xc80093537bdc1311 % UInt) ⊻ seed)
+Symbolics.hide_lhs(_::Connection) = true
+
+"""
+    $(TYPEDSIGNATURES)
+
+Connect multiple connectors created via `@connector`. All connected connectors
+must be unique.
+"""
+function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
+    syss = (sys1, sys2, syss...)
+    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
+    Equation(Connection(), Connection(syss)) # the RHS are connected systems
+end
+
+function Base.show(io::IO, c::Connection)
+    print(io, "connect(")
+    if c.systems isa AbstractArray || c.systems isa Tuple
+        n = length(c.systems)
+        for (i, s) in enumerate(c.systems)
+            str = join(split(string(nameof(s)), NAMESPACE_SEPARATOR), '.')
+            print(io, str)
+            i != n && print(io, ", ")
+        end
+    end
+    print(io, ")")
+end
+
+@latexrecipe function f(c::Connection)
+    index --> :subscript
+    return Expr(:call, :connect, map(nameof, c.systems)...)
+end
+
+function Base.show(io::IO, ::MIME"text/latex", ap::Connection)
+    print(io, latexify(ap))
+end
+
 isconnection(_) = false
 isconnection(_::Connection) = true
 """
@@ -20,6 +71,37 @@ function get_connection_type(s)
     getmetadata(s, VariableConnectType, Equality)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Mark a system constructor function as building a connector. For example,
+
+```julia
+@connector function ElectricalPin(; name, v = nothing, i = nothing)
+    @variables begin
+        v(t) = v, [description = "Potential at the pin [V]"]
+        i(t) = i, [connect = Flow, description = "Current flowing into the pin [A]"]
+    end
+    return System(Equation[], t, [v, i], []; name)
+end
+```
+
+Since connectors only declare variables, the equivalent shorthand syntax can also be used:
+
+```julia
+@connector Pin begin
+    v(t), [description = "Potential at the pin [V]"]
+    i(t), [connect = Flow, description = "Current flowing into the pin [A]"]
+end
+```
+
+ModelingToolkit systems are either components or connectors. Components define dynamics of
+the model. Connectors are used to connect components together. See the
+[Model building reference](@ref model_building_api) section of the documentation for more
+information.
+
+See also: [`@component`](@ref).
+"""
 macro connector(expr)
     esc(component_post_processing(expr, true))
 end
@@ -63,6 +145,15 @@ is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConne
 
 get_systems(c::Connection) = c.systems
 
+"""
+    $(TYPEDSIGNATURES)
+
+`instream` is used when modeling stream connections. It is only allowed to be used on
+`Stream` variables.
+
+Refer to the [Connection semantics](@ref connect_semantics) section of the docs for more
+information.
+"""
 instream(a) = term(instream, unwrap(a), type = symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
@@ -148,7 +239,7 @@ var1 ~ var3
 # ...
 ```
 """
-function Symbolics.connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
+function connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
         vars::ConnectableSymbolicT...)
     allvars = (var1, var2, vars...)
     validate_causal_variables_connection(allvars)

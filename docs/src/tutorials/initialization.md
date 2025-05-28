@@ -1,4 +1,4 @@
-# Initialization of ODESystems
+# [Initialization of Systems](@id initialization)
 
 While for simple numerical ODEs choosing an initial condition can be an easy
 affair, with ModelingToolkit's more general differential-algebraic equation
@@ -44,7 +44,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
-@mtkbuild pend = ODESystem(eqs, t)
+@mtkcompile pend = System(eqs, t)
 ```
 
 While we defined the system using second derivatives and a length constraint,
@@ -59,7 +59,7 @@ To see how the system works, let's start the pendulum in the far right position,
 i.e. `x(0) = 1` and `y(0) = 0`. We can do this by:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5), guesses = [λ => 1])
 ```
 
 This solves via:
@@ -93,7 +93,7 @@ sol[λ][1]
 We can similarly choose `λ = 0` and solve for `y` to start the system:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, λ => 0], (0.0, 1.5), [g => 1], guesses = [y => 1])
+prob = ODEProblem(pend, [x => 1, λ => 0, g => 1], (0.0, 1.5); guesses = [y => 1])
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -102,7 +102,7 @@ or choose to satisfy derivative conditions:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1])
+    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1])
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -114,7 +114,7 @@ We can also directly give equations to be satisfied at the initial point by usin
 the `initialization_eqs` keyword argument, for example:
 
 ```@example init
-prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1],
+prob = ODEProblem(pend, [x => 1, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1],
     initialization_eqs = [y ~ 0])
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
@@ -125,7 +125,7 @@ variables and parameters:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => g], (0.0, 3.0), [g => 1], guesses = [λ => 0, y => 1])
+    pend, [x => 1, D(y) => g, g => 1], (0.0, 3.0); guesses = [λ => 0, y => 1])
 sol = solve(prob, Rodas5P())
 plot(sol, idxs = (x, y))
 ```
@@ -141,7 +141,7 @@ conditions = getfield.(equations(pend)[3:end], :rhs)
 when we initialize with
 
 ```@example init
-prob = ODEProblem(pend, [x => 1, y => 0], (0.0, 1.5), [g => 1], guesses = [y => 0, λ => 1])
+prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5); guesses = [y => 0, λ => 1])
 ```
 
 we have two extra conditions to satisfy, `x ~ 1` and `y ~ 0` at the initial point. That gives
@@ -149,7 +149,7 @@ we have two extra conditions to satisfy, `x ~ 1` and `y ~ 0` at the initial poin
 case?
 
 ```@example init
-prob = ODEProblem(pend, [x => 1], (0.0, 1.5), [g => 1], guesses = [y => 0, λ => 1])
+prob = ODEProblem(pend, [x => 1, g => 1], (0.0, 1.5); guesses = [y => 0, λ => 1])
 ```
 
 Here we have 4 equations for 5 unknowns (note: the warning is post-simplification of the
@@ -167,7 +167,7 @@ direction, we may have an overdetermined system:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, y => 0.0, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+    pend, [x => 1, y => 0.0, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 1])
 ```
 
 Can that be solved?
@@ -184,7 +184,7 @@ a `SciMLBase.ReturnCode.InitialFailure`:
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1], (0.0, 1.5), [g => 1], guesses = [λ => 1])
+    pend, [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], (0.0, 1.5); guesses = [λ => 1])
 sol = solve(prob, Rodas5P())
 ```
 
@@ -217,7 +217,7 @@ y-velocities from a given position.
 
 ```@example init
 prob = ODEProblem(
-    pend, [x => 1, D(y) => 0], (0.0, 1.5), [g => 1], guesses = [λ => 0, y => 1, x => 1])
+    pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [λ => 0, y => 1, x => 1])
 sol1 = solve(prob, Rodas5P())
 ```
 
@@ -312,7 +312,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
 
 @variables x(t) y(t)
 @parameters total
-@mtkbuild sys = ODESystem([D(x) ~ -x, total ~ x + y], t;
+@mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t;
     defaults = [total => missing], guesses = [total => 1.0])
 ```
 
@@ -380,7 +380,7 @@ with observables, those observables are too treated as initial equations. We can
 resulting simplified system via the command:
 
 ```@example init
-isys = structural_simplify(isys; fully_determined = false)
+isys = mtkcompile(isys; fully_determined = false)
 ```
 
 Note `fully_determined=false` allows for the simplification to occur when the number of equations
@@ -392,7 +392,7 @@ isys = ModelingToolkit.generate_initializesystem(
 ```
 
 ```@example init
-isys = structural_simplify(isys; fully_determined = false)
+isys = mtkcompile(isys; fully_determined = false)
 ```
 
 ```@example init
@@ -503,8 +503,8 @@ eqs = [D(x) ~ α * x - β * x * y
        D(y) ~ -γ * y + δ * x * y
        z ~ x + y]
 
-@named sys = ODESystem(eqs, t)
-simpsys = structural_simplify(sys)
+@named sys = System(eqs, t)
+simpsys = mtkcompile(sys)
 tspan = (0.0, 10.0)
 ```
 

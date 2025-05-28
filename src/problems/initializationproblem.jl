@@ -1,22 +1,22 @@
 struct InitializationProblem{iip, specialization} end
 
-"""
-```julia
-InitializationProblem{iip}(sys::AbstractSystem, t, op;
-                           version = nothing, tgrad = false,
-                           jac = false,
-                           checkbounds = false, sparse = false,
-                           simplify = false,
-                           linenumbers = true, parallel = SerialForm(),
-                           initialization_eqs = [],
-                           fully_determined = false,
-                           kwargs...) where {iip}
-```
+@doc """
+    InitializationProblem(sys::AbstractSystem, t, op = Dict(); kwargs...)
+    InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
+    InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
 
-Generates a NonlinearProblem or NonlinearLeastSquaresProblem from a System
-which represents the initialization, i.e. the calculation of the consistent
-initial conditions for the given DAE.
-"""
+Generate a `NonlinearProblem`, `SCCNonlinearProblem` or `NonlinearLeastSquaresProblem` to
+represent a consistent initialization of `sys` given the initial time `t` and operating
+point `op`. The initial time can be `nothing` for time-independent systems.
+
+# Keyword arguments
+
+$INITIALIZEPROB_KWARGS
+$INTERNAL_INITIALIZEPROB_KWARGS
+
+All other keyword arguments are forwarded to the wrapped nonlinear problem constructor.
+""" InitializationProblem
+
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
         sys::AbstractSystem,
         t, op = Dict();
@@ -28,7 +28,6 @@ initial conditions for the given DAE.
         check_units = true,
         use_scc = true,
         allow_incomplete = false,
-        force_time_independent = false,
         algebraic_only = false,
         time_dependent_init = is_time_dependent(sys),
         kwargs...) where {iip, specialize}
@@ -58,7 +57,7 @@ initial conditions for the given DAE.
 
     # useful for `SteadyStateProblem` since `f` has to be autonomous and the
     # initialization should be too
-    if force_time_independent
+    if !time_dependent_init
         idx = findfirst(isequal(get_iv(sys)), get_ps(isys))
         idx === nothing || deleteat!(get_ps(isys), idx)
     end

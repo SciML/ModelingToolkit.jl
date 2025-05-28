@@ -91,8 +91,50 @@ end
 
 ### Connect
 abstract type AbstractConnectType end
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Equality` is the
+default value and such variables when connected are made equal. For example, electric
+potential is equated at a junction.
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Flow`](@ref),
+[`Stream`](@ref).
+"""
 struct Equality <: AbstractConnectType end # Equality connection
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Flow` denotes that
+the sum of marked variable in all connectors in the connection set must sum to zero. For
+example, electric current sums to zero at a junction (assuming appropriate signs are used
+for current flowing in and out of the function).
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+[`Stream`](@ref).
+"""
 struct Flow <: AbstractConnectType end     # sum to 0
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Stream` denotes that
+the variable is part of a special stream connector.
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+[`Flow`](@ref).
+"""
 struct Stream <: AbstractConnectType end   # special stream connector
 
 """

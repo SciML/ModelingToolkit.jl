@@ -41,10 +41,10 @@ eqs = [
 Because our dynamical system is super simple, we will directly make an `ODESystem` and cast it in an `ODEProblem` as in the [`ODESystems` tutorial](@ref programmatically). Since all state variables and parameters have a default value we can immediately write
 
 ```@example Attractors
-@named modlorenz = ODESystem(eqs, t)
-ssys = structural_simplify(modlorenz)
+@named modlorenz = System(eqs, t)
+ssys = mtkcompile(modlorenz)
 # The timespan given to the problem is irrelevant for DynamicalSystems.jl
-prob = ODEProblem(ssys, [], (0.0, 1.0), [])
+prob = ODEProblem(ssys, [], (0.0, 1.0))
 ```
 
 This `prob` can be turned to a dynamical system as simply as

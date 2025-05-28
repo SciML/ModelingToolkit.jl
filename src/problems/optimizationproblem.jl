@@ -10,8 +10,7 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         expression = Val{false}, kwargs...) where {iip}
     check_complete(sys, OptimizationFunction)
     check_compatibility && check_compatible_system(OptimizationFunction, sys)
-    dvs = unknowns(sys)
-    ps = parameters(sys)
+
     cstr = constraints(sys)
 
     f = generate_cost(sys; expression, wrap_gfw = Val{true}, eval_expression,

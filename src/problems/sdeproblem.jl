@@ -7,12 +7,10 @@
     check_complete(sys, SDEFunction)
     check_compatibility && check_compatible_system(SDEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
-    g = generate_diffusion_function(sys, dvs, ps; expression,
+    g = generate_diffusion_function(sys; expression,
         wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
@@ -27,7 +25,7 @@
     end
 
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps; expression,
+        _tgrad = generate_tgrad(sys; expression,
             wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
             kwargs...)
     else

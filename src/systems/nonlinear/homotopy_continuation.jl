@@ -472,22 +472,8 @@ function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fract
     return num, den
 end
 
-function SciMLBase.HomotopyNonlinearFunction(sys::System, args...; kwargs...)
-    ODEFunction{true}(sys, args...; kwargs...)
-end
-
-function SciMLBase.HomotopyNonlinearFunction{true}(sys::System, args...;
-        kwargs...)
-    ODEFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
-end
-
-function SciMLBase.HomotopyNonlinearFunction{false}(sys::System, args...;
-        kwargs...)
-    ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
-end
-
-function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
-        sys::System, args...; eval_expression = false, eval_module = @__MODULE__,
+@fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
+        sys::System; eval_expression = false, eval_module = @__MODULE__,
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
@@ -510,7 +496,7 @@ function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
 
     # we want to create f, jac etc. according to `sys2` since that will do the solving
     # but the `sys` inside for symbolic indexing should be the non-polynomial system
-    fn = NonlinearFunction{iip}(sys2; eval_expression, eval_module, cse, kwargs...)
+    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, cse, kwargs...)
     obsfn = ObservedFunctionCache(
         sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
     fn = remake(fn; sys = sys, observed = obsfn)
@@ -527,6 +513,9 @@ function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
 end
 
 struct HomotopyContinuationProblem{iip, specialization} end
+
+@doc problem_docstring(
+    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false) HomotopyContinuationProblem
 
 function HomotopyContinuationProblem(sys::System, args...; kwargs...)
     HomotopyContinuationProblem{true}(sys, args...; kwargs...)

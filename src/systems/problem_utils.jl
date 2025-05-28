@@ -1080,7 +1080,7 @@ function maybe_build_initialization_problem(
     end
     initializeprob = remake(initializeprob; p = initp)
 
-    get_initial_unknowns = if is_time_dependent(sys)
+    get_initial_unknowns = if time_dependent_init
         GetUpdatedU0(sys, initializeprob.f.sys, op)
     else
         nothing
@@ -1092,9 +1092,6 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; u0_constructor, p_constructor),
         get_initial_unknowns, SetInitialUnknowns(sys))
 
-    if time_dependent_init === nothing
-        time_dependent_init = is_time_dependent(sys)
-    end
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
@@ -1188,58 +1185,20 @@ Return the SciMLFunction created via calling `constructor`, the initial conditio
 and parameter object `p` given the system `sys`, and user-provided initial values `u0map`
 and `pmap`. `u0map` and `pmap` are converted into variable maps via [`to_varmap`](@ref).
 
-The order of unknowns is determined by `unknowns(sys)`. If the system is split
-[`is_split`](@ref) create an [`MTKParameters`](@ref) object. Otherwise, a parameter vector.
-Initial values provided in terms of other variables will be symbolically evaluated using
-[`evaluate_varmap!`](@ref). The type of `u0map` and `pmap` will be used to determine the
-type of the containers (if parameters are not in an `MTKParameters` object). `Dict`s will be
-turned into `Array`s.
+$U0_P_DOCS
 
 This will also build the initialization problem and related objects and pass them to the
 SciMLFunction as keyword arguments.
 
 Keyword arguments:
-- `build_initializeprob`: If `false`, avoids building the initialization problem.
-- `t`: The initial time of the `ODEProblem`. If this is not provided, the initialization
-  problem cannot be built.
+$PROBLEM_KWARGS
+$PROBLEM_INTERNAL_KWARGS
+- `t`: The initial time of the `SciMLProblem`. This does not need to be provided for time-
+  independent problems. If not provided for time-dependent problems, will be assumed as
+  zero.
 - `implicit_dae`: Also build a mapping of derivatives of states to values for implicit DAEs.
-  Changes the return value of this function to `(f, du0, u0, p)` instead of
-  `(f, u0, p)`.
-- `guesses`: The guesses for variables in the system, used as initial values for the
-  initialization problem.
-- `warn_initialize_determined`: Warn if the initialization system is under/over-determined.
-- `initialization_eqs`: Extra equations to use in the initialization problem.
-- `eval_expression`: Whether to compile any functions via `eval` or `RuntimeGeneratedFunctions`.
-- `eval_module`: If `eval_expression == true`, the module to `eval` into. Otherwise, the module
-  in which to generate the `RuntimeGeneratedFunction`.
-- `fully_determined`: Override whether the initialization system is fully determined.
-- `check_initialization_units`: Enable or disable unit checks when constructing the
-  initialization problem.
-- `tofloat`: Passed to [`varmap_to_vars`](@ref) when building the parameter vector of
-  a non-split system.
-- `u0_eltype`: The `eltype` of the `u0` vector. If `nothing`, finds the promoted floating point
-  type from `op`.
-- `u0_constructor`: A function to apply to the `u0` value returned from `varmap_to_vars`
-  to construct the final `u0` value.
-- `p_constructor`: A function to apply to each array buffer created when constructing the parameter object.
-- `check_length`: Whether to check the number of equations along with number of unknowns and
-  length of `u0` vector for consistency. If `false`, do not check with equations. This is
-  forwarded to `check_eqs_u0`
+  Changes the return value of this function to `(f, du0, u0, p)` instead of `(f, u0, p)`.
 - `symbolic_u0` allows the returned `u0` to be an array of symbolics.
-- `warn_cyclic_dependency`: Whether to emit a warning listing out cycles in initial
-  conditions provided for unknowns and parameters.
-- `circular_dependency_max_cycle_length`: Maximum length of cycle to check for.
-  Only applicable if `warn_cyclic_dependency == true`.
-- `circular_dependency_max_cycles`: Maximum number of cycles to check for.
-  Only applicable if `warn_cyclic_dependency == true`.
-- `substitution_limit`: The number times to substitute initial conditions into each
-  other to attempt to arrive at a numeric value.
-- `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
-  determined.
-- `force_initialization_time_independent`: Whether to force the initialization to not use
-  the independent variable of `sys`.
-- `algebraic_only`: Whether to build the initialization problem using only algebraic equations.
-- `allow_incomplete`: Whether to allow incomplete initialization problems.
 
 All other keyword arguments are passed as-is to `constructor`.
 """
@@ -1255,7 +1214,7 @@ function process_SciMLProblem(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
-        force_initialization_time_independent = false, algebraic_only = false,
+        algebraic_only = false,
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1314,8 +1273,8 @@ function process_SciMLProblem(
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            force_time_independent = force_initialization_time_independent, algebraic_only, allow_incomplete,
-            u0_constructor, p_constructor, floatT, time_dependent_init)
+            algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
+            time_dependent_init)
 
         kwargs = merge(kwargs, kws)
     end

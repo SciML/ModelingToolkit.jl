@@ -99,7 +99,7 @@ end
     end
 end
 
-@mtkbuild rc_model = RCModel(resistor.R = 2.0)
+@mtkcompile rc_model = RCModel(resistor.R = 2.0)
 u0 = [
     rc_model.capacitor.v => 0.0
 ]
@@ -272,7 +272,7 @@ We can create a RCModel component with `@named`. And using `subcomponent_name.pa
 the parameters or defaults values of variables of subcomponents.
 
 ```@example acausal
-@mtkbuild rc_model = RCModel(resistor.R = 2.0)
+@mtkcompile rc_model = RCModel(resistor.R = 2.0)
 ```
 
 This model is acausal because we have not specified anything about the causality of the model. We have
@@ -323,7 +323,7 @@ plot(sol)
 By default, this plots only the unknown variables that had to be solved for.
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
-like `structural_simplify` simply change unknown variables into observables which are
+like `mtkcompile` simply change unknown variables into observables which are
 defined by `observed` equations.
 
 ```@example acausal

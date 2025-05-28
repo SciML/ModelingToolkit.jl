@@ -67,7 +67,7 @@ This outer model, `ModelWithInputs`, contains two disturbance inputs, both of ty
 
 ```@example DISTURBANCE_MODELING
 @named model = ModelWithInputs() # Model with load disturbance
-ssys = structural_simplify(model)
+ssys = mtkcompile(model)
 prob = ODEProblem(ssys, [], (0.0, 6.0))
 sol = solve(prob, Tsit5())
 using Plots
@@ -108,7 +108,7 @@ y &= g(x, p, t)
 \end{aligned}
 ```
 
-where ``x`` is the state, ``y`` are observed variables, ``p`` are parameters, and ``t`` is time. When using MTK, which variables constitute ``x`` and which are considered part of the output, ``y``, is up to the tool rather than the user, this choice is made by MTK during the call to `@mtkbuild` or the lower-level function `structural_simplify`.
+where ``x`` is the state, ``y`` are observed variables, ``p`` are parameters, and ``t`` is time. When using MTK, which variables constitute ``x`` and which are considered part of the output, ``y``, is up to the tool rather than the user, this choice is made by MTK during the call to `@mtkcompile` or the lower-level function `mtkcompile`.
 
 If we further consider external inputs to the system, such as controlled input signals ``u`` and disturbance inputs ``w``, we can write the system as
 
@@ -169,7 +169,7 @@ end
 We demonstrate that this model is complete and can be simulated:
 
 ```@example DISTURBANCE_MODELING
-ssys = structural_simplify(model_with_disturbance)
+ssys = mtkcompile(model_with_disturbance)
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 using Test
@@ -191,7 +191,7 @@ g = ModelingToolkit.build_explicit_observed_function(
     io_sys, outputs; inputs)
 
 op = ModelingToolkit.inputs(io_sys) .=> 0
-x0, _ = ModelingToolkit.get_u0_p(io_sys, op, op)
+x0 = ModelingToolkit.get_u0(io_sys, op)
 p = MTKParameters(io_sys, op)
 u = zeros(1) # Control input
 w = zeros(length(disturbance_inputs)) # Disturbance input

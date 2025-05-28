@@ -7,9 +7,7 @@
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
-    dvs = unknowns(sys)
-    ps = parameters(sys)
-    f = generate_rhs(sys, dvs, ps; expression, wrap_gfw = Val{true},
+    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
         kwargs...)
 
@@ -26,7 +24,7 @@
 
     if tgrad
         _tgrad = generate_tgrad(
-            sys, dvs, ps; expression, wrap_gfw = Val{true},
+            sys; expression, wrap_gfw = Val{true},
             simplify, cse, eval_expression, eval_module, checkbounds, kwargs...)
     else
         _tgrad = nothing
@@ -83,20 +81,6 @@ end
     maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
 end
 
-"""
-```julia
-SciMLBase.SteadyStateProblem(sys::System, u0map,
-                             parammap = DiffEqBase.NullParameters();
-                             version = nothing, tgrad = false,
-                             jac = false,
-                             checkbounds = false, sparse = false,
-                             linenumbers = true, parallel = SerialForm(),
-                             kwargs...) where {iip}
-```
-
-Generates an SteadyStateProblem from a `System` of ODEs and allows for automatically
-symbolically calculating numerical enhancements.
-"""
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
         sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...) where {iip, spec}
@@ -105,7 +89,7 @@ symbolically calculating numerical enhancements.
 
     f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
-        force_initialization_time_independent = true, kwargs...)
+        time_dependent_init = false, kwargs...)
 
     kwargs = process_kwargs(sys; expression, kwargs...)
     args = (; f, u0, p)
