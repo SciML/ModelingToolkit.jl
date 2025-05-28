@@ -632,6 +632,7 @@ function complete(
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
+        sys = process_parameter_equations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)
         end
@@ -2760,52 +2761,53 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     end
 end
 
-struct InvalidParameterDependenciesType
-    got::Any
-end
+"""
+    $(TYPEDSIGNATURES)
 
-function Base.showerror(io::IO, err::InvalidParameterDependenciesType)
-    print(
-        io, "Parameter dependencies must be a `Dict`, or an array of `Pair` or `Equation`.")
-    if err.got !== nothing
-        print(io, " Got ", err.got)
+Find equations of `sys` involving only parameters and separate them out into the
+`parameter_dependencies` field. Relative ordering of equations is maintained.
+Parameter-only equations are validated to be explicit and sorted topologically. All such
+explicitly determined parameters are removed from the parameters of `sys`. Return the new
+system.
+"""
+function process_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
     end
-end
+    varsbuf = Set()
+    pareq_idxs = Int[]
+    eqs = equations(sys)
+    for (i, eq) in enumerate(eqs)
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
+        # singular equations
+        isempty(varsbuf) && continue
+        if all(varsbuf) do sym
+            is_parameter(sys, sym) ||
+                symbolic_type(sym) == ArraySymbolic() &&
+                    is_sized_array_symbolic(sym) &&
+                    all(Base.Fix1(is_parameter, sys), collect(sym))
+        end
+            if !isparameter(eq.lhs)
+                throw(ArgumentError("""
+                LHS of parameter dependency equation must be a single parameter. Found \
+                $(eq.lhs).
+                """))
+            end
+            push!(pareq_idxs, i)
+        end
+    end
 
-function process_parameter_dependencies(pdeps, ps)
-    if pdeps === nothing || isempty(pdeps)
-        return Equation[], ps
-    end
-    if pdeps isa Dict
-        pdeps = [k ~ v for (k, v) in pdeps]
-    else
-        pdeps isa AbstractArray || throw(InvalidParameterDependenciesType(pdeps))
-        pdeps = [if p isa Pair
-                     p[1] ~ p[2]
-                 elseif p isa Equation
-                     p
-                 else
-                     error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
-                 end
-                 for p in pdeps]
-    end
-    lhss = []
-    for p in pdeps
-        if !isparameter(p.lhs)
-            error("LHS of parameter dependency must be a single parameter. Found $(p.lhs).")
-        end
-        syms = vars(p.rhs)
-        if !all(isparameter, syms)
-            error("RHS of parameter dependency must only include parameters. Found $(p.rhs)")
-        end
-        push!(lhss, p.lhs)
-    end
-    lhss = map(identity, lhss)
-    pdeps = topsort_equations(pdeps, union(ps, lhss))
-    ps = filter(ps) do p
-        !any(isequal(p), lhss)
-    end
-    return pdeps, ps
+    pareqs = [get_parameter_dependencies(sys); eqs[pareq_idxs]]
+    explicitpars = [eq.lhs for eq in pareqs]
+    pareqs = topsort_equations(pareqs, explicitpars)
+
+    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
+
+    @set! sys.eqs = eqs
+    @set! sys.parameter_dependencies = pareqs
+    @set! sys.ps = setdiff(get_ps(sys), explicitpars)
+    return sys
 end
 
 """
