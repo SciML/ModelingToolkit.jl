@@ -1274,6 +1274,12 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
 end
 
 function dependent_parameters(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `dependent_parameters` requires that the system is marked as complete. Call
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     return map(eq -> eq.lhs, parameter_dependencies(sys))
 end
 
@@ -1290,23 +1296,22 @@ function parameters_toplevel(sys::AbstractSystem)
 end
 
 """
-$(TYPEDSIGNATURES)
-Get the parameter dependencies of the system `sys` and its subsystems.
+    $(TYPEDSIGNATURES)
 
-See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
+Get the parameter dependencies of the system `sys` and its subsystems. Requires that the
+system is `complete`d.
 """
 function parameter_dependencies(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `parameter_dependencies` requires that the system is marked as complete. Call \
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     if !has_parameter_dependencies(sys)
         return Equation[]
     end
-    pdeps = get_parameter_dependencies(sys)
-    systems = get_systems(sys)
-    # put pdeps after those of subsystems to maintain topological sorted order
-    namespaced_deps = mapreduce(
-        s -> map(eq -> namespace_equation(eq, s), parameter_dependencies(s)), vcat,
-        systems; init = Equation[])
-
-    return vcat(namespaced_deps, pdeps)
+    get_parameter_dependencies(sys)
 end
 
 function full_parameters(sys::AbstractSystem)
