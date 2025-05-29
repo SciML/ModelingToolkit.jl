@@ -91,7 +91,7 @@ end
 MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi) = model.tₛ * InfiniteOpt.∫(expr, model.model[:t], lo, hi)
 MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
 
-function MTK.process_integral_bounds(model, integral_span, tspan)
+function MTK.process_integral_bounds(model::InfiniteOptModel, integral_span, tspan)
     if MTK.is_free_final(model) && isequal(integral_span, tspan)
         integral_span = (0, 1)
     elseif MTK.is_free_final(model)
@@ -213,6 +213,7 @@ function MTK.get_U_values(m::InfiniteModel)
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
 end
 MTK.get_t_values(m::InfiniteModel) = value(m[:tₛ]) * supports(m[:t])
+MTK.objective_value(m::InfiniteModel) = InfiniteOpt.objective_value(m)
 
 function MTK.successful_solve(model::InfiniteModel)
     tstatus = termination_status(model)

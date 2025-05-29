@@ -120,7 +120,20 @@ function MTK.lowered_var(m::CasADiModel, uv, i, t)
     t isa Union{Num, Symbolics.Symbolic} ? X.u[i, :] : X(t)[i]
 end
 
-MTK.lowered_integral(model::CasADiModel, expr, args...) = model.tₛ * (model.U.t[2] - model.U.t[1]) * sum(expr)
+function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
+    total = MX(0)
+    dt = model.U.t[2] - model.U.t[1]
+    for (i, t) in enumerate(model.U.t)
+        if lo < t < hi
+            Δt = min(dt, t - lo)
+            total += (0.5*Δt*(expr[i] + expr[i-1]))
+        elseif t >= hi && (t - dt < hi)
+            Δt = hi - t + dt
+            total += (0.5*Δt*(expr[i] + expr[i-1]))
+        end
+    end
+    model.tₛ * total
+end
 
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
@@ -210,6 +223,7 @@ function MTK.get_t_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
     ts = value_getter(model.solver_opti, model.tₛ) .* model.U.t
 end
+MTK.objective_value(model::CasADiModel) = CasADi.pyconvert(Float64, model.solver_opti.py.value(model.solver_opti.py.f))
 
 function MTK.successful_solve(m::CasADiModel) 
     isnothing(m.solver_opti) && return false

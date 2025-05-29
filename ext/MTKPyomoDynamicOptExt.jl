@@ -8,16 +8,13 @@ using Setfield
 const MTK = ModelingToolkit
 
 SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
-                               log1p => Pyomo.py_log1p,
                                acosh => Pyomo.py_acosh,
-                               log2 => Pyomo.py_log2,
                                asin => Pyomo.py_asin,
                                tan => Pyomo.py_tan,
                                atanh => Pyomo.py_atanh,
                                cos => Pyomo.py_cos,
                                log => Pyomo.py_log,
                                sin => Pyomo.py_sin,
-                               log10 => Pyomo.py_log10,
                                sqrt => Pyomo.py_sqrt,
                                exp => Pyomo.py_exp])
 
@@ -36,8 +33,19 @@ struct PyomoDynamicOptModel
     function PyomoDynamicOptModel(model, U, V, tₛ, is_free_final)
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
+        #add_time_equation!(model, MODEL_SYM, T_SYM)
         new(model, U, V, tₛ, is_free_final, nothing, PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
+end
+
+function add_time_equation!(model::ConcreteModel, model_sym, t_sym)
+    model.dtime = dae.DerivativeVar(model.time)
+
+    mdt = Symbolics.value(pysym_getproperty(model_sym, :dtime))
+    mts = Symbolics.value(pysym_getproperty(model_sym, :tₛ))
+    expr = mdt[t_sym] - mts == 0
+    f = Pyomo.pyfunc(eval(Symbolics.build_function(expr, model_sym, t_sym)))
+    model.time_eq = pyomo.Constraint(model.t, rule = f)
 end
 
 struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
@@ -72,6 +80,7 @@ MTK.generate_internal_model(m::Type{PyomoDynamicOptModel}) = ConcreteModel(pyomo
 function MTK.generate_time_variable!(m::ConcreteModel, tspan, tsteps)
     m.steps = length(tsteps)
     m.t = dae.ContinuousSet(initialize = tsteps, bounds = tspan)
+    m.time = pyomo.Var(m.t)
 end
 
 function MTK.generate_state_variable!(m::ConcreteModel, u0, ns, ts) 
@@ -116,7 +125,6 @@ end
 
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
-    @show expr
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
     if occursin(Symbolics.unwrap(t_sym), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
@@ -134,14 +142,23 @@ function MTK.add_initial_constraints!(model::PyomoDynamicOptModel, u0, u0_idxs, 
 end
 
 function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
-    @unpack model, model_sym, t_sym = m
-    arg_f = eval(Symbolics.build_function(arg, model_sym, t_sym))
-    int_sym = Symbol(:int, hash(arg))
-    setproperty!(model, int_sym, dae.Integral(model.t, wrt = model.t, rule=Pyomo.pyfunc(arg_f)))
-    PyomoVar(model.tₛ * model.int_sym)
+    @unpack model, model_sym, t_sym, dummy_sym = m
+    total = 0
+    dt = Pyomo.pyconvert(Float64, (model.t.at(-1) - model.t.at(1))/(model.steps - 1))
+    f = Symbolics.build_function(arg, model_sym, t_sym, expression = false)
+    for (i, t) in enumerate(model.t)
+        if Bool(lo < t) && Bool(t < hi)
+            t_p = model.t.at(i-1)
+            Δt = min(t - lo, t - t_p)
+            total += 0.5*Δt*(f(model, t) + f(model, t_p))
+        elseif Bool(t >= hi) && Bool(t - dt < hi)
+            t_p = model.t.at(i-1)
+            Δt = hi - t + dt
+            total += 0.5*Δt*(f(model, t) + f(model, t_p))
+        end
+    end
+    PyomoVar(model.tₛ * total)
 end
-
-MTK.process_integral_bounds(model, integral_span, tspan) = integral_span
 
 function MTK.lowered_derivative(m::PyomoDynamicOptModel, i)
     mdU = Symbolics.value(pysym_getproperty(m.model_sym, :dU))
@@ -167,6 +184,7 @@ function MTK.prepare_and_optimize!(prob::PyomoDynamicOptProblem, collocation; ve
     discretizer = TransformationFactory(dm)
     ncp = Pyomo.is_finite_difference(dm) ? 1 : dm.np
     discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps - 1, scheme = Pyomo.scheme_string(dm))
+
     solver = SolverFactory(string(collocation.solver))
     results = solver.solve(solver_m, tee = true)
     PyomoOutput(results, solver_m)
@@ -190,10 +208,11 @@ function MTK.get_t_values(output::PyomoOutput)
     Pyomo.pyconvert(Float64, pyomo.value(m.tₛ)) * [Pyomo.pyconvert(Float64, t) for t in m.t]
 end
 
+MTK.objective_value(output::PyomoOutput) = Pyomo.pyconvert(Float64, pyomo.value(output.model.obj))
+
 function MTK.successful_solve(output::PyomoOutput)
     r = output.result
     ss = r.solver.status
-    Main.xx[] = ss
     tc = r.solver.termination_condition
     if Bool(ss == opt.SolverStatus.ok) && (Bool(tc == opt.TerminationCondition.optimal) || Bool(tc == opt.TerminationCondition.locallyOptimal))
         return true
