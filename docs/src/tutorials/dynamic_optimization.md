@@ -2,7 +2,8 @@
 Systems in ModelingToolkit.jl can be directly converted to dynamic optimization or optimal control problems. In such systems, one has one or more input variables that are externally controlled to control the dynamics of the system. A dynamic optimization solves for the optimal time trajectory of the input variables in order to maximize or minimize a desired objective function. For example, a car driver might like to know how to step on the accelerator if the goal is to finish a race while using the least gas.
 
 To begin, let us take a rocket launch example. The input variable here is the thrust exerted by the engine. The rocket state is described by its current height and velocity.
-```julia
+
+```@example dynamic_opt
 using ModelingToolkit
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
@@ -37,19 +38,25 @@ pmap = [
 What we would like to optimize here is the final height of the rocket. We do this by providing a vector of expressions corresponding to the costs. By default, the sense of the optimization is to minimize the provided cost. So to maximize the rocket height at the final time, we write `-h(te)` as the cost.
 
 Now we can construct a problem and solve it. Let us use JuMP as our backend here.
-```julia
+```@example dynamic_opt
+using InfiniteOpt
 jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
 jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
 ```
 
 Let's plot our final solution and the controller here:
-```julia
+```@example dynamic_opt
+using CairoMakie
+plot(
+    plot(jsol.sol, title = "Rocket trajectory"),
+    plot(jsol.input_sol, title = "Control trajectory")
+)
 ```
 
 ###### Free final time problems
 There are additionally a class of dynamic optimization problems where we would like to know how to control our system to achieve something in the least time. Such problems are called free final time problems, since the final time is unknown. To model these problems in ModelingToolkit, we declare the final time as a parameter.
 
-```julia
+```@example dynamic_opt
 @variables x(..) v(..)
 @variables u(..) [bounds = (-1.0, 1.0), input = true]
 @parameters tf
@@ -69,8 +76,14 @@ parammap = [u(t) => 0.0, tf => 1.0]
 
 Please note that, at the moment, free final time problems cannot support constraints defined at definite time values, like `x(3) ~ 2`.
 
-Let's plot our final solution and the controller for the block:
-```julia
+!!! warning
+    
+    The Pyomo collocation methods (LagrangeRadau, LagrangeLegendre) currently are bugged for free final time problems. Strongly suggest using BackwardEuler() for such problems.
+
+Let's solve plot our final solution and the controller for the block, using InfiniteOpt as the backend:
+```@example dynamic_opt
+iprob = InfiniteOptDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
+isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
 ```
 
 ### Solvers
@@ -86,7 +99,7 @@ CasADiCollocation("ipopt", constructRK4())
 
 **Pyomo** and **InfiniteOpt** each have their own built-in collocation methods.
 1. **InfiniteOpt**: The list of InfiniteOpt collocation methods can be found [in the table on this page](https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/). If none is passed in, the solver defaults to `FiniteDifference(Backward())`, which is effectively implicit Euler.
-2. **Pyomo**: The list of Pyomo collocation methods can be found [here](). If none is passed in, the solver defaults to a `LagrangeRadau(3)`.
+2. **Pyomo**: The list of Pyomo collocation methods can be found [at the bottom of this page](https://github.com/SciML/Pyomo.jl). If none is passed in, the solver defaults to a `LagrangeRadau(3)`.
 
 ```@docs; canonical = false
 JuMPCollocation
