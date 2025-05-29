@@ -54,6 +54,120 @@ function liouville_transform(sys::System; kwargs...)
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Generates the set of ODEs after change of variables.
+
+
+Example:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq, Test
+
+# Change of variables: z = log(x)
+# (this implies that x = exp(z) is automatically non-negative)
+
+@parameters t α
+@variables x(t)
+D = Differential(t)
+eqs = [D(x) ~ α*x]
+
+tspan = (0., 1.)
+u0 = [x => 1.0]
+p = [α => -0.5]
+
+@named sys = ODESystem(eqs; defaults=u0)
+prob = ODEProblem(sys, [], tspan, p)
+sol = solve(prob, Tsit5())
+
+@variables z(t)
+forward_subs  = [log(x) => z]
+backward_subs = [x => exp(z)]
+
+@named new_sys = changeofvariables(sys, forward_subs, backward_subs)
+@test equations(new_sys)[1] == (D(z) ~ α)
+
+new_prob = ODEProblem(new_sys, [], tspan, p)
+new_sol = solve(new_prob, Tsit5())
+
+@test isapprox(new_sol[x][end], sol[x][end], atol=1e-4)
+```
+
+"""
+function changeofvariables(sys::System, forward_subs, backward_subs; simplify=false, t0=missing)
+    t = independent_variable(sys)
+
+    old_vars = first.(backward_subs)
+    new_vars = last.(forward_subs)
+    kept_vars = setdiff(states(sys), old_vars)
+    rhs = [eq.rhs for eq in equations(sys)]
+
+    # use: dz/dt = ∂z/∂x dx/dt + ∂z/∂t
+    dzdt = Symbolics.derivative( first.(forward_subs), t )
+    new_eqs = Equation[]
+    for (new_var, ex) in zip(new_vars, dzdt)
+        for ode_eq in equations(sys)
+            ex = substitute(ex, ode_eq.lhs => ode_eq.rhs)
+        end
+        ex = substitute(ex, Dict(forward_subs))
+        ex = substitute(ex, Dict(backward_subs))
+        if simplify
+            ex = Symbolics.simplify(ex, expand=true)
+        end
+        push!(new_eqs, Differential(t)(new_var) ~ ex)
+    end
+
+    defs = get_defaults(sys)
+    new_defs = Dict()
+    for f_sub in forward_subs
+        #TODO call value(...)?
+        ex = substitute(first(f_sub), defs)
+        if !ismissing(t0)
+            ex = substitute(ex, t => t0)
+        end
+        new_defs[last(f_sub)] = ex
+    end
+    return ODESystem(new_eqs;
+                        defaults=new_defs,
+                        observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
+                        )
+end
+
+function change_of_variable_SDE(sys::System, forward_subs, backward_subs, iv; simplify=false, t0=missing)
+    t = independent_variable(sys)
+
+    old_vars = first.(backward_subs)
+    new_vars = last.(forward_subs)
+    
+    # use: f = Y(t, X)
+    # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
+    old_eqs = equations(sys)
+    old_noise = get_noiseeqs(sys)
+    ∂f∂t = Symbolics.derivative( first.(forward_subs), t )
+    ∂f∂x = Symbolics.derivative( first.(forward_subs), old_vars )
+    ∂2f∂x2 = Symbolics.derivative( ∂f∂x, old_vars )
+    new_eqs = Equation[]
+
+    for (new_var, eq, noise, first, second, third) in zip(new_vars, old_eqs, old_noise, ∂f∂t, ∂f∂x, ∂2f∂x2)
+        ex = first + eq.rhs * second + 1/2 * noise^2 * third
+        for eqs in old_eqs
+            ex = substitute(ex, eqs.lhs => eqs.rhs)
+        end
+        ex = substitute(ex, Dict(forward_subs))
+        ex = substitute(ex, Dict(backward_subs))
+        if simplify
+            ex = Symbolics.simplify(ex, expand=true)
+        end
+        push!(new_eqs, Differential(t)(new_var) ~ ex)
+    end
+    new_noise = [noise * div for (noise, div) in zip(old_noise, ∂f∂x)]
+
+    return SDESystem(new_eqs, new_noise;
+            observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
+            )
+end
+
+"""
     change_independent_variable(
         sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
