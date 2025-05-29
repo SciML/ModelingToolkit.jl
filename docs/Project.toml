@@ -30,9 +30,13 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[sources]
-ModelingToolkitStandardLibrary = {rev = "mtk-v10", url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl/"}
-OptimizationBase = {rev = "as/mtk-v10", url = "https://github.com/AayushSabharwal/OptimizationBase.jl"}
+[sources.ModelingToolkitStandardLibrary]
+rev = "mtk-v10"
+url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl/"
+
+[sources.OptimizationBase]
+rev = "as/mtk-v10"
+url = "https://github.com/AayushSabharwal/OptimizationBase.jl"
 
 [compat]
 Attractors = "1.24"
@@ -50,6 +54,7 @@ ModelingToolkitStandardLibrary = "2.19"
 NonlinearSolve = "3, 4"
 Optim = "1.7"
 Optimization = "3.9, 4"
+OptimizationBase = "2"
 OptimizationOptimJL = "0.1, 0.4"
 OrdinaryDiffEq = "6.31"
 Plots = "1.36"
