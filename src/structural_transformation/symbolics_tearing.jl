@@ -748,12 +748,14 @@ function update_simplified_system!(
     unknowns = [unknowns; extra_unknowns]
     @set! sys.unknowns = unknowns
 
-    obs, subeqs, deps = cse_and_array_hacks(
-        sys, obs, solved_eqs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+    obs = cse_and_array_hacks(
+        sys, obs, unknowns, neweqs; cse = cse_hack, array = array_hack)
 
+    deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
+                       for i in 1:length(solved_eqs)]
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
-    @set! sys.substitutions = Substitutions(subeqs, deps)
+    @set! sys.substitutions = Substitutions(solved_eqs, deps)
 
     # Only makes sense for time-dependent
     # TODO: generalize to SDE
@@ -850,7 +852,7 @@ if all `p[i]` are present and the unscalarized form is used in any equation (obs
 not) we first count the number of times the scalarized form of each observed variable
 occurs in observed equations (and unknowns if it's split).
 """
-function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, array = true)
+function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = true)
     # HACK 1
     # mapping of rhs to temporary CSE variable
     # `f(...) => tmpvar` in above example
@@ -878,7 +880,6 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
                 tempeq = tempvar ~ rhs_arr
                 rhs_to_tempvar[rhs_arr] = tempvar
                 push!(obs, tempeq)
-                push!(subeqs, tempeq)
             end
 
             # getindex_wrapper is used because `observed2graph` treats `x` and `x[i]` as different,
@@ -887,10 +888,6 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
             neweq = lhs ~ getindex_wrapper(
                 rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
             obs[i] = neweq
-            subeqi = findfirst(isequal(eq), subeqs)
-            if subeqi !== nothing
-                subeqs[subeqi] = neweq
-            end
         end
         # end HACK 1
 
@@ -920,7 +917,6 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
                 tempeq = tempvar ~ rhs_arr
                 rhs_to_tempvar[rhs_arr] = tempvar
                 push!(obs, tempeq)
-                push!(subeqs, tempeq)
             end
             # don't need getindex_wrapper, but do it anyway to know that this
             # hack took place
@@ -960,15 +956,8 @@ function cse_and_array_hacks(sys, obs, subeqs, unknowns, neweqs; cse = true, arr
         push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
-    append!(subeqs, obs_arr_eqs)
 
-    # need to re-sort subeqs
-    subeqs = ModelingToolkit.topsort_equations(subeqs, [eq.lhs for eq in subeqs])
-
-    deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
-                       for i in 1:length(subeqs)]
-
-    return obs, subeqs, deps
+    return obs
 end
 
 function is_getindexed_array(rhs)
