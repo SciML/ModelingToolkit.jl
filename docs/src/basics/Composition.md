@@ -21,7 +21,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function decay(; name)
     @parameters a
     @variables x(t) f(t)
-    ODESystem([
+    System([
             D(x) ~ -a * x + f
         ], t;
         name = name)
@@ -31,7 +31,7 @@ end
 @named decay2 = decay()
 
 connected = compose(
-    ODESystem([decay2.f ~ decay1.x
+    System([decay2.f ~ decay1.x
                D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
@@ -69,7 +69,7 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = compose(ODESystem(eqs, indepvar, unknowns, ps), subsys)
+@named sys = compose(System(eqs, indepvar, unknowns, ps), subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
@@ -122,7 +122,7 @@ With symbolic parameters, it is possible to set the default value of a parameter
 
 ```julia
 # ...
-sys = ODESystem(
+sys = System(
 # ...
 # directly in the defaults argument
     defaults = Pair{Num, Any}[x => u,
@@ -144,20 +144,20 @@ d = GlobalScope(d)
 
 p = [a, b, c, d]
 
-level0 = ODESystem(Equation[], t, [], p; name = :level0)
-level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
+level0 = System(Equation[], t, [], p; name = :level0)
+level1 = System(Equation[], t, [], []; name = :level1) ∘ level0
 parameters(level1)
 #level0₊a
 #b
 #c
 #d
-level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
+level2 = System(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
 #level1₊level0₊a
 #level1₊b
 #c
 #d
-level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
+level3 = System(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
 #level2₊level1₊level0₊a
 #level2₊level1₊b
@@ -194,12 +194,12 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 N = S + I + R
 @parameters β, γ
 
-@named seqn = ODESystem([D(S) ~ -β * S * I / N], t)
-@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t)
-@named reqn = ODESystem([D(R) ~ γ * I], t)
+@named seqn = System([D(S) ~ -β * S * I / N], t)
+@named ieqn = System([D(I) ~ β * S * I / N - γ * I], t)
+@named reqn = System([D(R) ~ γ * I], t)
 
 sir = compose(
-    ODESystem(
+    System(
         [
             S ~ ieqn.S,
             I ~ seqn.I,
@@ -266,6 +266,6 @@ equations are discontinuous in either the unknown or one of its derivatives. Thi
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
 handle such dynamics is to tell the solver about the discontinuity by a
-root-finding equation, which can be modeling using [`ODESystem`](@ref)'s event
+root-finding equation, which can be modeling using [`System`](@ref)'s event
 support. Please see the tutorial on [Callbacks and Events](@ref events) for
 details and examples.

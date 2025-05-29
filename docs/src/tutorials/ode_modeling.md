@@ -362,15 +362,15 @@ memory allocations. For large, hierarchically built models, which tend to be
 sparse, speedup and the reduction of memory allocation can also be expected to be
 substantial. In addition, these problem builders allow for automatic parallelism by
 exploiting the structural information. For more information, see the
-[ODESystem](@ref ODESystem) page.
+[System](@ref System) page.
 
 ## Notes and pointers how to go on
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
   - The `@mtkmodel` macro is for high-level usage of MTK. However, in many cases you
-    may need to programmatically generate `ODESystem`s. If that's the case, check out
-    the [Programmatically Generating and Scripting ODESystems Tutorial](@ref programmatically).
+    may need to programmatically generate `System`s. If that's the case, check out
+    the [Programmatically Generating and Scripting Systems Tutorial](@ref programmatically).
   - Vector-valued parameters and variables are possible. A cleaner, more
     consistent treatment of these is still a work in progress, however. Once finished,
     this introductory tutorial will also cover this feature.

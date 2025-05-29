@@ -12,7 +12,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables u1(t) u2(t) u3(t)
 eqs = [D(u1) ~ -√(u1), D(u2) ~ -√(u2), D(u3) ~ -√(u3)]
 defaults = [u1 => 1.0, u2 => 2.0, u3 => 3.0]
-@named sys = ODESystem(eqs, t; defaults)
+@named sys = System(eqs, t; defaults)
 sys = mtkcompile(sys)
 ```
 
@@ -38,7 +38,7 @@ We could have figured that out ourselves, but it is not always so obvious for mo
 Suppose we also want to validate that `u1 + u2 >= 2.0`. We can do this via the assertions functionality.
 
 ```@example debug
-@mtkcompile sys = ODESystem(eqs, t; defaults, assertions = [(u1 + u2 >= 2.0) => "Oh no!"])
+@mtkcompile sys = System(eqs, t; defaults, assertions = [(u1 + u2 >= 2.0) => "Oh no!"])
 ```
 
 The assertions must be an iterable of pairs, where the first element is the symbolic condition and

@@ -9,7 +9,7 @@ or into more specialized callback types from the
 [DiffEqCallbacks.jl](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_library/)
 library.
 
-[`ODESystem`](@ref)s and [`SDESystem`](@ref)s accept keyword arguments
+[`System`](@ref)s and [`SDESystem`](@ref)s accept keyword arguments
 `continuous_events` and `discrete_events` to symbolically encode continuous or
 discrete callbacks. [`JumpSystem`](@ref)s currently support only
 `discrete_events`. Continuous events are applied when a given condition becomes
@@ -59,7 +59,7 @@ For example, consider the following system.
 ```julia
 @variables x(t) y(t)
 @parameters p(t)
-@mtkcompile sys = ODESystem([x * y ~ p, D(x) ~ 0], t)
+@mtkcompile sys = System([x * y ~ p, D(x) ~ 0], t)
 event = [t == 1] => [x ~ Pre(x) + 1]
 ```
 
@@ -132,7 +132,7 @@ function UnitMassWithFriction(k; name)
     @variables x(t)=0 v(t)=0
     eqs = [D(x) ~ v
            D(v) ~ sin(t) - k * sign(v)]
-    ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
+    System(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @mtkcompile m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
@@ -154,7 +154,7 @@ like this
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -Pre(v)] # the effect is that the velocity changes sign
 
-@mtkcompile ball = ODESystem(
+@mtkcompile ball = System(
     [D(x) ~ v
      D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
 
@@ -175,7 +175,7 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 continuous_events = [[x ~ 0] => [vx ~ -Pre(vx)]
                      [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
 
-@mtkcompile ball = ODESystem(
+@mtkcompile ball = System(
     [
         D(x) ~ vx,
         D(y) ~ vy,
@@ -255,7 +255,7 @@ end
 
 reflect = [x ~ 0] => (bb_affect!, [v], [], [], nothing)
 
-@mtkcompile bb_sys = ODESystem(bb_eqs, t, sts, par,
+@mtkcompile bb_sys = System(bb_eqs, t, sts, par,
     continuous_events = reflect)
 
 u0 = [v => 0.0, x => 1.0]
@@ -300,7 +300,7 @@ injection = (t == tinject) => [N ~ Pre(N) + M]
 u0 = [N => 0.0]
 tspan = (0.0, 20.0)
 p = [α => 100.0, tinject => 10.0, M => 50]
-@mtkcompile osys = ODESystem(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
+@mtkcompile osys = System(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -319,7 +319,7 @@ to
 ```@example events
 injection = ((t == tinject) & (N < 50)) => [N ~ Pre(N) + M]
 
-@mtkcompile osys = ODESystem(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
+@mtkcompile osys = System(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -346,7 +346,7 @@ killing = ModelingToolkit.SymbolicDiscreteCallback(
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
-@mtkcompile osys = ODESystem(eqs, t, [N], [α, M, tinject, tkill];
+@mtkcompile osys = System(eqs, t, [N], [α, M, tinject, tkill];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = [10.0, 20.0])
@@ -375,7 +375,7 @@ killing = ModelingToolkit.SymbolicDiscreteCallback(
     [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
 
 p = [α => 100.0, M => 50]
-@mtkcompile osys = ODESystem(eqs, t, [N], [α, M];
+@mtkcompile osys = System(eqs, t, [N], [α, M];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5())
@@ -415,7 +415,7 @@ example:
 
 ev = ModelingToolkit.SymbolicDiscreteCallback(
     1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
-@mtkcompile sys = ODESystem(
+@mtkcompile sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
@@ -436,7 +436,7 @@ will be saved. If we repeat the above example with `c` not a `discrete_parameter
 @variables x(t)
 @parameters c(t)
 
-@mtkcompile sys = ODESystem(
+@mtkcompile sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
@@ -537,7 +537,7 @@ will write `furnace_on = false` back to the system, and when `temp = furnace_on_
 to the system.
 
 ```@example events
-@named sys = ODESystem(
+@named sys = System(
     eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable])
 ss = mtkcompile(sys)
 prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 10.0))
@@ -650,7 +650,7 @@ affect activation point, with -1 mapped to 0.
 We can now simulate the encoder.
 
 ```@example events
-@named sys = ODESystem(
+@named sys = System(
     eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
 ss = mtkcompile(sys)
 prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))

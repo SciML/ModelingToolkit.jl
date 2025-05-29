@@ -110,7 +110,7 @@ end
 sts = @variables a(t)=0 [unit = u"cm"]
 ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
-sys = ODESystem(
+sys = System(
     eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)
 sys_simple = mtkcompile(sys)
 ```

@@ -22,13 +22,13 @@ The procedure for variable elimination inside [`mtkcompile`](@ref) is
 
  1. [`ModelingToolkit.initialize_system_structure`](@ref).
  2. [`ModelingToolkit.alias_elimination`](@ref). This step moves equations into `observed(sys)`.
- 3. [`ModelingToolkit.dae_index_lowering`](@ref) by means of [`pantelides!`](@ref) (if the system is an [`ODESystem`](@ref)).
+ 3. [`ModelingToolkit.dae_index_lowering`](@ref) by means of [`pantelides!`](@ref) (if the system is an [`System`](@ref)).
  4. [`ModelingToolkit.tearing`](@ref).
 
 ## Preparing a system for simulation
 
 Before a simulation or optimization can be performed, the symbolic equations stored in an [`AbstractSystem`](@ref) must be converted into executable code. This step typically occurs after the simplification explained above, and is performed when an instance of a [`SciMLBase.AbstractSciMLProblem`](@ref), such as a [`ODEProblem`](@ref), is constructed.
-The call chain typically looks like this, with the function names in the case of an `ODESystem` indicated in parentheses
+The call chain typically looks like this, with the function names in the case of an `System` indicated in parentheses
 
  1. Problem constructor ([`ODEProblem`](@ref))
  2. Build an `DEFunction` ([`process_DEProblem`](@ref) -> [`ODEFunction`](@ref)

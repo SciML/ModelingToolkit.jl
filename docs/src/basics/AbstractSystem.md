@@ -12,7 +12,7 @@ model manipulation and compilation.
 There are three immediate subtypes of `AbstractSystem`, classified by how many independent variables each type has:
 
   - `AbstractTimeIndependentSystem`: has no independent variable (e.g.: `NonlinearSystem`)
-  - `AbstractTimeDependentSystem`: has a single independent variable (e.g.: `ODESystem`)
+  - `AbstractTimeDependentSystem`: has a single independent variable (e.g.: `System`)
   - `AbstractMultivariateSystem`: may have multiple independent variables (e.g.: `PDESystem`)
 
 ## Constructors and Naming

@@ -205,7 +205,7 @@ eqs = [x1 + x2 + 1 ~ 0
        x1 + x2 + x3 + 2 ~ 0
        x1 + D(x3) + x4 + 3 ~ 0
        2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 sys = mtkcompile(sys)
 prob = ODEProblem(sys, [], (0, 1))
 ```
@@ -237,7 +237,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) = 0.0
 eqs = [D(x1) ~ 1.1 * x1]
-@mtkcompile sys = ODESystem(eqs, t)
+@mtkcompile sys = System(eqs, t)
 prob = ODEProblem{false}(sys, [], (0, 1); u0_constructor = x -> SVector(x...))
 ```
 
@@ -252,7 +252,7 @@ using ModelingToolkit
 @independent_variables x
 D = Differential(x)
 @variables y(x)
-@named sys = ODESystem([D(y) ~ x], x)
+@named sys = System([D(y) ~ x], x)
 ```
 
 ## Ordering of tunable parameters
@@ -279,7 +279,7 @@ using ModelingToolkit
 
 @parameters p q[1:3] r[1:2, 1:2]
 
-@named sys = ODESystem(Equation[], ModelingToolkit.t_nounits, [], [p, q, r])
+@named sys = System(Equation[], ModelingToolkit.t_nounits, [], [p, q, r])
 sys = complete(sys)
 ```
 
