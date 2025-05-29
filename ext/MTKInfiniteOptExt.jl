@@ -72,18 +72,19 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)
 
-function MTK.JuMPDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.JuMPDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    MTK.process_DynamicOptProblem(JuMPDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    prob, _ = MTK.process_DynamicOptProblem(JuMPDynamicOptProblem, InfiniteOptModel, sys, op, tspan; dt, steps, guesses, kwargs...)
+    prob
 end
 
-function MTK.InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.InfiniteOptDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    prob = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    prob, pmap = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel, sys, op, tspan; dt, steps, guesses, kwargs...)
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob
 end
