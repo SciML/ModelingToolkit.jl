@@ -61,11 +61,12 @@ function (M::MXLinearInterpolation)(τ)
     end
 end
 
-function MTK.CasADiDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.CasADiDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    MTK.process_DynamicOptProblem(CasADiDynamicOptProblem, CasADiModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    prob, _ = MTK.process_DynamicOptProblem(CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, guesses, kwargs...)
+    prob
 end
 
 MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.Opti()

@@ -66,10 +66,10 @@ end
 pysym_getproperty(s::Union{Num, Symbolics.Symbolic}, name::Symbol) = Symbolics.wrap(SymbolicUtils.term(_getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}))
 _getproperty(s, name::Val{fieldname}) where fieldname = getproperty(s, fieldname)
 
-function MTK.PyomoDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap;
+function MTK.PyomoDynamicOptProblem(sys::System, op, tspan;
         dt = nothing, steps = nothing,
         guesses = Dict(), kwargs...)
-    prob = MTK.process_DynamicOptProblem(PyomoDynamicOptProblem, PyomoDynamicOptModel, sys, u0map, tspan, pmap; dt, steps, guesses, kwargs...)
+    prob, pmap = MTK.process_DynamicOptProblem(PyomoDynamicOptProblem, PyomoDynamicOptModel, sys, op, tspan; dt, steps, guesses, kwargs...)
     conc_model = prob.wrapped_model.model
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob

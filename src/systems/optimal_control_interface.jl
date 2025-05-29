@@ -19,9 +19,9 @@ function Base.show(io::IO, sol::DynamicOptSolution)
 end
 
 """
-    JuMPDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps, guesses, kwargs...)
+    JuMPDynamicOptProblem(sys::System, u0, tspan, p; dt, steps, guesses, kwargs...)
 
-Convert an ODESystem representing an optimal control system into a JuMP model
+Convert an System representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -30,9 +30,9 @@ To construct the problem, please load InfiniteOpt along with ModelingToolkit.
 """
 function JuMPDynamicOptProblem end
 """
-    InfiniteOptDynamicOptProblem(sys::ODESystem, u0map, tspan, pmap; dt)
+    InfiniteOptDynamicOptProblem(sys::System, op, tspan; dt)
 
-Convert an ODESystem representing an optimal control system into a InfiniteOpt model
+Convert an System representing an optimal control system into a InfiniteOpt model
 for solving using optimization. Must provide `dt` for determining the length 
 of the interpolation arrays.
 
@@ -43,9 +43,9 @@ To construct the problem, please load InfiniteOpt along with ModelingToolkit.
 """
 function InfiniteOptDynamicOptProblem end
 """
-    CasADiDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps, guesses, kwargs...)
+    CasADiDynamicOptProblem(sys::System, u0, tspan, p; dt, steps, guesses, kwargs...)
 
-Convert an ODESystem representing an optimal control system into a CasADi model
+Convert an System representing an optimal control system into a CasADi model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -54,9 +54,9 @@ To construct the problem, please load CasADi along with ModelingToolkit.
 """
 function CasADiDynamicOptProblem end
 """
-    PyomoDynamicOptProblem(sys::ODESystem, u0, tspan, p; dt, steps)
+    PyomoDynamicOptProblem(sys::System, u0, tspan, p; dt, steps)
 
-Convert an ODESystem representing an optimal control system into a Pyomo model
+Convert an System representing an optimal control system into a Pyomo model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
 points (which, along with the timespan, determines the number of points), or directly 
 provide the number of points as `steps`.
@@ -91,11 +91,12 @@ Pyomo Collocation solver.
 """
 function PyomoCollocation end
 
-function warn_overdetermined(sys, u0map)
+function warn_overdetermined(sys, op)
     cstrs = constraints(sys)
+    init_conds = filter(x -> value(x) ∈ Set(unknowns(sys)), [k for (k,v) in op])
     if !isempty(cstrs)
-        (length(cstrs) + length(u0map) > length(unknowns(sys))) &&
-            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by u0map) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
+        (length(cstrs) + length(init_conds) > length(unknowns(sys))) &&
+            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
 end
 
@@ -226,24 +227,27 @@ end
 ##########################
 ### MODEL CONSTRUCTION ###
 ##########################
-function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::ODESystem, u0map, tspan, pmap;
+function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
     dt = nothing,
     steps = nothing,
     guesses = Dict(), kwargs...)
-    warn_overdetermined(sys, u0map)
+
+    warn_overdetermined(sys, op)
     ctrls = unbound_inputs(sys)
     states = unknowns(sys)
 
-    _u0map = has_alg_eqs(sys) ? u0map : merge(Dict(u0map), Dict(guesses))
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
-    u0map = Dict([default_toterm(value(k)) => v for (k, v) in u0map])
+    op = Dict([default_toterm(value(k)) => v for (k, v) in op])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-              [stidxmap[default_toterm(k)] for (k, v) in u0map]
+        [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
 
-    f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _u0map, pmap;
+    _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
+    f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _op;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
+    warn_overdetermined(sys, op)
 
+    pmap = filter(p -> (first(p) ∉ Set(unknowns(sys))), op)
     pmap = recursive_unwrap(AnyDict(pmap))
     evaluate_varmap!(pmap, keys(pmap))
     c0 = value.([pmap[c] for c in ctrls])
@@ -261,7 +265,7 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    prob_type(f, u0, tspan, p, fullmodel, kwargs...)
+    prob_type(f, u0, tspan, p, fullmodel, kwargs...), pmap
 end
 
 function generate_time_variable! end
@@ -301,16 +305,16 @@ end
 is_free_final(model) = model.is_free_final 
 
 function add_cost_function!(model, sys, tspan, pmap)
-    jcosts = copy(get_costs(sys))
-    consolidate = get_consolidate(sys)
-    if isnothing(jcosts) || isempty(jcosts)
+    jcosts = cost(sys)
+    if Symbolics._iszero(jcosts)
         set_objective!(model, 0)
         return
     end
-    jcosts = substitute_model_vars(model, sys, jcosts, tspan)
+
+    jcosts = substitute_model_vars(model, sys, [jcosts], tspan)
     jcosts = substitute_params(pmap, jcosts)
-    jcosts = substitute_integral(model, jcosts, tspan)
-    set_objective!(model, consolidate(jcosts))
+    jcosts = substitute_integral(model, only(jcosts), tspan)
+    set_objective!(model, value(jcosts))
 end
 
 """
@@ -319,16 +323,16 @@ Substitute integrals. For an integral from (ts, te):
 - CasADi cannot handle partial timespans, even for non-free-final time problems.
 time problems and unchanged otherwise.
 """
-function substitute_integral(model, exprs, tspan)
+function substitute_integral(model, expr, tspan)
     intmap = Dict()
-    for int in collect_applied_operators(exprs, Symbolics.Integral)
+    for int in collect_applied_operators(expr, Symbolics.Integral)
         op = operation(int)
         arg = only(arguments(value(int)))
         lo, hi = value.((op.domain.domain.left, op.domain.domain.right))
         lo, hi = process_integral_bounds(model, (lo, hi), tspan)
         intmap[int] = lowered_integral(model, arg, lo, hi)
     end
-    exprs = map(c -> Symbolics.substitute(c, intmap), value.(exprs))
+    Symbolics.substitute(expr, intmap)
 end
 
 function process_integral_bounds(model, integral_span, tspan) 
@@ -386,13 +390,13 @@ function lowered_var end
 function fixed_t_map end
 
 function add_user_constraints!(model, sys, tspan, pmap)
-    conssys = get_constraintsystem(sys)
-    jconstraints = isnothing(conssys) ? nothing : get_constraints(conssys)
+    jconstraints = get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
-    consvars = get_unknowns(conssys)
-    is_free_final(model) && check_constraint_vars(consvars)
+    cons_dvs, cons_ps = process_constraint_system(jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false)
 
-    jconstraints = substitute_toterm(consvars, jconstraints)
+    is_free_final(model) && check_constraint_vars(cons_dvs)
+
+    jconstraints = substitute_toterm(cons_dvs, jconstraints)
     jconstraints = substitute_model_vars(model, sys, jconstraints, tspan)
     jconstraints = substitute_params(pmap, jconstraints)
 
