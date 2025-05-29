@@ -331,6 +331,18 @@ function substitute_integral(model, exprs, tspan)
     exprs = map(c -> Symbolics.substitute(c, intmap), value.(exprs))
 end
 
+function process_integral_bounds(model, integral_span, tspan) 
+    if is_free_final(model) && isequal(integral_span, tspan)
+        integral_span = (0, 1)
+    elseif is_free_final(model)
+        error("Free final time problems cannot handle partial timespans.")
+    else
+        (lo, hi) = integral_span
+        (lo < tspan[1] || hi > tspan[2]) && error("Integral bounds are beyond the timespan.")
+        integral_span
+    end
+end
+
 """Substitute variables like x(1.5), x(t), etc. with the corresponding model variables."""
 function substitute_model_vars(model, sys, exprs, tspan)
     x_ops = [operation(unwrap(st)) for st in unknowns(sys)]
@@ -405,6 +417,7 @@ function add_equational_constraints!(model, sys, pmap, tspan)
 end
 
 function set_objective! end
+objective_value(sol::DynamicOptSolution) = objective_value(sol.model) 
 
 function substitute_differentials(model, sys, eqs)
     t = get_iv(sys)
