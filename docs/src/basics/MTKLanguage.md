@@ -16,7 +16,7 @@ equations.
 ### [Defining components with `@mtkmodel`](@id mtkmodel)
 
 `@mtkmodel` is a convenience macro to define components. It returns
-`ModelingToolkit.Model`, which includes a system constructor (`ODESystem` by
+`ModelingToolkit.Model`, which includes a system constructor (`System` by
 default), a `structure` dictionary with metadata, and flag `isconnector` which is
 set to `false`.
 
@@ -263,7 +263,7 @@ end
 
 ### Setting the type of system:
 
-By default `@mtkmodel` returns an ODESystem. Different types of system can be
+By default `@mtkmodel` returns an System. Different types of system can be
 defined with the following syntax:
 
 ```
@@ -271,20 +271,6 @@ defined with the following syntax:
     ...
 end
 
-```
-
-Example:
-
-```@example mtkmodel-example
-@mtkmodel Float2Bool::DiscreteSystem begin
-    @variables begin
-        u(t)::Float64
-        y(t)::Bool
-    end
-    @equations begin
-        y ~ u != 0
-    end
-end
 ```
 
 ## Connectors
@@ -301,7 +287,7 @@ MTK provides 3 distinct connectors:
 ### [Defining connectors with `@connector`](@id connector)
 
 `@connector` returns `ModelingToolkit.Model`. It includes a constructor that returns
-a connector system (`ODESystem` by default), a `structure` dictionary with metadata, and flag `isconnector`
+a connector system (`System` by default), a `structure` dictionary with metadata, and flag `isconnector`
 which is set to `true`.
 
 A simple connector can be defined with syntax similar to following example:

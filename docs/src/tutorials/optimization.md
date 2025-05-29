@@ -14,7 +14,7 @@ The package can also build optimization systems.
     is not yet compatible with `OptimizationSystem`.
     We thus have to use a lower level interface to define optimization systems.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 ## Unconstrained Rosenbrock Function
 

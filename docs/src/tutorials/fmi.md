@@ -106,7 +106,7 @@ constant until the next time the callback triggers. The periodic interval must b
 more computationally expensive.
 
 This model alone does not have any differential variables, and calling `mtkcompile` will lead
-to an `ODESystem` with no unknowns.
+to an `System` with no unknowns.
 
 ```@example fmi
 mtkcompile(inner)

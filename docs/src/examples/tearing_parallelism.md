@@ -1,4 +1,4 @@
-# Exposing More Parallelism By Tearing Algebraic Equations in ODESystems
+# Exposing More Parallelism By Tearing Algebraic Equations in Systems
 
 Sometimes it can be very non-trivial to parallelize a system. In this tutorial,
 we will demonstrate how to make use of `mtkcompile` to expose more

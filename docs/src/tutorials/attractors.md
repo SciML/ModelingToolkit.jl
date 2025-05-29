@@ -38,7 +38,7 @@ eqs = [
 ]
 ```
 
-Because our dynamical system is super simple, we will directly make an `ODESystem` and cast it in an `ODEProblem` as in the [`ODESystems` tutorial](@ref programmatically). Since all state variables and parameters have a default value we can immediately write
+Because our dynamical system is super simple, we will directly make an `System` and cast it in an `ODEProblem` as in the [`Systems` tutorial](@ref programmatically). Since all state variables and parameters have a default value we can immediately write
 
 ```@example Attractors
 @named modlorenz = System(eqs, t)

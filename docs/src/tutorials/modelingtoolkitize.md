@@ -49,7 +49,7 @@ prob = ODEProblem(rober, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
 ```
 
 If we want to get a symbolic representation, we can simply call `modelingtoolkitize`
-on the `prob`, which will return an `ODESystem`:
+on the `prob`, which will return an `System`:
 
 ```@example mtkize
 @mtkcompile sys = modelingtoolkitize(prob)

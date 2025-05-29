@@ -116,7 +116,7 @@ We wish to build the following RC circuit by building individual components and 
 
 ### Building the Component Library
 
-For each of our components, we use ModelingToolkit `Model` that emits an `ODESystem`.
+For each of our components, we use ModelingToolkit `Model` that emits an `System`.
 At the top, we start with defining the fundamental qualities of an electric
 circuit component. At every input and output pin, a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
@@ -133,7 +133,7 @@ default, variables are equal in a connection.
 end
 ```
 
-Note that this is an incompletely specified ODESystem: it cannot be simulated
+Note that this is an incompletely specified System: it cannot be simulated
 on its own because the equations for `v(t)` and `i(t)` are unknown. Instead,
 this just gives a common syntax for receiving this pair with some default
 values.
@@ -145,7 +145,7 @@ One can then construct a `Pin` using the `@named` helper macro:
 
 Next, we build our ground node. A ground node is just a pin that is connected
 to a constant voltage reservoir, typically taken to be `V = 0`. Thus to define
-this component, we generate an `ODESystem` with a `Pin` subcomponent and specify
+this component, we generate an `System` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```@example acausal

@@ -42,7 +42,7 @@ Note that we could've used an alternative syntax for 2nd order, i.e.
 and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compose
 `Differential`s, like `Differential(t) * Differential(x)`.
 
-Now let's transform this into the `ODESystem` of first order components.
+Now let's transform this into the `System` of first order components.
 We do this by calling `mtkcompile`:
 
 Now we can directly numerically solve the lowered system. Note that,

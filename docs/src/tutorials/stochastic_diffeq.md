@@ -1,6 +1,6 @@
 # Modeling with Stochasticity
 
-All previous differential equations tutorials deal with deterministic `ODESystem`s.
+All previous differential equations tutorials deal with deterministic `System`s.
 In this tutorial, we add randomness.
 In particular, we show how to represent a
 [stochastic differential equation](https://en.wikipedia.org/wiki/Stochastic_differential_equation)
@@ -13,7 +13,7 @@ as a `SDESystem`.
     is not yet compatible with `SDESystem`.
     We thus have to use a lower level interface to define stochastic differential equations.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 Let's take the Lorenz equation and add noise to each of the states.
 To show the flexibility of ModelingToolkit,

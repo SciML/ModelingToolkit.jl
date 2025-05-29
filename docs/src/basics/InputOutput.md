@@ -44,7 +44,7 @@ import ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(x) ~ -k * (x + u)
        y ~ x]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 f, x_sym, ps = ModelingToolkit.generate_control_function(sys, [u], simplify = true);
 nothing # hide
 ```
