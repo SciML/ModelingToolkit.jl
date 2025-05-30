@@ -57,7 +57,6 @@ using DocStringExtensions
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
-export build_observed_function, ODAEProblem
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!
