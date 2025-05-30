@@ -1560,3 +1560,32 @@ end
     @mtkcompile sys = SysC()
     @test length(unknowns(sys)) == 3
 end
+
+@testset "`full_equations` doesn't recurse infinitely" begin
+    code = """
+    using ModelingToolkit
+    using ModelingToolkit: t_nounits as t, D_nounits as D
+    @variables x(t)[1:3]=[0,0,1]
+    @variables u1(t)=0 u2(t)=0 
+    y₁, y₂, y₃ = x
+    k₁, k₂, k₃ = 1,1,1
+    eqs = [
+        D(y₁) ~ -k₁*y₁ + k₃*y₂*y₃ + u1
+        D(y₂) ~ k₁*y₁ - k₃*y₂*y₃ - k₂*y₂^2 + u2
+        y₁ + y₂ + y₃ ~ 1
+    ]
+
+    @named sys = System(eqs, t)
+
+    inputs = [u1, u2]
+    outputs = [y₁, y₂, y₃]
+    ss = mtkcompile(sys; inputs)
+    full_equations(ss)
+    """
+
+    cmd = `$(Base.julia_cmd()) --project=$(@__DIR__) -e $code`
+    proc = run(cmd, stdin, stdout, stderr; wait = false)
+    sleep(120)
+    @test !process_running(proc)
+    kill(proc, Base.SIGKILL)
+end

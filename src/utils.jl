@@ -700,7 +700,8 @@ Get a dictionary mapping variables eliminated from the system during `mtkcompile
 expressions used to calculate them.
 """
 function get_substitutions(sys)
-    Dict([eq.lhs => eq.rhs for eq in observed(sys)])
+    obs, _ = unhack_observed(observed(sys), equations(sys))
+    Dict([eq.lhs => eq.rhs for eq in obs])
 end
 
 @noinline function throw_missingvars_in_sys(vars)
