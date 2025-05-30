@@ -1331,3 +1331,19 @@ end
     sys = mtkcompile(sys)
     sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
 end
+
+@testset "non-floating-point discretes and namespaced affects" begin
+    function Inner(; name)
+        @parameters p(t)::Int
+        @variables x(t)
+        cevs = ModelingToolkit.SymbolicContinuousCallback(
+            [x ~ 1.0], [p ~ Pre(p) + 1]; iv = t, discrete_parameters = [p])
+        System([D(x) ~ 1], t, [x], [p]; continuous_events = [cevs], name)
+    end
+    @named inner = Inner()
+    @mtkcompile sys = System(Equation[], t; systems = [inner])
+    prob = ODEProblem(sys, [inner.x => 0.0, inner.p => 0], (0.0, 5.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[inner.p][end] ≈ 1.0
+end
