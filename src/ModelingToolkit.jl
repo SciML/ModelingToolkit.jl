@@ -303,7 +303,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, equations, controls, observed, full_equations, jumps, cost,
+export independent_variable, equations, observed, full_equations, jumps, cost,
        brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export mtkcompile, expand_connections, linearize, linearization_function,
@@ -316,7 +316,6 @@ export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_func
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
-export calculate_factorized_W
 export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
