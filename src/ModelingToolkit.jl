@@ -307,7 +307,7 @@ export independent_variable, equations, observed, full_equations, jumps, cost,
        brownians
 export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
 export mtkcompile, expand_connections, linearize, linearization_function,
-       LinearizationProblem, structural_simplify
+       LinearizationProblem, linearization_ap_transform, structural_simplify
 export solve
 export Pre
 
