@@ -153,6 +153,9 @@ function find_var_sccs(g::BipartiteGraph, assign = nothing)
     cmog = DiCMOBiGraph{true}(g,
         Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
+    cgraph = MatchedCondensationGraph(cmog, sccs)
+    toporder = topological_sort(cgraph)
+    permute!(sccs, toporder)
     foreach(sort!, sccs)
     return sccs
 end
