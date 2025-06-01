@@ -352,6 +352,7 @@ function but_ordered_incidence(ts::TearingState, varmask = highest_order_variabl
         isemptyc || push!(bb, l)
     end
     mm = incidence_matrix(graph)
+    reverse!(vordering)
     mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
 end
 
