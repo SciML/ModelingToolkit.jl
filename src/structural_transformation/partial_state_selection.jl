@@ -174,11 +174,7 @@ function dummy_derivative_graph!(
     end
 
     ret = tearing_with_dummy_derivatives(structure, BitSet(dummy_derivatives))
-    if log
-        (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
-    else
-        ret[1]
-    end
+    (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
 end
 
 function is_present(structure, v)::Bool
