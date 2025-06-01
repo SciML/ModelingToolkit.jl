@@ -762,10 +762,10 @@ function _mtkcompile!(state::TearingState; simplify = false,
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
     else
         sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
     end
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
