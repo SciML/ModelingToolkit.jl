@@ -245,7 +245,7 @@ eqs = [D(x) ~ x
 sys = mtkcompile(model)
 Js = ModelingToolkit.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
-@test Js == Diagonal([1, 1, 0])
+@test Js == Diagonal([0, 1, 1])
 
 # MWE for #1722
 vars = @variables a(t) w(t) phi(t)

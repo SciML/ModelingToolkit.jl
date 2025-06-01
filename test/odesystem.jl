@@ -568,10 +568,10 @@ let
     @named sys = System(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = mtkcompile(sys)
 
-    u0 = unknowns(sys) .=> [0.5, 0]
-    du0 = D.(unknowns(sys)) .=> 0.0
+    u0 = x .=> [0.5, 0]
+    du0 = D.(x) .=> 0.0
     prob = DAEProblem(sys, [du0; u0], (0, 50))
-    @test prob.u0 ≈ [0.5, 0.0]
+    @test prob[x] ≈ [0.5, 0.0]
     @test prob.du0 ≈ [0.0, 0.0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -581,7 +581,8 @@ let
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5],
         (0, 50))
-    @test prob.u0 ≈ [0.5, 0]
+
+    @test prob[x] ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -590,7 +591,7 @@ let
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5, k => 2],
         (0, 50))
-    @test prob.u0 ≈ [0.5, 0]
+    @test prob[x] ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 2
@@ -769,7 +770,7 @@ let
     @named sys4 = System([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
     sys4s = mtkcompile(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
-    @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
+    @test issetequal(string.(unknowns(prob.f.sys)), ["x(t)", "y(t)"])
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end

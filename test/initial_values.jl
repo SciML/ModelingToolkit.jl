@@ -8,9 +8,10 @@ using SymbolicIndexingInterface
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
 @mtkcompile sys=System([D(x) ~ t * x], t) simplify=false
-@test get_u0(sys, []) == [1.0, 2.0, 3.0]
-@test get_u0(sys, [x => [2.0, 3.0, 4.0]]) == [2.0, 3.0, 4.0]
-@test get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0]) == [2.0, 3.0, 4.0]
+reorderer = getsym(sys, x)
+@test reorderer(get_u0(sys, [])) == [1.0, 2.0, 3.0]
+@test reorderer(get_u0(sys, [x => [2.0, 3.0, 4.0]])) == [2.0, 3.0, 4.0]
+@test reorderer(get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0])) == [2.0, 3.0, 4.0]
 @test get_u0(sys, [2.0, 3.0, 4.0]) == [2.0, 3.0, 4.0]
 
 @mtkcompile sys=System([
@@ -182,7 +183,7 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol.u[1] ≈ [1.0, 1.0, 0.5, 0.5]
+    @test sol[x, 1] ≈ [1.0, 1.0, 0.5, 0.5]
 end
 
 @testset "Missing/cyclic guesses throws error" begin
