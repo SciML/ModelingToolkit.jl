@@ -20,27 +20,6 @@ let dd = dummy_derivative(sys)
     @test length(unknowns(dd)) == length(equations(dd)) < 9
 end
 
-@test_skip let pss = partial_state_selection(sys)
-    @test length(equations(pss)) == 1
-    @test length(unknowns(pss)) == 2
-end
-
-@parameters σ ρ β
-@variables x(t) y(t) z(t) a(t) u(t) F(t)
-
-eqs = [D(x) ~ σ * (y - x)
-       D(y) ~ x * (ρ - z) - y + β
-       0 ~ z - x + y
-       0 ~ a + z
-       u ~ z + a]
-
-lorenz1 = System(eqs, t, name = :lorenz1)
-let al1 = alias_elimination(lorenz1)
-    let lss = partial_state_selection(al1)
-        @test length(equations(lss)) == 2
-    end
-end
-
 # 1516
 let
     @connector function Fluid_port(; name, p = 101325.0, m = 0.0, T = 293.15)

@@ -55,7 +55,7 @@ using SimpleNonlinearSolve
 
 using DocStringExtensions
 
-export tearing, partial_state_selection, dae_index_lowering, check_consistency
+export tearing, dae_index_lowering, check_consistency
 export dummy_derivative
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
