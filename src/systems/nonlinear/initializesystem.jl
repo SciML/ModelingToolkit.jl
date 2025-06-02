@@ -167,7 +167,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    isys = System(eqs_ics,
+    isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
         defaults = defs,
@@ -280,7 +280,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
-    isys = System(eqs_ics,
+    isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
         defaults = defs,
