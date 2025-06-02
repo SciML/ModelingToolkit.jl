@@ -8,15 +8,15 @@ using Setfield
 const MTK = ModelingToolkit
 
 SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
-                               acosh => Pyomo.py_acosh,
-                               asin => Pyomo.py_asin,
-                               tan => Pyomo.py_tan,
-                               atanh => Pyomo.py_atanh,
-                               cos => Pyomo.py_cos,
-                               log => Pyomo.py_log,
-                               sin => Pyomo.py_sin,
-                               sqrt => Pyomo.py_sqrt,
-                               exp => Pyomo.py_exp])
+    acosh => Pyomo.py_acosh,
+    asin => Pyomo.py_asin,
+    tan => Pyomo.py_tan,
+    atanh => Pyomo.py_atanh,
+    cos => Pyomo.py_cos,
+    log => Pyomo.py_log,
+    sin => Pyomo.py_sin,
+    sqrt => Pyomo.py_sqrt,
+    exp => Pyomo.py_exp])
 
 struct PyomoDynamicOptModel
     model::ConcreteModel
@@ -34,7 +34,8 @@ struct PyomoDynamicOptModel
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
         #add_time_equation!(model, MODEL_SYM, T_SYM)
-        new(model, U, V, tₛ, is_free_final, nothing, PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
+        new(model, U, V, tₛ, is_free_final, nothing,
+            PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
 end
 
@@ -63,19 +64,26 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     end
 end
 
-pysym_getproperty(s::Union{Num, Symbolics.Symbolic}, name::Symbol) = Symbolics.wrap(SymbolicUtils.term(_getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}))
-_getproperty(s, name::Val{fieldname}) where fieldname = getproperty(s, fieldname)
+function pysym_getproperty(s::Union{Num, Symbolics.Symbolic}, name::Symbol)
+    Symbolics.wrap(SymbolicUtils.term(
+        _getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}))
+end
+_getproperty(s, name::Val{fieldname}) where {fieldname} = getproperty(s, fieldname)
 
 function MTK.PyomoDynamicOptProblem(sys::System, op, tspan;
         dt = nothing, steps = nothing,
         guesses = Dict(), kwargs...)
-    prob, pmap = MTK.process_DynamicOptProblem(PyomoDynamicOptProblem, PyomoDynamicOptModel, sys, op, tspan; dt, steps, guesses, kwargs...)
+    prob,
+    pmap = MTK.process_DynamicOptProblem(PyomoDynamicOptProblem, PyomoDynamicOptModel,
+        sys, op, tspan; dt, steps, guesses, kwargs...)
     conc_model = prob.wrapped_model.model
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob
 end
 
-MTK.generate_internal_model(m::Type{PyomoDynamicOptModel}) = ConcreteModel(pyomo.ConcreteModel())
+function MTK.generate_internal_model(m::Type{PyomoDynamicOptModel})
+    ConcreteModel(pyomo.ConcreteModel())
+end
 
 function MTK.generate_time_variable!(m::ConcreteModel, tspan, tsteps)
     m.steps = length(tsteps)
@@ -83,7 +91,7 @@ function MTK.generate_time_variable!(m::ConcreteModel, tspan, tsteps)
     m.time = pyomo.Var(m.t)
 end
 
-function MTK.generate_state_variable!(m::ConcreteModel, u0, ns, ts) 
+function MTK.generate_state_variable!(m::ConcreteModel, u0, ns, ts)
     m.u_idxs = pyomo.RangeSet(1, ns)
     init_f = Pyomo.pyfunc((m, i, t) -> (u0[Pyomo.pyconvert(Int, i)]))
     m.U = pyomo.Var(m.u_idxs, m.t, initialize = init_f)
@@ -113,7 +121,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     end
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
 
-    cons_sym = Symbol("cons", hash(cons)) 
+    cons_sym = Symbol("cons", hash(cons))
     if occursin(Symbolics.unwrap(t_sym), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(f)))
@@ -176,14 +184,21 @@ struct PyomoCollocation <: AbstractCollocation
     derivative_method::Pyomo.DiscretizationMethod
 end
 
-MTK.PyomoCollocation(solver, derivative_method = LagrangeRadau(5)) = PyomoCollocation(solver, derivative_method)
+function MTK.PyomoCollocation(solver, derivative_method = LagrangeRadau(5))
+    PyomoCollocation(solver, derivative_method)
+end
 
-function MTK.prepare_and_optimize!(prob::PyomoDynamicOptProblem, collocation; verbose, kwargs...)
+function MTK.prepare_and_optimize!(
+        prob::PyomoDynamicOptProblem, collocation; verbose, kwargs...)
     solver_m = prob.wrapped_model.model.clone()
     dm = collocation.derivative_method
     discretizer = TransformationFactory(dm)
+    if MTK.is_free_final(prob.wrapped_model) && !Pyomo.is_finite_difference(dm)
+        error("The Lagrange-Radau and Lagrange-Legendre collocations currently cannot be used for free final problems.")
+    end
     ncp = Pyomo.is_finite_difference(dm) ? 1 : dm.np
-    discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps - 1, scheme = Pyomo.scheme_string(dm))
+    discretizer.apply_to(solver_m, wrt = solver_m.t, nfe = solver_m.steps - 1,
+        scheme = Pyomo.scheme_string(dm))
 
     solver = SolverFactory(string(collocation.solver))
     results = solver.solve(solver_m, tee = true)
@@ -208,13 +223,16 @@ function MTK.get_t_values(output::PyomoOutput)
     Pyomo.pyconvert(Float64, pyomo.value(m.tₛ)) * [Pyomo.pyconvert(Float64, t) for t in m.t]
 end
 
-MTK.objective_value(output::PyomoOutput) = Pyomo.pyconvert(Float64, pyomo.value(output.model.obj))
+function MTK.objective_value(output::PyomoOutput)
+    Pyomo.pyconvert(Float64, pyomo.value(output.model.obj))
+end
 
 function MTK.successful_solve(output::PyomoOutput)
     r = output.result
     ss = r.solver.status
     tc = r.solver.termination_condition
-    if Bool(ss == opt.SolverStatus.ok) && (Bool(tc == opt.TerminationCondition.optimal) || Bool(tc == opt.TerminationCondition.locallyOptimal))
+    if Bool(ss == opt.SolverStatus.ok) && (Bool(tc == opt.TerminationCondition.optimal) ||
+        Bool(tc == opt.TerminationCondition.locallyOptimal))
         return true
     else
         return false
