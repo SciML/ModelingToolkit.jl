@@ -205,6 +205,27 @@ function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeq
     sparse(I, J, val, nsrcs(graph), ndsts(graph))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the incidence matrix of the system sorted by the SCCs. Requires that the system is
+simplified and has a `schedule`.
+"""
+function sorted_incidence_matrix(sys::AbstractSystem)
+    if !iscomplete(sys) || get_tearing_state(sys) === nothing ||
+       get_schedule(sys) === nothing
+        error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
+    end
+    sched = get_schedule(sys)
+    var_sccs = sched.var_sccs
+
+    ts = get_tearing_state(sys)
+    imat = Graphs.incidence_matrix(ts.structure.graph)
+    buffer = similar(imat)
+    permute!(buffer, imat, 1:size(imat, 2), reduce(vcat, var_sccs))
+    buffer
+end
+
 ###
 ### Structural and symbolic utilities
 ###
