@@ -119,7 +119,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     else
         cons.lhs - cons.rhs ≤ 0
     end
-    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
+    expr = Symbolics.substitute(Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT)
 
     cons_sym = Symbol("cons", hash(cons))
     if occursin(Symbolics.unwrap(t_sym), expr)
