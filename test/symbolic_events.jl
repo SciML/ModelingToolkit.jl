@@ -2,7 +2,6 @@ using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
                        SymbolicDiscreteCallback,
-                       get_callback,
                        t_nounits as t,
                        D_nounits as D,
                        affects, affect_negs, system, observed, AffectSystem
