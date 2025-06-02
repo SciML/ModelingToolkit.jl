@@ -39,6 +39,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         @test prob.u0 isa SVector
         @test !SciMLBase.isinplace(prob)
     end
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(model), 2)
 end
 
 @testset "With parameters" begin
@@ -90,6 +93,9 @@ end
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
     @test SciMLBase.successful_retcode(sccsol)
     @test norm(sccsol.resid) < norm(sol.resid)
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
 end
 
 @testset "Transistor amplifier" begin
@@ -149,6 +155,9 @@ end
     sccsol = solve(sccprob, NewtonRaphson(); abstol = 1e-12)
 
     @test sol.u≈sccsol.u atol=1e-10
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
 end
 
 @testset "Expression caching" begin
