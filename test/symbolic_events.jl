@@ -310,8 +310,9 @@ end
         [D(x) ~ v
          D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
-    @test only(continuous_events(ball)) ==
-          SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -Pre(v)])
+    cev = only(continuous_events(ball))
+    @test isequal(only(equations(cev)), x ~ 0)
+    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
     ball = mtkcompile(ball)
 
     @test length(ModelingToolkit.continuous_events(ball)) == 1
@@ -343,10 +344,11 @@ end
 
     cb = get_callback(prob)
     @test cb isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
-    @test getfield(ball, :continuous_events)[1] ==
-          SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -Pre(vx)])
-    @test getfield(ball, :continuous_events)[2] ==
-          SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -Pre(vy)])
+    _cevs = getfield(ball, :continuous_events)
+    @test isequal(only(equations(_cevs[1])), x ~ 0)
+    @test isequal(only(observed(_cevs[1].affect.system)), vx ~ -Pre(vx))
+    @test issetequal(equations(_cevs[2]), [y ~ -1.5, y ~ 1.5])
+    @test isequal(only(observed(_cevs[2].affect.system)), vy ~ -Pre(vy))
     cond = cb.condition
     out = [0.0, 0.0, 0.0]
     p0 = 0.0
