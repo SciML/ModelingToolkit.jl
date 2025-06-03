@@ -5,6 +5,7 @@ using ModelingToolkit.StructuralTransformations: SystemStructure, find_solvables
 using NonlinearSolve
 using LinearAlgebra
 using UnPack
+using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
 ###
 ### Nonlinear system
@@ -147,9 +148,10 @@ eqs = [D(x) ~ z * h
        0 ~ sin(z) + y - p * t]
 @named daesys = System(eqs, t)
 newdaesys = mtkcompile(daesys)
-@test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
-@test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
-@test isequal(unknowns(newdaesys), [x, z])
+@test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ y + sin(z) - p * t])
+@test issetequal(
+    equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t])
+@test issetequal(unknowns(newdaesys), [x, z])
 prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π, p => 0.2], (0, 1.0))
 du = [0.0, 0.0];
 u = [1.0, -0.5π];
@@ -157,7 +159,10 @@ pr = prob.p;
 tt = 0.1;
 @test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 prob.f(du, u, pr, tt)
-@test du≈[u[2], u[1] + sin(u[2]) - prob.ps[p] * tt] atol=1e-5
+xgetter = getsym(prob, x)
+zgetter = getsym(prob, z)
+@test xgetter(du)≈zgetter(u) atol=1e-5
+@test zgetter(du)≈xgetter(u) + sin(zgetter(u)) - prob.ps[p] * tt atol=1e-5
 
 # test the initial guess is respected
 @named sys = System(eqs, t, defaults = Dict(z => NaN))

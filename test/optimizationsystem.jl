@@ -109,11 +109,9 @@ end
     x0 = zeros(2)
     p = [1.0, 100.0]
     f = OptimizationFunction(rosenbrock, Optimization.AutoSymbolics())
-    @test_broken begin
-        prob = OptimizationProblem(f, x0, p)
-        sol = solve(prob, Newton())
-        @test sol.u ≈ [1.0, 1.0]
-    end
+    prob = OptimizationProblem(f, x0, p)
+    sol = solve(prob, Newton())
+    @test sol.u ≈ [1.0, 1.0]
 end
 
 # issue #819

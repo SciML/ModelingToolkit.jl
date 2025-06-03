@@ -58,22 +58,22 @@ const M = ModelingToolkit
     jprob = JuMPDynamicOptProblem(lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     @test JuMP.num_constraints(jprob.model) == 2
     jsol = solve(jprob, Ipopt.Optimizer, constructTsitouras5, silent = true) # 12.190 s, 9.68 GiB
-    @test jsol.sol(0.6)[1] ≈ 3.5
-    @test jsol.sol(0.3)[1] ≈ 7.0
+    @test jsol.sol(0.6; idxs = x(t)) ≈ 3.5
+    @test jsol.sol(0.3; idxs = x(t)) ≈ 7.0
 
     cprob = CasADiDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     csol = solve(cprob, "ipopt", constructTsitouras5, silent = true)
-    @test csol.sol(0.6)[1] ≈ 3.5
-    @test csol.sol(0.3)[1] ≈ 7.0
+    @test csol.sol(0.6; idxs = x(t)) ≈ 3.5
+    @test csol.sol(0.3; idxs = x(t)) ≈ 7.0
 
     iprob = InfiniteOptDynamicOptProblem(
         lksys, u0map, tspan, parammap; guesses = guess, dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer,
         derivative_method = InfiniteOpt.OrthogonalCollocation(3), silent = true) # 48.564 ms, 9.58 MiB
     sol = isol.sol
-    @test sol(0.6)[1] ≈ 3.5
-    @test sol(0.3)[1] ≈ 7.0
+    @test sol(0.6; idxs = x(t)) ≈ 3.5
+    @test sol(0.3; idxs = x(t)) ≈ 7.0
 
     # Test whole-interval constraints
     constr = [x(t) ≳ 1, y(t) ≳ 1]
@@ -128,14 +128,14 @@ end
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
-    @test ≈(jsol.sol.u[end][2], 0.25, rtol = 1e-5)
+    @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1e-5)
 
     cprob = CasADiDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     csol = solve(cprob, "ipopt", constructVerner8, silent = true)
     # Linear systems have bang-bang controls
     @test is_bangbang(csol.input_sol, [-1.0], [1.0])
     # Test reached final position.
-    @test ≈(csol.sol.u[end][2], 0.25, rtol = 1e-5)
+    @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1e-5)
 
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
@@ -149,7 +149,7 @@ end
     iprob = InfiniteOptDynamicOptProblem(block, u0map, tspan, parammap; dt = 0.01)
     isol = solve(iprob, Ipopt.Optimizer; silent = true)
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
-    @test ≈(isol.sol.u[end][2], 0.25, rtol = 1e-5)
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1e-5)
     osol = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
 
@@ -220,16 +220,16 @@ end
         Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     jsol = solve(jprob, Ipopt.Optimizer, constructRadauIIA5, silent = true)
-    @test jsol.sol.u[end][1] > 1.012
+    @test jsol.sol[h(t)][end] > 1.012
 
     cprob = CasADiDynamicOptProblem(rocket, u0map, (ts, te), pmap; dt = 0.001, cse = false)
     csol = solve(cprob, "ipopt"; silent = true)
-    @test csol.sol.u[end][1] > 1.012
+    @test csol.sol[h(t)][end] > 1.012
 
     iprob = InfiniteOptDynamicOptProblem(
         rocket, u0map, (ts, te), pmap; dt = 0.001)
     isol = solve(iprob, Ipopt.Optimizer, silent = true)
-    @test isol.sol.u[end][1] > 1.012
+    @test isol.sol[h(t)][end] > 1.012
 
     # Test solution
     @parameters (T_interp::CubicSpline)(..)

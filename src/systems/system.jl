@@ -1,8 +1,5 @@
-struct Schedule{V <: BipartiteGraphs.Matching}
-    """
-    Maximal matching of variables to equations calculated during structural simplification.
-    """
-    var_eq_matching::V
+struct Schedule
+    var_sccs::Vector{Vector{Int}}
     """
     Mapping of `Differential`s of variables to corresponding derivative expressions.
     """
