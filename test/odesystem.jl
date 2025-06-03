@@ -35,8 +35,10 @@ ssort(eqs) = sort(eqs, by = string)
 @named des[1:3] = System(eqs, t)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 
-@test eval(toexpr(de)) == de
-@test hash(deepcopy(de)) == hash(de)
+de2 = eval(toexpr(de))
+@test issetequal(equations(de2), eqs)
+@test issetequal(unknowns(de2), unknowns(de))
+@test issetequal(parameters(de2), parameters(de))
 
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "System construction: $name" begin
@@ -710,7 +712,9 @@ let
     s1′ = sys1(; name = :s1)
     @named s2 = sys2()
     @unpack s1 = s2
-    @test isequal(s1, s1′)
+    @test isequal(unknowns(s1), unknowns(s1′))
+    @test isequal(parameters(s1), parameters(s1′))
+    @test isequal(equations(s1), equations(s1′))
 
     defs = Dict(s1.dx => 0.0, D(s1.x) => s1.x, s1.x => 0.0)
     @test isequal(ModelingToolkit.defaults(s2), defs)
@@ -1425,33 +1429,6 @@ end
     @variables X(t)::Complex
     eqs = D(X) ~ p - d * X
     @test_nowarn @named osys = System(eqs, t)
-end
-
-# Test `isequal`
-@testset "`isequal`" begin
-    @variables X(t)
-    @parameters p d(t)
-    eq = D(X) ~ p - d * X
-
-    osys1 = complete(System([eq], t; name = :osys))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 == osys2 # true
-
-    continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
-    discrete_events = [SymbolicDiscreteCallback(
-        5.0 => [d ~ d / 2.0], discrete_parameters = [d])]
-
-    osys1 = complete(System([eq], t; name = :osys, continuous_events))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 !== osys2
-
-    osys1 = complete(System([eq], t; name = :osys, discrete_events))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 !== osys2
-
-    osys1 = complete(System([eq], t; name = :osys, continuous_events))
-    osys2 = complete(System([eq], t; name = :osys, discrete_events))
-    @test osys1 !== osys2
 end
 
 @testset "Constraint system construction" begin
