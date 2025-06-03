@@ -434,3 +434,11 @@ end
     @test resid == [0.0]
     @test resid isa SVector
 end
+
+@testset "`ProblemTypeCtx`" begin
+    @variables x
+    @mtkcompile sys = System(
+        [0 ~ x^2 - 4x + 4]; metadata = [ModelingToolkit.ProblemTypeCtx => "A"])
+    prob = NonlinearProblem(sys, [x => 1.0])
+    @test prob.problem_type == "A"
+end

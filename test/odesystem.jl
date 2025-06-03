@@ -1567,3 +1567,11 @@ end
     @test !process_running(proc)
     kill(proc, Base.SIGKILL)
 end
+
+@testset "`ProblemTypeCtx`" begin
+    @variables x(t)
+    @mtkcompile sys = System(
+        [D(x) ~ x], t; metadata = [ModelingToolkit.ProblemTypeCtx => "A"])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    @test prob.problem_type == "A"
+end

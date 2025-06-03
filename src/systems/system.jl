@@ -806,6 +806,16 @@ end
 
 """
     $(TYPEDSIGNATURES)
+
+Metadata key for systems containing the `problem_type` to be passed to the problem
+constructor, where applicable. For example, if `getmetadata(sys, ProblemTypeCtx, nothing)`
+is `CustomType()` then `ODEProblem(sys, ...).problem_type` will be `CustomType()` instead
+of `StandardODEProblem`.
+"""
+struct ProblemTypeCtx end
+
+"""
+    $(TYPEDSIGNATURES)
 """
 function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
