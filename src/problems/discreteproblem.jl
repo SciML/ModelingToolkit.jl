@@ -47,7 +47,7 @@ end
     add_toterms!(u0map; replace = true)
     f, u0, p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
-        kwargs...)
+        build_initializeprob = false, kwargs...)
 
     if expression == Val{true}
         u0 = :(f($u0, p, tspan[1]))
