@@ -94,13 +94,13 @@ new_sol = solve(new_prob, Tsit5())
 ```
 
 """
-function changeofvariables(sys::System, forward_subs, backward_subs; simplify=false, t0=missing)
-    t = independent_variable(sys)
+function changeofvariables(sys::System, iv, forward_subs, backward_subs; simplify=true, t0=missing)
+    t = iv
 
     old_vars = first.(backward_subs)
     new_vars = last.(forward_subs)
-    kept_vars = setdiff(states(sys), old_vars)
-    rhs = [eq.rhs for eq in equations(sys)]
+    # kept_vars = setdiff(states(sys), old_vars)
+    # rhs = [eq.rhs for eq in equations(sys)]
 
     # use: dz/dt = ∂z/∂x dx/dt + ∂z/∂t
     dzdt = Symbolics.derivative( first.(forward_subs), t )
@@ -120,21 +120,29 @@ function changeofvariables(sys::System, forward_subs, backward_subs; simplify=fa
     defs = get_defaults(sys)
     new_defs = Dict()
     for f_sub in forward_subs
-        #TODO call value(...)?
         ex = substitute(first(f_sub), defs)
         if !ismissing(t0)
             ex = substitute(ex, t => t0)
         end
         new_defs[last(f_sub)] = ex
     end
-    return ODESystem(new_eqs;
+    for para in parameters(sys)
+        if haskey(defs, para)
+            new_defs[para] = defs[para]
+        end
+    end
+    @named new_sys = System(new_eqs, t;
                         defaults=new_defs,
                         observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
                         )
+    if simplify
+        return mtkcompile(new_sys)
+    end
+    return new_sys
 end
 
-function change_of_variable_SDE(sys::System, forward_subs, backward_subs, iv; simplify=false, t0=missing)
-    t = independent_variable(sys)
+function change_of_variable_SDE(sys::System, iv, nvs, forward_subs, backward_subs; simplify=false, t0=missing)
+    t = iv
 
     old_vars = first.(backward_subs)
     new_vars = last.(forward_subs)
@@ -142,14 +150,14 @@ function change_of_variable_SDE(sys::System, forward_subs, backward_subs, iv; si
     # use: f = Y(t, X)
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
-    old_noise = get_noiseeqs(sys)
+    old_noise = ModelingToolkit.get_noise_eqs(sys)
     ∂f∂t = Symbolics.derivative( first.(forward_subs), t )
-    ∂f∂x = Symbolics.derivative( first.(forward_subs), old_vars )
+    ∂f∂x = [Symbolics.derivative( first(f_sub), old_var )]
     ∂2f∂x2 = Symbolics.derivative( ∂f∂x, old_vars )
     new_eqs = Equation[]
 
-    for (new_var, eq, noise, first, second, third) in zip(new_vars, old_eqs, old_noise, ∂f∂t, ∂f∂x, ∂2f∂x2)
-        ex = first + eq.rhs * second + 1/2 * noise^2 * third
+    for (new_var, eq, noise, nv, first, second, third) in zip(new_vars, old_eqs, old_noise, nvs, ∂f∂t, ∂f∂x, ∂2f∂x2)
+        ex = first + eq.rhs * second + 1/2 * noise^2 * third + noise*second*nv
         for eqs in old_eqs
             ex = substitute(ex, eqs.lhs => eqs.rhs)
         end
@@ -160,11 +168,11 @@ function change_of_variable_SDE(sys::System, forward_subs, backward_subs, iv; si
         end
         push!(new_eqs, Differential(t)(new_var) ~ ex)
     end
-    new_noise = [noise * div for (noise, div) in zip(old_noise, ∂f∂x)]
 
-    return SDESystem(new_eqs, new_noise;
+    @named new_sys = System(new_eqs;
             observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
             )
+    return new_sys
 end
 
 """
