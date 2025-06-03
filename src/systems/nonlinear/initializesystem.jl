@@ -638,24 +638,44 @@ function SciMLBase.remake_initialization_data(
     return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
 end
 
-function promote_u0_p(u0, p::MTKParameters, t0)
-    u0 = DiffEqBase.promote_u0(u0, p.tunable, t0)
-    u0 = DiffEqBase.promote_u0(u0, p.initials, t0)
+promote_type_with_nothing(::Type{T}, ::Nothing) where {T} = T
+promote_type_with_nothing(::Type{T}, ::SizedVector{0}) where {T} = T
+function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
+    promote_type(T, T2)
+end
+function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
+    promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
+end
 
-    if !isempty(p.tunable)
-        tunables = DiffEqBase.promote_u0(p.tunable, u0, t0)
-        p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
+promote_with_nothing(::Type, ::Nothing) = nothing
+promote_with_nothing(::Type, x::SizedVector{0}) = x
+promote_with_nothing(::Type{T}, x::AbstractArray{T}) where {T} = x
+function promote_with_nothing(::Type{T}, x::AbstractArray{T2}) where {T, T2}
+    if ArrayInterface.ismutable(x)
+        y = similar(x, T)
+        copyto!(y, x)
+        return y
+    else
+        yT = similar_type(x, T)
+        return yT(x)
     end
-    if !isempty(p.initials)
-        initials = DiffEqBase.promote_u0(p.initials, u0, t0)
-        p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
-    end
-
-    return u0, p
+end
+function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
+    tunables = promote_with_nothing(T, p.tunable)
+    p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
+    initials = promote_with_nothing(T, p.initials)
+    p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    return p
 end
 
 function promote_u0_p(u0, p, t0)
-    return DiffEqBase.promote_u0(u0, p, t0), DiffEqBase.promote_u0(p, u0, t0)
+    T = Union{}
+    T = promote_type_with_nothing(T, u0)
+    T = promote_type_with_nothing(T, p)
+
+    u0 = promote_with_nothing(T, u0)
+    p = promote_with_nothing(T, p)
+    return u0, p
 end
 
 function SciMLBase.late_binding_update_u0_p(
