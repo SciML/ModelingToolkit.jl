@@ -2,7 +2,7 @@
 
 # Fetch packages
 using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, StaticArrays,
-      SteadyStateDiffEq, StochasticDiffEq, Test
+      SteadyStateDiffEq, StochasticDiffEq, SciMLBase, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Sets rnd number.
@@ -101,7 +101,7 @@ begin
 end
 
 # Perform ODE simulations (singular and ensemble).
-let
+@testset "ODE" begin
     # Creates normal and ensemble problems.
     base_oprob = ODEProblem(osys, [u0_alts[1]; p_alts[1]], tspan)
     base_sol = solve(base_oprob, Tsit5(); saveat = 1.0)
@@ -119,7 +119,7 @@ let
 end
 
 # Solves a nonlinear problem (EnsembleProblems are not possible for these).
-let
+@testset "Nonlinear" begin
     base_nlprob = NonlinearProblem(nsys, [u0_alts[1]; p_alts[1]])
     base_sol = solve(base_nlprob, NewtonRaphson())
     # Solves problems for all input types, checking that identical solutions are found.
@@ -130,7 +130,7 @@ let
 end
 
 # Perform steady state simulations (singular and ensemble).
-let
+@testset "SteadyState" begin
     # Creates normal and ensemble problems.
     base_ssprob = SteadyStateProblem(osys, [u0_alts[1]; p_alts[1]])
     base_sol = solve(base_ssprob, DynamicSS(Tsit5()))
@@ -144,5 +144,87 @@ let
         @test base_sol == solve(ssprob, DynamicSS(Tsit5()))
         eprob = remake(base_eprob; u0, p)
         @test base_esol == solve(eprob, DynamicSS(Tsit5()); trajectories = 2)
+    end
+end
+
+@testset "Deprecations" begin
+    @variables _x(..) = 1.0
+    @parameters p = 1.0
+    @brownian a
+    x = _x(t)
+    k = ShiftIndex(t)
+
+    @test_deprecated ODESystem([D(x) ~ x * p], t; name = :a)
+    @mtkcompile odesys = System([D(x) ~ x * p], t)
+    @mtkcompile sdesys = System([D(x) ~ x * p + a], t)
+    @test_deprecated NonlinearSystem([0 ~ x^3 + p]; name = :a)
+    @mtkcompile nlsys = System([0 ~ x^3 + p])
+    @mtkcompile ddesys = System([D(x) ~ x * p + _x(t - 0.1)], t)
+    @mtkcompile sddesys = System([D(x) ~ x * p + _x(t - 0.1) + a], t)
+    @test_deprecated DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t; name = :a)
+    @mtkcompile discsys = System([x ~ x(k - 1) * p], t)
+    @test_deprecated ImplicitDiscreteSystem([x ~ x(k - 1) + x(k - 2) * p * x], t; name = :a)
+    @mtkcompile idiscsys = System([x ~ x(k - 1) * p * x], t)
+    @mtkcompile optsys = OptimizationSystem(x^2 + p)
+
+    u0s = [
+        Dict(x => 1.0),
+        [x => 1.0],
+        [1.0],
+        [],
+        nothing
+    ]
+    ps = [
+        Dict(p => 1.0),
+        [p => 1.0],
+        [1.0],
+        [],
+        nothing,
+        SciMLBase.NullParameters()
+    ]
+    tspan = (0.0, 1.0)
+
+    @testset "$ctor" for (sys, ctor) in [
+        (odesys, ODEProblem),
+        (odesys, ODEProblem{true}),
+        (odesys, ODEProblem{true, SciMLBase.FullSpecialize}), (odesys, BVProblem),
+        (odesys, BVProblem{true}),
+        (odesys, BVProblem{true, SciMLBase.FullSpecialize}), (sdesys, SDEProblem),
+        (sdesys, SDEProblem{true}),
+        (sdesys, SDEProblem{true, SciMLBase.FullSpecialize}), (ddesys, DDEProblem),
+        (ddesys, DDEProblem{true}),
+        (ddesys, DDEProblem{true, SciMLBase.FullSpecialize}), (sddesys, SDDEProblem),
+        (sddesys, SDDEProblem{true}),
+        (sddesys, SDDEProblem{true, SciMLBase.FullSpecialize}),
+
+        # (discsys, DiscreteProblem),
+        # (discsys, DiscreteProblem{true}),
+        # (discsys, DiscreteProblem{true, SciMLBase.FullSpecialize}),
+
+        (idiscsys, ImplicitDiscreteProblem),
+        (idiscsys, ImplicitDiscreteProblem{true}),
+        (idiscsys, ImplicitDiscreteProblem{true, SciMLBase.FullSpecialize})
+    ]
+        @testset "$(typeof(u0)) - $(typeof(p))" for u0 in u0s, p in ps
+            if u0 isa Vector{Float64} && ctor <: ImplicitDiscreteProblem
+                u0 = ones(2)
+            end
+            @test_warn ["deprecated"] ctor(sys, u0, tspan, p)
+        end
+    end
+    @testset "$ctor" for (sys, ctor) in [
+        (nlsys, NonlinearProblem),
+        (nlsys, NonlinearProblem{true}),
+        (nlsys, NonlinearProblem{true, SciMLBase.FullSpecialize}), (
+            nlsys, NonlinearLeastSquaresProblem),
+        (nlsys, NonlinearLeastSquaresProblem{true}),
+        (nlsys, NonlinearLeastSquaresProblem{true, SciMLBase.FullSpecialize}), (
+            nlsys, SCCNonlinearProblem),
+        (nlsys, SCCNonlinearProblem{true}), (optsys, OptimizationProblem),
+        (optsys, OptimizationProblem{true})
+    ]
+        @testset "$(typeof(u0)) - $(typeof(p))" for u0 in u0s, p in ps
+            @test_warn ["deprecated"] ctor(sys, u0, p)
+        end
     end
 end

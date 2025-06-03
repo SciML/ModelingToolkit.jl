@@ -8,6 +8,8 @@
     check_compatibility && check_compatible_system(BVProblem, sys)
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
+    dvs = unknowns(sys)
+    op = to_varmap(op, dvs)
     # Systems without algebraic equations should use both fixed values + guesses
     # for initialization.
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
@@ -17,7 +19,6 @@
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse,
         checkbounds, time_dependent_init = false, expression, kwargs...)
 
-    dvs = unknowns(sys)
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) :
               [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]

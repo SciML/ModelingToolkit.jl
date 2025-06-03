@@ -543,12 +543,11 @@ function System(eqs::Vector{Equation}; kwargs...)
     for ssys in get(kwargs, :systems, System[])
         collect_scoped_vars!(allunknowns, ps, ssys, nothing)
     end
-    costs = get(kwargs, :costs, nothing)
-    if costs !== nothing
-        costunknowns, costps = process_costs(costs, allunknowns, ps, nothing)
-        union!(allunknowns, costunknowns)
-        union!(ps, costps)
+    costs = get(kwargs, :costs, [])
+    for val in costs
+        collect_vars!(allunknowns, ps, val, nothing)
     end
+
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     for eq in cstrs
         collect_vars!(allunknowns, ps, eq, nothing)
