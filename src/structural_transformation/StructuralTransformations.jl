@@ -26,7 +26,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule, schedule
+                       Schedule, schedule, AliasGraph
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
