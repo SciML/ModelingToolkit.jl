@@ -974,8 +974,8 @@ end
 function linearization_function(sys::AbstractSystem,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...)
-
-    sys, input_vars, output_vars = linearization_ap_transform(sys, inputs, outputs, loop_openings)
+    sys, input_vars, output_vars = linearization_ap_transform(
+        sys, inputs, outputs, loop_openings)
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 
