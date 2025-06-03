@@ -26,7 +26,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule, schedule
+                       Schedule, schedule, iscomplete, get_schedule
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -55,9 +55,8 @@ using SimpleNonlinearSolve
 
 using DocStringExtensions
 
-export tearing, partial_state_selection, dae_index_lowering, check_consistency
+export tearing, dae_index_lowering, check_consistency
 export dummy_derivative
-export build_observed_function, ODAEProblem
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!

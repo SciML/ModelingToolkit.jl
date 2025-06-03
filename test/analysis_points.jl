@@ -22,7 +22,7 @@ using Symbolics: NAMESPACE_SEPARATOR
     sys_normal = System(eqs, t, systems = [P, C], name = :hej)
     sys_normal2 = @test_nowarn expand_connections(sys_normal)
 
-    @test isequal(sys_ap2, sys_normal2)
+    @test issetequal(equations(sys_ap2), equations(sys_normal2))
 end
 
 @testset "Inverse causality throws a warning" begin

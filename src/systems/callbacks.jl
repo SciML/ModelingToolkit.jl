@@ -13,15 +13,12 @@ struct AffectSystem
     parameters::Vector
     """Parameters of the parent ODESystem whose values are modified by the affect."""
     discretes::Vector
-    """Maps the symbols of unknowns/observed in the ImplicitDiscreteSystem to its corresponding unknown/parameter in the parent system."""
-    aff_to_sys::Dict
 end
 
 system(a::AffectSystem) = a.system
 discretes(a::AffectSystem) = a.discretes
 unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
-aff_to_sys(a::AffectSystem) = a.aff_to_sys
 all_equations(a::AffectSystem) = vcat(equations(system(a)), observed(system(a)))
 
 function Base.show(iio::IO, aff::AffectSystem)
@@ -34,16 +31,14 @@ function Base.:(==)(a1::AffectSystem, a2::AffectSystem)
     isequal(system(a1), system(a2)) &&
         isequal(discretes(a1), discretes(a2)) &&
         isequal(unknowns(a1), unknowns(a2)) &&
-        isequal(parameters(a1), parameters(a2)) &&
-        isequal(aff_to_sys(a1), aff_to_sys(a2))
+        isequal(parameters(a1), parameters(a2))
 end
 
 function Base.hash(a::AffectSystem, s::UInt)
     s = hash(system(a), s)
     s = hash(unknowns(a), s)
     s = hash(parameters(a), s)
-    s = hash(discretes(a), s)
-    hash(aff_to_sys(a), s)
+    hash(discretes(a), s)
 end
 
 function vars!(vars, aff::AffectSystem; op = Differential)
@@ -251,14 +246,12 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
     for eq in alg_eqs
         collect_vars!(dvs, params, eq, iv)
     end
-
     pre_params = filter(haspre ∘ value, params)
     sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
     discretes = map(tovar, discrete_parameters)
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
 
-    aff_map = Dict(zip(discretes, discrete_parameters))
     rev_map = Dict(zip(discrete_parameters, discretes))
     subs = merge(rev_map, Dict(zip(dvs, _dvs)))
     affect = Symbolics.fast_substitute(affect, subs)
@@ -269,17 +262,14 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
         collect(union(pre_params, sys_params)))
     affectsys = mtkcompile(affectsys; fully_determined = nothing)
     # get accessed parameters p from Pre(p) in the callback parameters
-    accessed_params = filter(isparameter, map(unPre, collect(pre_params)))
+    accessed_params = Vector{Any}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
     _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
-    for u in _dvs
-        aff_map[u] = u
-    end
 
     AffectSystem(affectsys, collect(_dvs), collect(accessed_params),
-        collect(discrete_parameters), aff_map)
+        collect(discrete_parameters))
 end
 
 function make_affect(affect; kwargs...)
@@ -448,11 +438,23 @@ end
 ########## Namespacing Utilities ###########
 ############################################
 function namespace_affects(affect::AffectSystem, s)
-    AffectSystem(renamespace(s, system(affect)),
+    affsys = system(affect)
+    old_ts = get_tearing_state(affsys)
+    # if we just `renamespace` the system, it updates the name. However, this doesn't
+    # namespace the returned values from `equations(affsys)`, etc. which we need. So we
+    # need to manually namespace everything. This is done by renaming the system to the
+    # namespace, putting it as a subsystem of an empty system called `affectsys`, and then
+    # flatten the system. The resultant system has everything namespaced, and is still
+    # called `affectsys` for further namespacing
+    affsys = rename(affsys, nameof(s))
+    affsys = toggle_namespacing(affsys, true)
+    affsys = System(Equation[], get_iv(affsys); systems = [affsys], name = :affectsys)
+    affsys = complete(affsys)
+    @set! affsys.tearing_state = old_ts
+    AffectSystem(affsys,
         renamespace.((s,), unknowns(affect)),
         renamespace.((s,), parameters(affect)),
-        renamespace.((s,), discretes(affect)),
-        Dict([k => renamespace(s, v) for (k, v) in aff_to_sys(affect)]))
+        renamespace.((s,), discretes(affect)))
 end
 namespace_affects(af::Nothing, s) = nothing
 
@@ -808,15 +810,13 @@ function compile_equational_affect(
     affsys = system(aff)
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
-    aff_map = aff_to_sys(aff)
-    sys_map = Dict([v => k for (k, v) in aff_map])
 
     obseqs, eqs = unhack_observed(observed(affsys), equations(affsys))
     if isempty(equations(affsys))
         update_eqs = Symbolics.fast_substitute(
             obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
-        lhss = map(x -> aff_map[x.lhs], update_eqs)
+        lhss = map(x -> x.lhs, update_eqs)
         is_p = [lhs ∈ Set(ps_to_update) for lhs in lhss]
         is_u = [lhs ∈ Set(dvs_to_update) for lhs in lhss]
         dvs = unknowns(sys)
@@ -854,11 +854,11 @@ function compile_equational_affect(
             end
         end
     else
-        return let dvs_to_update = dvs_to_update, aff_map = aff_map, sys_map = sys_map,
+        return let dvs_to_update = dvs_to_update,
             affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys,
             reset_jumps = reset_jumps
 
-            dvs_to_access = [aff_map[u] for u in unknowns(affsys)]
+            dvs_to_access = unknowns(affsys)
             ps_to_access = [unPre(p) for p in parameters(affsys)]
 
             affu_getter = getsym(sys, dvs_to_access)
@@ -867,8 +867,8 @@ function compile_equational_affect(
             affp_setter! = setsym(affsys, parameters(affsys))
             u_setter! = setsym(sys, dvs_to_update)
             p_setter! = setsym(sys, ps_to_update)
-            u_getter = getsym(affsys, [sys_map[u] for u in dvs_to_update])
-            p_getter = getsym(affsys, [sys_map[p] for p in ps_to_update])
+            u_getter = getsym(affsys, dvs_to_update)
+            p_getter = getsym(affsys, ps_to_update)
 
             affprob = ImplicitDiscreteProblem(
                 affsys, Pair[unknowns(affsys) .=> 0; parameters(affsys) .=> 0],

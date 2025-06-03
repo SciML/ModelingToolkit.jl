@@ -87,10 +87,10 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 @named cl = System(connections, t, systems = [f, c, p])
 
-lsys0, ssys = linearize(cl)
+lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl; autodiff = AutoFiniteDiff())
+lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
 lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 
 @test lsys.A == lsys2.A == [-2 0; 1 -2]
@@ -99,8 +99,9 @@ lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 @test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
-lsyss, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 
+lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
 @test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
 @test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
 @test ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
@@ -147,28 +148,17 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-if VERSION >= v"1.8"
-    @test_throws "Some specified inputs were not found" linearize(pid,
-        [
-            pid.reference.u,
-            pid.measurement.u
-        ], [ctr_output.u])
-    @test_throws "Some specified outputs were not found" linearize(pid,
-        [
-            reference.u,
-            measurement.u
-        ],
-        [pid.ctr_output.u])
-else # v1.6 does not have the feature to match error message
-    @test_throws ErrorException linearize(pid,
-        [
-            pid.reference.u,
-            pid.measurement.u
-        ], [ctr_output.u])
-    @test_throws ErrorException linearize(pid,
-        [reference.u, measurement.u],
-        [pid.ctr_output.u])
-end
+@test_throws "Some specified inputs were not found" linearize(pid,
+    [
+        pid.reference.u,
+        pid.measurement.u
+    ], [ctr_output.u])
+@test_throws "Some specified outputs were not found" linearize(pid,
+    [
+        reference.u,
+        measurement.u
+    ],
+    [pid.ctr_output.u])
 
 ## Test operating points
 
@@ -266,7 +256,7 @@ closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er]
         filt.xd => 0.0
     ])
 
-@test_nowarn linearize(closed_loop; warn_empty_op = false)
+@test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
 @mtkmodel Tank_noi begin
@@ -327,7 +317,7 @@ end
     eqs = [0 ~ x * log(y) - p]
     @named sys = System(eqs, t; defaults = [p => 1.0])
     sys = complete(sys)
-    @test_throws ModelingToolkit.MissingVariablesError linearize(
+    @test_throws ModelingToolkit.MissingGuessError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),

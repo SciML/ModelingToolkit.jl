@@ -930,13 +930,22 @@ function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = iden
     return system_modifier(sys), vars
 end
 
-function linearization_function(sys::AbstractSystem,
+"""
+    sys, input_vars, output_vars = $(TYPEDSIGNATURES)
+
+Apply analysis-point transformations to prepare a system for linearization.
+
+Returns
+- `sys`: The transformed system.
+- `input_vars`: A vector of input variables corresponding to the input analysis points.
+- `output_vars`: A vector of output variables corresponding to the output analysis points.
+"""
+function linearization_ap_transform(sys,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
-        outputs; loop_openings = [], system_modifier = identity, kwargs...)
+        outputs, loop_openings)
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
     outputs = canonicalize_ap(sys, outputs)
-
     input_vars = []
     for input in inputs
         if nameof(input) in loop_openings
@@ -958,9 +967,15 @@ function linearization_function(sys::AbstractSystem,
         end
         push!(output_vars, output_var)
     end
-
     sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
+    return sys, input_vars, output_vars
+end
 
+function linearization_function(sys::AbstractSystem,
+        inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+        outputs; loop_openings = [], system_modifier = identity, kwargs...)
+    sys, input_vars, output_vars = linearization_ap_transform(
+        sys, inputs, outputs, loop_openings)
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 

@@ -30,7 +30,7 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
     for solver in solvers
         sol = solve(bvp, solver(), dt = 0.01)
         @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test sol.u[1] == [1.0, 2.0]
+        @test sol[[x, y], 1] == [1.0, 2.0]
     end
 
     # Test out of place
@@ -40,7 +40,7 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
         @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test sol.u[1] == [1.0, 2.0]
+        @test sol[[x, y], 1] == [1.0, 2.0]
     end
 end
 
@@ -129,7 +129,9 @@ end
     sol2 = solve(bvpi2, MIRK4(), dt = 0.01)
     sol3 = solve(bvpi3, MIRK4(), dt = 0.01)
     sol4 = solve(bvpi4, MIRK4(), dt = 0.01)
-    @test sol1 ≈ sol2 ≈ sol3 ≈ sol4 # don't get true equality here, not sure why
+    @test sol1.t ≈ sol2.t ≈ sol3.t ≈ sol4.t
+    @test sol1.u ≈ sol2.u ≈ sol3[[x(t), y(t)]] ≈ sol4[[x(t), y(t)]]
+    # @test sol1 ≈ sol2 ≈ sol3 ≈ sol4 # don't get true equality here, not sure why
 end
 
 function test_solvers(
@@ -296,7 +298,7 @@ end
     costfn = ModelingToolkit.generate_cost(
         lksys; expression = Val{false}, wrap_gfw = Val{true})
     _t = tspan[2]
-    @test costfn(sol, prob.p, _t) ≈ (sol(0.6)[1] + 3)^2 + sol(0.3)[1]^2
+    @test costfn(sol, prob.p, _t) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
 
     ### With a parameter
     @parameters t_c
@@ -309,5 +311,6 @@ end
     sol = solve(prob, Tsit5())
     costfn = ModelingToolkit.generate_cost(
         lksys; expression = Val{false}, wrap_gfw = Val{true})
-    @test costfn(sol, prob.p, _t) ≈ log(sol(0.56)[2] + sol(0.0)[1]) - sol(0.4)[1]^2
+    @test costfn(sol, prob.p, _t) ≈
+          log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
 end

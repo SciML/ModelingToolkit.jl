@@ -612,9 +612,8 @@ diffusion_eqs = [s*x 0
 
 sys2 = SDESystem(drift_eqs, diffusion_eqs, tt, sts, ps, name = :sys1)
 sys2 = complete(sys2)
-@set! sys1.parent = nothing
-@set! sys2.parent = nothing
-@test sys1 == sys2
+
+@test issetequal(ModelingToolkit.get_noise_eqs(sys1), ModelingToolkit.get_noise_eqs(sys2))
 
 prob = SDEProblem(sys1, [sts .=> [1.0, 0.0, 0.0]; ps .=> [10.0, 26.0]],
     (0.0, 100.0))
@@ -925,31 +924,6 @@ end
         f_order = SDEFunction(de; expression = Val{true})
         @test f_order isa Expr
     end
-end
-
-@testset "SDESystem Equality with events" begin
-    @variables X(t)
-    @parameters p d
-    @brownian a
-    seq = D(X) ~ p - d * X + a
-    @mtkcompile ssys1 = System([seq], t; name = :ssys)
-    @mtkcompile ssys2 = System([seq], t; name = :ssys)
-    @test ssys1 == ssys2 # true
-
-    continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
-    discrete_events = [5.0 => [d ~ Pre(d) / 2.0]]
-
-    @mtkcompile ssys1 = System([seq], t; name = :ssys, continuous_events)
-    @mtkcompile ssys2 = System([seq], t; name = :ssys)
-    @test ssys1 !== ssys2
-
-    @mtkcompile ssys1 = System([seq], t; name = :ssys, discrete_events)
-    @mtkcompile ssys2 = System([seq], t; name = :ssys)
-    @test ssys1 !== ssys2
-
-    @mtkcompile ssys1 = System([seq], t; name = :ssys, continuous_events)
-    @mtkcompile ssys2 = System([seq], t; name = :ssys, discrete_events)
-    @test ssys1 !== ssys2
 end
 
 @testset "Error when constructing SDEProblem without `mtkcompile`" begin

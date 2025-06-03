@@ -32,7 +32,7 @@ end
 
 connected = compose(
     System([decay2.f ~ decay1.x
-               D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
+            D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
 

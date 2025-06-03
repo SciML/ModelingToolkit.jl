@@ -369,7 +369,7 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
 m_inputs = [u[1], u[2]]
 m_outputs = [y₂]
 sys_simp = mtkcompile(sys, inputs = m_inputs, outputs = m_outputs)
-@test isequal(unknowns(sys_simp), collect(x[1:2]))
+@test issetequal(unknowns(sys_simp), collect(x[1:2]))
 @test length(inputs(sys_simp)) == 2
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1577
@@ -417,7 +417,7 @@ matrices, ssys = linearize(augmented_sys,
     ], outs;
     op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0])
 matrices = ModelingToolkit.reorder_unknowns(
-    matrices, unknowns(ssys), [ssys.x[2], ssys.integrator.x[1], ssys.x[1]])
+    matrices, unknowns(ssys), [ssys.x[1], ssys.x[2], ssys.integrator.x[1]])
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
 @test matrices.B == I
 @test matrices.C == [C zeros(2)]

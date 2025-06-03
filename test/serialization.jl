@@ -27,7 +27,10 @@ write(io, expand_connections(rc_model))
 str = String(take!(io))
 
 sys = include_string(@__MODULE__, str)
-@test sys == expand_connections(rc_model) # this actually kind of works, but the variables would have different identities.
+rc2 = expand_connections(rc_model)
+@test issetequal(equations(sys), equations(rc2))
+@test issetequal(unknowns(sys), unknowns(rc2))
+@test issetequal(parameters(sys), parameters(rc2))
 
 # check answer
 ss = mtkcompile(rc_model)

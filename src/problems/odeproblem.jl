@@ -77,7 +77,8 @@ end
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module, kwargs...)
 
-    args = (; f, u0, tspan, p, ptype = StandardODEProblem())
+    ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
+    args = (; f, u0, tspan, p, ptype)
     maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
 end
 

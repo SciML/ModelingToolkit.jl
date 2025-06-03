@@ -46,13 +46,13 @@ prob = DDEProblem(sys,
     tspan,
     constant_lags = [tau])
 sol_mtk = solve(prob, alg, reltol = 1e-7, abstol = 1e-10)
-@test sol_mtk.u[end] ≈ sol.u[end]
+@test sol_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol.u[end]
 prob2 = DDEProblem(sys,
     [x₀ => 1.0 - t * q1 * 10, x₁ => 1.0 - t * q1 * 10, x₂(t) => 1.0 - t * q1 * 10],
     tspan,
     constant_lags = [tau])
 sol2_mtk = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
-@test sol2_mtk.u[end] ≈ sol2.u[end]
+@test sol2_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol2.u[end]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t)]]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t - 0.1)]]
 
