@@ -141,8 +141,10 @@ function changeofvariables(sys::System, iv, forward_subs, backward_subs; simplif
     return new_sys
 end
 
-function change_of_variable_SDE(sys::System, iv, nvs, forward_subs, backward_subs; simplify=false, t0=missing)
+function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; simplify=true, t0=missing)
+    sys = mtkcompile(sys)
     t = iv
+    @brownian B
 
     old_vars = first.(backward_subs)
     new_vars = last.(forward_subs)
@@ -151,13 +153,17 @@ function change_of_variable_SDE(sys::System, iv, nvs, forward_subs, backward_sub
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
     old_noise = ModelingToolkit.get_noise_eqs(sys)
+
+    # Is there a function to find partial derivative?
     ∂f∂t = Symbolics.derivative( first.(forward_subs), t )
-    ∂f∂x = [Symbolics.derivative( first(f_sub), old_var )]
-    ∂2f∂x2 = Symbolics.derivative( ∂f∂x, old_vars )
+    ∂f∂t = [substitute(f_t, Differential(t)(old_var) => 0) for (f_t, old_var) in zip(∂f∂t, old_vars)]
+
+    ∂f∂x = [Symbolics.derivative( first(f_sub), old_var ) for (f_sub, old_var) in zip(forward_subs, old_vars)]
+    ∂2f∂x2 = Symbolics.derivative.( ∂f∂x, old_vars )
     new_eqs = Equation[]
 
-    for (new_var, eq, noise, nv, first, second, third) in zip(new_vars, old_eqs, old_noise, nvs, ∂f∂t, ∂f∂x, ∂2f∂x2)
-        ex = first + eq.rhs * second + 1/2 * noise^2 * third + noise*second*nv
+    for (new_var, eq, noise, first, second, third) in zip(new_vars, old_eqs, old_noise, ∂f∂t, ∂f∂x, ∂2f∂x2)
+        ex = first + eq.rhs * second + 1/2 * noise^2 * third + noise*second*B
         for eqs in old_eqs
             ex = substitute(ex, eqs.lhs => eqs.rhs)
         end
@@ -169,9 +175,28 @@ function change_of_variable_SDE(sys::System, iv, nvs, forward_subs, backward_sub
         push!(new_eqs, Differential(t)(new_var) ~ ex)
     end
 
-    @named new_sys = System(new_eqs;
+    defs = get_defaults(sys)
+    new_defs = Dict()
+    for f_sub in forward_subs
+        ex = substitute(first(f_sub), defs)
+        if !ismissing(t0)
+            ex = substitute(ex, t => t0)
+        end
+        new_defs[last(f_sub)] = ex
+    end
+    for para in parameters(sys)
+        if haskey(defs, para)
+            new_defs[para] = defs[para]
+        end
+    end
+
+    @named new_sys = System(new_eqs, t;
+            defaults=new_defs,
             observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
             )
+    if simplify
+        return mtkcompile(new_sys)
+    end
     return new_sys
 end
 

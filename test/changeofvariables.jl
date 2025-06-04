@@ -5,11 +5,11 @@ using Test, LinearAlgebra
 # Change of variables: z = log(x)
 # (this implies that x = exp(z) is automatically non-negative)
 @independent_variables t
-# @variables z(t)[1:2, 1:2]
-# D = Differential(t)
-# eqs = [D(D(z)) ~ ones(2, 2)]
-# @mtkcompile sys = System(eqs, t)
-# @test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
+@variables z(t)[1:2, 1:2]
+D = Differential(t)
+eqs = [D(D(z)) ~ ones(2, 2)]
+@mtkcompile sys = System(eqs, t)
+@test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
 
 @parameters α
 @variables x(t)
@@ -94,17 +94,19 @@ new_sol = solve(new_prob, Tsit5())
 # @test isapprox( new_sol[x[1],end], sol[x[1],end], rtol=1e-4)
 
 # Change of variables for sde
-# @independent_variables t
-# @brownian B
-# @parameters μ σ
-# @variables x(t) y(t)
-# D = Differential(t)
-# eqs = [D(x) ~ μ*x + σ*x*B]
+@independent_variables t
+@brownian B
+@parameters μ σ
+@variables x(t) y(t)
+D = Differential(t)
+eqs = [D(x) ~ μ*x + σ*x*B]
 
-# def = [x=>0., μ => 2., σ=>1.]
-# @mtkcompile sys = System(eqs, t; defaults=def)
-# forward_subs = [log(x) => y]
-# backward_subs = [x => exp(y)]
-# new_sys = change_of_variable_SDE(sys, t, [B], forward_subs, backward_subs)
+def = [x=>0., μ => 2., σ=>1.]
+@mtkcompile sys = System(eqs, t; defaults=def)
+forward_subs = [log(x) => y]
+backward_subs = [x => exp(y)]
+new_sys = change_of_variable_SDE(sys, t, forward_subs, backward_subs)
+@test equations(new_sys)[1] == (D(y) ~ μ - 1/2*σ^2)
+@test ModelingToolkit.get_noise_eqs(new_sys)[1] === ModelingToolkit.value(σ)
 
 
