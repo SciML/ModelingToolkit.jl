@@ -649,7 +649,7 @@ function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(indp, syms::AbstractVector)
     @nospecialize
-    obsfn = SymbolicIndexingInterface.observed(indp, syms)
+    obsfn = build_explicit_observed_function(indp, syms; wrap_delays = false)
     return ObservedWrapper{is_time_dependent(indp)}(obsfn)
 end
 
