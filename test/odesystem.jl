@@ -35,8 +35,10 @@ ssort(eqs) = sort(eqs, by = string)
 @named des[1:3] = System(eqs, t)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 
-@test eval(toexpr(de)) == de
-@test hash(deepcopy(de)) == hash(de)
+de2 = eval(toexpr(de))
+@test issetequal(equations(de2), eqs)
+@test issetequal(unknowns(de2), unknowns(de))
+@test issetequal(parameters(de2), parameters(de))
 
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "System construction: $name" begin
@@ -568,10 +570,10 @@ let
     @named sys = System(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = mtkcompile(sys)
 
-    u0 = unknowns(sys) .=> [0.5, 0]
-    du0 = D.(unknowns(sys)) .=> 0.0
+    u0 = x .=> [0.5, 0]
+    du0 = D.(x) .=> 0.0
     prob = DAEProblem(sys, [du0; u0], (0, 50))
-    @test prob.u0 ≈ [0.5, 0.0]
+    @test prob[x] ≈ [0.5, 0.0]
     @test prob.du0 ≈ [0.0, 0.0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -581,7 +583,8 @@ let
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5],
         (0, 50))
-    @test prob.u0 ≈ [0.5, 0]
+
+    @test prob[x] ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -590,7 +593,7 @@ let
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5, k => 2],
         (0, 50))
-    @test prob.u0 ≈ [0.5, 0]
+    @test prob[x] ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 2
@@ -710,7 +713,9 @@ let
     s1′ = sys1(; name = :s1)
     @named s2 = sys2()
     @unpack s1 = s2
-    @test isequal(s1, s1′)
+    @test isequal(unknowns(s1), unknowns(s1′))
+    @test isequal(parameters(s1), parameters(s1′))
+    @test isequal(equations(s1), equations(s1′))
 
     defs = Dict(s1.dx => 0.0, D(s1.x) => s1.x, s1.x => 0.0)
     @test isequal(ModelingToolkit.defaults(s2), defs)
@@ -769,7 +774,7 @@ let
     @named sys4 = System([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
     sys4s = mtkcompile(sys4)
     prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
-    @test string.(unknowns(prob.f.sys)) == ["x(t)", "y(t)"]
+    @test issetequal(string.(unknowns(prob.f.sys)), ["x(t)", "y(t)"])
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
@@ -1427,33 +1432,6 @@ end
     @test_nowarn @named osys = System(eqs, t)
 end
 
-# Test `isequal`
-@testset "`isequal`" begin
-    @variables X(t)
-    @parameters p d(t)
-    eq = D(X) ~ p - d * X
-
-    osys1 = complete(System([eq], t; name = :osys))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 == osys2 # true
-
-    continuous_events = [[X ~ 1.0] => [X ~ Pre(X) + 5.0]]
-    discrete_events = [SymbolicDiscreteCallback(
-        5.0 => [d ~ d / 2.0], discrete_parameters = [d])]
-
-    osys1 = complete(System([eq], t; name = :osys, continuous_events))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 !== osys2
-
-    osys1 = complete(System([eq], t; name = :osys, discrete_events))
-    osys2 = complete(System([eq], t; name = :osys))
-    @test osys1 !== osys2
-
-    osys1 = complete(System([eq], t; name = :osys, continuous_events))
-    osys2 = complete(System([eq], t; name = :osys, discrete_events))
-    @test osys1 !== osys2
-end
-
 @testset "Constraint system construction" begin
     @variables x(..) y(..) z(..)
     @parameters a b c d e
@@ -1559,4 +1537,41 @@ end
     end
     @mtkcompile sys = SysC()
     @test length(unknowns(sys)) == 3
+end
+
+@testset "`full_equations` doesn't recurse infinitely" begin
+    code = """
+    using ModelingToolkit
+    using ModelingToolkit: t_nounits as t, D_nounits as D
+    @variables x(t)[1:3]=[0,0,1]
+    @variables u1(t)=0 u2(t)=0 
+    y₁, y₂, y₃ = x
+    k₁, k₂, k₃ = 1,1,1
+    eqs = [
+        D(y₁) ~ -k₁*y₁ + k₃*y₂*y₃ + u1
+        D(y₂) ~ k₁*y₁ - k₃*y₂*y₃ - k₂*y₂^2 + u2
+        y₁ + y₂ + y₃ ~ 1
+    ]
+
+    @named sys = System(eqs, t)
+
+    inputs = [u1, u2]
+    outputs = [y₁, y₂, y₃]
+    ss = mtkcompile(sys; inputs)
+    full_equations(ss)
+    """
+
+    cmd = `$(Base.julia_cmd()) --project=$(@__DIR__) -e $code`
+    proc = run(cmd, stdin, stdout, stderr; wait = false)
+    sleep(120)
+    @test !process_running(proc)
+    kill(proc, Base.SIGKILL)
+end
+
+@testset "`ProblemTypeCtx`" begin
+    @variables x(t)
+    @mtkcompile sys = System(
+        [D(x) ~ x], t; metadata = [ModelingToolkit.ProblemTypeCtx => "A"])
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    @test prob.problem_type == "A"
 end

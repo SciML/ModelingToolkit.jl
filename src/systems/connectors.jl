@@ -519,11 +519,11 @@ function connection2set!(connectionsets, namespace, ss, isouter;
 end
 
 function generate_connection_set(
-        sys::AbstractSystem, find = nothing, replace = nothing; scalarize = false)
+        sys::AbstractSystem; scalarize = false)
     connectionsets = ConnectionSet[]
     domain_csets = ConnectionSet[]
     sys = generate_connection_set!(
-        connectionsets, domain_csets, sys, find, replace, scalarize, nothing, ignored_connections(sys))
+        connectionsets, domain_csets, sys, scalarize, nothing, ignored_connections(sys))
     csets = merge(connectionsets)
     domain_csets = merge([csets; domain_csets], true)
 
@@ -627,7 +627,7 @@ Generate connection sets from `connect` equations.
   for no namespace (if `sys` is top-level).
 """
 function generate_connection_set!(connectionsets, domain_csets,
-        sys::AbstractSystem, find, replace, scalarize, namespace = nothing,
+        sys::AbstractSystem, scalarize, namespace = nothing,
         ignored_connects = (HierarchyAnalysisPointT[], HierarchyAnalysisPointT[]))
     subsys = get_systems(sys)
     ignored_system_aps, ignored_variable_aps = ignored_connects
@@ -646,31 +646,21 @@ function generate_connection_set!(connectionsets, domain_csets,
         # causal variable connections will be expanded before we get here,
         # but this guard is useful for `n_expanded_connection_equations`.
         is_causal_variable_connection(rhs) && continue
-        if find !== nothing && find(rhs, _getname(namespace))
-            neweq, extra_unknown = replace(rhs, _getname(namespace))
-            if extra_unknown isa AbstractArray
-                append!(extra_unknowns, unwrap.(extra_unknown))
-            elseif extra_unknown !== nothing
-                push!(extra_unknowns, extra_unknown)
-            end
-            neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
+        if lhs isa Connection && get_systems(lhs) === :domain
+            connected_systems = get_systems(rhs)
+            connection2set!(domain_csets, namespace, connected_systems, isouter;
+                ignored_systems = systems_to_ignore(
+                    ignored_system_aps, connected_systems),
+                ignored_variables = variables_to_ignore(
+                    ignored_variable_aps, connected_systems))
+        elseif isconnection(rhs)
+            push!(cts, get_systems(rhs))
         else
-            if lhs isa Connection && get_systems(lhs) === :domain
-                connected_systems = get_systems(rhs)
-                connection2set!(domain_csets, namespace, connected_systems, isouter;
-                    ignored_systems = systems_to_ignore(
-                        ignored_system_aps, connected_systems),
-                    ignored_variables = variables_to_ignore(
-                        ignored_variable_aps, connected_systems))
-            elseif isconnection(rhs)
-                push!(cts, get_systems(rhs))
+            # split connections and equations
+            if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
+                append!(eqs, Symbolics.scalarize(eq))
             else
-                # split connections and equations
-                if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
-                    append!(eqs, Symbolics.scalarize(eq))
-                else
-                    push!(eqs, eq)
-                end
+                push!(eqs, eq)
             end
         end
     end
@@ -699,7 +689,7 @@ function generate_connection_set!(connectionsets, domain_csets,
     end
     @set! sys.systems = map(
         s -> generate_connection_set!(connectionsets, domain_csets, s,
-            find, replace, scalarize, renamespace(namespace, s),
+            scalarize, renamespace(namespace, s),
             ignored_systems_for_subsystem.((s,), ignored_connects)),
         subsys)
     @set! sys.eqs = eqs
@@ -870,11 +860,11 @@ function expand_variable_connections(sys::AbstractSystem; ignored_variables = no
     return sys
 end
 
-function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
+function expand_connections(sys::AbstractSystem;
         debug = false, tol = 1e-10, scalarize = true)
     sys = remove_analysis_points(sys)
     sys = expand_variable_connections(sys)
-    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace; scalarize)
+    sys, (csets, domain_csets) = generate_connection_set(sys; scalarize)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)

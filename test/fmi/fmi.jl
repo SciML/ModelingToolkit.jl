@@ -170,7 +170,8 @@ end
         sol = solve(prob, Rodas5P(autodiff = false), abstol = 1e-8, reltol = 1e-8)
         @test SciMLBase.successful_retcode(sol)
 
-        @test truesol(sol.t; idxs = [truesys.a, truesys.b, truesys.c]).u≈sol.u rtol=4e-2
+        @test truesol(sol.t;
+            idxs = [truesys.a, truesys.b, truesys.c]).u≈sol[[sys.a, sys.b, sys.c]] rtol=4e-2
         # sys.adder.c is a discrete variable
         @test truesol(sol.t; idxs = truesys.adder.c).u≈sol(sol.t; idxs = sys.adder.c).u rtol=4e-2
     end

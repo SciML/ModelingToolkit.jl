@@ -459,7 +459,7 @@ sol = solve(prob, Tsit5())
 
 prob = ODEProblem(simpsys, [z => 1.0, y => 1.0], tspan, guesses = [x => 2.0])
 sol = solve(prob, Tsit5())
-@test sol.u[1] == [0.0, 1.0]
+@test sol[[x, y], 1] == [0.0, 1.0]
 
 # This should warn, but logging tests can't be marked as broken
 @test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])

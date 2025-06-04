@@ -40,13 +40,13 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
     
     The 0-th order equation can be solved analytically, but ModelingToolkit does currently not feature automatic analytical solution of ODEs, so we proceed with solving it numerically.
 
-These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
+These are the ODEs we want to solve. Now construct an `System`, which automatically inserts dummy derivatives for the velocities:
 
 ```@example perturbation
 @mtkcompile sys = System(eqs_pert, t)
 ```
 
-To solve the `ODESystem`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
+To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
 ```@example perturbation
 using OrdinaryDiffEq
@@ -82,7 +82,7 @@ eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 
 with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
 
-We follow the same steps as in the previous example to construct the `ODESystem`:
+We follow the same steps as in the previous example to construct the `System`:
 
 ```@example perturbation
 eq_pert = substitute(eq, x => x_series)

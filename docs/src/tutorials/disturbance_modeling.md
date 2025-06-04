@@ -1,3 +1,7 @@
+```@meta
+Draft = true
+```
+
 # Disturbance and input modeling modeling
 
 Disturbances are often seen as external factors that influence a system. Modeling and simulation of such external influences is common in order to ensure that the plant and or control system can adequately handle or suppress these disturbances. Disturbance modeling is also integral to the problem of state estimation, indeed, modeling how disturbances affect the evolution of the state of the system is crucial in order to accurately estimate this state.

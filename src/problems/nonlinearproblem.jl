@@ -67,7 +67,8 @@ end
         check_length, check_compatibility, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
-    args = (; f, u0, p, ptype = StandardNonlinearProblem())
+    ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
+    args = (; f, u0, p, ptype)
 
     return maybe_codegen_scimlproblem(expression, NonlinearProblem{iip}, args; kwargs...)
 end

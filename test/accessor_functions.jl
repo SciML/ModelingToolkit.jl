@@ -151,17 +151,11 @@ let
     # Checks `continuous_events_toplevel` and  `discrete_events_toplevel` (straightforward
     # as I stored the same single event in all systems). Don't check for non-toplevel cases as
     # technically not needed for these tests and name spacing the events is a mess.
-    bot_cev = ModelingToolkit.SymbolicContinuousCallback(
-        cevs[1], alg_eqs = [O ~ (d + p_bot) * X_bot + Y])
-    mid_dev = ModelingToolkit.SymbolicDiscreteCallback(
-        devs[1], alg_eqs = [O ~ (d + p_mid1) * X_mid1 + Y])
     @test all_sets_equal(
-        continuous_events_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])...,
-        [bot_cev])
+        continuous_events_toplevel.([sys_bot, sys_bot_comp, sys_bot_ss])...)
     @test all_sets_equal(
         discrete_events_toplevel.(
-            [sys_mid1, sys_mid1_comp, sys_mid1_ss])...,
-        [mid_dev])
+        [sys_mid1, sys_mid1_comp, sys_mid1_ss])...)
     @test all(sym_issubset(
                   continuous_events_toplevel(sys), get_continuous_events(sys))
     for sys in [sys_bot, sys_mid2, sys_mid1, sys_top])

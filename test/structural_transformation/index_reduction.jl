@@ -31,23 +31,12 @@ eqs2 = [D(D(x)) ~ T * x,
     0 ~ x^2 + y^2 - L^2]
 pendulum2 = System(eqs2, t, [x, y, T], [L, g], name = :pendulum)
 
-@test_skip begin
-    let pss_pendulum2 = partial_state_selection(pendulum2)
-        length(equations(pss_pendulum2)) <= 6
-    end
-end
-
 eqs = [D(x) ~ w,
     D(y) ~ z,
     D(w) ~ T * x,
     D(z) ~ T * y - g,
     0 ~ x^2 + y^2 - L^2]
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
-
-let pss_pendulum = partial_state_selection(pendulum)
-    # This currently selects `T` rather than `x` at top level. Needs tearing priorities to fix.
-    @test_broken length(equations(pss_pendulum)) == 3
-end
 
 let sys = mtkcompile(pendulum2)
     @test length(equations(sys)) == 5

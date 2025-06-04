@@ -4,7 +4,7 @@ While for simple numerical ODEs choosing an initial condition can be an easy
 affair, with ModelingToolkit's more general differential-algebraic equation
 (DAE) system there is more care needed due to the flexibility of the solver
 state. In this tutorial we will walk through the functionality involved in
-initialization of ODESystem and the diagnostics to better understand and
+initialization of System and the diagnostics to better understand and
 debug the initialization problem.
 
 ## Primer on Initialization of Differential-Algebraic Equations

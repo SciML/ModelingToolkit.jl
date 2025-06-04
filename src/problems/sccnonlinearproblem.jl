@@ -80,20 +80,31 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
     end
 
     ts = get_tearing_state(sys)
-    var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
+    sched = get_schedule(sys)
+    if sched === nothing
+        @warn "System is simplified but does not have a schedule. This should not happen."
+        var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
+        condensed_graph = MatchedCondensationGraph(
+            DiCMOBiGraph{true}(complete(ts.structure.graph),
+                complete(var_eq_matching)),
+            var_sccs)
+        toporder = topological_sort_by_dfs(condensed_graph)
+        var_sccs = var_sccs[toporder]
+        eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
+    else
+        var_sccs = sched.var_sccs
+        # Equations are already in the order of SCCs
+        eq_sccs = length.(var_sccs)
+        cumsum!(eq_sccs, eq_sccs)
+        eq_sccs = map(enumerate(eq_sccs)) do (i, lasti)
+            i == 1 ? (1:lasti) : ((eq_sccs[i - 1] + 1):lasti)
+        end
+    end
 
     if length(var_sccs) == 1
         return NonlinearProblem{iip}(
             sys, op; eval_expression, eval_module, kwargs...)
     end
-
-    condensed_graph = MatchedCondensationGraph(
-        DiCMOBiGraph{true}(complete(ts.structure.graph),
-            complete(var_eq_matching)),
-        var_sccs)
-    toporder = topological_sort_by_dfs(condensed_graph)
-    var_sccs = var_sccs[toporder]
-    eq_sccs = map(Base.Fix1(getindex, var_eq_matching), var_sccs)
 
     dvs = unknowns(sys)
     ps = parameters(sys)

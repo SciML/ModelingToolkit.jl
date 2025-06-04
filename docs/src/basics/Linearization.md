@@ -29,12 +29,12 @@ eqs = [u ~ kp * (r - y) # P controller
        D(x) ~ -x + u    # First-order plant
        y ~ x]           # Output equation
 
-@named sys = ODESystem(eqs, t) # Do not call @mtkcompile when linearizing
+@named sys = System(eqs, t) # Do not call @mtkcompile when linearizing
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
 matrices
 ```
 
-The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `ODESystem` that, among other things, indicates the unknown variable order in the linear system through
+The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `System` that, among other things, indicates the unknown variable order in the linear system through
 
 ```@example LINEARIZE
 using ModelingToolkit: inputs, outputs
@@ -78,7 +78,7 @@ eqs = [D(x) ~ v
        D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
        y.u ~ x]
 
-@named duffing = ODESystem(eqs, t, systems = [y, u], defaults = [u.u => 0])
+@named duffing = System(eqs, t, systems = [y, u], defaults = [u.u => 0])
 
 # pass a constant value for `x`, since it is the variable we will change in operating points
 linfun, simplified_sys = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));

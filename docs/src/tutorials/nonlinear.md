@@ -12,7 +12,7 @@ This steady state is reached when the nonlinear system of differential equations
     is not yet compatible with `NonlinearSystem`.
     We thus have to use a lower level interface to define nonlinear systems.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 ```@example nonlinear
 using ModelingToolkit, NonlinearSolve

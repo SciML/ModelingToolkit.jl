@@ -26,7 +26,10 @@ eqs = [0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h], defaults = Dict(x => 2))
-@test eval(toexpr(ns)) == ns
+ns2 = eval(toexpr(ns))
+@test issetequal(equations(ns), equations(ns2))
+@test issetequal(unknowns(ns), unknowns(ns2))
+@test issetequal(parameters(ns), parameters(ns2))
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β, h))
 @test begin
     f = generate_rhs(ns, expression = Val{false})[2]
@@ -430,4 +433,12 @@ end
     resid = sol.resid
     @test resid == [0.0]
     @test resid isa SVector
+end
+
+@testset "`ProblemTypeCtx`" begin
+    @variables x
+    @mtkcompile sys = System(
+        [0 ~ x^2 - 4x + 4]; metadata = [ModelingToolkit.ProblemTypeCtx => "A"])
+    prob = NonlinearProblem(sys, [x => 1.0])
+    @test prob.problem_type == "A"
 end

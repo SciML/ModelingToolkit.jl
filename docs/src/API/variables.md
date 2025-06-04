@@ -34,7 +34,7 @@ When variables with descriptions are present in systems, they will be printed wh
 ```@example metadata
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
-@named sys = ODESystem([u ~ p], t)
+@named sys = System([u ~ p], t)
 show(stdout, "text/plain", sys) # hide
 ```
 
@@ -298,7 +298,7 @@ In the example below, we define a system with tunable parameters and extract bou
 @parameters k [tunable = true, bounds = (0, Inf)]
 eqs = [D(x) ~ (-x + k * u) / T # A first-order system with time constant T and gain k
        y ~ x]
-sys = ODESystem(eqs, t, name = :tunable_first_order)
+sys = System(eqs, t, name = :tunable_first_order)
 ```
 
 ```@example metadata

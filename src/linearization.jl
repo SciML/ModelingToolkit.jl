@@ -505,7 +505,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     ps = parameters(sys; initial_parameters = true)
     p = reorder_parameters(sys, ps)
 
-    fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
+    fun_expr = generate_rhs(sys; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
     dx = fun(sts, p, t)
 

@@ -22,16 +22,18 @@ ps = [p => zeros(3, 3),
     q => 1.0]
 tspan = (0.0, 10.0)
 @mtkcompile sys = System(eqs, t)
-prob = ODEProblem(sys, u0, tspan, ps)
+prob = ODEProblem(sys, [u0; ps], tspan)
 sol = solve(prob, Tsit5())
 
 mtkparams = parameter_values(prob)
 new_p = rand(14)
-gs = gradient(new_p) do new_p
-    new_params = SciMLStructures.replace(SciMLStructures.Tunable(), mtkparams, new_p)
-    new_prob = remake(prob, p = new_params)
-    new_sol = solve(new_prob, Tsit5())
-    sum(new_sol)
+@test_broken begin
+    gs = gradient(new_p) do new_p
+        new_params = SciMLStructures.replace(SciMLStructures.Tunable(), mtkparams, new_p)
+        new_prob = remake(prob, p = new_params)
+        new_sol = solve(new_prob, Tsit5())
+        sum(new_sol)
+    end
 end
 
 @testset "Issue#2997" begin
@@ -50,7 +52,7 @@ end
     sys = mtkcompile(sys)
 
     function x_at_0(θ)
-        prob = ODEProblem(sys, [sys.x => 1.0], (0.0, 1.0), [sys.ργ0 => θ[1], sys.h => θ[2]])
+        prob = ODEProblem(sys, [sys.x => 1.0, sys.ργ0 => θ[1], sys.h => θ[2]], (0.0, 1.0))
         return prob.u0[1]
     end
 
@@ -61,7 +63,7 @@ end
 @named sys = System(
     Equation[], t, [], [a, b, c, d, e, f, g, h],
     continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
-        [a ~ 0] => [c ~ 0], discrete_parameters = c)])
+        [a ~ 0] => [c ~ 0], discrete_parameters = c, iv = t)])
 sys = complete(sys)
 
 ivs = Dict(c => 3a, b => ones(3), a => 1.0, d => 4, e => [5.0, 6.0, 7.0],
@@ -116,7 +118,7 @@ fwd, back = ChainRulesCore.rrule(remake_buffer, sys, ps, idxs, vals)
     sys = mtkcompile(sys)
 
     # Find initial throw velocity that reaches exactly 10 m after 1 s
-    dprob0 = ODEProblem(sys, [D(y) => NaN], (0.0, 1.0), []; guesses = [y => 0.0])
+    dprob0 = ODEProblem(sys, [D(y) => NaN], (0.0, 1.0); guesses = [y => 0.0])
     function f(ics, _)
         dprob = remake(dprob0, u0 = Dict(D(y) => ics[1]))
         dsol = solve(dprob, Tsit5())

@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "10.0.0"
+version = "10.1.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -200,11 +200,6 @@ StochasticDelayDiffEq = "29a0d76e-afc8-11e9-03a4-eda52ae4b960"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[sources]
-ModelingToolkitStandardLibrary = { url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl/", rev = "mtk-v10" }
-OptimizationBase = { url = "https://github.com/AayushSabharwal/OptimizationBase.jl", rev = "as/mtk-v10" }
-OptimizationMOI = { url = "https://github.com/AayushSabharwal/Optimization.jl", subdir = "lib/OptimizationMOI", rev = "as/mtk-v10" }
 
 [targets]
 test = ["AmplNLWriter", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase"]
