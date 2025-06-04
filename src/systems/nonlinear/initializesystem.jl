@@ -603,6 +603,9 @@ promote_type_with_nothing(::Type{T}, ::SizedVector{0}) where {T} = T
 function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
     promote_type(T, T2)
 end
+function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
+    promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
+end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
 promote_with_nothing(::Type, x::SizedVector{0}) = x
@@ -628,8 +631,7 @@ end
 function promote_u0_p(u0, p, t0)
     T = Union{}
     T = promote_type_with_nothing(T, u0)
-    T = promote_type_with_nothing(T, p.tunable)
-    T = promote_type_with_nothing(T, p.initials)
+    T = promote_type_with_nothing(T, p)
 
     u0 = promote_with_nothing(T, u0)
     p = promote_with_nothing(T, p)
