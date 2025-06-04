@@ -1680,7 +1680,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the `u0` vector for the given system `sys` and variable-value mapping `varmap`. All
+Return the `p` object for the given system `sys` and variable-value mapping `varmap`. All
 keyword arguments are forwarded to [`MTKParameters`](@ref) for split systems and
 [`varmap_to_vars`](@ref) for non-split systems.
 """
