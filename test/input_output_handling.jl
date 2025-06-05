@@ -165,8 +165,8 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = mtkcompile(sys, inputs = [u])
-        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+            sys, [u]; simplify, split)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -183,8 +183,8 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = mtkcompile(sys, inputs = [u], disturbance_inputs = [d])
-        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys; simplify, split)
+        f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+            sys, [u], [d]; simplify, split)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -201,9 +201,9 @@ end
         ]
 
         @named sys = System(eqs, t)
-        sys = mtkcompile(sys, inputs = [u], disturbance_inputs = [d])
         f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-            sys; simplify, split, disturbance_argument = true)
+            sys, [u], [d];
+            simplify, split, disturbance_argument = true)
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -267,8 +267,8 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = System(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
-model = mtkcompile(model, inputs = [u])
-f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(model, simplify = true)
+f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
+    model, [u]; simplify = true)
 @test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
@@ -435,8 +435,8 @@ matrices = ModelingToolkit.reorder_unknowns(
     ]
 
     @named sys = System(eqs, t)
-    sys = mtkcompile(sys, inputs = [u])
-    (; io_sys,) = ModelingToolkit.generate_control_function(sys, simplify = true)
+    (; io_sys,) = ModelingToolkit.generate_control_function(
+        sys, [u]; simplify = true)
     obsfn = ModelingToolkit.build_explicit_observed_function(
         io_sys, [x + u * t]; inputs = [u])
     @test obsfn([1.0], [2.0], MTKParameters(io_sys, []), 3.0) ≈ [7.0]
@@ -458,8 +458,7 @@ end
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
     @named sys = System(eqs, t)
-    sys = mtkcompile(sys, inputs = [u])
-    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys)
+    f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(sys, [u])
     p = MTKParameters(io_sys, [])
     u = [1.0]
     x = [1.0]
