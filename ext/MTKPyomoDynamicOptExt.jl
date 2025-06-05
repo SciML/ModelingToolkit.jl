@@ -7,7 +7,7 @@ using NaNMath
 using Setfield
 const MTK = ModelingToolkit
 
-SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
+const SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
     acosh => Pyomo.py_acosh,
     asin => Pyomo.py_asin,
     tan => Pyomo.py_tan,
@@ -33,20 +33,9 @@ struct PyomoDynamicOptModel
     function PyomoDynamicOptModel(model, U, V, tₛ, is_free_final)
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
-        #add_time_equation!(model, MODEL_SYM, T_SYM)
         new(model, U, V, tₛ, is_free_final, nothing,
             PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
-end
-
-function add_time_equation!(model::ConcreteModel, model_sym, t_sym)
-    model.dtime = dae.DerivativeVar(model.time)
-
-    mdt = Symbolics.value(pysym_getproperty(model_sym, :dtime))
-    mts = Symbolics.value(pysym_getproperty(model_sym, :tₛ))
-    expr = mdt[t_sym] - mts == 0
-    f = Pyomo.pyfunc(eval(Symbolics.build_function(expr, model_sym, t_sym)))
-    model.time_eq = pyomo.Constraint(model.t, rule = f)
 end
 
 struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
@@ -119,7 +108,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     else
         cons.lhs - cons.rhs ≤ 0
     end
-    expr = Symbolics.substitute(Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT)
+    expr = Symbolics.substitute(Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = false)
 
     cons_sym = Symbol("cons", hash(cons))
     if occursin(Symbolics.unwrap(t_sym), expr)
@@ -133,7 +122,7 @@ end
 
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
-    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT)
+    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = false)
     if occursin(Symbolics.unwrap(t_sym), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
