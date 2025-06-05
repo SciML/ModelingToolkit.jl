@@ -131,9 +131,9 @@ function changeofvariables(sys::System, iv, forward_subs, backward_subs; simplif
             new_defs[para] = defs[para]
         end
     end
-    @named new_sys = System(new_eqs, t;
+    @named new_sys = System(vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
                         defaults=new_defs,
-                        observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
+                        observed=observed(sys)
                         )
     if simplify
         return mtkcompile(new_sys)
@@ -190,9 +190,9 @@ function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; si
         end
     end
 
-    @named new_sys = System(new_eqs, t;
+    @named new_sys = System(vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
             defaults=new_defs,
-            observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
+            observed=observed(sys)
             )
     if simplify
         return mtkcompile(new_sys)
