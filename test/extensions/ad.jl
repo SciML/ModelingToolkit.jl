@@ -27,13 +27,11 @@ sol = solve(prob, Tsit5())
 
 mtkparams = parameter_values(prob)
 new_p = rand(14)
-@test_broken begin
-    gs = gradient(new_p) do new_p
-        new_params = SciMLStructures.replace(SciMLStructures.Tunable(), mtkparams, new_p)
-        new_prob = remake(prob, p = new_params)
-        new_sol = solve(new_prob, Tsit5())
-        sum(new_sol)
-    end
+gs = gradient(new_p) do new_p
+    new_params = SciMLStructures.replace(SciMLStructures.Tunable(), mtkparams, new_p)
+    new_prob = remake(prob, p = new_params)
+    new_sol = solve(new_prob, Tsit5())
+    sum(new_sol)
 end
 
 @testset "Issue#2997" begin
