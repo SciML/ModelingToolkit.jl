@@ -943,6 +943,8 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
 - `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 - `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
+- `wrap_delays = is_dde(sys)`: Whether to add an argument for the history function and use
+  it to calculate all delayed variables.
 
 ## Returns
 
@@ -981,7 +983,8 @@ function build_explicit_observed_function(sys, ts;
         op = Operator,
         throw = true,
         cse = true,
-        mkarray = nothing)
+        mkarray = nothing,
+        wrap_delays = is_dde(sys))
     # TODO: cleanup
     is_tuple = ts isa Tuple
     if is_tuple
@@ -1068,14 +1071,15 @@ function build_explicit_observed_function(sys, ts;
     p_end = length(dvs) + length(inputs) + length(ps)
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
-        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse)
+        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
+        wrap_delays)
     if fns isa Tuple
         if expression
             return return_inplace ? fns : fns[1]
         end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
             oop, iip)
         return return_inplace ? (f, f) : f
     else
@@ -1084,7 +1088,7 @@ function build_explicit_observed_function(sys, ts;
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
             f, nothing)
         return f
     end
