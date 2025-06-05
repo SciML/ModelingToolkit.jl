@@ -198,13 +198,11 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         simplify = false,
         eval_expression = false,
         eval_module = @__MODULE__,
-        check_simplified = true,
         kwargs...)
-    # Remove this when the ControlFunction gets merged.
-    if check_simplified && !iscomplete(sys)
-        error("A completed `ODESystem` is required. Call `complete` or `mtkcompile` on the system before creating the control function.")
-    end
     isempty(inputs) && @warn("No unbound inputs were found in system.")
+    if !iscomplete(sys)
+        sys = mtkcompile(sys; inputs, disturbance_inputs)
+    end
     if disturbance_inputs !== nothing
         # add to inputs for the purposes of io processing
         inputs = [inputs; disturbance_inputs]
