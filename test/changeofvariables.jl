@@ -101,6 +101,9 @@ using Test, LinearAlgebra
 # @test isapprox( new_sol[x[1],end], sol[x[1],end], rtol=1e-4)
 
 # Change of variables for sde
+noise_eqs = ModelingToolkit.get_noise_eqs
+value = ModelingToolkit.value
+
 @independent_variables t
 @brownian B
 @parameters μ σ
@@ -114,7 +117,7 @@ forward_subs = [log(x) => y]
 backward_subs = [x => exp(y)]
 new_sys = change_of_variable_SDE(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(y) ~ μ - 1/2*σ^2)
-@test ModelingToolkit.get_noise_eqs(new_sys)[1] === ModelingToolkit.value(σ)
+@test noise_eqs(new_sys)[1] === value(σ)
 
 #Multiple Brownian and equations
 @independent_variables t
@@ -128,3 +131,12 @@ def = [x=>0., y=> 0., u=>0., μ => 2., σ=>1., α=>3.]
 forward_subs = [log(x) => z, y^2 => w, log(u) => v]
 backward_subs = [x => exp(z), y => w^.5, u => exp(v)]
 new_sys = change_of_variable_SDE(sys, t, forward_subs, backward_subs)
+@test equations(new_sys)[1] == (D(z) ~ μ - 1/2*σ^2)
+@test equations(new_sys)[2] == (D(w) ~ α^2)
+@test equations(new_sys)[3] == (D(v) ~ μ - 1/2*(α^2 + σ^2))
+@test noise_eqs(new_sys)[1,1] === value(σ)
+@test noise_eqs(new_sys)[1,2] === value(0)
+@test noise_eqs(new_sys)[2,1] === value(0)
+@test noise_eqs(new_sys)[2,2] === value(substitute(2*α*y, backward_subs[2]))
+@test noise_eqs(new_sys)[3,1] === value(σ)
+@test noise_eqs(new_sys)[3,2] === value(α)
