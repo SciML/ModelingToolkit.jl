@@ -62,36 +62,43 @@ new_sol = solve(new_prob, Tsit5())
 @test isapprox(sol[x][end], new_sol[x][end], rtol=1e-4)
 
 
-# # Linear transformation to diagonal system
-# @variables x(t)[1:3]
-# D = Differential(t)
-# A = [0. -1. 0.; -0.5 0.5 0.; 0. 0. -1.]
-# right = A.*transpose(x)
-# eqs = [D(x[1]) ~ sum(right[1, 1:3]), D(x[2]) ~ sum(right[2, 1:3]), D(x[3]) ~ sum(right[3, 1:3])]
+# Linear transformation to diagonal system
+@independent_variables t
+@variables x(t)[1:3]
+x = reshape(x, 3, 1)
+D = Differential(t)
+A = [0. -1. 0.; -0.5 0.5 0.; 0. 0. -1.]
+right = A*x
+eqs = vec(D.(x) .~ right)
 
-# tspan = (0., 10.)
-# u0 = [x[1] => 1.0, x[2] => 2.0, x[3] => -1.0]
+tspan = (0., 10.)
+u0 = [x[1] => 1.0, x[2] => 2.0, x[3] => -1.0]
 
-# @mtkcompile sys = System(eqs, t; defaults=u0)
-# prob = ODEProblem(sys,[],tspan)
-# sol = solve(prob, Tsit5())
+@mtkcompile sys = System(eqs, t; defaults=u0)
+prob = ODEProblem(sys,[],tspan)
+sol = solve(prob, Tsit5())
 
-# T = eigen(A).vectors
+T = eigen(A).vectors
+T_inv = inv(T)
 
-# @variables z(t)[1:3]
-# forward_subs  = T \ x .=> z
-# backward_subs = x     .=> T*z
+@variables z(t)[1:3]
+z = reshape(z, 3, 1)
+forward_subs  = vec(T_inv*x .=> z)
+backward_subs = vec(x .=> T*z)
 
-# new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=true)
+new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=true)
 
-# new_prob = ODEProblem(new_sys, [], tspan)
-# new_sol = solve(new_prob, Tsit5())
+new_prob = ODEProblem(new_sys, [], tspan)
+new_sol = solve(new_prob, Tsit5())
 
-# # test RHS
-# new_rhs = [eq.rhs for eq in equations(new_sys)]
-# new_A = Symbolics.value.(Symbolics.jacobian(new_rhs, z))
-# @test isapprox(diagm(eigen(A).values), new_A, rtol = 1e-10)
-# @test isapprox( new_sol[x[1],end], sol[x[1],end], rtol=1e-4)
+# test RHS
+new_rhs = [eq.rhs for eq in equations(new_sys)]
+new_A = Symbolics.value.(Symbolics.jacobian(new_rhs, z))
+A = diagm(eigen(A).values)
+A = sortslices(A, dims=1)
+new_A = sortslices(new_A, dims=1)
+@test isapprox(A, new_A, rtol = 1e-10)
+@test isapprox( new_sol[x[1],end], sol[x[1],end], rtol=1e-4)
 
 # Change of variables for sde
 @independent_variables t
