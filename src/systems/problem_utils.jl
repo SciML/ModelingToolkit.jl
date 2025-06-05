@@ -631,7 +631,9 @@ end
 ObservedWrapper{TD}(f::F) where {TD, F} = ObservedWrapper{TD, F}(f)
 
 function (ow::ObservedWrapper{true})(prob)
-    ow.f(state_values(prob), parameter_values(prob), current_time(prob))
+    # Edge case for steady state problems
+    t = applicable(current_time, prob) ? current_time(prob) : Inf
+    ow.f(state_values(prob), parameter_values(prob), t)
 end
 
 function (ow::ObservedWrapper{false})(prob)
@@ -649,7 +651,7 @@ function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(indp, syms::AbstractVector)
     @nospecialize
-    obsfn = SymbolicIndexingInterface.observed(indp, syms)
+    obsfn = build_explicit_observed_function(indp, syms; wrap_delays = false)
     return ObservedWrapper{is_time_dependent(indp)}(obsfn)
 end
 

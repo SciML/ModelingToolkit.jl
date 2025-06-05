@@ -1083,7 +1083,7 @@ Keyword arguments:
   `available_vars` will not be searched for in the observed equations.
 """
 function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = vars(exprs; op = Union{Shift, Differential}), obs = observed(sys), available_vars = [])
+        involved_vars = vars(exprs; op = Union{Shift, Differential, Initial}), obs = observed(sys), available_vars = [])
     obsvars = getproperty.(obs, :lhs)
     graph = observed_dependency_graph(obs)
     if !(available_vars isa Set)
