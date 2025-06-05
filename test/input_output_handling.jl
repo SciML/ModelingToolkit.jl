@@ -268,7 +268,7 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named model = compose(_model, mass1, mass2, sd);
 
 f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
-    model; inputs = [u]simplify = true)
+    model; inputs = [u], simplify = true)
 @test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
