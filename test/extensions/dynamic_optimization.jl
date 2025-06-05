@@ -69,9 +69,8 @@ const M = ModelingToolkit
     pprob = PyomoDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(3)))
-    @show psol.sol
-    @test psol.sol(0.6)[1] ≈ 3.5
-    @test psol.sol(0.3)[1] ≈ 7.0
+    @test psol.sol(0.6; idxs = x(t)) ≈ 3.5
+    @test psol.sol(0.3; idxs = x(t)) ≈ 7.0
 
     iprob = InfiniteOptDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
@@ -161,7 +160,7 @@ end
     pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test is_bangbang(psol.input_sol, [-1.0], [1.0])
-    @test ≈(psol.sol.u[end][2], 0.25, rtol = 1e-3)
+    @test ≈(psol.sol[x(t)][end], 0.25, rtol = 1e-3)
 
     spline = ctrl_to_spline(isol.input_sol, ConstantInterpolation)
     oprob = ODEProblem(block_ode, [u0map; u_interp => spline], tspan)
@@ -251,7 +250,7 @@ end
 
     pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
     psol = solve(pprob, PyomoCollocation("ipopt", LagrangeRadau(4)))
-    @test psol.sol.u[end][1] > 1.012
+    @test psol.sol[h(t)][end] > 1.012
 
     # Test solution
     @parameters (T_interp::CubicSpline)(..)
