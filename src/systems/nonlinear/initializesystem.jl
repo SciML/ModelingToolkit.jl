@@ -739,20 +739,6 @@ function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
             push!(rm_idxs, i)
             continue
         end
-        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
-            var, idxs = arguments(eq.rhs)
-            subs[eq.rhs] = var[idxs...]
-            push!(tempvars, var)
-        end
-    end
-
-    for (i, eq) in enumerate(eqs)
-        iscall(eq.rhs) || continue
-        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
-            var, idxs = arguments(eq.rhs)
-            subs[eq.rhs] = var[idxs...]
-            push!(tempvars, var)
-        end
     end
 
     for (i, eq) in enumerate(obseqs)

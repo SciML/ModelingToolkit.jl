@@ -724,7 +724,7 @@ Update the system equations, unknowns, and observables after simplification.
 """
 function update_simplified_system!(
         state::TearingState, neweqs, solved_eqs, dummy_sub, var_eq_matching, extra_unknowns;
-        cse_hack = true, array_hack = true)
+        array_hack = true)
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
     diff_to_var = invview(var_to_diff)
 
@@ -748,8 +748,7 @@ function update_simplified_system!(
     unknowns = [unknowns; extra_unknowns]
     @set! sys.unknowns = unknowns
 
-    obs = cse_and_array_hacks(
-        sys, obs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+    obs = tearing_hacks(sys, obs, unknowns, neweqs; array = array_hack)
 
     deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
                        for i in 1:length(solved_eqs)]
@@ -793,7 +792,7 @@ appear in the system. Algebraic variables are variables that are not
 differential variables.
 """
 function tearing_reassemble(state::TearingState, var_eq_matching,
-        full_var_eq_matching = nothing; simplify = false, mm = nothing, cse_hack = true, array_hack = true)
+        full_var_eq_matching = nothing; simplify = false, mm = nothing, array_hack = true)
     extra_vars = Int[]
     if full_var_eq_matching !== nothing
         for v in 𝑑vertices(state.structure.graph)
@@ -829,7 +828,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
         state, var_eq_matching, eq_ordering, var_ordering, nelim_eq, nelim_var)
 
     sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_eq_matching,
-        extra_unknowns; cse_hack, array_hack)
+        extra_unknowns; array_hack)
 
     @set! state.sys = sys
     @set! sys.tearing_state = state
@@ -837,14 +836,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching,
 end
 
 """
-# HACK 1
-
-Since we don't support array equations, any equation of the sort `x[1:n] ~ f(...)[1:n]`
-gets turned into `x[1] ~ f(...)[1], x[2] ~ f(...)[2]`. Repeatedly calling `f` gets
-_very_ expensive. this hack performs a limited form of CSE specifically for this case to
-avoid the unnecessary cost. This and the below hack are implemented simultaneously
-
-# HACK 2
+# HACK
 
 Add equations for array observed variables. If `p[i] ~ (...)` are equations, add an
 equation `p ~ [p[1], p[2], ...]` allow topsort to reorder them only add the new equation
@@ -852,44 +844,13 @@ if all `p[i]` are present and the unscalarized form is used in any equation (obs
 not) we first count the number of times the scalarized form of each observed variable
 occurs in observed equations (and unknowns if it's split).
 """
-function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = true)
-    # HACK 1
-    # mapping of rhs to temporary CSE variable
-    # `f(...) => tmpvar` in above example
-    rhs_to_tempvar = Dict()
-
-    # HACK 2
+function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     # map of array observed variable (unscalarized) to number of its
     # scalarized terms that appear in observed equations
     arr_obs_occurrences = Dict()
     for (i, eq) in enumerate(obs)
         lhs = eq.lhs
         rhs = eq.rhs
-
-        # HACK 1
-        if cse && is_getindexed_array(rhs)
-            rhs_arr = arguments(rhs)[1]
-            iscall(rhs_arr) && operation(rhs_arr) isa Symbolics.Operator && continue
-            if !haskey(rhs_to_tempvar, rhs_arr)
-                tempvar = gensym(Symbol(lhs))
-                N = length(rhs_arr)
-                tempvar = unwrap(Symbolics.variable(
-                    tempvar; T = Symbolics.symtype(rhs_arr)))
-                tempvar = setmetadata(
-                    tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
-                tempeq = tempvar ~ rhs_arr
-                rhs_to_tempvar[rhs_arr] = tempvar
-                push!(obs, tempeq)
-            end
-
-            # getindex_wrapper is used because `observed2graph` treats `x` and `x[i]` as different,
-            # so it doesn't find a dependency between this equation and `tempvar ~ rhs_arr`
-            # which fails the topological sort
-            neweq = lhs ~ getindex_wrapper(
-                rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
-            obs[i] = neweq
-        end
-        # end HACK 1
 
         array || continue
         iscall(lhs) || continue
@@ -899,31 +860,6 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
         cnt = get(arr_obs_occurrences, arg1, 0)
         arr_obs_occurrences[arg1] = cnt + 1
         continue
-    end
-
-    # Also do CSE for `equations(sys)`
-    if cse
-        for (i, eq) in enumerate(neweqs)
-            (; lhs, rhs) = eq
-            is_getindexed_array(rhs) || continue
-            rhs_arr = arguments(rhs)[1]
-            if !haskey(rhs_to_tempvar, rhs_arr)
-                tempvar = gensym(Symbol(lhs))
-                N = length(rhs_arr)
-                tempvar = unwrap(Symbolics.variable(
-                    tempvar; T = Symbolics.symtype(rhs_arr)))
-                tempvar = setmetadata(
-                    tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
-                tempeq = tempvar ~ rhs_arr
-                rhs_to_tempvar[rhs_arr] = tempvar
-                push!(obs, tempeq)
-            end
-            # don't need getindex_wrapper, but do it anyway to know that this
-            # hack took place
-            neweq = lhs ~ getindex_wrapper(
-                rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
-            neweqs[i] = neweq
-        end
     end
 
     # count variables in unknowns if they are scalarized forms of variables
@@ -960,18 +896,7 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
     return obs
 end
 
-function is_getindexed_array(rhs)
-    (!ModelingToolkit.isvariable(rhs) || ModelingToolkit.iscalledparameter(rhs)) &&
-        iscall(rhs) && operation(rhs) === getindex &&
-        Symbolics.shape(rhs) != Symbolics.Unknown()
-end
-
-# PART OF HACK 1
-getindex_wrapper(x, i) = x[i...]
-
-@register_symbolic getindex_wrapper(x::AbstractArray, i::Tuple{Vararg{Int}})
-
-# PART OF HACK 2
+# PART OF HACK
 function change_origin(origin, arr)
     if all(isone, Tuple(origin))
         return arr
@@ -999,10 +924,10 @@ new residual equations after tearing. End users are encouraged to call [`structu
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-        simplify = false, cse_hack = true, array_hack = true, kwargs...)
+        simplify = false, array_hack = true, kwargs...)
     var_eq_matching, full_var_eq_matching = tearing(state)
     invalidate_cache!(tearing_reassemble(
-        state, var_eq_matching, full_var_eq_matching; mm, simplify, cse_hack, array_hack))
+        state, var_eq_matching, full_var_eq_matching; mm, simplify, array_hack))
 end
 
 """
@@ -1024,7 +949,7 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-        mm = nothing, cse_hack = true, array_hack = true, kwargs...)
+        mm = nothing, array_hack = true, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -1048,5 +973,5 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false,
     end
     var_eq_matching = dummy_derivative_graph!(state, jac; state_priority,
         kwargs...)
-    tearing_reassemble(state, var_eq_matching; simplify, mm, cse_hack, array_hack)
+    tearing_reassemble(state, var_eq_matching; simplify, mm, array_hack)
 end
