@@ -1,0 +1,3 @@
+[deps]
+ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
+OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
