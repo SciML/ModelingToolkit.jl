@@ -5,11 +5,13 @@ on:
     branches:
       - master
       - 'release-'
+      - 'backport-v9'
     paths-ignore:
       - 'docs/**'
   push:
     branches:
       - master
+      - 'backport-v9'
     paths-ignore:
       - 'docs/**'
 
