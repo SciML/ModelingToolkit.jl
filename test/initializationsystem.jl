@@ -1650,3 +1650,24 @@ end
     @test !SciMLBase.isinplace(prob)
     @test !SciMLBase.isinplace(prob.f.initialization_data.initializeprob)
 end
+
+@testset "Array unknowns occurring unscalarized in initializeprobpmap" begin
+    @variables begin
+        u(t)[1:2] = 0.9ones(2)
+        x(t)[1:2], [guess = 0.01ones(2)]
+        o(t)[1:2]
+    end
+    @parameters p[1:4] = [2.0, 1.875, 2.0, 1.875]
+
+    eqs = [D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
+           D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
+           o[1] ~ sum(p) * sum(u)
+           o[2] ~ sum(p) * sum(x)
+           x[1] ~ 0.01exp(-1)
+           x[2] ~ 0.01cos(t)]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+end
