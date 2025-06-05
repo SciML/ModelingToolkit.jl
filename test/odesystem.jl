@@ -5,10 +5,14 @@ using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
-using SymbolicUtils: issym
+using SymbolicUtils.Code
+using SymbolicUtils: Sym, issym
 using ForwardDiff
 using ModelingToolkit: value
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics
+using Symbolics: unwrap
+using DiffEqBase: isinplace
 
 # Define some variables
 @parameters σ ρ β
@@ -607,13 +611,6 @@ sys = complete(sys)
 @test_throws Any ODEFunction(sys)
 
 @testset "Preface tests" begin
-    using OrdinaryDiffEq
-    using Symbolics
-    using DiffEqBase: isinplace
-    using ModelingToolkit
-    using SymbolicUtils.Code
-    using SymbolicUtils: Sym
-
     c = [0]
     function f(c, du::AbstractVector{Float64}, u::AbstractVector{Float64}, p, t::Float64)
         c .= [c[1] + 1]
@@ -656,7 +653,9 @@ sys = complete(sys)
 
     @named sys = ODESystem(eqs, t, us, ps; defaults = defs, preface = preface)
     sys = complete(sys)
-    prob = ODEProblem(sys, [], (0.0, 1.0))
+    # don't build initializeprob because it will use preface in other functions and
+    # affect `c`
+    prob = ODEProblem(sys, [], (0.0, 1.0); build_initializeprob = false)
     sol = solve(prob, Euler(); dt = 0.1)
 
     @test c[1] == length(sol)
