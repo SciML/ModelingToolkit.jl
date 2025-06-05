@@ -144,7 +144,6 @@ end
 function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; simplify=true, t0=missing)
     sys = mtkcompile(sys)
     t = iv
-    @brownian B
 
     old_vars = first.(backward_subs)
     new_vars = last.(forward_subs)
@@ -152,20 +151,27 @@ function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; si
     # use: f = Y(t, X)
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
-    old_noise = ModelingToolkit.get_noise_eqs(sys)
+    neqs = get_noise_eqs(sys)
+    neqs = [neqs[i,:] for i in 1:size(neqs,1)]
 
-    # Is there a function to find partial derivative?
-    ∂f∂t = Symbolics.derivative( first.(forward_subs), t )
-    ∂f∂t = [substitute(f_t, Differential(t)(old_var) => 0) for (f_t, old_var) in zip(∂f∂t, old_vars)]
+    brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
+        unwrap(only(@brownian $name))
+    end
 
+    # df/dt = ∂f/∂x dx/dt + ∂f/∂t
+    dfdt = Symbolics.derivative( first.(forward_subs), t )
     ∂f∂x = [Symbolics.derivative( first(f_sub), old_var ) for (f_sub, old_var) in zip(forward_subs, old_vars)]
     ∂2f∂x2 = Symbolics.derivative.( ∂f∂x, old_vars )
     new_eqs = Equation[]
 
-    for (new_var, eq, noise, first, second, third) in zip(new_vars, old_eqs, old_noise, ∂f∂t, ∂f∂x, ∂2f∂x2)
-        ex = first + eq.rhs * second + 1/2 * noise^2 * third + noise*second*B
-        for eqs in old_eqs
-            ex = substitute(ex, eqs.lhs => eqs.rhs)
+    for (new_var, ex, first, second) in zip(new_vars, dfdt, ∂f∂x, ∂2f∂x2)
+        for (eqs, neq) in zip(old_eqs, neqs)
+            if occursin(value(eqs.lhs), value(ex))
+                ex = substitute(ex, eqs.lhs => eqs.rhs)
+                for (noise, B) in zip(neq, brownvars)
+                    ex = ex + 1/2 * noise^2 * second + noise*first*B
+                end
+            end
         end
         ex = substitute(ex, Dict(forward_subs))
         ex = substitute(ex, Dict(backward_subs))
