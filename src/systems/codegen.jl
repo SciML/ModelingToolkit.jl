@@ -54,13 +54,16 @@ function generate_rhs(sys::System; implicit_dae = false,
             # Handle observables in algebraic equations, since they are shifted
             shifted_obs = Equation[distribute_shift(D(eq)) for eq in obs]
             obsidxs = observed_equations_used_by(sys, rhss; obs = shifted_obs)
-            extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
-                                 for i in obsidxs]
+            ddvs = map(D, dvs)
+
+            append!(extra_assignments,
+                [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
+                 for i in obsidxs])
         else
             D = Differential(t)
+            ddvs = map(D, dvs)
             rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
         end
-        ddvs = map(D, dvs)
     else
         if !override_discrete && !is_discrete_system(sys)
             check_operator_variables(eqs, Differential)
