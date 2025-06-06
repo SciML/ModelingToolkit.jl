@@ -482,11 +482,29 @@ function lower_shift_varname(var, iv)
     end
 end
 
+function descend_lower_shift_varname_with_unit(var, iv)
+    symbolic_type(var) == NotSymbolic() && return var
+    ModelingToolkit._with_unit(descend_lower_shift_varname, var, iv, iv)
+end
+function descend_lower_shift_varname(var, iv)
+    iscall(var) || return var
+    op = operation(var)
+    if op isa Shift
+        return shift2term(var)
+    else
+        args = arguments(var)
+        args = map(Base.Fix2(descend_lower_shift_varname, iv), args)
+        return maketerm(typeof(var), op, args, Symbolics.metadata(var))
+    end
+end
+
 """
 Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
 """
 function shift2term(var)
+    iscall(var) || return var
     op = operation(var)
+    op isa Shift || return var
     iv = op.t
     arg = only(arguments(var))
     if operation(arg) === getindex
