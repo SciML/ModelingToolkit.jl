@@ -720,8 +720,13 @@ function mtkcompile!(state::TearingState; simplify = false,
             """))
         end
     end
-    if continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+    if get_is_discrete(state.sys) ||
+       continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
+        state = shift_discrete_system(state)
+        sys = state.sys
+        @set! sys.is_discrete = true
+        state.sys = sys
     end
 
     sys = _mtkcompile!(state; simplify, check_consistency,
