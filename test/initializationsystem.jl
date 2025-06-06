@@ -1670,3 +1670,23 @@ end
     prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0))
     @test SciMLBase.initialization_status(prob) == SciMLBase.FULLY_DETERMINED
 end
+
+@testset "Nonnumerics aren't narrowed" begin
+    @mtkmodel Foo begin
+        @variables begin
+            x(t) = 1.0
+        end
+        @parameters begin
+            p::AbstractString
+            r = 1.0
+        end
+        @equations begin
+            D(x) ~ r * x
+        end
+    end
+    @mtkbuild sys = Foo(p = "a")
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.p.nonnumeric[1] isa Vector{AbstractString}
+    integ = init(prob)
+    @test integ.p.nonnumeric[1] isa Vector{AbstractString}
+end
