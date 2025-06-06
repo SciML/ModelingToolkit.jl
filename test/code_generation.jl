@@ -89,7 +89,7 @@ end
     end
     @mtkbuild sys = ODESystem([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
     @test length(equations(sys)) == 1
-    @test length(observed(sys)) == 3
+    @test length(ModelingToolkit.observed(sys)) == 3
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [foo => _tmp_fn2])
     val[] = 0
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
@@ -101,7 +101,7 @@ end
         @mtkbuild sys = ODESystem(
             [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
         @test length(equations(sys)) == 5
-        @test length(observed(sys)) == 0
+        @test length(ModelingToolkit.observed(sys)) == 0
         prob = ODEProblem(
             sys, [y => ones(2), z => 2ones(2), x => 3.0], (0.0, 1.0), [foo => _tmp_fn2])
         val[] = 0
