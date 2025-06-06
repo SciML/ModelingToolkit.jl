@@ -596,7 +596,7 @@ function _distribute_shift(expr, shift)
         (op isa Pre || op isa Initial) && return expr
         args = arguments(expr)
 
-        if ModelingToolkit.isvariable(expr)
+        if ModelingToolkit.isvariable(expr) && operation(expr) !== getindex
             (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
             (return expr)
         elseif op isa Shift
