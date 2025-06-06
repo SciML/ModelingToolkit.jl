@@ -94,55 +94,13 @@ new_sol = solve(new_prob, Tsit5())
 ```
 
 """
-function changeofvariables(sys::System, iv, forward_subs, backward_subs; simplify=true, t0=missing)
-    t = iv
-
-    old_vars = first.(backward_subs)
-    new_vars = last.(forward_subs)
-    # kept_vars = setdiff(states(sys), old_vars)
-    # rhs = [eq.rhs for eq in equations(sys)]
-
-    # use: dz/dt = ∂z/∂x dx/dt + ∂z/∂t
-    dzdt = Symbolics.derivative( first.(forward_subs), t )
-    new_eqs = Equation[]
-    for (new_var, ex) in zip(new_vars, dzdt)
-        for ode_eq in equations(sys)
-            ex = substitute(ex, ode_eq.lhs => ode_eq.rhs)
-        end
-        ex = substitute(ex, Dict(forward_subs))
-        ex = substitute(ex, Dict(backward_subs))
-        if simplify
-            ex = Symbolics.simplify(ex, expand=true)
-        end
-        push!(new_eqs, Differential(t)(new_var) ~ ex)
+function changeofvariables(
+    sys::System, iv, forward_subs, backward_subs;
+    simplify=true, t0=missing, isSDE=false
+)
+    if !iscomplete(sys)
+        sys = mtkcompile(sys)
     end
-
-    defs = get_defaults(sys)
-    new_defs = Dict()
-    for f_sub in forward_subs
-        ex = substitute(first(f_sub), defs)
-        if !ismissing(t0)
-            ex = substitute(ex, t => t0)
-        end
-        new_defs[last(f_sub)] = ex
-    end
-    for para in parameters(sys)
-        if haskey(defs, para)
-            new_defs[para] = defs[para]
-        end
-    end
-    @named new_sys = System(vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
-                        defaults=new_defs,
-                        observed=observed(sys)
-                        )
-    if simplify
-        return mtkcompile(new_sys)
-    end
-    return new_sys
-end
-
-function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; simplify=true, t0=missing)
-    sys = mtkcompile(sys)
     t = iv
 
     old_vars = first.(backward_subs)
@@ -152,10 +110,15 @@ function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; si
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
     neqs = get_noise_eqs(sys)
-    neqs = [neqs[i,:] for i in 1:size(neqs,1)]
+    if neqs !== nothing
+        isSDE = true
+        neqs = [neqs[i,:] for i in 1:size(neqs,1)]
 
-    brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
-        unwrap(only(@brownian $name))
+        brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
+            unwrap(only(@brownian $name))
+        end
+    else
+        neqs = ones(1, length(old_eqs))
     end
 
     # df/dt = ∂f/∂x dx/dt + ∂f/∂t
@@ -168,8 +131,10 @@ function change_of_variable_SDE(sys::System, iv, forward_subs, backward_subs; si
         for (eqs, neq) in zip(old_eqs, neqs)
             if occursin(value(eqs.lhs), value(ex))
                 ex = substitute(ex, eqs.lhs => eqs.rhs)
-                for (noise, B) in zip(neq, brownvars)
-                    ex = ex + 1/2 * noise^2 * second + noise*first*B
+                if isSDE
+                    for (noise, B) in zip(neq, brownvars)
+                        ex = ex + 1/2 * noise^2 * second + noise*first*B
+                    end
                 end
             end
         end
