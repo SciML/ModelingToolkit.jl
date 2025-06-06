@@ -760,6 +760,7 @@ for prop in [:eqs
              :metadata
              :gui_metadata
              :is_initializesystem
+             :is_discrete
              :parameter_dependencies
              :assertions
              :ignored_connections
