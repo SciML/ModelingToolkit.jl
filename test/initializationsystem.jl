@@ -1671,3 +1671,23 @@ end
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Nonnumerics aren't narrowed" begin
+    @mtkmodel Foo begin
+        @variables begin
+            x(t) = 1.0
+        end
+        @parameters begin
+            p::AbstractString
+            r = 1.0
+        end
+        @equations begin
+            D(x) ~ r * x
+        end
+    end
+    @mtkbuild sys = Foo(p = "a")
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.p.nonnumeric[1] isa Vector{AbstractString}
+    integ = init(prob)
+    @test integ.p.nonnumeric[1] isa Vector{AbstractString}
+end
