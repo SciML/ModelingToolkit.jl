@@ -79,3 +79,34 @@ end
         @test SciMLBase.successful_retcode(sol)
     end
 end
+
+@testset "scalarized array observed calling same function multiple times" begin
+    @variables x(t) y(t)[1:2]
+    @parameters foo(::Real)[1:2]
+    val = Ref(0)
+    function _tmp_fn2(x)
+        val[] += 1
+        return [x, 2x]
+    end
+    @mtkcompile sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
+    @test length(equations(sys)) == 1
+    @test length(ModelingToolkit.observed(sys)) == 3
+    prob = ODEProblem(sys, [x => 1.0, foo => _tmp_fn2], (0.0, 1.0))
+    val[] = 0
+    @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+    @test val[] == 1
+
+    @testset "CSE in equations(sys)" begin
+        val[] = 0
+        @variables z(t)[1:2]
+        @mtkcompile sys = System(
+            [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
+        @test length(equations(sys)) == 5
+        @test length(ModelingToolkit.observed(sys)) == 0
+        prob = ODEProblem(
+            sys, [y => ones(2), z => 2ones(2), x => 3.0, foo => _tmp_fn2], (0.0, 1.0))
+        val[] = 0
+        @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+        @test val[] == 2
+    end
+end
