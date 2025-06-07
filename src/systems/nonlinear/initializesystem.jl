@@ -167,6 +167,8 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
+    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
+    merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
@@ -280,6 +282,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
+    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
+    merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
