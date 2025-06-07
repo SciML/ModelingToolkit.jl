@@ -259,7 +259,7 @@ function make_affect(affect::Vector{Equation}; discrete_parameters = Any[],
 
     @named affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
-        collect(union(pre_params, sys_params)))
+        collect(union(pre_params, sys_params)); is_discrete = true)
     affectsys = mtkcompile(affectsys; fully_determined = nothing)
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = Vector{Any}(filter(isparameter, map(unPre, collect(pre_params))))

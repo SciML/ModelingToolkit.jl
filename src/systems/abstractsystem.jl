@@ -503,7 +503,7 @@ function (f::Initial)(x)
         return x
     end
     # differential variables are default-toterm-ed
-    if iscall(x) && operation(x) isa Differential
+    if iscall(x) && operation(x) isa Union{Differential, Shift}
         x = default_toterm(x)
     end
     # don't double wrap
@@ -760,6 +760,7 @@ for prop in [:eqs
              :metadata
              :gui_metadata
              :is_initializesystem
+             :is_discrete
              :parameter_dependencies
              :assertions
              :ignored_connections

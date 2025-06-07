@@ -235,6 +235,7 @@ struct System <: AbstractSystem
     Whether the current system is an initialization system.
     """
     is_initializesystem::Bool
+    is_discrete::Bool
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
@@ -255,8 +256,8 @@ struct System <: AbstractSystem
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
-            is_initializesystem = false, isscheduled = false, schedule = nothing;
-            checks::Union{Bool, Int} = true)
+            is_initializesystem = false, is_discrete = false, isscheduled = false,
+            schedule = nothing; checks::Union{Bool, Int} = true)
         if is_initializesystem && iv !== nothing
             throw(ArgumentError("""
             Expected initialization system to be time-independent. Found independent
@@ -293,7 +294,8 @@ struct System <: AbstractSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
-            preface, parent, initializesystem, is_initializesystem, isscheduled, schedule)
+            preface, parent, initializesystem, is_initializesystem, is_discrete,
+            isscheduled, schedule)
     end
 end
 
@@ -330,8 +332,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         is_dde = nothing, tstops = [], tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
-        initializesystem = nothing, is_initializesystem = false, preface = [],
-        checks = true)
+        initializesystem = nothing, is_initializesystem = false, is_discrete = false,
+        preface = [], checks = true)
     name === nothing && throw(NoNameError())
     if !isempty(parameter_dependencies)
         @warn """
@@ -411,7 +413,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem; checks)
+        initializesystem, is_initializesystem, is_discrete; checks)
 end
 
 """
@@ -668,7 +670,7 @@ callbacks, so checking if any LHS is shifted is sufficient. If a variable is shi
 the input equations there _will_ be a `Shift` equation in the simplified system.
 """
 function is_discrete_system(sys::System)
-    any(eq -> isoperator(eq.lhs, Shift), equations(sys))
+    get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
