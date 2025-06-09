@@ -376,7 +376,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
-    if check
+    if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
         if !isempty(missing_vars)
             if is_initializeprob
@@ -387,7 +387,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         end
     end
     evaluate_varmap!(varmap, vars; limit = substitution_limit)
-    vals = map(x -> varmap[x], vars)
+    vals = map(x -> get(varmap, x, x), vars)
     if !allow_symbolic
         missingsyms = Any[]
         missingvals = Any[]
