@@ -37,7 +37,9 @@ makedocs(sitename = "ModelingToolkit.jl",
         assets = ["assets/favicon.ico"],
         mathengine,
         canonical = "https://docs.sciml.ai/ModelingToolkit/stable/",
-        prettyurls = (get(ENV, "CI", nothing) == "true")),
+        prettyurls = (get(ENV, "CI", nothing) == "true"),
+        # This page gets especially big with all the problem docstrings
+        size_threshold_ignore = ["API/problems.md"]),
     pages = pages)
 
 deploydocs(repo = "github.com/SciML/ModelingToolkit.jl.git";
