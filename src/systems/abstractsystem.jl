@@ -1169,7 +1169,9 @@ function is_array_of_symbolics(x)
 end
 
 function namespace_expr(
-        O, sys, n = nameof(sys); ivs = independent_variables(sys))
+        O, sys, n = (sys === nothing ? nothing : nameof(sys));
+        ivs = sys === nothing ? nothing : independent_variables(sys))
+    sys === nothing && return O
     O = unwrap(O)
     # Exceptions for arrays of symbolic and Ref of a symbolic, the latter
     # of which shows up in broadcasts
