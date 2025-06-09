@@ -1520,7 +1520,7 @@ $(TYPEDSIGNATURES)
 Get the default values of the system sys and its subsystems.
 If they are not explicitly provided, variables and parameters are initialized to these values.
 
-See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
 """
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
@@ -1723,7 +1723,7 @@ $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`guesses`](@ref), [`defaults`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`defaults`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
