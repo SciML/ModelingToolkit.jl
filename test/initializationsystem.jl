@@ -1664,3 +1664,10 @@ end
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Defaults removed with ` => nothing` aren't retained" begin
+    @variables x(t)[1:2]
+    @mtkbuild sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; defaults = [x[1] => 1])
+    prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0))
+    @test SciMLBase.initialization_status(prob) == SciMLBase.FULLY_DETERMINED
+end

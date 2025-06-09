@@ -73,7 +73,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     op = anydict(op)
     u0map = anydict()
     pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
         parameters(sys; initial_parameters = true))
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
@@ -144,7 +144,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     # 3) process other variables
     for var in vars
-        if var ∈ keys(defs)
+        if var ∈ keys(op)
             push!(eqs_ics, var ~ defs[var])
         elseif var ∈ keys(guesses)
             push!(defs, var => guesses[var])
@@ -238,7 +238,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     op = anydict(op)
     u0map = anydict()
     pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
         parameters(sys; initial_parameters = true))
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
