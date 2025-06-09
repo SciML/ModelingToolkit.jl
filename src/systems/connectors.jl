@@ -860,6 +860,12 @@ function expand_variable_connections(sys::AbstractSystem; ignored_variables = no
     return sys
 end
 
+"""
+    function expand_connections(sys::AbstractSystem)
+
+Given a hierarchical system with [`connect`](@ref) equations, expand the connection
+equations and return the new system.
+"""
 function expand_connections(sys::AbstractSystem;
         debug = false, tol = 1e-10, scalarize = true)
     sys = remove_analysis_points(sys)
