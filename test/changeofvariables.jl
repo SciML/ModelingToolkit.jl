@@ -127,9 +127,10 @@ new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
 D = Differential(t)
 eqs = [D(x) ~ μ*x + σ*x*Bx, D(y) ~ α*By, D(u) ~ μ*u + σ*u*Bx + α*u*By]
 def = [x=>0., y=> 0., u=>0., μ => 2., σ=>1., α=>3.]
-@mtkcompile sys = System(eqs, t; defaults=def)
 forward_subs = [log(x) => z, y^2 => w, log(u) => v]
 backward_subs = [x => exp(z), y => w^.5, u => exp(v)]
+
+@mtkcompile sys = System(eqs, t; defaults=def)
 new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ μ - 1/2*σ^2)
 @test equations(new_sys)[2] == (D(w) ~ α^2)
@@ -140,3 +141,10 @@ new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
 @test noise_eqs(new_sys)[2,2] === value(substitute(2*α*y, backward_subs[2]))
 @test noise_eqs(new_sys)[3,1] === value(σ)
 @test noise_eqs(new_sys)[3,2] === value(α)
+
+# Test for  Brownian instead of noise
+@named sys = System(eqs, t; defaults=def)
+new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=false)
+@test simplify(equations(new_sys)[1]) == simplify((D(z) ~ μ - 1/2*σ^2 + σ*Bx))
+@test simplify(equations(new_sys)[2]) == simplify((D(w) ~ α^2 + 2*α*w^.5*By))
+@test simplify(equations(new_sys)[3]) == simplify((D(v) ~ μ - 1/2*(α^2 + σ^2) + σ*Bx + α*By))

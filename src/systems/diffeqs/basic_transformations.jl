@@ -98,9 +98,6 @@ function changeofvariables(
     sys::System, iv, forward_subs, backward_subs;
     simplify=true, t0=missing, isSDE=false
 )
-    if !iscomplete(sys)
-        sys = mtkcompile(sys)
-    end
     t = iv
 
     old_vars = first.(backward_subs)
@@ -110,7 +107,12 @@ function changeofvariables(
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
     neqs = get_noise_eqs(sys)
-    if neqs !== nothing
+    brownvars = brownians(sys)
+    
+    
+    if neqs === nothing && length(brownvars) === 0
+        neqs = ones(1, length(old_eqs))
+    elseif neqs !== nothing
         isSDE = true
         neqs = [neqs[i,:] for i in 1:size(neqs,1)]
 
@@ -118,7 +120,19 @@ function changeofvariables(
             unwrap(only(@brownian $name))
         end
     else
-        neqs = ones(1, length(old_eqs))
+        isSDE = true
+        neqs = Vector{Any}[]
+        for (i, eq) in enumerate(old_eqs)
+            neq = Any[]
+            right = eq.rhs
+            for Bv in brownvars
+                lin_exp = linear_expansion(right, Bv)
+                right = lin_exp[2]
+                push!(neq, lin_exp[1])
+            end
+            push!(neqs, neq)
+            old_eqs[i] = eq.lhs ~ right
+        end
     end
 
     # df/dt = ∂f/∂x dx/dt + ∂f/∂t
