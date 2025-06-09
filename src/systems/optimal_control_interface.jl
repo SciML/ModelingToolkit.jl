@@ -135,7 +135,8 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         initialization_data = nothing,
         cse = true,
         kwargs...) where {iip, specialize}
-    f, _, _ = generate_control_function(
+    f, _,
+    _ = generate_control_function(
         sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
     f = f[1]
 
@@ -242,7 +243,8 @@ function process_DynamicOptProblem(
               [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
 
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
-    f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _op;
+    f, u0,
+    p = process_SciMLProblem(ODEInputFunction, sys, _op;
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
     warn_overdetermined(sys, op)
@@ -395,7 +397,8 @@ function fixed_t_map end
 function add_user_constraints!(model, sys, tspan, pmap)
     jconstraints = get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
-    cons_dvs, cons_ps = process_constraint_system(
+    cons_dvs,
+    cons_ps = process_constraint_system(
         jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false)
 
     is_free_final(model) && check_constraint_vars(cons_dvs)

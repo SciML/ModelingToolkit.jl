@@ -816,7 +816,7 @@ Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sub.s1, new_sys2.sub.s2])
 
 let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
-    @parameters a=10 b=a / 10 c=a / 20
+    @parameters a=10 b=a/10 c=a/20
 
     Dt = D
 
@@ -1383,7 +1383,7 @@ end
     @mtkcompile sys = System([D(x) ~ x, y^2 ~ x + sum(p)], t)
     prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], (0.0, 1.0))
     sol = solve(prob, DFBDF(), abstol = 1e-8, reltol = 1e-8)
-    @test sol[x]≈sol[y^2 - sum(p)] atol=1e-5
+    @test sol[x]≈sol[y ^ 2 - sum(p)] atol=1e-5
 end
 
 @testset "Symbolic tstops" begin
@@ -1483,7 +1483,8 @@ end
     obsfn_expr = ModelingToolkit.build_explicit_observed_function(
         sys, 2x + 1, expression = true)
     @test obsfn_expr isa Expr
-    obsfn_expr_oop, obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
+    obsfn_expr_oop,
+    obsfn_expr_iip = ModelingToolkit.build_explicit_observed_function(
         sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr

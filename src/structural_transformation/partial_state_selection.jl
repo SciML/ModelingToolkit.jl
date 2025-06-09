@@ -213,7 +213,8 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
             can_eliminate[v] = true
         end
     end
-    var_eq_matching, full_var_eq_matching, var_sccs = tear_graph_modia(structure,
+    var_eq_matching, full_var_eq_matching,
+    var_sccs = tear_graph_modia(structure,
         Base.Fix1(isdiffed, (structure, dummy_derivatives)),
         Union{Unassigned, SelectedState};
         varfilter = Base.Fix1(getindex, can_eliminate))

@@ -117,7 +117,7 @@ d = FakeNormal()
 ## System interface
 @independent_variables t
 Dₜ = Differential(t)
-@variables x(t)=0 [bounds = (-10, 10)] u(t)=0 [input = true] y(t)=0 [output = true]
+@variables x(t)=0 [bounds=(-10, 10)] u(t)=0 [input=true] y(t)=0 [output=true]
 @parameters T [bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
 @parameters k2 [tunable = false]

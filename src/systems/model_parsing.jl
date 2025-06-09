@@ -85,12 +85,17 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
             push!(exprs.args, arg)
         elseif arg.head == :if
             MLStyle.@match arg begin
-                Expr(:if, condition, x) => begin
+                Expr(:if,
+                    condition,
+                    x) => begin
                     parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs,
                         mod, ps, vs, where_types,
                         parse_top_level_branch(condition, x.args)...)
                 end
-                Expr(:if, condition, x, y) => begin
+                Expr(:if,
+                    condition,
+                    x,
+                    y) => begin
                     parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs,
                         mod, ps, vs, where_types,
                         parse_top_level_branch(condition, x.args, y)...)
@@ -273,7 +278,9 @@ Base.@nospecializeinfer function parse_variable_def!(
         # Parses: `par6(t)[1:3]::BigFloat`
         # Recursively called by: `par2(t)::Int`
         # Recursively called by: `par3(t)::BigFloat = 1.0`
-        Expr(:(::), a, type) => begin
+        Expr(:(::),
+            a,
+            type) => begin
             type = getfield(mod, type)
             parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
@@ -283,7 +290,9 @@ Base.@nospecializeinfer function parse_variable_def!(
         # Recursively called by: `j(t) = jval, [description = "j(t)"]`
         # Recursively called by: `par2(t)::Int`
         # Recursively called by: `par3(t)::BigFloat = 1.0`
-        Expr(:call, a, b) => begin
+        Expr(:call,
+            a,
+            b) => begin
             var = generate_var!(dict, a, b, varclass, mod; type)
             update_kwargs_and_metadata!(dict, kwargs, a, def, type,
                 varclass, where_types, meta)
@@ -307,7 +316,8 @@ Base.@nospecializeinfer function parse_variable_def!(
         # `e2[1:2], [description = "e2"]`
         # `h2(t)[1:2], [description = "h2(t)"]`
         Expr(:tuple, Expr(:(=), Expr(:ref, a, indices...), default_val), meta_val) ||
-        Expr(:tuple, Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), default_val), meta_val) ||
+        Expr(:tuple, Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), default_val),
+            meta_val) ||
         Expr(:tuple, Expr(:(::), Expr(:ref, a, indices...), type), meta_val) ||
         Expr(:tuple, Expr(:ref, a, indices...), meta_val) => begin
             (@isdefined type) || (type = Real)
@@ -341,7 +351,9 @@ Base.@nospecializeinfer function parse_variable_def!(
         # `d2[1:2] = 2`
         # `l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]`
         Expr(:(=), Expr(:(::), Expr(:ref, a, indices...), type), def_n_meta) ||
-        Expr(:(=), Expr(:ref, a, indices...), def_n_meta) => begin
+        Expr(:(=),
+            Expr(:ref, a, indices...),
+            def_n_meta) => begin
             (@isdefined type) || (type = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
             if Meta.isexpr(def_n_meta, :tuple)
@@ -401,7 +413,9 @@ Base.@nospecializeinfer function parse_variable_def!(
         # `b2(t)[1:2]`
         # `a2[1:2]`
         Expr(:(::), Expr(:ref, a, indices...), type) ||
-        Expr(:ref, a, indices...) => begin
+        Expr(:ref,
+            a,
+            indices...) => begin
             (@isdefined type) || (type = Real)
             varname = a isa Expr && a.head == :call ? a.args[1] : a
             if varclass == :parameters
@@ -431,10 +445,13 @@ Base.@nospecializeinfer function parse_variable_def!(
         # Parses: `k = kval, [description = "k"]`
         # Parses: `par0::Bool = true`
         # Parses: `par3(t)::BigFloat = 1.0`
-        Expr(:(=), a, b) => begin
+        Expr(:(=),
+            a,
+            b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
-            var, def, _ = parse_variable_def!(
+            var, def,
+            _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
             varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) :
                             Ref(dict[varclass])
@@ -449,9 +466,12 @@ Base.@nospecializeinfer function parse_variable_def!(
         # Parses: `e, [description = "e"]`
         # Parses: `h(t), [description = "h(t)"]`
         # Parses: `par2(t)::Int`
-        Expr(:tuple, a, b) => begin
+        Expr(:tuple,
+            a,
+            b) => begin
             meta = parse_metadata(mod, b)
-            var, def, _ = parse_variable_def!(
+            var, def,
+            _ = parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; type, meta)
             varclass_dict = dict[varclass] isa Vector ? Ref(dict[varclass][1]) :
                             Ref(dict[varclass])
@@ -690,7 +710,9 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     Base.remove_linenums!(body)
     for arg in body.args
         MLStyle.@match arg begin
-            Expr(:(=), Expr(:(::), a, type), b) => begin
+            Expr(:(=),
+                Expr(:(::), a, type),
+                b) => begin
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
                 push!(sps, a)
@@ -698,7 +720,9 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
                     :value => b, :type => type)
             end
-            Expr(:(=), a, b) => begin
+            Expr(:(=),
+                a,
+                b) => begin
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, a, b))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
@@ -742,7 +766,8 @@ function extend_args!(a, b, dict, expr, kwargs, has_param = false)
                 push!(kwargs, Expr(:kw, x, y))
                 dict[:kwargs][x] = Dict(:value => y)
             end
-            Expr(:parameters, x...) => begin
+            Expr(:parameters,
+                x...) => begin
                 has_param = true
                 extend_args!(a, arg, dict, expr, kwargs, has_param)
             end
@@ -806,7 +831,9 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
     push!(exprs, expr)
     body = deepcopy(body)
     MLStyle.@match body begin
-        Expr(:(=), a, b) => begin
+        Expr(:(=),
+            a,
+            b) => begin
             if Meta.isexpr(b, :(=))
                 vars = a
                 if !Meta.isexpr(vars, :tuple)
@@ -820,7 +847,9 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                 error("When explicitly destructing in `@extend` please use the syntax: `@extend a, b = oneport = OnePort()`.")
             end
         end
-        Expr(:call, a′, _...) => begin
+        Expr(:call,
+            a′,
+            _...) => begin
             a = Symbol(Symbol("#mtkmodel"), :__anonymous__, a′)
             b = body
             if (model = getproperty(mod, b.args[1])) isa Model
@@ -876,7 +905,8 @@ convert_units(::Unitful.FreeUnits, value::Num) = value
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
-    vv, def, metadata_with_exprs = parse_variable_def!(
+    vv, def,
+    metadata_with_exprs = parse_variable_def!(
         dict, mod, arg, varclass, kwargs, where_types)
     if !(vv isa Tuple)
         name = getname(vv)
@@ -931,7 +961,8 @@ function handle_conditional_vars!(
         :constants => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     for _arg in arg.args
-        name, ex = parse_variable_arg(
+        name,
+        ex = parse_variable_arg(
             conditional_dict, mod, _arg, varclass, kwargs, where_types)
         push!(conditional_branch.args, ex)
         push!(conditional_branch.args, :(push!($varclass, $name)))
@@ -997,7 +1028,9 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs, where_ty
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
-            Expr(:if, condition, x) => begin
+            Expr(:if,
+                condition,
+                x) => begin
                 conditional_expr = Expr(:if, condition, Expr(:block))
                 conditional_dict = handle_conditional_vars!(x,
                     conditional_expr.args[2],
@@ -1008,7 +1041,10 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs, where_ty
                 push!(expr.args, conditional_expr)
                 push_conditional_dict!(dict, condition, conditional_dict, nothing, varclass)
             end
-            Expr(:if, condition, x, y) => begin
+            Expr(:if,
+                condition,
+                x,
+                y) => begin
                 conditional_expr = Expr(:if, condition, Expr(:block))
                 conditional_dict = handle_conditional_vars!(x,
                     conditional_expr.args[2],
@@ -1016,7 +1052,8 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs, where_ty
                     varclass,
                     kwargs,
                     where_types)
-                conditional_y_expr, conditional_y_tuple = handle_y_vars(y,
+                conditional_y_expr,
+                conditional_y_tuple = handle_y_vars(y,
                     conditional_dict,
                     mod,
                     varclass,
@@ -1044,7 +1081,8 @@ function handle_y_vars(y, dict, mod, varclass, kwargs, where_types)
             varclass,
             kwargs,
             where_types)
-        _y_expr, _conditional_dict = handle_y_vars(
+        _y_expr,
+        _conditional_dict = handle_y_vars(
             y.args[end], dict, mod, varclass, kwargs, where_types)
         push!(conditional_y_expr.args, _y_expr)
         (:elseif, y.args[1], conditional_dict, _conditional_dict)
@@ -1090,13 +1128,15 @@ function parse_equations!(exprs, eqs, dict, body)
     Base.remove_linenums!(body)
     for arg in body.args
         MLStyle.@match arg begin
-            Expr(:if, condition, x) => begin
+            Expr(:if, condition,
+                x) => begin
                 ifexpr = Expr(:if)
                 eq_entry = handle_if_x_equations!(condition, dict, ifexpr, x)
                 push!(exprs, ifexpr)
                 push!(dict[:equations], (:if, condition, eq_entry))
             end
-            Expr(:if, condition, x, y) => begin
+            Expr(:if, condition, x,
+                y) => begin
                 ifexpr = Expr(:if)
                 xeq_entry = handle_if_x_equations!(condition, dict, ifexpr, x)
                 yeq_entry = handle_if_y_equations!(ifexpr, y, dict)
@@ -1181,19 +1221,25 @@ function parse_consolidate!(body, dict)
     end
 end
 
-function parse_icon!(body::String, dict, icon, mod)
-    icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
-    dict[:icon] = icon[] = if isfile(body)
-        URI("file:///" * abspath(body))
-    elseif (iconpath = abspath(joinpath(icon_dir, body)); isfile(iconpath))
-        URI("file:///" * abspath(iconpath))
-    elseif try
+function _try_validate_uri(body::String)
+    try
         Base.isvalid(URI(body))
     catch e
         false
     end
+end
+
+function parse_icon!(body::String, dict, icon, mod)
+    icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
+    iconpath = abspath(joinpath(icon_dir, body))
+    _body = lstrip(body)
+    dict[:icon] = icon[] = if isfile(body)
+        URI("file:///" * abspath(body))
+    elseif isfile(iconpath)
+        URI("file:///" * abspath(iconpath))
+    elseif _try_validate_uri(body)
         URI(body)
-    elseif (_body = lstrip(body); startswith(_body, r"<\?xml|<svg"))
+    elseif startswith(_body, r"<\?xml|<svg")
         String(_body) # With Julia-1.10 promoting `SubString{String}` to `String` can be dropped.
     else
         @info iconpath=joinpath(icon_dir, body) isfile(iconpath) body
@@ -1223,7 +1269,8 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
         arg = b.args[i]
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
-            x::Symbol || Expr(:kw, x) => begin
+            x::Symbol ||
+            Expr(:kw, x) => begin
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 push!(varexpr.args, :((if $varname !== nothing
@@ -1240,7 +1287,9 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
             Expr(:parameters, x...) => begin
                 component_args!(a, arg, varexpr, kwargs)
             end
-            Expr(:kw, x, y) => begin
+            Expr(:kw,
+                x,
+                y) => begin
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 if isnothing(index_name)
@@ -1269,7 +1318,9 @@ function _parse_components!(body, kwargs)
     arg = body.args[end]
 
     MLStyle.@match arg begin
-        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d)))) => begin
+        Expr(:(=),
+            a,
+            Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d)))) => begin
             array_varexpr = Expr(:block)
 
             push!(comp_names, :($a...))
@@ -1280,10 +1331,14 @@ function _parse_components!(body, kwargs)
 
             expr = _named_idxs(a, d, :($c -> $b); extra_args = array_varexpr)
         end
-        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:filter, e, Expr(:(=), c, d))))) => begin
+        Expr(:(=),
+            a,
+            Expr(:comprehension, Expr(:generator, b, Expr(:filter, e, Expr(:(=), c, d))))) => begin
             error("List comprehensions with conditional statements aren't supported.")
         end
-        Expr(:(=), a, Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d), e...))) => begin
+        Expr(:(=),
+            a,
+            Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d), e...))) => begin
             # Note that `e` is of the form `Tuple{Expr(:(=), c, d)}`
             error("More than one index isn't supported while building component array")
         end
@@ -1291,7 +1346,9 @@ function _parse_components!(body, kwargs)
             # TODO: Do we need this?
             error("Multiple `@components` block detected within a single block")
         end
-        Expr(:(=), a, Expr(:for, Expr(:(=), c, d), b)) => begin
+        Expr(:(=),
+            a,
+            Expr(:for, Expr(:(=), c, d), b)) => begin
             Base.remove_linenums!(b)
             array_varexpr = Expr(:block)
             push!(array_varexpr.args, b.args[1:(end - 1)]...)
@@ -1367,15 +1424,20 @@ function parse_components!(exprs, cs, dict, compbody, kwargs)
     Base.remove_linenums!(compbody)
     for arg in compbody.args
         MLStyle.@match arg begin
-            Expr(:if, condition, x) => begin
+            Expr(:if, condition,
+                x) => begin
                 handle_conditional_components(condition, dict, exprs, kwargs, x)
             end
-            Expr(:if, condition, x, y) => begin
+            Expr(:if,
+                condition,
+                x,
+                y) => begin
                 handle_conditional_components(condition, dict, exprs, kwargs, x, y)
             end
             # Either the arg is top level component declaration or an invalid cause - both are handled by `_parse_components`
             _ => begin
-                comp_names, comps, expr_vec, varexpr = _parse_components!(:(begin
+                comp_names, comps, expr_vec,
+                varexpr = _parse_components!(:(begin
                         $arg
                     end),
                     kwargs)
@@ -1403,7 +1465,9 @@ define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
 Base.@nospecializeinfer function parse_top_level_branch(
         condition, x, y = nothing, branch::Symbol = :if)
     @nospecialize
-    blocks::Vector{Union{Expr, Nothing}} = component_blk, equations_blk, parameter_blk, variable_blk = define_blocks(branch)
+    blocks::Vector{Union{Expr,
+        Nothing}} = component_blk, equations_blk, parameter_blk,
+    variable_blk = define_blocks(branch)
 
     for arg in x
         if arg.args[1] == Symbol("@components")

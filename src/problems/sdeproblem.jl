@@ -72,7 +72,8 @@ end
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
 
-    f, u0, p = process_SciMLProblem(SDEFunction{iip, spec}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(SDEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, sparse, expression, kwargs...)
 

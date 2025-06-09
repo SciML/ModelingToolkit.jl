@@ -728,6 +728,7 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
     union_find = IntDisjointSets(0)
     prev_id = Ref(-1)
     for cset in csets, (j, s) in enumerate(cset.set)
+
         v = allouter ? withtrueouter(s) : s
         id = let ele2idx = ele2idx, idx2ele = idx2ele
             get!(ele2idx, v) do
@@ -810,7 +811,8 @@ function domain_defaults(sys, domain_csets)
                 for p in parameters(m.sys.namespace)
                     d_p = get(ns_s_def, p, nothing)
                     if d_p !== nothing
-                        def[parameters(m.sys.namespace, p)] = parameters(s.sys.namespace,
+                        def[parameters(m.sys.namespace,
+                            p)] = parameters(s.sys.namespace,
                             parameters(s.sys.sys,
                                 d_p))
                     end

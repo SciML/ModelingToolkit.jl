@@ -600,7 +600,8 @@ end
     # the correct solver.
     # `rhss` allows adding terms to the end of equations (only 2 equations allowed) to influence
     # the system type (brownian vars to turn it into an SDE).
-    @testset "$Problem with $(SciMLBase.parameterless_type(alg)) and $ctor ctor" for ((Problem, alg, rhss), (ctor, expectedT)) in Iterators.product(
+    @testset "$Problem with $(SciMLBase.parameterless_type(alg)) and $ctor ctor" for (
+        (Problem, alg, rhss), (ctor, expectedT)) in Iterators.product(
         [
             (ODEProblem, Tsit5(), zeros(2)),
             (SDEProblem, ImplicitEM(), [a, b]),
@@ -778,7 +779,7 @@ end
 
     @testset "No initialization for variables" begin
         @variables x=1.0 y=0.0 z=0.0
-        @parameters σ=10.0 ρ=26.0 β=8 / 3
+        @parameters σ=10.0 ρ=26.0 β=8/3
 
         eqs = [0 ~ σ * (y - x),
             0 ~ x * (ρ - z) - y,
@@ -823,7 +824,7 @@ end
             @test SciMLBase.successful_retcode(sol)
         end
 
-        @parameters p=2.0 q=missing [guess = 1.0] c=1.0
+        @parameters p=2.0 q=missing [guess=1.0] c=1.0
         @variables x=1.0 z=3.0
 
         # eqs = [0 ~ p * (y - x),
@@ -884,7 +885,8 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (
+        System, Problem, alg, rhss) in [
         (ModelingToolkit.System, ODEProblem, Tsit5(), zeros(2)),
         (ModelingToolkit.System, SDEProblem, ImplicitEM(), [a, b]),
         (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
@@ -913,7 +915,8 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (
+        System, Problem, alg, rhss) in [
         (ModelingToolkit.System, ODEProblem, Tsit5(), 0),
         (ModelingToolkit.System, SDEProblem, ImplicitEM(), a),
         (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
@@ -936,7 +939,8 @@ end
     @brownian a b
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (Problem, alg, rhss) in [
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (
+        Problem, alg, rhss) in [
         (ODEProblem, Tsit5(), zeros(2)),
         (SDEProblem, ImplicitEM(), [a, b]),
         (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
@@ -968,7 +972,8 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (
+        System, Problem, alg, rhss) in [
         (ModelingToolkit.System, ODEProblem, Tsit5(), 0),
         (ModelingToolkit.System, SDEProblem, ImplicitEM(), a),
         (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
@@ -1025,7 +1030,8 @@ end
     @brownian a
     x = _x(t)
 
-    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
+    @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (
+        System, Problem, alg, rhss) in [
         (ModelingToolkit.System, ODEProblem, Tsit5(), 0),
         (ModelingToolkit.System, SDEProblem, ImplicitEM(), a),
         (ModelingToolkit.System, DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
@@ -1191,7 +1197,7 @@ end
 
 @testset "DAEProblem initialization" begin
     @variables x(t) [guess = 1.0] y(t) [guess = 1.0]
-    @parameters p=missing [guess = 1.0] q=missing [guess = 1.0]
+    @parameters p=missing [guess=1.0] q=missing [guess=1.0]
     @mtkcompile sys = System(
         [D(x) ~ p * y + q, x^3 + y^3 ~ 5], t; initialization_eqs = [p^2 + q^3 ~ 3])
 
@@ -1608,7 +1614,8 @@ end
     tspan = (0.0, 100.0)
     getter = getsym(sys, Initial.(unknowns(sys)))
     prob = ODEProblem(sys, [u0; p], tspan; guesses = [w2 => 3.0])
-    new_u0, new_p, _ = SciMLBase.get_initial_values(
+    new_u0, new_p,
+    _ = SciMLBase.get_initial_values(
         prob, prob, prob.f, SciMLBase.OverrideInit(), Val(true);
         nlsolve_alg = NewtonRaphson(), abstol = 1e-6, reltol = 1e-3)
     @test getter(prob) != getter(new_p)

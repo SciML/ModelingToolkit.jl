@@ -67,7 +67,8 @@ function MTK.CasADiDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    prob, _ = MTK.process_DynamicOptProblem(
+    prob,
+    _ = MTK.process_DynamicOptProblem(
         CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, guesses, kwargs...)
     prob
 end
