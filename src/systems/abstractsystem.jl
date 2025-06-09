@@ -1780,13 +1780,13 @@ function preface(sys::AbstractSystem)
 end
 
 function islinear(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(islinear(r, unknowns(sys)) for r in rhs)
 end
 
 function isaffine(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(isaffine(r, unknowns(sys)) for r in rhs)
 end
