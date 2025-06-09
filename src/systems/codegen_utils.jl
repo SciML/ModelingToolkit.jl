@@ -123,7 +123,11 @@ function isdelay(var, iv)
     if iscall(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
         args = arguments(var)
         length(args) == 1 || return false
-        isequal(args[1], iv) || return true
+        arg = args[1]
+        isequal(arg, iv) && return false
+        iscall(arg) || return true
+        issym(operation(arg)) && !iscalledparameter(arg) && return false
+        return true
     end
     return false
 end
