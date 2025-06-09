@@ -1538,9 +1538,9 @@ function defaults_and_guesses(sys::AbstractSystem)
     merge(guesses(sys), defaults(sys))
 end
 
-unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)
 for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
-    @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
+    @eval unknowns(sys::AbstractSystem, v::$vType) = namespace_expr(v, sys)
     @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
 end
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
