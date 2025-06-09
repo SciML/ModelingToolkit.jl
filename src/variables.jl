@@ -163,18 +163,50 @@ function isvarkind(m, x)
     getmetadata(x, m, false)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Set the `input` metadata of variable `x` to `v`.
+"""
 setinput(x, v::Bool) = setmetadata(x, VariableInput, v)
+"""
+    $(TYPEDSIGNATURES)
+
+Set the `output` metadata of variable `x` to `v`.
+"""
 setoutput(x, v::Bool) = setmetadata(x, VariableOutput, v)
 setio(x, i::Bool, o::Bool) = setoutput(setinput(x, i), o)
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` is marked as an input.
+"""
 isinput(x) = isvarkind(VariableInput, x)
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` is marked as an output.
+"""
 isoutput(x) = isvarkind(VariableOutput, x)
 
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `x` is marked as irreducible. This prevents it from being eliminated as an
+observed variable in `mtkcompile`.
+"""
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `state_priority` metadata of variable `x`. This influences its priority to be
+chosen as a state in `mtkcompile`.
+"""
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 normalize_to_differential(x) = x
@@ -419,6 +451,11 @@ function getdescription(x)
     Symbolics.getmetadata(x, VariableDescription, "")
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` has a non-empty attached description.
+"""
 function hasdescription(x)
     getdescription(x) != ""
 end
