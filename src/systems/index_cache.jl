@@ -246,9 +246,11 @@ function IndexCache(sys::AbstractSystem)
         return idxs, buffer_sizes
     end
 
-    const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(
+    const_idxs,
+    const_buffer_sizes = get_buffer_sizes_and_idxs(
         ParamIndexMap, constant_buffers)
-    nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
+    nonnumeric_idxs,
+    nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
         NonnumericMap, nonnumeric_buffers)
 
     tunable_idxs = TunableIndexMap()

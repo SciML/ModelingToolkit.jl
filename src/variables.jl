@@ -33,7 +33,8 @@ ModelingToolkit.dump_variable_metadata(p)
 """
 function dump_variable_metadata(var)
     uvar = unwrap(var)
-    variable_source, name = Symbolics.getmetadata(
+    variable_source,
+    name = Symbolics.getmetadata(
         uvar, VariableSource, (:unknown, :unknown))
     type = symtype(uvar)
     if type <: AbstractArray

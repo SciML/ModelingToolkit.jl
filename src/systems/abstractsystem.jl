@@ -731,46 +731,46 @@ function unflatten_parameters!(buffer, params, all_ps)
 end
 
 for prop in [:eqs
-             :tag
-             :noise_eqs
-             :iv
-             :unknowns
-             :ps
-             :tspan
-             :brownians
-             :jumps
-             :name
-             :description
-             :var_to_name
-             :defaults
-             :guesses
-             :observed
-             :systems
-             :constraints
-             :bcs
-             :domain
-             :ivs
-             :dvs
-             :connector_type
-             :preface
-             :initializesystem
-             :initialization_eqs
-             :schedule
-             :tearing_state
-             :metadata
-             :gui_metadata
-             :is_initializesystem
-             :is_discrete
-             :parameter_dependencies
-             :assertions
-             :ignored_connections
-             :parent
-             :is_dde
-             :tstops
-             :index_cache
-             :isscheduled
-             :costs
-             :consolidate]
+     :tag
+     :noise_eqs
+     :iv
+     :unknowns
+     :ps
+     :tspan
+     :brownians
+     :jumps
+     :name
+     :description
+     :var_to_name
+     :defaults
+     :guesses
+     :observed
+     :systems
+     :constraints
+     :bcs
+     :domain
+     :ivs
+     :dvs
+     :connector_type
+     :preface
+     :initializesystem
+     :initialization_eqs
+     :schedule
+     :tearing_state
+     :metadata
+     :gui_metadata
+     :is_initializesystem
+     :is_discrete
+     :parameter_dependencies
+     :assertions
+     :ignored_connections
+     :parent
+     :is_dde
+     :tstops
+     :index_cache
+     :isscheduled
+     :costs
+     :consolidate]
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
@@ -1626,7 +1626,8 @@ function full_equations(sys::AbstractSystem; simplify = false)
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~
+                   substitute_and_simplify(
                 eq.rhs, subs,
                 simplify)
         else
@@ -2364,7 +2365,8 @@ function component_post_processing(expr, isconnector)
                 if $isconnector
                     $Setfield.@set!(res.connector_type=$connector_type(res))
                 end
-                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
+                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(
+                    @__MODULE__, name)))
             else
                 res
             end
@@ -2812,8 +2814,8 @@ function process_parameter_equations(sys::AbstractSystem)
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                    is_sized_array_symbolic(sym) &&
-                    all(Base.Fix1(is_parameter, sys), collect(sym))
+                is_sized_array_symbolic(sym) &&
+                all(Base.Fix1(is_parameter, sys), collect(sym))
         end
             if !isparameter(eq.lhs)
                 throw(ArgumentError("""

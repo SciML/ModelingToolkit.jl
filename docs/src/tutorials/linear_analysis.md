@@ -39,7 +39,7 @@ This is signified by the name being the middle argument to `connect`.
 Of the above mentioned functions, all except for [`open_loop`](@ref) return the output of [`ModelingToolkit.linearize`](@ref), which is
 
 ```julia
-matrices, simplified_sys = linearize(...)
+matrices, simplified_sys = linearize(_...)
 # matrices = (; A, B, C, D)
 ```
 

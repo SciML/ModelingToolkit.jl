@@ -56,8 +56,8 @@ setp(sys, a)(ps, 1.0)
 @test getp(sys, a)(ps) == getp(sys, b)(ps) / 2 == getp(sys, c)(ps) / 3 == 1.0
 
 for (portion, values) in [(Tunable(), [1.0, 5.0, 6.0, 7.0])
-                          (Discrete(), [3.0])
-                          (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))]
+     (Discrete(), [3.0])
+     (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))]
     buffer, repack, alias = canonicalize(portion, ps)
     @test alias
     @test sort(collect(buffer)) == values
@@ -173,7 +173,7 @@ ps = [p => 1.0] # Value for `d` is missing
 
 # scalar parameters only
 function level1()
-    @parameters p1=0.5 [tunable = true] p2=1 [tunable = true] p3=3 [tunable = false] p4=3 [tunable = true] y0=1
+    @parameters p1=0.5 [tunable=true] p2=1 [tunable=true] p3=3 [tunable=false] p4=3 [tunable=true] y0=1
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
@@ -188,7 +188,7 @@ end
 
 # scalar and vector parameters
 function level2()
-    @parameters p1=0.5 [tunable = true] (p23[1:2]=[1, 3.0]) [tunable = true] p4=3 [tunable = false] y0=1
+    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4=3 [tunable=false] y0=1
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
@@ -203,7 +203,7 @@ end
 
 # scalar and vector parameters with different scalar types
 function level3()
-    @parameters p1=0.5 [tunable = true] (p23[1:2]=[1, 3.0]) [tunable = true] p4::Int=3 [tunable = true] y0::Int=1
+    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4::Int=3 [tunable=true] y0::Int=1
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 

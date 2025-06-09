@@ -111,7 +111,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
     eqs = equations(sys)
     obs = observed(sys)
 
-    _, u0, p = process_SciMLProblem(
+    _, u0,
+    p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, kwargs...)
 
     explicitfuns = []

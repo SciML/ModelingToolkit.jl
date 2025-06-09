@@ -149,10 +149,14 @@ sol = solve(prob, Tsit5())
 ## Generate function for an augmented Unscented Kalman Filter =====================
 # temp = open_loop(model_with_disturbance, :d)
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
-f, x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+f, x_sym,
+p_sym,
+io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u], [:d1, :d2, :dy], split = false)
 
-f, x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+f, x_sym,
+p_sym,
+io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u], [:d1, :d2, :dy],
     disturbance_argument = true, split = false)
 

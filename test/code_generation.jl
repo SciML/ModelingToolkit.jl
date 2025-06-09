@@ -17,7 +17,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         sys, x + y[1] + p1 + p2[1] + p3 * t, [x], [p1, p2, p3]; expression = Val(false))
     @test fn1(u0, p, 0.0) == 5.0
 
-    fn3_oop, fn3_iip = generate_custom_function(
+    fn3_oop,
+    fn3_iip = generate_custom_function(
         sys, [x + y[2], y[3] + p2[2], p1 + p3, 3t]; expression = Val(false))
 
     buffer = zeros(4)
@@ -41,7 +42,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         sys, x + y[1] + p1 + p2[1] + p3, [x], [p1, p2, p3]; expression = Val(false))
     @test fn1(u0, p) == 6.0
 
-    fn3_oop, fn3_iip = generate_custom_function(
+    fn3_oop,
+    fn3_iip = generate_custom_function(
         sys, [x + y[2], y[3] + p2[2], p1 + p3]; expression = Val(false))
 
     buffer = zeros(3)

@@ -118,7 +118,8 @@ Jiip(J2, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0], 1.0)
 
 s∂ = sparse(∂)
 @test nnz(s∂) == 8
-Joop, Jiip = eval.(ModelingToolkit.build_function(s∂, [x, y, z], [σ, ρ, β], t,
+Joop,
+Jiip = eval.(ModelingToolkit.build_function(s∂, [x, y, z], [σ, ρ, β], t,
     linenumbers = true))
 J = Joop([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], 1.0)
 @test length(nonzeros(s∂)) == 8
@@ -147,7 +148,8 @@ function test_worldage()
     eqs = [σ * (y - x),
         x * (ρ - z) - y,
         x * y - β * z]
-    f, f_iip = ModelingToolkit.build_function(eqs, [x, y, z], [σ, ρ, β];
+    f,
+    f_iip = ModelingToolkit.build_function(eqs, [x, y, z], [σ, ρ, β];
         expression = Val{false})
     out = [1.0, 2, 3]
     o1 = f([1.0, 2, 3], [1.0, 2, 3])

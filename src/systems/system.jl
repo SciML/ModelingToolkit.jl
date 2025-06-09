@@ -384,7 +384,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
     if length(unique_sysnames) != length(sysnames)
         throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
     end
-    continuous_events, discrete_events = create_symbolic_events(
+    continuous_events,
+    discrete_events = create_symbolic_events(
         continuous_events, discrete_events, eqs, iv)
 
     if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))

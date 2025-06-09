@@ -202,7 +202,8 @@ function split_system(ci::ClockInference{S}) where {S}
     if continuous_id != 0
         tss[continuous_id], tss[end] = tss[end], tss[continuous_id]
         inputs[continuous_id], inputs[end] = inputs[end], inputs[continuous_id]
-        id_to_clock[continuous_id], id_to_clock[end] = id_to_clock[end],
+        id_to_clock[continuous_id],
+        id_to_clock[end] = id_to_clock[end],
         id_to_clock[continuous_id]
         continuous_id = lastindex(tss)
     end

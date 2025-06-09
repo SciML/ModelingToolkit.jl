@@ -12,13 +12,17 @@ function brusselator_2d_loop(du, u, p, t)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1, jm1 = lim(i + 1, N), lim(i - 1, N), lim(j + 1, N),
         lim(j - 1, N)
-        du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
-                       4u[i, j, 1]) +
-                      B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
-                      brusselator_f(x, y, t)
-        du[i, j, 2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
-                       4u[i, j, 2]) +
-                      A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
+        du[i,
+            j,
+            1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
+                  4u[i, j, 1]) +
+                 B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
+                 brusselator_f(x, y, t)
+        du[i,
+            j,
+            2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
+                  4u[i, j, 2]) +
+                 A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
     end
 end
 

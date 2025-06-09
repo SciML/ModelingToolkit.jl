@@ -297,7 +297,8 @@ function (linfun::LinearizationFunction)(u, p, t)
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
         integ_cache = (linfun.caches,)
         integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
-        u, p, success = SciMLBase.get_initial_values(
+        u, p,
+        success = SciMLBase.get_initial_values(
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...)
         if !success
@@ -744,7 +745,8 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
-    lin_fun, ssys = linearization_function(sys,
+    lin_fun,
+    ssys = linearization_function(sys,
         inputs,
         outputs;
         zero_dummy_der,

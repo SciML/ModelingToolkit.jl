@@ -63,7 +63,7 @@ The same principle applies to any parameter type that is not `Float64`.
 @parameters p1::Int # integer-valued
 @parameters p2::Bool # boolean-valued
 @parameters p3::MyCustomStructType # non-numeric
-@parameters p4::ComponentArray{...} # non-standard array
+@parameters p4::ComponentArray{_...} # non-standard array
 ```
 
 ## Getting the index for a symbol

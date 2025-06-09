@@ -375,34 +375,69 @@ end
 const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([
                                                                                     # simple boolean laws
                                                                                     (@rule (!!(~x)) => (~x))
-                                                                                    (@rule ((~x) & true) => (~x))
-                                                                                    (@rule ((~x) & false) => false)
-                                                                                    (@rule ((~x) | true) => true)
-                                                                                    (@rule ((~x) | false) => (~x))
-                                                                                    (@rule ((~x) & !(~x)) => false)
-                                                                                    (@rule ((~x) | !(~x)) => true)
+                                                                                    (@rule ((~x) &
+                                                                                            true) => (~x))
+                                                                                    (@rule ((~x) &
+                                                                                            false) => false)
+                                                                                    (@rule ((~x) |
+                                                                                            true) => true)
+                                                                                    (@rule ((~x) |
+                                                                                            false) => (~x))
+                                                                                    (@rule ((~x) &
+                                                                                            !(~x)) => false)
+                                                                                    (@rule ((~x) |
+                                                                                            !(~x)) => true)
                                                                                     # reversed order of the above, because it matters and `@acrule` refuses to do its job
-                                                                                    (@rule (true & (~x)) => (~x))
-                                                                                    (@rule (false & (~x)) => false)
-                                                                                    (@rule (true | (~x)) => true)
-                                                                                    (@rule (false | (~x)) => (~x))
-                                                                                    (@rule (!(~x) & (~x)) => false)
-                                                                                    (@rule (!(~x) | (~x)) => true)
+                                                                                    (@rule (true &
+                                                                                            (~x)) => (~x))
+                                                                                    (@rule (false &
+                                                                                            (~x)) => false)
+                                                                                    (@rule (true |
+                                                                                            (~x)) => true)
+                                                                                    (@rule (false |
+                                                                                            (~x)) => (~x))
+                                                                                    (@rule (!(~x) &
+                                                                                            (~x)) => false)
+                                                                                    (@rule (!(~x) |
+                                                                                            (~x)) => true)
                                                                                     # idempotent
-                                                                                    (@rule ((~x) & (~x)) => (~x))
-                                                                                    (@rule ((~x) | (~x)) => (~x))
+                                                                                    (@rule ((~x) &
+                                                                                            (~x)) => (~x))
+                                                                                    (@rule ((~x) |
+                                                                                            (~x)) => (~x))
                                                                                     # ifelse with determined branches
-                                                                                    (@rule ifelse((~x), true, false) => (~x))
-                                                                                    (@rule ifelse((~x), false, true) => !(~x))
+                                                                                    (@rule ifelse(
+                                                                                        (~x),
+                                                                                        true,
+                                                                                        false) => (~x))
+                                                                                    (@rule ifelse(
+                                                                                        (~x),
+                                                                                        false,
+                                                                                        true) => !(~x))
                                                                                     # ifelse with identical branches
-                                                                                    (@rule ifelse((~x), (~y), (~y)) => (~y))
-                                                                                    (@rule ifelse((~x), (~y), !(~y)) => ((~x) &
-                                                                                                                         (~y)))
-                                                                                    (@rule ifelse((~x), !(~y), (~y)) => ((~x) &
-                                                                                                                         !(~y)))
+                                                                                    (@rule ifelse(
+                                                                                        (~x),
+                                                                                        (~y),
+                                                                                        (~y)) => (~y))
+                                                                                    (@rule ifelse(
+                                                                                        (~x),
+                                                                                        (~y),
+                                                                                        !(~y)) => ((~x) &
+                                                                                                   (~y)))
+                                                                                    (@rule ifelse(
+                                                                                        (~x),
+                                                                                        !(~y),
+                                                                                        (~y)) => ((~x) &
+                                                                                                  !(~y)))
                                                                                     # ifelse with determined condition
-                                                                                    (@rule ifelse(true, (~x), (~y)) => (~x))
-                                                                                    (@rule ifelse(false, (~x), (~y)) => (~y))])))
+                                                                                    (@rule ifelse(
+                                                                                        true,
+                                                                                        (~x),
+                                                                                        (~y)) => (~x))
+                                                                                    (@rule ifelse(
+                                                                                        false,
+                                                                                        (~x),
+                                                                                        (~y)) => (~y))])))
 
 """
 If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.
@@ -499,7 +534,8 @@ function IfLifting(sys::System)
 
     for var in new_cond_vars
         condition = generate_condition(cw, var)
-        up_affect, down_affect = generate_affects(
+        up_affect,
+        down_affect = generate_affects(
             cw, var, new_cond_vars, new_cond_vars_graph)
         cb = SymbolicContinuousCallback([condition], up_affect; affect_neg = down_affect,
             initialize = up_affect, rootfind = SciMLBase.RightRootFind)

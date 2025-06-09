@@ -67,7 +67,9 @@ end
     check_complete(sys, DAEProblem)
     check_compatibility && check_compatible_system(DAEProblem, sys)
 
-    f, du0, u0, p = process_SciMLProblem(DAEFunction{iip, spec}, sys, op;
+    f, du0,
+    u0,
+    p = process_SciMLProblem(DAEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, implicit_dae = true, expression, kwargs...)
 

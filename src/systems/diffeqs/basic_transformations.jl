@@ -439,7 +439,8 @@ All accumulation variables have a default of zero.
 function add_accumulations(sys::System, vars::Vector{<:Pair})
     eqs = get_eqs(sys)
     avars = map(first, vars)
-    if (ints = intersect(avars, unknowns(sys)); !isempty(ints))
+    ints = intersect(avars, unknowns(sys))
+    if !isempty(ints)
         error("$ints already exist in the system!")
     end
     D = Differential(get_iv(sys))

@@ -381,7 +381,8 @@ Refer the following example for different ways to define symbolic arrays.
     @parameters begin
         p1[1:4]
         p2[1:N]
-        p3[1:N, 1:M] = 10,
+        p3[1:N,
+            1:M] = 10,
         [description = "A multi-dimensional array of arbitrary length with description"]
         (p4[1:N, 1:M] = 10),
         [description = "An alternate syntax for p3 to match the syntax of vanilla parameters macro"]

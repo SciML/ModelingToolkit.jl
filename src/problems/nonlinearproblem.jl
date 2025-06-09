@@ -63,7 +63,8 @@ end
     end
     check_compatibility && check_compatible_system(NonlinearProblem, sys)
 
-    f, u0, p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(NonlinearFunction{iip, spec}, sys, op;
         check_length, check_compatibility, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)
@@ -79,7 +80,8 @@ end
     check_complete(sys, NonlinearLeastSquaresProblem)
     check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
 
-    f, u0, p = process_SciMLProblem(NonlinearFunction{iip}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(NonlinearFunction{iip}, sys, op;
         check_length, expression, kwargs...)
 
     kwargs = process_kwargs(sys; kwargs...)

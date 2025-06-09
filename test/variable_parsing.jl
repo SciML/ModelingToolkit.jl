@@ -88,7 +88,7 @@ end
 @test getmetadata(x, VariableUnit) == u
 @test getmetadata(y, VariableDefaultValue) === 2
 
-@variables x=[1, 2] [connect = Flow, unit = u] y=2
+@variables x=[1, 2] [connect=Flow, unit=u] y=2
 
 @test getmetadata(x, VariableDefaultValue) == [1, 2]
 @test getmetadata(x, VariableConnectType) == Flow

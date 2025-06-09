@@ -14,15 +14,20 @@ function brusselator_2d_loop(du, u, p, t)
     @inbounds for I in CartesianIndices((N, N))
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
-        ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
+        ip1, im1, jp1,
+        jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
         limit(j - 1, N)
-        du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
-                       4u[i, j, 1]) +
-                      B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
-                      brusselator_f(x, y, t)
-        du[i, j, 2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
-                       4u[i, j, 2]) +
-                      A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
+        du[i,
+            j,
+            1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
+                  4u[i, j, 1]) +
+                 B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
+                 brusselator_f(x, y, t)
+        du[i,
+            j,
+            2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
+                  4u[i, j, 2]) +
+                 A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
     end
 end
 
@@ -115,7 +120,9 @@ function SIRD_ac!(du, u, p, t)
 
     # initialize this parameter (death probability stratified by age, taken from literature)
 
-    δ₁, δ₂, δ₃, δ₄ = [
+    δ₁, δ₂,
+    δ₃,
+    δ₄ = [
         0.003 / 100,
         0.004 / 100,
         (0.015 + 0.030 + 0.064 + 0.213 + 0.718) / (5 * 100),
@@ -255,7 +262,7 @@ sys = modelingtoolkitize(prob)
 @test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
 
-@parameters sig=10 rho=28.0 beta=8 / 3
+@parameters sig=10 rho=28.0 beta=8/3
 @variables x(t)=100 y(t)=1.0 z(t)=1
 
 eqs = [D(x) ~ sig * (y - x),

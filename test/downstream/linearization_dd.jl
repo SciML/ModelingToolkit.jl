@@ -43,9 +43,11 @@ ps = poles(G)
 @test minimum(abs, ps) < 1e-6
 @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
 
-lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
+lsys,
+syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
     allow_input_derivatives = true, zero_dummy_der = true)
-lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
+lsyss,
+sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
     allow_input_derivatives = true)
 
 dummyder = setdiff(unknowns(sysss), unknowns(model))

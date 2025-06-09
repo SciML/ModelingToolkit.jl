@@ -22,7 +22,8 @@
                 build_initializeprob = false, checkbounds, cse, check_length = false,
                 kwargs...)
         else
-            _, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
+            _, u0,
+            p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
                 t = tspan === nothing ? nothing : tspan[1],
                 check_length = false, build_initializeprob = false, kwargs...)
             observedfun = ObservedFunctionCache(sys; eval_expression, eval_module,
@@ -32,7 +33,8 @@
             prob = ODEProblem{true}(df, u0, tspan, p; kwargs...)
         end
     else
-        _f, u0, p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
+        _f, u0,
+        p = process_SciMLProblem(EmptySciMLFunction{iip}, sys, op;
             t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, cse, kwargs...)
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 

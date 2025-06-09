@@ -753,7 +753,8 @@ function generate_constraint_jacobian(
         simplify = false, sparse = false, kwargs...)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    jac, sparsity = calculate_constraint_jacobian(
+    jac,
+    sparsity = calculate_constraint_jacobian(
         sys; simplify, sparse, return_sparsity = true)
     res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
@@ -807,7 +808,8 @@ function generate_constraint_hessian(
         simplify = false, sparse = false, kwargs...)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    hess, sparsity = calculate_constraint_hessian(
+    hess,
+    sparsity = calculate_constraint_hessian(
         sys; simplify, sparse, return_sparsity = true)
     res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
