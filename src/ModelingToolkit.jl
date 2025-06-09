@@ -364,7 +364,8 @@ export DynamicOptSolution
 @public apply_to_variables, equations_toplevel, unknowns_toplevel, parameters_toplevel
 @public continuous_events_toplevel, discrete_events_toplevel, assertions, is_alg_equation
 @public is_diff_equation, Equality, linearize_symbolic, reorder_unknowns
-@public similarity_transform
+@public similarity_transform, inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
+@public unbound_outputs, is_bound
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
