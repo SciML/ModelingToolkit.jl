@@ -71,6 +71,9 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     # PREPROCESSING
     op = anydict(op)
+    if isempty(op)
+        op = copy(defs)
+    end
     u0map = anydict()
     pmap = anydict()
     build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
