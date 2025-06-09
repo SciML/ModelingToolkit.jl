@@ -730,47 +730,49 @@ function unflatten_parameters!(buffer, params, all_ps)
     end
 end
 
-for prop in [:eqs
-             :tag
-             :noise_eqs
-             :iv
-             :unknowns
-             :ps
-             :tspan
-             :brownians
-             :jumps
-             :name
-             :description
-             :var_to_name
-             :defaults
-             :guesses
-             :observed
-             :systems
-             :constraints
-             :bcs
-             :domain
-             :ivs
-             :dvs
-             :connector_type
-             :preface
-             :initializesystem
-             :initialization_eqs
-             :schedule
-             :tearing_state
-             :metadata
-             :gui_metadata
-             :is_initializesystem
-             :is_discrete
-             :parameter_dependencies
-             :assertions
-             :ignored_connections
-             :parent
-             :is_dde
-             :tstops
-             :index_cache
-             :isscheduled
-             :costs
-             :consolidate]
+const SYS_PROPS = [:eqs
+                   :tag
+                   :noise_eqs
+                   :iv
+                   :unknowns
+                   :ps
+                   :tspan
+                   :brownians
+                   :jumps
+                   :name
+                   :description
+                   :var_to_name
+                   :defaults
+                   :guesses
+                   :observed
+                   :systems
+                   :constraints
+                   :bcs
+                   :domain
+                   :ivs
+                   :dvs
+                   :connector_type
+                   :preface
+                   :initializesystem
+                   :initialization_eqs
+                   :schedule
+                   :tearing_state
+                   :metadata
+                   :gui_metadata
+                   :is_initializesystem
+                   :is_discrete
+                   :parameter_dependencies
+                   :assertions
+                   :ignored_connections
+                   :parent
+                   :is_dde
+                   :tstops
+                   :index_cache
+                   :isscheduled
+                   :costs
+                   :consolidate]
+
+for prop in SYS_PROPS
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
@@ -780,7 +782,6 @@ for prop in [:eqs
         Get the internal field `$($(QuoteNode(prop)))` of a system `sys`.
         It only includes `$($(QuoteNode(prop)))` local to `sys`; not those of its subsystems,
         like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
-        This is equivalent to, but preferred over `sys.$($(QuoteNode(prop)))`.
 
         See also [`has_$($(QuoteNode(prop)))`](@ref).
         """
