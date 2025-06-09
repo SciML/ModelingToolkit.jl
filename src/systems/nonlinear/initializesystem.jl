@@ -1,3 +1,34 @@
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the initialization system for `sys`. The initialization system is a system of
+nonlinear equations that solve for the full set of initial conditions of `sys` given
+specified constraints.
+
+The initialization system can be of two types: time-dependent and time-independent.
+Time-dependent initialization systems solve for the initial values of unknowns as well as
+the values of solvable parameters of the system. Time-independent initialization systems
+only solve for solvable parameters of the system.
+
+# Keyword arguments
+
+- `time_dependent_init`: Whether to create an initialization system for a time-dependent
+  system. A time-dependent initialization requires a time-dependent `sys`, but a time-
+  independent initialization can be created regardless.
+- `op`: The operating point of user-specified initial conditions of variables in `sys`.
+- `initialization_eqs`: Additional initialization equations to use apart from those in
+  `initialization_equations(sys)`.
+- `guesses`: Additional guesses to use apart from those in `guesses(sys)`.
+- `default_dd_guess`: Default guess for dummy derivative variables in time-dependent
+  initialization.
+- `algebraic_only`: If `false`, does not use initialization equations (provided via the
+  keyword or part of the system) to construct initialization.
+- `check_defguess`: Whether to error when a variable does not have a default or guess
+  despite ModelingToolkit expecting it to.
+- `name`: The name of the initialization system.
+
+All other keyword arguments are forwarded to the [`System`](@ref) constructor.
+"""
 function generate_initializesystem(
         sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
     if time_dependent_init

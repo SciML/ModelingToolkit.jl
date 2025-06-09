@@ -146,7 +146,7 @@ nyquistplot(P)
 Pages = ["linear_analysis.md"]
 ```
 
-```@autodocs
+```@autodocs; canonical = false
 Modules = [ModelingToolkit]
 Pages   = ["systems/analysis_points.jl"]
 Order   = [:function, :type]

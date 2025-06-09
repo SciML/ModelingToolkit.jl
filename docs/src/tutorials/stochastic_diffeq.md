@@ -39,7 +39,7 @@ By "multiplying" the equations by $dt$, the notation used in
 can be recovered.
 
 We use this Langevin-like notation because it allows us to extend MTK modeling capacity from ODEs to SDEs,
-using only a single new concept, `@brownian` variables, which represent $\frac{dB}{dt}$ in the above equation.
+using only a single new concept, `@brownians` variables, which represent $\frac{dB}{dt}$ in the above equation.
 
 ```@example SDE
 using ModelingToolkit, StochasticDiffEq
@@ -48,7 +48,7 @@ using Plots
 
 @parameters σ=10.0 ρ=2.33 β=26.0
 @variables x(t)=5.0 y(t)=5.0 z(t)=1.0
-@brownian B
+@brownians B
 eqs = [D(x) ~ σ * (y - x) + 0.3x * B,
     D(y) ~ x * (ρ - z) - y + 0.3y * B,
     D(z) ~ x * y - β * z + 0.3z * B]
@@ -80,10 +80,10 @@ plot(sol)
 ```
 
 If you want uncorrelated noise for each equation,
-multiple `@brownian` variables have to be declared.
+multiple `@brownians` variables have to be declared.
 
 ```@example SDE
-@brownian Bx By Bz
+@brownians Bx By Bz
 eqs = [D(x) ~ σ * (y - x) + 0.3x * Bx,
     D(y) ~ x * (ρ - z) - y + 0.3y * By,
     D(z) ~ x * y - β * z + 0.3z * Bz]

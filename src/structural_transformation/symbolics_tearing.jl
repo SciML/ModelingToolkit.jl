@@ -1265,7 +1265,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     for (arrvar, cnt) in arr_obs_occurrences
         cnt == length(arrvar) || continue
         # firstindex returns 1 for multidimensional array symbolics
-        firstind = first(eachindex(arrvar))
+        firstind = Tuple(first(eachindex(arrvar)))
         scal = [arrvar[i] for i in eachindex(arrvar)]
         # respect non-1-indexed arrays
         # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
@@ -1273,8 +1273,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
         # try to `create_array(OffsetArray{...}, ...)` which errors.
         # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
         # of `scal`.
-        rhs = scal
-        rhs = change_origin(firstind, rhs)
+        rhs = change_origin(firstind, scal)
         push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
@@ -1284,7 +1283,7 @@ end
 
 # PART OF HACK
 function change_origin(origin, arr)
-    if all(isone, Tuple(origin))
+    if all(isone, origin)
         return arr
     end
     return Origin(origin)(arr)

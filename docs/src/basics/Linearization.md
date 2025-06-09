@@ -153,7 +153,7 @@ Also see [ControlSystemsMTK.jl](https://juliacontrol.github.io/ControlSystemsMTK
 Pages = ["Linearization.md"]
 ```
 
-```@docs
+```@docs; canonical = false
 linearize
 ModelingToolkit.linearize_symbolic
 ModelingToolkit.linearization_function

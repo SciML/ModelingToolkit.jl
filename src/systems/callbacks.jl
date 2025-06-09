@@ -941,7 +941,23 @@ function discrete_events(sys::AbstractSystem)
     cbs
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Returns whether the system `sys` has the internal field `discrete_events`.
+
+See also [`get_discrete_events`](@ref).
+"""
 has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
+"""
+    $(TYPEDSIGNATURES)
+
+Get the internal field `discrete_events` of a system `sys`.
+It only includes `discrete_events` local to `sys`; not those of its subsystems,
+like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
+
+See also [`has_discrete_events`](@ref).
+"""
 function get_discrete_events(sys::AbstractSystem)
     has_discrete_events(sys) || return SymbolicDiscreteCallback[]
     getfield(sys, :discrete_events)
@@ -984,7 +1000,23 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Returns whether the system `sys` has the internal field `continuous_events`.
+
+See also [`get_continuous_events`](@ref).
+"""
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
+"""
+    $(TYPEDSIGNATURES)
+
+Get the internal field `continuous_events` of a system `sys`.
+It only includes `continuous_events` local to `sys`; not those of its subsystems,
+like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
+
+See also [`has_continuous_events`](@ref).
+"""
 function get_continuous_events(sys::AbstractSystem)
     has_continuous_events(sys) || return SymbolicContinuousCallback[]
     getfield(sys, :continuous_events)

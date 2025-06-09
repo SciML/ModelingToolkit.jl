@@ -75,7 +75,7 @@ u = [rand()]
 
 ## Generating an output function, ``g``
 
-ModelingToolkit can also generate a function that computes a specified output of a system, the function ``y = g(x, u, p, t)`` above. This is done using the function [`build_explicit_observed_function`](@ref). When generating an output function, the user must specify the output variable(s) of interest, as well as any inputs if inputs are relevant to compute the output.
+ModelingToolkit can also generate a function that computes a specified output of a system, the function ``y = g(x, u, p, t)`` above. This is done using the function [`ModelingToolkit.build_explicit_observed_function`](@ref). When generating an output function, the user must specify the output variable(s) of interest, as well as any inputs if inputs are relevant to compute the output.
 
 The order of the user-specified output variables determines the order of the output vector ``y``.
 
@@ -93,7 +93,7 @@ See [Linearization](@ref linearization).
 Pages = ["InputOutput.md"]
 ```
 
-```@docs
+```@docs; canonical=false
 ModelingToolkit.generate_control_function
 ModelingToolkit.build_explicit_observed_function
 ```

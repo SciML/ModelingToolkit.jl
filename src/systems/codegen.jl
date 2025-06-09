@@ -277,6 +277,16 @@ function generate_tgrad(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return an array of symbolic hessians corresponding to the equations of the system.
+
+# Keyword Arguments
+
+- `sparse`: Controls whether the symbolic hessians are sparse matrices
+- `simplify`: Forwarded to `Symbolics.hessian`
+"""
 function calculate_hessian(sys::System; simplify = false, sparse = false)
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)]
     dvs = unknowns(sys)
@@ -484,6 +494,17 @@ function W_sparsity(sys::System)
     jac_sparsity .| M_sparsity
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the matrix to use as the jacobian prototype given the W-sparsity matrix of the
+system. This is not the same as the jacobian sparsity pattern.
+
+# Keyword arguments
+
+- `u0`: The `u0` vector for the problem.
+- `sparse`: The prototype is `nothing` for non-sparse matrices.
+"""
 function calculate_W_prototype(W_sparsity; u0 = nothing, sparse = false)
     sparse || return nothing
     uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -599,6 +620,12 @@ function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the gradient of the consolidated cost of `sys` with respect to the unknowns.
+`simplify` is forwarded to `Symbolics.gradient`.
+"""
 function calculate_cost_gradient(sys::System; simplify = false)
     obj = cost(sys)
     dvs = unknowns(sys)
@@ -629,6 +656,13 @@ function generate_cost_gradient(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the hessian of the consolidated cost of `sys` with respect to the unknowns.
+`simplify` is forwarded to `Symbolics.hessian`. `sparse` controls whether a sparse
+matrix is returned.
+"""
 function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
     obj = cost(sys)
     dvs = unknowns(sys)

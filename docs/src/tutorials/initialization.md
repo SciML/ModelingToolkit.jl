@@ -362,7 +362,7 @@ which requires the system-level information and the additional nonlinear equatio
 tagged to the system.
 
 ```@example init
-isys = generate_initializesystem(pend, u0map = [x => 1.0, y => 0.0], guesses = [λ => 1])
+isys = generate_initializesystem(pend; op = [x => 1.0, y => 0.0], guesses = [λ => 1])
 ```
 
 We can inspect what its equations and unknown values are:
@@ -388,7 +388,7 @@ does not match the number of unknowns, which we can use to investigate our overd
 
 ```@example init
 isys = ModelingToolkit.generate_initializesystem(
-    pend, u0map = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1])
+    pend; op = [x => 1, y => 0.0, D(y) => 2.0, λ => 1], guesses = [λ => 1])
 ```
 
 ```@example init
@@ -418,7 +418,7 @@ creates the special initialization system for a given `sys`. This is done as fol
 
 ```@example init
 iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0, D(y) => 2.0, λ => 1], [g => 1], guesses = [λ => 1])
+    [x => 1, y => 0.0, D(y) => 2.0, λ => 1, g => 1], guesses = [λ => 1])
 ```
 
 We can see that because the system is overdetermined we receive a NonlinearLeastSquaresProblem,
@@ -460,7 +460,7 @@ some of the conditions:
 
 ```@example init
 iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0, D(y) => 0.0, λ => 0], [g => 1], guesses = [λ => 1])
+    [x => 1, y => 0.0, D(y) => 0.0, λ => 0, g => 1], guesses = [λ => 1])
 ```
 
 gives a NonlinearLeastSquaresProblem which can be solved:
@@ -477,7 +477,7 @@ In comparison, if we have a well-conditioned system:
 
 ```@example init
 iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0], [g => 1], guesses = [λ => 1])
+    [x => 1, y => 0.0, g => 1], guesses = [λ => 1])
 ```
 
 notice that we instead obtained a NonlinearSystem. In this case we have to use

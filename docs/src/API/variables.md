@@ -1,4 +1,4 @@
-# Symbolic variables and variable metadata
+# [Symbolic variables and variable metadata](@id symbolic_metadata)
 
 ModelingToolkit uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) for the symbolic
 manipulation infrastructure. In fact, the `@variables` macro is defined in Symbolics.jl. In
@@ -85,7 +85,7 @@ hasconnect
 getconnect
 ```
 
-```@docs; canonical = false
+```@docs; canonical=false
 Flow
 Stream
 ```
@@ -165,7 +165,7 @@ getguess
 When a system is constructed, the guesses of the involved variables are stored in a `Dict`
 in the system. After this point, the guess metadata of the variable is irrelevant.
 
-```@docs; canonical = false
+```@docs; canonical=false
 guesses
 ```
 
@@ -315,7 +315,7 @@ b = getbounds(sys) # Operating on the system, we get a dict
 
 See also:
 
-```@docs; canonical = false
+```@docs; canonical=false
 tunable_parameters
 ModelingToolkit.dump_unknowns
 ModelingToolkit.dump_parameters

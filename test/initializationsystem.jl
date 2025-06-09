@@ -592,7 +592,7 @@ end
 @testset "Initialization of parameters" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
     sarray_ctor = splat(SVector)
     # `System` constructor creates appropriate type with mtkcompile
@@ -881,7 +881,7 @@ end
 @testset "Update initializeprob parameters" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -910,7 +910,7 @@ end
 @testset "Equations for dependent parameters" begin
     @variables _x(..)
     @parameters p q=5 r
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -933,7 +933,7 @@ end
 @testset "Re-creating initialization problem on remake" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (Problem, alg, rhss) in [
@@ -965,7 +965,7 @@ end
 @testset "`remake` changes initialization problem types" begin
     @variables _x(..) y(t) z(t)
     @parameters p q
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -1022,7 +1022,7 @@ end
 @testset "`remake` preserves old u0map and pmap" begin
     @variables _x(..) y(t)
     @parameters p
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -1426,7 +1426,7 @@ end
 
 @testset "Trivial initialization is run on problem construction" begin
     @variables _x(..) y(t)
-    @brownian a
+    @brownians a
     @parameters tot
     x = _x(t)
     @testset "$Problem" for (Problem, lhs, rhs) in [

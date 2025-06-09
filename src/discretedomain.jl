@@ -1,5 +1,11 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
+"""
+    function SampleTime()
+
+`SampleTime()` can be used in the equations of a hybrid system to represent time sampled
+at the inferred clock for that equation.
+"""
 struct SampleTime <: Operator
     SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
 end
