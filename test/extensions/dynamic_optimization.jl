@@ -47,7 +47,7 @@ const M = ModelingToolkit
     @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
     pprob = PyomoDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test all([≈(psol.sol(t), osol2(t), rtol = 1e-2) for t in 0.:0.01:1.])
+    @test all([≈(psol.sol(t), osol2(t), rtol = 1e-2) for t in 0.0:0.01:1.0])
 
     # With a constraint
     u0map = Pair[]
@@ -55,7 +55,8 @@ const M = ModelingToolkit
     constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
     @mtkcompile lksys = System(eqs, t; constraints = constr)
 
-    jprob = JuMPDynamicOptProblem(lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(
+        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
     @test jsol.sol(0.6; idxs = x(t)) ≈ 3.5
     @test jsol.sol(0.3; idxs = x(t)) ≈ 7.0
@@ -74,7 +75,8 @@ const M = ModelingToolkit
 
     iprob = InfiniteOptDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3))) # 48.564 ms, 9.58 MiB
+    isol = solve(iprob,
+        InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3))) # 48.564 ms, 9.58 MiB
     sol = isol.sol
     @test sol(0.6; idxs = x(t)) ≈ 3.5
     @test sol(0.3; idxs = x(t)) ≈ 7.0
@@ -84,14 +86,17 @@ const M = ModelingToolkit
     @mtkcompile lksys = System(eqs, t; constraints = constr)
     iprob = InfiniteOptDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+    isol = solve(iprob,
+        InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
     @test all(u -> u > [1, 1], isol.sol.u)
 
-    jprob = JuMPDynamicOptProblem(lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+    jprob = JuMPDynamicOptProblem(
+        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIA3()))
     @test all(u -> u > [1, 1], jsol.sol.u)
 
-    pprob = PyomoDynamicOptProblem(lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+    pprob = PyomoDynamicOptProblem(
+        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", MidpointEuler()))
     @test all(u -> u > [1, 1], psol.sol.u)
 
@@ -110,9 +115,9 @@ function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
 end
 
 function ctrl_to_spline(inputsol, splineType)
-   us = reduce(vcat, inputsol.u)
-   ts = reduce(vcat, inputsol.t)
-   splineType(us, ts)
+    us = reduce(vcat, inputsol.u)
+    ts = reduce(vcat, inputsol.t)
+    splineType(us, ts)
 end
 
 @testset "Linear systems" begin
@@ -131,7 +136,8 @@ end
     tspan = (0.0, 1.0)
     parammap = [u(t) => 0.0]
     jprob = JuMPDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
-    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()), verbose = true)
+    jsol = solve(
+        jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()), verbose = true)
     # Linear systems have bang-bang controls
     @test is_bangbang(jsol.input_sol, [-1.0], [1.0])
     # Test reached final position.
@@ -156,7 +162,7 @@ end
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1e-5)
-    
+
     pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test is_bangbang(psol.input_sol, [-1.0], [1.0])
@@ -165,7 +171,7 @@ end
     spline = ctrl_to_spline(isol.input_sol, ConstantInterpolation)
     oprob = ODEProblem(block_ode, [u0map; u_interp => spline], tspan)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
-    @test all([≈(psol.sol(t), osol(t), rtol = 0.05) for t in 0.:0.01:1.])
+    @test all([≈(psol.sol(t), osol(t), rtol = 0.05) for t in 0.0:0.01:1.0])
 
     ###################
     ### Bee example ###
@@ -210,7 +216,7 @@ end
     @test ≈(osol.u, csol.sol.u, rtol = 0.01)
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
-    @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.:0.01:4.])
+    @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.0:0.01:4.0])
 end
 
 @testset "Rocket launch" begin
@@ -240,7 +246,8 @@ end
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
     @test jsol.sol[h(t)][end] > 1.012
 
-    cprob = CasADiDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
+    cprob = CasADiDynamicOptProblem(
+        rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
     csol = solve(cprob, CasADiCollocation("ipopt"))
     @test csol.sol[h(t)][end] > 1.012
 
@@ -378,7 +385,8 @@ end
     @test csol.sol.u[end] ≈ [π, 0, 0, 0]
 
     iprob = InfiniteOptDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
-    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(2)))
+    isol = solve(iprob,
+        InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(2)))
     @test isol.sol.u[end] ≈ [π, 0, 0, 0]
 
     pprob = PyomoDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)

@@ -93,7 +93,7 @@ function PyomoCollocation end
 
 function warn_overdetermined(sys, op)
     cstrs = constraints(sys)
-    init_conds = filter(x -> value(x) ∈ Set(unknowns(sys)), [k for (k,v) in op])
+    init_conds = filter(x -> value(x) ∈ Set(unknowns(sys)), [k for (k, v) in op])
     if !isempty(cstrs)
         (length(cstrs) + length(init_conds) > length(unknowns(sys))) &&
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
@@ -227,11 +227,11 @@ end
 ##########################
 ### MODEL CONSTRUCTION ###
 ##########################
-function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
-    dt = nothing,
-    steps = nothing,
-    guesses = Dict(), kwargs...)
-
+function process_DynamicOptProblem(
+        prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
+        dt = nothing,
+        steps = nothing,
+        guesses = Dict(), kwargs...)
     warn_overdetermined(sys, op)
     ctrls = unbound_inputs(sys)
     states = unknowns(sys)
@@ -239,7 +239,7 @@ function process_DynamicOptProblem(prob_type::Type{<:AbstractDynamicOptProblem},
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-        [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
+              [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
 
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
     f, u0, p = process_SciMLProblem(ODEInputFunction, sys, _op;
@@ -302,7 +302,7 @@ function set_variable_bounds!(m, sys, pmap, tf)
     end
 end
 
-is_free_final(model) = model.is_free_final 
+is_free_final(model) = model.is_free_final
 
 function add_cost_function!(model, sys, tspan, pmap)
     jcosts = cost(sys)
@@ -335,14 +335,15 @@ function substitute_integral(model, expr, tspan)
     Symbolics.substitute(expr, intmap)
 end
 
-function process_integral_bounds(model, integral_span, tspan) 
+function process_integral_bounds(model, integral_span, tspan)
     if is_free_final(model) && isequal(integral_span, tspan)
         integral_span = (0, 1)
     elseif is_free_final(model)
         error("Free final time problems cannot handle partial timespans.")
     else
         (lo, hi) = integral_span
-        (lo < tspan[1] || hi > tspan[2]) && error("Integral bounds are beyond the timespan.")
+        (lo < tspan[1] || hi > tspan[2]) &&
+            error("Integral bounds are beyond the timespan.")
         integral_span
     end
 end
@@ -353,12 +354,14 @@ function substitute_model_vars(model, sys, exprs, tspan)
     c_ops = [operation(unwrap(ct)) for ct in unbound_inputs(sys)]
     t = get_iv(sys)
 
-    exprs = map(c -> Symbolics.fast_substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
+    exprs = map(
+        c -> Symbolics.fast_substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
 
     (ti, tf) = tspan
     if symbolic_type(tf) === ScalarSymbolic()
         _tf = model.tₛ + ti
-        exprs = map(c -> Symbolics.fast_substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
+        exprs = map(
+            c -> Symbolics.fast_substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
         exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
     end
     exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
@@ -392,7 +395,8 @@ function fixed_t_map end
 function add_user_constraints!(model, sys, tspan, pmap)
     jconstraints = get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
-    cons_dvs, cons_ps = process_constraint_system(jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false)
+    cons_dvs, cons_ps = process_constraint_system(
+        jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false)
 
     is_free_final(model) && check_constraint_vars(cons_dvs)
 
@@ -421,12 +425,13 @@ function add_equational_constraints!(model, sys, pmap, tspan)
 end
 
 function set_objective! end
-objective_value(sol::DynamicOptSolution) = objective_value(sol.model) 
+objective_value(sol::DynamicOptSolution) = objective_value(sol.model)
 
 function substitute_differentials(model, sys, eqs)
     t = get_iv(sys)
     D = Differential(t)
-    diffsubmap = Dict([D(lowered_var(model, :U, i, t)) => lowered_derivative(model, i) for i in 1:length(unknowns(sys))])
+    diffsubmap = Dict([D(lowered_var(model, :U, i, t)) => lowered_derivative(model, i)
+                       for i in 1:length(unknowns(sys))])
     eqs = map(c -> Symbolics.substitute(c, diffsubmap), eqs)
 end
 
@@ -466,9 +471,10 @@ function successful_solve end
 
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
-function DiffEqBase.solve(prob::AbstractDynamicOptProblem, solver::AbstractCollocation; verbose = false, kwargs...)
+function DiffEqBase.solve(prob::AbstractDynamicOptProblem,
+        solver::AbstractCollocation; verbose = false, kwargs...)
     solved_model = prepare_and_optimize!(prob, solver; verbose, kwargs...)
-    
+
     ts = get_t_values(solved_model)
     Us = get_U_values(solved_model)
     Vs = get_V_values(solved_model)
