@@ -249,11 +249,11 @@ par = @parameters g = 9.8
 bb_eqs = [D(x) ~ v
           D(v) ~ -g]
 
-function bb_affect!(integ, u, p, ctx)
-    integ.u[u.v] = -integ.u[u.v]
+function bb_affect!(mod, obs, integ, ctx)
+    return (; v = -mod.v)
 end
 
-reflect = [x ~ 0] => (bb_affect!, [v], [], [], nothing)
+reflect = [x ~ 0] => (bb_affect!, (; v))
 
 @mtkcompile bb_sys = System(bb_eqs, t, sts, par,
     continuous_events = reflect)

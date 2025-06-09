@@ -88,7 +88,7 @@ Strings are not considered symbolic variables, and thus cannot directly be used 
 indexing. However, ModelingToolkit does provide a method to parse the string representation of
 a variable, given the system in which that variable exists.
 
-```@docs
+```@docs; canonical = false
 ModelingToolkit.parse_variable
 ```
 
@@ -260,14 +260,14 @@ D = Differential(x)
 Tunable parameters are floating point parameters, not used in callbacks and not marked with `tunable = false` in their metadata. These are expected to be used with AD
 and optimization libraries. As such, they are stored together in one `Vector{T}`. To obtain the ordering of tunable parameters in this buffer, use:
 
-```@docs
+```@docs; canonical = false
 tunable_parameters
 ```
 
 If you have an array in which a particular dimension is in the order of tunable parameters (e.g. the jacobian with respect to tunables) then that dimension of the
 array can be reordered into the required permutation using the symbolic variables:
 
-```@docs
+```@docs; canonical = false
 reorder_dimension_by_tunables!
 reorder_dimension_by_tunables
 ```

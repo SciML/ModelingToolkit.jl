@@ -32,7 +32,7 @@ or analysis points of the hierarchical system.
 ModelingToolkit.has_eqs
 ModelingToolkit.get_eqs
 equations
-equations_toplevel
+ModelingToolkit.equations_toplevel
 full_equations
 ModelingToolkit.has_noise_eqs
 ModelingToolkit.get_noise_eqs
@@ -44,17 +44,17 @@ ModelingToolkit.get_constraints
 constraints
 ModelingToolkit.has_costs
 ModelingToolkit.get_costs
-costs
+cost
 ModelingToolkit.has_consolidate
 ModelingToolkit.get_consolidate
 ModelingToolkit.has_unknowns
 ModelingToolkit.get_unknowns
 unknowns
-unknowns_toplevel
+ModelingToolkit.unknowns_toplevel
 ModelingToolkit.has_ps
 ModelingToolkit.get_ps
 parameters
-parameters_toplevel
+ModelingToolkit.parameters_toplevel
 tunable_parameters
 ModelingToolkit.has_brownians
 ModelingToolkit.get_brownians
@@ -77,19 +77,20 @@ defaults
 ModelingToolkit.has_guesses
 ModelingToolkit.get_guesses
 guesses
+ModelingToolkit.get_systems
 ModelingToolkit.has_initialization_eqs
 ModelingToolkit.get_initialization_eqs
 initialization_equations
 ModelingToolkit.has_continuous_events
 ModelingToolkit.get_continuous_events
 continuous_events
-continuous_events_toplevel
+ModelingToolkit.continuous_events_toplevel
 ModelingToolkit.has_discrete_events
 ModelingToolkit.get_discrete_events
-discrete_events_toplevel
+ModelingToolkit.discrete_events_toplevel
 ModelingToolkit.has_assertions
 ModelingToolkit.get_assertions
-assertions
+ModelingToolkit.assertions
 ModelingToolkit.has_metadata
 ModelingToolkit.get_metadata
 SymbolicUtils.getmetadata(::ModelingToolkit.AbstractSystem, ::DataType, ::Any)
@@ -144,8 +145,8 @@ has_diff_equations
 has_alg_equations
 diff_equations
 alg_equations
-is_alg_equation
-is_diff_equation
+ModelingToolkit.is_alg_equation
+ModelingToolkit.is_diff_equation
 ```
 
 ## String parsing
@@ -165,6 +166,18 @@ ModelingToolkit.dump_parameters
 
 ```@docs; canonical = false
 ModelingToolkit.dump_variable_metadata
+```
+
+## Inputs and outputs
+
+```@docs
+ModelingToolkit.inputs
+ModelingToolkit.outputs
+ModelingToolkit.bound_inputs
+ModelingToolkit.unbound_inputs
+ModelingToolkit.bound_outputs
+ModelingToolkit.unbound_outputs
+ModelingToolkit.is_bound
 ```
 
 ## Debugging utilities

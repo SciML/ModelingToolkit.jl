@@ -1,5 +1,7 @@
 using Documenter, ModelingToolkit
 using ModelingToolkit: SciMLBase
+# To load docstring from extension
+import FMI, CommonSolve, JumpProcesses
 
 # Make sure that plots don't throw a bunch of warnings / errors!
 ENV["GKSwstype"] = "100"

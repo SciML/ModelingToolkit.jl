@@ -8,7 +8,6 @@ ModelingToolkit.generate_rhs
 ModelingToolkit.generate_diffusion_function
 ModelingToolkit.generate_jacobian
 ModelingToolkit.generate_tgrad
-ModelingToolkit.generate_hessian
 ModelingToolkit.generate_W
 ModelingToolkit.generate_dae_jacobian
 ModelingToolkit.generate_history
@@ -21,6 +20,7 @@ ModelingToolkit.generate_constraint_jacobian
 ModelingToolkit.generate_constraint_hessian
 ModelingToolkit.generate_control_jacobian
 ModelingToolkit.build_explicit_observed_function
+ModelingToolkit.generate_control_function
 ```
 
 For functions such as jacobian calculation which require symbolic computation, there
@@ -42,4 +42,10 @@ ModelingToolkit.cost_hessian_sparsity
 ModelingToolkit.calculate_constraint_jacobian
 ModelingToolkit.calculate_constraint_hessian
 ModelingToolkit.calculate_control_jacobian
+```
+
+All code generation eventually calls `build_function_wrapper`.
+
+```@docs
+build_function_wrapper
 ```

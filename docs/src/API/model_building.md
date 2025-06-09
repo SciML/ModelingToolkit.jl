@@ -81,7 +81,7 @@ Similar to the `stream` and `flow` keyword arguments in the specification, Model
 allows specifying how variables in a connector behave in a connection.
 
 ```@docs
-Equality
+ModelingToolkit.Equality
 Flow
 Stream
 ```
@@ -168,7 +168,6 @@ Symbolic affects are handled using equations as described in the [Events](@ref e
 section of the documentation. User-defined functions can be used via `ImperativeAffect`.
 
 ```@docs
-ModelingToolkit.AffectSystem
 ModelingToolkit.ImperativeAffect
 ```
 

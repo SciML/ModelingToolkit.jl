@@ -9,46 +9,46 @@ code for a variety of such numerical problems.
 ## Dynamical systems
 
 ```@docs
-ODEFunction(::System, args...)
-ODEProblem(::System, args...)
-DAEFunction(::System, args...)
-DAEProblem(::System, args...)
-SDEFunction(::System, args...)
-SDEProblem(::System, args...)
-DDEFunction(::System, args...)
-DDEProblem(::System, args...)
-SDDEFunction(::System, args...)
-SDDEProblem(::System, args...)
-JumpProblem(::System, args...)
-BVProblem(::System, args...)
-DiscreteProblem(::System, args...)
-ImplicitDiscreteProblem(::System, args...)
+SciMLBase.ODEFunction
+SciMLBase.ODEProblem
+SciMLBase.DAEFunction
+SciMLBase.DAEProblem
+SciMLBase.SDEFunction
+SciMLBase.SDEProblem
+SciMLBase.DDEFunction
+SciMLBase.DDEProblem
+SciMLBase.SDDEFunction
+SciMLBase.SDDEProblem
+JumpProcesses.JumpProblem
+SciMLBase.BVProblem
+SciMLBase.DiscreteProblem
+SciMLBase.ImplicitDiscreteProblem
 ```
 
 ## Nonlinear systems
 
 ```@docs
-NonlinearFunction(::System, args...)
-NonlinearProblem(::System, args...)
-SCCNonlinearProblem(::System, args...)
-NonlinearLeastSquaresProblem(::System, args...)
-SteadyStateProblem(::System, args...)
-IntervalNonlinearFunction(::System, args...)
-IntervalNonlinearProblem(::System, args...)
+SciMLBase.NonlinearFunction
+SciMLBase.NonlinearProblem
+SciMLBase.SCCNonlinearProblem
+SciMLBase.NonlinearLeastSquaresProblem
+SciMLBase.SteadyStateProblem
+SciMLBase.IntervalNonlinearFunction
+SciMLBase.IntervalNonlinearProblem
 ModelingToolkit.HomotopyContinuationProblem
-HomotopyNonlinearFunction(::System, args...)
+SciMLBase.HomotopyNonlinearFunction
 ```
 
 ## Optimization and optimal control
 
 ```@docs
-OptimizationFunction(::System, args...)
-OptimizationProblem(::System, args...)
-ODEInputFunction(::System, args...)
-JuMPDynamicOptProblem(::System, args...)
-InfiniteOptDynamicOptProblem,(::System, args...)
-CasADiDynamicOptProblem(::System, args...)
-DynamicOptSolution
+SciMLBase.OptimizationFunction
+SciMLBase.OptimizationProblem
+SciMLBase.ODEInputFunction
+ModelingToolkit.JuMPDynamicOptProblem
+ModelingToolkit.InfiniteOptDynamicOptProblem
+ModelingToolkit.CasADiDynamicOptProblem
+ModelingToolkit.DynamicOptSolution
 ```
 
 ## The state vector and parameter object
@@ -102,7 +102,7 @@ There are also utilities for manipulating the results of these analyses in a sym
 
 ```@docs
 ModelingToolkit.similarity_transform
-ModelingToolkit.reorder_unknnowns
+ModelingToolkit.reorder_unknowns
 ```
 
 ### Analysis point transformations
