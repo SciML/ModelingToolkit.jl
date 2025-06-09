@@ -358,7 +358,7 @@ end
     @testset "SDESystem" begin
         @variables x(t) p a
         @parameters y(t) q b
-        @brownian c
+        @brownians c
         @mtkcompile sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
             [p, q], [a, b, c]; initialization_eqs = [p + q ~ 4],
             guesses = [p => 1.0], defaults = [p => missing])

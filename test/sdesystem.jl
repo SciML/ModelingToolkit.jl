@@ -591,7 +591,7 @@ end
 
 sts = @variables x(tt) y(tt) z(tt)
 ps = @parameters σ ρ
-@brownian β η
+@brownians β η
 s = 0.001
 β *= s
 η *= s
@@ -636,7 +636,7 @@ ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
 # Issue#2814
 @parameters p d
 @variables x(tt)
-@brownian a
+@brownians a
 eqs = [D(x) ~ p - d * x + a * sqrt(p)]
 @mtkcompile sys = System(eqs, tt)
 u0 = @SVector[x => 10.0]
@@ -649,7 +649,7 @@ sprob = SDEProblem(sys, [u0; ps], tspan)
 
 # Ensure diagonal noise generates vector noise function
 @variables y(tt)
-@brownian b
+@brownians b
 eqs = [D(x) ~ p - d * x + a * sqrt(p)
        D(y) ~ p - d * y + b * sqrt(d)]
 @mtkcompile sys = System(eqs, tt)
@@ -663,7 +663,7 @@ sprob = SDEProblem(sys, [u0; ps], tspan)
 let
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
-    @brownian a
+    @brownians a
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
         D(z) ~ x * y - β * z + 0.1a * z]
@@ -688,7 +688,7 @@ end
 
 let # test to make sure that scalar noise always receive the same kicks
     @variables x(t) y(t)
-    @brownian a
+    @brownians a
     eqs = [D(x) ~ a,
         D(y) ~ a]
 
@@ -701,7 +701,7 @@ end
 let # test that diagonal noise is correctly handled
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
-    @brownian a b c
+    @brownians a b c
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1b * y,
         D(z) ~ x * y - β * z + 0.1c * z]
@@ -728,7 +728,7 @@ end
 @testset "Non-diagonal noise check" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
-    @brownian a b c d e f
+    @brownians a b c d e f
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x + d,
         D(y) ~ x * (ρ - z) - y + 0.1b * y + e,
         D(z) ~ x * y - β * z + 0.1c * z + f]
@@ -757,7 +757,7 @@ end
 @testset "Diagonal noise, less brownians than equations" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
-    @brownian a b
+    @brownians a b
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,     # One brownian
         D(y) ~ x * (ρ - z) - y + 0.1b * y, # Another brownian
         D(z) ~ x * y - β * z]              # no brownians -- still diagonal
@@ -781,7 +781,7 @@ end
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
-    @brownian b
+    @brownians b
     @mtkcompile sys = System([D(x) ~ x + b], t)
     prob = @test_nowarn SDEProblem(sys, nothing, (0.0, 1.0))
     @test_nowarn solve(prob, ImplicitEM())
@@ -794,7 +794,7 @@ end
         [input = true]
     end
     ps = @parameters a = 2
-    browns = @brownian η
+    browns = @brownians η
 
     eqs = [D(x) ~ -a * x + (input + 1) * η
            input ~ 0.0]
@@ -808,7 +808,7 @@ end
 
 @testset "Observed variables retained after `mtkcompile`" begin
     @variables x(t) y(t) z(t)
-    @brownian a
+    @brownians a
     @mtkcompile sys = System([D(x) ~ x + a, D(y) ~ y + a, z ~ x + y], t)
     @test length(observed(sys)) == 1
     prob = SDEProblem(sys, [x => 1.0, y => 1.0], (0.0, 1.0))
@@ -875,7 +875,7 @@ end
 @testset "Validate input types" begin
     @parameters p d
     @variables X(t)::Int64
-    @brownian z
+    @brownians z
     eq2 = D(X) ~ p - d * X + z
     @test_throws ModelingToolkit.ContinuousOperatorDiscreteArgumentError @mtkcompile ssys = System(
         [eq2], t)
@@ -929,7 +929,7 @@ end
 @testset "Error when constructing SDEProblem without `mtkcompile`" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
-    @brownian a
+    @brownians a
     eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
         D(z) ~ x * y - β * z + 0.1a * z]
@@ -944,4 +944,8 @@ end
         de, [u0map; parammap], (0.0, 100.0))
     de = mtkcompile(de)
     @test SDEProblem(de, [u0map; parammap], (0.0, 100.0)) isa SDEProblem
+end
+
+@testset "`@brownian` is deprecated" begin
+    @test_deprecated @brownian a b c
 end

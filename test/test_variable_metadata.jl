@@ -224,5 +224,5 @@ x = ModelingToolkit.toparam(x)
 @parameters y
 @test ModelingToolkit.getvariabletype(y) == ModelingToolkit.PARAMETER
 
-@brownian z
+@brownians z
 @test ModelingToolkit.getvariabletype(z) == ModelingToolkit.BROWNIAN

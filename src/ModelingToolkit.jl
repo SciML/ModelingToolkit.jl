@@ -335,7 +335,7 @@ export generate_initializesystem, Initial, isinitial
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @independent_variables, @constants, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 

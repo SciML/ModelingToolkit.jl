@@ -150,7 +150,7 @@ end
 @testset "Deprecations" begin
     @variables _x(..) = 1.0
     @parameters p = 1.0
-    @brownian a
+    @brownians a
     x = _x(t)
     k = ShiftIndex(t)
 
