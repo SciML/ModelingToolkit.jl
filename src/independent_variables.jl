@@ -7,8 +7,12 @@ Define one or more independent variables. For example:
     @variables x(t)
 """
 macro independent_variables(ts...)
-    :(@parameters $(ts...)) |> esc # TODO: treat independent variables separately from variables and parameters
+    Symbolics._parse_vars(:independent_variables,
+        Real,
+        ts,
+        toiv) |> esc
 end
 
-toiv(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, PARAMETER)
+toiv(s::Symbolic) = GlobalScope(setmetadata(s, MTKVariableTypeCtx, PARAMETER))
+toiv(s::Symbolics.Arr) = wrap(toiv(value(s)))
 toiv(s::Num) = Num(toiv(value(s)))
