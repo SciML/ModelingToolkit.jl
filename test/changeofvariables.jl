@@ -105,7 +105,7 @@ noise_eqs = ModelingToolkit.get_noise_eqs
 value = ModelingToolkit.value
 
 @independent_variables t
-@brownian B
+@brownians B
 @parameters μ σ
 @variables x(t) y(t)
 D = Differential(t)
@@ -121,7 +121,7 @@ new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
 
 #Multiple Brownian and equations
 @independent_variables t
-@brownian Bx By
+@brownians Bx By
 @parameters μ σ α
 @variables x(t) y(t) z(t) w(t) u(t) v(t)
 D = Differential(t)
