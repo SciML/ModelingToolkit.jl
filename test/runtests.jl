@@ -98,6 +98,7 @@ end
             @safetestset "Namespacing test" include("namespacing.jl")
             @safetestset "Subsystem replacement" include("substitute_component.jl")
             @safetestset "Linearization Tests" include("linearize.jl")
+            @safetestset "LinearProblem Tests" include("linearproblem.jl")
         end
     end
 
