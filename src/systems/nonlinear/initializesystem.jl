@@ -61,6 +61,12 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
+    arrvars = Set()
+    for var in vars
+        if iscall(var) && operation(var) === getindex
+            push!(arrvars, first(arguments(var)))
+        end
+    end
 
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
@@ -74,6 +80,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     if isempty(op)
         op = copy(defs)
     end
+    scalarize_vars_in_varmap!(op, arrvars)
     u0map = anydict()
     pmap = anydict()
     build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),

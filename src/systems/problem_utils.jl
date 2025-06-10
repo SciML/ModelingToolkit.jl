@@ -523,6 +523,24 @@ function scalarize_varmap!(varmap::AbstractDict)
     return varmap
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+For each array variable in `vars`, scalarize the corresponding entry in `varmap`.
+If a scalarized entry already exists, it is not overridden.
+"""
+function scalarize_vars_in_varmap!(varmap::AbstractDict, vars)
+    for var in vars
+        symbolic_type(var) == ArraySymbolic() || continue
+        is_sized_array_symbolic(var) || continue
+        haskey(varmap, var) || continue
+        for i in eachindex(var)
+            haskey(varmap, var[i]) && continue
+            varmap[var[i]] = varmap[var][i]
+        end
+    end
+end
+
 function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
