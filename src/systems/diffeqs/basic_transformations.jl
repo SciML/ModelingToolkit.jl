@@ -117,7 +117,7 @@ function changeofvariables(
         neqs = [neqs[i,:] for i in 1:size(neqs,1)]
 
         brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
-            unwrap(only(@brownian $name))
+            unwrap(only(@brownians $name))
         end
     else
         isSDE = true
