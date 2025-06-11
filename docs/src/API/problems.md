@@ -1,3 +1,7 @@
+```@meta
+CollapsedDocStrings = true
+```
+
 # Building and solving numerical problems
 
 Systems are numerically solved by building and solving the appropriate problem type.

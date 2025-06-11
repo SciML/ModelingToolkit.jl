@@ -42,13 +42,6 @@ If you use ModelingToolkit in your work, please cite the following:
     for a summary of the changes. Some documentation pages may be broken while downstram
     packages update to the new version.
 
-!!! danger "Temporarily broken discrete systems"
-    
-    ModelingToolkit's support for purely explicit systems of discrete update equations
-    (ones solved via `OrdinaryDiffEqFunctionMap.jl`) is temporarily broken. While such
-    systems can be created, simplfied and solved there are issues with the naming of
-    simplified unknowns and symbolic indexing of the problem/solution.
-
 ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some
 of the features from symbolic computing packages like SymPy or Mathematica with
 the ideas of equation-based modeling systems like the causal Simulink and the
