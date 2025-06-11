@@ -275,7 +275,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Linearize the wrapped system at the point given by `(u, p, t)`.
+Linearize the wrapped system at the point given by `(unknowns, p, t)`.
 """
 function (linfun::LinearizationFunction)(u, p, t)
     if eltype(p) <: Pair
@@ -301,7 +301,7 @@ function (linfun::LinearizationFunction)(u, p, t)
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...)
         if !success
-            error("Initialization algorithm $(linfun.initializealg) failed with `u = $u` and `p = $p`.")
+            error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
@@ -323,7 +323,10 @@ function (linfun::LinearizationFunction)(u, p, t)
         g_u = fg_u[linfun.alge_idxs, :],
         h_x = h_xz[:, linfun.diff_idxs],
         h_z = h_xz[:, linfun.alge_idxs],
-        h_u = h_u)
+        h_u = h_u,
+        x = u,
+        p,
+        t)
 end
 
 """
@@ -436,7 +439,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
     p = parameter_values(prob)
     t = current_time(prob)
     linres = prob.f(u0, p, t)
-    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
+    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u, x, p, t = linres
 
     nx, nu = size(f_u)
     nz = size(f_z, 2)
@@ -473,7 +476,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         end
     end
 
-    (; A, B, C, D)
+    (; A, B, C, D), (; x, p, t)
 end
 
 """
@@ -618,8 +621,8 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
-    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
+    (; A, B, C, D), simplified_sys, extras = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
+    (; A, B, C, D), extras                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
 
 Linearize `sys` between `inputs` and `outputs`, both vectors of variables. Return a NamedTuple with the matrices of a linear statespace representation
 on the form
@@ -640,6 +643,8 @@ the default values of `sys` are used.
 If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
 
 `zero_dummy_der` can be set to automatically set the operating point to zero for all dummy derivatives.
+
+The return value `extras` is a NamedTuple `(; x, p, t)` containing the result of the initialization problem that was solved to determine the operating point.
 
 See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_unknowns`](@ref).
 
@@ -750,7 +755,8 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         zero_dummy_der,
         op,
         kwargs...)
-    linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
+    mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
+    mats, ssys, extras
 end
 
 """
