@@ -736,6 +736,8 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 # Keyword Arguments
 - `initials`: Whether to include the `Initial` parameters of `dstsys` among the values
   to be transferred.
+- `unwrap_initials`: Whether initials in `dstsys` corresponding to unknowns in `srcsys` are
+  unwrapped.
 - `p_constructor`: The `p_constructor` argument to `process_SciMLProblem`.
 """
 function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
@@ -758,7 +760,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = Vector{Any}(syms[2])
-        allsyms = Set(all_symbols(srcsys))
+        allsyms = Set(variable_symbols(srcsys))
         if unwrap_initials
             for i in eachindex(initsyms)
                 sym = initsyms[i]

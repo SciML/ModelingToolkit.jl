@@ -110,3 +110,33 @@ end
         @test val[] == 2
     end
 end
+
+@testset "Do not codegen redundant expressions" begin
+    @variables v1(t) = 1
+    @variables v2(t) [guess = 0]
+
+    mutable struct Data
+        count::Int
+    end
+    function update!(d::Data, t)
+        d.count += 1 # Count the number of times the data gets updated.
+    end
+    function (d::Data)(t)
+        update!(d, t)
+        rand(1:10)
+    end
+
+    @parameters (d1::Data)(..) = Data(0)
+    @parameters (d2::Data)(..) = Data(0)
+
+    eqs = [
+        D(v1) ~ d1(t),
+        v2 ~ d2(t) # Some of the data parameters are not actually needed to solve the system.
+    ]
+
+    @mtkbuild sys = System(eqs, t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+
+    @test sol.ps[d2].count == 0
+end
