@@ -26,7 +26,7 @@ sol = solve(prob, Tsit5())
 @variables z(t)
 forward_subs  = [log(x) => z]
 backward_subs = [x => exp(z)]
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ α)
 
 new_prob = ODEProblem(new_sys, [], tspan)
@@ -48,7 +48,7 @@ def = [x=>1., α => 1.]
 forward_subs  = [t + α/(x+t) =>    z       ]
 backward_subs = [       x    => α/(z-t) - t]
 
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=true, t0=0.)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs; simplify=true, t0=0.)
 # output should be equivalent to
 # t^2 + α - z^2 + 2   (but this simplification is not found automatically)
 
@@ -86,7 +86,7 @@ z = reshape(z, 3, 1)
 forward_subs  = vec(T_inv*x .=> z)
 backward_subs = vec(x .=> T*z)
 
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=true)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs; simplify=true)
 
 new_prob = ODEProblem(new_sys, [], tspan)
 new_sol = solve(new_prob, Tsit5())
@@ -115,7 +115,7 @@ def = [x=>0., μ => 2., σ=>1.]
 @mtkcompile sys = System(eqs, t; defaults=def)
 forward_subs = [log(x) => y]
 backward_subs = [x => exp(y)]
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(y) ~ μ - 1/2*σ^2)
 @test noise_eqs(new_sys)[1] === value(σ)
 
@@ -131,7 +131,7 @@ forward_subs = [log(x) => z, y^2 => w, log(u) => v]
 backward_subs = [x => exp(z), y => w^.5, u => exp(v)]
 
 @mtkcompile sys = System(eqs, t; defaults=def)
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ μ - 1/2*σ^2)
 @test equations(new_sys)[2] == (D(w) ~ α^2)
 @test equations(new_sys)[3] == (D(v) ~ μ - 1/2*(α^2 + σ^2))
@@ -144,7 +144,7 @@ new_sys = changeofvariables(sys, t, forward_subs, backward_subs)
 
 # Test for  Brownian instead of noise
 @named sys = System(eqs, t; defaults=def)
-new_sys = changeofvariables(sys, t, forward_subs, backward_subs; simplify=false)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs; simplify=false)
 @test simplify(equations(new_sys)[1]) == simplify((D(z) ~ μ - 1/2*σ^2 + σ*Bx))
 @test simplify(equations(new_sys)[2]) == simplify((D(w) ~ α^2 + 2*α*w^.5*By))
 @test simplify(equations(new_sys)[3]) == simplify((D(v) ~ μ - 1/2*(α^2 + σ^2) + σ*Bx + α*By))

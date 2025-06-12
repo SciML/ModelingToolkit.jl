@@ -196,6 +196,7 @@ symbolic analysis.
 
 ```@docs
 liouville_transform
+change_of_variables
 stochastic_integral_transform
 Girsanov_transform
 change_independent_variable
