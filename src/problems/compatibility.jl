@@ -169,3 +169,12 @@ function check_no_equations(sys::System, T)
         """))
     end
 end
+
+function check_affine(sys::System, T)
+    if !isaffine(sys)
+        throw(SystemCompatibilityError("""
+        A non-affine system cannot be used to construct a `$T`. Consider a
+        `NonlinearProblem` instead.
+        """))
+    end
+end

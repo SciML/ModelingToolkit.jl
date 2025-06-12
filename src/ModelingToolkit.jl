@@ -188,6 +188,7 @@ include("problems/jumpproblem.jl")
 include("problems/initializationproblem.jl")
 include("problems/sccnonlinearproblem.jl")
 include("problems/bvproblem.jl")
+include("problems/linearproblem.jl")
 
 include("modelingtoolkitize/common.jl")
 include("modelingtoolkitize/odeproblem.jl")

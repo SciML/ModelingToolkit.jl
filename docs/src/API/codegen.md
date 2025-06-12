@@ -21,6 +21,8 @@ ModelingToolkit.generate_constraint_hessian
 ModelingToolkit.generate_control_jacobian
 ModelingToolkit.build_explicit_observed_function
 ModelingToolkit.generate_control_function
+ModelingToolkit.generate_update_A
+ModelingToolkit.generate_update_b
 ```
 
 For functions such as jacobian calculation which require symbolic computation, there
@@ -42,6 +44,7 @@ ModelingToolkit.cost_hessian_sparsity
 ModelingToolkit.calculate_constraint_jacobian
 ModelingToolkit.calculate_constraint_hessian
 ModelingToolkit.calculate_control_jacobian
+ModelingToolkit.calculate_A_b
 ```
 
 All code generation eventually calls `build_function_wrapper`.

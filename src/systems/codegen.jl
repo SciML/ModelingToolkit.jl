@@ -1130,3 +1130,90 @@ function build_explicit_observed_function(sys, ts;
         return f
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return matrix `A` and vector `b` such that the system `sys` can be represented as
+`A * x = b` where `x` is `unknowns(sys)`. Errors if the system is not affine.
+
+# Keyword arguments
+
+- `sparse`: return a sparse `A`.
+"""
+function calculate_A_b(sys::System; sparse = false)
+    rhss = [eq.rhs for eq in full_equations(sys)]
+    dvs = unknowns(sys)
+
+    A = Matrix{Any}(undef, length(rhss), length(dvs))
+    b = Vector{Any}(undef, length(rhss))
+    for (i, rhs) in enumerate(rhss)
+        # mtkcompile makes this `0 ~ rhs` which typically ends up giving
+        # unknowns negative coefficients. If given the equations `A * x ~ b`
+        # it will simplify to `0 ~ b - A * x`. Thus this negation usually leads
+        # to more comprehensible user API.
+        resid = -rhs
+        for (j, var) in enumerate(dvs)
+            p, q, islinear = Symbolics.linear_expansion(resid, var)
+            if !islinear
+                throw(ArgumentError("System is not linear. Equation $((0 ~ rhs)) is not linear in unknown $var."))
+            end
+            A[i, j] = p
+            resid = q
+        end
+        # negate beucause `resid` is the residual on the LHS
+        b[i] = -resid
+    end
+
+    @assert all(Base.Fix1(isassigned, A), eachindex(A))
+    @assert all(Base.Fix1(isassigned, A), eachindex(b))
+
+    if sparse
+        A = SparseArrays.sparse(A)
+    end
+    return A, b
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system `sys` and the `A` from [`calculate_A_b`](@ref) generate the function that
+updates `A` given the parameter object.
+
+# Keyword arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_update_A(sys::System, A::AbstractMatrix; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    ps = reorder_parameters(sys)
+
+    res = build_function_wrapper(sys, A, ps...; p_start = 1, expression = Val{true},
+        similarto = typeof(A), kwargs...)
+    return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
+        eval_expression, eval_module)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a system `sys` and the `b` from [`calculate_A_b`](@ref) generate the function that
+updates `b` given the parameter object.
+
+# Keyword arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_update_b(sys::System, b::AbstractVector; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    ps = reorder_parameters(sys)
+
+    res = build_function_wrapper(sys, b, ps...; p_start = 1, expression = Val{true},
+        similarto = typeof(b), kwargs...)
+    return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
+        eval_expression, eval_module)
+end
