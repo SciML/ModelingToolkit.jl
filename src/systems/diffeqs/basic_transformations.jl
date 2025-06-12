@@ -54,6 +54,138 @@ function liouville_transform(sys::System; kwargs...)
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Generates the set of ODEs after change of variables.
+
+
+Example:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq, Test
+
+# Change of variables: z = log(x)
+# (this implies that x = exp(z) is automatically non-negative)
+
+@parameters t α
+@variables x(t)
+D = Differential(t)
+eqs = [D(x) ~ α*x]
+
+tspan = (0., 1.)
+u0 = [x => 1.0]
+p = [α => -0.5]
+
+@named sys = ODESystem(eqs; defaults=u0)
+prob = ODEProblem(sys, [], tspan, p)
+sol = solve(prob, Tsit5())
+
+@variables z(t)
+forward_subs  = [log(x) => z]
+backward_subs = [x => exp(z)]
+
+@named new_sys = changeofvariables(sys, forward_subs, backward_subs)
+@test equations(new_sys)[1] == (D(z) ~ α)
+
+new_prob = ODEProblem(new_sys, [], tspan, p)
+new_sol = solve(new_prob, Tsit5())
+
+@test isapprox(new_sol[x][end], sol[x][end], atol=1e-4)
+```
+
+"""
+function changeofvariables(
+    sys::System, iv, forward_subs, backward_subs;
+    simplify=true, t0=missing, isSDE=false
+)
+    t = iv
+
+    old_vars = first.(backward_subs)
+    new_vars = last.(forward_subs)
+    
+    # use: f = Y(t, X)
+    # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
+    old_eqs = equations(sys)
+    neqs = get_noise_eqs(sys)
+    brownvars = brownians(sys)
+    
+    
+    if neqs === nothing && length(brownvars) === 0
+        neqs = ones(1, length(old_eqs))
+    elseif neqs !== nothing
+        isSDE = true
+        neqs = [neqs[i,:] for i in 1:size(neqs,1)]
+
+        brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
+            unwrap(only(@brownians $name))
+        end
+    else
+        isSDE = true
+        neqs = Vector{Any}[]
+        for (i, eq) in enumerate(old_eqs)
+            neq = Any[]
+            right = eq.rhs
+            for Bv in brownvars
+                lin_exp = linear_expansion(right, Bv)
+                right = lin_exp[2]
+                push!(neq, lin_exp[1])
+            end
+            push!(neqs, neq)
+            old_eqs[i] = eq.lhs ~ right
+        end
+    end
+
+    # df/dt = ∂f/∂x dx/dt + ∂f/∂t
+    dfdt = Symbolics.derivative( first.(forward_subs), t )
+    ∂f∂x = [Symbolics.derivative( first(f_sub), old_var ) for (f_sub, old_var) in zip(forward_subs, old_vars)]
+    ∂2f∂x2 = Symbolics.derivative.( ∂f∂x, old_vars )
+    new_eqs = Equation[]
+
+    for (new_var, ex, first, second) in zip(new_vars, dfdt, ∂f∂x, ∂2f∂x2)
+        for (eqs, neq) in zip(old_eqs, neqs)
+            if occursin(value(eqs.lhs), value(ex))
+                ex = substitute(ex, eqs.lhs => eqs.rhs)
+                if isSDE
+                    for (noise, B) in zip(neq, brownvars)
+                        ex = ex + 1/2 * noise^2 * second + noise*first*B
+                    end
+                end
+            end
+        end
+        ex = substitute(ex, Dict(forward_subs))
+        ex = substitute(ex, Dict(backward_subs))
+        if simplify
+            ex = Symbolics.simplify(ex, expand=true)
+        end
+        push!(new_eqs, Differential(t)(new_var) ~ ex)
+    end
+
+    defs = get_defaults(sys)
+    new_defs = Dict()
+    for f_sub in forward_subs
+        ex = substitute(first(f_sub), defs)
+        if !ismissing(t0)
+            ex = substitute(ex, t => t0)
+        end
+        new_defs[last(f_sub)] = ex
+    end
+    for para in parameters(sys)
+        if haskey(defs, para)
+            new_defs[para] = defs[para]
+        end
+    end
+
+    @named new_sys = System(vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
+            defaults=new_defs,
+            observed=observed(sys)
+            )
+    if simplify
+        return mtkcompile(new_sys)
+    end
+    return new_sys
+end
+
+"""
     change_independent_variable(
         sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
