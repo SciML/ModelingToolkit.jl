@@ -1,6 +1,8 @@
 using ModelingToolkit, BenchmarkTools
 using ModelingToolkitStandardLibrary
-using ModelingToolkitStandardLibrary.Thermal
+using ModelingToolkitStandardLibrary.Electrical
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEqDefault
 
 const SUITE = BenchmarkGroup()
@@ -51,4 +53,4 @@ tspan = (0.0, 6.0)
 SUITE["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
 
 prob = ODEProblem(model, u0, tspan)
-SUITE["init"] = init($prob)
+SUITE["init"] = @benchmarkable init($prob)

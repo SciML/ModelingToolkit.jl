@@ -6,6 +6,7 @@ on:
   pull_request:
     paths-ignore:
         - 'docs/**'
+        - 'benchmark/**'
 
 concurrency:
   # Skip intermediate builds: always, but for the master branch and tags.
