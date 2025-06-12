@@ -22,6 +22,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        vars!, invalidate_cache!,
+                       vars!, invalidate_cache!, Shift,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
@@ -39,7 +40,7 @@ using ModelingToolkit: algeqs, EquationsView,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,
                        get_fullvars, system_subset
-using SymbolicIndexingInterface: symbolic_type, ArraySymbolic
+using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays

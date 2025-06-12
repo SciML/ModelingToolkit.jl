@@ -330,12 +330,12 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export generate_initializesystem, Initial, isinitial
+export generate_initializesystem, Initial, isinitial, InitializationProblem
 
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @independent_variables, @constants, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 
@@ -356,9 +356,21 @@ function FMIComponent end
 
 include("systems/optimal_control_interface.jl")
 export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
-       CasADiDynamicOptProblem
+       CasADiDynamicOptProblem, PyomoDynamicOptProblem
+export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
+       CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
 
-@public apply_to_variables
+@public apply_to_variables, equations_toplevel, unknowns_toplevel, parameters_toplevel
+@public continuous_events_toplevel, discrete_events_toplevel, assertions, is_alg_equation
+@public is_diff_equation, Equality, linearize_symbolic, reorder_unknowns
+@public similarity_transform, inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
+@public unbound_outputs, is_bound
+
+for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
+    getter = Symbol(:get_, prop)
+    hasfn = Symbol(:has_, prop)
+    @eval @public $getter, $hasfn
+end
 
 end # module

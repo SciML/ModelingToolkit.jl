@@ -421,6 +421,23 @@ function generate_derivative_variables!(
     for (i, idxs) in idxs_to_remove
         deleteat!(var_sccs[i], idxs)
     end
+    new_sccs = insert_sccs(var_sccs, sccs_to_insert)
+
+    if mm !== nothing
+        @set! mm.ncols = ndsts(graph)
+    end
+
+    return new_sccs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a list of SCCs and a list of SCCs to insert at specific indices, insert them and
+return the new SCC vector.
+"""
+function insert_sccs(
+        var_sccs::Vector{Vector{Int}}, sccs_to_insert::Vector{Tuple{Int, Vector{Int}}})
     # insert the new SCCs, accounting for the fact that we might have multiple entries
     # in `sccs_to_insert` to be inserted at the same index.
     old_idx = 1
@@ -441,10 +458,6 @@ function generate_derivative_variables!(
     end
 
     filter!(!isempty, new_sccs)
-    if mm !== nothing
-        @set! mm.ncols = ndsts(graph)
-    end
-
     return new_sccs
 end
 
@@ -742,7 +755,17 @@ function codegen_equation!(eg::EquationGenerator,
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
-    if is_solvable(eg, ieq, iv) && is_dervar(eg, iv)
+
+    issolvable = is_solvable(eg, ieq, iv)
+    isdervar = issolvable && is_dervar(eg, iv)
+    isdisc = is_only_discrete(structure)
+    # The variable is derivative variable and the "most differentiated"
+    # This is only used for discrete systems, and basically refers to
+    # `Shift(t, 1)(x(k))` in `Shift(t, 1)(x(k)) ~ x(k) + x(k-1)`. As illustrated in
+    # the docstring for `add_additional_history!`, this is an exception and needs to be
+    # treated like a solved equation rather than a differential equation.
+    is_highest_diff = iv isa Int && isdervar && var_to_diff[iv] === nothing
+    if issolvable && isdervar && (!isdisc || !is_highest_diff)
         var = fullvars[iv]
         isnothing(D) && throw(UnexpectedDifferentialError(equations(sys)[ieq]))
         order, lv = var_order(iv, diff_to_var)
@@ -762,15 +785,25 @@ function codegen_equation!(eg::EquationGenerator,
         push!(neweqs′, neweq)
         push!(eq_ordering, ieq)
         push!(var_ordering, diff_to_var[iv])
-    elseif is_solvable(eg, ieq, iv)
+    elseif issolvable
         var = fullvars[iv]
         neweq = make_solved_equation(var, eq, total_sub; simplify)
         if neweq !== nothing
+            # backshift solved equations to calculate the value of the variable at the
+            # current time. This works because we added one additional history element
+            # in `add_additional_history!`.
+            if isdisc
+                neweq = backshift_expr(neweq, idep)
+            end
             push!(solved_eqs, neweq)
             push!(solved_vars, iv)
         end
     else
         neweq = make_algebraic_equation(eq, total_sub)
+        # For the same reason as solved equations (they are effectively the same)
+        if isdisc
+            neweq = backshift_expr(neweq, idep)
+        end
         push!(neweqs′, neweq)
         push!(eq_ordering, ieq)
         # we push a dummy to `var_ordering` here because `iv` is `unassigned`
@@ -896,9 +929,24 @@ Update the system equations, unknowns, and observables after simplification.
 """
 function update_simplified_system!(
         state::TearingState, neweqs, solved_eqs, dummy_sub, var_sccs, extra_unknowns;
-        cse_hack = true, array_hack = true)
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
+        array_hack = true, D = nothing, iv = nothing)
+    @unpack fullvars, structure = state
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
+    # Since we solved the highest order derivative varible in discrete systems,
+    # we make a list of the solved variables and avoid including them in the
+    # unknowns.
+    solved_vars = Set()
+    if is_only_discrete(structure)
+        for eq in solved_eqs
+            var = eq.lhs
+            if isequal(eq.lhs, eq.rhs)
+                var = lower_shift_varname_with_unit(D(eq.lhs), iv)
+            end
+            push!(solved_vars, var)
+        end
+        filter!(eq -> !isequal(eq.lhs, eq.rhs), solved_eqs)
+    end
 
     ispresent = let var_to_diff = var_to_diff, graph = graph
         i -> (!isempty(𝑑neighbors(graph, i)) ||
@@ -915,13 +963,22 @@ function update_simplified_system!(
     obs = [fast_substitute(observed(sys), obs_sub); solved_eqs]
 
     unknown_idxs = filter(
-        i -> diff_to_var[i] === nothing && ispresent(i), eachindex(state.fullvars))
+        i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars), eachindex(state.fullvars))
     unknowns = state.fullvars[unknown_idxs]
     unknowns = [unknowns; extra_unknowns]
+    if is_only_discrete(structure)
+        # Algebraic variables are shifted forward by one, so we backshift them.
+        unknowns = map(enumerate(unknowns)) do (i, var)
+            if iscall(var) && operation(var) isa Shift && operation(var).steps == 1
+                backshift_expr(var, iv)
+            else
+                var
+            end
+        end
+    end
     @set! sys.unknowns = unknowns
 
-    obs = cse_and_array_hacks(
-        sys, obs, unknowns, neweqs; cse = cse_hack, array = array_hack)
+    obs = tearing_hacks(sys, obs, unknowns, neweqs; array = array_hack)
 
     @set! sys.eqs = neweqs
     @set! sys.observed = obs
@@ -977,9 +1034,10 @@ differential variables.
   according to `full_var_eq_matching`.
 """
 function tearing_reassemble(state::TearingState, var_eq_matching::Matching,
-        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}; simplify = false, mm, cse_hack = true,
+        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}; simplify = false, mm,
         array_hack = true, fully_determined = true)
-    extra_eqs_vars = get_extra_eqs_vars(state, full_var_eq_matching, fully_determined)
+    extra_eqs_vars = get_extra_eqs_vars(
+        state, var_eq_matching, full_var_eq_matching, fully_determined)
     neweqs = collect(equations(state))
     dummy_sub = Dict()
 
@@ -995,6 +1053,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching::Matching,
     end
 
     extra_unknowns = state.fullvars[extra_eqs_vars[2]]
+    if is_only_discrete(state.structure)
+        var_sccs = add_additional_history!(
+            state, neweqs, var_eq_matching, full_var_eq_matching, var_sccs; iv, D)
+    end
+
     # Structural simplification 
     substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub; iv, D)
 
@@ -1010,11 +1073,119 @@ function tearing_reassemble(state::TearingState, var_eq_matching::Matching,
     # var_eq_matching and full_var_eq_matching are now invalidated
 
     sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_sccs,
-        extra_unknowns; cse_hack, array_hack)
+        extra_unknowns; array_hack, iv, D)
 
     @set! state.sys = sys
     @set! sys.tearing_state = state
     return invalidate_cache!(sys)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add one more history equation for discrete systems. For example, if we have
+
+```julia
+Shift(t, 1)(x(k-1)) ~ x(k)
+Shift(t, 1)(x(k)) ~ x(k) + x(k-1)
+```
+
+This turns it into
+
+```julia
+Shift(t, 1)(x(k-2)) ~ x(k-1)
+Shift(t, 1)(x(k-1)) ~ x(k)
+Shift(t, 1)(x(k)) ~ x(k) + x(k-1)
+```
+
+Thus adding an additional unknown as well. Later, the highest derivative equation will
+be backshifted by one and turned into an observed equation, resulting in:
+
+```julia
+Shift(t, 1)(x(k-2)) ~ x(k-1)
+Shift(t, 1)(x(k-1)) ~ x(k)
+
+x(k) ~ x(k-1) + x(k-2)
+```
+
+Where the last equation is the observed equation.
+"""
+function add_additional_history!(
+        state::TearingState, neweqs::Vector, var_eq_matching::Matching,
+        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}; iv, D)
+    @unpack fullvars, sys, structure = state
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
+    eq_var_matching = invview(var_eq_matching)
+    diff_to_var = invview(var_to_diff)
+    is_discrete = is_only_discrete(structure)
+    digraph = DiCMOBiGraph{false}(graph, var_eq_matching)
+
+    # We need the inverse mapping of `var_sccs` to update it efficiently later.
+    v_to_scc = Vector{NTuple{2, Int}}(undef, ndsts(graph))
+    for (i, scc) in enumerate(var_sccs), (j, v) in enumerate(scc)
+        v_to_scc[v] = (i, j)
+    end
+
+    vars_to_backshift = BitSet()
+    eqs_to_backshift = BitSet()
+    # add history for differential variables
+    for ivar in 1:length(fullvars)
+        ieq = var_eq_matching[ivar]
+        # the variable to backshift is a state variable which is not the
+        # derivative of any other one.
+        ieq isa SelectedState || continue
+        diff_to_var[ivar] === nothing || continue
+        push!(vars_to_backshift, ivar)
+    end
+
+    inserts = Tuple{Int, Vector{Int}}[]
+
+    for var in vars_to_backshift
+        add_backshifted_var!(state, var, iv)
+        # all backshifted vars are differential vars, hence SelectedState
+        push!(var_eq_matching, SelectedState())
+        push!(full_var_eq_matching, unassigned)
+        # add to the SCCs right before the variable that was backshifted
+        push!(inserts, (v_to_scc[var][1], [length(fullvars)]))
+    end
+
+    sort!(inserts, by = first)
+    new_sccs = insert_sccs(var_sccs, inserts)
+    return new_sccs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Add the backshifted version of variable `ivar` to the system.
+"""
+function add_backshifted_var!(state::TearingState, ivar::Int, iv)
+    @unpack fullvars, structure = state
+    @unpack var_to_diff, graph, solvable_graph = structure
+
+    var = fullvars[ivar]
+    newvar = simplify_shifts(Shift(iv, -1)(var))
+    push!(fullvars, newvar)
+    inewvar = add_vertex!(var_to_diff)
+    add_edge!(var_to_diff, inewvar, ivar)
+    add_vertex!(graph, DST)
+    add_vertex!(solvable_graph, DST)
+    return inewvar
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Backshift the given expression `ex`.
+"""
+function backshift_expr(ex, iv)
+    ex isa Symbolic || return ex
+    return descend_lower_shift_varname_with_unit(
+        simplify_shifts(distribute_shift(Shift(iv, -1)(ex))), iv)
+end
+
+function backshift_expr(ex::Equation, iv)
+    return backshift_expr(ex.lhs, iv) ~ backshift_expr(ex.rhs, iv)
 end
 
 """
@@ -1025,7 +1196,7 @@ respectively. For fully-determined systems, both of these are empty. Overdetermi
 have extra equations, and underdetermined systems have extra variables.
 """
 function get_extra_eqs_vars(
-        state::TearingState, full_var_eq_matching::Matching, fully_determined::Bool)
+        state::TearingState, var_eq_matching::Matching, full_var_eq_matching::Matching, fully_determined::Bool)
     fully_determined && return Int[], Int[]
 
     extra_eqs = Int[]
@@ -1035,6 +1206,10 @@ function get_extra_eqs_vars(
     for v in 𝑑vertices(state.structure.graph)
         eq = full_var_eq_matching[v]
         eq isa Int && continue
+        # Only if the variable is also unmatched in `var_eq_matching`.
+        # Otherwise, `SelectedState` differential variables from order lowering
+        # are also considered "extra"
+        var_eq_matching[v] === unassigned || continue
         push!(extra_vars, v)
     end
     for eq in 𝑠vertices(state.structure.graph)
@@ -1047,14 +1222,7 @@ function get_extra_eqs_vars(
 end
 
 """
-# HACK 1
-
-Since we don't support array equations, any equation of the sort `x[1:n] ~ f(...)[1:n]`
-gets turned into `x[1] ~ f(...)[1], x[2] ~ f(...)[2]`. Repeatedly calling `f` gets
-_very_ expensive. this hack performs a limited form of CSE specifically for this case to
-avoid the unnecessary cost. This and the below hack are implemented simultaneously
-
-# HACK 2
+# HACK
 
 Add equations for array observed variables. If `p[i] ~ (...)` are equations, add an
 equation `p ~ [p[1], p[2], ...]` allow topsort to reorder them only add the new equation
@@ -1062,44 +1230,13 @@ if all `p[i]` are present and the unscalarized form is used in any equation (obs
 not) we first count the number of times the scalarized form of each observed variable
 occurs in observed equations (and unknowns if it's split).
 """
-function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = true)
-    # HACK 1
-    # mapping of rhs to temporary CSE variable
-    # `f(...) => tmpvar` in above example
-    rhs_to_tempvar = Dict()
-
-    # HACK 2
+function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     # map of array observed variable (unscalarized) to number of its
     # scalarized terms that appear in observed equations
     arr_obs_occurrences = Dict()
     for (i, eq) in enumerate(obs)
         lhs = eq.lhs
         rhs = eq.rhs
-
-        # HACK 1
-        if cse && is_getindexed_array(rhs)
-            rhs_arr = arguments(rhs)[1]
-            iscall(rhs_arr) && operation(rhs_arr) isa Symbolics.Operator && continue
-            if !haskey(rhs_to_tempvar, rhs_arr)
-                tempvar = gensym(Symbol(lhs))
-                N = length(rhs_arr)
-                tempvar = unwrap(Symbolics.variable(
-                    tempvar; T = Symbolics.symtype(rhs_arr)))
-                tempvar = setmetadata(
-                    tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
-                tempeq = tempvar ~ rhs_arr
-                rhs_to_tempvar[rhs_arr] = tempvar
-                push!(obs, tempeq)
-            end
-
-            # getindex_wrapper is used because `observed2graph` treats `x` and `x[i]` as different,
-            # so it doesn't find a dependency between this equation and `tempvar ~ rhs_arr`
-            # which fails the topological sort
-            neweq = lhs ~ getindex_wrapper(
-                rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
-            obs[i] = neweq
-        end
-        # end HACK 1
 
         array || continue
         iscall(lhs) || continue
@@ -1109,31 +1246,6 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
         cnt = get(arr_obs_occurrences, arg1, 0)
         arr_obs_occurrences[arg1] = cnt + 1
         continue
-    end
-
-    # Also do CSE for `equations(sys)`
-    if cse
-        for (i, eq) in enumerate(neweqs)
-            (; lhs, rhs) = eq
-            is_getindexed_array(rhs) || continue
-            rhs_arr = arguments(rhs)[1]
-            if !haskey(rhs_to_tempvar, rhs_arr)
-                tempvar = gensym(Symbol(lhs))
-                N = length(rhs_arr)
-                tempvar = unwrap(Symbolics.variable(
-                    tempvar; T = Symbolics.symtype(rhs_arr)))
-                tempvar = setmetadata(
-                    tempvar, Symbolics.ArrayShapeCtx, Symbolics.shape(rhs_arr))
-                tempeq = tempvar ~ rhs_arr
-                rhs_to_tempvar[rhs_arr] = tempvar
-                push!(obs, tempeq)
-            end
-            # don't need getindex_wrapper, but do it anyway to know that this
-            # hack took place
-            neweq = lhs ~ getindex_wrapper(
-                rhs_to_tempvar[rhs_arr], Tuple(arguments(rhs)[2:end]))
-            neweqs[i] = neweq
-        end
     end
 
     # count variables in unknowns if they are scalarized forms of variables
@@ -1153,7 +1265,7 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
     for (arrvar, cnt) in arr_obs_occurrences
         cnt == length(arrvar) || continue
         # firstindex returns 1 for multidimensional array symbolics
-        firstind = first(eachindex(arrvar))
+        firstind = Tuple(first(eachindex(arrvar)))
         scal = [arrvar[i] for i in eachindex(arrvar)]
         # respect non-1-indexed arrays
         # TODO: get rid of this hack together with the above hack, then remove OffsetArrays dependency
@@ -1161,8 +1273,7 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
         # try to `create_array(OffsetArray{...}, ...)` which errors.
         # `term(Origin(firstind), scal)` doesn't retain the `symtype` and `size`
         # of `scal`.
-        rhs = scal
-        rhs = change_origin(firstind, rhs)
+        rhs = change_origin(firstind, scal)
         push!(obs_arr_eqs, arrvar ~ rhs)
     end
     append!(obs, obs_arr_eqs)
@@ -1170,20 +1281,9 @@ function cse_and_array_hacks(sys, obs, unknowns, neweqs; cse = true, array = tru
     return obs
 end
 
-function is_getindexed_array(rhs)
-    (!ModelingToolkit.isvariable(rhs) || ModelingToolkit.iscalledparameter(rhs)) &&
-        iscall(rhs) && operation(rhs) === getindex &&
-        Symbolics.shape(rhs) != Symbolics.Unknown()
-end
-
-# PART OF HACK 1
-getindex_wrapper(x, i) = x[i...]
-
-@register_symbolic getindex_wrapper(x::AbstractArray, i::Tuple{Vararg{Int}})
-
-# PART OF HACK 2
+# PART OF HACK
 function change_origin(origin, arr)
-    if all(isone, Tuple(origin))
+    if all(isone, origin)
         return arr
     end
     return Origin(origin)(arr)
@@ -1209,11 +1309,11 @@ new residual equations after tearing. End users are encouraged to call [`mtkcomp
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-        simplify = false, cse_hack = true, array_hack = true, fully_determined = true, kwargs...)
+        simplify = false, array_hack = true, fully_determined = true, kwargs...)
     var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate = tearing(state)
     invalidate_cache!(tearing_reassemble(
         state, var_eq_matching, full_var_eq_matching, var_sccs; mm,
-        simplify, cse_hack, array_hack, fully_determined))
+        simplify, array_hack, fully_determined))
 end
 
 """
@@ -1223,7 +1323,7 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-        mm = nothing, cse_hack = true, array_hack = true, fully_determined = true, kwargs...)
+        mm = nothing, array_hack = true, fully_determined = true, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -1249,5 +1349,5 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false,
         state, jac; state_priority,
         kwargs...)
     tearing_reassemble(state, var_eq_matching, full_var_eq_matching, var_sccs;
-        simplify, mm, cse_hack, array_hack, fully_determined)
+        simplify, mm, array_hack, fully_determined)
 end

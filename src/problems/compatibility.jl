@@ -119,7 +119,7 @@ function check_has_noise(sys::System, T)
         """
         if !isempty(brownians(sys))
             msg = """
-            Systems constructed by defining Brownian variables with `@brownian` must be \
+            Systems constructed by defining Brownian variables with `@brownians` must be \
             simplified by calling `mtkcompile` before a `$T` can be constructed.
             """
         end

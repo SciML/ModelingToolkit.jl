@@ -503,7 +503,7 @@ function (f::Initial)(x)
         return x
     end
     # differential variables are default-toterm-ed
-    if iscall(x) && operation(x) isa Differential
+    if iscall(x) && operation(x) isa Union{Differential, Shift}
         x = default_toterm(x)
     end
     # don't double wrap
@@ -730,46 +730,49 @@ function unflatten_parameters!(buffer, params, all_ps)
     end
 end
 
-for prop in [:eqs
-             :tag
-             :noise_eqs
-             :iv
-             :unknowns
-             :ps
-             :tspan
-             :brownians
-             :jumps
-             :name
-             :description
-             :var_to_name
-             :defaults
-             :guesses
-             :observed
-             :systems
-             :constraints
-             :bcs
-             :domain
-             :ivs
-             :dvs
-             :connector_type
-             :preface
-             :initializesystem
-             :initialization_eqs
-             :schedule
-             :tearing_state
-             :metadata
-             :gui_metadata
-             :is_initializesystem
-             :parameter_dependencies
-             :assertions
-             :ignored_connections
-             :parent
-             :is_dde
-             :tstops
-             :index_cache
-             :isscheduled
-             :costs
-             :consolidate]
+const SYS_PROPS = [:eqs
+                   :tag
+                   :noise_eqs
+                   :iv
+                   :unknowns
+                   :ps
+                   :tspan
+                   :brownians
+                   :jumps
+                   :name
+                   :description
+                   :var_to_name
+                   :defaults
+                   :guesses
+                   :observed
+                   :systems
+                   :constraints
+                   :bcs
+                   :domain
+                   :ivs
+                   :dvs
+                   :connector_type
+                   :preface
+                   :initializesystem
+                   :initialization_eqs
+                   :schedule
+                   :tearing_state
+                   :metadata
+                   :gui_metadata
+                   :is_initializesystem
+                   :is_discrete
+                   :parameter_dependencies
+                   :assertions
+                   :ignored_connections
+                   :parent
+                   :is_dde
+                   :tstops
+                   :index_cache
+                   :isscheduled
+                   :costs
+                   :consolidate]
+
+for prop in SYS_PROPS
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
@@ -779,7 +782,6 @@ for prop in [:eqs
         Get the internal field `$($(QuoteNode(prop)))` of a system `sys`.
         It only includes `$($(QuoteNode(prop)))` local to `sys`; not those of its subsystems,
         like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
-        This is equivalent to, but preferred over `sys.$($(QuoteNode(prop)))`.
 
         See also [`has_$($(QuoteNode(prop)))`](@ref).
         """
@@ -1167,7 +1169,9 @@ function is_array_of_symbolics(x)
 end
 
 function namespace_expr(
-        O, sys, n = nameof(sys); ivs = independent_variables(sys))
+        O, sys, n = (sys === nothing ? nothing : nameof(sys));
+        ivs = sys === nothing ? nothing : independent_variables(sys))
+    sys === nothing && return O
     O = unwrap(O)
     # Exceptions for arrays of symbolic and Ref of a symbolic, the latter
     # of which shows up in broadcasts
@@ -1518,7 +1522,7 @@ $(TYPEDSIGNATURES)
 Get the default values of the system sys and its subsystems.
 If they are not explicitly provided, variables and parameters are initialized to these values.
 
-See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
 """
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
@@ -1536,9 +1540,9 @@ function defaults_and_guesses(sys::AbstractSystem)
     merge(guesses(sys), defaults(sys))
 end
 
-unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)
 for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
-    @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
+    @eval unknowns(sys::AbstractSystem, v::$vType) = namespace_expr(v, sys)
     @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
 end
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
@@ -1721,7 +1725,7 @@ $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`guesses`](@ref), [`defaults`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`defaults`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)

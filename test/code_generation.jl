@@ -79,3 +79,64 @@ end
         @test SciMLBase.successful_retcode(sol)
     end
 end
+
+@testset "scalarized array observed calling same function multiple times" begin
+    @variables x(t) y(t)[1:2]
+    @parameters foo(::Real)[1:2]
+    val = Ref(0)
+    function _tmp_fn2(x)
+        val[] += 1
+        return [x, 2x]
+    end
+    @mtkcompile sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
+    @test length(equations(sys)) == 1
+    @test length(ModelingToolkit.observed(sys)) == 3
+    prob = ODEProblem(sys, [x => 1.0, foo => _tmp_fn2], (0.0, 1.0))
+    val[] = 0
+    @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+    @test val[] == 1
+
+    @testset "CSE in equations(sys)" begin
+        val[] = 0
+        @variables z(t)[1:2]
+        @mtkcompile sys = System(
+            [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
+        @test length(equations(sys)) == 5
+        @test length(ModelingToolkit.observed(sys)) == 0
+        prob = ODEProblem(
+            sys, [y => ones(2), z => 2ones(2), x => 3.0, foo => _tmp_fn2], (0.0, 1.0))
+        val[] = 0
+        @test_nowarn prob.f(prob.u0, prob.p, 0.0)
+        @test val[] == 2
+    end
+end
+
+@testset "Do not codegen redundant expressions" begin
+    @variables v1(t) = 1
+    @variables v2(t) [guess = 0]
+
+    mutable struct Data
+        count::Int
+    end
+    function update!(d::Data, t)
+        d.count += 1 # Count the number of times the data gets updated.
+    end
+    function (d::Data)(t)
+        update!(d, t)
+        rand(1:10)
+    end
+
+    @parameters (d1::Data)(..) = Data(0)
+    @parameters (d2::Data)(..) = Data(0)
+
+    eqs = [
+        D(v1) ~ d1(t),
+        v2 ~ d2(t) # Some of the data parameters are not actually needed to solve the system.
+    ]
+
+    @mtkbuild sys = System(eqs, t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+
+    @test sol.ps[d2].count == 0
+end

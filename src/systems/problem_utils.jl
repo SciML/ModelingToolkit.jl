@@ -523,6 +523,24 @@ function scalarize_varmap!(varmap::AbstractDict)
     return varmap
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+For each array variable in `vars`, scalarize the corresponding entry in `varmap`.
+If a scalarized entry already exists, it is not overridden.
+"""
+function scalarize_vars_in_varmap!(varmap::AbstractDict, vars)
+    for var in vars
+        symbolic_type(var) == ArraySymbolic() || continue
+        is_sized_array_symbolic(var) || continue
+        haskey(varmap, var) || continue
+        for i in eachindex(var)
+            haskey(varmap, var[i]) && continue
+            varmap[var[i]] = varmap[var][i]
+        end
+    end
+end
+
 function get_temporary_value(p, floatT = Float64)
     stype = symtype(unwrap(p))
     return if stype == Real
@@ -647,29 +665,39 @@ struct ReconstructInitializeprob{GP, GU}
 end
 
 """
+    $(TYPEDEF)
+
+A wrapper over an observed function which allows calling it on a problem-like object.
+`TD` determines whether the getter function is `(u, p, t)` (if `true`) or `(u, p)` (if
+`false`).
+"""
+struct ObservedWrapper{TD, F}
+    f::F
+end
+
+ObservedWrapper{TD}(f::F) where {TD, F} = ObservedWrapper{TD, F}(f)
+
+function (ow::ObservedWrapper{true})(prob)
+    ow.f(state_values(prob), parameter_values(prob), current_time(prob))
+end
+
+function (ow::ObservedWrapper{false})(prob)
+    ow.f(state_values(prob), parameter_values(prob))
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Given an index provider `indp` and a vector of symbols `syms` return a type-stable getter
-function by splitting `syms` into contiguous buffers where the getter of each buffer
-is type-stable and constructing a function that calls and concatenates the results.
+function.
+
+Note that the getter ONLY works for problem-like objects, since it generates an observed
+function. It does NOT work for solutions.
 """
-function concrete_getu(indp, syms::AbstractVector)
-    # a list of contiguous buffer
-    split_syms = [Any[syms[1]]]
-    # the type of the getter of the last buffer
-    current = typeof(getu(indp, syms[1]))
-    for sym in syms[2:end]
-        getter = getu(indp, sym)
-        if typeof(getter) != current
-            # if types don't match, build a new buffer
-            push!(split_syms, [])
-            current = typeof(getter)
-        end
-        push!(split_syms[end], sym)
-    end
-    split_syms = Tuple(split_syms)
-    # the getter is now type-stable, and we can vcat it to get the full buffer
-    return Base.Fix1(reduce, vcat) ∘ getu(indp, split_syms)
+Base.@nospecializeinfer function concrete_getu(indp, syms::AbstractVector)
+    @nospecialize
+    obsfn = build_explicit_observed_function(indp, syms; wrap_delays = false)
+    return ObservedWrapper{is_time_dependent(indp)}(obsfn)
 end
 
 """
@@ -708,6 +736,8 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 # Keyword Arguments
 - `initials`: Whether to include the `Initial` parameters of `dstsys` among the values
   to be transferred.
+- `unwrap_initials`: Whether initials in `dstsys` corresponding to unknowns in `srcsys` are
+  unwrapped.
 - `p_constructor`: The `p_constructor` argument to `process_SciMLProblem`.
 """
 function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
@@ -730,7 +760,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = Vector{Any}(syms[2])
-        allsyms = Set(all_symbols(srcsys))
+        allsyms = Set(variable_symbols(srcsys))
         if unwrap_initials
             for i in eachindex(initsyms)
                 sym = initsyms[i]

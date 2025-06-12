@@ -8,6 +8,7 @@ pages = [
         "tutorials/modelingtoolkitize.md",
         "tutorials/programmatically_generating.md",
         "tutorials/stochastic_diffeq.md",
+        "tutorials/dynamic_optimization.md",
         "tutorials/discrete_system.md",
         "tutorials/parameter_identifiability.md",
         "tutorials/change_independent_variable.md",
@@ -31,6 +32,7 @@ pages = [
         "API/variables.md",
         "API/model_building.md",
         "API/problems.md",
+        "API/dynamic_opt.md",
         "API/codegen.md",
         "API/PDESystem.md"],
     "Basics" => Any[

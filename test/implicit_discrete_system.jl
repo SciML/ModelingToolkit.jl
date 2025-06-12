@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, SymbolicIndexingInterface, Test
 using ModelingToolkit: t_nounits as t
 using StableRNGs
 
@@ -45,6 +45,8 @@ end
             1 - (u_next[1] + u_next[2])^2 - u_next[3]^2]
     end
 
+    reorderer = getu(sys, [x(k - 2), x(k - 1), y])
+
     for _ in 1:10
         u_next = rand(rng, 3)
         u = rand(rng, 3)
@@ -73,6 +75,6 @@ end
         y(k) ~ x(k - 1) + x(k - 2),
         z(k) * x(k) ~ 3]
     @mtkcompile sys = System(eqs, t)
-    @test occursin("var\"Shift(t, 1)(z(t))\"",
+    @test occursin("var\"Shift(t, 1)(x(t))\"",
         string(ImplicitDiscreteFunction(sys; expression = Val{true})))
 end

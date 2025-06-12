@@ -1,3 +1,34 @@
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the initialization system for `sys`. The initialization system is a system of
+nonlinear equations that solve for the full set of initial conditions of `sys` given
+specified constraints.
+
+The initialization system can be of two types: time-dependent and time-independent.
+Time-dependent initialization systems solve for the initial values of unknowns as well as
+the values of solvable parameters of the system. Time-independent initialization systems
+only solve for solvable parameters of the system.
+
+# Keyword arguments
+
+- `time_dependent_init`: Whether to create an initialization system for a time-dependent
+  system. A time-dependent initialization requires a time-dependent `sys`, but a time-
+  independent initialization can be created regardless.
+- `op`: The operating point of user-specified initial conditions of variables in `sys`.
+- `initialization_eqs`: Additional initialization equations to use apart from those in
+  `initialization_equations(sys)`.
+- `guesses`: Additional guesses to use apart from those in `guesses(sys)`.
+- `default_dd_guess`: Default guess for dummy derivative variables in time-dependent
+  initialization.
+- `algebraic_only`: If `false`, does not use initialization equations (provided via the
+  keyword or part of the system) to construct initialization.
+- `check_defguess`: Whether to error when a variable does not have a default or guess
+  despite ModelingToolkit expecting it to.
+- `name`: The name of the initialization system.
+
+All other keyword arguments are forwarded to the [`System`](@ref) constructor.
+"""
 function generate_initializesystem(
         sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
     if time_dependent_init
@@ -30,6 +61,12 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
     vars_set = Set(vars) # for efficient in-lookup
+    arrvars = Set()
+    for var in vars
+        if iscall(var) && operation(var) === getindex
+            push!(arrvars, first(arguments(var)))
+        end
+    end
 
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
@@ -40,9 +77,13 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     # PREPROCESSING
     op = anydict(op)
+    if isempty(op)
+        op = copy(defs)
+    end
+    scalarize_vars_in_varmap!(op, arrvars)
     u0map = anydict()
     pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
         parameters(sys; initial_parameters = true))
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
@@ -113,7 +154,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     # 3) process other variables
     for var in vars
-        if var ∈ keys(defs)
+        if var ∈ keys(op)
             push!(eqs_ics, var ~ defs[var])
         elseif var ∈ keys(guesses)
             push!(defs, var => guesses[var])
@@ -167,6 +208,8 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
+    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
+    merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
@@ -205,7 +248,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     op = anydict(op)
     u0map = anydict()
     pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, defs, unknowns(sys),
+    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
         parameters(sys; initial_parameters = true))
     for (k, v) in op
         if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
@@ -280,6 +323,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for k in keys(defs)
         defs[k] = substitute(defs[k], paramsubs)
     end
+    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
+    merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
@@ -779,20 +824,6 @@ function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
         if operation(eq.rhs) == StructuralTransformations.change_origin
             push!(rm_idxs, i)
             continue
-        end
-        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
-            var, idxs = arguments(eq.rhs)
-            subs[eq.rhs] = var[idxs...]
-            push!(tempvars, var)
-        end
-    end
-
-    for (i, eq) in enumerate(eqs)
-        iscall(eq.rhs) || continue
-        if operation(eq.rhs) == StructuralTransformations.getindex_wrapper
-            var, idxs = arguments(eq.rhs)
-            subs[eq.rhs] = var[idxs...]
-            push!(tempvars, var)
         end
     end
 

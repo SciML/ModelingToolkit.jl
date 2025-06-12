@@ -189,7 +189,7 @@ connections = [r ~ sin(t)          # reference signal
 @named cl = System(connections, t, systems = [f, c, p])
 ```
 
-```@docs
+```@docs; canonical = false
 Sample
 Hold
 ShiftIndex

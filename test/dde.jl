@@ -78,7 +78,7 @@ sol = solve(prob, RKMil(), seed = 100)
 
 @variables x(..) delx(t)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
-@brownian η
+@brownians η
 τ = 1.0
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η, delx ~ x(t - τ)]
 @mtkcompile sys = System(eqs, t)
@@ -188,7 +188,7 @@ end
     alg = MethodOfSteps(Vern7())
     @test_nowarn solve(prob, alg)
 
-    @brownian r
+    @brownians r
     eqs = [D(x(t)) ~ -w * x(t - τ) + r]
     @named sys = System(eqs, t)
     sys = mtkcompile(sys)

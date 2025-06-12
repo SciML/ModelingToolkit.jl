@@ -3,7 +3,7 @@ import Logging
 using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 
 @variables x(t)
-@brownian a
+@brownians a
 @named inner_ode = System(D(x) ~ -sqrt(x), t; assertions = [(x > 0) => "ohno"])
 @named inner_sde = System([D(x) ~ -10sqrt(x) + 0.01a], t; assertions = [(x > 0) => "ohno"])
 sys_ode = mtkcompile(inner_ode)

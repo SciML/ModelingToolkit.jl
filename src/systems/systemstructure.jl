@@ -544,21 +544,21 @@ function shift_discrete_system(ts::TearingState)
     discvars = OrderedSet()
     eqs = equations(sys)
     for eq in eqs
-        vars!(discvars, eq; op = Union{Sample, Hold})
+        vars!(discvars, eq; op = Union{Sample, Hold, Pre})
     end
     iv = get_iv(sys)
 
     discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
     for k in discvars
-    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold}))
+    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold, Pre}))
 
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
-            fullvars[i], discmap; operator = Union{Sample, Hold}))
+            fullvars[i], discmap; operator = Union{Sample, Hold, Pre}))
     end
     for i in eachindex(eqs)
         eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
-            eqs[i], discmap; operator = Union{Sample, Hold}))
+            eqs[i], discmap; operator = Union{Sample, Hold, Pre}))
     end
     @set! ts.sys.eqs = eqs
     @set! ts.fullvars = fullvars
@@ -720,8 +720,13 @@ function mtkcompile!(state::TearingState; simplify = false,
             """))
         end
     end
-    if continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+    if get_is_discrete(state.sys) ||
+       continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
+        state = shift_discrete_system(state)
+        sys = state.sys
+        @set! sys.is_discrete = true
+        state.sys = sys
     end
 
     sys = _mtkcompile!(state; simplify, check_consistency,

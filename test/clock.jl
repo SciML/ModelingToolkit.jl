@@ -74,8 +74,8 @@ sss = ModelingToolkit._mtkcompile!(
 d = Clock(dt)
 k = ShiftIndex(d)
 @test issetequal(observed(sss),
-    [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
-     ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))])
+    [yd ~ Sample(dt)(y); r ~ 1.0;
+     ud ~ kp * (r - yd)])
 
 canonical_eqs = map(eqs) do eq
     if iscall(eq.lhs) && operation(eq.lhs) isa Differential

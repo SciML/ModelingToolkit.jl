@@ -592,7 +592,7 @@ end
 @testset "Initialization of parameters" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
     sarray_ctor = splat(SVector)
     # `System` constructor creates appropriate type with mtkcompile
@@ -881,7 +881,7 @@ end
 @testset "Update initializeprob parameters" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -910,7 +910,7 @@ end
 @testset "Equations for dependent parameters" begin
     @variables _x(..)
     @parameters p q=5 r
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -933,7 +933,7 @@ end
 @testset "Re-creating initialization problem on remake" begin
     @variables _x(..) y(t)
     @parameters p q
-    @brownian a b
+    @brownians a b
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (Problem, alg, rhss) in [
@@ -965,7 +965,7 @@ end
 @testset "`remake` changes initialization problem types" begin
     @variables _x(..) y(t) z(t)
     @parameters p q
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -1022,7 +1022,7 @@ end
 @testset "`remake` preserves old u0map and pmap" begin
     @variables _x(..) y(t)
     @parameters p
-    @brownian a
+    @brownians a
     x = _x(t)
 
     @testset "$Problem with $(SciMLBase.parameterless_type(typeof(alg)))" for (System, Problem, alg, rhss) in [
@@ -1426,7 +1426,7 @@ end
 
 @testset "Trivial initialization is run on problem construction" begin
     @variables _x(..) y(t)
-    @brownian a
+    @brownians a
     @parameters tot
     x = _x(t)
     @testset "$Problem" for (Problem, lhs, rhs) in [
@@ -1642,4 +1642,32 @@ end
         (0.0, 1.0); guesses = [y => 1.0, λ => 1.0])
     @test !SciMLBase.isinplace(prob)
     @test !SciMLBase.isinplace(prob.f.initialization_data.initializeprob)
+end
+
+@testset "Array unknowns occurring unscalarized in initializeprobpmap" begin
+    @variables begin
+        u(t)[1:2] = 0.9ones(2)
+        x(t)[1:2], [guess = 0.01ones(2)]
+        o(t)[1:2]
+    end
+    @parameters p[1:4] = [2.0, 1.875, 2.0, 1.875]
+
+    eqs = [D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
+           D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
+           o[1] ~ sum(p) * sum(u)
+           o[2] ~ sum(p) * sum(x)
+           x[1] ~ 0.01exp(-1)
+           x[2] ~ 0.01cos(t)]
+
+    @mtkbuild sys = ODESystem(eqs, t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Defaults removed with ` => nothing` aren't retained" begin
+    @variables x(t)[1:2]
+    @mtkbuild sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; defaults = [x[1] => 1])
+    prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0))
+    @test SciMLBase.initialization_status(prob) == SciMLBase.FULLY_DETERMINED
 end

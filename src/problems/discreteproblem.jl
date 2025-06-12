@@ -43,11 +43,11 @@ end
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
     dvs = unknowns(sys)
-    u0map = to_varmap(op, dvs)
-    add_toterms!(u0map; replace = true)
+    op = to_varmap(op, dvs)
+    add_toterms!(op; replace = true)
     f, u0, p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
-        build_initializeprob = false, kwargs...)
+        kwargs...)
 
     if expression == Val{true}
         u0 = :(f($u0, p, tspan[1]))

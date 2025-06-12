@@ -68,6 +68,6 @@ dprob[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false;
 solve(dprob, Tsit5());
 ```
 
-```@docs
+```@docs; canonical = false
 debug_system
 ```

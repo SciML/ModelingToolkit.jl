@@ -54,13 +54,16 @@ function generate_rhs(sys::System; implicit_dae = false,
             # Handle observables in algebraic equations, since they are shifted
             shifted_obs = Equation[distribute_shift(D(eq)) for eq in obs]
             obsidxs = observed_equations_used_by(sys, rhss; obs = shifted_obs)
-            extra_assignments = [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
-                                 for i in obsidxs]
+            ddvs = map(D, dvs)
+
+            append!(extra_assignments,
+                [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
+                 for i in obsidxs])
         else
             D = Differential(t)
+            ddvs = map(D, dvs)
             rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
         end
-        ddvs = map(D, dvs)
     else
         if !override_discrete && !is_discrete_system(sys)
             check_operator_variables(eqs, Differential)
@@ -274,6 +277,16 @@ function generate_tgrad(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return an array of symbolic hessians corresponding to the equations of the system.
+
+# Keyword Arguments
+
+- `sparse`: Controls whether the symbolic hessians are sparse matrices
+- `simplify`: Forwarded to `Symbolics.hessian`
+"""
 function calculate_hessian(sys::System; simplify = false, sparse = false)
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)]
     dvs = unknowns(sys)
@@ -481,6 +494,17 @@ function W_sparsity(sys::System)
     jac_sparsity .| M_sparsity
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return the matrix to use as the jacobian prototype given the W-sparsity matrix of the
+system. This is not the same as the jacobian sparsity pattern.
+
+# Keyword arguments
+
+- `u0`: The `u0` vector for the problem.
+- `sparse`: The prototype is `nothing` for non-sparse matrices.
+"""
 function calculate_W_prototype(W_sparsity; u0 = nothing, sparse = false)
     sparse || return nothing
     uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -596,6 +620,12 @@ function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the gradient of the consolidated cost of `sys` with respect to the unknowns.
+`simplify` is forwarded to `Symbolics.gradient`.
+"""
 function calculate_cost_gradient(sys::System; simplify = false)
     obj = cost(sys)
     dvs = unknowns(sys)
@@ -626,6 +656,13 @@ function generate_cost_gradient(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the hessian of the consolidated cost of `sys` with respect to the unknowns.
+`simplify` is forwarded to `Symbolics.hessian`. `sparse` controls whether a sparse
+matrix is returned.
+"""
 function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
     obj = cost(sys)
     dvs = unknowns(sys)
@@ -943,6 +980,8 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
 - `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 - `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
+- `wrap_delays = is_dde(sys)`: Whether to add an argument for the history function and use
+  it to calculate all delayed variables.
 
 ## Returns
 
@@ -981,7 +1020,8 @@ function build_explicit_observed_function(sys, ts;
         op = Operator,
         throw = true,
         cse = true,
-        mkarray = nothing)
+        mkarray = nothing,
+        wrap_delays = is_dde(sys))
     # TODO: cleanup
     is_tuple = ts isa Tuple
     if is_tuple
@@ -1068,14 +1108,15 @@ function build_explicit_observed_function(sys, ts;
     p_end = length(dvs) + length(inputs) + length(ps)
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
-        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse)
+        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
+        wrap_delays)
     if fns isa Tuple
         if expression
             return return_inplace ? fns : fns[1]
         end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
             oop, iip)
         return return_inplace ? (f, f) : f
     else
@@ -1084,7 +1125,7 @@ function build_explicit_observed_function(sys, ts;
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + is_dde(sys), length(args) - length(ps) + 1 + is_dde(sys), is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
             f, nothing)
         return f
     end

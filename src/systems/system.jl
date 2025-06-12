@@ -235,6 +235,7 @@ struct System <: AbstractSystem
     Whether the current system is an initialization system.
     """
     is_initializesystem::Bool
+    is_discrete::Bool
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
@@ -255,8 +256,8 @@ struct System <: AbstractSystem
             is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
-            is_initializesystem = false, isscheduled = false, schedule = nothing;
-            checks::Union{Bool, Int} = true)
+            is_initializesystem = false, is_discrete = false, isscheduled = false,
+            schedule = nothing; checks::Union{Bool, Int} = true)
         if is_initializesystem && iv !== nothing
             throw(ArgumentError("""
             Expected initialization system to be time-independent. Found independent
@@ -293,7 +294,8 @@ struct System <: AbstractSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
-            preface, parent, initializesystem, is_initializesystem, isscheduled, schedule)
+            preface, parent, initializesystem, is_initializesystem, is_discrete,
+            isscheduled, schedule)
     end
 end
 
@@ -330,8 +332,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         is_dde = nothing, tstops = [], tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
-        initializesystem = nothing, is_initializesystem = false, preface = [],
-        checks = true)
+        initializesystem = nothing, is_initializesystem = false, is_discrete = false,
+        preface = [], checks = true)
     name === nothing && throw(NoNameError())
     if !isempty(parameter_dependencies)
         @warn """
@@ -411,7 +413,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem; checks)
+        initializesystem, is_initializesystem, is_discrete; checks)
 end
 
 """
@@ -668,7 +670,7 @@ callbacks, so checking if any LHS is shifted is sufficient. If a variable is shi
 the input equations there _will_ be a `Shift` equation in the simplified system.
 """
 function is_discrete_system(sys::System)
-    any(eq -> isoperator(eq.lhs, Shift), equations(sys))
+    get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
@@ -824,9 +826,19 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Convert a time-dependent system `sys` to a time-independent system of nonlinear
-equations that solve for the steady state of the system where `D(x)` is zero for
-each continuous variable `x`.
+Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
+nonlinear equations that solve for the steady-state of the unknowns. This is done by
+replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
+does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
+All other information such as defaults, guesses, observed and initialization equations
+are retained. The independent variable of `sys` becomes a parameter of the returned system.
+
+If `sys` is hierarchical (it contains subsystems) this transformation will be applied
+recursively to all subsystems. The output system will be marked as `complete` if and only
+if the input system is also `complete`. This also retains the `split` flag passed to
+`complete`.
+
+See also: [`complete`](@ref).
 """
 function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
@@ -835,6 +847,9 @@ function NonlinearSystem(sys::System)
     eqs = equations(sys)
     obs = observed(sys)
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    for var in brownians(sys)
+        subrules[var] = 0.0
+    end
     eqs = map(eqs) do eq
         fast_substitute(eq, subrules)
     end
@@ -854,30 +869,68 @@ end
 ########
 
 """
-    $(METHODLIST)
+    $(TYPEDSIGNATURES)
 
-Construct a [`System`](@ref) to solve an optimization problem with the given scalar cost.
+Construct a time-independent [`System`](@ref) for optimizing the specified scalar `cost`.
+The system will have no equations.
+
+Unknowns and parameters of the system are inferred from the cost and other values (such as
+defaults) passed to it.
+
+All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
 function OptimizationSystem(cost; kwargs...)
     return System(Equation[]; costs = [cost], kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Identical to the corresponding single-argument `OptimizationSystem` constructor, except
+the unknowns and parameters are specified by passing arrays of symbolic variables to `dvs`
+and `ps` respectively.
+"""
 function OptimizationSystem(cost, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Construct a time-independent [`System`](@ref) for optimizing the specified multi-objective
+`cost`. The cost will be reduced to a scalar using the `consolidate` function. This
+defaults to summing the specified cost and that of all subsystems. The system will have no
+equations.
+
+Unknowns and parameters of the system are inferred from the cost and other values (such as
+defaults) passed to it.
+
+All keyword arguments are the same as those of the [`System`](@ref) constructor.
+"""
 function OptimizationSystem(cost::Array; kwargs...)
     return System(Equation[]; costs = vec(cost), kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Identical to the corresponding single-argument `OptimizationSystem` constructor, except
+the unknowns and parameters are specified by passing arrays of symbolic variables to `dvs`
+and `ps` respectively.
+"""
 function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
 end
 
 """
-    $(METHODLIST)
+    $(TYPEDSIGNATURES)
 
-Construct a [`System`](@ref) to solve a system of jump equations.
+Construct a [`System`](@ref) to solve a system of jump equations. `jumps` is an array of
+jumps, expressed using `JumpProcesses.MassActionJump`, `JumpProcesses.ConstantRateJump`
+and `JumpProcesses.VariableRateJump`. It can also include standard equations to simulate
+jump-diffusion processes. `iv` should be the independent variable of the system.
+
+All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
@@ -886,6 +939,12 @@ function JumpSystem(jumps, iv; kwargs...)
     return System(eqs, iv; jumps, kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Identical to the 2-argument `JumpSystem` constructor, but uses the explicitly provided
+`dvs` and `ps` for unknowns and parameters of the system.
+"""
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
@@ -893,10 +952,29 @@ function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
 
+# explicitly write the docstring to avoid mentioning `parameter_dependencies`.
 """
-    $(METHODLIST)
+    SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
 
-Construct a system of equations with associated noise terms.
+Construct a system of equations with associated noise terms. Instead of specifying noise
+using [`@brownians`](@ref) variables, it is specified using a noise matrix `noise`. `iv` is
+the independent variable of the system.
+
+In the general case, `noise` should be a `N x M` matrix where `N` is the number of
+equations (`length(eqs)`) and `M` is the number of independent random variables.
+`noise[i, j]` is the diffusion term for equation `i` and random variable `j`. If the noise
+is diagonal (`N == M` and `noise[i, j] == 0` for all `i != j`) it can be specified as a
+`Vector` of length `N` corresponding to the diagonal of the noise matrix. As a special
+case, if all equations have the same noise then all rows of `noise` are identical. This
+is known as "scalar noise". In this case, `noise` can be a `Vector` corresponding to the
+repeated row and `is_scalar_noise` must be `true`.
+
+Note that systems created in this manner cannot be used hierarchically. This should only
+be used to construct flattened systems. To use such a system hierarchically, it must be
+converted to use brownian variables using [`noise_to_brownians`](@ref). [`mtkcompile`](@ref)
+will automatically perform this conversion.
+
+All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
@@ -910,6 +988,13 @@ function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
     @set sys.parameter_dependencies = parameter_dependencies
 end
 
+"""
+    SDESystem(eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false, kwargs...)
+
+
+Identical to the 3-argument `SDESystem` constructor, but uses the explicitly provided
+`dvs` and `ps` for unknowns and parameters of the system.
+"""
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
@@ -923,6 +1008,11 @@ function SDESystem(
     @set sys.parameter_dependencies = parameter_dependencies
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Attach the given noise matrix `noise` to the system `sys`.
+"""
 function SDESystem(sys::System, noise; kwargs...)
     SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
 end
