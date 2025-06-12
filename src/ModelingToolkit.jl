@@ -297,7 +297,7 @@ export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbanc
        hasunit, getunit, hasconnect, getconnect,
        hasmisc, getmisc, state_priority
 export liouville_transform, change_independent_variable, substitute_component,
-       add_accumulations, noise_to_brownians, Girsanov_transform, changeofvariables
+       add_accumulations, noise_to_brownians, Girsanov_transform, change_of_variables
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation

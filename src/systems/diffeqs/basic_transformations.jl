@@ -67,34 +67,33 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 # Change of variables: z = log(x)
 # (this implies that x = exp(z) is automatically non-negative)
 
-@parameters t α
+@independent_variables t
+@parameters α
 @variables x(t)
 D = Differential(t)
 eqs = [D(x) ~ α*x]
 
 tspan = (0., 1.)
-u0 = [x => 1.0]
-p = [α => -0.5]
+def = [x => 1.0, α => -0.5]
 
-@named sys = ODESystem(eqs; defaults=u0)
-prob = ODEProblem(sys, [], tspan, p)
+@mtkcompile sys = System(eqs, t;defaults=def)
+prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
 
 @variables z(t)
 forward_subs  = [log(x) => z]
 backward_subs = [x => exp(z)]
-
-@named new_sys = changeofvariables(sys, forward_subs, backward_subs)
+new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ α)
 
-new_prob = ODEProblem(new_sys, [], tspan, p)
+new_prob = ODEProblem(new_sys, [], tspan)
 new_sol = solve(new_prob, Tsit5())
 
 @test isapprox(new_sol[x][end], sol[x][end], atol=1e-4)
 ```
 
 """
-function changeofvariables(
+function change_of_variables(
     sys::System, iv, forward_subs, backward_subs;
     simplify=true, t0=missing, isSDE=false
 )
