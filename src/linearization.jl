@@ -38,6 +38,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         initialization_reltol = 1e-3,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
+        t0=0.0,
         zero_dummy_der = false,
         initialization_solver_alg = TrustRegion(),
         autodiff = AutoForwardDiff(),
@@ -73,7 +74,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-        sys, merge(op, anydict(p)), (nothing, nothing); allow_incomplete = true,
+        sys, merge(op, anydict(p)), (t0, t0); allow_incomplete = true,
         algebraic_only = true, guesses)
     u0 = state_values(prob)
 
@@ -85,7 +86,6 @@ function linearization_function(sys::AbstractSystem, inputs,
         nlsolve_alg = initialization_solver_alg)
 
     p = parameter_values(prob)
-    t0 = current_time(prob)
     inputvals = [prob.ps[i] for i in inputs]
 
     hp_fun = let fun = h, setter = setp_oop(sys, inputs)
@@ -749,6 +749,7 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         outputs;
         zero_dummy_der,
         op,
+        t0 = t,
         kwargs...)
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
