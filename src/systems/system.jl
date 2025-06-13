@@ -214,8 +214,7 @@ struct System <: AbstractSystem
     (ones between connector systems) and the second contains all such causal variable
     connections.
     """
-    ignored_connections::Union{
-        Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
+    ignored_connections::Union{Nothing, Vector{Connection}}
     """
     `SymbolicUtils.Code.Assignment`s to prepend to all code generated from this system.
     """
