@@ -432,19 +432,15 @@ function with_analysis_point_ignored(sys::AbstractSystem, ap::AnalysisPoint)
     has_ignored_connections(sys) || return sys
     ignored = get_ignored_connections(sys)
     if ignored === nothing
-        ignored = (IgnoredAnalysisPoint[], IgnoredAnalysisPoint[])
+        ignored = Connection[]
     else
-        ignored = copy.(ignored)
+        ignored = copy(ignored)
     end
     if ap.outputs === nothing
         error("Empty analysis point")
     end
 
-    if ap.input isa AbstractSystem && all(x -> x isa AbstractSystem, ap.outputs)
-        push!(ignored[1], IgnoredAnalysisPoint(ap.input, ap.outputs))
-    else
-        push!(ignored[2], IgnoredAnalysisPoint(unwrap(ap.input), unwrap.(ap.outputs)))
-    end
+    push!(ignored, Connection([unwrap(ap.input); unwrap.(ap.outputs)]))
 
     return @set sys.ignored_connections = ignored
 end
