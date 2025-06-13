@@ -1160,7 +1160,7 @@ function parse_constraints!(cons, dict, body)
     Base.remove_linenums!(body)
     for arg in body.args
         push!(cons, arg)
-        push!(dict[:constraints], readable_code.(cons)...)
+        push!(dict[:constraints], readable_code(arg))
     end
 end
 
@@ -1169,7 +1169,7 @@ function parse_costs!(costs, dict, body)
     Base.remove_linenums!(body)
     for arg in body.args
         push!(costs, arg)
-        push!(dict[:costs], readable_code.(costs)...)
+        push!(dict[:costs], readable_code(arg))
     end
 end
 
