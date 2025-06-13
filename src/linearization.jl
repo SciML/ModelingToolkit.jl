@@ -717,7 +717,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
 ```
 """
-function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
+function linearize(sys, lin_fun::LinearizationFunction; t = nothing,
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
     prob = LinearizationProblem(lin_fun, t)
@@ -741,7 +741,7 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+function linearize(sys, inputs, outputs; op = Dict(), t = nothing,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
