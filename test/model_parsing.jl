@@ -1042,4 +1042,6 @@ end
     @test isequal(constrs[1], EvalAt(0.3)(ex.x) ~ 3)
     @test isequal(constrs[2], ex.y ≲ 4)
     @test ModelingToolkit.get_consolidate(ex)([1, 2], [3, 4]) ≈ 8 + log(2)
+    @test Example.structure[:constraints] == ["(EvalAt(0.3))(x) ~ 3", "y ≲ 4"]
+    @test Example.structure[:costs] == ["x + y", "(EvalAt(1))(y) ^ 2"]
 end
