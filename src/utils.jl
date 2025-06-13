@@ -1050,3 +1050,11 @@ function flatten_equations(eqs::Vector{Equation})
 end
 
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
+
+struct NotPossibleError <: Exception end
+
+function Base.showerror(io::IO, ::NotPossibleError)
+    print(io, """
+    This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE.
+    """)
+end
