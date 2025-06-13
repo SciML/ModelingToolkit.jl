@@ -101,6 +101,13 @@ function Base.:(==)(a::ConnectionVertex, b::ConnectionVertex)
     return true
 end
 
+function Base.show(io::IO, vert::ConnectionVertex)
+    for name in @view(vert.name[1:(end - 1)])
+        print(io, name, ".")
+    end
+    print(io, vert.name[end], "::", vert.isouter ? "outer" : "inner")
+end
+
 """
     $(TYPEDEF)
 
@@ -136,6 +143,33 @@ Create an empty `ConnectionGraph`.
 function ConnectionGraph()
     graph = BipartiteGraph(0, 0, Val(true))
     return ConnectionGraph(Dict{ConnectionVertex, Int}(), ConnectionVertex[], graph)
+end
+
+function Base.show(io::IO, graph::ConnectionGraph)
+    printstyled(io, get(io, :cgraph_name, "ConnectionGraph"); color = :blue, bold = true)
+    println(io, " with ", length(graph.labels),
+        " vertices and ", nsrcs(graph.graph), " hyperedges")
+    compact = get(io, :compact, false)
+    for edge_i in 𝑠vertices(graph.graph)
+        if compact && edge_i > 5
+            println(io, "⋮")
+            break
+        end
+        edge_idxs = 𝑠neighbors(graph.graph, edge_i)
+        type = graph.invmap[edge_idxs[1]].type
+        if type <: Union{InputVar, OutputVar}
+            type = "Causal"
+        elseif type == Equality
+            # otherwise it prints `ModelingToolkit.Equality`
+            type = "Equality"
+        end
+        printstyled(io, "  ", type; bold = true, color = :yellow)
+        print(io, "<")
+        for vi in @view(edge_idxs[1:(end - 1)])
+            print(io, graph.invmap[vi], ", ")
+        end
+        println(io, graph.invmap[edge_idxs[end]], ">")
+    end
 end
 
 """
@@ -207,6 +241,18 @@ end
 Create an empty `ConnectionState` with empty graphs.
 """
 ConnectionState() = ConnectionState(ConnectionGraph(), ConnectionGraph())
+
+function Base.show(io::IO, state::AbstractConnectionState)
+    printstyled(io, typeof(state); bold = true, color = :green)
+    println(io, " comprising of")
+    ctx1 = IOContext(io, :cgraph_name => "Connection Network", :compact => true)
+    show(ctx1, state.connection_graph)
+    println(io)
+    println(io, "And")
+    println(io)
+    ctx2 = IOContext(io, :cgraph_name => "Domain Network", :compact => true)
+    show(ctx2, state.domain_connection_graph)
+end
 
 """
     $(TYPEDSIGNATURES)
