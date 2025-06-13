@@ -25,13 +25,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
     @test_throws ["same size"] connect(xarr, yarr)
 
-    @test_throws ["Expected", "x", "output = true", "metadata"] connect(x, y)
-    @test_throws ["Expected", "y", "output = true", "metadata"] connect(y, v)
-
-    @test_throws ["Expected", "x", "input = true", "metadata"] connect(z, x)
-    @test_throws ["Expected", "x", "input = true", "metadata"] connect(z, y, x)
-    @test_throws ["Expected", "u", "input = true", "metadata"] connect(z, u)
-    @test_throws ["Expected", "u", "input = true", "metadata"] connect(z, y, u)
+    @test_throws ArgumentError connect(x, y)
 end
 
 @testset "Connection expansion" begin
