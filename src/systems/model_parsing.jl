@@ -654,9 +654,9 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
     elseif mname == Symbol("@defaults")
         parse_system_defaults!(exprs, arg, dict)
     elseif mname == Symbol("@constraints")
-        parse_costs!(cons, dict, body)
+        parse_constraints!(cons, dict, body)
     elseif mname == Symbol("@costs")
-        parse_constraints!(costs, dict, body)
+        parse_costs!(costs, dict, body)
     elseif mname == Symbol("@consolidate")
         parse_consolidate!(body, dict)
     else
