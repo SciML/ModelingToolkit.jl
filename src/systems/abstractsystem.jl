@@ -1895,35 +1895,20 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
     sys = remove_analysis_points(sys)
-    n_variable_connect_eqs = 0
-    for eq in equations(sys)
-        is_causal_variable_connection(eq.rhs) || continue
-        n_variable_connect_eqs += length(get_systems(eq.rhs)) - 1
-    end
-
     sys, (csets, _) = generate_connection_set(sys)
-    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
-    n_outer_stream_variables = 0
-    for cset in instream_csets
-        n_outer_stream_variables += count(x -> x.isouter, cset.set)
+
+    n_extras = 0
+    for cset in csets
+        rep = cset[1]
+        if rep.type <: Union{InputVar, OutputVar, Equality}
+            n_extras += length(cset) - 1
+        elseif rep.type == Flow
+            n_extras += 1
+        elseif rep.type == Stream
+            n_extras += count(x -> x.isouter, cset)
+        end
     end
-
-    #n_toplevel_unused_flows = 0
-    #toplevel_flows = Set()
-    #for cset in csets
-    #    e1 = first(cset.set)
-    #    e1.sys.namespace === nothing || continue
-    #    for e in cset.set
-    #        get_connection_type(e.v) === Flow || continue
-    #        push!(toplevel_flows, e.v)
-    #    end
-    #end
-    #for m in get_systems(sys)
-    #    isconnector(m) || continue
-    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
-    #end
-
-    nextras = n_outer_stream_variables + length(ceqs) + n_variable_connect_eqs
+    return n_extras
 end
 
 Base.show(io::IO, sys::AbstractSystem; kws...) = show(io, MIME"text/plain"(), sys; kws...)
