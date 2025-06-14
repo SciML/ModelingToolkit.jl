@@ -320,8 +320,8 @@ for traitT in [
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
             elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
-                   is_variable(sys, operation(s)(get_iv(sys)))
-                # DDEs case, to detect x(t - k)
+                   is_variable(sys, operation(s)(get_iv(sys), arguments(s)[2:end]...))
+                # DDEs case, to detect x(t - k), and x(t - k, arg2, arg3, ...)
                 push!(ts_idxs, ContinuousTimeseries())
             else
                 if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
