@@ -1573,3 +1573,13 @@ end
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     @test prob.problem_type == "A"
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/3737
+@testset "ODE with multivariate variables" begin
+    @parameters k
+    @variables x(t, k) y(t, k) # equivalent to x(t) and y(t)
+    @mtkbuild sys = System([D(x) ~ 0, y ~ x + 1], t)
+    prob = ODEProblem(sys, [x => 0.0], (0.0, 1.0))
+    @test prob[x] == 0.0 # unknown
+    @test prob[y] == 1.0 # observed
+end
