@@ -798,15 +798,33 @@ function add_integrator_header(
         expr.body)
 end
 
+function default_operating_point(affsys::AffectSystem)
+    sys = system(affsys)
+
+    op = Dict(unknowns(sys) .=> 0.0)
+    for p in parameters(sys)
+        T = symtype(p)
+        if T <: Number
+            op[p] = false
+        elseif T <: Array{<:Real} && is_sized_array_symbolic(p)
+            op[p] = zeros(size(p))
+        end
+    end
+    return op
+end
+
 """
 Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
 """
 function compile_equational_affect(
         aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false,
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, op = nothing, kwargs...)
     if aff isa AbstractVector
         aff = make_affect(
             aff; iv = get_iv(sys), warn_no_algebraic = false)
+    end
+    if op === nothing
+        op = default_operating_point(aff)
     end
     affsys = system(aff)
     ps_to_update = discretes(aff)
@@ -872,10 +890,10 @@ function compile_equational_affect(
             p_getter = getsym(affsys, ps_to_update)
 
             affprob = ImplicitDiscreteProblem(
-                affsys, Pair[unknowns(affsys) .=> 0; parameters(affsys) .=> 0],
+                affsys, op,
                 (0, 0);
                 build_initializeprob = false, check_length = false, eval_expression,
-                eval_module, check_compatibility = false)
+                eval_module, check_compatibility = false, kwargs...)
 
             function implicit_affect!(integ)
                 new_u0 = affu_getter(integ)

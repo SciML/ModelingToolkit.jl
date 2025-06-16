@@ -72,7 +72,7 @@ end
         eval_module, check_compatibility, implicit_dae = true, expression, kwargs...)
 
     kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
-        kwargs...)
+        op, kwargs...)
 
     diffvars = collect_differential_variables(sys)
     sts = unknowns(sys)

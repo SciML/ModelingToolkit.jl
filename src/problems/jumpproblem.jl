@@ -80,7 +80,8 @@
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
-    cbs = process_events(sys; callback, eval_expression, eval_module, reset_jumps = true)
+    cbs = process_events(
+        sys; callback, eval_expression, eval_module, op, reset_jumps = true)
 
     if rng !== nothing
         kwargs = (; kwargs..., rng)

@@ -1348,3 +1348,30 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[inner.p][end] ≈ 1.0
 end
+
+mutable struct ParamTest
+    y::Any
+end
+
+@testset "callable parameter and symbolic affect" begin
+    (pt::ParamTest)(x) = pt.y - x
+
+    p1 = ParamTest(1)
+    tp1 = typeof(p1)
+    @parameters (p_1::tp1)(..) = p1
+    @parameters p2(t) = 1.0
+    @variables x(t) = 0.0
+    @variables x2(t)
+    event = [0.5] => [p2 ~ Pre(t)]
+
+    eq = [
+        D(x) ~ p2,
+        x2 ~ p_1(x)
+    ]
+    @mtkcompile sys = ODESystem(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
+
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x, end]≈1.0 atol=1e-6
+end
