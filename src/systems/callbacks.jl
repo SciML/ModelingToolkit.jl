@@ -63,7 +63,8 @@ Base.show(io::IO, x::Pre) = print(io, "Pre")
 input_timedomain(::Pre, _ = nothing) = ContinuousClock()
 output_timedomain(::Pre, _ = nothing) = ContinuousClock()
 unPre(x::Num) = unPre(unwrap(x))
-unPre(x::BasicSymbolic) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
+unPre(x::Symbolics.Arr) = unPre(unwrap(x))
+unPre(x::Symbolic) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
 
 function (p::Pre)(x)
     iw = Symbolics.iswrapped(x)
