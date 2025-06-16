@@ -1142,35 +1142,15 @@ Return matrix `A` and vector `b` such that the system `sys` can be represented a
 - `sparse`: return a sparse `A`.
 """
 function calculate_A_b(sys::System; sparse = false)
-    rhss = [eq.rhs for eq in full_equations(sys)]
+    rhss = [-eq.rhs for eq in full_equations(sys)]
     dvs = unknowns(sys)
 
-    A = Matrix{Any}(undef, length(rhss), length(dvs))
-    b = Vector{Any}(undef, length(rhss))
-    for (i, rhs) in enumerate(rhss)
-        # mtkcompile makes this `0 ~ rhs` which typically ends up giving
-        # unknowns negative coefficients. If given the equations `A * x ~ b`
-        # it will simplify to `0 ~ b - A * x`. Thus this negation usually leads
-        # to more comprehensible user API.
-        resid = -rhs
-        for (j, var) in enumerate(dvs)
-            p, q, islinear = Symbolics.linear_expansion(resid, var)
-            if !islinear
-                throw(ArgumentError("System is not linear. Equation $((0 ~ rhs)) is not linear in unknown $var."))
-            end
-            A[i, j] = p
-            resid = q
-        end
-        # negate beucause `resid` is the residual on the LHS
-        b[i] = -resid
+    A, b = semilinear_form(rhss, dvs)
+    if !sparse
+        A = collect(A)
     end
-
-    @assert all(Base.Fix1(isassigned, A), eachindex(A))
-    @assert all(Base.Fix1(isassigned, A), eachindex(b))
-
-    if sparse
-        A = SparseArrays.sparse(A)
-    end
+    A = unwrap.(A)
+    b = unwrap.(-b)
     return A, b
 end
 
