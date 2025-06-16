@@ -25,13 +25,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
     @test_throws ["same size"] connect(xarr, yarr)
 
-    @test_throws ["Expected", "x", "output = true", "metadata"] connect(x, y)
-    @test_throws ["Expected", "y", "output = true", "metadata"] connect(y, v)
-
-    @test_throws ["Expected", "x", "input = true", "metadata"] connect(z, x)
-    @test_throws ["Expected", "x", "input = true", "metadata"] connect(z, y, x)
-    @test_throws ["Expected", "u", "input = true", "metadata"] connect(z, u)
-    @test_throws ["Expected", "u", "input = true", "metadata"] connect(z, y, u)
+    @test_throws ArgumentError connect(x, y)
 end
 
 @testset "Connection expansion" begin
@@ -95,4 +89,35 @@ end
         @test matrices.B[] * matrices.C[] == -1 # either one negative
         @test matrices.D[] == 0
     end
+end
+
+@testset "Outside input to inside input connection" begin
+    @mtkmodel Inner begin
+        @variables begin
+            x(t), [input = true]
+            y(t), [output = true]
+        end
+        @equations begin
+            y ~ x
+        end
+    end
+    @mtkmodel Outer begin
+        @variables begin
+            u(t), [input = true]
+            v(t), [output = true]
+        end
+        @components begin
+            inner = Inner()
+        end
+        @equations begin
+            connect(u, inner.x)
+            connect(inner.y, v)
+        end
+    end
+    @named sys = Outer()
+    ss = toggle_namespacing(sys, false)
+    eqs = equations(expand_connections(sys))
+    @test issetequal(eqs, [ss.u ~ ss.inner.x
+                           ss.inner.y ~ ss.inner.x
+                           ss.inner.y ~ ss.v])
 end
