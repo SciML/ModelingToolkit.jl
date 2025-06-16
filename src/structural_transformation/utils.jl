@@ -596,7 +596,8 @@ function _distribute_shift(expr, shift)
         (op isa Union{Pre, Initial, Sample, Hold}) && return expr
         args = arguments(expr)
 
-        if ModelingToolkit.isvariable(expr) && operation(expr) !== getindex
+        if ModelingToolkit.isvariable(expr) && operation(expr) !== getindex &&
+           !ModelingToolkit.iscalledparameter(expr)
             (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
             (return expr)
         elseif op isa Shift
