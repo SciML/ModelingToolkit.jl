@@ -79,8 +79,8 @@ function array_variable_assignments(args...; argument_name = generated_argument_
             # to help reduce allocations
             if first(idxs) < last(idxs) && vec(idxs) == first(idxs):last(idxs)
                 idxs = first(idxs):last(idxs)
-            elseif vec(idxs) == last(idxs):-1:first(idxs)
-                idxs = last(idxs):-1:first(idxs)
+            elseif vec(idxs) == first(idxs):-1:last(idxs)
+                idxs = first(idxs):-1:last(idxs)
             else
                 # Otherwise, turn the indexes into an `SArray` so they're stack-allocated
                 idxs = SArray{Tuple{size(idxs)...}}(idxs)
