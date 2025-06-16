@@ -19,7 +19,7 @@ function Base.show(io::IO, sol::DynamicOptSolution)
 end
 
 """
-    JuMPDynamicOptProblem(sys::System, u0, tspan, p; dt, steps, guesses, kwargs...)
+    JuMPDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
 Convert an System representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
@@ -43,7 +43,7 @@ To construct the problem, please load InfiniteOpt along with ModelingToolkit.
 """
 function InfiniteOptDynamicOptProblem end
 """
-    CasADiDynamicOptProblem(sys::System, u0, tspan, p; dt, steps, guesses, kwargs...)
+    CasADiDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
 Convert an System representing an optimal control system into a CasADi model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
@@ -54,7 +54,7 @@ To construct the problem, please load CasADi along with ModelingToolkit.
 """
 function CasADiDynamicOptProblem end
 """
-    PyomoDynamicOptProblem(sys::System, u0, tspan, p; dt, steps)
+    PyomoDynamicOptProblem(sys::System, op, tspan; dt, steps)
 
 Convert an System representing an optimal control system into a Pyomo model
 for solving using optimization. Must provide either `dt`, the timestep between collocation 
@@ -67,27 +67,27 @@ function PyomoDynamicOptProblem end
 
 ### Collocations
 """
-JuMP Collocation solver.
-- solver: a optimization solver such as Ipopt
-- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+JuMP Collocation solver. Takes two arguments:
+- `solver`: a optimization solver such as Ipopt
+- `tableau`: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
 """
 function JuMPCollocation end
 """
 InfiniteOpt Collocation solver.
-- solver: an optimization solver such as Ipopt
+- `solver`: an optimization solver such as Ipopt
 - `derivative_method`: the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
 """
 function InfiniteOptCollocation end
 """
 CasADi Collocation solver.
-- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
-- tableau: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+- `solver`: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
+- `tableau`: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
 """
 function CasADiCollocation end
 """
 Pyomo Collocation solver.
-- solver: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
-- derivative_method: a derivative method from Pyomo. The choices here are ForwardEuler, BackwardEuler, MidpointEuler, LagrangeRadau, or LagrangeLegendre. The last two should additionally have a number indicating the number of collocation points per timestep, e.g. PyomoCollocation("ipopt", LagrangeRadau(3)). Defaults to LagrangeRadau(5).
+- `solver`: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
+- `derivative_method`: a derivative method from Pyomo. The choices here are ForwardEuler, BackwardEuler, MidpointEuler, LagrangeRadau, or LagrangeLegendre. The last two should additionally have a number indicating the number of collocation points per timestep, e.g. PyomoCollocation("ipopt", LagrangeRadau(3)). Defaults to LagrangeRadau(5).
 """
 function PyomoCollocation end
 

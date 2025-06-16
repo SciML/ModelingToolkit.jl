@@ -1,4 +1,4 @@
-### Solvers
+# [Dynamic Optimization Solvers](@id dynamic_opt_api)
 
 Currently 4 backends are exposed for solving dynamic optimization problems using collocation: JuMP, InfiniteOpt, CasADi, and Pyomo.
 
