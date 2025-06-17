@@ -348,7 +348,12 @@ function modify_nested_subsystem(
     end
     # ignore the name of the root
     if nameof(root) != hierarchy[1]
-        error("The name of the root system $(nameof(root)) must be included in the name passed to `modify_nested_subsystem`")
+        error("""
+        Invalid analysis point name `$(join(hierarchy, NAMESPACE_SEPARATOR))`. The name
+        must include the name of the root system `$(nameof(root))`. This typically happens
+        when  using an analysis point obtained by calling `getproperty` on a system marked
+        as `complete` to linearize a system that is not marked as `complete`.
+        """)
     end
     hierarchy = @view hierarchy[2:end]
 
