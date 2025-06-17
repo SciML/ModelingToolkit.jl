@@ -274,3 +274,21 @@ end
     sol = solve(prob, FunctionMap())
     @test sol[[x..., y...], end] == 8ones(4)
 end
+
+@testset "Defaults are totermed appropriately" begin
+    @parameters σ ρ β q
+    @variables x(t) y(t) z(t)
+    k = ShiftIndex(t)
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    @mtkcompile discsys = System(
+        [x ~ x(k - 1) * ρ + y(k - 2), y ~ y(k - 1) * σ - z(k - 2),
+            z ~ z(k - 1) * β + x(k - 2)],
+        t; defaults = [x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
+            y(k - 1) => 1.0, z(k - 1) => 1.0])
+    discprob = DiscreteProblem(discsys, p, (0, 10))
+    sol = solve(discprob, FunctionMap())
+    @test SciMLBase.successful_retcode(sol)
+end

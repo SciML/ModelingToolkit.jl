@@ -1309,7 +1309,7 @@ function process_SciMLProblem(
 
     check_inputmap_keys(sys, op)
 
-    defs = add_toterms(recursive_unwrap(defaults(sys)))
+    defs = add_toterms(recursive_unwrap(defaults(sys)); replace = is_discrete_system(sys))
     kwargs = NamedTuple(kwargs)
 
     if eltype(eqs) <: Equation
