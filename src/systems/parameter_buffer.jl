@@ -29,7 +29,7 @@ the default behavior).
 function MTKParameters(
         sys::AbstractSystem, p, u0 = Dict(); tofloat = false,
         t0 = nothing, substitution_limit = 1000, floatT = nothing,
-        p_constructor = identity)
+        p_constructor = identity, fast_path = false)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -50,9 +50,15 @@ function MTKParameters(
     is_time_dependent(sys) && add_observed!(sys, u0)
     add_parameter_dependencies!(sys, p)
 
-    op, missing_unknowns, missing_pars = build_operating_point!(sys,
-        u0, p, defs, cmap, dvs, ps)
-
+    u0map = anydict()
+    pmap = anydict()
+    if fast_path
+        missing_pars = missingvars(p, ps)
+        op = p
+    else
+        op, _, missing_pars = build_operating_point!(sys,
+            u0, p, defs, cmap, dvs, ps)
+    end
     if t0 !== nothing
         op[get_iv(sys)] = t0
     end
