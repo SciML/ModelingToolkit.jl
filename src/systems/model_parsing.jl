@@ -654,9 +654,9 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
     elseif mname == Symbol("@defaults")
         parse_system_defaults!(exprs, arg, dict)
     elseif mname == Symbol("@constraints")
-        parse_costs!(cons, dict, body)
+        parse_constraints!(cons, dict, body)
     elseif mname == Symbol("@costs")
-        parse_constraints!(costs, dict, body)
+        parse_costs!(costs, dict, body)
     elseif mname == Symbol("@consolidate")
         parse_consolidate!(body, dict)
     else
@@ -1160,7 +1160,7 @@ function parse_constraints!(cons, dict, body)
     Base.remove_linenums!(body)
     for arg in body.args
         push!(cons, arg)
-        push!(dict[:constraints], readable_code.(cons)...)
+        push!(dict[:constraints], readable_code(arg))
     end
 end
 
@@ -1169,7 +1169,7 @@ function parse_costs!(costs, dict, body)
     Base.remove_linenums!(body)
     for arg in body.args
         push!(costs, arg)
-        push!(dict[:costs], readable_code.(costs)...)
+        push!(dict[:costs], readable_code(arg))
     end
 end
 
