@@ -948,4 +948,8 @@ end
 
 @testset "`@brownian` is deprecated" begin
     @test_deprecated @brownian a b c
+
+    @brownian p q
+    @test ModelingToolkit.isbrownian(p)
+    @test ModelingToolkit.isbrownian(q)
 end

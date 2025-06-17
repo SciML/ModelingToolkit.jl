@@ -175,5 +175,5 @@ macro brownian(xs...)
     return quote
         Base.depwarn("`@brownian` is deprecated. Use `@brownians` instead", :brownian_macro)
         $(@__MODULE__).@brownians $(xs...)
-    end
+    end |> esc
 end
