@@ -1397,7 +1397,7 @@ function process_SciMLProblem(
         if !(pType <: AbstractArray)
             pType = Array
         end
-        p = MTKParameters(sys, op; floatT = floatT, p_constructor)
+        p = MTKParameters(sys, op; floatT = floatT, p_constructor, fast_path = true)
     else
         p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
     end
