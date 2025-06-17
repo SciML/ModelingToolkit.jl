@@ -1128,20 +1128,24 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
-    for p in punknowns
-        is_parameter_solvable(p, pmap, defs, guesses) || continue
-        get(op, p, missing) === missing || continue
+    filter!(punknowns) do p
+        is_parameter_solvable(p, op, defs, guesses) && get(op, p, missing) === missing
+    end
+    pvals = getu(initializeprob, punknowns)(initializeprob)
+    for (p, pval) in zip(punknowns, pvals)
         p = unwrap(p)
-        op[p] = getu(initializeprob, p)(initializeprob)
+        op[p] = pval
         if iscall(p) && operation(p) === getindex
             arrp = arguments(p)[1]
+            get(op, arrp, nothing) !== missing && continue
             op[arrp] = collect(arrp)
         end
     end
 
     if is_time_dependent(sys)
-        for v in missing_unknowns
-            op[v] = getu(initializeprob, v)(initializeprob)
+        uvals = getu(initializeprob, collect(missing_unknowns))(initializeprob)
+        for (v, val) in zip(missing_unknowns, uvals)
+            op[v] = val
         end
         empty!(missing_unknowns)
     end
