@@ -583,13 +583,15 @@ function build_operating_point!(sys::AbstractSystem,
         end
     end
 
-    for k in keys(u0map)
-        v = fixpoint_sub(u0map[k], neithermap; operator = Symbolics.Operator)
+    for (k, v) in u0map
+        symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
+        v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
         isequal(k, v) && continue
         u0map[k] = v
     end
-    for k in keys(pmap)
-        v = fixpoint_sub(pmap[k], neithermap; operator = Symbolics.Operator)
+    for (k, v) in pmap
+        symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
+        v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
         isequal(k, v) && continue
         pmap[k] = v
     end
