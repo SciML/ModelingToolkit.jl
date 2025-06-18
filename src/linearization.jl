@@ -45,6 +45,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         warn_initialize_determined = true,
         guesses = Dict(),
         warn_empty_op = true,
+        t = 0.0,
         kwargs...)
     op = Dict(op)
     if isempty(op) && warn_empty_op
@@ -73,7 +74,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     end
 
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-        sys, merge(op, anydict(p)), (nothing, nothing); allow_incomplete = true,
+        sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only = true, guesses)
     u0 = state_values(prob)
 
@@ -753,7 +754,7 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         inputs,
         outputs;
         zero_dummy_der,
-        op,
+        op, t,
         kwargs...)
     mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
     mats, ssys, extras
