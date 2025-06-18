@@ -455,6 +455,7 @@ function connectionsets(graph::ConnectionGraph)
     disjoint_sets = IntDisjointSets(length(invmap))
     for edge_i in 𝑠vertices(bigraph)
         hyperedge = 𝑠neighbors(bigraph, edge_i)
+        isempty(hyperedge) && continue
         root, rest = Iterators.peel(hyperedge)
         for vert in rest
             union!(disjoint_sets, root, vert)
