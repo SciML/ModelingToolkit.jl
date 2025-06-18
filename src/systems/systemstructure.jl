@@ -363,7 +363,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             isdelay(v, iv) && continue
 
             if !symbolic_contains(v, dvs)
-                isvalid = iscall(v) && operation(v) isa Union{Shift, Sample, Hold}
+                isvalid = iscall(v) && (operation(v) isa Shift || is_transparent_operator(operation(v)))
                 v′ = v
                 while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
                     v′ = arguments(v′)[1]
