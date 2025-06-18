@@ -414,10 +414,6 @@ function remove_negative_connections!(
                 # if there is any other variable, start removing
                 push!(idxs_to_rm[edge_j], var_j)
             end
-            if should_rm
-                # if there was any other variable, also remove `input_j`
-                push!(idxs_to_rm, input_j)
-            end
         end
     end
 
