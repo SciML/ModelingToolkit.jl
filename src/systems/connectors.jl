@@ -468,6 +468,16 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
                 [namespace; var_ns], length(var_ns) == 1 || isouter(var_ns[1]), type)
         end
         add_connection_edge!(connection_state, hyperedge)
+
+        # Removed analysis points generate causal connections in the negative graph. These
+        # should also remove `Equality` connections involving the same variables, so also
+        # add an `Equality` variant of the edge.
+        if connection_state isa NegativeConnectionState
+            hyperedge = map(hyperedge) do cvert
+                ConnectionVertex(cvert.name, cvert.isouter, Equality)
+            end
+            add_connection_edge!(connection_state, hyperedge)
+        end
     end
 end
 
