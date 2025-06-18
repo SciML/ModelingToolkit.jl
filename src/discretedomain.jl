@@ -1,6 +1,16 @@
 using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
 """
+    $(TYPEDSIGNATURES)
+
+Trait to be implemented for operators which determines whether application of the operator
+generates a semantically different variable or not. For example, `Differential` and `Shift`
+are not transparent but `Sample` and `Hold` are. Defaults to `false` if not implemented.
+"""
+is_transparent_operator(x) = is_transparent_operator(typeof(x))
+is_transparent_operator(::Type) = false
+
+"""
     function SampleTime()
 
 `SampleTime()` can be used in the equations of a hybrid system to represent time sampled
@@ -128,6 +138,8 @@ struct Sample <: Operator
     Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete()) = new(clock)
 end
 
+is_transparent_operator(::Type{Sample}) = true
+
 function Sample(arg::Real)
     arg = unwrap(arg)
     if symbolic_type(arg) == NotSymbolic()
@@ -179,6 +191,9 @@ cont_x = Hold()(disc_x)
 """
 struct Hold <: Operator
 end
+
+is_transparent_operator(::Type{Hold}) = true
+
 (D::Hold)(x) = Term{symtype(x)}(D, Any[x])
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
