@@ -38,6 +38,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         initialization_reltol = 1e-3,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
+        t=nothing,
         zero_dummy_der = false,
         initialization_solver_alg = TrustRegion(),
         autodiff = AutoForwardDiff(),
@@ -72,8 +73,9 @@ function linearization_function(sys::AbstractSystem, inputs,
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
+    t0 = t
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-        sys, merge(op, anydict(p)), (nothing, nothing); allow_incomplete = true,
+        sys, merge(op, anydict(p)), (t0, t0); allow_incomplete = true,
         algebraic_only = true, guesses)
     u0 = state_values(prob)
 
@@ -85,7 +87,6 @@ function linearization_function(sys::AbstractSystem, inputs,
         nlsolve_alg = initialization_solver_alg)
 
     p = parameter_values(prob)
-    t0 = current_time(prob)
     inputvals = [prob.ps[i] for i in inputs]
 
     hp_fun = let fun = h, setter = setp_oop(sys, inputs)
@@ -721,7 +722,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
 ```
 """
-function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
+function linearize(sys, lin_fun::LinearizationFunction; t = nothing,
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
     prob = LinearizationProblem(lin_fun, t)
@@ -745,7 +746,7 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+function linearize(sys, inputs, outputs; op = Dict(), t = nothing,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
@@ -754,6 +755,7 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         outputs;
         zero_dummy_der,
         op,
+        t,
         kwargs...)
     mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
     mats, ssys, extras
