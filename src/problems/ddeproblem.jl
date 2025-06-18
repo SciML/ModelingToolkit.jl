@@ -66,7 +66,7 @@ end
     end
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, kwargs...)
+        sys; expression, callback, eval_expression, eval_module, op, kwargs...)
     args = (; f, u0, h, tspan, p)
 
     return maybe_codegen_scimlproblem(expression, DDEProblem{iip}, args; kwargs...)

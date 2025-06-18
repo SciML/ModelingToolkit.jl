@@ -68,7 +68,7 @@ end
     end
 
     noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
-    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, kwargs...)
+    kwargs = process_kwargs(sys; callback, eval_expression, eval_module, op, kwargs...)
 
     if expression == Val{true}
         g = :(f.g)
