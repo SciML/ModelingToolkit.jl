@@ -2708,7 +2708,9 @@ function process_parameter_equations(sys::AbstractSystem)
                     is_sized_array_symbolic(sym) &&
                     all(Base.Fix1(is_parameter, sys), collect(sym))
         end
-            if !isparameter(eq.lhs)
+            # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
+            # check.
+            if !(eq.lhs in varsbuf)
                 throw(ArgumentError("""
                 LHS of parameter dependency equation must be a single parameter. Found \
                 $(eq.lhs).
