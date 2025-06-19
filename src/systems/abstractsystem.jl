@@ -2699,18 +2699,16 @@ function process_parameter_equations(sys::AbstractSystem)
         vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
         # singular equations
         isempty(varsbuf) && continue
+
+        # only consider explicit parameter dependencies
+        isparameter(eq.lhs) || continue
+
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                    is_sized_array_symbolic(sym) &&
-                    all(Base.Fix1(is_parameter, sys), collect(sym))
+                is_sized_array_symbolic(sym) &&
+                all(Base.Fix1(is_parameter, sys), collect(sym))
         end
-            if !isparameter(eq.lhs)
-                throw(ArgumentError("""
-                LHS of parameter dependency equation must be a single parameter. Found \
-                $(eq.lhs).
-                """))
-            end
             push!(pareq_idxs, i)
         end
     end
