@@ -208,6 +208,11 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     structure::SystemStructure
     extra_eqs::Vector
     param_derivative_map::Dict{BasicSymbolic, Any}
+    """
+    Additional user-provided observed equations. The variables calculated here
+    are not used in the rest of the system.
+    """
+    additional_observed::Vector{Equation}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
@@ -277,6 +282,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     # flatten array equations
     eqs = flatten_equations(equations(sys))
     neqs = length(eqs)
+    obseqs = observed(sys)
+    obsvars = Set([eq.lhs for eq in obseqs])
+    @set! sys.observed = Equation[]
     param_derivative_map = Dict{BasicSymbolic, Any}()
     # * Scalarize unknowns
     dvs = Set{BasicSymbolic}()
@@ -320,6 +328,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     varsbuf = Set()
     eqs_to_retain = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
+        _eq = eq
         if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
            isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
@@ -345,6 +354,14 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             if v in browns
                 addvar!(v, BROWNIAN)
                 push!(incidence, v)
+            end
+
+            if v in obsvars
+                error("""
+                Observed equations in unsimplified systems cannot compute quantities that \
+                are involved in the equations of the system. Encountered observed \
+                variable `$v` in equation `$_eq`.
+                """)
             end
 
             # TODO: Can we handle this without `isparameter`?
@@ -516,7 +533,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
-        Any[], param_derivative_map)
+        Any[], param_derivative_map, obseqs)
 
     return ts
 end
