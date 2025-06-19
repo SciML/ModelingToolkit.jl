@@ -740,7 +740,8 @@ function update_simplified_system!(
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs]
+    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs;
+           fast_substitute(state.additional_observed, obs_sub)]
 
     unknowns = Any[v
                    for (i, v) in enumerate(state.fullvars)
