@@ -22,3 +22,5 @@ jobs:
       - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
         with:
           julia-version: "${{ matrix.version }}"
+          script: "benchmark/benchmarks.jl"
+          extra-pkgs: "ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault"
