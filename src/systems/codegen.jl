@@ -1142,35 +1142,15 @@ Return matrix `A` and vector `b` such that the system `sys` can be represented a
 - `sparse`: return a sparse `A`.
 """
 function calculate_A_b(sys::System; sparse = false)
-    rhss = [eq.rhs for eq in full_equations(sys)]
+    rhss = [-eq.rhs for eq in full_equations(sys)]
     dvs = unknowns(sys)
 
-    A = Matrix{Any}(undef, length(rhss), length(dvs))
-    b = Vector{Any}(undef, length(rhss))
-    for (i, rhs) in enumerate(rhss)
-        # mtkcompile makes this `0 ~ rhs` which typically ends up giving
-        # unknowns negative coefficients. If given the equations `A * x ~ b`
-        # it will simplify to `0 ~ b - A * x`. Thus this negation usually leads
-        # to more comprehensible user API.
-        resid = -rhs
-        for (j, var) in enumerate(dvs)
-            p, q, islinear = Symbolics.linear_expansion(resid, var)
-            if !islinear
-                throw(ArgumentError("System is not linear. Equation $((0 ~ rhs)) is not linear in unknown $var."))
-            end
-            A[i, j] = p
-            resid = q
-        end
-        # negate beucause `resid` is the residual on the LHS
-        b[i] = -resid
+    A, b = semilinear_form(rhss, dvs)
+    if !sparse
+        A = collect(A)
     end
-
-    @assert all(Base.Fix1(isassigned, A), eachindex(A))
-    @assert all(Base.Fix1(isassigned, A), eachindex(b))
-
-    if sparse
-        A = SparseArrays.sparse(A)
-    end
+    A = unwrap.(A)
+    b = unwrap.(-b)
     return A, b
 end
 
@@ -1216,4 +1196,198 @@ function generate_update_b(sys::System, b::AbstractVector; expression = Val{true
         similarto = typeof(b), kwargs...)
     return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
         eval_expression, eval_module)
+end
+
+# f1 = rest
+# f2 = A * x + B * x2 + C
+function calculate_split_form(sys::System; sparse = false)
+    rhss = [eq.rhs for eq in full_equations(sys)]
+    dvs = unknowns(sys)
+    A, B, x2, C = semiquadratic_form(rhss, dvs)
+    if !sparse
+        A = collect(A)
+        B = collect(B)
+    end
+    A = unwrap.(A)
+    B = unwrap.(B)
+    x2 = unwrap.(x2)
+    C = unwrap.(C)
+
+    return A, B, x2, C
+end
+
+const DIFFCACHE_PARAM_NAME = :__mtk_diffcache
+
+function get_diffcache_param(::Type{T}) where {T}
+    toconstant(Symbolics.variable(
+        DIFFCACHE_PARAM_NAME; T = DiffCache{Vector{T}, Vector{T}}))
+end
+
+# x2
+const BILINEAR_CACHEVAR = unwrap(only(@constants bilinear_xₘₜₖ::Vector{Real}))
+# A
+const LINEAR_MATRIX_PARAM_NAME = :linear_Aₘₜₖ
+function get_linear_matrix_param(size::NTuple{2, Int})
+    m, n = size
+    unwrap(only(@constants linear_Aₘₜₖ[1:m, 1:n]))
+end
+# B
+const BILINEAR_MATRIX_PARAM_NAME = :bilinear_Bₘₜₖ
+function get_bilinear_matrix_param(size::NTuple{2, Int})
+    m, n = size
+    unwrap(only(@constants bilinear_Bₘₜₖ[1:m, 1:n]))
+end
+
+function generate_semiquadratic_functions(
+        sys::System, A, B, x2, C; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    linear_matrix_param = unwrap(getproperty(sys, LINEAR_MATRIX_PARAM_NAME))
+    bilinear_matrix_param = unwrap(getproperty(sys, BILINEAR_MATRIX_PARAM_NAME))
+    diffcache_par = unwrap(getproperty(sys, DIFFCACHE_PARAM_NAME))
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    # Codegen is a bit manual, and we're manually creating an efficient IIP function.
+    # Since we explicitly provide Symbolics.DEFAULT_OUTSYM, the `u` is actually the second
+    # argument.
+    iip_x = generated_argument_name(2)
+    oop_x = generated_argument_name(1)
+
+    f1_iip_ir = Assignment[Assignment(BILINEAR_CACHEVAR,
+                               term(view,
+                                   term(PreallocationTools.get_tmp,
+                                       diffcache_par, Symbolics.DEFAULT_OUTSYM),
+                                   1:length(x2)))
+                           # write to x2
+                           Assignment(:__tmp1, SetArray(false, BILINEAR_CACHEVAR, x2))
+                           # out .= C
+                           Assignment(
+                               :__tmp2, SetArray(false, Symbolics.DEFAULT_OUTSYM, C))
+                           # mul!(out, B, x2, 1, 1)
+                           Assignment(:__tmp3,
+                               term(mul!, Symbolics.DEFAULT_OUTSYM, bilinear_matrix_param,
+                                   BILINEAR_CACHEVAR, true, true))]
+    f1_iip = build_function_wrapper(
+        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., get_iv(sys); p_start = 3,
+        extra_assignments = f1_iip_ir, expression = Val{true}, kwargs...)
+    f1_oop = build_function_wrapper(
+        sys, term(+, term(*, bilinear_matrix_param, x2), C), dvs, ps...,
+        get_iv(sys); expression = Val{true}, iip_config = (true, false), kwargs...)
+
+    f2_iip_ir = Assignment[
+        Assignment(
+        :__tmp1, term(mul!, Symbolics.DEFAULT_OUTSYM, linear_matrix_param, iip_x))
+    ]
+    f2_iip = build_function_wrapper(
+        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., get_iv(sys); p_start = 3,
+        extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...)
+    f2_oop = build_function_wrapper(
+        sys, term(*, linear_matrix_param, oop_x), dvs, ps..., get_iv(sys);
+        expression = Val{true}, iip_config = (true, false), kwargs...)
+
+    f1 = maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
+        (f1_oop, f1_iip); eval_expression, eval_module)
+    f2 = maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
+        (f2_oop, f2_iip); eval_expression, eval_module)
+    return f1, f2
+end
+
+function calculate_semiquadratic_jacobian(
+        sys::System, B, x2, C; sparse = false, massmatrix = calculate_massmatrix(sys))
+    dvs = unknowns(sys)
+    if sparse
+        x2jac = Symbolics.sparsejacobian(x2, dvs)
+        Cjac = Symbolics.sparsejacobian(C, dvs)
+    else
+        x2jac = Symbolics.jacobian(x2, dvs)
+        Cjac = Symbolics.jacobian(C, dvs)
+    end
+
+    f1jac = B * x2jac + Cjac
+
+    if sparse
+        for i in 1:length(dvs)
+            massmatrix[i, i] == 0 && continue
+            _iszero(f1jac[i, i]) || continue
+            f1jac[i, i] = 1
+            f1jac[i, i] = 0
+        end
+    end
+
+    return f1jac, x2jac, Cjac
+end
+
+const COLPTR_PARAM = unwrap(only(@parameters __mtk_colptr::Vector{Int}))
+const ROWVAL_PARAM = unwrap(only(@parameters __mtk_rowval::Vector{Int}))
+
+function generate_semiquadratic_jacobian(
+        sys::System, B, x2, C, f1jac, x2jac, Cjac; sparse = false,
+        expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+    if sparse
+        @assert is_parameter(sys, COLPTR_PARAM)
+        @assert is_parameter(sys, ROWVAL_PARAM)
+    end
+    bilinear_matrix_param = unwrap(getproperty(sys, BILINEAR_MATRIX_PARAM_NAME))
+    diffcache_par = unwrap(getproperty(sys, DIFFCACHE_PARAM_NAME))
+    dvs = unknowns(sys)
+    ps = reorder_parameters(sys)
+    # Codegen is a bit manual, and we're manually creating an efficient IIP function.
+    # Since we explicitly provide Symbolics.DEFAULT_OUTSYM, the `u` is actually the second
+    # argument.
+    iip_x = generated_argument_name(2)
+    oop_x = generated_argument_name(1)
+
+    iip_ir = Assignment[]
+    push!(iip_ir,
+        Assignment(:__mtk_preallocbuf,
+            term(PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM)))
+    if sparse
+        push!(
+            iip_ir, Assignment(:__mtk_nzvals, term(view, :__mtk_preallocbuf, 1:nnz(x2jac))))
+        push!(iip_ir, Assignment(:__tmp1, SetArray(false, :__mtk_nzvals, x2jac.nzvals)))
+        push!(iip_ir,
+            Assignment(:__mtk_x2jacbuf,
+                term(SparseMatrixCSC, size(x2jac)...,
+                    COLPTR_PARAM, ROWVAL_PARAM, :__mtk_nzvals)))
+        cjac_idxs = AtIndex[]
+        for (i, j, v) in zip(findnz(Cjac)...)
+            push!(cjac_idxs, AtIndex(CartesianIndex(i, j), v))
+        end
+    else
+        push!(iip_ir,
+            Assignment(:__mtk_x2jacbuf,
+                term(reshape, term(view, :__mtk_preallocbuf, 1:length(x2jac)), size(x2jac))))
+        push!(iip_ir, Assignment(:__tmp1, SetArray(false, :__mtk_x2jacbuf, x2jac)))
+        cjac_idxs = AtIndex[]
+        for i in eachindex(Cjac)
+            _iszero(Cjac[i]) && continue
+            push!(cjac_idxs, AtIndex(i, Cjac[i]))
+        end
+    end
+    push!(iip_ir, Assignment(:__tmp2, SetArray(false, Symbolics.DEFAULT_OUTSYM, cjac_idxs)))
+    push!(iip_ir,
+        Assignment(:__tmp3,
+            term(mul!, Symbolics.DEFAULT_OUTSYM,
+                bilinear_matrix_param, :__mtk_x2jacbuf, true, true)))
+
+    jaciip = build_function_wrapper(
+        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., get_iv(sys);
+        p_start = 3, extra_assignments = iip_ir, expression = Val{true}, kwargs...)
+
+    make_x2 = if sparse
+        MakeSparseArray(x2jac)
+    else
+        MakeArray(x2jac, generated_argument_name(1))
+    end
+    make_cjac = if sparse
+        MakeSparseArray(Cjac)
+    else
+        MakeArray(Cjac, generated_argument_name(1))
+    end
+    oop_expr = term(+, term(*, bilinear_matrix_param, make_x2), Cjac)
+    jacoop = build_function_wrapper(
+        sys, oop_expr, dvs, ps..., get_iv(sys); expression = Val{true}, kwargs...)
+
+    return maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
+        (jacoop, jaciip); eval_expression, eval_module)
 end
