@@ -805,7 +805,11 @@ has_equations(::AbstractSystem) = true
 
 Invalidate cached jacobians, etc.
 """
-invalidate_cache!(sys::AbstractSystem) = sys
+function invalidate_cache!(sys::AbstractSystem)
+    has_metadata(sys) || return sys
+    empty!(getmetadata(sys, MutableCacheKey, nothing))
+    return sys
+end
 
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
