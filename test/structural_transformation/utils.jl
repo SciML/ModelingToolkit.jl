@@ -59,9 +59,10 @@ end
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 
     isys = ModelingToolkit.generate_initializesystem(sys)
-    @test length(unknowns(isys)) == 5
-    @test length(equations(isys)) == 4
-    @test !any(equations(isys)) do eq
+    @test length(unknowns(isys)) == 1
+    @test length(equations(isys)) == 0
+    @test length(observed(isys)) == 4
+    @test !any([equations(isys); observed(isys)]) do eq
         iscall(eq.rhs) && operation(eq.rhs) in [StructuralTransformations.change_origin]
     end
 end
