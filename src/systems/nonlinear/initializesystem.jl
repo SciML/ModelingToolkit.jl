@@ -198,13 +198,19 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     end
     append!(eqs_ics, trueobs)
 
+    # 9) optimize equations that are guaranteed to be observed
+    eqs_ics, explicit_observed = separate_trivial_equations(sys, eqs_ics)
+    eliminated_vars = Set([eq.lhs for eq in explicit_observed])
+
     vars = [vars; collect(solved_params)]
+    filter!(!in(eliminated_vars), vars)
 
     initials = Dict(k => v for (k, v) in pmap if isinitial(k))
     merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
+        observed = explicit_observed,
         defaults = defs,
         checks = check_units,
         name,
@@ -307,17 +313,26 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         !in(solved_params), parameters(sys; initial_parameters = true)))
     vars = collect(solved_params)
 
+    # optimize equations that are guaranteed to be observed
+    eqs_ics, explicit_observed = separate_trivial_equations(sys, eqs_ics)
+    eliminated_vars = Set([eq.lhs for eq in explicit_observed])
+
+    vars = [vars; collect(solved_params)]
+    filter!(!in(eliminated_vars), vars)
+
     initials = Dict(k => v for (k, v) in pmap if isinitial(k))
     merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
+        observed = explicit_observed,
         defaults = defs,
         checks = check_units,
         name,
         is_initializesystem = true,
         kwargs...)
     @set isys.parameter_dependencies = new_parameter_deps
+    return isys
 end
 
 """
@@ -468,6 +483,54 @@ function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{
         push!(banned_vars, eq.lhs)
     end
     return deleteat!(trueobs, idxs_to_remove)
+end
+
+function separate_trivial_equations(sys::AbstractSystem, eqs::Vector{Equation})
+    # Many equations (observed, ICs for differential variables) are explicit and will be
+    # converted to observed by `mtkcompile`, but doing so is also expensive. All such
+    # equations are explicit in `eqs_ics`, so we find all variables determined by such
+    # explicit equations exactly once (e.g. an observed variable given an initial condition
+    # will occur twice on the LHS, ruling it out). These are substituted into the rest so
+    # the determined-ness of the system isn't affected and will be added back to the
+    # simplified system as observed.
+    occurrences = Dict{BasicSymbolic, Vector{Int}}()
+    for (i, eq) in enumerate(eqs)
+        symbolic_type(eq.lhs) == NotSymbolic() && continue
+        # if we eliminate `x ~ Initial(x)` equations, then for overdetermined systems
+        # redundant conditions end up being parameter equations in terms of `Initial(..)`
+        # and don't play well with the rest of the infrastructure. So we only eliminate
+        # parameter equations and observed.
+        is_variable(sys, eq.lhs) && continue
+        if iscall(eq.lhs)
+            op = operation(eq.lhs)
+            args = arguments(eq.lhs)
+            if !(issym(op) ||
+                 op === getindex && (!iscall(args[1]) || issym(operation(args[1]))))
+                continue
+            end
+        end
+        buffer = get!(() -> Int[], occurrences, eq.lhs)
+        push!(buffer, i)
+    end
+
+    blacklist = BitSet()
+    subrules = Dict()
+    explicit_observed = Equation[]
+    for (sym, idxs) in occurrences
+        length(idxs) == 1 || continue
+        idx = only(idxs)
+        subrules[sym] = eqs[idx].rhs
+        push!(blacklist, idx)
+        push!(explicit_observed, sym ~ eqs[idx].rhs)
+    end
+
+    new_eqs = Equation[]
+    for (i, eq) in enumerate(eqs)
+        i in blacklist && continue
+        push!(new_eqs, fixpoint_sub(eq, subrules; maxiters = max(length(subrules), 10)))
+    end
+
+    return new_eqs, explicit_observed
 end
 
 """
