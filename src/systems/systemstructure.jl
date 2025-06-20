@@ -203,18 +203,37 @@ end
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
+    original_eqs::Vector{Equation}
     """The set of variables of the system."""
     fullvars::Vector{BasicSymbolic}
     structure::SystemStructure
     extra_eqs::Vector
     param_derivative_map::Dict{BasicSymbolic, Any}
+    statemachines::Vector{T}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int})
     eqs = equations(ts)
+    @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs)
+    if all(eq -> eq.rhs isa StateMachineOperator, get_eqs(ts.sys))
+        names = Symbol[]
+        for eq in get_eqs(ts.sys)
+            if eq.lhs isa Transition
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.from))))
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.to))))
+            elseif eq.lhs isa InitialState
+                push!(names, first(namespace_hierarchy(nameof(eq.rhs.s))))
+            else
+                error("Unhandled state machine operator")
+            end
+        end
+        @set! ts.statemachines = filter(x -> nameof(x) in names, ts.statemachines)
+    else
+        @set! ts.statemachines = eltype(ts.statemachines)[]
+    end
     ts
 end
 
@@ -268,14 +287,58 @@ function symbolic_contains(var, set)
             all(x -> x in set, Symbolics.scalarize(var))
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Descend through the system hierarchy and look for statemachines. Remove equations from
+the inner statemachine systems. Return the new `sys` and an array of top-level
+statemachines.
+"""
+function extract_top_level_statemachines(sys::AbstractSystem)
+    eqs = get_eqs(sys)
+
+    if !isempty(eqs) && all(eq -> eq.lhs isa StateMachineOperator, eqs)
+        # top-level statemachine
+        with_removed = @set sys.systems = map(remove_child_equations, get_systems(sys))
+        return with_removed, [sys]
+    elseif !isempty(eqs) && any(eq -> eq.lhs isa StateMachineOperator, eqs)
+        # error: can't mix
+        error("Mixing statemachine equations and standard equations in a top-level statemachine is not allowed.")
+    else
+        # descend
+        subsystems = get_systems(sys)
+        newsubsystems = eltype(subsystems)[]
+        statemachines = eltype(subsystems)[]
+        for subsys in subsystems
+            newsubsys, sub_statemachines = extract_top_level_statemachines(subsys)
+            push!(newsubsystems, newsubsys)
+            append!(statemachines, sub_statemachines)
+        end
+        @set! sys.systems = newsubsystems
+        return sys, statemachines
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return `sys` with all equations (including those in subsystems) removed.
+"""
+function remove_child_equations(sys::AbstractSystem)
+    @set! sys.eqs = eltype(get_eqs(sys))[]
+    @set! sys.systems = map(remove_child_equations, get_systems(sys))
+    return sys
+end
+
 function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     # flatten system
     sys = flatten(sys)
     sys = process_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    # flatten array equations
-    eqs = flatten_equations(equations(sys))
+    # scalarize array equations, without scalarizing arguments to registered functions
+    original_eqs = flatten_equations(copy(equations(sys)))
+    eqs = copy(original_eqs)
     neqs = length(eqs)
     param_derivative_map = Dict{BasicSymbolic, Any}()
     # * Scalarize unknowns
@@ -331,9 +394,16 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             # change the equation if the RHS is `missing` so the rest of this loop works
             eq = 0.0 ~ coalesce(eq.rhs, 0.0)
         end
-        rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
-        if !_iszero(eq.lhs)
+        is_statemachine_equation = false
+        if eq.lhs isa StateMachineOperator
+            is_statemachine_equation = true
+            eq = eq
+            rhs = eq.rhs
+        elseif _iszero(eq.lhs)
+            rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
+        else
             lhs = quick_cancel ? quick_cancel_expr(eq.lhs) : eq.lhs
+            rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
             eq = 0 ~ rhs - lhs
         end
         empty!(varsbuf)
@@ -397,8 +467,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
                 addvar!(v, VARIABLE)
             end
         end
-
-        if isalgeq
+        if isalgeq || is_statemachine_equation
             eqs[i] = eq
         else
             eqs[i] = eqs[i].lhs ~ rhs
@@ -415,6 +484,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         end
     end
     eqs = eqs[eqs_to_retain]
+    original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
 
@@ -423,6 +493,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         # depending on order due to NP-completeness of tearing.
         sortidxs = Base.sortperm(eqs, by = string)
         eqs = eqs[sortidxs]
+        original_eqs = original_eqs[sortidxs]
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
@@ -513,11 +584,10 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    ts = TearingState(sys, fullvars,
+    ts = TearingState(sys, original_eqs, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
-        Any[], param_derivative_map)
-
+        Any[], param_derivative_map, typeof(sys)[])
     return ts
 end
 
@@ -696,29 +766,73 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " SelectedState")
 end
 
+function make_eqs_zero_equals!(ts::TearingState)
+    neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
+        i, eq = kvp
+        isalgeq = true
+        for j in 𝑠neighbors(ts.structure.graph, i)
+            isalgeq &= invview(ts.structure.var_to_diff)[j] === nothing
+        end
+        if isalgeq
+            return 0 ~ eq.rhs - eq.lhs
+        else
+            return eq
+        end
+    end
+    copyto!(get_eqs(ts.sys), neweqs)
+end
+
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
+    # split_system returns one or two systems and the inputs for each
+    # mod clock inference to be binary
+    # if it's continous keep going, if not then error unless given trait impl in additional passes
     ci = ModelingToolkit.ClockInference(state)
     ci = ModelingToolkit.infer_clocks!(ci)
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
         Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
     tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-    if length(tss) > 1
-        if continuous_id == 0
-            throw(HybridSystemNotSupportedException("""
-            Discrete systems with multiple clocks are not supported with the standard \
-            MTK compiler.
-            """))
-        else
-            throw(HybridSystemNotSupportedException("""
-            Hybrid continuous-discrete systems are currently not supported with \
-            the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-            see https://help.juliahub.com/juliasimcompiler/stable/
-            """))
+    if continuous_id == 0
+        # do a trait check here - handle fully discrete system
+        additional_passes = get(kwargs, :additional_passes, nothing)
+        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            # take the first discrete compilation pass given for now
+            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+            discrete_compile = additional_passes[discrete_pass_idx]
+            deleteat!(additional_passes, discrete_pass_idx)
+            return discrete_compile(tss, clocked_inputs, ci)
         end
+        throw(HybridSystemNotSupportedException("""
+        Discrete systems with multiple clocks are not supported with the standard \
+        MTK compiler.
+        """))
+    end
+    if length(tss) > 1
+        make_eqs_zero_equals!(tss[continuous_id])
+        # simplify as normal
+        sys = _mtkcompile!(tss[continuous_id]; simplify,
+            inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
+            check_consistency, fully_determined,
+            kwargs...)
+        additional_passes = get(kwargs, :additional_passes, nothing)
+        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
+            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
+            discrete_compile = additional_passes[discrete_pass_idx]
+            deleteat!(additional_passes, discrete_pass_idx)
+            # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
+            # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
+            return discrete_compile(
+                sys, tss[[i for i in eachindex(tss) if i != continuous_id]],
+                clocked_inputs, ci, id_to_clock)
+        end
+        throw(HybridSystemNotSupportedException("""
+        Hybrid continuous-discrete systems are currently not supported with \
+        the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
+        see https://help.juliahub.com/juliasimcompiler/stable/
+        """))
     end
     if get_is_discrete(state.sys) ||
        continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
