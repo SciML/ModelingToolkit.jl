@@ -922,8 +922,8 @@ end
             [D(x) ~ 2x + r + rhss, r ~ p + 2q, q ~ p + 3], t;
             guesses = [p => 1.0])
         prob = Problem(sys, [x => 1.0, p => missing], (0.0, 1.0))
-        @test length(equations(ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys))) ==
-              4
+        parent_isys = ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys)
+        @test length(equations(parent_isys)) == 4
         integ = init(prob, alg)
         @test integ.ps[p] ≈ 2
     end
