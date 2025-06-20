@@ -811,6 +811,18 @@ function invalidate_cache!(sys::AbstractSystem)
     return sys
 end
 
+# `::MetadataT` but that is defined later
+function refreshed_metadata(meta::Base.ImmutableDict)
+    newmeta = MetadataT()
+    for (k, v) in meta
+        if k === MutableCacheKey
+            v = MutableCacheT()
+        end
+        newmeta = Base.ImmutableDict(newmeta, k => v)
+    end
+    return newmeta
+end
+
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
 end
@@ -819,6 +831,8 @@ end
         args = map(fieldnames(obj)) do fn
             if fn in fieldnames(patch)
                 :(patch.$fn)
+            elseif fn == :metadata
+                :($refreshed_metadata(getfield(obj, $(Meta.quot(fn)))))
             else
                 :(getfield(obj, $(Meta.quot(fn))))
             end
