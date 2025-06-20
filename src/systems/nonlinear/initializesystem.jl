@@ -719,7 +719,25 @@ function SciMLBase.late_binding_update_u0_p(
     newu0, newp = promote_u0_p(newu0, newp, t0)
 
     # non-symbolic u0 updates initials...
-    if !(eltype(u0) <: Pair)
+    if eltype(u0) <: Pair
+        syms = []
+        vals = []
+        allsyms = all_symbols(sys)
+        for (k, v) in u0
+            v === nothing && continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            if k isa Symbol
+                k2 = symbol_to_symbolic(sys, k; allsyms)
+                # if it is returned as-is, there is no match so skip it
+                k2 === k && continue
+                k = k2
+            end
+            is_parameter(sys, Initial(k)) || continue
+            push!(syms, Initial(k))
+            push!(vals, v)
+        end
+        newp = setp_oop(sys, syms)(newp, vals)
+    else
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
@@ -732,27 +750,27 @@ function SciMLBase.late_binding_update_u0_p(
             throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
         newp = meta.set_initial_unknowns!(newp, newu0)
-        return newu0, newp
     end
 
-    syms = []
-    vals = []
-    allsyms = all_symbols(sys)
-    for (k, v) in u0
-        v === nothing && continue
-        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
-        if k isa Symbol
-            k2 = symbol_to_symbolic(sys, k; allsyms)
-            # if it is returned as-is, there is no match so skip it
-            k2 === k && continue
-            k = k2
+    if eltype(p) <: Pair
+        syms = []
+        vals = []
+        for (k, v) in p
+            v === nothing && continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            if k isa Symbol
+                k2 = symbol_to_symbolic(sys, k; allsyms)
+                # if it is returned as-is, there is no match so skip it
+                k2 === k && continue
+                k = k2
+            end
+            is_parameter(sys, Initial(k)) || continue
+            push!(syms, Initial(k))
+            push!(vals, v)
         end
-        is_parameter(sys, Initial(k)) || continue
-        push!(syms, Initial(k))
-        push!(vals, v)
+        newp = setp_oop(sys, syms)(newp, vals)
     end
 
-    newp = setp_oop(sys, syms)(newp, vals)
     return newu0, newp
 end
 

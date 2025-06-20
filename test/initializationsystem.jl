@@ -1252,9 +1252,9 @@ end
     @test init(prob3)[x] ≈ 1.0
     prob4 = remake(prob; p = [p => 1.0])
     test_dummy_initialization_equation(prob4, x)
-    prob5 = remake(prob; p = [p => missing, q => 2.0])
+    prob5 = remake(prob; p = [p => missing, q => 4.0])
     @test prob5.f.initialization_data !== nothing
-    @test init(prob5).ps[p] ≈ 1.0
+    @test init(prob5).ps[p] ≈ 2.0
 end
 
 @testset "Variables provided as symbols" begin
