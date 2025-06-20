@@ -252,6 +252,7 @@ struct SymbolicContinuousCallback <: AbstractCallback
     finalize::Union{Affect, SymbolicAffect, Nothing}
     rootfind::Union{Nothing, SciMLBase.RootfindOpt}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
+    zero_crossing_id::Symbol
 end
 
 function SymbolicContinuousCallback(
@@ -262,6 +263,7 @@ function SymbolicContinuousCallback(
         finalize = nothing,
         rootfind = SciMLBase.LeftRootFind,
         reinitializealg = nothing,
+        zero_crossing_id = gensym(),
         kwargs...)
     conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
@@ -278,7 +280,7 @@ function SymbolicContinuousCallback(
         SymbolicAffect(affect_neg; kwargs...),
         SymbolicAffect(initialize; kwargs...), SymbolicAffect(
             finalize; kwargs...),
-        rootfind, reinitializealg)
+        rootfind, reinitializealg, zero_crossing_id)
 end # Default affect to nothing
 
 function SymbolicContinuousCallback(p::Pair, args...; kwargs...)
@@ -297,7 +299,7 @@ end
 function complete(cb::SymbolicContinuousCallback; kwargs...)
     SymbolicContinuousCallback(cb.conditions, make_affect(cb.affect; kwargs...),
         make_affect(cb.affect_neg; kwargs...), make_affect(cb.initialize; kwargs...),
-        make_affect(cb.finalize; kwargs...), cb.rootfind, cb.reinitializealg)
+        make_affect(cb.finalize; kwargs...), cb.rootfind, cb.reinitializealg, cb.zero_crossing_id)
 end
 
 make_affect(affect::SymbolicAffect; kwargs...) = AffectSystem(affect; kwargs...)
@@ -512,7 +514,8 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
         affect_neg = namespace_affects(affect_negs(cb), s),
         initialize = namespace_affects(initialize_affects(cb), s),
         finalize = namespace_affects(finalize_affects(cb), s),
-        rootfind = cb.rootfind, reinitializealg = cb.reinitializealg)
+        rootfind = cb.rootfind, reinitializealg = cb.reinitializealg,
+        zero_crossing_id = cb.zero_crossing_id)
 end
 
 function namespace_conditions(condition, s)
@@ -536,6 +539,8 @@ function Base.hash(cb::AbstractCallback, s::UInt)
     s = hash(finalize_affects(cb), s)
     !is_discrete(cb) && (s = hash(cb.rootfind, s))
     hash(cb.reinitializealg, s)
+    !is_discrete(cb) && (s = hash(cb.zero_crossing_id, s))
+    return s
 end
 
 ###########################
@@ -570,13 +575,17 @@ function finalize_affects(cbs::Vector{<:AbstractCallback})
 end
 
 function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
-    (is_discrete(e1) === is_discrete(e2)) || return false
-    (isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) &&
-     isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) &&
-    isequal(e1.reinitializealg, e2.reinitializealg) ||
-        return false
-    is_discrete(e1) ||
-        (isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind))
+    is_discrete(e1) === is_discrete(e2) || return false
+    isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) || return false
+    isequal(e1.initialize, e2.initialize) || return false
+    isequal(e1.finalize, e2.finalize) || return false
+    isequal(e1.reinitializealg, e2.reinitializealg) || return false
+    if !is_discrete(e1)
+        isequal(e1.affect_neg, e2.affect_neg) || return false
+        isequal(e1.rootfind, e2.rootfind) || return false
+        isequal(e1.zero_crossing_id, e2.zero_crossing_id) || return false
+    end
+    return true
 end
 
 Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
