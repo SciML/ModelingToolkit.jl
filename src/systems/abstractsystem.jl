@@ -825,7 +825,8 @@ end
         kwarg = :($(Expr(:kw, :checks, false))) # Inputs should already be checked
         return Expr(:block,
             Expr(:meta, :inline),
-            Expr(:call, :(constructorof($obj)), args..., kwarg))
+            Expr(:call, invalidate_cache!,
+                Expr(:call, :(constructorof($obj)), args..., kwarg)))
     else
         error("This should never happen. Trying to set $(typeof(obj)) with $patch.")
     end
