@@ -79,7 +79,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), [unknowns(isys); observables(isys)])
+    uninit = setdiff(unknowns(sys), unknowns(isys), observables(isys))
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
