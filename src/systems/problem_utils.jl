@@ -482,8 +482,11 @@ in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
     for k in vars
+        v = get(varmap, k, nothing)
+        v === nothing && continue
+        symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
         haskey(varmap, k) || continue
-        varmap[k] = fixpoint_sub(varmap[k], varmap; maxiters = limit)
+        varmap[k] = fixpoint_sub(v, varmap; maxiters = limit)
     end
 end
 
@@ -627,15 +630,19 @@ function build_operating_point!(sys::AbstractSystem,
         end
     end
 
-    for k in keys(u0map)
-        v = fixpoint_sub(u0map[k], neithermap; operator = Symbolics.Operator)
-        isequal(k, v) && continue
-        u0map[k] = v
-    end
-    for k in keys(pmap)
-        v = fixpoint_sub(pmap[k], neithermap; operator = Symbolics.Operator)
-        isequal(k, v) && continue
-        pmap[k] = v
+    if !isempty(neithermap)
+        for (k, v) in u0map
+            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
+            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
+            isequal(k, v) && continue
+            u0map[k] = v
+        end
+        for (k, v) in pmap
+            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
+            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
+            isequal(k, v) && continue
+            pmap[k] = v
+        end
     end
 
     return missing_unknowns, missing_pars
@@ -1148,20 +1155,24 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
-    for p in punknowns
-        is_parameter_solvable(p, op, defs, guesses) || continue
-        get(op, p, missing) === missing || continue
+    filter!(punknowns) do p
+        is_parameter_solvable(p, op, defs, guesses) && get(op, p, missing) === missing
+    end
+    pvals = getu(initializeprob, punknowns)(initializeprob)
+    for (p, pval) in zip(punknowns, pvals)
         p = unwrap(p)
-        op[p] = getu(initializeprob, p)(initializeprob)
+        op[p] = pval
         if iscall(p) && operation(p) === getindex
             arrp = arguments(p)[1]
+            get(op, arrp, nothing) !== missing && continue
             op[arrp] = collect(arrp)
         end
     end
 
     if time_dependent_init
-        for v in missing_unknowns
-            op[v] = getu(initializeprob, v)(initializeprob)
+        uvals = getu(initializeprob, collect(missing_unknowns))(initializeprob)
+        for (v, val) in zip(missing_unknowns, uvals)
+            op[v] = val
         end
         empty!(missing_unknowns)
     end
@@ -1397,7 +1408,7 @@ function process_SciMLProblem(
         if !(pType <: AbstractArray)
             pType = Array
         end
-        p = MTKParameters(sys, op; floatT = floatT, p_constructor)
+        p = MTKParameters(sys, op; floatT = floatT, p_constructor, fast_path = true)
     else
         p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
     end

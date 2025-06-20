@@ -461,8 +461,8 @@ prob = ODEProblem(simpsys, [z => 1.0, y => 1.0], tspan, guesses = [x => 2.0])
 sol = solve(prob, Tsit5())
 @test sol[[x, y], 1] == [0.0, 1.0]
 
-# This should warn, but logging tests can't be marked as broken
-@test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
+@test_throws ModelingToolkit.IncompleteInitializationError ODEProblem(
+    simpsys, [], tspan, guesses = [x => 2.0])
 
 # Late Binding initialization_eqs
 # https://github.com/SciML/ModelingToolkit.jl/issues/2787
@@ -923,8 +923,9 @@ end
             [D(x) ~ 2x + r + rhss, r ~ p + 2q, q ~ p + 3], t;
             guesses = [p => 1.0])
         prob = Problem(sys, [x => 1.0, p => missing], (0.0, 1.0))
-        @test length(equations(ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys))) ==
-              4
+        parent_isys = ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys)
+        @test length(equations(parent_isys)) == 3
+        @test length(observed(parent_isys)) == 1
         integ = init(prob, alg)
         @test integ.ps[p] ≈ 2
     end
@@ -1253,9 +1254,9 @@ end
     @test init(prob3)[x] ≈ 1.0
     prob4 = remake(prob; p = [p => 1.0])
     test_dummy_initialization_equation(prob4, x)
-    prob5 = remake(prob; p = [p => missing, q => 2.0])
+    prob5 = remake(prob; p = [p => missing, q => 4.0])
     @test prob5.f.initialization_data !== nothing
-    @test init(prob5).ps[p] ≈ 1.0
+    @test init(prob5).ps[p] ≈ 2.0
 end
 
 @testset "Variables provided as symbols" begin
@@ -1343,7 +1344,7 @@ end
     @test ModelingToolkit.is_parameter_solvable(p, Dict(), defaults(sys), guesses(sys))
     prob = ODEProblem(sys, [x => 1.0, q => 2.0], (0.0, 1.0))
     initsys = prob.f.initialization_data.initializeprob.f.sys
-    @test length(ModelingToolkit.observed(initsys)) == 4
+    @test length(ModelingToolkit.observed(initsys)) == 2
     sol = solve(prob, Tsit5())
     @test sol.ps[p] ≈ [2.0, 4.0]
 end

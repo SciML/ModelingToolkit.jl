@@ -173,20 +173,20 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     end
 
     # 5) process parameters as initialization unknowns
-    paramsubs = setup_parameter_initialization!(
+    solved_params = setup_parameter_initialization!(
         sys, pmap, defs, guesses, eqs_ics; check_defguess)
 
     # 6) parameter dependencies become equations, their LHS become unknowns
     # non-numeric dependent parameters stay as parameter dependencies
     new_parameter_deps = solve_parameter_dependencies!(
-        sys, paramsubs, eqs_ics, defs, guesses)
+        sys, solved_params, eqs_ics, defs, guesses)
 
     # 7) handle values provided for dependent parameters similar to values for observed variables
-    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics, paramsubs)
+    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics)
 
     # parameters do not include ones that became initialization unknowns
     pars = Vector{SymbolicParam}(filter(
-        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
+        !in(solved_params), parameters(sys; initial_parameters = true)))
     push!(pars, get_iv(sys))
 
     # 8) use observed equations for guesses of observed variables if not provided
@@ -198,21 +198,19 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     end
     append!(eqs_ics, trueobs)
 
-    vars = [vars; collect(values(paramsubs))]
+    # 9) optimize equations that are guaranteed to be observed
+    eqs_ics, explicit_observed = separate_trivial_equations(sys, eqs_ics)
+    eliminated_vars = Set([eq.lhs for eq in explicit_observed])
 
-    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
-    # so add scalarized versions as well
-    scalarize_varmap!(paramsubs)
+    vars = [vars; collect(solved_params)]
+    filter!(!in(eliminated_vars), vars)
 
-    eqs_ics = Symbolics.substitute.(eqs_ics, (paramsubs,))
-    for k in keys(defs)
-        defs[k] = substitute(defs[k], paramsubs)
-    end
     initials = Dict(k => v for (k, v) in pmap if isinitial(k))
     merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
+        observed = explicit_observed,
         defaults = defs,
         checks = check_units,
         name,
@@ -299,41 +297,42 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     append!(eqs_ics, initialization_eqs)
 
     # process parameters as initialization unknowns
-    paramsubs = setup_parameter_initialization!(
+    solved_params = setup_parameter_initialization!(
         sys, pmap, defs, guesses, eqs_ics; check_defguess)
 
     # parameter dependencies become equations, their LHS become unknowns
     # non-numeric dependent parameters stay as parameter dependencies
     new_parameter_deps = solve_parameter_dependencies!(
-        sys, paramsubs, eqs_ics, defs, guesses)
+        sys, solved_params, eqs_ics, defs, guesses)
 
     # handle values provided for dependent parameters similar to values for observed variables
-    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics, paramsubs)
+    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics)
 
     # parameters do not include ones that became initialization unknowns
     pars = Vector{SymbolicParam}(filter(
-        p -> !haskey(paramsubs, p), parameters(sys; initial_parameters = true)))
-    vars = collect(values(paramsubs))
+        !in(solved_params), parameters(sys; initial_parameters = true)))
+    vars = collect(solved_params)
 
-    # even if `p => tovar(p)` is in `paramsubs`, `isparameter(p[1]) === true` after substitution
-    # so add scalarized versions as well
-    scalarize_varmap!(paramsubs)
+    # optimize equations that are guaranteed to be observed
+    eqs_ics, explicit_observed = separate_trivial_equations(sys, eqs_ics)
+    eliminated_vars = Set([eq.lhs for eq in explicit_observed])
 
-    eqs_ics = Vector{Equation}(Symbolics.substitute.(eqs_ics, (paramsubs,)))
-    for k in keys(defs)
-        defs[k] = substitute(defs[k], paramsubs)
-    end
+    vars = [vars; collect(solved_params)]
+    filter!(!in(eliminated_vars), vars)
+
     initials = Dict(k => v for (k, v) in pmap if isinitial(k))
     merge!(defs, initials)
     isys = System(Vector{Equation}(eqs_ics),
         vars,
         pars;
+        observed = explicit_observed,
         defaults = defs,
         checks = check_units,
         name,
         is_initializesystem = true,
         kwargs...)
     @set isys.parameter_dependencies = new_parameter_deps
+    return isys
 end
 
 """
@@ -359,7 +358,7 @@ mapping solvable parameters to their `tovar` variants.
 function setup_parameter_initialization!(
         sys::AbstractSystem, pmap::AbstractDict, defs::AbstractDict,
         guesses::AbstractDict, eqs_ics::Vector{Equation}; check_defguess = false)
-    paramsubs = Dict()
+    solved_params = Set()
     for p in parameters(sys)
         if is_parameter_solvable(p, pmap, defs, guesses)
             # If either of them are `missing` the parameter is an unknown
@@ -369,7 +368,7 @@ function setup_parameter_initialization!(
             _val2 = get_possibly_array_fallback_singletons(defs, p)
             _val3 = get_possibly_array_fallback_singletons(guesses, p)
             varp = tovar(p)
-            paramsubs[p] = varp
+            push!(solved_params, p)
             # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
             if _val2 === missing
                 if _val1 !== nothing && _val1 !== missing
@@ -409,7 +408,7 @@ function setup_parameter_initialization!(
         end
     end
 
-    return paramsubs
+    return solved_params
 end
 
 """
@@ -418,7 +417,7 @@ end
 Add appropriate parameter dependencies as initialization equations. Return the new list of
 parameter dependencies for the initialization system.
 """
-function solve_parameter_dependencies!(sys::AbstractSystem, paramsubs::AbstractDict,
+function solve_parameter_dependencies!(sys::AbstractSystem, solved_params::AbstractSet,
         eqs_ics::Vector{Equation}, defs::AbstractDict, guesses::AbstractDict)
     new_parameter_deps = Equation[]
     for eq in parameter_dependencies(sys)
@@ -427,7 +426,7 @@ function solve_parameter_dependencies!(sys::AbstractSystem, paramsubs::AbstractD
             continue
         end
         varp = tovar(eq.lhs)
-        paramsubs[eq.lhs] = varp
+        push!(solved_params, eq.lhs)
         push!(eqs_ics, eq)
         guessval = get(guesses, eq.lhs, eq.rhs)
         push!(defs, varp => guessval)
@@ -442,10 +441,10 @@ end
 Turn values provided for parameter dependencies into initialization equations.
 """
 function handle_dependent_parameter_constraints!(sys::AbstractSystem, pmap::AbstractDict,
-        eqs_ics::Vector{Equation}, paramsubs::AbstractDict)
+        eqs_ics::Vector{Equation})
     for (k, v) in merge(defaults(sys), pmap)
         if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
-            push!(eqs_ics, paramsubs[k] ~ v)
+            push!(eqs_ics, k ~ v)
         end
     end
 
@@ -484,6 +483,54 @@ function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{
         push!(banned_vars, eq.lhs)
     end
     return deleteat!(trueobs, idxs_to_remove)
+end
+
+function separate_trivial_equations(sys::AbstractSystem, eqs::Vector{Equation})
+    # Many equations (observed, ICs for differential variables) are explicit and will be
+    # converted to observed by `mtkcompile`, but doing so is also expensive. All such
+    # equations are explicit in `eqs_ics`, so we find all variables determined by such
+    # explicit equations exactly once (e.g. an observed variable given an initial condition
+    # will occur twice on the LHS, ruling it out). These are substituted into the rest so
+    # the determined-ness of the system isn't affected and will be added back to the
+    # simplified system as observed.
+    occurrences = Dict{BasicSymbolic, Vector{Int}}()
+    for (i, eq) in enumerate(eqs)
+        symbolic_type(eq.lhs) == NotSymbolic() && continue
+        # if we eliminate `x ~ Initial(x)` equations, then for overdetermined systems
+        # redundant conditions end up being parameter equations in terms of `Initial(..)`
+        # and don't play well with the rest of the infrastructure. So we only eliminate
+        # parameter equations and observed.
+        is_variable(sys, eq.lhs) && continue
+        if iscall(eq.lhs)
+            op = operation(eq.lhs)
+            args = arguments(eq.lhs)
+            if !(issym(op) ||
+                 op === getindex && (!iscall(args[1]) || issym(operation(args[1]))))
+                continue
+            end
+        end
+        buffer = get!(() -> Int[], occurrences, eq.lhs)
+        push!(buffer, i)
+    end
+
+    blacklist = BitSet()
+    subrules = Dict()
+    explicit_observed = Equation[]
+    for (sym, idxs) in occurrences
+        length(idxs) == 1 || continue
+        idx = only(idxs)
+        subrules[sym] = eqs[idx].rhs
+        push!(blacklist, idx)
+        push!(explicit_observed, sym ~ eqs[idx].rhs)
+    end
+
+    new_eqs = Equation[]
+    for (i, eq) in enumerate(eqs)
+        i in blacklist && continue
+        push!(new_eqs, fixpoint_sub(eq, subrules; maxiters = max(length(subrules), 10)))
+    end
+
+    return new_eqs, explicit_observed
 end
 
 """
@@ -735,7 +782,25 @@ function SciMLBase.late_binding_update_u0_p(
     newu0, newp = promote_u0_p(newu0, newp, t0)
 
     # non-symbolic u0 updates initials...
-    if !(eltype(u0) <: Pair)
+    if eltype(u0) <: Pair
+        syms = []
+        vals = []
+        allsyms = all_symbols(sys)
+        for (k, v) in u0
+            v === nothing && continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            if k isa Symbol
+                k2 = symbol_to_symbolic(sys, k; allsyms)
+                # if it is returned as-is, there is no match so skip it
+                k2 === k && continue
+                k = k2
+            end
+            is_parameter(sys, Initial(k)) || continue
+            push!(syms, Initial(k))
+            push!(vals, v)
+        end
+        newp = setp_oop(sys, syms)(newp, vals)
+    else
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
@@ -748,27 +813,27 @@ function SciMLBase.late_binding_update_u0_p(
             throw(ArgumentError("Expected `newu0` to be of same length as unknowns ($(length(prob.u0))). Got $(typeof(newu0)) of length $(length(newu0))"))
         end
         newp = meta.set_initial_unknowns!(newp, newu0)
-        return newu0, newp
     end
 
-    syms = []
-    vals = []
-    allsyms = all_symbols(sys)
-    for (k, v) in u0
-        v === nothing && continue
-        (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
-        if k isa Symbol
-            k2 = symbol_to_symbolic(sys, k; allsyms)
-            # if it is returned as-is, there is no match so skip it
-            k2 === k && continue
-            k = k2
+    if eltype(p) <: Pair
+        syms = []
+        vals = []
+        for (k, v) in p
+            v === nothing && continue
+            (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
+            if k isa Symbol
+                k2 = symbol_to_symbolic(sys, k; allsyms)
+                # if it is returned as-is, there is no match so skip it
+                k2 === k && continue
+                k = k2
+            end
+            is_parameter(sys, Initial(k)) || continue
+            push!(syms, Initial(k))
+            push!(vals, v)
         end
-        is_parameter(sys, Initial(k)) || continue
-        push!(syms, Initial(k))
-        push!(vals, v)
+        newp = setp_oop(sys, syms)(newp, vals)
     end
 
-    newp = setp_oop(sys, syms)(newp, vals)
     return newu0, newp
 end
 

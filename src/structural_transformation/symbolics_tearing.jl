@@ -960,7 +960,7 @@ function update_simplified_system!(
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs]
+    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs; state.additional_observed]
 
     unknown_idxs = filter(
         i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars), eachindex(state.fullvars))

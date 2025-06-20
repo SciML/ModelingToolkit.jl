@@ -39,7 +39,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     for k in keys(op)
         has_u0_ics |= is_variable(sys, k) || isdifferential(k) ||
                       symbolic_type(k) == ArraySymbolic() &&
-                      is_sized_array_symbolic(k) && is_variable(sys, first(collect(k)))
+                      is_sized_array_symbolic(k) && is_variable(sys, unwrap(first(wrap(k))))
     end
     if !has_u0_ics && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
@@ -55,6 +55,34 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         simplify_system = true
     end
 
+    # The trivial observed identification process may have substituted the equations
+    # of the system until they are pure-parameter equations. To prevent `mtkcompile` from
+    # ignoring them (since we still want them as constraints) remove them from the system
+    # and add them back later.
+    varsbuf = Set()
+    pareq_idxs = Int[]
+    eqs = equations(isys)
+    for (i, eq) in enumerate(eqs)
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Union{Initial, Pre})
+        # singular equations
+        isempty(varsbuf) && continue
+        if all(varsbuf) do sym
+            is_parameter(isys, sym) ||
+                symbolic_type(sym) == ArraySymbolic() &&
+                    is_sized_array_symbolic(sym) &&
+                    all(Base.Fix1(is_parameter, isys), collect(sym))
+        end
+            push!(pareq_idxs, i)
+        end
+    end
+    pareqs = flatten_equations(eqs[pareq_idxs])
+    pareqs = map(pareqs) do eq
+        0 ~ eq.rhs - eq.lhs
+    end
+    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
+    @set! isys.eqs = eqs
+
     # useful for `SteadyStateProblem` since `f` has to be autonomous and the
     # initialization should be too
     if !time_dependent_init
@@ -62,9 +90,18 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         idx === nothing || deleteat!(get_ps(isys), idx)
     end
 
+    # some variables may be used in the explicitly torn observed equations
+    # but not in the standard equations
+    used_in_explicit_obs = Set()
+    for eq in observed(isys)
+        vars!(used_in_explicit_obs, eq.rhs)
+    end
+
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys))
     end
+
+    @set! isys.eqs = [get_eqs(isys); pareqs]
 
     ts = get_tearing_state(isys)
     unassigned_vars = StructuralTransformations.singular_check(ts)
@@ -79,7 +116,13 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), [unknowns(isys); observables(isys)])
+    uninit = setdiff(unknowns(sys), unknowns(isys), observables(isys))
+    # get the variables not present in standard equations but present in explicit observed
+    extra_vars = intersect!(used_in_explicit_obs, uninit)
+    # remove them from the uninitialized variables
+    setdiff!(uninit, extra_vars)
+    # and add them to the unknowns
+    @set! isys.unknowns = [get_unknowns(isys); collect(extra_vars)]
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)

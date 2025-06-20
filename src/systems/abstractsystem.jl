@@ -805,7 +805,10 @@ has_equations(::AbstractSystem) = true
 
 Invalidate cached jacobians, etc.
 """
-invalidate_cache!(sys::AbstractSystem) = sys
+function invalidate_cache!(sys::AbstractSystem)
+    empty!(getmetadata(sys, MutableCacheKey, nothing))
+    return sys
+end
 
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
@@ -822,7 +825,8 @@ end
         kwarg = :($(Expr(:kw, :checks, false))) # Inputs should already be checked
         return Expr(:block,
             Expr(:meta, :inline),
-            Expr(:call, :(constructorof($obj)), args..., kwarg))
+            Expr(:call, invalidate_cache!,
+                Expr(:call, :(constructorof($obj)), args..., kwarg)))
     else
         error("This should never happen. Trying to set $(typeof(obj)) with $patch.")
     end
@@ -2705,7 +2709,9 @@ function process_parameter_equations(sys::AbstractSystem)
                     is_sized_array_symbolic(sym) &&
                     all(Base.Fix1(is_parameter, sys), collect(sym))
         end
-            if !isparameter(eq.lhs)
+            # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
+            # check.
+            if !(eq.lhs in varsbuf)
                 throw(ArgumentError("""
                 LHS of parameter dependency equation must be a single parameter. Found \
                 $(eq.lhs).

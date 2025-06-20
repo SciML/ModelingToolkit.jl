@@ -872,7 +872,8 @@ function expand_connections(sys::AbstractSystem; tol = 1e-10)
     eqs = [equations(sys); ceqs; stream_eqs]
     # substitute `instream(..)` expressions with their new values
     for i in eachindex(eqs)
-        eqs[i] = fixpoint_sub(eqs[i], instream_subs; maxiters = length(instream_subs))
+        eqs[i] = fixpoint_sub(
+            eqs[i], instream_subs; maxiters = max(length(instream_subs), 10))
     end
     # get the defaults for domain networks
     d_defs = domain_defaults(sys, domain_csets)
