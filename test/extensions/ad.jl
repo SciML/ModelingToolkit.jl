@@ -8,6 +8,7 @@ using OrdinaryDiffEqNonlinearSolve
 using NonlinearSolve
 using SciMLSensitivity
 using ForwardDiff
+using StableRNGs
 using ChainRulesCore
 using ChainRulesCore: NoTangent
 using ChainRulesTestUtils: test_rrule, rand_tangent
@@ -134,4 +135,47 @@ end
     grad = Zygote.gradient(prob) do prob
         prob[sys.x]
     end
+end
+
+@testset "`p` provided to `solve` is respected" begin
+    @mtkmodel Linear begin
+        @variables begin
+            x(t) = 1.0, [description = "Prey"]
+        end
+        @parameters begin
+            α = 1.5
+        end
+        @equations begin
+            D(x) ~ -α * x
+        end
+    end
+
+    @mtkbuild linear = Linear()
+    problem = ODEProblem(linear, [], (0.0, 1.0))
+    solution = solve(problem, Tsit5(), saveat = 0.1)
+    rng = StableRNG(42)
+    data = (;
+        t = solution.t,
+        # [[y, x], :]
+        measurements = Array(solution)
+    )
+    data.measurements .+= 0.05 * randn(rng, size(data.measurements))
+
+    p0, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), problem.p)
+
+    objective = let repack = repack, problem = problem
+        (p, data) -> begin
+            pnew = repack(p)
+            sol = solve(problem, Tsit5(), p = pnew, saveat = data.t)
+            sum(abs2, sol .- data.measurements) / size(data.t, 1)
+        end
+    end
+
+    # Check 0.0031677344878386607 
+    @test_nowarn objective(p0, data)
+
+    fd = ForwardDiff.gradient(Base.Fix2(objective, data), p0)
+    zg = Zygote.gradient(Base.Fix2(objective, data), p0)
+
+    @test fd≈zg[1] atol=1e-6
 end
