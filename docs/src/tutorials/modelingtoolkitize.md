@@ -33,10 +33,10 @@ to improve a simulation code before it's passed to the solver.
 ## Example Usage: Generating an Analytical Jacobian Expression for an ODE Code
 
 Take, for example, the Robertson ODE
-defined as an `ODEProblem` for DifferentialEquations.jl:
+defined as an `ODEProblem` for OrdinaryDiffEq.jl:
 
 ```@example mtkize
-using DifferentialEquations, ModelingToolkit
+using OrdinaryDiffEq, ModelingToolkit
 function rober(du, u, p, t)
     y₁, y₂, y₃ = u
     k₁, k₂, k₃ = p
@@ -49,10 +49,10 @@ prob = ODEProblem(rober, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
 ```
 
 If we want to get a symbolic representation, we can simply call `modelingtoolkitize`
-on the `prob`, which will return an `ODESystem`:
+on the `prob`, which will return an `System`:
 
 ```@example mtkize
-@mtkbuild sys = modelingtoolkitize(prob)
+@mtkcompile sys = modelingtoolkitize(prob)
 ```
 
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:

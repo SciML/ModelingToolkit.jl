@@ -9,7 +9,7 @@ or into more specialized callback types from the
 [DiffEqCallbacks.jl](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_library/)
 library.
 
-[`ODESystem`](@ref)s and [`SDESystem`](@ref)s accept keyword arguments
+[`System`](@ref)s and [`SDESystem`](@ref)s accept keyword arguments
 `continuous_events` and `discrete_events` to symbolically encode continuous or
 discrete callbacks. [`JumpSystem`](@ref)s currently support only
 `discrete_events`. Continuous events are applied when a given condition becomes
@@ -24,6 +24,67 @@ test), and an *affect* function (for determining how to update the system when
 the event occurs). These can both be specified symbolically, but a more [general
 functional affect](@ref func_affects) representation is also allowed, as described
 below.
+
+## Symbolic Callback Semantics
+
+In callbacks, there is a distinction between values of the unknowns and parameters
+*before* the callback, and the desired values *after* the callback. In MTK, this
+is provided by the `Pre` operator. For example, if we would like to add 1 to an
+unknown `x` in a callback, the equation would look like the following:
+
+```julia
+x ~ Pre(x) + 1
+```
+
+Non `Pre`-d values will be interpreted as values *after* the callback. As such,
+writing
+
+```julia
+x ~ x + 1
+```
+
+will be interpreted as an algebraic equation to be satisfied after the callback.
+Since this equation obviously cannot be satisfied, an error will result.
+
+Callbacks must maintain the consistency of DAEs, meaning that they must satisfy
+all the algebraic equations of the system after their update. However, the affect
+equations often do not fully specify which unknowns/parameters should be modified
+to maintain consistency. To make this clear, MTK uses the following rules:
+
+ 1. All unknowns are treated as modifiable by the callback. In order to enforce that an unknown `x` remains the same, one can add `x ~ Pre(x)` to the affect equations.
+ 2. All parameters are treated as un-modifiable, *unless* they are declared as `discrete_parameters` to the callback. In order to be a discrete parameter, the parameter must be time-dependent (the terminology *discretes* here means [discrete variables](@ref save_discretes)).
+
+For example, consider the following system.
+
+```julia
+@variables x(t) y(t)
+@parameters p(t)
+@mtkcompile sys = System([x * y ~ p, D(x) ~ 0], t)
+event = [t == 1] => [x ~ Pre(x) + 1]
+```
+
+By default what will happen is that `x` will increase by 1, `p` will remain constant,
+and `y` will change in order to compensate the increase in `x`. But what if we
+wanted to keep `y` constant and change `p` instead? We could use the callback
+constructor as follows:
+
+```julia
+event = SymbolicDiscreteCallback(
+    [t == 1] => [x ~ Pre(x) + 1, y ~ Pre(y)], discrete_parameters = [p])
+```
+
+This way, we enforce that `y` will remain the same, and `p` will change.
+
+!!! warning
+    
+    Symbolic affects come with the guarantee that the state after the callback
+    will be consistent. However, when using [general functional affects](@ref func_affects)
+    or [imperative affects](@ref imp_affects) one must be more careful. In
+    particular, one can pass in `reinitializealg` as a keyword arg to the
+    callback constructor to re-initialize the system. This will default to
+    `SciMLBase.NoInit()` in the case of symbolic affects and `SciMLBase.CheckInit()`
+    in the case of functional affects. This keyword should *not* be provided
+    if the affect is purely symbolic.
 
 ## Continuous Events
 
@@ -71,9 +132,9 @@ function UnitMassWithFriction(k; name)
     @variables x(t)=0 v(t)=0
     eqs = [D(x) ~ v
            D(v) ~ sin(t) - k * sign(v)]
-    ODESystem(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
+    System(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
-@mtkbuild m = UnitMassWithFriction(0.7)
+@mtkcompile m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -91,10 +152,11 @@ like this
 @variables x(t)=1 v(t)=0
 
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
-affect = [v ~ -v] # the effect is that the velocity changes sign
+affect = [v ~ -Pre(v)] # the effect is that the velocity changes sign
 
-@mtkbuild ball = ODESystem([D(x) ~ v
-                            D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
+@mtkcompile ball = System(
+    [D(x) ~ v
+     D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -110,10 +172,10 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 ```@example events
 @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
 
-continuous_events = [[x ~ 0] => [vx ~ -vx]
-                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+continuous_events = [[x ~ 0] => [vx ~ -Pre(vx)]
+                     [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
 
-@mtkbuild ball = ODESystem(
+@mtkcompile ball = System(
     [
         D(x) ~ vx,
         D(y) ~ vy,
@@ -126,8 +188,8 @@ prob = ODEProblem(ball, Pair[], tspan)
 
 sol = solve(prob, Tsit5())
 @assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
-@assert minimum(sol[y]) > -1.5 # check wall conditions
-@assert maximum(sol[y]) < 1.5  # check wall conditions
+@assert minimum(sol[y]) >= -1.5 # check wall conditions
+@assert maximum(sol[y]) <= 1.5  # check wall conditions
 
 tv = sort([LinRange(0, 10, 200); sol.t])
 plot(sol(tv)[y], sol(tv)[x], line_z = tv)
@@ -187,13 +249,13 @@ par = @parameters g = 9.8
 bb_eqs = [D(x) ~ v
           D(v) ~ -g]
 
-function bb_affect!(integ, u, p, ctx)
-    integ.u[u.v] = -integ.u[u.v]
+function bb_affect!(mod, obs, integ, ctx)
+    return (; v = -mod.v)
 end
 
-reflect = [x ~ 0] => (bb_affect!, [v], [], [], nothing)
+reflect = [x ~ 0] => (bb_affect!, (; v))
 
-@mtkbuild bb_sys = ODESystem(bb_eqs, t, sts, par,
+@mtkcompile bb_sys = System(bb_eqs, t, sts, par,
     continuous_events = reflect)
 
 u0 = [v => 0.0, x => 1.0]
@@ -204,7 +266,7 @@ bb_sol = solve(bb_prob, Tsit5())
 plot(bb_sol)
 ```
 
-## Discrete events support
+## Discrete Events
 
 In addition to continuous events, discrete events are also supported. The
 general interface to represent a collection of discrete events is
@@ -227,18 +289,18 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 `t1` we want to inject `M` more cells into the population. We can model this by
 
 ```@example events
-@parameters M tinject α
+@parameters M tinject α(t)
 @variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
 
 # at time tinject we inject M cells
-injection = (t == tinject) => [N ~ N + M]
+injection = (t == tinject) => [N ~ Pre(N) + M]
 
 u0 = [N => 0.0]
 tspan = (0.0, 20.0)
 p = [α => 100.0, tinject => 10.0, M => 50]
-@mtkbuild osys = ODESystem(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
+@mtkcompile osys = System(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -255,9 +317,9 @@ its steady-state value (which is 100). We can encode this by modifying the event
 to
 
 ```@example events
-injection = ((t == tinject) & (N < 50)) => [N ~ N + M]
+injection = ((t == tinject) & (N < 50)) => [N ~ Pre(N) + M]
 
-@mtkbuild osys = ODESystem(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
+@mtkcompile osys = System(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -269,20 +331,22 @@ event time, the event condition now returns false. Here we used logical and,
 cannot be used within symbolic expressions.
 
 Let's now also add a drug at time `tkill` that turns off production of new
-cells, modeled by setting `α = 0.0`
+cells, modeled by setting `α = 0.0`. Since this is a parameter we must explicitly
+set it as `discrete_parameters`.
 
 ```@example events
 @parameters tkill
 
 # we reset the first event to just occur at tinject
-injection = (t == tinject) => [N ~ N + M]
+injection = (t == tinject) => [N ~ Pre(N) + M]
 
 # at time tkill we turn off production of cells
-killing = (t == tkill) => [α ~ 0.0]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    (t == tkill) => [α ~ 0.0]; discrete_parameters = α, iv = t)
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
-@mtkbuild osys = ODESystem(eqs, t, [N], [α, M, tinject, tkill];
+@mtkcompile osys = System(eqs, t, [N], [α, M, tinject, tkill];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = [10.0, 20.0])
@@ -298,7 +362,7 @@ A preset-time event is triggered at specific set times, which can be
 passed in a vector like
 
 ```julia
-discrete_events = [[1.0, 4.0] => [v ~ -v]]
+discrete_events = [[1.0, 4.0] => [v ~ -Pre(v)]]
 ```
 
 This will change the sign of `v` *only* at `t = 1.0` and `t = 4.0`.
@@ -306,11 +370,12 @@ This will change the sign of `v` *only* at `t = 1.0` and `t = 4.0`.
 As such, our last example with treatment and killing could instead be modeled by
 
 ```@example events
-injection = [10.0] => [N ~ N + M]
-killing = [20.0] => [α ~ 0.0]
+injection = [10.0] => [N ~ Pre(N) + M]
+killing = ModelingToolkit.SymbolicDiscreteCallback(
+    [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
 
 p = [α => 100.0, M => 50]
-@mtkbuild osys = ODESystem(eqs, t, [N], [α, M];
+@mtkcompile osys = System(eqs, t, [N], [α, M];
     discrete_events = [injection, killing])
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5())
@@ -325,7 +390,7 @@ specify a periodic interval, pass the interval as the condition for the event.
 For example,
 
 ```julia
-discrete_events = [1.0 => [v ~ -v]]
+discrete_events = [1.0 => [v ~ -Pre(v)]]
 ```
 
 will change the sign of `v` at `t = 1.0`, `2.0`, ...
@@ -334,10 +399,10 @@ Finally, we note that to specify an event at precisely one time, say 2.0 below,
 one must still use a vector
 
 ```julia
-discrete_events = [[2.0] => [v ~ -v]]
+discrete_events = [[2.0] => [v ~ -Pre(v)]]
 ```
 
-## Saving discrete values
+## [Saving discrete values](@id save_discretes)
 
 Time-dependent parameters which are updated in callbacks are termed as discrete variables.
 ModelingToolkit enables automatically saving the timeseries of these discrete variables,
@@ -348,8 +413,10 @@ example:
 @variables x(t)
 @parameters c(t)
 
-@mtkbuild sys = ODESystem(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+ev = ModelingToolkit.SymbolicDiscreteCallback(
+    1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
+@mtkcompile sys = System(
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
 sol = solve(prob, Tsit5())
@@ -362,15 +429,15 @@ The solution object can also be interpolated with the discrete variables
 sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
-Note that only time-dependent parameters will be saved. If we repeat the above example with
-this change:
+Note that only time-dependent parameters that are explicitly passed as `discrete_parameters`
+will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
 
 ```@example events
 @variables x(t)
-@parameters c
+@parameters c(t)
 
-@mtkbuild sys = ODESystem(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ c + 1]])
+@mtkcompile sys = System(
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
 
 prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
 sol = solve(prob, Tsit5())
@@ -470,9 +537,9 @@ will write `furnace_on = false` back to the system, and when `temp = furnace_on_
 to the system.
 
 ```@example events
-@named sys = ODESystem(
+@named sys = System(
     eqs, t, [temp], params; continuous_events = [furnace_disable, furnace_enable])
-ss = structural_simplify(sys)
+ss = mtkcompile(sys)
 prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -583,9 +650,9 @@ affect activation point, with -1 mapped to 0.
 We can now simulate the encoder.
 
 ```@example events
-@named sys = ODESystem(
+@named sys = System(
     eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
-ss = structural_simplify(sys)
+ss = mtkcompile(sys)
 prob = ODEProblem(ss, [theta => 0.0], (0.0, pi))
 sol = solve(prob, Tsit5(); dtmax = 0.01)
 sol.ps[cnt]

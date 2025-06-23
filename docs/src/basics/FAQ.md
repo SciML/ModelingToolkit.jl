@@ -27,8 +27,8 @@ are similarly undocumented. Following is the list of behaviors that should be re
     parameter with the given index.
   - `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
     parameter with the given index.
-  - `parameter_values(sys, sym)` will return a `ParameterIndex` object if `sys` has been
-    `complete`d (through `structural_simplify`, `complete` or `@mtkbuild`).
+  - `parameter_index(sys, sym)` will return a `ParameterIndex` object if `sys` has been
+    `complete`d (through `mtkcompile`, `complete` or `@mtkcompile`).
   - `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
     memory used by the underlying buffers.
 
@@ -88,7 +88,7 @@ Strings are not considered symbolic variables, and thus cannot directly be used 
 indexing. However, ModelingToolkit does provide a method to parse the string representation of
 a variable, given the system in which that variable exists.
 
-```@docs
+```@docs; canonical = false
 ModelingToolkit.parse_variable
 ```
 
@@ -194,7 +194,7 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 
 # ERROR: ArgumentError: SymbolicUtils.BasicSymbolic{Real}[xˍt(t)] are missing from the variable map.
 
-This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
+This error can come up after running `mtkcompile` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 
 ```julia
 using ModelingToolkit
@@ -205,8 +205,8 @@ eqs = [x1 + x2 + 1 ~ 0
        x1 + x2 + x3 + 2 ~ 0
        x1 + D(x3) + x4 + 3 ~ 0
        2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@named sys = System(eqs, t)
+sys = mtkcompile(sys)
 prob = ODEProblem(sys, [], (0, 1))
 ```
 
@@ -237,7 +237,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) = 0.0
 eqs = [D(x1) ~ 1.1 * x1]
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkcompile sys = System(eqs, t)
 prob = ODEProblem{false}(sys, [], (0, 1); u0_constructor = x -> SVector(x...))
 ```
 
@@ -252,7 +252,7 @@ using ModelingToolkit
 @independent_variables x
 D = Differential(x)
 @variables y(x)
-@named sys = ODESystem([D(y) ~ x], x)
+@named sys = System([D(y) ~ x], x)
 ```
 
 ## Ordering of tunable parameters
@@ -260,14 +260,14 @@ D = Differential(x)
 Tunable parameters are floating point parameters, not used in callbacks and not marked with `tunable = false` in their metadata. These are expected to be used with AD
 and optimization libraries. As such, they are stored together in one `Vector{T}`. To obtain the ordering of tunable parameters in this buffer, use:
 
-```@docs
+```@docs; canonical = false
 tunable_parameters
 ```
 
 If you have an array in which a particular dimension is in the order of tunable parameters (e.g. the jacobian with respect to tunables) then that dimension of the
 array can be reordered into the required permutation using the symbolic variables:
 
-```@docs
+```@docs; canonical = false
 reorder_dimension_by_tunables!
 reorder_dimension_by_tunables
 ```
@@ -279,7 +279,7 @@ using ModelingToolkit
 
 @parameters p q[1:3] r[1:2, 1:2]
 
-@named sys = ODESystem(Equation[], ModelingToolkit.t_nounits, [], [p, q, r])
+@named sys = System(Equation[], ModelingToolkit.t_nounits, [], [p, q, r])
 sys = complete(sys)
 ```
 

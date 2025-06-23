@@ -33,7 +33,12 @@ end
 
 function getcalledparameter(x)
     x = unwrap(x)
-    return getmetadata(x, CallWithParent)
+    # `parent` is a `CallWithMetadata` with the correct metadata,
+    # but no namespacing. `operation(x)` has the correct namespacing,
+    # but is not a `CallWithMetadata` and doesn't have any metadata.
+    # This approach combines both.
+    parent = getmetadata(x, CallWithParent)
+    return CallWithMetadata(operation(x), metadata(parent))
 end
 
 """
@@ -58,7 +63,7 @@ toparam(s::Num) = wrap(toparam(value(s)))
 Maps the variable to an unknown.
 """
 tovar(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
-tovar(s::Num) = Num(tovar(value(s)))
+tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 
 """
 $(SIGNATURES)

@@ -1,93 +1,3 @@
-"""
-$(TYPEDEF)
-
-A type of Nonlinear problem which specializes on polynomial systems and uses
-HomotopyContinuation.jl to solve the system. Requires importing HomotopyContinuation.jl to
-create and solve.
-"""
-struct HomotopyContinuationProblem{uType, H, D, O, SS, U} <:
-       SciMLBase.AbstractNonlinearProblem{uType, true}
-    """
-    The initial values of states in the system. If there are multiple real roots of
-    the system, the one closest to this point is returned.
-    """
-    u0::uType
-    """
-    A subtype of `HomotopyContinuation.AbstractSystem` to solve. Also contains the
-    parameter object.
-    """
-    homotopy_continuation_system::H
-    """
-    A function with signature `(u, p) -> resid`. In case of rational functions, this
-    is used to rule out roots of the system which would cause the denominator to be
-    zero.
-    """
-    denominator::D
-    """
-    The `NonlinearSystem` used to create this problem. Used for symbolic indexing.
-    """
-    sys::NonlinearSystem
-    """
-    A function which generates and returns observed expressions for the given system.
-    """
-    obsfn::O
-    """
-    The HomotopyContinuation.jl solver and start system, obtained through
-    `HomotopyContinuation.solver_startsystems`.
-    """
-    solver_and_starts::SS
-    """
-    A function which takes a solution of the transformed system, and returns a vector
-    of solutions for the original system. This is utilized when converting systems
-    to polynomials.
-    """
-    unpack_solution::U
-end
-
-function HomotopyContinuationProblem(::AbstractSystem, _u0, _p; kwargs...)
-    error("HomotopyContinuation.jl is required to create and solve `HomotopyContinuationProblem`s. Please run `Pkg.add(\"HomotopyContinuation\")` to continue.")
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Utility function for `safe_HomotopyContinuationProblem`, implemented in the extension.
-"""
-function _safe_HomotopyContinuationProblem end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return a `HomotopyContinuationProblem` if the extension is loaded and the system is
-polynomial. If the extension is not loaded, return `nothing`. If the system is not
-polynomial, return the appropriate `NotPolynomialError`.
-"""
-function safe_HomotopyContinuationProblem(sys::NonlinearSystem, args...; kwargs...)
-    if Base.get_extension(ModelingToolkit, :MTKHomotopyContinuationExt) === nothing
-        return nothing
-    end
-    return _safe_HomotopyContinuationProblem(sys, args...; kwargs...)
-end
-
-SymbolicIndexingInterface.symbolic_container(p::HomotopyContinuationProblem) = p.sys
-SymbolicIndexingInterface.state_values(p::HomotopyContinuationProblem) = p.u0
-function SymbolicIndexingInterface.set_state!(p::HomotopyContinuationProblem, args...)
-    set_state!(p.u0, args...)
-end
-function SymbolicIndexingInterface.parameter_values(p::HomotopyContinuationProblem)
-    parameter_values(p.homotopy_continuation_system)
-end
-function SymbolicIndexingInterface.set_parameter!(p::HomotopyContinuationProblem, args...)
-    set_parameter!(parameter_values(p), args...)
-end
-function SymbolicIndexingInterface.observed(p::HomotopyContinuationProblem, sym)
-    if p.obsfn !== nothing
-        return p.obsfn(sym)
-    else
-        return SymbolicIndexingInterface.observed(p.sys, sym)
-    end
-end
-
 function contains_variable(x, wrt)
     any(y -> occursin(y, x), wrt)
 end
@@ -301,7 +211,7 @@ end
 """
     $(TYPEDEF)
 
-Information representing how to transform a `NonlinearSystem` into a polynomial
+Information representing how to transform a `System` into a polynomial
 system.
 """
 struct PolynomialTransformation
@@ -326,7 +236,7 @@ struct PolynomialTransformation
     polydata::Vector{PolynomialData}
 end
 
-function PolynomialTransformation(sys::NonlinearSystem)
+function PolynomialTransformation(sys::System)
     # we need to consider `full_equations` because observed also should be
     # polynomials (if used in equations) and we don't know if observed is used
     # in denominator.
@@ -348,7 +258,8 @@ function PolynomialTransformation(sys::NonlinearSystem)
     # Is there a better way to check for uniqueness? `simplify` is relatively slow
     # (maybe use the threaded version?) and `expand` can blow up expression size.
     # Could metatheory help?
-    all_non_poly_terms = mapreduce(d -> d.non_polynomial_terms, vcat, polydata)
+    all_non_poly_terms = mapreduce(
+        d -> d.non_polynomial_terms, vcat, polydata; init = BasicSymbolic[])
     unique!(all_non_poly_terms)
 
     # each variable can only be replaced by one non-polynomial expression involving
@@ -431,7 +342,7 @@ using the appropriate `PolynomialTransformation`. Also contains the denominators
 in the equations, to rule out invalid roots.
 """
 struct PolynomialTransformationResult
-    sys::NonlinearSystem
+    sys::System
     denominators::Vector{BasicSymbolic}
 end
 
@@ -442,7 +353,7 @@ Transform the system `sys` with `transformation` and return a
 `PolynomialTransformationResult`, or a `NotPolynomialError` if the system cannot
 be transformed.
 """
-function transform_system(sys::NonlinearSystem, transformation::PolynomialTransformation;
+function transform_system(sys::System, transformation::PolynomialTransformation;
         fraction_cancel_fn = simplify_fractions)
     subrules = transformation.substitution_rules
     dvs = unknowns(sys)
@@ -483,7 +394,6 @@ function transform_system(sys::NonlinearSystem, transformation::PolynomialTransf
     @set! sys2.unknowns = new_dvs
     # remove observed equations to avoid adding them in codegen
     @set! sys2.observed = Equation[]
-    @set! sys2.substitutions = nothing
     return PolynomialTransformationResult(sys2, denoms)
 end
 
@@ -560,4 +470,82 @@ function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fract
         return num / den, 1
     end
     return num, den
+end
+
+@fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
+        sys::System; eval_expression = false, eval_module = @__MODULE__,
+        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
+        kwargs...) where {iip, specialize}
+    if !iscomplete(sys)
+        error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationFunction`")
+    end
+    transformation = PolynomialTransformation(sys)
+    if transformation isa NotPolynomialError
+        throw(transformation)
+    end
+    result = transform_system(sys, transformation; fraction_cancel_fn)
+    if result isa NotPolynomialError
+        throw(result)
+    end
+
+    sys2 = result.sys
+    denoms = result.denominators
+    polydata = transformation.polydata
+    new_dvs = transformation.new_dvs
+    all_solutions = transformation.all_solutions
+
+    # we want to create f, jac etc. according to `sys2` since that will do the solving
+    # but the `sys` inside for symbolic indexing should be the non-polynomial system
+    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, cse, kwargs...)
+    obsfn = ObservedFunctionCache(
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
+    fn = remake(fn; sys = sys, observed = obsfn)
+
+    denominator = build_explicit_observed_function(sys2, denoms)
+    unpolynomialize = build_explicit_observed_function(sys2, all_solutions)
+
+    inv_mapping = Dict(v => k for (k, v) in transformation.substitution_rules)
+    polynomialize_terms = [get(inv_mapping, var, var) for var in unknowns(sys2)]
+    polynomialize = build_explicit_observed_function(sys, polynomialize_terms)
+
+    return HomotopyNonlinearFunction{iip, specialize}(
+        fn; polynomialize, unpolynomialize, denominator)
+end
+
+struct HomotopyContinuationProblem{iip, specialization} end
+
+@doc problem_docstring(
+    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false) HomotopyContinuationProblem
+
+function HomotopyContinuationProblem(sys::System, args...; kwargs...)
+    HomotopyContinuationProblem{true}(sys, args...; kwargs...)
+end
+
+function HomotopyContinuationProblem(sys::System, t,
+        u0map::StaticArray,
+        args...;
+        kwargs...)
+    HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(
+        sys, t, u0map, args...; kwargs...)
+end
+
+function HomotopyContinuationProblem{true}(sys::System, args...; kwargs...)
+    HomotopyContinuationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function HomotopyContinuationProblem{false}(sys::System, args...; kwargs...)
+    HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function HomotopyContinuationProblem{iip, spec}(
+        sys::System, op;
+        kwargs...) where {iip, spec}
+    if !iscomplete(sys)
+        error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationProblem`")
+    end
+    f, u0, p = process_SciMLProblem(
+        HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...)
+
+    kwargs = filter_kwargs(kwargs)
+    return NonlinearProblem{iip}(f, u0, p; kwargs...)
 end

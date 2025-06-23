@@ -34,8 +34,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
-using DifferentialEquations: solve
-@mtkbuild fol = FOL()
+using OrdinaryDiffEq
+@mtkcompile fol = FOL()
 prob = ODEProblem(fol, [], (0.0, 10.0), [])
 sol = solve(prob)
 
@@ -77,20 +77,20 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
-@mtkbuild fol = FOL()
+@mtkcompile fol = FOL()
 ```
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
 
-`@mtkbuild` creates an instance of `FOL` named as `fol`.
+`@mtkcompile` creates an instance of `FOL` named as `fol`.
 
-After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
+After construction of the ODE, you can solve it using [OrdinaryDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
 ```@example ode2
-using DifferentialEquations
+using OrdinaryDiffEq
 using Plots
 
-prob = ODEProblem(fol, [], (0.0, 10.0), [])
+prob = ODEProblem(fol, [], (0.0, 10.0))
 plot(solve(prob))
 ```
 
@@ -105,15 +105,15 @@ you likely do not want to write an entirely new `@mtkmodel`.
 ModelingToolkit supports overwriting the default values:
 
 ```@example ode2
-@mtkbuild fol_different_values = FOL(; τ = 1 / 3, x = 0.5)
-prob = ODEProblem(fol_different_values, [], (0.0, 10.0), [])
+@mtkcompile fol_different_values = FOL(; τ = 1 / 3, x = 0.5)
+prob = ODEProblem(fol_different_values, [], (0.0, 10.0))
 plot(solve(prob))
 ```
 
 Alternatively, this overwriting could also have occurred at the `ODEProblem` level.
 
 ```@example ode2
-prob = ODEProblem(fol, [fol.τ => 1 / 3], (0.0, 10.0), [fol.x => 0.5])
+prob = ODEProblem(fol, [fol.x => 0.5, fol.τ => 1 / 3], (0.0, 10.0))
 plot(solve(prob))
 ```
 
@@ -147,7 +147,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     end
 end
 
-@mtkbuild fol = FOL()
+@mtkcompile fol = FOL()
 ```
 
 If you copy this block of code to your REPL, you will not see the above LaTeX equations.
@@ -175,7 +175,7 @@ in a simulation result. The intermediate variable `RHS` therefore can be plotted
 along with the unknown variable. Note that this has to be requested explicitly:
 
 ```@example ode2
-prob = ODEProblem(fol, [], (0.0, 10.0), [])
+prob = ODEProblem(fol, [], (0.0, 10.0))
 sol = solve(prob)
 plot(sol, idxs = [fol.x, fol.RHS])
 ```
@@ -221,7 +221,7 @@ Obviously, one could use an explicit, symbolic function of time:
     end
 end
 
-@mtkbuild fol_variable_f = FOL()
+@mtkcompile fol_variable_f = FOL()
 ```
 
 However, this function might not be available in an explicit form.
@@ -252,11 +252,11 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
     end
 end
 
-@mtkbuild fol_external_f = FOLExternalFunction()
+@mtkcompile fol_external_f = FOLExternalFunction()
 ```
 
 ```@example ode2
-prob = ODEProblem(fol_external_f, [], (0.0, 10.0), [])
+prob = ODEProblem(fol_external_f, [], (0.0, 10.0))
 sol = solve(prob)
 plot(sol, idxs = [fol_external_f.x, fol_external_f.f])
 ```
@@ -292,7 +292,7 @@ end
         fol_2.f ~ fol_1.x
     end
 end
-@mtkbuild connected = FOLConnected()
+@mtkcompile connected = FOLConnected()
 ```
 
 Here the total model consists of two of the same submodels (components),
@@ -316,7 +316,7 @@ initial unknown and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
 ```@example ode2
-prob = ODEProblem(connected, [], (0.0, 10.0), [])
+prob = ODEProblem(connected, [], (0.0, 10.0))
 plot(solve(prob))
 ```
 
@@ -344,13 +344,13 @@ Now have MTK provide sparse, analytical derivatives to the solver. This has to
 be specified during the construction of the `ODEProblem`:
 
 ```@example ode2
-prob_an = ODEProblem(connected, [], (0.0, 10.0), []; jac = true)
+prob_an = ODEProblem(connected, [], (0.0, 10.0); jac = true)
 @btime solve(prob_an, Rodas4());
 nothing # hide
 ```
 
 ```@example ode2
-prob_sparse = ODEProblem(connected, [], (0.0, 10.0), []; jac = true, sparse = true)
+prob_sparse = ODEProblem(connected, [], (0.0, 10.0); jac = true, sparse = true)
 @btime solve(prob_sparse, Rodas4());
 nothing # hide
 ```
@@ -362,15 +362,15 @@ memory allocations. For large, hierarchically built models, which tend to be
 sparse, speedup and the reduction of memory allocation can also be expected to be
 substantial. In addition, these problem builders allow for automatic parallelism by
 exploiting the structural information. For more information, see the
-[ODESystem](@ref ODESystem) page.
+[System](@ref System) page.
 
 ## Notes and pointers how to go on
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
   - The `@mtkmodel` macro is for high-level usage of MTK. However, in many cases you
-    may need to programmatically generate `ODESystem`s. If that's the case, check out
-    the [Programmatically Generating and Scripting ODESystems Tutorial](@ref programmatically).
+    may need to programmatically generate `System`s. If that's the case, check out
+    the [Programmatically Generating and Scripting Systems Tutorial](@ref programmatically).
   - Vector-valued parameters and variables are possible. A cleaner, more
     consistent treatment of these is still a work in progress, however. Once finished,
     this introductory tutorial will also cover this feature.

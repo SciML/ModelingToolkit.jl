@@ -44,42 +44,42 @@ D = Differential(t)
 eqs = [D(E) ~ P - E / τ
        0 ~ P]
 @test UMT.validate(eqs)
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 @test !UMT.validate(D(D(E)) ~ P)
 @test !UMT.validate(0 ~ P + E * τ)
 
 # Disabling unit validation/checks selectively
-@test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
-ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
+@test_throws MT.ArgumentError System(eqs, t, [E, P, t], [τ], name = :sys)
+System(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [D(E) ~ P - E / τ
        0 ~ P + E * τ]
-@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = MT.CheckAll)
-@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys, checks = true)
-ODESystem(eqs, t, name = :sys, checks = MT.CheckNone)
-ODESystem(eqs, t, name = :sys, checks = false)
-@test_throws MT.ValidationError ODESystem(eqs, t, name = :sys,
+@test_throws MT.ValidationError System(eqs, t, name = :sys, checks = MT.CheckAll)
+@test_throws MT.ValidationError System(eqs, t, name = :sys, checks = true)
+System(eqs, t, name = :sys, checks = MT.CheckNone)
+System(eqs, t, name = :sys, checks = false)
+@test_throws MT.ValidationError System(eqs, t, name = :sys,
     checks = MT.CheckComponents | MT.CheckUnits)
-@named sys = ODESystem(eqs, t, checks = MT.CheckComponents)
-@test_throws MT.ValidationError ODESystem(eqs, t, [E, P, t], [τ], name = :sys,
+@named sys = System(eqs, t, checks = MT.CheckComponents)
+@test_throws MT.ValidationError System(eqs, t, [E, P, t], [τ], name = :sys,
     checks = MT.CheckUnits)
 
 # connection validation
 @connector function Pin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
         i(t)=1.0, [unit = u"A", connect = Flow])
-    ODESystem(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name = name)
 end
 @connector function OtherPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"mV"],
         i(t)=1.0, [unit = u"mA", connect = Flow])
-    ODESystem(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name = name)
 end
 @connector function LongPin(; name)
     sts = @variables(v(t)=1.0, [unit = u"V"],
         i(t)=1.0, [unit = u"A", connect = Flow],
         x(t)=1.0, [unit = NoUnits])
-    ODESystem(Equation[], t, sts, []; name = name)
+    System(Equation[], t, sts, []; name = name)
 end
 @named p1 = Pin()
 @named p2 = Pin()
@@ -91,16 +91,16 @@ bad_length_eqs = [connect(op, lp)]
 @test UMT.validate(good_eqs)
 @test !UMT.validate(bad_eqs)
 @test !UMT.validate(bad_length_eqs)
-@named sys = ODESystem(good_eqs, t, [], [])
-@test_throws MT.ValidationError ODESystem(bad_eqs, t, [], []; name = :sys)
+@named sys = System(good_eqs, t, [], [])
+@test_throws MT.ValidationError System(bad_eqs, t, [], []; name = :sys)
 
 # Array variables
 @independent_variables t [unit = u"s"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
 @variables x(t)[1:3] [unit = u"m"]
 D = Differential(t)
-eqs = D.(x) .~ v
-ODESystem(eqs, t, name = :sys)
+eqs = [D(x) ~ v]
+System(eqs, t, name = :sys)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
@@ -108,7 +108,7 @@ ODESystem(eqs, t, name = :sys)
 eqs = [
     0 ~ a * x
 ]
-@named nls = NonlinearSystem(eqs, [x], [a])
+@named nls = System(eqs, [x], [a])
 
 # SDE test w/ noise vector
 @independent_variables t [unit = u"ms"]
@@ -139,25 +139,25 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 D = Differential(t)
 eqs = [D(L) ~ v,
     V ~ L^3]
-@named sys = ODESystem(eqs, t)
-sys_simple = structural_simplify(sys)
+@named sys = System(eqs, t)
+sys_simple = mtkcompile(sys)
 
 eqs = [D(V) ~ r,
     V ~ L^3]
-@named sys = ODESystem(eqs, t)
-sys_simple = structural_simplify(sys)
+@named sys = System(eqs, t)
+sys_simple = mtkcompile(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"] t [unit = u"s"]
 eqs = [V ~ r * t,
     V ~ L^3]
-@named sys = NonlinearSystem(eqs, [V, L], [t, r])
-sys_simple = structural_simplify(sys)
+@named sys = System(eqs, [V, L], [t, r])
+sys_simple = mtkcompile(sys)
 
 eqs = [L ~ v * t,
     V ~ L^3]
-@named sys = NonlinearSystem(eqs, [V, L], [t, r])
-sys_simple = structural_simplify(sys)
+@named sys = System(eqs, [V, L], [v, t, r])
+sys_simple = mtkcompile(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [

@@ -6,3 +6,4 @@ Manifest.toml
 .vscode/*
 docs/src/assets/Project.toml
 docs/src/assets/Manifest.toml
+.CondaPkg

@@ -1,7 +1,6 @@
 # (Experimental) Modeling Discrete Systems
 
-In this example, we will use the new [`DiscreteSystem`](@ref) API
-to create an SIR model.
+In this example, we will use the [`System`](@ref) API to create an SIR model.
 
 ```@example discrete
 using ModelingToolkit
@@ -23,12 +22,12 @@ recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 eqs = [S(k) ~ S(k - 1) - infection * h,
     I(k) ~ I(k - 1) + infection - recovery,
     R(k) ~ R(k - 1) + recovery]
-@mtkbuild sys = DiscreteSystem(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1]
 tspan = (0.0, 100.0)
-prob = DiscreteProblem(sys, u0, tspan, p)
+prob = DiscreteProblem(sys, vcat(u0, p), tspan)
 sol = solve(prob, FunctionMap())
 ```
 
@@ -39,7 +38,7 @@ the Fibonacci series:
 
 ```@example discrete
 @variables x(t) = 1.0
-@mtkbuild sys = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
+@mtkcompile sys = System([x ~ x(k - 1) + x(k - 2)], t)
 ```
 
 The "default value" here should be interpreted as the value of `x` at all past timesteps.

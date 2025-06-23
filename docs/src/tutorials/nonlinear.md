@@ -12,7 +12,7 @@ This steady state is reached when the nonlinear system of differential equations
     is not yet compatible with `NonlinearSystem`.
     We thus have to use a lower level interface to define nonlinear systems.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 ```@example nonlinear
 using ModelingToolkit, NonlinearSolve
@@ -23,12 +23,12 @@ using ModelingToolkit, NonlinearSolve
 eqs = [0 ~ σ * (y - x)
        0 ~ x * (ρ - z) - y
        0 ~ x * y - β * z]
-@mtkbuild ns = NonlinearSystem(eqs)
+@mtkcompile ns = System(eqs)
 
 guesses = [x => 1.0, y => 0.0, z => 0.0]
 ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
 
-prob = NonlinearProblem(ns, guesses, ps)
+prob = NonlinearProblem(ns, vcat(guesses, ps))
 sol = solve(prob, NewtonRaphson())
 ```
 
@@ -38,6 +38,6 @@ Just like with `ODEProblem`s we can generate the `NonlinearProblem` with its ana
 Jacobian function:
 
 ```@example nonlinear
-prob = NonlinearProblem(ns, guesses, ps, jac = true)
+prob = NonlinearProblem(ns, vcat(guesses, ps), jac = true)
 sol = solve(prob, NewtonRaphson())
 ```

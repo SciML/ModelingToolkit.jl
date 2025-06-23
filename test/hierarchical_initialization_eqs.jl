@@ -24,7 +24,7 @@ A simple linear resistor model
            p.i + n.i ~ 0
            # Ohm's Law
            v ~ i * R]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 @connector Pin begin
     v(t)
@@ -46,7 +46,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            v ~ V]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 
 @component function Capacitor(; name, C = 1.0)
@@ -68,7 +68,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            C * D(v) ~ i]
-    return ODESystem(eqs, t, vars, params; systems, name, initialization_eqs)
+    return System(eqs, t, vars, params; systems, name, initialization_eqs)
 end
 
 @component function Ground(; name)
@@ -78,7 +78,7 @@ end
     eqs = [
         g.v ~ 0
     ]
-    return ODESystem(eqs, t, [], []; systems, name)
+    return System(eqs, t, [], []; systems, name)
 end
 
 @component function Inductor(; name, L = 1.0)
@@ -97,7 +97,7 @@ end
            i ~ p.i
            p.i + n.i ~ 0
            L * D(i) ~ v]
-    return ODESystem(eqs, t, vars, params; systems, name)
+    return System(eqs, t, vars, params; systems, name)
 end
 
 """
@@ -118,11 +118,11 @@ HTML as well.
     eqs = [connect(source.p, inductor.n)
            connect(inductor.p, resistor.p, capacitor.p)
            connect(resistor.n, ground.g, capacitor.n, source.n)]
-    return ODESystem(eqs, t, [], []; systems, name, initialization_eqs)
+    return System(eqs, t, [], []; systems, name, initialization_eqs)
 end
 """Run model RLCModel from 0 to 10"""
 function simple()
-    @mtkbuild model = RLCModel()
+    @mtkcompile model = RLCModel()
     u0 = []
     prob = ODEProblem(model, u0, (0.0, 10.0))
     sol = solve(prob)
@@ -140,7 +140,7 @@ syslist = ModelingToolkit.get_systems(model)
 @test length(ModelingToolkit.initialization_equations(model)) == 2
 
 u0 = []
-prob = ODEProblem(structural_simplify(model), u0, (0.0, 10.0))
+prob = ODEProblem(mtkcompile(model), u0, (0.0, 10.0))
 sol = solve(prob, Rodas5P())
 @test length(sol.u[end]) == 2
 @test length(equations(prob.f.initializeprob.f.sys)) == 0

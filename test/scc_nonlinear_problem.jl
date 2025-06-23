@@ -2,6 +2,7 @@ using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using SciMLBase, Symbolics
+using StaticArrays
 using LinearAlgebra, Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -20,11 +21,11 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     eqs = Any[0 for _ in 1:8]
     f!(eqs, u, nothing)
     eqs = 0 .~ eqs
-    @named model = NonlinearSystem(eqs)
+    @named model = System(eqs)
     @test_throws ["simplified", "required"] SCCNonlinearProblem(model, [])
-    _model = structural_simplify(model; split = false)
+    _model = mtkcompile(model; split = false)
     @test_throws ["not compatible"] SCCNonlinearProblem(_model, [])
-    model = structural_simplify(model)
+    model = mtkcompile(model)
     prob = NonlinearProblem(model, [u => zeros(8)])
     sccprob = SCCNonlinearProblem(model, [u => zeros(8)])
     sol1 = solve(prob, NewtonRaphson())
@@ -32,6 +33,15 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test SciMLBase.successful_retcode(sol1)
     @test SciMLBase.successful_retcode(sol2)
     @test sol1[u] ≈ sol2[u]
+
+    sccprob = SCCNonlinearProblem{false}(model, SA[u => zeros(8)])
+    for prob in sccprob.probs
+        @test prob.u0 isa SVector
+        @test !SciMLBase.isinplace(prob)
+    end
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(model), 2)
 end
 
 @testset "With parameters" begin
@@ -78,11 +88,14 @@ end
     @variables u[1:5] [irreducible = true]
     @parameters p1[1:6] p2
     eqs = 0 .~ collect(nlf(u, (u0, (p1, p2))))
-    @mtkbuild sys = NonlinearSystem(eqs, [u], [p1, p2])
-    sccprob = SCCNonlinearProblem(sys, [u => u0], [p1 => p[1], p2 => p[2][]])
+    @mtkcompile sys = System(eqs, [u], [p1, p2])
+    sccprob = SCCNonlinearProblem(sys, [u => u0, p1 => p[1], p2 => p[2][]])
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
     @test SciMLBase.successful_retcode(sccsol)
     @test norm(sccsol.resid) < norm(sol.resid)
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
 end
 
 @testset "Transistor amplifier" begin
@@ -134,14 +147,17 @@ end
     eqs = 0 .~ eqs
     subrules = Dict(Symbolics.unwrap(D(y[i])) => ((y[i] - u0[i]) / dt) for i in 1:8)
     eqs = substitute.(eqs, (subrules,))
-    @mtkbuild sys = NonlinearSystem(eqs)
-    prob = NonlinearProblem(sys, [y => u0], [t => t0])
+    @mtkcompile sys = System(eqs)
+    prob = NonlinearProblem(sys, [y => u0, t => t0])
     sol = solve(prob, NewtonRaphson(); abstol = 1e-12)
 
-    sccprob = SCCNonlinearProblem(sys, [y => u0], [t => t0])
+    sccprob = SCCNonlinearProblem(sys, [y => u0, t => t0])
     sccsol = solve(sccprob, NewtonRaphson(); abstol = 1e-12)
 
     @test sol.u≈sccsol.u atol=1e-10
+
+    # Test BLT sorted
+    @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
 end
 
 @testset "Expression caching" begin
@@ -152,12 +168,142 @@ end
         x + y
     end
     @register_symbolic func(x, y)
-    @mtkbuild sys = NonlinearSystem([0 ~ x[1]^3 + x[2]^3 - 5
-                                     0 ~ sin(x[1] - x[2]) - 0.5
-                                     0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
-                                     0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
+    @mtkcompile sys = System([0 ~ x[1]^3 + x[2]^3 - 5
+                              0 ~ sin(x[1] - x[2]) - 0.5
+                              0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
+                              0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
     sccprob = SCCNonlinearProblem(sys, [])
     sccsol = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sccsol)
     @test val[] == 1
+end
+
+import ModelingToolkitStandardLibrary.Blocks as B
+import ModelingToolkitStandardLibrary.Mechanical.Translational as T
+import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
+
+@testset "Caching of subexpressions of different types" begin
+    liquid_pressure(rho, rho_0, bulk) = (rho / rho_0 - 1) * bulk
+    gas_pressure(rho, rho_0, p_gas, rho_gas) = rho * ((0 - p_gas) / (rho_0 - rho_gas))
+    full_pressure(rho, rho_0, bulk, p_gas, rho_gas) = ifelse(
+        rho >= rho_0, liquid_pressure(rho, rho_0, bulk),
+        gas_pressure(rho, rho_0, p_gas, rho_gas))
+
+    @component function Volume(;
+            #parameters
+            area,
+            direction = +1,
+            x_int,
+            name)
+        pars = @parameters begin
+            area = area
+            x_int = x_int
+            rho_0 = 1000
+            bulk = 1e9
+            p_gas = -1000
+            rho_gas = 1
+        end
+
+        vars = @variables begin
+            x(t) = x_int
+            dx(t), [guess = 0]
+            p(t), [guess = 0]
+            f(t), [guess = 0]
+            rho(t), [guess = 0]
+            m(t), [guess = 0]
+            dm(t), [guess = 0]
+        end
+
+        systems = @named begin
+            port = IC.HydraulicPort()
+            flange = T.MechanicalPort()
+        end
+
+        eqs = [
+               # connectors
+               port.p ~ p
+               port.dm ~ dm
+               flange.v * direction ~ dx
+               flange.f * direction ~ -f
+
+               # differentials
+               D(x) ~ dx
+               D(m) ~ dm
+
+               # physics
+               p ~ full_pressure(rho, rho_0, bulk, p_gas, rho_gas)
+               f ~ p * area
+               m ~ rho * x * area]
+
+        return System(eqs, t, vars, pars; name, systems)
+    end
+
+    systems = @named begin
+        fluid = IC.HydraulicFluid(; bulk_modulus = 1e9)
+
+        src1 = IC.Pressure(;)
+        src2 = IC.Pressure(;)
+
+        vol1 = Volume(; area = 0.01, direction = +1, x_int = 0.1)
+        vol2 = Volume(; area = 0.01, direction = +1, x_int = 0.1)
+
+        mass = T.Mass(; m = 10)
+
+        sin1 = B.Sine(; frequency = 0.5, amplitude = +0.5e5, offset = 10e5)
+        sin2 = B.Sine(; frequency = 0.5, amplitude = -0.5e5, offset = 10e5)
+    end
+
+    eqs = [connect(fluid, src1.port)
+           connect(fluid, src2.port)
+           connect(src1.port, vol1.port)
+           connect(src2.port, vol2.port)
+           connect(vol1.flange, mass.flange, vol2.flange)
+           connect(src1.p, sin1.output)
+           connect(src2.p, sin2.output)]
+
+    initialization_eqs = [mass.s ~ 0.0
+                          mass.v ~ 0.0]
+
+    @mtkcompile sys = System(eqs, t, [], []; systems, initialization_eqs)
+    prob = ODEProblem(sys, [], (0, 5))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Array variables split across SCCs" begin
+    @variables x[1:3]
+    @parameters (f::Function)(..)
+    @mtkcompile sys = System([
+        0 ~ x[1]^2 - 9, x[2] ~ 2x[1], 0 ~ x[3]^2 - x[1]^2 + f(x)])
+    prob = SCCNonlinearProblem(sys, [x => ones(3), f => sum])
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "SCCNonlinearProblem retains parameter order" begin
+    @variables x y z
+    @parameters σ β ρ
+    @mtkcompile fullsys = System(
+        [0 ~ x^3 * β + y^3 * ρ - σ, 0 ~ x^2 + 2x * y + y^2, 0 ~ z^2 - 4z + 4],
+        [x, y, z], [σ, β, ρ])
+
+    u0 = [x => 1.0,
+        y => 0.0,
+        z => 0.0]
+
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    sccprob = SCCNonlinearProblem(fullsys, [u0; p])
+    @test isequal(parameters(fullsys), parameters(sccprob.f.sys))
+end
+
+@testset "Vector parameters in function arguments" begin
+    @variables x y
+    @parameters p[1:2] (f::Function)(..)
+
+    @mtkcompile sys = System([x^2 - p[1]^2 ~ 0, y^2 ~ f(p)])
+    prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0, p => ones(2), f => sum])
+    @test_nowarn solve(prob, NewtonRaphson())
 end

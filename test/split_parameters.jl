@@ -5,7 +5,7 @@ using DataInterpolations
 using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
-using SciMLStructures: Tunable, Discrete, Constants
+using SciMLStructures: Tunable, Discrete, Constants, Initials
 using StaticArrays: SizedVector
 using SymbolicIndexingInterface: is_parameter, getp
 
@@ -51,8 +51,8 @@ end
 
 get_value(interp::Interpolator, t) = interp(t)
 @register_symbolic get_value(interp::Interpolator, t)
-# get_value(data, t, dt) = data[round(Int, t / dt + 1)]
-# @register_symbolic get_value(data::Vector, t, dt)
+
+Symbolics.derivative(::typeof(get_value), args::NTuple{2, Any}, ::Val{2}) = 0
 
 function Sampled(; name, interp = Interpolator(Float64[], 0.0))
     pars = @parameters begin
@@ -68,11 +68,10 @@ function Sampled(; name, interp = Interpolator(Float64[], 0.0))
         output.u ~ get_value(interpolator, t)
     ]
 
-    return ODESystem(eqs, t, vars, [interpolator]; name, systems,
-        defaults = [output.u => interp.data[1]])
+    return System(eqs, t, vars, [interpolator]; name, systems)
 end
 
-vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
+vars = @variables y(t) dy(t) ddy(t)
 @named src = Sampled(; interp = Interpolator(x, dt))
 @named int = Integrator()
 
@@ -81,14 +80,12 @@ eqs = [y ~ src.output.u
        D(dy) ~ ddy
        connect(src.output, int.input)]
 
-@named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
+@named sys = System(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
-sys = structural_simplify(sys)
-@test_broken ODEProblem(
-    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)]; tofloat = false)
+sys = mtkcompile(sys)
 prob = ODEProblem(
-    sys, [], (0.0, t_end), [s.src.interpolator => Interpolator(x, dt)];
-    tofloat = false, build_initializeprob = false)
+    sys, [s.src.interpolator => Interpolator(x, dt)], (0.0, t_end);
+    tofloat = false)
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]
@@ -110,11 +107,11 @@ eqs = [D(y) ~ dy * a
        D(dy) ~ ddy * b
        ddy ~ sin(t) * c]
 
-@named model = ODESystem(eqs, t, vars, pars)
-sys = structural_simplify(model; split = false)
+@named model = System(eqs, t, vars, pars)
+sys = mtkcompile(model; split = false)
 
 tspan = (0.0, t_end)
-prob = ODEProblem(sys, [], tspan, []; build_initializeprob = false)
+prob = ODEProblem(sys, [], tspan; build_initializeprob = false)
 
 @test prob.p isa Vector{Float64}
 sol = solve(prob, ImplicitEuler());
@@ -123,9 +120,8 @@ sol = solve(prob, ImplicitEuler());
 # ------------------------ Mixed Type Conserved
 
 prob = ODEProblem(
-    sys, [], tspan, []; tofloat = false, use_union = true, build_initializeprob = false)
+    sys, [], tspan; tofloat = false, build_initializeprob = false)
 
-@test prob.p isa Vector{Union{Float64, Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 
@@ -138,7 +134,7 @@ using ModelingToolkit: connect
 
 "A wrapper function to make symbolic indexing easier"
 function wr(sys)
-    ODESystem(Equation[], ModelingToolkit.get_iv(sys), systems = [sys], name = :a_wrapper)
+    System(Equation[], ModelingToolkit.get_iv(sys), systems = [sys], name = :a_wrapper)
 end
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
@@ -160,18 +156,21 @@ function SystemModel(u = nothing; name = :model)
            connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return @named model = ODESystem(eqs,
+        return @named model = System(eqs,
             t;
             systems = [torque, inertia1, inertia2, spring, damper, u])
     end
-    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+        name, guesses = [spring.flange_a.phi => 0.0])
 end
 
 model = SystemModel() # Model with load disturbance
 @named d = Step(start_time = 1.0, duration = 10.0, offset = 0.0, height = 1.0) # Disturbance
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi] # This is the state realization we want to control
 inputs = [model.torque.tau.u]
-matrices, ssys = ModelingToolkit.linearize(wr(model), inputs, model_outputs)
+op = [model.torque.tau.u => 0.0]
+matrices, ssys = ModelingToolkit.linearize(
+    wr(model), inputs, model_outputs; op)
 
 # Design state-feedback gain using LQR
 # Define cost matrices
@@ -187,7 +186,7 @@ L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controlle
 #     @named input = RealInput(; nin = nin)
 #     @named output = RealOutput(; nout = nout)
 #     eqs = [output.u[i] ~ sum(K[i, j] * input.u[j] for j in 1:nin) for i in 1:nout]
-#     compose(ODESystem(eqs, t, [], []; name = name), [input, output])
+#     compose(System(eqs, t, [], []; name = name), [input, output])
 # end
 
 @named state_feedback = MatrixGain(K = -L) # Build negative feedback into the feedback matrix
@@ -197,11 +196,11 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
                connect(d.output, :d, add.input1)
                connect(add.input2, state_feedback.output)
                connect(add.output, :u, model.torque.tau)]
-@named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
+@named closed_loop = System(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
-    ps = MTKParameters(collect(1.0:10.0),
+    ps = MTKParameters(collect(1.0:10.0), collect(11.0:20.0),
         (BlockedArray([true, false, false, true], [2, 2]),
             BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
         # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
@@ -210,6 +209,9 @@ S = get_sensitivity(closed_loop, :u)
     @test ps[ParameterIndex(Tunable(), 1)] == 1.0
     @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
     @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)
+    @test ps[ParameterIndex(Initials(), 1)] == 11.0
+    @test ps[ParameterIndex(Initials(), 2:4)] == collect(12.0:14.0)
+    @test ps[ParameterIndex(Initials(), reshape(4:7, 2, 2))] == reshape(14.0:17.0, 2, 2)
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 4
     @test ps[ParameterIndex(Discrete(), (2, 2))] == [2 4; 6 8]
     @test ps[ParameterIndex(Constants(), (1, 1))] == 5
@@ -218,8 +220,12 @@ S = get_sensitivity(closed_loop, :u)
     ps[ParameterIndex(Tunable(), 1)] = 1.5
     ps[ParameterIndex(Tunable(), 2:4)] = [2.5, 3.5, 4.5]
     ps[ParameterIndex(Tunable(), reshape(5:8, 2, 2))] = [5.5 7.5; 6.5 8.5]
+    ps[ParameterIndex(Initials(), 1)] = 11.5
+    ps[ParameterIndex(Initials(), 2:4)] = [12.5, 13.5, 14.5]
+    ps[ParameterIndex(Initials(), reshape(5:8, 2, 2))] = [15.5 17.5; 16.5 18.5]
     ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] = 5
     @test ps[ParameterIndex(Tunable(), 1:8)] == collect(1.0:8.0) .+ 0.5
+    @test ps[ParameterIndex(Initials(), 1:8)] == collect(11.0:18.0) .+ 0.5
     @test ps[ParameterIndex(Discrete(), (2, 1, 2, 2))] == 5
 end
 
@@ -230,7 +236,7 @@ end
         (::Foo)(x) = 3x
         @variables x(t)
         @parameters fn(::Real) = _f1
-        @mtkbuild sys = ODESystem(D(x) ~ fn(t), t)
+        @mtkcompile sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
         @test ModelingToolkit.defaults(sys)[fn] == _f1
 
@@ -242,7 +248,7 @@ end
         sol = solve(prob, Tsit5(); abstol = 1e-10, reltol = 1e-10)
         @test sol.u[end][] ≈ 2.0
 
-        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => Foo()])
+        prob = ODEProblem(sys, [x => 1.0, fn => Foo()], (0.0, 1.0))
         @inferred getter(prob)
         @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
         sol = solve(prob; abstol = 1e-10, reltol = 1e-10)
@@ -254,14 +260,51 @@ end
         interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
-        @mtkbuild sys = ODESystem(D(x) ~ fn(x), t)
+        @mtkcompile sys = System(D(x) ~ fn(x), t)
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
-        prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0), [fn => interp])
+        prob = ODEProblem(sys, [x => 1.0, fn => interp], (0.0, 1.0))
         @inferred getter(prob)
         @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
         @test_nowarn sol = solve(prob, Tsit5())
         @test_nowarn prob.ps[fn] = LinearInterpolation(ts .^ 3, ts; extrapolate = true)
         @test_nowarn sol = solve(prob)
     end
+end
+
+@testset "" begin
+    @mtkmodel SubSystem begin
+        @parameters begin
+            c = 1
+        end
+        @variables begin
+            x(t)
+        end
+        @equations begin
+            D(x) ~ c * x
+        end
+    end
+
+    @mtkmodel ApexSystem begin
+        @components begin
+            subsys = SubSystem()
+        end
+        @parameters begin
+            k = 1
+        end
+        @variables begin
+            y(t)
+        end
+        @equations begin
+            D(y) ~ k * y + subsys.x
+        end
+    end
+
+    @named sys = ApexSystem()
+    sysref = complete(sys)
+    sys2 = complete(sys; split = true, flatten = false)
+    ps = Set(full_parameters(sys2))
+    @test sysref.k in ps
+    @test sysref.subsys.c in ps
+    @test length(ps) == 2
 end

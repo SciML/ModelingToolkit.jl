@@ -20,7 +20,7 @@ equalities before solving. Let's see this in action.
 ## Copy-Paste Example
 
 ```@example acausal
-using ModelingToolkit, Plots, DifferentialEquations
+using ModelingToolkit, Plots, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @connector Pin begin
@@ -84,6 +84,7 @@ end
 end
 
 @mtkmodel RCModel begin
+    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
     @components begin
         resistor = Resistor(R = 1.0)
         capacitor = Capacitor(C = 1.0)
@@ -98,7 +99,7 @@ end
     end
 end
 
-@mtkbuild rc_model = RCModel(resistor.R = 2.0)
+@mtkcompile rc_model = RCModel(resistor.R = 2.0)
 u0 = [
     rc_model.capacitor.v => 0.0
 ]
@@ -115,7 +116,7 @@ We wish to build the following RC circuit by building individual components and 
 
 ### Building the Component Library
 
-For each of our components, we use ModelingToolkit `Model` that emits an `ODESystem`.
+For each of our components, we use ModelingToolkit `Model` that emits an `System`.
 At the top, we start with defining the fundamental qualities of an electric
 circuit component. At every input and output pin, a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
@@ -132,7 +133,7 @@ default, variables are equal in a connection.
 end
 ```
 
-Note that this is an incompletely specified ODESystem: it cannot be simulated
+Note that this is an incompletely specified System: it cannot be simulated
 on its own because the equations for `v(t)` and `i(t)` are unknown. Instead,
 this just gives a common syntax for receiving this pair with some default
 values.
@@ -144,7 +145,7 @@ One can then construct a `Pin` using the `@named` helper macro:
 
 Next, we build our ground node. A ground node is just a pin that is connected
 to a constant voltage reservoir, typically taken to be `V = 0`. Thus to define
-this component, we generate an `ODESystem` with a `Pin` subcomponent and specify
+this component, we generate an `System` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```@example acausal
@@ -251,6 +252,7 @@ make all of our parameter values 1.0. As `resistor`, `capacitor`, `source` lists
 
 ```@example acausal
 @mtkmodel RCModel begin
+    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
     @components begin
         resistor = Resistor(R = 1.0)
         capacitor = Capacitor(C = 1.0)
@@ -270,7 +272,7 @@ We can create a RCModel component with `@named`. And using `subcomponent_name.pa
 the parameters or defaults values of variables of subcomponents.
 
 ```@example acausal
-@mtkbuild rc_model = RCModel(resistor.R = 2.0)
+@mtkcompile rc_model = RCModel(resistor.R = 2.0)
 ```
 
 This model is acausal because we have not specified anything about the causality of the model. We have
@@ -318,9 +320,10 @@ sol = solve(prob)
 plot(sol)
 ```
 
+By default, this plots only the unknown variables that had to be solved for.
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
-like `structural_simplify` simply change unknown variables into observables which are
+like `mtkcompile` simply change unknown variables into observables which are
 defined by `observed` equations.
 
 ```@example acausal
@@ -343,4 +346,10 @@ or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
 plot(sol, idxs = [rc_model.resistor.v])
+```
+
+Although it may be more confusing than helpful here, we can of course also plot all unknown and observed variables together:
+
+```@example acausal
+plot(sol, idxs = [unknowns(rc_model); observables(rc_model)])
 ```

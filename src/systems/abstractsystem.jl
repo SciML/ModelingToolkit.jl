@@ -10,143 +10,6 @@ GUIMetadata(type) = GUIMetadata(type, nothing)
 
 """
 ```julia
-calculate_tgrad(sys::AbstractTimeDependentSystem)
-```
-
-Calculate the time gradient of a system.
-
-Returns a vector of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_tgrad end
-
-"""
-```julia
-calculate_gradient(sys::AbstractSystem)
-```
-
-Calculate the gradient of a scalar system.
-
-Returns a vector of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_gradient end
-
-"""
-```julia
-calculate_jacobian(sys::AbstractSystem)
-```
-
-Calculate the Jacobian matrix of a system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_jacobian end
-
-"""
-```julia
-calculate_control_jacobian(sys::AbstractSystem)
-```
-
-Calculate the Jacobian matrix of a system with respect to the system's controls.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_control_jacobian end
-
-"""
-```julia
-calculate_factorized_W(sys::AbstractSystem)
-```
-
-Calculate the factorized W-matrix of a system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_factorized_W end
-
-"""
-```julia
-calculate_hessian(sys::AbstractSystem)
-```
-
-Calculate the hessian matrix of a scalar system.
-
-Returns a matrix of [`Num`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_hessian end
-
-"""
-```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = unknowns(sys), ps = parameters(sys),
-               expression = Val{true}; kwargs...)
-```
-
-Generates a function for the time gradient of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_tgrad end
-
-"""
-```julia
-generate_gradient(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; kwargs...)
-```
-
-Generates a function for the gradient of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_gradient end
-
-"""
-```julia
-generate_jacobian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the Jacobian matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_jacobian end
-
-"""
-```julia
-generate_factorized_W(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                      expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the factorized W matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_factorized_W end
-
-"""
-```julia
-generate_hessian(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                 expression = Val{true}; sparse = false, kwargs...)
-```
-
-Generates a function for the hessian matrix of a system. Extra arguments control
-the arguments to the internal [`build_function`](@ref) call.
-"""
-function generate_hessian end
-
-"""
-```julia
-generate_function(sys::AbstractSystem, dvs = unknowns(sys), ps = parameters(sys),
-                  expression = Val{true}; kwargs...)
-```
-
-Generate a function to evaluate the system's equations.
-"""
-function generate_function end
-
-"""
-```julia
 generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
                          ps = parameters(sys); kwargs...)
 ```
@@ -157,51 +20,31 @@ may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
 [`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
 `f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
 time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
-[`structural_simplify`](@ref) or [`@mtkbuild`](@ref), `p` is expected to be an `MTKParameters`
+[`mtkcompile`](@ref) or [`@mtkcompile`](@ref), `p` is expected to be an `MTKParameters`
 object.
 """
 function generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys); wrap_code = nothing, postprocess_fbody = nothing, states = nothing,
+        ps = parameters(sys; initial_parameters = true);
         expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
         cachesyms::Tuple = (), kwargs...)
     if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `structural_simplify` on the system.")
+        error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
     end
     p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
     isscalar = !(exprs isa AbstractArray)
-    if wrap_code === nothing
-        wrap_code = isscalar ? identity : (identity, identity)
-    end
-    pre, sol_states = get_substitutions_and_solved_unknowns(sys, isscalar ? [exprs] : exprs)
-    if postprocess_fbody === nothing
-        postprocess_fbody = pre
-    end
-    if states === nothing
-        states = sol_states
-    end
     fnexpr = if is_time_dependent(sys)
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...,
             get_iv(sys);
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     else
-        build_function(exprs,
+        build_function_wrapper(sys, exprs,
             dvs,
             p...;
             kwargs...,
-            postprocess_fbody,
-            states,
-            wrap_code = wrap_code .∘ wrap_mtkparameters(sys, isscalar) .∘
-                        wrap_array_vars(sys, exprs; dvs, cachesyms) .∘
-                        wrap_parameter_dependencies(sys, isscalar),
             expression = Val{true}
         )
     end
@@ -226,244 +69,21 @@ function wrap_assignments(isscalar, assignments; let_block = false)
     end
 end
 
-function wrap_parameter_dependencies(sys::AbstractSystem, isscalar)
-    wrap_assignments(isscalar, [eq.lhs ← eq.rhs for eq in parameter_dependencies(sys)])
-end
+const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
 
 """
     $(TYPEDSIGNATURES)
 
-Add the necessary assignment statements to allow use of unscalarized array variables
-in the generated code. `expr` is the expression returned by the function. `dvs` and
-`ps` are the unknowns and parameters of the system `sys` to use in the generated code.
-`inputs` can be specified as an array of symbolics if the generated function has inputs.
-If `history == true`, the generated function accepts a history function. `cachesyms` are
-extra variables (arrays of variables) stored in the cache array(s) of the parameter
-object. `extra_args` are extra arguments appended to the end of the argument list.
-
-The function is assumed to have the signature `f(du, u, h, x, p, cache_syms..., t, extra_args...)`
-Where:
-- `du` is the optional buffer to write to for in-place functions.
-- `u` is the list of unknowns. This argument is not present if `dvs === nothing`.
-- `h` is the optional history function, present if `history == true`.
-- `x` is the array of inputs, present only if `inputs !== nothing`. Values are assumed
-  to be in the order of variables passed to `inputs`.
-- `p` is the parameter object.
-- `cache_syms` are the cache variables. These are part of the splatted parameter object.
-- `t` is time, present only if the system is time dependent.
-- `extra_args` are the extra arguments passed to the function, present only if
-  `extra_args` is non-empty.
+Obtain the name of `sys`.
 """
-function wrap_array_vars(
-        sys::AbstractSystem, exprs; dvs = unknowns(sys), ps = parameters(sys),
-        inputs = nothing, history = false, cachesyms::Tuple = (), extra_args::Tuple = ())
-    isscalar = !(exprs isa AbstractArray)
-    var_to_arridxs = Dict()
-
-    if dvs === nothing
-        uind = 0
-    else
-        uind = 1
-        for (i, x) in enumerate(dvs)
-            iscall(x) && operation(x) == getindex || continue
-            arg = arguments(x)[1]
-            inds = get!(() -> [], var_to_arridxs, arg)
-            push!(inds, (uind, i))
-        end
-    end
-    p_start = uind + 1 + history
-    rps = (reorder_parameters(sys, ps)..., cachesyms...)
-    if inputs !== nothing
-        rps = (inputs, rps...)
-    end
-    if has_iv(sys)
-        rps = (rps..., get_iv(sys))
-    end
-    rps = (rps..., extra_args...)
-    for sym in reduce(vcat, rps; init = [])
-        iscall(sym) && operation(sym) == getindex || continue
-        arg = arguments(sym)[1]
-
-        bufferidx = findfirst(buf -> any(isequal(sym), buf), rps)
-        idxinbuffer = findfirst(isequal(sym), rps[bufferidx])
-        inds = get!(() -> [], var_to_arridxs, arg)
-        push!(inds, (p_start + bufferidx - 1, idxinbuffer))
-    end
-
-    viewsyms = Dict()
-    splitsyms = Dict()
-    for (arrsym, idxs) in var_to_arridxs
-        length(idxs) == length(arrsym) || continue
-        # allequal(first, idxs) is a 1.11 feature
-        if allequal(Iterators.map(first, idxs))
-            viewsyms[arrsym] = (first(first(idxs)), reshape(last.(idxs), size(arrsym)))
-        else
-            splitsyms[arrsym] = reshape(idxs, size(arrsym))
-        end
-    end
-    if isscalar
-        function (expr)
-            Func(
-                expr.args,
-                [],
-                Let(
-                    vcat(
-                        [sym ← :(view($(expr.args[i].name), $idxs))
-                         for (sym, (i, idxs)) in viewsyms],
-                        [sym ←
-                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
-                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
-                    ),
-                    expr.body,
-                    false
-                )
-            )
-        end
-    else
-        function (expr)
-            Func(
-                expr.args,
-                [],
-                Let(
-                    vcat(
-                        [sym ← :(view($(expr.args[i].name), $idxs))
-                         for (sym, (i, idxs)) in viewsyms],
-                        [sym ←
-                         MakeArray([expr.args[bufi].elems[vali] for (bufi, vali) in idxs],
-                             expr.args[idxs[1][1]]) for (sym, idxs) in splitsyms]
-                    ),
-                    expr.body,
-                    false
-                )
-            )
-        end,
-        function (expr)
-            Func(
-                expr.args,
-                [],
-                Let(
-                    vcat(
-                        [sym ← :(view($(expr.args[i + 1].name), $idxs))
-                         for (sym, (i, idxs)) in viewsyms],
-                        [sym ← MakeArray(
-                             [expr.args[bufi + 1].elems[vali] for (bufi, vali) in idxs],
-                             expr.args[idxs[1][1] + 1]) for (sym, idxs) in splitsyms]
-                    ),
-                    expr.body,
-                    false
-                )
-            )
-        end
-    end
-end
-
-const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
-
-"""
-    wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2, offset = Int(is_time_dependent(sys)))
-
-Return function(s) to be passed to the `wrap_code` keyword of `build_function` which
-allow the compiled function to be called as `f(u, p, t)` where `p isa MTKParameters`
-instead of `f(u, p..., t)`. `isscalar` denotes whether the function expression being
-wrapped is for a scalar value. `p_start` is the index of the argument containing
-the first parameter vector in the out-of-place version of the function. For example,
-if a history function (DDEs) was passed before `p`, then the function before wrapping
-would have the signature `f(u, h, p..., t)` and hence `p_start` would need to be `3`.
-
-`offset` is the number of arguments at the end of the argument list to ignore. Defaults
-to 1 if the system is time-dependent (to ignore `t`) and 0 otherwise.
-
-The returned function is `identity` if the system does not have an `IndexCache`.
-"""
-function wrap_mtkparameters(sys::AbstractSystem, isscalar::Bool, p_start = 2,
-        offset = Int(is_time_dependent(sys)))
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        if isscalar
-            function (expr)
-                param_args = expr.args[p_start:(end - offset)]
-                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
-                param_buffer_args = param_args[param_buffer_idxs]
-                destructured_mtkparams = DestructuredArgs(
-                    [x.name for x in param_buffer_args],
-                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
-                Func(
-                    [
-                        expr.args[begin:(p_start - 1)]...,
-                        destructured_mtkparams,
-                        expr.args[(end - offset + 1):end]...
-                    ],
-                    [],
-                    Let(param_buffer_args, expr.body, false)
-                )
-            end
-        else
-            function (expr)
-                param_args = expr.args[p_start:(end - offset)]
-                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
-                param_buffer_args = param_args[param_buffer_idxs]
-                destructured_mtkparams = DestructuredArgs(
-                    [x.name for x in param_buffer_args],
-                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
-                Func(
-                    [
-                        expr.args[begin:(p_start - 1)]...,
-                        destructured_mtkparams,
-                        expr.args[(end - offset + 1):end]...
-                    ],
-                    [],
-                    Let(param_buffer_args, expr.body, false)
-                )
-            end,
-            function (expr)
-                param_args = expr.args[(p_start + 1):(end - offset)]
-                param_buffer_idxs = findall(x -> x isa DestructuredArgs, param_args)
-                param_buffer_args = param_args[param_buffer_idxs]
-                destructured_mtkparams = DestructuredArgs(
-                    [x.name for x in param_buffer_args],
-                    MTKPARAMETERS_ARG; inds = param_buffer_idxs)
-                Func(
-                    [
-                        expr.args[begin:p_start]...,
-                        destructured_mtkparams,
-                        expr.args[(end - offset + 1):end]...
-                    ],
-                    [],
-                    Let(param_buffer_args, expr.body, false)
-                )
-            end
-        end
-    else
-        identity
-    end
-end
-
-mutable struct Substitutions
-    subs::Vector{Equation}
-    deps::Vector{Vector{Int}}
-    subed_eqs::Union{Nothing, Vector{Equation}}
-end
-Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
-
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the description associated with `sys` if present, and an empty
+string otherwise.
+"""
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
-
-#Deprecated
-function independent_variable(sys::AbstractSystem)
-    Base.depwarn(
-        "`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
-        :independent_variable)
-    isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
-end
-
-function independent_variables(sys::AbstractTimeDependentSystem)
-    return [getfield(sys, :iv)]
-end
-
-independent_variables(::AbstractTimeIndependentSystem) = []
-
-function independent_variables(sys::AbstractMultivariateSystem)
-    return getfield(sys, :ivs)
-end
 
 """
 $(TYPEDSIGNATURES)
@@ -473,8 +93,7 @@ Get the independent variable(s) of the system `sys`.
 See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
-    @warn "Please declare ($(typeof(sys))) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
-    if isdefined(sys, :iv)
+    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
         return getfield(sys, :ivs)
@@ -547,10 +166,8 @@ function SymbolicIndexingInterface.variable_index(sys::AbstractSystem, sym::Symb
     return nothing
 end
 
-SymbolicIndexingInterface.variable_symbols(sys::AbstractMultivariateSystem) = sys.dvs
-
 function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
-    return solved_unknowns(sys)
+    return unknowns(sys)
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
@@ -651,45 +268,34 @@ function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        rawobs = build_explicit_observed_function(
-            sys, sym; param_only = true, return_inplace = true)
-        if rawobs isa Tuple
-            if is_time_dependent(sys)
-                obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1a(p, t) = oop(p, t)
-                    f1a(out, p, t) = iip(out, p, t)
-                end
-            else
-                obsfn = let oop = rawobs[1], iip = rawobs[2]
-                    f1b(p) = oop(p)
-                    f1b(out, p) = iip(out, p)
-                end
-            end
-        else
-            obsfn = rawobs
-        end
-    else
-        obsfn = build_explicit_observed_function(sys, sym; param_only = true)
-    end
-    return obsfn
+    return build_explicit_observed_function(sys, sym; param_only = true)
 end
 
-function has_observed_with_lhs(sys, sym)
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains an observed equation with LHS `sym`.
+"""
+function has_observed_with_lhs(sys::AbstractSystem, sym)
     has_observed(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.observed_syms_to_timeseries, sym)
     else
-        return any(isequal(sym), [eq.lhs for eq in observed(sys)])
+        return any(isequal(sym), observables(sys))
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the system `sys` contains a parameter dependency equation with LHS `sym`.
+"""
 function has_parameter_dependency_with_lhs(sys, sym)
     has_parameter_dependencies(sys) || return false
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
     else
-        return any(isequal(sym), [eq.lhs for eq in parameter_dependencies(sys)])
+        return any(isequal(sym), [eq.lhs for eq in get_parameter_dependencies(sys)])
     end
 end
 
@@ -714,7 +320,7 @@ for traitT in [
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
             elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
-                   is_variable(sys, operation(s)(get_iv(sys)))
+                   length(arguments(s)) == 1 && is_variable(sys, operation(s)(get_iv(sys)))
                 # DDEs case, to detect x(t - k)
                 push!(ts_idxs, ContinuousTimeseries())
             else
@@ -739,7 +345,7 @@ function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return _all_ts_idxs!(ts_idxs, sys, ic.symbol_to_variable[sym])
     elseif is_variable(sys, sym) || is_independent_variable(sys, sym) ||
-           any(isequal(sym), [getname(eq.lhs) for eq in observed(sys)])
+           any(isequal(sym), getname.(observables(sys)))
         push!(ts_idxs, ContinuousTimeseries())
     elseif is_timeseries_parameter(sys, sym)
         push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
@@ -762,7 +368,7 @@ function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_symbols(sys::AbstractSystem)
-    return parameters(sys)
+    return parameters(sys; initial_parameters = true)
 end
 
 function SymbolicIndexingInterface.is_independent_variable(sys::AbstractSystem, sym)
@@ -785,7 +391,8 @@ end
 SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
-        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__)
+        sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__,
+        checkbounds = true, cse = true)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
             _sym = get(ic.symbol_to_variable, sym, nothing)
@@ -808,17 +415,8 @@ function SymbolicIndexingInterface.observed(
             end
         end
     end
-    _fn = build_explicit_observed_function(sys, sym; eval_expression, eval_module)
-
-    if is_time_dependent(sys)
-        return _fn
-    else
-        return let _fn = _fn
-            fn2(u, p) = _fn(u, p)
-            fn2(::Nothing, p) = _fn([], p)
-            fn2
-        end
-    end
+    return build_explicit_observed_function(
+        sys, sym; eval_expression, eval_module, checkbounds, cse)
 end
 
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
@@ -828,38 +426,41 @@ function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
     )
 end
 
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeDependentSystem) = true
-SymbolicIndexingInterface.is_time_dependent(::AbstractTimeIndependentSystem) = false
-
 SymbolicIndexingInterface.is_markovian(sys::AbstractSystem) = !is_dde(sys)
 
 SymbolicIndexingInterface.constant_structure(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.all_variable_symbols(sys::AbstractSystem)
     syms = variable_symbols(sys)
-    obs = getproperty.(observed(sys), :lhs)
+    obs = observables(sys)
     return isempty(obs) ? syms : vcat(syms, obs)
 end
 
 function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
     syms = all_variable_symbols(sys)
-    for other in (parameter_symbols(sys), independent_variable_symbols(sys))
+    for other in (full_parameters(sys), independent_variable_symbols(sys))
         isempty(other) || (syms = vcat(syms, other))
     end
     return syms
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check whether a system is marked as `complete`.
+"""
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
-
 """
-$(TYPEDSIGNATURES)
+    $(TYPEDSIGNATURES)
 
-Mark a system as scheduled. It is only intended in compiler internals. A system
-is scheduled after tearing based simplifications where equations are converted
-into assignments.
+Check whether a system performs namespacing.
 """
-function schedule(sys::AbstractSystem)
-    has_schedule(sys) ? sys : (@set! sys.isscheduled = true)
+function does_namespacing(sys::AbstractSystem)
+    if isdefined(sys, :namespacing)
+        getfield(sys, :namespacing)
+    else
+        !iscomplete(sys)
+    end
 end
 
 """
@@ -879,6 +480,139 @@ function isscheduled(sys::AbstractSystem)
 end
 
 """
+    Initial(x)
+
+The `Initial` operator. Used by initialization to store constant constraints on variables
+of a system. See the documentation section on initialization for more information.
+"""
+struct Initial <: Symbolics.Operator end
+Initial(x) = Initial()(x)
+SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
+SymbolicUtils.isbinop(::Initial) = false
+Base.nameof(::Initial) = :Initial
+Base.show(io::IO, x::Initial) = print(io, "Initial")
+input_timedomain(::Initial, _ = nothing) = ContinuousClock()
+output_timedomain(::Initial, _ = nothing) = ContinuousClock()
+
+function (f::Initial)(x)
+    # wrap output if wrapped input
+    iw = Symbolics.iswrapped(x)
+    x = unwrap(x)
+    # non-symbolic values don't change
+    if symbolic_type(x) == NotSymbolic()
+        return x
+    end
+    # differential variables are default-toterm-ed
+    if iscall(x) && operation(x) isa Union{Differential, Shift}
+        x = default_toterm(x)
+    end
+    # don't double wrap
+    iscall(x) && operation(x) isa Initial && return x
+    result = if symbolic_type(x) == ArraySymbolic()
+        # create an array for `Initial(array)`
+        Symbolics.array_term(f, x)
+    elseif iscall(x) && operation(x) == getindex
+        # instead of `Initial(x[1])` create `Initial(x)[1]`
+        # which allows parameter indexing to handle this case automatically.
+        arr = arguments(x)[1]
+        term(getindex, f(arr), arguments(x)[2:end]...)
+    else
+        term(f, x)
+    end
+    # the result should be a parameter
+    result = toparam(result)
+    if iw
+        result = wrap(result)
+    end
+    return result
+end
+
+# This is required so `fast_substitute` works
+function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
+    val = Initial()(args...)
+    if symbolic_type(val) == NotSymbolic()
+        return val
+    end
+    return metadata(val, meta)
+end
+
+supports_initialization(sys::AbstractSystem) = true
+
+function add_initialization_parameters(sys::AbstractSystem; split = true)
+    @assert !has_systems(sys) || isempty(get_systems(sys))
+    supports_initialization(sys) || return sys
+    is_initializesystem(sys) && return sys
+
+    all_initialvars = Set{BasicSymbolic}()
+    # time-independent systems don't initialize unknowns
+    # but may initialize parameters using guesses for unknowns
+    eqs = equations(sys)
+    if !(eqs isa Vector{Equation})
+        eqs = Equation[x for x in eqs if x isa Equation]
+    end
+    obs, eqs = unhack_observed(observed(sys), eqs)
+    for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
+        x = unwrap(x)
+        if iscall(x) && operation(x) == getindex && split
+            push!(all_initialvars, arguments(x)[1])
+        else
+            push!(all_initialvars, x)
+        end
+    end
+
+    # add derivatives of all variables for steady-state initial conditions
+    if is_time_dependent(sys) && !is_discrete_system(sys)
+        D = Differential(get_iv(sys))
+        union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
+    end
+    for eq in get_parameter_dependencies(sys)
+        is_variable_floatingpoint(eq.lhs) || continue
+        push!(all_initialvars, eq.lhs)
+    end
+    all_initialvars = collect(all_initialvars)
+    initials = map(Initial(), all_initialvars)
+    @set! sys.ps = unique!([get_ps(sys); initials])
+    defs = copy(get_defaults(sys))
+    for ivar in initials
+        if symbolic_type(ivar) == ScalarSymbolic()
+            defs[ivar] = false
+        else
+            defs[ivar] = collect(ivar)
+            for scal_ivar in defs[ivar]
+                defs[scal_ivar] = false
+            end
+        end
+    end
+    @set! sys.defaults = defs
+    return sys
+end
+
+"""
+Returns true if the parameter `p` is of the form `Initial(x)`.
+"""
+function isinitial(p)
+    p = unwrap(p)
+    return iscall(p) && (operation(p) isa Initial ||
+            operation(p) === getindex && isinitial(arguments(p)[1]))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Find [`GlobalScope`](@ref)d variables in `sys` and add them to the unknowns/parameters.
+"""
+function discover_globalscoped(sys::AbstractSystem)
+    newunknowns = OrderedSet()
+    newparams = OrderedSet()
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    setdiff!(newunknowns, observables(sys))
+    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+    @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
+    return sys
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Mark a system as completed. A completed system is a system which is done being
@@ -888,15 +622,13 @@ the global structure of the system.
 
 One property to note is that if a system is complete, the system will no longer
 namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+
+This namespacing functionality can also be toggled independently of `complete`
+using [`toggle_namespacing`](@ref).
 """
-function complete(sys::AbstractSystem; split = true, flatten = true)
-    newunknowns = OrderedSet()
-    newparams = OrderedSet()
-    iv = has_iv(sys) ? get_iv(sys) : nothing
-    collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
-    # don't update unknowns to not disturb `structural_simplify` order
-    # `GlobalScope`d unknowns will be picked up and added there
-    @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+function complete(
+        sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
+    sys = discover_globalscoped(sys)
 
     if flatten
         eqs = equations(sys)
@@ -910,45 +642,34 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
             @set! newsys.parent = complete(sys; split = false, flatten = false)
         end
         sys = newsys
+        sys = process_parameter_equations(sys)
+        if add_initial_parameters
+            sys = add_initialization_parameters(sys; split)
+        end
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
-        all_ps = get_ps(sys)
+        # Ideally we'd do `get_ps` but if `flatten = false`
+        # we don't get all of them. So we call `parameters`.
+        all_ps = parameters(sys; initial_parameters = true)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
+            # if there are tunables, they will all be in `ps_split[1]`
+            # and the arrays will have been scalarized
+            ordered_ps = eltype(all_ps)[]
             # if there are no tunables, vcat them
-            if isempty(get_index_cache(sys).tunable_idx)
-                ordered_ps = reduce(vcat, ps_split)
-            else
-                # if there are tunables, they will all be in `ps_split[1]`
-                # and the arrays will have been scalarized
-                ordered_ps = eltype(all_ps)[]
-                i = 1
-                # go through all the tunables
-                while i <= length(ps_split[1])
-                    sym = ps_split[1][i]
-                    # if the sym is not a scalarized array symbolic OR it was already scalarized,
-                    # just push it as-is
-                    if !iscall(sym) || operation(sym) != getindex ||
-                       any(isequal(sym), all_ps)
-                        push!(ordered_ps, sym)
-                        i += 1
-                        continue
-                    end
-                    # the next `length(sym)` symbols should be scalarized versions of the same
-                    # array symbolic
-                    if !allequal(first(arguments(x))
-                    for x in view(ps_split[1], i:(i + length(sym) - 1)))
-                        error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
-                    end
-                    arrsym = first(arguments(sym))
-                    push!(ordered_ps, arrsym)
-                    i += length(arrsym)
-                end
-                ordered_ps = vcat(
-                    ordered_ps, reduce(vcat, ps_split[2:end]; init = eltype(ordered_ps)[]))
+            if !isempty(get_index_cache(sys).tunable_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
             end
+            # unflatten initial parameters
+            if !isempty(get_index_cache(sys).initials_idx)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
+                ps_split = Base.tail(ps_split)
+            end
+            ordered_ps = vcat(
+                ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
@@ -957,59 +678,101 @@ function complete(sys::AbstractSystem; split = true, flatten = true)
     if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
         @set! sys.initializesystem = complete(get_initializesystem(sys); split)
     end
+    sys = toggle_namespacing(sys, false; safe = true)
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
 end
 
-for prop in [:eqs
-             :tag
-             :noiseeqs
-             :iv
-             :unknowns
-             :ps
-             :tspan
-             :name
-             :description
-             :var_to_name
-             :ctrls
-             :defaults
-             :guesses
-             :observed
-             :tgrad
-             :jac
-             :ctrl_jac
-             :Wfact
-             :Wfact_t
-             :systems
-             :structure
-             :op
-             :constraints
-             :controls
-             :loss
-             :bcs
-             :domain
-             :ivs
-             :dvs
-             :connector_type
-             :connections
-             :preface
-             :torn_matching
-             :initializesystem
-             :initialization_eqs
-             :schedule
-             :tearing_state
-             :substitutions
-             :metadata
-             :gui_metadata
-             :discrete_subsystems
-             :parameter_dependencies
-             :solved_unknowns
-             :split_idxs
-             :parent
-             :is_dde
-             :tstops
-             :index_cache
-             :is_scalar_noise
-             :isscheduled]
+"""
+    $(TYPEDSIGNATURES)
+
+Return a new `sys` with namespacing enabled or disabled, depending on `value`. The
+keyword argument `safe` denotes whether systems that do not support such a toggle
+should error or be ignored.
+"""
+function toggle_namespacing(sys::AbstractSystem, value::Bool; safe = false)
+    if !isdefined(sys, :namespacing)
+        safe && return sys
+        throw(ArgumentError("The system must define the `namespacing` flag to toggle namespacing"))
+    end
+    @set sys.namespacing = value
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a flattened array of parameters `params` and a collection of all (unscalarized)
+parameters in the system `all_ps`, unscalarize the elements in `params` and append
+to `buffer` in the same order as they are present in `params`. Effectively, if
+`params = [p[1], p[2], p[3], q]` then this is equivalent to `push!(buffer, p, q)`.
+"""
+function unflatten_parameters!(buffer, params, all_ps)
+    i = 1
+    # go through all the tunables
+    while i <= length(params)
+        sym = params[i]
+        # if the sym is not a scalarized array symbolic OR it was already scalarized,
+        # just push it as-is
+        if !iscall(sym) || operation(sym) != getindex ||
+           any(isequal(sym), all_ps)
+            push!(buffer, sym)
+            i += 1
+            continue
+        end
+        # the next `length(sym)` symbols should be scalarized versions of the same
+        # array symbolic
+        if !allequal(first(arguments(x))
+        for x in view(params, i:(i + length(sym) - 1)))
+            error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+        end
+        arrsym = first(arguments(sym))
+        push!(buffer, arrsym)
+        i += length(arrsym)
+    end
+end
+
+const SYS_PROPS = [:eqs
+                   :tag
+                   :noise_eqs
+                   :iv
+                   :unknowns
+                   :ps
+                   :tspan
+                   :brownians
+                   :jumps
+                   :name
+                   :description
+                   :var_to_name
+                   :defaults
+                   :guesses
+                   :observed
+                   :systems
+                   :constraints
+                   :bcs
+                   :domain
+                   :ivs
+                   :dvs
+                   :connector_type
+                   :preface
+                   :initializesystem
+                   :initialization_eqs
+                   :schedule
+                   :tearing_state
+                   :metadata
+                   :gui_metadata
+                   :is_initializesystem
+                   :is_discrete
+                   :parameter_dependencies
+                   :assertions
+                   :ignored_connections
+                   :parent
+                   :is_dde
+                   :tstops
+                   :index_cache
+                   :isscheduled
+                   :costs
+                   :consolidate]
+
+for prop in SYS_PROPS
     fname_get = Symbol(:get_, prop)
     fname_has = Symbol(:has_, prop)
     @eval begin
@@ -1019,7 +782,6 @@ for prop in [:eqs
         Get the internal field `$($(QuoteNode(prop)))` of a system `sys`.
         It only includes `$($(QuoteNode(prop)))` local to `sys`; not those of its subsystems,
         like `unknowns(sys)`, `parameters(sys)` and `equations(sys)` does.
-        This is equivalent to, but preferred over `sys.$($(QuoteNode(prop)))`.
 
         See also [`has_$($(QuoteNode(prop)))`](@ref).
         """
@@ -1038,26 +800,12 @@ end
 
 has_equations(::AbstractSystem) = true
 
-const EMPTY_TGRAD = Vector{Num}(undef, 0)
-const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
-function invalidate_cache!(sys::AbstractSystem)
-    if has_tgrad(sys)
-        get_tgrad(sys)[] = EMPTY_TGRAD
-    end
-    if has_jac(sys)
-        get_jac(sys)[] = EMPTY_JAC
-    end
-    if has_ctrl_jac(sys)
-        get_ctrl_jac(sys)[] = EMPTY_JAC
-    end
-    if has_Wfact(sys)
-        get_Wfact(sys)[] = EMPTY_JAC
-    end
-    if has_Wfact_t(sys)
-        get_Wfact_t(sys)[] = EMPTY_JAC
-    end
-    return sys
-end
+"""
+    $(TYPEDSIGNATURES)
+
+Invalidate cached jacobians, etc.
+"""
+invalidate_cache!(sys::AbstractSystem) = sys
 
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
@@ -1080,7 +828,7 @@ end
     end
 end
 
-rename(x, name) = @set x.name = name
+Symbolics.rename(x::AbstractSystem, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -1097,6 +845,7 @@ function Base.propertynames(sys::AbstractSystem; private = false)
             push!(names, getname(s))
         end
         has_ps(sys) && for s in get_ps(sys)
+            hasname(s) || continue
             push!(names, getname(s))
         end
         has_observed(sys) && for s in get_observed(sys)
@@ -1107,20 +856,24 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
+"""
+    Base.getproperty(sys::AbstractSystem, name::Symbol)
+
+Access the subsystem, variable or analysis point of `sys` named `name`. To check if `sys`
+will namespace the returned value, use `ModelingToolkit.does_namespacing(sys)`.
+
+See also: [`ModelingToolkit.does_namespacing`](@ref).
+"""
+function Base.getproperty(
+        sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
         return getproperty(parent, name; namespace)
     end
     wrap(getvar(sys, name; namespace = namespace))
 end
-function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
+function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(sys))
     systems = get_systems(sys)
-    if isdefined(sys, name)
-        Base.depwarn(
-            "`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
-            "sys.$name")
-        return getfield(sys, name)
-    elseif !isempty(systems)
+    if !isempty(systems)
         i = findfirst(x -> nameof(x) == name, systems)
         if i !== nothing
             return namespace ? renamespace(sys, systems[i]) : systems[i]
@@ -1162,27 +915,41 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
         end
     end
 
+    if has_eqs(sys)
+        for eq in get_eqs(sys)
+            eq isa Equation || continue
+            if eq.lhs isa AnalysisPoint && nameof(eq.rhs) == name
+                return namespace ? renamespace(sys, eq.rhs) : eq.rhs
+            end
+        end
+    end
+
     throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    # We use this weird syntax because `parameters` and `unknowns` calls are
-    # potentially expensive.
-    if (params = parameters(sys);
-    idx = findfirst(s -> getname(s) == prop, params);
-    idx !== nothing)
-        get_defaults(sys)[params[idx]] = value(val)
-    elseif (sts = unknowns(sys);
-    idx = findfirst(s -> getname(s) == prop, sts);
-    idx !== nothing)
-        get_defaults(sys)[sts[idx]] = value(val)
-    else
-        setfield!(sys, prop, val)
-    end
+    error("""
+    `setproperty!` on systems is invalid. Systems are immutable data structures, and \
+    modifications to fields should be made by constructing a new system. This can be done \
+    easily using packages such as Setfield.jl.
+
+    If you are looking for the old behavior of updating the default of a variable via \
+    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_defaults(sys)`.
+    """)
 end
 
-apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
-apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+"""
+    $(TYPEDSIGNATURES)
+
+Apply function `f` to each variable in expression `ex`. `f` should be a function that takes
+a variable and returns the replacement to use. A "variable" in this context refers to a
+symbolic quantity created directly from a variable creation macro such as
+[`Symbolics.@variables`](@ref), [`@independent_variables`](@ref), [`@parameters`](@ref),
+[`@constants`](@ref) or [`@brownians`](@ref).
+"""
+apply_to_variables(f, ex) = _apply_to_variables(f, ex)
+apply_to_variables(f, ex::Num) = wrap(_apply_to_variables(f, unwrap(ex)))
+apply_to_variables(f, ex::Symbolics.Arr) = wrap(_apply_to_variables(f, unwrap(ex)))
 function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
@@ -1193,9 +960,25 @@ function _apply_to_variables(f::F, ex) where {F}
         metadata(ex))
 end
 
+"""
+Variable metadata key which contains information about scoping/namespacing of the
+variable in a hierarchical system.
+"""
 abstract type SymScope end
 
+"""
+    $(TYPEDEF)
+
+The default scope of a variable. It belongs to the system whose equations it is involved
+in and is namespaced by every level of the hierarchy.
+"""
 struct LocalScope <: SymScope end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `LocalScope` to `sym`.
+"""
 function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
@@ -1209,9 +992,25 @@ function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     end
 end
 
+"""
+    $(TYPEDEF)
+
+Denotes that the variable does not belong to the system whose equations it is involved
+in. It is not namespaced by this system. In the immediate parent of this system, the
+scope of this variable is given by `parent`.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
 struct ParentScope <: SymScope
     parent::SymScope
 end
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `ParentScope` to `sym`, with `parent` being `LocalScope`.
+"""
 function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
@@ -1227,27 +1026,21 @@ function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     end
 end
 
-struct DelayParentScope <: SymScope
-    parent::SymScope
-    N::Int
-end
-function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}, N)
-    apply_to_variables(sym) do sym
-        if iscall(sym) && operation(sym) == getindex
-            args = arguments(sym)
-            a1 = setmetadata(args[1], SymScope,
-                DelayParentScope(getmetadata(value(args[1]), SymScope, LocalScope()), N))
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                metadata(sym))
-        else
-            setmetadata(sym, SymScope,
-                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
-        end
-    end
-end
-DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}}) = DelayParentScope(sym, 1)
+"""
+    $(TYPEDEF)
 
+Denotes that a variable belongs to the root system in the hierarchy, regardless of which
+equations of subsystems in the hierarchy it is involved in. Variables with this scope
+are never namespaced and only added to the unknowns/parameters of a system when calling
+`complete` or `mtkcompile`.
+"""
 struct GlobalScope <: SymScope end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Apply `GlobalScope` to `sym`.
+"""
 function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
@@ -1285,15 +1078,6 @@ function renamespace(sys, x)
                 rename(x, renamespace(getname(sys), getname(x)))::T
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)::T
-            elseif scope isa DelayParentScope
-                if scope.N > 0
-                    x = setmetadata(x, SymScope,
-                        DelayParentScope(scope.parent, scope.N - 1))
-                    rename(x, renamespace(getname(sys), getname(x)))::T
-                else
-                    #rename(x, renamespace(getname(sys), getname(x)))
-                    setmetadata(x, SymScope, scope.parent)::T
-                end
             else # GlobalScope
                 x::T
             end
@@ -1307,7 +1091,6 @@ end
 
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
-namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
@@ -1350,6 +1133,28 @@ function namespace_equation(eq::Equation,
     (_lhs ~ _rhs)::Equation
 end
 
+function namespace_jump(j::ConstantRateJump, sys)
+    return ConstantRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::VariableRateJump, sys)
+    return VariableRateJump(namespace_expr(j.rate, sys), namespace_expr(j.affect!, sys))
+end
+
+function namespace_jump(j::MassActionJump, sys)
+    return MassActionJump(namespace_expr(j.scaled_rates, sys),
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.reactant_stoch],
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch])
+end
+
+function namespace_jumps(sys::AbstractSystem)
+    return [namespace_jump(j, sys) for j in get_jumps(sys)]
+end
+
+function namespace_brownians(sys::AbstractSystem)
+    return [renamespace(sys, b) for b in brownians(sys)]
+end
+
 function namespace_assignment(eq::Assignment, sys)
     _lhs = namespace_expr(eq.lhs, sys)
     _rhs = namespace_expr(eq.rhs, sys)
@@ -1364,7 +1169,9 @@ function is_array_of_symbolics(x)
 end
 
 function namespace_expr(
-        O, sys, n = nameof(sys); ivs = independent_variables(sys))
+        O, sys, n = (sys === nothing ? nothing : nameof(sys));
+        ivs = sys === nothing ? nothing : independent_variables(sys))
+    sys === nothing && return O
     O = unwrap(O)
     # Exceptions for arrays of symbolic and Ref of a symbolic, the latter
     # of which shows up in broadcasts
@@ -1406,6 +1213,7 @@ _nonum(@nospecialize x) = x isa Num ? x.val : x
 $(TYPEDSIGNATURES)
 
 Get the unknown variables of the system `sys` and its subsystems.
+These must be explicitly solved for, unlike `observables(sys)`.
 
 See also [`ModelingToolkit.get_unknowns`](@ref).
 """
@@ -1430,13 +1238,25 @@ function unknowns(sys::AbstractSystem)
 end
 
 """
+    unknowns_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `unknowns`, but ignores unknowns of subsystems.
+"""
+function unknowns_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return unknowns_toplevel(parent)
+    end
+    return get_unknowns(sys)
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Get the parameters of the system `sys` and its subsystems.
 
 See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
-function parameters(sys::AbstractSystem)
+function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
     if ps == SciMLBase.NullParameters()
         return []
@@ -1445,35 +1265,107 @@ function parameters(sys::AbstractSystem)
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
+    result = unique(isempty(systems) ? ps :
+                    [ps; reduce(vcat, namespace_parameters.(systems))])
+    if !initial_parameters && !is_initializesystem(sys)
+        filter!(result) do sym
+            return !(isoperator(sym, Initial) ||
+                     iscall(sym) && operation(sym) == getindex &&
+                     isoperator(arguments(sym)[1], Initial))
+        end
+    end
+    return result
 end
 
 function dependent_parameters(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `dependent_parameters` requires that the system is marked as complete. Call
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     return map(eq -> eq.lhs, parameter_dependencies(sys))
 end
 
 """
-$(TYPEDSIGNATURES)
-Get the parameter dependencies of the system `sys` and its subsystems.
+    parameters_toplevel(sys::AbstractSystem)
 
-See also [`defaults`](@ref) and [`ModelingToolkit.get_parameter_dependencies`](@ref).
+Replicates the behaviour of `parameters`, but ignores parameters of subsystems.
+"""
+function parameters_toplevel(sys::AbstractSystem)
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return parameters_toplevel(parent)
+    end
+    return get_ps(sys)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get the parameter dependencies of the system `sys` and its subsystems. Requires that the
+system is `complete`d.
 """
 function parameter_dependencies(sys::AbstractSystem)
+    if !iscomplete(sys)
+        throw(ArgumentError("""
+        `parameter_dependencies` requires that the system is marked as complete. Call \
+        `complete` or `mtkcompile` on the system.
+        """))
+    end
     if !has_parameter_dependencies(sys)
         return Equation[]
     end
-    pdeps = get_parameter_dependencies(sys)
-    systems = get_systems(sys)
-    # put pdeps after those of subsystems to maintain topological sorted order
-    namespaced_deps = mapreduce(
-        s -> map(eq -> namespace_equation(eq, s), parameter_dependencies(s)), vcat,
-        systems; init = Equation[])
-
-    return vcat(namespaced_deps, pdeps)
+    get_parameter_dependencies(sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return all of the parameters of the system, including hidden initial parameters and ones
+eliminated via `parameter_dependencies`.
+"""
 function full_parameters(sys::AbstractSystem)
-    vcat(parameters(sys), dependent_parameters(sys))
+    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
+    vcat(parameters(sys; initial_parameters = true), dep_ps)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the assertions for a system `sys` and its subsystems.
+"""
+function assertions(sys::AbstractSystem)
+    has_assertions(sys) || return Dict{BasicSymbolic, String}()
+
+    asserts = get_assertions(sys)
+    systems = get_systems(sys)
+    namespaced_asserts = mapreduce(
+        merge!, systems; init = Dict{BasicSymbolic, String}()) do subsys
+        Dict{BasicSymbolic, String}(namespace_expr(k, subsys) => v
+        for (k, v) in assertions(subsys))
+    end
+    return merge(asserts, namespaced_asserts)
+end
+
+"""
+    $(TYPEDEF)
+
+Information about an `AnalysisPoint` for which the corresponding connection must be
+ignored during `expand_connections`, since the analysis point has been transformed.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct IgnoredAnalysisPoint
+    """
+    The input variable/connector.
+    """
+    input::Union{BasicSymbolic, AbstractSystem}
+    """
+    The output variables/connectors.
+    """
+    outputs::Vector{Union{BasicSymbolic, AbstractSystem}}
 end
 
 """
@@ -1496,12 +1388,14 @@ end
 # required in `src/connectors.jl:437`
 parameters(_) = []
 
-function controls(sys::AbstractSystem)
-    ctrls = get_ctrls(sys)
-    systems = get_systems(sys)
-    isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
-end
+"""
+$(TYPEDSIGNATURES)
 
+Get the observed equations of the system `sys` and its subsystems.
+These can be expressed in terms of `unknowns(sys)`, and do not have to be explicitly solved for.
+
+See also [`observables`](@ref) and [`ModelingToolkit.get_observed()`](@ref).
+"""
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
@@ -1511,8 +1405,18 @@ function observed(sys::AbstractSystem)
          init = Equation[])]
 end
 
-Base.@deprecate default_u0(x) defaults(x) false
-Base.@deprecate default_p(x) defaults(x) false
+"""
+$(TYPEDSIGNATURES)
+
+Get the observed variables of the system `sys` and its subsystems.
+These can be expressed in terms of `unknowns(sys)`, and do not have to be explicitly solved for.
+It is equivalent to all left hand sides of `observed(sys)`.
+
+See also [`observed`](@ref).
+"""
+function observables(sys::AbstractSystem)
+    return map(eq -> eq.lhs, observed(sys))
+end
 
 """
 $(TYPEDSIGNATURES)
@@ -1520,7 +1424,7 @@ $(TYPEDSIGNATURES)
 Get the default values of the system sys and its subsystems.
 If they are not explicitly provided, variables and parameters are initialized to these values.
 
-See also [`initialization_equations`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
 """
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
@@ -1528,7 +1432,7 @@ function defaults(sys::AbstractSystem)
     # `mapfoldr` is really important!!! We should prefer the base model for
     # defaults, because people write:
     #
-    # `compose(ODESystem(...; defaults=defs), ...)`
+    # `compose(System(...; defaults=defs), ...)`
     #
     # Thus, right associativity is required and crucial for correctness.
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
@@ -1538,9 +1442,9 @@ function defaults_and_guesses(sys::AbstractSystem)
     merge(guesses(sys), defaults(sys))
 end
 
-unknowns(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)
 for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
-    @eval unknowns(sys::AbstractSystem, v::$vType) = renamespace(sys, v)
+    @eval unknowns(sys::AbstractSystem, v::$vType) = namespace_expr(v, sys)
     @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
 end
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
@@ -1576,11 +1480,154 @@ function equations(sys::AbstractSystem)
 end
 
 """
+    equations_toplevel(sys::AbstractSystem)
+
+Replicates the behaviour of `equations`, but ignores equations of subsystems.
+
+Notes:
+- Cannot be applied to non-complete systems.
+"""
+function equations_toplevel(sys::AbstractSystem)
+    iscomplete(sys) && error("Cannot apply `equations_toplevel` to complete systems.")
+    if has_parent(sys) && (parent = get_parent(sys)) !== nothing
+        return equations_toplevel(parent)
+    end
+    return get_eqs(sys)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expression
+if `simplify == true`.
+"""
+function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkit.Initial)
+    simplify ? Symbolics.simplify(expr) : expr
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively substitute the observed equations of `sys` into `expr`. If `simplify`, call
+`Symbolics.simplify` on the resultant expression.
+"""
+function substitute_observed(sys::AbstractSystem, expr; simplify = false)
+    empty_substitutions(sys) && return expr
+    substitutions = get_substitutions(sys)
+    return substitute_and_simplify(expr, substitutions, simplify)
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Like `equations(sys)`, but also substitutes the observed equations eliminated from the
+equations during `mtkcompile`. These equations matches generated numerical code.
+
+See also [`equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
+"""
+function full_equations(sys::AbstractSystem; simplify = false)
+    empty_substitutions(sys) && return equations(sys)
+    subs = get_substitutions(sys)
+    neweqs = map(equations(sys)) do eq
+        if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+                eq.rhs, subs,
+                simplify)
+        else
+            if !_iszero(eq.lhs)
+                eq = 0 ~ eq.rhs - eq.lhs
+            end
+            rhs = substitute_and_simplify(eq.rhs, subs, simplify)
+            return 0 ~ rhs
+        end
+        eq
+    end
+    return neweqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get the flattened jumps of the system. In other words, obtain all of the jumps in `sys` and
+all the subsystems of `sys` (appropriately namespaced).
+"""
+function jumps(sys::AbstractSystem)
+    js = get_jumps(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return js
+    end
+    return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get all of the brownian variables involved in the system `sys` and all subsystems,
+appropriately namespaced.
+"""
+function brownians(sys::AbstractSystem)
+    bs = get_brownians(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return bs
+    end
+    return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively consolidate the cost vector of `sys` and all subsystems of `sys`, returning the
+final scalar cost function.
+"""
+function cost(sys::AbstractSystem)
+    cs = get_costs(sys)
+    consolidate = get_consolidate(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return consolidate(cs, Float64[])
+    end
+    subcosts = [namespace_expr(cost(subsys), subsys) for subsys in systems]
+    return consolidate(cs, subcosts)
+end
+
+namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
+
+namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)
+
+function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
+    _lhs = namespace_expr(ineq.lhs, sys, n)
+    _rhs = namespace_expr(ineq.rhs, sys, n)
+    Inequality(_lhs,
+        _rhs,
+        ineq.relational_op)
+end
+
+function namespace_constraints(sys)
+    cstrs = constraints(sys)
+    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef, 0)
+    map(cstr -> namespace_constraint(cstr, sys), cstrs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get all constraints in the system `sys` and all of its subsystems, appropriately namespaced.
+"""
+function constraints(sys::AbstractSystem)
+    cs = get_constraints(sys)
+    systems = get_systems(sys)
+    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`guesses`](@ref), [`defaults`](@ref), [`parameter_dependencies`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`defaults`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
@@ -1596,6 +1643,11 @@ function initialization_equations(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Get the tstops present in `sys` and its subsystems, appropriately namespaced.
+"""
 function symbolic_tstops(sys::AbstractSystem)
     tstops = get_tstops(sys)
     systems = get_systems(sys)
@@ -1604,6 +1656,12 @@ function symbolic_tstops(sys::AbstractSystem)
     return tstops
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Obtain the preface associated with `sys` and all of its subsystems, appropriately
+namespaced.
+"""
 function preface(sys::AbstractSystem)
     has_preface(sys) || return nothing
     pre = get_preface(sys)
@@ -1624,42 +1682,15 @@ function preface(sys::AbstractSystem)
 end
 
 function islinear(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(islinear(r, unknowns(sys)) for r in rhs)
 end
 
 function isaffine(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(isaffine(r, unknowns(sys)) for r in rhs)
-end
-
-function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
-    # if something is not x(t) (the current unknown)
-    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
-    # than pass in a value in place of x(t).
-    #
-    # This is done by just making `x` the argument of the function.
-    if iscall(x) &&
-       issym(operation(x)) &&
-       !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
-        return operation(x)
-    end
-    return x
-end
-
-"""
-$(SIGNATURES)
-
-Return a list of actual unknowns needed to be solved by solvers.
-"""
-function solved_unknowns(sys::AbstractSystem)
-    sts = unknowns(sys)
-    if has_solved_unknowns(sys)
-        sts = something(get_solved_unknowns(sys), sts)
-    end
-    return sts
 end
 
 ###
@@ -1671,11 +1702,20 @@ struct ObservedFunctionCache{S}
     steady_state::Bool
     eval_expression::Bool
     eval_module::Module
+    checkbounds::Bool
+    cse::Bool
 end
 
 function ObservedFunctionCache(
-        sys; steady_state = false, eval_expression = false, eval_module = @__MODULE__)
-    return ObservedFunctionCache(sys, Dict(), steady_state, eval_expression, eval_module)
+        sys; expression = Val{false}, steady_state = false, eval_expression = false,
+        eval_module = @__MODULE__, checkbounds = true, cse = true)
+    if expression == Val{true}
+        :($ObservedFunctionCache($sys, Dict(), $steady_state, $eval_expression,
+            $eval_module, $checkbounds, $cse))
+    else
+        ObservedFunctionCache(
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse)
+    end
 end
 
 # This is hit because ensemble problems do a deepcopy
@@ -1685,7 +1725,10 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     steady_state = ofc.steady_state
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
-    newofc = ObservedFunctionCache(sys, dict, steady_state, eval_expression, eval_module)
+    checkbounds = ofc.checkbounds
+    cse = ofc.cse
+    newofc = ObservedFunctionCache(
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds, cse)
     stackdict[ofc] = newofc
     return newofc
 end
@@ -1694,7 +1737,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module)
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds, cse = ofc.cse)
     end
     if ofc.steady_state
         obs = let fn = obs
@@ -1767,8 +1810,8 @@ function push_eqs!(stmt, eqs, var2name)
     return eqs_name
 end
 
-function push_defaults!(stmt, defs, var2name)
-    defs_name = gensym(:defs)
+function push_defaults!(stmt, defs, var2name; name = :defs)
+    defs_name = gensym(name)
     defs_expr = Expr(:call, Dict)
     defs_blk = Expr(:(=), defs_name, defs_expr)
     for d in defs
@@ -1814,23 +1857,25 @@ function toexpr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
-    defs_name = push_defaults!(stmt, defaults(sys), var2name)
+    filtered_defs = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    filtered_guesses = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
+    defs_name = push_defaults!(stmt, filtered_defs, var2name)
+    guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
-    if sys isa ODESystem
-        iv = get_iv(sys)
+    iv = get_iv(sys)
+    if iv === nothing
+        ivname = nothing
+    else
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt,
-            :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
-    elseif sys isa NonlinearSystem
-        push!(stmt,
-            :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
-                observed = $obs_name,
-                name = $name, checks = false)))
     end
+    push!(stmt,
+        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+            guesses = $guesses_name, observed = $obs_name,
+            name = $name, checks = false)))
 
     expr = :(let
         $expr
@@ -1839,18 +1884,6 @@ function toexpr(sys::AbstractSystem)
 end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
-
-function get_or_construct_tearing_state(sys)
-    if has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        if state === nothing
-            state = TearingState(sys)
-        end
-    else
-        state = nothing
-    end
-    state
-end
 
 """
     n_expanded_connection_equations(sys::AbstractSystem)
@@ -1861,30 +1894,24 @@ Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> 
 function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
+    sys = remove_analysis_points(sys)
     sys, (csets, _) = generate_connection_set(sys)
-    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
-    n_outer_stream_variables = 0
-    for cset in instream_csets
-        n_outer_stream_variables += count(x -> x.isouter, cset.set)
+
+    n_extras = 0
+    for cset in csets
+        rep = cset[1]
+        if rep.type <: Union{InputVar, OutputVar, Equality}
+            n_extras += length(cset) - 1
+        elseif rep.type == Flow
+            n_extras += 1
+        elseif rep.type == Stream
+            n_extras += count(x -> x.isouter, cset)
+        end
     end
-
-    #n_toplevel_unused_flows = 0
-    #toplevel_flows = Set()
-    #for cset in csets
-    #    e1 = first(cset.set)
-    #    e1.sys.namespace === nothing || continue
-    #    for e in cset.set
-    #        get_connection_type(e.v) === Flow || continue
-    #        push!(toplevel_flows, e.v)
-    #    end
-    #end
-    #for m in get_systems(sys)
-    #    isconnector(m) || continue
-    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
-    #end
-
-    nextras = n_outer_stream_variables + length(ceqs)
+    return n_extras
 end
+
+Base.show(io::IO, sys::AbstractSystem; kws...) = show(io, MIME"text/plain"(), sys; kws...)
 
 function Base.show(
         io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
@@ -1905,7 +1932,7 @@ function Base.show(
     nrows > 0 && hint && print(io, " see hierarchy($name)")
     for i in 1:nrows
         sub = subs[i]
-        name = String(nameof(sub))
+        local name = String(nameof(sub))
         print(io, "\n  ", name)
         desc = description(sub)
         if !isempty(desc)
@@ -1965,21 +1992,17 @@ function Base.show(
         limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
 
+    # Print parameter dependencies
+    npdeps = has_parameter_dependencies(sys) ? length(get_parameter_dependencies(sys)) : 0
+    npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
+    npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
+
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
     nobs > 0 && hint && print(io, " see observed($name)")
 
     return nothing
-end
-
-function Graphs.incidence_matrix(sys)
-    if has_torn_matching(sys) && has_tearing_state(sys)
-        state = get_tearing_state(sys)
-        incidence_matrix(state.structure.graph, Num(Sym{Real}(:×)))
-    else
-        return nothing
-    end
 end
 
 function split_assign(expr)
@@ -2078,6 +2101,10 @@ function _named_idxs(name::Symbol, idxs, call; extra_args = "")
         end, $idxs))
 end
 
+function setname(x, name)
+    @set x.name = name
+end
+
 function single_named_expr(expr)
     name, call = split_assign(expr)
     if Meta.isexpr(name, :ref)
@@ -2086,7 +2113,7 @@ function single_named_expr(expr)
         var = gensym(name)
         ex = quote
             $var = $(_named(name, call))
-            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+            $name = map(i -> $setname($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
         end
         ex
     else
@@ -2163,11 +2190,7 @@ function default_to_parentscope(v)
     uv = unwrap(v)
     uv isa Symbolic || return v
     apply_to_variables(v) do sym
-        if !hasmetadata(uv, SymScope)
-            ParentScope(sym)
-        else
-            sym
-        end
+        ParentScope(sym)
     end
 end
 
@@ -2239,633 +2262,114 @@ function component_post_processing(expr, isconnector)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Mark a system constructor function as building a component. For example,
+
+```julia
+@component function AddOne(; name)
+    @variables in(t) out(t)
+    eqs = [out ~ in + 1]
+    return System(eqs, t, [in, out], []; name)
+end
+```
+
+ModelingToolkit systems are either components or connectors. Components define dynamics of
+the model. Connectors are used to connect components together. See the
+[Model building reference](@ref model_building_api) section of the documentation for more
+information.
+
+See also: [`@connector`](@ref).
+"""
 macro component(expr)
     esc(component_post_processing(expr, false))
 end
 
-macro mtkbuild(exprs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Macro shorthand for building and compiling a system in one step.
+
+```julia
+@mtkcompile sys = Constructor(args...; kwargs....)
+```
+
+Is shorthand for
+
+```julia
+@named sys = Constructor(args...; kwargs...)
+sys = mtkcompile(sys)
+```
+"""
+macro mtkcompile(exprs...)
     expr = exprs[1]
     named_expr = ModelingToolkit.named_expr(expr)
     name = named_expr.args[1]
-    kwargs = if length(exprs) > 1
-        NamedTuple{Tuple(ex.args[1] for ex in Base.tail(exprs))}(Tuple(ex.args[2]
-        for ex in Base.tail(exprs)))
-    else
-        (;)
+    kwargs = Base.tail(exprs)
+    kwargs = map(kwargs) do ex
+        @assert ex.head == :(=)
+        Expr(:kw, ex.args[1], ex.args[2])
     end
+    if isempty(kwargs)
+        kwargs = ()
+    else
+        kwargs = (Expr(:parameters, kwargs...),)
+    end
+    call_expr = Expr(:call, mtkcompile, kwargs..., name)
     esc(quote
         $named_expr
-        $name = $structural_simplify($name; $(kwargs)...)
+        $name = $call_expr
     end)
 end
 
 """
-$(SIGNATURES)
+    debug_system(sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], error_nonfinite = true)
 
-Replace functions with singularities with a function that errors with symbolic
-information. E.g.
+Wrap `functions` in `sys` so any error thrown in them shows helpful symbolic-numeric
+information about its input. If `error_nonfinite`, functions that output nonfinite
+values (like `Inf` or `NaN`) also display errors, even though the raw function itself
+does not throw an exception (like `1/0`). For example:
 
 ```julia-repl
-julia> sys = debug_system(sys);
+julia> sys = debug_system(complete(sys))
 
-julia> sys = complete(sys);
+julia> prob = ODEProblem(sys, [0.0, 2.0], (0.0, 1.0))
 
-julia> prob = ODEProblem(sys, [], (0, 1.0));
-
-julia> du = zero(prob.u0);
-
-julia> prob.f(du, prob.u0, prob.p, 0.0)
-ERROR: DomainError with (-1.0,):
-log errors with input(s): -cos(Q(t)) => -1.0
-Stacktrace:
-  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
-  ...
+julia> prob.f(prob.u0, prob.p, 0.0)
+ERROR: Function /(1, sin(P(t))) output non-finite value Inf with input
+  1 => 1
+  sin(P(t)) => 0.0
 ```
+
+Additionally, all assertions in the system are optionally logged when they fail.
+A new parameter is also added to the system which controls whether the message associated
+with each assertion will be logged when the assertion fails. This parameter defaults to
+`true` and can be toggled by symbolic indexing with
+`ModelingToolkit.ASSERTION_LOG_VARIABLE`. For example,
+`prob.ps[ModelingToolkit.ASSERTION_LOG_VARIABLE] = false` will disable logging.
 """
-function debug_system(sys::AbstractSystem)
+function debug_system(
+        sys::AbstractSystem; functions = [log, sqrt, (^), /, inv, asin, acos], kw...)
+    if !(functions isa Set)
+        functions = Set(functions) # more efficient "in" lookup
+    end
     if has_systems(sys) && !isempty(get_systems(sys))
-        error("debug_system only works on systems with no sub-systems!")
+        error("debug_system(sys) only works on systems with no sub-systems! Consider flattening it with flatten(sys) or mtkcompile(sys) first.")
     end
     if has_eqs(sys)
-        @set! sys.eqs = debug_sub.(equations(sys))
+        eqs = debug_sub.(equations(sys), Ref(functions); kw...)
+        @set! sys.eqs = eqs
+        @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
+        @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
     end
     if has_observed(sys)
-        @set! sys.observed = debug_sub.(observed(sys))
+        @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
+    end
+    if iscomplete(sys)
+        sys = complete(sys; split = is_split(sys))
     end
     return sys
-end
-
-function eliminate_constants(sys::AbstractSystem)
-    if has_eqs(sys)
-        eqs = get_eqs(sys)
-        eq_cs = collect_constants(eqs)
-        if !isempty(eq_cs)
-            new_eqs = eliminate_constants(eqs, eq_cs)
-            @set! sys.eqs = new_eqs
-        end
-    end
-    return sys
-end
-
-function io_preprocessing(sys::AbstractSystem, inputs,
-        outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
-
-    eqs = equations(sys)
-    alg_start_idx = findfirst(!isdiffeq, eqs)
-    if alg_start_idx === nothing
-        alg_start_idx = length(eqs) + 1
-    end
-    diff_idxs = 1:(alg_start_idx - 1)
-    alge_idxs = alg_start_idx:length(eqs)
-
-    sys, diff_idxs, alge_idxs, input_idxs
-end
-
-"""
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
-
-Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
-
-`lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
-
-```math
-\\begin{aligned}
-ẋ &= f(x, z, u) \\\\
-0 &= g(x, z, u) \\\\
-y &= h(x, z, u)
-\\end{aligned}
-```
-
-where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
-
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
-
-# Arguments:
-
-  - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
-  - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
-  - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
-  - `simplify`: Apply simplification in tearing.
-  - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
-  - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
-  - `kwargs`: Are passed on to `find_solvables!`
-
-See also [`linearize`](@ref) which provides a higher-level interface.
-"""
-function linearization_function(sys::AbstractSystem, inputs,
-        outputs; simplify = false,
-        initialize = true,
-        op = Dict(),
-        p = DiffEqBase.NullParameters(),
-        zero_dummy_der = false,
-        initialization_solver_alg = TrustRegion(),
-        eval_expression = false, eval_module = @__MODULE__,
-        warn_initialize_determined = true,
-        kwargs...)
-    op = Dict(op)
-    inputs isa AbstractVector || (inputs = [inputs])
-    outputs isa AbstractVector || (outputs = [outputs])
-    ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
-        simplify,
-        kwargs...)
-    if zero_dummy_der
-        dummyder = setdiff(unknowns(ssys), unknowns(sys))
-        defs = Dict(x => 0.0 for x in dummyder)
-        @set! ssys.defaults = merge(defs, defaults(ssys))
-        op = merge(defs, op)
-    end
-    sys = ssys
-    u0map = Dict(k => v for (k, v) in op if is_variable(ssys, k))
-    initsys = structural_simplify(
-        generate_initializesystem(
-            sys, u0map = u0map, guesses = guesses(sys), algebraic_only = true),
-        fully_determined = false)
-
-    # HACK: some unknowns may not be involved in any initialization equations, and are
-    # thus removed from the system during `structural_simplify`.
-    # This causes `getu(initsys, unknowns(sys))` to fail, so we add them back as parameters
-    # for now.
-    missing_unknowns = setdiff(unknowns(sys), all_symbols(initsys))
-    if !isempty(missing_unknowns)
-        if warn_initialize_determined
-            @warn "Initialization system is underdetermined. No equations for $(missing_unknowns). Initialization will default to using least squares. To suppress this warning pass warn_initialize_determined = false."
-        end
-        new_parameters = [parameters(initsys); missing_unknowns]
-        @set! initsys.ps = new_parameters
-        initsys = complete(initsys)
-    end
-
-    if p isa SciMLBase.NullParameters
-        p = Dict()
-    else
-        p = todict(p)
-    end
-    x0 = merge(defaults_and_guesses(sys), op)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        sys_ps = MTKParameters(sys, p, x0)
-    else
-        sys_ps = varmap_to_vars(p, parameters(sys); defaults = x0)
-    end
-    p[get_iv(sys)] = NaN
-    if has_index_cache(initsys) && get_index_cache(initsys) !== nothing
-        oldps = MTKParameters(initsys, p, merge(guesses(sys), defaults(sys), op))
-        initsys_ps = parameters(initsys)
-        p_getter = build_explicit_observed_function(
-            sys, initsys_ps; eval_expression, eval_module)
-
-        u_getter = isempty(unknowns(initsys)) ? (_...) -> nothing :
-                   build_explicit_observed_function(
-            sys, unknowns(initsys); eval_expression, eval_module)
-        get_initprob_u_p = let p_getter = p_getter,
-            p_setter! = setp(initsys, initsys_ps),
-            u_getter = u_getter
-
-            function (u, p, t)
-                p_setter!(oldps, p_getter(u, p, t))
-                newu = u_getter(u, p, t)
-                return newu, oldps
-            end
-        end
-    else
-        get_initprob_u_p = let p_getter = getu(sys, parameters(initsys)),
-            u_getter = build_explicit_observed_function(
-                sys, unknowns(initsys); eval_expression, eval_module)
-
-            function (u, p, t)
-                state = ProblemState(; u, p, t)
-                return u_getter(
-                    state_values(state), parameter_values(state), current_time(state)),
-                p_getter(state)
-            end
-        end
-    end
-    initfn = NonlinearFunction(initsys; eval_expression, eval_module)
-    initprobmap = build_explicit_observed_function(
-        initsys, unknowns(sys); eval_expression, eval_module)
-    ps = parameters(sys)
-    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
-    lin_fun = let diff_idxs = diff_idxs,
-        alge_idxs = alge_idxs,
-        input_idxs = input_idxs,
-        sts = unknowns(sys),
-        get_initprob_u_p = get_initprob_u_p,
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(
-            sys, unknowns(sys), ps; eval_expression, eval_module),
-        initfn = initfn,
-        initprobmap = initprobmap,
-        h = h,
-        chunk = ForwardDiff.Chunk(input_idxs),
-        sys_ps = sys_ps,
-        initialize = initialize,
-        initialization_solver_alg = initialization_solver_alg,
-        sys = sys
-
-        function (u, p, t)
-            if !isa(p, MTKParameters)
-                p = todict(p)
-                newps = deepcopy(sys_ps)
-                for (k, v) in p
-                    if is_parameter(sys, k)
-                        v = fixpoint_sub(v, p)
-                        setp(sys, k)(newps, v)
-                    end
-                end
-                p = newps
-            end
-
-            if u !== nothing # Handle systems without unknowns
-                length(sts) == length(u) ||
-                    error("Number of unknown variables ($(length(sts))) does not match the number of input unknowns ($(length(u)))")
-                if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
-                    residual = fun(u, p, t)
-                    if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
-                        initu0, initp = get_initprob_u_p(u, p, t)
-                        initprob = NonlinearLeastSquaresProblem(initfn, initu0, initp)
-                        nlsol = solve(initprob, initialization_solver_alg)
-                        u = initprobmap(state_values(nlsol), parameter_values(nlsol))
-                    end
-                end
-                uf = SciMLBase.UJacobianWrapper(fun, t, p)
-                fg_xz = ForwardDiff.jacobian(uf, u)
-                h_xz = ForwardDiff.jacobian(
-                    let p = p, t = t
-                        xz -> h(xz, p, t)
-                    end, u)
-                pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-                fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
-            else
-                length(sts) == 0 ||
-                    error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
-                fg_xz = zeros(0, 0)
-                h_xz = fg_u = zeros(0, length(inputs))
-            end
-            hp = let u = u, t = t
-                _hp(p) = h(u, p, t)
-                _hp
-            end
-            h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
-            (f_x = fg_xz[diff_idxs, diff_idxs],
-                f_z = fg_xz[diff_idxs, alge_idxs],
-                g_x = fg_xz[alge_idxs, diff_idxs],
-                g_z = fg_xz[alge_idxs, alge_idxs],
-                f_u = fg_u[diff_idxs, :],
-                g_u = fg_u[alge_idxs, :],
-                h_x = h_xz[:, diff_idxs],
-                h_z = h_xz[:, alge_idxs],
-                h_u = h_u)
-        end
-    end
-    return lin_fun, sys
-end
-
-"""
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
-
-Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
-
-See [`linearize`](@ref) for a description of the arguments.
-
-# Extended help
-The named tuple returned as the first argument additionally contains the jacobians `f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u` of
-```math
-\\begin{aligned}
-ẋ &= f(x, z, u) \\\\
-0 &= g(x, z, u) \\\\
-y &= h(x, z, u)
-\\end{aligned}
-```
-where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
-"""
-function linearize_symbolic(sys::AbstractSystem, inputs,
-        outputs; simplify = false, allow_input_derivatives = false,
-        eval_expression = false, eval_module = @__MODULE__,
-        kwargs...)
-    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(
-        sys, inputs, outputs; simplify,
-        kwargs...)
-    sts = unknowns(sys)
-    t = get_iv(sys)
-    ps = parameters(sys)
-    p = reorder_parameters(sys, ps)
-
-    fun_expr = generate_function(sys, sts, ps; expression = Val{true})[1]
-    fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
-    dx = fun(sts, p..., t)
-
-    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
-    y = h(sts, p, t)
-
-    fg_xz = Symbolics.jacobian(dx, sts)
-    fg_u = Symbolics.jacobian(dx, inputs)
-    h_xz = Symbolics.jacobian(y, sts)
-    h_u = Symbolics.jacobian(y, inputs)
-    f_x = fg_xz[diff_idxs, diff_idxs]
-    f_z = fg_xz[diff_idxs, alge_idxs]
-    g_x = fg_xz[alge_idxs, diff_idxs]
-    g_z = fg_xz[alge_idxs, alge_idxs]
-    f_u = fg_u[diff_idxs, :]
-    g_u = fg_u[alge_idxs, :]
-    h_x = h_xz[:, diff_idxs]
-    h_z = h_xz[:, alge_idxs]
-
-    nx, nu = size(f_u)
-    nz = size(f_z, 2)
-    ny = size(h_x, 1)
-
-    D = h_u
-
-    if isempty(g_z) # ODE
-        A = f_x
-        B = f_u
-        C = h_x
-    else
-        gz = lu(g_z; check = false)
-        issuccess(gz) ||
-            error("g_z not invertible, this indicates that the DAE is of index > 1.")
-        gzgx = -(gz \ g_x)
-        A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
-        B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
-
-        C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
-        if !iszero(Bs)
-            if !allow_input_derivatives
-                der_inds = findall(vec(any(!iszero, Bs, dims = 1)))
-                @show typeof(der_inds)
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(ModelingToolkit.inputs(sys)[der_inds]). Call `linearize_symbolic` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
-            end
-            B = [B [zeros(nx, nu); Bs]]
-            D = [D zeros(ny, nu)]
-        end
-    end
-
-    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
-end
-
-function markio!(state, orig_inputs, inputs, outputs; check = true)
-    fullvars = get_fullvars(state)
-    inputset = Dict{Any, Bool}(i => false for i in inputs)
-    outputset = Dict{Any, Bool}(o => false for o in outputs)
-    for (i, v) in enumerate(fullvars)
-        if v in keys(inputset)
-            if v in keys(outputset)
-                v = setio(v, true, true)
-                outputset[v] = true
-            else
-                v = setio(v, true, false)
-            end
-            inputset[v] = true
-            fullvars[i] = v
-        elseif v in keys(outputset)
-            v = setio(v, false, true)
-            outputset[v] = true
-            fullvars[i] = v
-        else
-            if isinput(v)
-                push!(orig_inputs, v)
-            end
-            v = setio(v, false, false)
-            fullvars[i] = v
-        end
-    end
-    if check
-        ikeys = keys(filter(!last, inputset))
-        if !isempty(ikeys)
-            error(
-                "Some specified inputs were not found in system. The following variables were not found ",
-                ikeys)
-        end
-    end
-    check && (all(values(outputset)) ||
-     error(
-        "Some specified outputs were not found in system. The following Dict indicates the found variables ",
-        outputset))
-    state, orig_inputs
-end
-
-"""
-    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
-    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
-
-Linearize `sys` between `inputs` and `outputs`, both vectors of variables. Return a NamedTuple with the matrices of a linear statespace representation
-on the form
-
-```math
-\\begin{aligned}
-ẋ &= Ax + Bu\\\\
-y &= Cx + Du
-\\end{aligned}
-```
-
-The first signature automatically calls [`linearization_function`](@ref) internally,
-while the second signature expects the outputs of [`linearization_function`](@ref) as input.
-
-`op` denotes the operating point around which to linearize. If none is provided,
-the default values of `sys` are used.
-
-If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
-
-`zero_dummy_der` can be set to automatically set the operating point to zero for all dummy derivatives.
-
-See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_unknowns`](@ref).
-
-See extended help for an example.
-
-The implementation and notation follows that of
-["Linear Analysis Approach for Modelica Models", Allain et al. 2009](https://ep.liu.se/ecp/043/075/ecp09430097.pdf)
-
-# Extended help
-
-This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
-
-```
-
-  r ┌─────┐       ┌─────┐     ┌─────┐
-───►│     ├──────►│     │  u  │     │
-    │  F  │       │  C  ├────►│  P  │ y
-    └─────┘     ┌►│     │     │     ├─┬─►
-                │ └─────┘     └─────┘ │
-                │                     │
-                └─────────────────────┘
-```
-
-```julia
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
-function plant(; name)
-    @variables x(t) = 1
-    @variables u(t)=0 y(t)=0
-    eqs = [D(x) ~ -x + u
-           y ~ x]
-    ODESystem(eqs, t; name = name)
-end
-
-function ref_filt(; name)
-    @variables x(t)=0 y(t)=0
-    @variables u(t)=0 [input = true]
-    eqs = [D(x) ~ -2 * x + u
-           y ~ x]
-    ODESystem(eqs, t, name = name)
-end
-
-function controller(kp; name)
-    @variables y(t)=0 r(t)=0 u(t)=0
-    @parameters kp = kp
-    eqs = [
-        u ~ kp * (r - y),
-    ]
-    ODESystem(eqs, t; name = name)
-end
-
-@named f = ref_filt()
-@named c = controller(1)
-@named p = plant()
-
-connections = [f.y ~ c.r # filtered reference to controller reference
-               c.u ~ p.u # controller output to plant input
-               p.y ~ c.y]
-
-@named cl = ODESystem(connections, t, systems = [f, c, p])
-
-lsys0, ssys = linearize(cl, [f.u], [p.x])
-desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-
-@assert lsys.A == [-2 0; 1 -2]
-@assert lsys.B == [1; 0;;]
-@assert lsys.C == [0 1]
-@assert lsys.D[] == 0
-
-## Symbolic linearization
-lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
-
-@assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
-```
-"""
-function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
-        p = DiffEqBase.NullParameters())
-    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
-    u0, defs = get_u0(sys, x0, p)
-    if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        if p isa SciMLBase.NullParameters
-            p = op
-        elseif p isa Dict
-            p = merge(p, op)
-        elseif p isa Vector && eltype(p) <: Pair
-            p = merge(Dict(p), op)
-        elseif p isa Vector
-            p = merge(Dict(parameters(sys) .=> p), op)
-        end
-    end
-    linres = lin_fun(u0, p, t)
-    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
-
-    nx, nu = size(f_u)
-    nz = size(f_z, 2)
-    ny = size(h_x, 1)
-
-    D = h_u
-
-    if isempty(g_z)
-        A = f_x
-        B = f_u
-        C = h_x
-        @assert iszero(g_x)
-        @assert iszero(g_z)
-        @assert iszero(g_u)
-    else
-        gz = lu(g_z; check = false)
-        issuccess(gz) ||
-            error("g_z not invertible, this indicates that the DAE is of index > 1.")
-        gzgx = -(gz \ g_x)
-        A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
-        B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
-
-        C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
-        if !iszero(Bs)
-            if !allow_input_derivatives
-                der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
-            end
-            B = [B [zeros(nx, nu); Bs]]
-            D = [D zeros(ny, nu)]
-        end
-    end
-
-    (; A, B, C, D)
-end
-
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
-        allow_input_derivatives = false,
-        zero_dummy_der = false,
-        kwargs...)
-    lin_fun, ssys = linearization_function(sys,
-        inputs,
-        outputs;
-        zero_dummy_der,
-        op,
-        kwargs...)
-    linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
-end
-
-"""
-    (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
-
-Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
-
-```
-Ã = T⁻¹AT
-B̃ = T⁻¹ B
-C̃ = CT
-D̃ = D
-```
-
-If `unitary=true`, `T` is assumed unitary and the matrix adjoint is used instead of the inverse.
-"""
-function similarity_transform(sys::NamedTuple, T; unitary = false)
-    if unitary
-        A = T'sys.A * T
-        B = T'sys.B
-    else
-        Tf = lu(T)
-        A = Tf \ sys.A * T
-        B = Tf \ sys.B
-    end
-    C = sys.C * T
-    D = sys.D
-    (; A, B, C, D)
-end
-
-"""
-    reorder_unknowns(sys::NamedTuple, old, new)
-
-Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state unknown is changed from `old` to `new`
-Example:
-
-```
-lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
-desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
-lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
-```
-
-See also [`ModelingToolkit.similarity_transform`](@ref)
-"""
-function reorder_unknowns(sys::NamedTuple, old, new)
-    nx = length(old)
-    length(new) == nx || error("old and new must have the same length")
-    perm = [findfirst(isequal(n), old) for n in new]
-    issorted(perm) && return sys # shortcut return, no reordering
-    P = zeros(Int, nx, nx)
-    for i in 1:nx # Build permutation matrix
-        P[i, perm[i]] = 1
-    end
-    similarity_transform(sys, P; unitary = true)
 end
 
 @latexrecipe function f(sys::AbstractSystem)
@@ -2922,6 +2426,11 @@ end
     hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
 
 Print a tree of a system's hierarchy of subsystems.
+
+# Keyword arguments
+
+- `describe`: Whether to also print the description of each subsystem, if present.
+- `bold`: Whether to print the name of the system in **bold** font.
 """
 function hierarchy(sys::AbstractSystem; describe = false, bold = describe, kwargs...)
     print_tree(sys; printnode_kw = (describe = describe, bold = bold), kwargs...)
@@ -2936,10 +2445,10 @@ end
 
 function check_array_equations_unknowns(eqs, dvs)
     if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
-        throw(ArgumentError("The system has array equations. Call `structural_simplify` to handle such equations or scalarize them manually."))
+        throw(ArgumentError("The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."))
     end
     if any(x -> Symbolics.isarraysymbolic(x), dvs)
-        throw(ArgumentError("The system has array unknowns. Call `structural_simplify` to handle this or scalarize them manually."))
+        throw(ArgumentError("The system has array unknowns. Call `mtkcompile` to handle this or scalarize them manually."))
     end
 end
 
@@ -2961,28 +2470,16 @@ end
 ###
 ### Inheritance & composition
 ###
-function Base.hash(sys::AbstractSystem, s::UInt)
-    s = hash(nameof(sys), s)
-    s = foldr(hash, get_systems(sys), init = s)
-    s = foldr(hash, get_unknowns(sys), init = s)
-    s = foldr(hash, get_ps(sys), init = s)
-    if sys isa OptimizationSystem
-        s = hash(get_op(sys), s)
-    else
-        s = foldr(hash, get_eqs(sys), init = s)
-    end
-    s = foldr(hash, get_observed(sys), init = s)
-    s = foldr(hash, get_continuous_events(sys), init = s)
-    s = foldr(hash, get_discrete_events(sys), init = s)
-    s = hash(independent_variables(sys), s)
-    return s
-end
-
 """
 $(TYPEDSIGNATURES)
 
-Extend `basesys` with `sys`.
+Extend `basesys` with `sys`. This can be thought of as the `merge` operation on systems.
+Values in `sys` take priority over duplicates in `basesys` (for example, defaults).
+
 By default, the resulting system inherits `sys`'s name and description.
+
+The `&` operator can also be used for this purpose. `sys & basesys` is equivalent to
+`extend(sys, basesys)`.
 
 See also [`compose`](@ref).
 """
@@ -3005,36 +2502,59 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union(parameter_dependencies(basesys), parameter_dependencies(sys))
+    dep_ps = union(get_parameter_dependencies(basesys), get_parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    meta = union_nothing(get_metadata(basesys), get_metadata(sys))
+    meta = merge(get_metadata(basesys), get_metadata(sys))
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
-    kwargs = (parameter_dependencies = dep_ps, observed = obs, continuous_events = cevs,
+    kwargs = (observed = obs, continuous_events = cevs,
         discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
         name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
-    if basesys isa ODESystem
-        ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
-        guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
-        kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+    ieqs = union(get_initialization_eqs(basesys), get_initialization_eqs(sys))
+    guesses = merge(get_guesses(basesys), get_guesses(sys)) # prefer `sys`
+    kwargs = merge(kwargs, (initialization_eqs = ieqs, guesses = guesses))
+
+    if has_assertions(basesys)
+        kwargs = merge(
+            kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys))))
     end
 
-    return T(args...; kwargs...)
+    newsys = T(args...; kwargs...)
+    @set! newsys.parameter_dependencies = dep_ps
+
+    return newsys
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Extend `sys` with all systems in `basesys` in order.
+"""
 function extend(sys, basesys::Vector{T}) where {T <: AbstractSystem}
     foldl(extend, basesys, init = sys)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+
+See also: [`extend`](@ref).
+"""
 function Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; kwargs...)
     extend(sys, basesys; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `extend(sys, basesys)`.
+"""
 function Base.:(&)(
         sys::AbstractSystem, basesys::Vector{T}; kwargs...) where {T <: AbstractSystem}
     extend(sys, basesys; kwargs...)
@@ -3043,8 +2563,11 @@ end
 """
 $(SIGNATURES)
 
-Compose multiple systems together. The resulting system would inherit the first
-system's name.
+Compose multiple systems together. This adds all of `systems` as subsystems of `sys`.
+The resulting system inherits the name of `sys` by default.
+
+The `∘` operator can also be used for this purpose. `sys ∘ basesys` is equivalent to
+`compose(sys, basesys)`.
 
 See also [`extend`](@ref).
 """
@@ -3066,9 +2589,22 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     return sys
 end
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for adding all systems in `syss` as the subsystems of `first(syss)`.
+"""
 function compose(syss...; name = nameof(first(syss)))
     compose(first(syss), collect(syss[2:end]); name = name)
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Syntactic sugar for `compose(sys1, sys2)`.
+
+See also: [`compose`](@ref).
+"""
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
@@ -3118,7 +2654,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         # post-walk to avoid infinite recursion
         @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
         something(get(rules, nameof(sys), nothing), sys)
-    elseif sys isa ODESystem
+    elseif sys isa System
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
         eqs = fast_substitute(get_eqs(sys), rules)
@@ -3127,60 +2663,68 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         for (k, v) in get_defaults(sys))
         guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_guesses(sys))
+        noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
+        costs = fast_substitute(get_costs(sys), rules)
+        observed = fast_substitute(get_observed(sys), rules)
+        initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
+        cstrs = fast_substitute(get_constraints(sys), rules)
         subsys = map(s -> substitute(s, rules), get_systems(sys))
-        ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys)
+        newsys = System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
+            guesses = guess, systems = subsys, noise_eqs,
+            observed, initialization_eqs, constraints = cstrs)
+        @set! newsys.parameter_dependencies = pdeps
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
 end
 
-struct InvalidParameterDependenciesType
-    got::Any
-end
+"""
+    $(TYPEDSIGNATURES)
 
-function Base.showerror(io::IO, err::InvalidParameterDependenciesType)
-    print(
-        io, "Parameter dependencies must be a `Dict`, or an array of `Pair` or `Equation`.")
-    if err.got !== nothing
-        print(io, " Got ", err.got)
+Find equations of `sys` involving only parameters and separate them out into the
+`parameter_dependencies` field. Relative ordering of equations is maintained.
+Parameter-only equations are validated to be explicit and sorted topologically. All such
+explicitly determined parameters are removed from the parameters of `sys`. Return the new
+system.
+"""
+function process_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
     end
-end
+    varsbuf = Set()
+    pareq_idxs = Int[]
+    eqs = equations(sys)
+    for (i, eq) in enumerate(eqs)
+        empty!(varsbuf)
+        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
+        # singular equations
+        isempty(varsbuf) && continue
+        if all(varsbuf) do sym
+            is_parameter(sys, sym) ||
+                symbolic_type(sym) == ArraySymbolic() &&
+                    is_sized_array_symbolic(sym) &&
+                    all(Base.Fix1(is_parameter, sys), collect(sym))
+        end
+            if !isparameter(eq.lhs)
+                throw(ArgumentError("""
+                LHS of parameter dependency equation must be a single parameter. Found \
+                $(eq.lhs).
+                """))
+            end
+            push!(pareq_idxs, i)
+        end
+    end
 
-function process_parameter_dependencies(pdeps, ps)
-    if pdeps === nothing || isempty(pdeps)
-        return Equation[], ps
-    end
-    if pdeps isa Dict
-        pdeps = [k ~ v for (k, v) in pdeps]
-    else
-        pdeps isa AbstractArray || throw(InvalidParameterDependenciesType(pdeps))
-        pdeps = [if p isa Pair
-                     p[1] ~ p[2]
-                 elseif p isa Equation
-                     p
-                 else
-                     error("Parameter dependencies must be a `Dict`, `Vector{Pair}` or `Vector{Equation}`")
-                 end
-                 for p in pdeps]
-    end
-    lhss = []
-    for p in pdeps
-        if !isparameter(p.lhs)
-            error("LHS of parameter dependency must be a single parameter. Found $(p.lhs).")
-        end
-        syms = vars(p.rhs)
-        if !all(isparameter, syms)
-            error("RHS of parameter dependency must only include parameters. Found $(p.rhs)")
-        end
-        push!(lhss, p.lhs)
-    end
-    lhss = map(identity, lhss)
-    pdeps = topsort_equations(pdeps, union(ps, lhss))
-    ps = filter(ps) do p
-        !any(isequal(p), lhss)
-    end
-    return pdeps, ps
+    pareqs = [get_parameter_dependencies(sys); eqs[pareq_idxs]]
+    explicitpars = [eq.lhs for eq in pareqs]
+    pareqs = topsort_equations(pareqs, explicitpars)
+
+    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
+
+    @set! sys.eqs = eqs
+    @set! sys.parameter_dependencies = pareqs
+    @set! sys.ps = setdiff(get_ps(sys), explicitpars)
+    return sys
 end
 
 """
@@ -3196,7 +2740,7 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_parameters(sys)
 ```
 
@@ -3204,7 +2748,7 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    pdeps = parameter_dependencies(sys)
+    pdeps = get_parameter_dependencies(sys)
     metas = map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
@@ -3237,15 +2781,15 @@ using ModelingToolkit: t, D
 
 @parameters p = 1.0, [description = "My parameter", tunable = false] q = 2.0, [description = "Other parameter"]
 @variables x(t) = 3.0 [unit = u"m"]
-@named sys = ODESystem(Equation[], t, [x], [p, q])
+@named sys = System(Equation[], t, [x], [p, q])
 ModelingToolkit.dump_unknowns(sys)
 ```
 
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = varmap_with_toterm(defaults(sys))
-    gs = varmap_with_toterm(guesses(sys))
+    defs = add_toterms(defaults(sys))
+    gs = add_toterms(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
@@ -3371,9 +2915,9 @@ is_diff_equation(eq2) # false
 """
 function is_diff_equation(eq)
     (eq isa Equation) || (return false)
-    isdefined(eq, :lhs) && hasnode(is_derivative, wrap(eq.lhs)) &&
+    isdefined(eq, :lhs) && recursive_hasoperator(Union{Differential, Shift}, eq.lhs) &&
         (return true)
-    isdefined(eq, :rhs) && hasnode(is_derivative, wrap(eq.rhs)) &&
+    isdefined(eq, :rhs) && recursive_hasoperator(Union{Differential, Shift}, eq.rhs) &&
         (return true)
     return false
 end
@@ -3415,7 +2959,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
 """
@@ -3434,7 +2978,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys = ODESystem([eq1, eq2], t)
+@named osys = System([eq1, eq2], t)
 
 diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
 """
@@ -3454,8 +2998,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_alg_equations(osys1) # returns `false`.
 has_alg_equations(osys2) # returns `true`.
@@ -3476,8 +3020,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 
 has_diff_equations(osys1) # returns `true`.
 has_diff_equations(osys2) # returns `false`.
@@ -3499,9 +3043,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
-osys12 = compose(osys1, [osys2])
+@named osys1 = ([eq1], t)
+@named osys2 = ([eq2], t)
+osys12 = compose(sys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
 get_alg_eqs(osys12) # returns `Equation[]`.
@@ -3524,8 +3068,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3549,8 +3093,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = System([eq1], t)
+@named osys2 = System([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3575,8 +3119,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables X(t)
 eq1 = D(X) ~ p - d*X
 eq2 = 0 ~ p - d*X
-@named osys1 = ODESystem([eq1], t)
-@named osys2 = ODESystem([eq2], t)
+@named osys1 = tem([eq1], t)
+@named osys2 = tem([eq2], t)
 osys12 = compose(osys1, [osys2])
 osys21 = compose(osys2, [osys1])
 
@@ -3585,3 +3129,188 @@ has_diff_eqs(osys21) # returns `false`.
 ```
 """
 has_diff_eqs(sys::AbstractSystem) = any(is_diff_equation, get_eqs(sys))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Validate the rules for replacement of subcomponents as defined in `substitute_component`.
+"""
+function validate_replacement_rule(
+        rule::Pair{T, T}; namespace = []) where {T <: AbstractSystem}
+    lhs, rhs = rule
+
+    iscomplete(lhs) && throw(ArgumentError("LHS of replacement rule cannot be completed."))
+    iscomplete(rhs) && throw(ArgumentError("RHS of replacement rule cannot be completed."))
+
+    rhs_h = namespace_hierarchy(nameof(rhs))
+    if length(rhs_h) != 1
+        throw(ArgumentError("RHS of replacement rule must not be namespaced."))
+    end
+    rhs_h[1] == namespace_hierarchy(nameof(lhs))[end] ||
+        throw(ArgumentError("LHS and RHS must have the same name."))
+
+    if !isequal(get_iv(lhs), get_iv(rhs))
+        throw(ArgumentError("LHS and RHS of replacement rule must have the same independent variable."))
+    end
+
+    lhs_u = get_unknowns(lhs)
+    rhs_u = Dict(get_unknowns(rhs) .=> nothing)
+    for u in lhs_u
+        if !haskey(rhs_u, u)
+            if isempty(namespace)
+                throw(ArgumentError("RHS of replacement rule does not contain unknown $u."))
+            else
+                throw(ArgumentError("Subsystem $(join([namespace; nameof(lhs)], NAMESPACE_SEPARATOR)) of RHS does not contain unknown $u."))
+            end
+        end
+        ru = getkey(rhs_u, u, nothing)
+        name = join([namespace; nameof(lhs); (hasname(u) ? getname(u) : Symbol(u))],
+            NAMESPACE_SEPARATOR)
+        l_connect = something(getconnect(u), Equality)
+        r_connect = something(getconnect(ru), Equality)
+        if l_connect != r_connect
+            throw(ArgumentError("Variable $(name) should have connection metadata $(l_connect),"))
+        end
+
+        l_input = isinput(u)
+        r_input = isinput(ru)
+        if l_input != r_input
+            throw(ArgumentError("Variable $name has differing causality. Marked as `input = $l_input` in LHS and `input = $r_input` in RHS."))
+        end
+        l_output = isoutput(u)
+        r_output = isoutput(ru)
+        if l_output != r_output
+            throw(ArgumentError("Variable $name has differing causality. Marked as `output = $l_output` in LHS and `output = $r_output` in RHS."))
+        end
+    end
+
+    lhs_p = get_ps(lhs)
+    rhs_p = Set(get_ps(rhs))
+    for p in lhs_p
+        if !(p in rhs_p)
+            if isempty(namespace)
+                throw(ArgumentError("RHS of replacement rule does not contain parameter $p"))
+            else
+                throw(ArgumentError("Subsystem $(join([namespace; nameof(lhs)], NAMESPACE_SEPARATOR)) of RHS does not contain parameter $p."))
+            end
+        end
+    end
+
+    lhs_s = get_systems(lhs)
+    rhs_s = Dict(nameof(s) => s for s in get_systems(rhs))
+
+    for s in lhs_s
+        if haskey(rhs_s, nameof(s))
+            rs = rhs_s[nameof(s)]
+            if isconnector(s)
+                name = join([namespace; nameof(lhs); nameof(s)], NAMESPACE_SEPARATOR)
+                if !isconnector(rs)
+                    throw(ArgumentError("Subsystem $name of RHS is not a connector."))
+                end
+                if (lct = get_connector_type(s)) !== (rct = get_connector_type(rs))
+                    throw(ArgumentError("Subsystem $name of RHS has connection type $rct but LHS has $lct."))
+                end
+            end
+            validate_replacement_rule(s => rs; namespace = [namespace; nameof(rhs)])
+            continue
+        end
+        name1 = join([namespace; nameof(lhs)], NAMESPACE_SEPARATOR)
+        throw(ArgumentError("$name1 of replacement rule does not contain subsystem $(nameof(s))."))
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Chain `getproperty` calls on `root` in the order given in `hierarchy`.
+
+# Keyword Arguments
+
+- `skip_namespace_first`: Whether to avoid namespacing in the first `getproperty` call.
+"""
+function recursive_getproperty(
+        root::AbstractSystem, hierarchy::Vector{Symbol}; skip_namespace_first = true)
+    cur = root
+    for (i, name) in enumerate(hierarchy)
+        cur = getproperty(cur, name; namespace = i > 1 || !skip_namespace_first)
+    end
+    return unwrap(cur)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Recursively descend through `sys`, finding all connection equations and re-creating them
+using the names of the involved variables/systems and finding the required variables/
+systems in the hierarchy.
+"""
+function recreate_connections(sys::AbstractSystem)
+    eqs = map(get_eqs(sys)) do eq
+        eq.lhs isa Union{Connection, AnalysisPoint} || return eq
+        if eq.lhs isa Connection
+            oldargs = get_systems(eq.rhs)
+        else
+            ap::AnalysisPoint = eq.rhs
+            oldargs = [ap.input; ap.outputs]
+        end
+        newargs = map(get_systems(eq.rhs)) do arg
+            rewrap_nameof = arg isa SymbolicWithNameof
+            if rewrap_nameof
+                arg = arg.var
+            end
+            name = arg isa AbstractSystem ? nameof(arg) : getname(arg)
+            hierarchy = namespace_hierarchy(name)
+            newarg = recursive_getproperty(sys, hierarchy)
+            if rewrap_nameof
+                newarg = SymbolicWithNameof(newarg)
+            end
+            return newarg
+        end
+        if eq.lhs isa Connection
+            return eq.lhs ~ Connection(newargs)
+        else
+            return eq.lhs ~ AnalysisPoint(newargs[1], eq.rhs.name, newargs[2:end])
+        end
+    end
+    @set! sys.eqs = eqs
+    @set! sys.systems = map(recreate_connections, get_systems(sys))
+    return sys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a hierarchical system `sys` and a rule `lhs => rhs`, replace the subsystem `lhs` in
+`sys` by `rhs`. The `lhs` must be the namespaced version of a subsystem of `sys` (e.g.
+obtained via `sys.inner.component`). The `rhs` must be valid as per the following
+conditions:
+
+1. `rhs` must not be namespaced.
+2. The name of `rhs` must be the same as the unnamespaced name of `lhs`.
+3. Neither one of `lhs` or `rhs` can be marked as complete.
+4. Both `lhs` and `rhs` must share the same independent variable.
+5. `rhs` must contain at least all of the unknowns and parameters present in
+   `lhs`.
+6. Corresponding unknowns in `rhs` must share the same connection and causality
+   (input/output) metadata as their counterparts in `lhs`.
+7. For each subsystem of `lhs`, there must be an identically named subsystem of `rhs`.
+   These two corresponding subsystems must satisfy conditions 3, 4, 5, 6, 7. If the
+   subsystem of `lhs` is a connector, the corresponding subsystem of `rhs` must also
+   be a connector of the same type.
+
+`sys` also cannot be marked as complete.
+"""
+function substitute_component(sys::T, rule::Pair{T, T}) where {T <: AbstractSystem}
+    iscomplete(sys) &&
+        throw(ArgumentError("Cannot replace subsystems of completed systems"))
+
+    validate_replacement_rule(rule)
+
+    lhs, rhs = rule
+    hierarchy = namespace_hierarchy(nameof(lhs))
+
+    newsys, _ = modify_nested_subsystem(sys, hierarchy) do inner
+        return rhs, ()
+    end
+    return recreate_connections(newsys)
+end

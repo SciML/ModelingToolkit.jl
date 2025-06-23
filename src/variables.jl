@@ -6,14 +6,18 @@ struct VariableOutput end
 struct VariableIrreducible end
 struct VariableStatePriority end
 struct VariableMisc end
+# Metadata for renamed shift variables xₜ₋₁
+struct VariableUnshifted end
+struct VariableShift end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
-Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
+Symbolics.option_to_metadata_type(::Val{:unshifted}) = VariableUnshifted
+Symbolics.option_to_metadata_type(::Val{:shift}) = VariableShift
 
 """
     dump_variable_metadata(var)
@@ -29,7 +33,8 @@ ModelingToolkit.dump_variable_metadata(p)
 """
 function dump_variable_metadata(var)
     uvar = unwrap(var)
-    vartype, name = get(uvar.metadata, VariableSource, (:unknown, :unknown))
+    variable_source, name = Symbolics.getmetadata(
+        uvar, VariableSource, (:unknown, :unknown))
     type = symtype(uvar)
     if type <: AbstractArray
         shape = Symbolics.shape(var)
@@ -39,14 +44,13 @@ function dump_variable_metadata(var)
     else
         shape = nothing
     end
-    unit = get(uvar.metadata, VariableUnit, nothing)
-    connect = get(uvar.metadata, VariableConnectType, nothing)
-    noise = get(uvar.metadata, VariableNoiseType, nothing)
+    unit = getunit(uvar)
+    connect = getconnect(uvar)
     input = isinput(uvar) || nothing
     output = isoutput(uvar) || nothing
-    irreducible = get(uvar.metadata, VariableIrreducible, nothing)
-    state_priority = get(uvar.metadata, VariableStatePriority, nothing)
-    misc = get(uvar.metadata, VariableMisc, nothing)
+    irreducible = isirreducible(var)
+    state_priority = Symbolics.getmetadata(uvar, VariableStatePriority, nothing)
+    misc = getmisc(uvar)
     bounds = hasbounds(uvar) ? getbounds(uvar) : nothing
     desc = getdescription(var)
     if desc == ""
@@ -57,16 +61,16 @@ function dump_variable_metadata(var)
     disturbance = isdisturbance(uvar) || nothing
     tunable = istunable(uvar, isparameter(uvar))
     dist = getdist(uvar)
-    type = symtype(uvar)
+    variable_type = getvariabletype(uvar)
 
     meta = (
         var = var,
-        vartype,
+        variable_source,
         name,
+        variable_type,
         shape,
         unit,
         connect,
-        noise,
         input,
         output,
         irreducible,
@@ -85,12 +89,73 @@ function dump_variable_metadata(var)
     return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
 end
 
+### Connect
 abstract type AbstractConnectType end
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Equality` is the
+default value and such variables when connected are made equal. For example, electric
+potential is equated at a junction.
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Flow`](@ref),
+[`Stream`](@ref).
+"""
 struct Equality <: AbstractConnectType end # Equality connection
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Flow` denotes that
+the sum of marked variable in all connectors in the connection set must sum to zero. For
+example, electric current sums to zero at a junction (assuming appropriate signs are used
+for current flowing in and out of the function).
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+[`Stream`](@ref).
+"""
 struct Flow <: AbstractConnectType end     # sum to 0
+"""
+    $(TYPEDEF)
+
+Flag which is meant to be passed to the `connect` metadata of a variable to affect how it
+behaves when the connector it is in is part of a `connect` equation. `Stream` denotes that
+the variable is part of a special stream connector.
+
+For more information, refer to the [Connection semantics](@ref connect_semantics) section
+of the docs.
+
+See also: [`connect`](@ref), [`@connector`](@ref), [`Equality`](@ref),
+[`Flow`](@ref).
+"""
 struct Stream <: AbstractConnectType end   # special stream connector
 
-isvarkind(m, x::Num) = isvarkind(m, value(x))
+"""
+    getconnect(x)
+
+Get the connect type of x. See also [`hasconnect`](@ref).
+"""
+getconnect(x::Num) = getconnect(unwrap(x))
+getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
+"""
+    hasconnect(x)
+
+Determine whether variable `x` has a connect type. See also [`getconnect`](@ref).
+"""
+hasconnect(x) = getconnect(x) !== nothing
+function setconnect(x, t::Type{T}) where {T <: AbstractConnectType}
+    setmetadata(x, VariableConnectType, t)
+end
+
+### Input, Output, Irreducible 
+isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
 function isvarkind(m, x)
     iskind = getmetadata(x, m, nothing)
     iskind !== nothing && return iskind
@@ -98,22 +163,59 @@ function isvarkind(m, x)
     getmetadata(x, m, false)
 end
 
-setinput(x, v) = setmetadata(x, VariableInput, v)
-setoutput(x, v) = setmetadata(x, VariableOutput, v)
-setio(x, i, o) = setoutput(setinput(x, i), o)
+"""
+    $(TYPEDSIGNATURES)
+
+Set the `input` metadata of variable `x` to `v`.
+"""
+setinput(x, v::Bool) = setmetadata(x, VariableInput, v)
+"""
+    $(TYPEDSIGNATURES)
+
+Set the `output` metadata of variable `x` to `v`.
+"""
+setoutput(x, v::Bool) = setmetadata(x, VariableOutput, v)
+setio(x, i::Bool, o::Bool) = setoutput(setinput(x, i), o)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` is marked as an input.
+"""
 isinput(x) = isvarkind(VariableInput, x)
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` is marked as an output.
+"""
 isoutput(x) = isvarkind(VariableOutput, x)
+
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `x` is marked as irreducible. This prevents it from being eliminated as an
+observed variable in `mtkcompile`.
+"""
 isirreducible(x) = isvarkind(VariableIrreducible, x)
-setirreducible(x, v) = setmetadata(x, VariableIrreducible, v)
+setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
+state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `state_priority` metadata of variable `x`. This influences its priority to be
+chosen as a state in `mtkcompile`.
+"""
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
+
+normalize_to_differential(x) = x
 
 function default_toterm(x)
     if iscall(x) && (op = operation(x)) isa Operator
         if !(op isa Differential)
             if op isa Shift && op.steps < 0
-                return x
+                return shift2term(x)
             end
             x = normalize_to_differential(op)(arguments(x)...)
         end
@@ -121,134 +223,6 @@ function default_toterm(x)
     else
         x
     end
-end
-
-"""
-$(SIGNATURES)
-
-Takes a list of pairs of `variables=>values` and an ordered list of variables
-and creates the array of values in the correct order with default values when
-applicable.
-"""
-function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
-        toterm = default_toterm, promotetoconcrete = nothing,
-        tofloat = true, use_union = true)
-    varlist = collect(map(unwrap, varlist))
-
-    # Edge cases where one of the arguments is effectively empty.
-    is_incomplete_initialization = varmap isa DiffEqBase.NullParameters ||
-                                   varmap === nothing
-    if is_incomplete_initialization || isempty(varmap)
-        if isempty(defaults)
-            if !is_incomplete_initialization && check
-                isempty(varlist) || throw(MissingVariablesError(varlist))
-            end
-            return nothing
-        else
-            varmap = Dict()
-        end
-    end
-
-    # We respect the input type if it's a static array
-    # otherwise canonicalize to a normal array
-    # container_type = T <: Union{Dict,Tuple} ? Array : T
-    if varmap isa StaticArray
-        container_type = typeof(varmap)
-    else
-        container_type = Array
-    end
-
-    vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
-        varmap = todict(varmap)
-        _varmap_to_vars(varmap, varlist; defaults = defaults, check = check,
-            toterm = toterm)
-    else # plain array-like initialization
-        varmap
-    end
-
-    promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
-    if promotetoconcrete
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
-    end
-
-    if isempty(vals)
-        return nothing
-    elseif container_type <: Tuple
-        (vals...,)
-    else
-        SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),
-            Val(length(vals)), vals...)
-    end
-end
-
-const MISSING_VARIABLES_MESSAGE = """
-                                Initial condition underdefined. Some are missing from the variable map.
-                                Please provide a default (`u0`), initialization equation, or guess
-                                for the following variables:
-                                """
-
-struct MissingVariablesError <: Exception
-    vars::Any
-end
-
-function Base.showerror(io::IO, e::MissingVariablesError)
-    println(io, MISSING_VARIABLES_MESSAGE)
-    println(io, e.vars)
-end
-
-function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-        toterm = Symbolics.diff2term, initialization_phase = false)
-    varmap = canonicalize_varmap(varmap; toterm)
-    defaults = canonicalize_varmap(defaults; toterm)
-    varmap = merge(defaults, varmap)
-    values = Dict()
-
-    T = Union{}
-    for var in varlist
-        var = unwrap(var)
-        val = unwrap(fixpoint_sub(var, varmap; operator = Symbolics.Operator))
-        if !isequal(val, var)
-            values[var] = val
-        end
-    end
-    missingvars = setdiff(varlist, collect(keys(values)))
-    check && (isempty(missingvars) || throw(MissingVariablesError(missingvars)))
-    return [values[unwrap(var)] for var in varlist]
-end
-
-function varmap_with_toterm(varmap; toterm = Symbolics.diff2term)
-    return merge(todict(varmap), Dict(toterm(unwrap(k)) => v for (k, v) in varmap))
-end
-
-function canonicalize_varmap(varmap; toterm = Symbolics.diff2term)
-    new_varmap = Dict()
-    for (k, v) in varmap
-        k = unwrap(k)
-        v = unwrap(v)
-        new_varmap[k] = v
-        new_varmap[toterm(k)] = v
-        if Symbolics.isarraysymbolic(k) && Symbolics.shape(k) !== Symbolics.Unknown()
-            for i in eachindex(k)
-                new_varmap[k[i]] = v[i]
-                new_varmap[toterm(k[i])] = v[i]
-            end
-        end
-    end
-    return new_varmap
-end
-
-@noinline function throw_missingvars(vars)
-    throw(ArgumentError("$vars are missing from the variable map."))
-end
-
-struct IsHistory end
-ishistory(x) = ishistory(unwrap(x))
-ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
-hist(x, t) = wrap(hist(unwrap(x), t))
-function hist(x::Symbolic, t)
-    setmetadata(
-        toparam(maketerm(typeof(x), operation(x), [unwrap(t)], metadata(x))),
-        IsHistory, true)
 end
 
 ## Bounds ======================================================================
@@ -307,6 +281,11 @@ function hasbounds(x)
     any(isfinite.(b[1]) .|| isfinite.(b[2]))
 end
 
+function setbounds(x::Num, bounds)
+    (lb, ub) = bounds
+    setmetadata(x, VariableBounds, (lb, ub))
+end
+
 ## Disturbance =================================================================
 struct VariableDisturbance end
 Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
@@ -323,6 +302,8 @@ function isdisturbance(x)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableDisturbance, false)
 end
+
+setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
 
 function disturbances(sys)
     [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
@@ -394,7 +375,7 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys); default=true)
+    tunable_parameters(sys, p = parameters(sys; initial_parameters = true); default=true)
 
 Get all parameters of `sys` that are marked as `tunable`.
 
@@ -413,7 +394,8 @@ call `Symbolics.scalarize(tunable_parameters(sys))` and concatenate the resultin
 
 See also [`getbounds`](@ref), [`istunable`](@ref), [`MTKParameters`](@ref), [`complete`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys); default = true)
+function tunable_parameters(
+        sys, p = parameters(sys; initial_parameters = true); default = true)
     filter(x -> istunable(x, default), p)
 end
 
@@ -469,6 +451,11 @@ function getdescription(x)
     Symbolics.getmetadata(x, VariableDescription, "")
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if variable `x` has a non-empty attached description.
+"""
 function hasdescription(x)
     getdescription(x) != ""
 end
@@ -488,11 +475,11 @@ $(SIGNATURES)
 
 Define one or more Brownian variables.
 """
-macro brownian(xs...)
+macro brownians(xs...)
     all(
         x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$ || Meta.isexpr(x, :$),
         xs) ||
-        error("@brownian only takes scalar expressions!")
+        error("@brownians only takes scalar expressions!")
     Symbolics._parse_vars(:brownian,
         Real,
         xs,
@@ -545,3 +532,84 @@ function get_default_or_guess(x)
         return getguess(x)
     end
 end
+
+## Miscellaneous metadata ======================================================================
+"""
+    getmisc(x)
+
+Fetch any miscellaneous data associated with symbolic variable `x`.
+See also [`hasmisc(x)`](@ref).
+"""
+getmisc(x::Num) = getmisc(unwrap(x))
+getmisc(x::Symbolic) = Symbolics.getmetadata(x, VariableMisc, nothing)
+"""
+    hasmisc(x)
+
+Determine whether a symbolic variable `x` has misc
+metadata associated with it. 
+
+See also [`getmisc(x)`](@ref).
+"""
+hasmisc(x) = getmisc(x) !== nothing
+setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
+
+## Units ======================================================================
+"""
+    getunit(x)
+
+Fetch the unit associated with variable `x`. This function is a metadata getter for an individual variable, while `get_unit` is used for unit inference on more complicated sdymbolic expressions.
+"""
+getunit(x::Num) = getunit(unwrap(x))
+getunit(x::Symbolic) = Symbolics.getmetadata(x, VariableUnit, nothing)
+"""
+    hasunit(x)
+
+Check if the variable `x` has a unit.
+"""
+hasunit(x) = getunit(x) !== nothing
+
+getunshifted(x::Num) = getunshifted(unwrap(x))
+getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
+
+getshift(x::Num) = getshift(unwrap(x))
+getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
+
+###################
+### Evaluate at ###
+###################
+struct EvalAt <: Symbolics.Operator
+    t::Union{Symbolic, Number}
+end
+
+function (A::EvalAt)(x::Symbolic)
+    if symbolic_type(x) == NotSymbolic() || !iscall(x)
+        if x isa Symbolics.CallWithMetadata
+            return x(A.t)
+        else
+            return x
+        end
+    end
+
+    if iscall(x) && operation(x) == getindex
+        arr = arguments(x)[1]
+        term(getindex, A(arr), arguments(x)[2:end]...)
+    elseif operation(x) isa Differential
+        x = default_toterm(x)
+        A(x)
+    else
+        length(arguments(x)) !== 1 &&
+            error("Variable $x has too many arguments. EvalAt can only be applied to one-argument variables.")
+        (symbolic_type(only(arguments(x))) !== ScalarSymbolic()) && return x
+        return operation(x)(A.t)
+    end
+end
+
+function (A::EvalAt)(x::Union{Num, Symbolics.Arr})
+    wrap(A(unwrap(x)))
+end
+SymbolicUtils.isbinop(::EvalAt) = false
+
+Base.nameof(::EvalAt) = :EvalAt
+Base.show(io::IO, A::EvalAt) = print(io, "EvalAt(", A.t, ")")
+Base.:(==)(A1::EvalAt, A2::EvalAt) = isequal(A1.t, A2.t)
+Base.hash(A::EvalAt, u::UInt) = hash(A.t, u)

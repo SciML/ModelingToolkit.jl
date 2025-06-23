@@ -17,12 +17,12 @@ end
 @register_symbolic do_something(a)
 
 eq = Dt(u) ~ do_something(x) + MyModule.do_something(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 5.0
-@test fun([0.5], [u0], 0.0) == [do_something(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something(u0) * 2]
 end
 
 # TEST: Function registration in a nested module.
@@ -40,12 +40,12 @@ end
 @register_symbolic do_something_2(a)
 
 eq = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 3.0
-@test fun([0.5], [u0], 0.0) == [do_something_2(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something_2(u0) * 2]
 end
 end
 
@@ -62,12 +62,12 @@ end
 @register_symbolic do_something_3(a)
 
 eq = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
-@named sys = ODESystem([eq], t, [u], [x])
+@named sys = System([eq], t, [u], [x])
 sys = complete(sys)
 fun = ODEFunction(sys)
 
 u0 = 7.0
-@test fun([0.5], [u0], 0.0) == [do_something_3(u0) * 2]
+@test fun([0.5], u0, 0.0) == [do_something_3(u0) * 2]
 
 # TEST: Function registration works with derivatives.
 # ---------------------------------------------------
@@ -99,14 +99,14 @@ function build_ode()
     @parameters x
     @variables u(t)
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
-    @named sys = ODESystem([eq], t, [u], [x])
+    @named sys = System([eq], t, [u], [x])
     sys = complete(sys)
     fun = ODEFunction(sys, eval_expression = false)
 end
 function run_test()
     fun = build_ode()
     u0 = 10.0
-    @test fun([0.5], [u0], 0.0) == [do_something_4(u0) * 2]
+    @test fun([0.5], u0, 0.0) == [do_something_4(u0) * 2]
 end
 run_test()
 

@@ -1,4 +1,4 @@
-# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkbuild`](@id mtk_language)
+# [ModelingToolkit Language: Modeling with `@mtkmodel`, `@connectors` and `@mtkcompile`](@id mtk_language)
 
 ## MTK Model
 
@@ -16,16 +16,18 @@ equations.
 ### [Defining components with `@mtkmodel`](@id mtkmodel)
 
 `@mtkmodel` is a convenience macro to define components. It returns
-`ModelingToolkit.Model`, which includes a constructor that returns the ODESystem, a
-`structure` dictionary with metadata, and flag `isconnector` which is set to `false`.
+`ModelingToolkit.Model`, which includes a system constructor (`System` by
+default), a `structure` dictionary with metadata, and flag `isconnector` which is
+set to `false`.
 
 ### What can an MTK-Model definition have?
 
 `@mtkmodel` definition contains begin blocks of
 
+  - `@description`: for describing the whole system with a human-readable string
   - `@components`: for listing sub-components of the system
   - `@constants`: for declaring constants
-  - `@defaults`: for passing `defaults` to ODESystem
+  - `@defaults`: for passing `defaults` to the system
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
@@ -42,6 +44,7 @@ using ModelingToolkit
 using ModelingToolkit: t
 
 @mtkmodel ModelA begin
+    @description "A component with parameters `k` and `k_array`."
     @parameters begin
         k
         k_array[1:2]
@@ -49,6 +52,7 @@ using ModelingToolkit: t
 end
 
 @mtkmodel ModelB begin
+    @description "A component with parameters `p1` and `p2`."
     @parameters begin
         p1 = 1.0, [description = "Parameter of ModelB"]
         p2 = 1.0, [description = "Parameter of ModelB"]
@@ -56,6 +60,7 @@ end
 end
 
 @mtkmodel ModelC begin
+    @description "A bigger system that contains many more things."
     @icon "https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png"
     @constants begin
         c::Int = 1, [description = "Example constant."]
@@ -90,6 +95,10 @@ end
     end
 end
 ```
+
+#### `@description`
+
+A documenting `String` that summarizes and explains what the model is.
 
 #### `@icon`
 
@@ -141,7 +150,7 @@ end
   - Whenever a parameter or variable has initial value, for example `v(t) = 0.0`, a symbolic variable named `v` with initial value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
 
 ```julia
-julia> @mtkbuild model_c1 = ModelC(; v = 2.0);
+julia> @mtkcompile model_c1 = ModelC(; v = 2.0);
 
 julia> ModelingToolkit.getdefault(model_c1.v)
 2.0
@@ -173,7 +182,7 @@ One or more partial systems can be extended in a higher system with `@extend` st
 ```@example mtkmodel-example
 using ModelingToolkit: getdefault
 
-@mtkbuild model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
+@mtkcompile model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
 
 getdefault(model_c3.model_a.k_array[1])
 # 1.0
@@ -188,12 +197,13 @@ getdefault(model_c3.model_a.k_array[2])
 #### `@defaults` begin block
 
   - Default values can be passed as pairs.
-  - This is equivalent to passing `defaults` argument to `ODESystem`.
+  - This is equivalent to passing `defaults` argument to the system.
 
 #### `@continuous_events` begin block
 
   - Defining continuous events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Continuous-Events).
   - If this block is not defined in the model, no continuous events will be added.
+  - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
 using ModelingToolkit
@@ -201,7 +211,7 @@ using ModelingToolkit: t
 
 @mtkmodel M begin
     @parameters begin
-        k
+        k(t)
     end
     @variables begin
         x(t)
@@ -214,6 +224,7 @@ using ModelingToolkit: t
     @continuous_events begin
         [x ~ 1.5] => [x ~ 5, y ~ 5]
         [t ~ 4] => [x ~ 10]
+        [t ~ 5] => [k ~ 3], [discrete_parameters = k]
     end
 end
 ```
@@ -222,13 +233,14 @@ end
 
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
   - If this block is not defined in the model, no discrete events will be added.
+  - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
 using ModelingToolkit
 
 @mtkmodel M begin
     @parameters begin
-        k
+        k(t)
     end
     @variables begin
         x(t)
@@ -239,7 +251,8 @@ using ModelingToolkit
         D(y) ~ -k
     end
     @discrete_events begin
-        (t == 1.5) => [x ~ x + 5, y ~ 5]
+        (t == 1.5) => [x ~ Pre(x) + 5, y ~ 5]
+        (t == 2.5) => [k ~ Pre(k) * 2], [discrete_parameters = k]
     end
 end
 ```
@@ -247,6 +260,18 @@ end
 #### A begin block
 
   - Any other Julia operations can be included with dedicated begin blocks.
+
+### Setting the type of system:
+
+By default `@mtkmodel` returns an System. Different types of system can be
+defined with the following syntax:
+
+```
+@mtkmodel ModelName::SystemType begin
+    ...
+end
+
+```
 
 ## Connectors
 
@@ -262,7 +287,7 @@ MTK provides 3 distinct connectors:
 ### [Defining connectors with `@connector`](@id connector)
 
 `@connector` returns `ModelingToolkit.Model`. It includes a constructor that returns
-a connector ODESystem, a `structure` dictionary with metadata, and flag `isconnector`
+a connector system (`System` by default), a `structure` dictionary with metadata, and flag `isconnector`
 which is set to `true`.
 
 A simple connector can be defined with syntax similar to following example:
@@ -490,28 +515,28 @@ end
 
 ## Build structurally simplified models:
 
-`@mtkbuild` builds an instance of a component and returns a structurally simplied `ODESystem`.
+`@mtkcompile` builds an instance of a component and returns a structurally simplied system.
 
 ```julia
-@mtkbuild sys = CustomModel()
+@mtkcompile sys = CustomModel()
 ```
 
 This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 ```
 
-Pass keyword arguments to `structural_simplify` using the following syntax:
+Pass keyword arguments to `mtkcompile` using the following syntax:
 
 ```julia
-@mtkbuild sys=CustomModel() fully_determined=false
+@mtkcompile sys=CustomModel() fully_determined=false
 ```
 
 This is equivalent to:
 
 ```julia
 @named model = CustomModel()
-sys = structural_simplify(model; fully_determined = false)
+sys = mtkcompile(model; fully_determined = false)
 ```

@@ -12,7 +12,7 @@
   - All current Modelica compiler implementations are fixed and not extendable
     by the users from the Modelica language itself. For example, the Dymola
     compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/),
-    which is roughly equivalent to the `dae_index_lowering` and `structural_simplify`
+    which is roughly equivalent to the `dae_index_lowering` and `mtkcompile`
     of ModelingToolkit.jl. ModelingToolkit.jl is an open and hackable transformation
     system which allows users to add new non-standard transformations and control
     the order of application.
@@ -23,9 +23,9 @@
   - Modelica is an object-oriented single dispatch language. ModelingToolkit.jl,
     built on Julia, uses multiple dispatch extensively to simplify code.
   - Many Modelica compilers supply a GUI. ModelingToolkit.jl does not.
-  - Modelica can be used to simulate ODE and DAE systems. ModelingToolkit.jl
-    has a much more expansive set of system types, including nonlinear systems,
-    SDEs, PDEs, and more.
+  - Modelica is designed for simulating ODE and DAE systems (which can include nonlinear dynamics).
+    In contrast, ModelingToolkit.jl supports a much broader range of system types, including SDEs,
+    PDEs, time-independent nonlinear systems (e.g. various forms of optimization problems) and more.
 
 ## Comparison Against Simulink
 
@@ -90,7 +90,7 @@
     [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
     with some improvements. ModelingToolkit.jl has an open transformation pipeline
     that allows for users to extend and reorder transformation passes, where
-    `structural_simplify` is an adaptation of the Modia.jl-improved alias elimination
+    `mtkcompile` is an adaptation of the Modia.jl-improved alias elimination
     and tearing algorithms.
   - Both Modia and ModelingToolkit generate `DAEProblem` and `ODEProblem` forms for
     solving with [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/).

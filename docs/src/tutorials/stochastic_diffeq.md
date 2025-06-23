@@ -1,6 +1,6 @@
 # Modeling with Stochasticity
 
-All previous differential equations tutorials deal with deterministic `ODESystem`s.
+All previous differential equations tutorials deal with deterministic `System`s.
 In this tutorial, we add randomness.
 In particular, we show how to represent a
 [stochastic differential equation](https://en.wikipedia.org/wiki/Stochastic_differential_equation)
@@ -13,7 +13,7 @@ as a `SDESystem`.
     is not yet compatible with `SDESystem`.
     We thus have to use a lower level interface to define stochastic differential equations.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 Let's take the Lorenz equation and add noise to each of the states.
 To show the flexibility of ModelingToolkit,
@@ -39,7 +39,7 @@ By "multiplying" the equations by $dt$, the notation used in
 can be recovered.
 
 We use this Langevin-like notation because it allows us to extend MTK modeling capacity from ODEs to SDEs,
-using only a single new concept, `@brownian` variables, which represent $\frac{dB}{dt}$ in the above equation.
+using only a single new concept, `@brownians` variables, which represent $\frac{dB}{dt}$ in the above equation.
 
 ```@example SDE
 using ModelingToolkit, StochasticDiffEq
@@ -48,12 +48,12 @@ using Plots
 
 @parameters σ=10.0 ρ=2.33 β=26.0
 @variables x(t)=5.0 y(t)=5.0 z(t)=1.0
-@brownian B
+@brownians B
 eqs = [D(x) ~ σ * (y - x) + 0.3x * B,
     D(y) ~ x * (ρ - z) - y + 0.3y * B,
     D(z) ~ x * y - β * z + 0.3z * B]
 
-@mtkbuild de = System(eqs, t)
+@mtkcompile de = System(eqs, t)
 ```
 
 Even though we did not explicitly use `SDESystem`, ModelingToolkit can still infer this from the equations.
@@ -65,7 +65,7 @@ typeof(de)
 We continue by solving and plotting the SDE.
 
 ```@example SDE
-prob = SDEProblem(de, [], (0.0, 100.0), [])
+prob = SDEProblem(de, [], (0.0, 100.0))
 sol = solve(prob, SRIW1())
 plot(sol, idxs = [(1, 2, 3)])
 ```
@@ -80,15 +80,15 @@ plot(sol)
 ```
 
 If you want uncorrelated noise for each equation,
-multiple `@brownian` variables have to be declared.
+multiple `@brownians` variables have to be declared.
 
 ```@example SDE
-@brownian Bx By Bz
+@brownians Bx By Bz
 eqs = [D(x) ~ σ * (y - x) + 0.3x * Bx,
     D(y) ~ x * (ρ - z) - y + 0.3y * By,
     D(z) ~ x * y - β * z + 0.3z * Bz]
-@mtkbuild de = System(eqs, t)
-prob = SDEProblem(de, [], (0.0, 100.0), [])
+@mtkcompile de = System(eqs, t)
+prob = SDEProblem(de, [], (0.0, 100.0))
 sol = solve(prob, SRIW1())
 plot(sol)
 ```

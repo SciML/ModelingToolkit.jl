@@ -1,0 +1,26 @@
+name: Benchmark this PR
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+
+permissions:
+  pull-requests: write    # needed to post comments
+
+jobs:
+  bench:
+    name: "Benchmarks"
+    strategy:
+      matrix:
+        version:
+          - "1"
+          - "lts"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: "${{ matrix.version }}"
+          script: "benchmark/benchmarks.jl"
+          extra-pkgs: "ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault"

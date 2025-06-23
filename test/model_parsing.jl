@@ -1,8 +1,9 @@
-using ModelingToolkit, Test
+using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector,
                        get_unit
+using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
 using DynamicQuantities, OrdinaryDiffEq
@@ -127,6 +128,7 @@ end
 end
 
 @mtkmodel RC begin
+    @description "An RC circuit."
     @structural_parameters begin
         R_val = 10u"Ω"
         C_val = 10u"F"
@@ -139,7 +141,6 @@ end
         constant = Constant(; k = k_val)
         ground = MyMockModule.Ground()
     end
-
     @equations begin
         connect(constant.output, source.V)
         connect(source.p, resistor.p)
@@ -151,12 +152,13 @@ end
 C_val = 20u"F"
 R_val = 20u"Ω"
 res__R = 100u"Ω"
-@mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+@mtkcompile rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
 @test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
+@test ModelingToolkit.description(rc) == "An RC circuit."
 @test getname(rc.resistor) === getname(resistor)
 @test getname(rc.resistor.R) === getname(resistor.R)
 @test getname(rc.resistor.v) === getname(resistor.v)
@@ -482,11 +484,11 @@ using ModelingToolkit: D_nounits
             [x ~ 1.5] => [x ~ 5, y ~ 1]
         end
         @discrete_events begin
-            (t == 1.5) => [x ~ x + 5, z ~ 2]
+            (t == 1.5) => [x ~ Pre(x) + 5, z ~ 2]
         end
     end
 
-    @mtkbuild model = M()
+    @mtkcompile model = M()
     u0 = [model.x => 10, model.y => 0, model.z => 0]
 
     prob = ODEProblem(model, u0, (0, 5.0))
@@ -509,7 +511,7 @@ using ModelingToolkit: getdefault, scalarize
 
     @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
           eval(u"Ω")
-    @test lastindex(parameters(model_with_component_array)) == 3
+    @test lastindex(parameters(model_with_component_array)) == 4
 
     # Test the constant `k`. Manually k's value should be kept in sync here
     # and the ModelParsingPrecompile.
@@ -818,15 +820,15 @@ end
     @named guess_model = GuessModel()
 
     j_guess = getguess(guess_model.j)
-    @test typeof(j_guess) == Num
+    @test symbolic_type(j_guess) == ScalarSymbolic()
     @test readable_code(j_guess) == "l(t) / i(t) + k(t)"
 
     i_guess = getguess(guess_model.i)
-    @test typeof(i_guess) == Num
+    @test symbolic_type(i_guess) == ScalarSymbolic()
     @test readable_code(i_guess) == "k(t)"
 
     l_guess = getguess(guess_model.l)
-    @test typeof(l_guess) == Num
+    @test symbolic_type(l_guess) == ScalarSymbolic()
     @test readable_code(l_guess) == "k(t)"
 end
 
@@ -975,7 +977,7 @@ end
 
 @testset "Multiple extend statements" begin
     @named multiple_extend = MultipleExtend()
-    @test collect(nameof.(multiple_extend.systems)) == [:inmodel_b, :inmodel]
+    @test collect(nameof.(get_systems(multiple_extend))) == [:inmodel_b, :inmodel]
     @test MultipleExtend.structure[:extend][1] == [:inmodel, :b, :inmodel_b]
     @test tosymbol.(parameters(multiple_extend)) == [:b, :inmodel_b₊p, :inmodel₊p]
 end
@@ -989,4 +991,57 @@ struct CustomStruct end
     end
     @named sys = MyModel(p = CustomStruct())
     @test ModelingToolkit.defaults(sys)[@nonamespace sys.p] == CustomStruct()
+end
+
+@testset "Variables are not callable symbolics" begin
+    @mtkmodel Example begin
+        @variables begin
+            x(t)
+            y(t)
+        end
+        @equations begin
+            x ~ y
+        end
+    end
+    @named ex = Example()
+    vars = Symbolics.get_variables(only(equations(ex)))
+    @test length(vars) == 2
+    for u in Symbolics.unwrap.(unknowns(ex))
+        @test !Symbolics.hasmetadata(u, Symbolics.CallWithParent)
+        @test any(isequal(u), vars)
+    end
+end
+
+@testset "Constraints, costs, consolidate" begin
+    @mtkmodel Example begin
+        @variables begin
+            x(t)
+            y(t)
+        end
+        @equations begin
+            x ~ y
+        end
+        @constraints begin
+            EvalAt(0.3)(x) ~ 3
+            y ≲ 4
+        end
+        @costs begin
+            x + y
+            EvalAt(1)(y)^2
+        end
+        @consolidate f(u, sub) = u[1]^2 + log(u[2]) + sum(sub; init = 0)
+    end
+
+    @named ex = Example()
+    ex = complete(ex)
+
+    costs = ModelingToolkit.get_costs(ex)
+    constrs = ModelingToolkit.get_constraints(ex)
+    @test isequal(costs[1], ex.x + ex.y)
+    @test isequal(costs[2], EvalAt(1)(ex.y)^2)
+    @test isequal(constrs[1], EvalAt(0.3)(ex.x) ~ 3)
+    @test isequal(constrs[2], ex.y ≲ 4)
+    @test ModelingToolkit.get_consolidate(ex)([1, 2], [3, 4]) ≈ 8 + log(2)
+    @test Example.structure[:constraints] == ["(EvalAt(0.3))(x) ~ 3", "y ≲ 4"]
+    @test Example.structure[:costs] == ["x + y", "(EvalAt(1))(y) ^ 2"]
 end

@@ -5,7 +5,7 @@ In this tutorial, we will build a simple component-based model of a spring-mass 
 ## Copy-Paste Example
 
 ```@example component
-using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using ModelingToolkit, Plots, OrdinaryDiffEq, LinearAlgebra
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics: scalarize
 
@@ -13,13 +13,13 @@ function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
     sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
     eqs = scalarize(D.(pos) .~ v)
-    ODESystem(eqs, t, [pos..., v...], ps; name)
+    System(eqs, t, [pos..., v...], ps; name)
 end
 
 function Spring(; name, k = 1e4, l = 1.0)
     ps = @parameters k=k l=l
     @variables x(t), dir(t)[1:2]
-    ODESystem(Equation[], t, [x, dir...], ps; name)
+    System(Equation[], t, [x, dir...], ps; name)
 end
 
 function connect_spring(spring, a, b)
@@ -43,9 +43,9 @@ g = [0.0, -9.81]
 eqs = [connect_spring(spring, mass.pos, center)
        scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
 
-@named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
+@named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 
 prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
@@ -56,18 +56,18 @@ plot(sol)
 
 ### Building the components
 
-For each component, we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
+For each component, we use a Julia function that returns an `System`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
 
 ```@example component
 function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
     sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
     eqs = scalarize(D.(pos) .~ v)
-    ODESystem(eqs, t, [pos..., v...], ps; name)
+    System(eqs, t, [pos..., v...], ps; name)
 end
 ```
 
-Note that this is an incompletely specified `ODESystem`. It cannot be simulated on its own, since the equations for the velocity `v[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
+Note that this is an incompletely specified `System`. It cannot be simulated on its own, since the equations for the velocity `v[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
 
 ```@example component
 Mass(name = :mass1)
@@ -85,7 +85,7 @@ Next, we build the spring component. It is characterized by the spring constant 
 function Spring(; name, k = 1e4, l = 1.0)
     ps = @parameters k=k l=l
     @variables x(t), dir(t)[1:2]
-    ODESystem(Equation[], t, [x, dir...], ps; name)
+    System(Equation[], t, [x, dir...], ps; name)
 end
 ```
 
@@ -129,7 +129,7 @@ eqs = [connect_spring(spring, mass.pos, center)
 Finally, we can build the model using these equations and components.
 
 ```@example component
-@named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
+@named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
 ```
 
@@ -153,10 +153,10 @@ parameters(model)
 
 ### Simplifying and solving this system
 
-This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `structural_simplify` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
+This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `mtkcompile` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
 
 ```@example component
-sys = structural_simplify(model)
+sys = mtkcompile(model)
 equations(sys)
 ```
 
@@ -177,7 +177,7 @@ sol = solve(prob, Rosenbrock23())
 plot(sol)
 ```
 
-What if we want the timeseries of a different variable? That information is not lost! Instead, `structural_simplify` simply changes unknown variables into `observed` variables.
+What if we want the timeseries of a different variable? That information is not lost! Instead, `mtkcompile` simply changes unknown variables into `observed` variables.
 
 ```@example component
 observed(sys)

@@ -38,7 +38,7 @@ eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 
        D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
                (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
 prob = DDEProblem(sys,
@@ -46,13 +46,13 @@ prob = DDEProblem(sys,
     tspan,
     constant_lags = [tau])
 sol_mtk = solve(prob, alg, reltol = 1e-7, abstol = 1e-10)
-@test sol_mtk.u[end] ≈ sol.u[end]
+@test sol_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol.u[end]
 prob2 = DDEProblem(sys,
     [x₀ => 1.0 - t * q1 * 10, x₁ => 1.0 - t * q1 * 10, x₂(t) => 1.0 - t * q1 * 10],
     tspan,
     constant_lags = [tau])
 sol2_mtk = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
-@test sol2_mtk.u[end] ≈ sol2.u[end]
+@test sol2_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol2.u[end]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t)]]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t - 0.1)]]
 
@@ -78,15 +78,15 @@ sol = solve(prob, RKMil(), seed = 100)
 
 @variables x(..) delx(t)
 @parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
-@brownian η
+@brownians η
 τ = 1.0
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η, delx ~ x(t - τ)]
-@mtkbuild sys = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 @test ModelingToolkit.has_observed_with_lhs(sys, delx)
 @test ModelingToolkit.is_dde(sys)
 @test !is_markovian(sys)
 @test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
-@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ])
+@test isequal(ModelingToolkit.get_noise_eqs(sys), [α * x(t) + γ;;])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil(), seed = 100)
 
@@ -98,7 +98,7 @@ prob_sa = SDDEProblem(
 
 function oscillator(; name, k = 1.0, τ = 0.01)
     @parameters k=k τ=τ
-    @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
+    @variables x(..)=0.1 y(t)=0.1 jcn(t) delx(t)
     eqs = [D(x(t)) ~ y,
         D(y) ~ -k * x(t - τ) + jcn,
         delx ~ x(t - τ)]
@@ -119,11 +119,11 @@ eqs = [osc1.jcn ~ osc2.delx,
 @test ModelingToolkit.is_dde(coupledOsc2)
 @test !is_markovian(coupledOsc2)
 for coupledOsc in [coupledOsc, coupledOsc2]
-    local sys = structural_simplify(coupledOsc)
+    local sys = mtkcompile(coupledOsc)
     @test length(equations(sys)) == 4
     @test length(unknowns(sys)) == 4
 end
-sys = structural_simplify(coupledOsc)
+sys = mtkcompile(coupledOsc)
 prob = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ])
 sol = solve(prob, MethodOfSteps(Tsit5()))
 obsfn = ModelingToolkit.build_explicit_observed_function(
@@ -162,7 +162,7 @@ prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc
         return System([D(x) ~ dx], t; name = name)
     end
 
-    @mtkbuild ssys = System(
+    @mtkcompile ssys = System(
         Equation[], t; systems = [valve(name = :valve), veccy(name = :vvecs)])
     prob = DDEProblem(ssys, [ssys.valve.opening => 1.0], (0.0, 1.0))
     sol = solve(prob, MethodOfSteps(Tsit5()))
@@ -178,7 +178,7 @@ end
     eqs = [D(x(t)) ~ -w * x(t - τ)]
 
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
 
     prob = DDEProblem(sys,
         [],
@@ -188,10 +188,10 @@ end
     alg = MethodOfSteps(Vern7())
     @test_nowarn solve(prob, alg)
 
-    @brownian r
+    @brownians r
     eqs = [D(x(t)) ~ -w * x(t - τ) + r]
     @named sys = System(eqs, t)
-    sys = structural_simplify(sys)
+    sys = mtkcompile(sys)
     prob = SDDEProblem(sys,
         [],
         (0.0, 10.0),

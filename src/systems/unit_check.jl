@@ -267,12 +267,16 @@ function validate(jump::MassActionJump, t::Symbolic; info::String = "")
         ["scaled_rates", "1/(t*reactants^$n))"]; info)
 end
 
-function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Symbolic)
+function validate(jumps::Vector{JumpType}, t::Symbolic)
     labels = ["in Mass Action Jumps,", "in Constant Rate Jumps,", "in Variable Rate Jumps,"]
-    all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
+    majs = filter(x -> x isa MassActionJump, jumps)
+    crjs = filter(x -> x isa ConstantRateJump, jumps)
+    vrjs = filter(x -> x isa VariableRateJump, jumps)
+    splitjumps = [majs, crjs, vrjs]
+    all([validate(js, t; info) for (js, info) in zip(splitjumps, labels)])
 end
 
-function validate(eq::Equation; info::String = "")
+function validate(eq::Union{Inequality, Equation}; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else

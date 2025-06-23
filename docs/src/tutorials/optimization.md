@@ -1,3 +1,7 @@
+```@meta
+Draft = true
+```
+
 # Modeling Optimization Problems
 
 ModelingToolkit.jl is not only useful for generating initial value problems (`ODEProblem`).
@@ -10,7 +14,7 @@ The package can also build optimization systems.
     is not yet compatible with `OptimizationSystem`.
     We thus have to use a lower level interface to define optimization systems.
     For an introduction to this interface, read the
-    [programmatically generating ODESystems tutorial](@ref programmatically).
+    [programmatically generating Systems tutorial](@ref programmatically).
 
 ## Unconstrained Rosenbrock Function
 
@@ -24,7 +28,7 @@ using ModelingToolkit, Optimization, OptimizationOptimJL
 end
 @parameters a=1.0 b=1.0
 rosenbrock = (a - x)^2 + b * (y - x^2)^2
-@mtkbuild sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
+@mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
 ```
 
 Every optimization problem consists of a set of optimization variables.
@@ -52,7 +56,7 @@ ModelingToolkit is also capable of constructing analytical gradients and Hessian
 u0 = [y => 2.0]
 p = [b => 100.0]
 
-prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
+prob = OptimizationProblem(sys, vcat(u0, p), grad = true, hess = true)
 u_opt = solve(prob, GradientDescent())
 ```
 
@@ -86,7 +90,7 @@ rosenbrock = (a - x)^2 + b * (y - x^2)^2
 cons = [
     x^2 + y^2 ≲ 1
 ]
-@mtkbuild sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
+@mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
 prob = OptimizationProblem(sys, [], grad = true, hess = true, cons_j = true, cons_h = true)
 u_opt = solve(prob, IPNewton())
 ```

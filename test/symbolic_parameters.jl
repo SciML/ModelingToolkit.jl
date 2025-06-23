@@ -20,35 +20,33 @@ u0 = [
     y => σ, # default u0 from default p
     z => u - 0.1
 ]
-ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
-ns.y = u * 1.1
-resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
-    defaults = ModelingToolkit.defaults(ns))
+ns = System(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
+ModelingToolkit.get_defaults(ns)[y] = u * 1.1
+resolved = ModelingToolkit.varmap_to_vars(defaults(ns), parameters(ns))
 @test resolved == [1, 0.1 + 1, (0.1 + 1) * 1.1]
 
-prob = NonlinearProblem(complete(ns), [u => 1.0], Pair[])
+prob = NonlinearProblem(complete(ns), [u => 1.0])
 @test prob.u0 == [1.0, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 @variables a
 @parameters b
-top = NonlinearSystem([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
-top.b = ns.σ * 0.5
-top.ns.x = u * 0.5
+top = System([0 ~ -a + ns.x + b], [a], [b], systems = [ns], name = :top)
+ModelingToolkit.get_defaults(top)[b] = ns.σ * 0.5
+ModelingToolkit.get_defaults(top)[ns.x] = unknowns(ns, u) * 0.5
 
-res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
-    defaults = ModelingToolkit.defaults(top))
+res = ModelingToolkit.varmap_to_vars(defaults(top), parameters(top))
 @test res == [0.5, 1, 0.1 + 1, (0.1 + 1) * 1.1]
 
 top = complete(top)
-prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0], [])
+prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 # test NullParameters+defaults
 prob = NonlinearProblem(top, [unknowns(ns, u) => 1.0, a => 1.0])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
-@show sol = solve(prob, NewtonRaphson())
+sol = solve(prob, NewtonRaphson())
 
 # test initial conditions and parameters at the problem level
 pars = @parameters(begin
@@ -59,14 +57,10 @@ vars = @variables(begin
 end)
 der = Differential(t)
 eqs = [der(x) ~ x]
-@named sys = ODESystem(eqs, t, vars, [x0])
+@named sys = System(eqs, t, vars, [x0])
 sys = complete(sys)
-pars = [
-    x0 => 10.0
-]
-initialValues = [
-    x => x0
-]
+initialValues = [x => x0
+                 x0 => 10.0]
 tspan = (0.0, 1.0)
-problem = ODEProblem(sys, initialValues, tspan, pars)
+problem = ODEProblem(sys, initialValues, tspan)
 @test problem.u0 isa Vector{Float64}

@@ -14,7 +14,7 @@ using Test
         dm(t), [connect = Flow]
     end
 
-    ODESystem(Equation[], t, vars, pars; name, defaults = [dm => 0])
+    System(Equation[], t, vars, pars; name, defaults = [dm => 0])
 end
 
 @connector function HydraulicFluid(;
@@ -36,7 +36,7 @@ end
         dm ~ 0
     ]
 
-    ODESystem(eqs, t, vars, pars; name, defaults = [dm => 0])
+    System(eqs, t, vars, pars; name, defaults = [dm => 0])
 end
 
 function FixedPressure(; p, name)
@@ -54,7 +54,7 @@ function FixedPressure(; p, name)
         port.p ~ p
     ]
 
-    ODESystem(eqs, t, vars, pars; name, systems)
+    System(eqs, t, vars, pars; name, systems)
 end
 
 function FixedVolume(; vol, p_int, name)
@@ -80,7 +80,7 @@ function FixedVolume(; vol, p_int, name)
            rho ~ port.ρ * (1 + p / port.β)
            dm ~ drho * vol]
 
-    ODESystem(eqs, t, vars, pars; name, systems)
+    System(eqs, t, vars, pars; name, systems)
 end
 
 function Valve2Port(; p_s_int, p_r_int, p_int, name)
@@ -120,10 +120,10 @@ function Valve2Port(; p_s_int, p_r_int, p_int, name)
            HS.dm ~ ifelse(x >= 0, port.dm, 0)
            HR.dm ~ ifelse(x < 0, port.dm, 0)]
 
-    ODESystem(eqs, t, vars, pars; name, systems)
+    System(eqs, t, vars, pars; name, systems)
 end
 
-function System(; name)
+function HydraulicSystem(; name)
     vars = []
     pars = []
     systems = @named begin
@@ -139,16 +139,16 @@ function System(; name)
            connect(vol.port, valve.port)
            valve.x ~ sin(2π * t * 10)]
 
-    return ODESystem(eqs, t, vars, pars; systems, name)
+    return System(eqs, t, vars, pars; systems, name)
 end
 
-@named odesys = System()
+@named odesys = HydraulicSystem()
 esys = ModelingToolkit.expand_connections(odesys)
 @test length(equations(esys)) == length(unknowns(esys))
 
 csys = complete(odesys)
 
-sys = structural_simplify(odesys)
+sys = mtkcompile(odesys)
 @test length(equations(sys)) == length(unknowns(sys))
 
 sys_defs = ModelingToolkit.defaults(sys)

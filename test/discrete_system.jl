@@ -3,14 +3,13 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkit, Test
+using ModelingToolkit, SymbolicIndexingInterface, Test
 using ModelingToolkit: t_nounits as t
-using ModelingToolkit: get_metadata, MTKParameters
 
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
-@test_throws ErrorException @mtkbuild sys = DiscreteSystem([x(k + 1) ~ x + x(k - 1)], t)
+@test_throws ErrorException @mtkcompile sys = System([x(k + 1) ~ x + x(k - 1)], t)
 
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)
@@ -30,37 +29,37 @@ eqs = [S ~ S(k - 1) - infection * h,
     R ~ R(k - 1) + recovery]
 
 # System
-@named sys = DiscreteSystem(eqs, t, [S, I, R], [c, nsteps, δt, β, γ])
-syss = structural_simplify(sys)
+@named sys = System(eqs, t, [S, I, R], [c, nsteps, δt, β, γ, h])
+syss = mtkcompile(sys)
 @test syss == syss
 
-for df in [
-    DiscreteFunction(syss),
-    eval(DiscreteFunctionExpr(syss))
-]
+df = DiscreteFunction(syss)
+# iip
+du = zeros(3)
+u = ModelingToolkit.varmap_to_vars(
+    Dict([S(k - 1) => 1, I(k - 1) => 2, R(k - 1) => 3]), unknowns(syss))
+p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
+df.f(du, u, p, 0)
+reorderer = getu(syss, [S(k - 1), I(k - 1), R(k - 1)])
+@test reorderer(du) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
-    # iip
-    du = zeros(3)
-    u = collect(1:3)
-    p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
-    df.f(du, u, p, 0)
-    @test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
-
-    # oop
-    @test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
-end
+# oop
+@test reorderer(df.f(u, p, 0)) ≈
+      [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # Problem
-u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
+u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
-prob_map = DiscreteProblem(syss, u0, tspan, p)
+prob_map = DiscreteProblem(
+    syss, [u0; p], tspan; guesses = [S(k - 1) => 1.0, I(k - 1) => 1.0, R(k - 1) => 1.0])
 @test prob_map.f.sys === syss
 
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map, FunctionMap());
 @test sol_map[S] isa Vector
+@test sol_map[S(k - 1)] isa Vector
 
 # Using defaults constructor
 @parameters c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
@@ -75,17 +74,20 @@ eqs2 = [S ~ S(k - 1) - infection2,
     R ~ R(k - 1) + recovery2,
     R2 ~ R]
 
-@mtkbuild sys = DiscreteSystem(
-    eqs2, t, [S, I, R, R2], [c, nsteps, δt, β, γ]; controls = [β, γ], tspan)
+@mtkcompile sys = System(
+    eqs2, t, [S, I, R, R2], [c, nsteps, δt, β, γ])
 @test ModelingToolkit.defaults(sys) != Dict()
 
-prob_map2 = DiscreteProblem(sys)
+prob_map2 = DiscreteProblem(sys, [], tspan)
+# prob_map2 = DiscreteProblem(sys, [S(k - 1) => S, I(k - 1) => I, R(k - 1) => R], tspan)
 sol_map2 = solve(prob_map2, FunctionMap());
 
 @test sol_map.u ≈ sol_map2.u
-@test sol_map.prob.p == sol_map2.prob.p
-@test_throws Any sol_map2[R2]
-@test sol_map2[R2(k + 1)][begin:(end - 1)] == sol_map2[R][(begin + 1):end]
+for p in parameters(sys)
+    @test sol_map.prob.ps[p] ≈ sol_map2.prob.ps[p]
+end
+@test sol_map2[R2][begin:(end - 1)] == sol_map2[R(k - 1)][(begin + 1):end] ==
+      sol_map2[R][begin:(end - 1)]
 # Direct Implementation
 
 function sir_map!(u_diff, u, p, t)
@@ -101,12 +103,12 @@ function sir_map!(u_diff, u, p, t)
     end
     nothing
 end;
-u0 = prob_map2.u0;
+u0 = sol_map2[[S, I, R], 1];
 p = [0.05, 10.0, 0.25, 0.1];
 prob_map = DiscreteProblem(sir_map!, u0, tspan, p);
 sol_map2 = solve(prob_map, FunctionMap());
 
-@test Array(sol_map) ≈ Array(sol_map2)
+@test reduce(hcat, sol_map[[S, I, R]]) ≈ Array(sol_map2)
 
 # Delayed difference equation
 # @variables x(..) y(..) z(t)
@@ -128,7 +130,7 @@ sol_map2 = solve(prob_map, FunctionMap());
 # ]
 
 # # System
-# @named sys = DiscreteSystem(eqs, t, [x(t), x(t - 1.5), x(t - 3), y(t), y(t - 2), z], [])
+# @named sys = System(eqs, t, [x(t), x(t - 1.5), x(t - 3), y(t), y(t - 2), z], [])
 
 # eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay = true)
 
@@ -144,7 +146,7 @@ sol_map2 = solve(prob_map, FunctionMap());
 # observed variable handling
 @variables x(t) RHS(t)
 @parameters τ
-@named fol = DiscreteSystem(
+@named fol = System(
     [x ~ (1 - x(k - 1)) / τ], t, [x, RHS], [τ]; observed = [RHS ~ (1 - x) / τ * h])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
@@ -199,41 +201,21 @@ RHS2 = RHS
 #         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
 #     end
 
-#     @mtkbuild sys = DiscreteSystem(eqs, t, us, ps; defaults = defs, preface = preface)
+#     @mtkcompile sys = System(eqs, t, us, ps; defaults = defs, preface = preface)
 #     prob = DiscreteProblem(sys, [], (0.0, 1.0))
 #     sol = solve(prob, FunctionMap(); dt = dt)
 #     @test c[1] + 1 == length(sol)
 # end
 
-@variables x(t) y(t)
-testdict = Dict([:test => 1])
-@named sys = DiscreteSystem([x(k + 1) ~ 1.0], t, [x], []; metadata = testdict)
-@test get_metadata(sys) == testdict
-
 @variables x(t) y(t) u(t)
 eqs = [u ~ 1
        x ~ x(k - 1) + u
        y ~ x + u]
-@mtkbuild de = DiscreteSystem(eqs, t)
+@mtkcompile de = System(eqs, t)
 prob = DiscreteProblem(de, [x(k - 1) => 0.0], (0, 10))
 sol = solve(prob, FunctionMap())
 
-@test reduce(vcat, sol.u) == 1:11
-
-# test that default values apply to the entire history
-@variables x(t) = 1.0
-@mtkbuild de = DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t)
-prob = DiscreteProblem(de, [], (0, 10))
-@test prob[x] == 2.0
-@test prob[x(k - 1)] == 1.0
-
-# must provide initial conditions for history
-@test_throws ErrorException DiscreteProblem(de, [x => 2.0], (0, 10))
-
-# initial values only affect _that timestep_, not the entire history
-prob = DiscreteProblem(de, [x(k - 1) => 2.0], (0, 10))
-@test prob[x] == 3.0
-@test prob[x(k - 1)] == 2.0
+@test sol[x] == 1:11
 
 # Issue#2585
 getdata(buffer, t) = buffer[mod1(Int(t), length(buffer))]
@@ -247,7 +229,7 @@ function SampledData(; name, buffer)
     @variables output(t) time(t)
     eqs = [time ~ time(k - 1) + 1
            output ~ getdata(buffer, time)]
-    return DiscreteSystem(eqs, t; name)
+    return System(eqs, t; name)
 end
 function System(; name, buffer)
     @named y_sys = SampledData(; buffer = buffer)
@@ -261,21 +243,52 @@ function System(; name, buffer)
            # y[t] = 0.5 * y[t - 1] + 0.5 * y[t + 1] + y_shk[t]
            y(k - 1) ~ α * y(k - 2) + (β * y(k) + y_shk(k - 1))]
 
-    DiscreteSystem(eqs, t, vars, pars; systems = [y_sys], name = name)
+    System(eqs, t, vars, pars; systems = [y_sys], name = name)
 end
 
-@test_nowarn @mtkbuild sys = System(; buffer = ones(10))
-
-# Ensure discrete systems with algebraic equations throw
-@variables x(t) y(t)
-k = ShiftIndex(t)
-@named sys = DiscreteSystem([x ~ x^2 + y^2, y ~ x(k - 1) + y(k - 1)], t)
-@test_throws ["algebraic equations", "not yet supported"] structural_simplify(sys)
+@test_nowarn @mtkcompile sys = System(; buffer = ones(10))
 
 @testset "Passing `nothing` to `u0`" begin
     @variables x(t) = 1
     k = ShiftIndex()
-    @mtkbuild sys = DiscreteSystem([x(k) ~ x(k - 1) + 1], t)
+    @mtkcompile sys = System([x(k) ~ x(k - 1) + 1], t)
     prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0))
-    @test_nowarn solve(prob, FunctionMap())
+    sol = solve(prob, FunctionMap())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Shifted array variables" begin
+    @variables x(t)[1:2] y(t)[1:2]
+    k = ShiftIndex(t)
+    eqs = [
+        x(k) ~ x(k - 1) + x(k - 2),
+        y[1](k) ~ y[1](k - 1) + y[1](k - 2),
+        y[2](k) ~ y[2](k - 1) + y[2](k - 2)
+    ]
+    @mtkcompile sys = System(eqs, t)
+    prob = DiscreteProblem(sys,
+        [x(k - 1) => ones(2), x(k - 2) => zeros(2), y[1](k - 1) => 1.0,
+            y[1](k - 2) => 0.0, y[2](k - 1) => 1.0, y[2](k - 2) => 0.0],
+        (0, 4))
+    @test all(isone, prob.u0)
+    sol = solve(prob, FunctionMap())
+    @test sol[[x..., y...], end] == 8ones(4)
+end
+
+@testset "Defaults are totermed appropriately" begin
+    @parameters σ ρ β q
+    @variables x(t) y(t) z(t)
+    k = ShiftIndex(t)
+    p = [σ => 28.0,
+        ρ => 10.0,
+        β => 8 / 3]
+
+    @mtkcompile discsys = System(
+        [x ~ x(k - 1) * ρ + y(k - 2), y ~ y(k - 1) * σ - z(k - 2),
+            z ~ z(k - 1) * β + x(k - 2)],
+        t; defaults = [x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
+            y(k - 1) => 1.0, z(k - 1) => 1.0])
+    discprob = DiscreteProblem(discsys, p, (0, 10))
+    sol = solve(discprob, FunctionMap())
+    @test SciMLBase.successful_retcode(sol)
 end

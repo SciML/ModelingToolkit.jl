@@ -1,5 +1,5 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
-using ModelingToolkit: Continuous
+using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 function infer_clocks(sys)
@@ -22,7 +22,7 @@ eqs = [yd ~ Sample(dt)(y)
        u ~ Hold(ud)
        D(x) ~ -x + u
        y ~ x]
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 # compute equation and variables' time domains
 #TODO: test linearize
 
@@ -65,31 +65,41 @@ By inference:
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit._structural_simplify!(
-    deepcopy(tss[continuous_id]), (inputs[continuous_id], ()))
+sss = ModelingToolkit._mtkcompile!(
+    deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+sss = ModelingToolkit._mtkcompile!(
+    deepcopy(tss[1]), inputs = inputs[1], outputs = [])
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
-@test observed(sss) == [yd(k + 1) ~ Sample(dt)(y); r(k + 1) ~ 1.0;
-       ud(k + 1) ~ kp * (r(k + 1) - yd(k + 1))]
+@test issetequal(observed(sss),
+    [yd ~ Sample(dt)(y); r ~ 1.0;
+     ud ~ kp * (r - yd)])
 
+canonical_eqs = map(eqs) do eq
+    if iscall(eq.lhs) && operation(eq.lhs) isa Differential
+        return eq
+    else
+        return 0 ~ eq.rhs - eq.lhs
+    end
+end
+eqs_idxs = findfirst.(isequal.(canonical_eqs), (equations(ci.ts),))
 d = Clock(dt)
 # Note that TearingState reorders the equations
-@test eqmap[1] == Continuous
-@test eqmap[2] == d
-@test eqmap[3] == d
-@test eqmap[4] == d
-@test eqmap[5] == Continuous
-@test eqmap[6] == Continuous
+@test eqmap[eqs_idxs[1]] == d
+@test eqmap[eqs_idxs[2]] == d
+@test eqmap[eqs_idxs[3]] == d
+@test eqmap[eqs_idxs[4]] == ContinuousClock()
+@test eqmap[eqs_idxs[5]] == ContinuousClock()
+@test eqmap[eqs_idxs[6]] == ContinuousClock()
 
 @test varmap[yd] == d
 @test varmap[ud] == d
 @test varmap[r] == d
-@test varmap[x] == Continuous
-@test varmap[y] == Continuous
-@test varmap[u] == Continuous
+@test varmap[x] == ContinuousClock()
+@test varmap[y] == ContinuousClock()
+@test varmap[u] == ContinuousClock()
 
 @info "Testing shift normalization"
 dt = 0.1
@@ -105,27 +115,27 @@ eqs = [yd ~ Sample(dt)(y)
        u ~ Hold(ud)
        D(x) ~ -x + u
        y ~ x]
-@named sys = ODESystem(eqs, t)
-@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=structural_simplify(sys);
+@named sys = System(eqs, t)
+@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=mtkcompile(sys);
 
 @test_skip begin
     Tf = 1.0
-    prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+    prob = ODEProblem(
+        ss, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf))
     # create integrator so callback is evaluated at t=0 and we can test correct param values
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test sort(vcat(int.p...)) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
-    prob = ODEProblem(ss, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
+    prob = ODEProblem(
+        ss, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf)) # recreate problem to empty saved values
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
-    ss_nosplit = structural_simplify(sys; split = false)
-    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0])
+    ss_nosplit = mtkcompile(sys; split = false)
+    prob_nosplit = ODEProblem(
+        ss_nosplit, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf))
     int = init(prob_nosplit, Tsit5(); kwargshandle = KeywordArgSilent)
     @test sort(int.p) == [0.1, 1.0, 2.1, 2.1, 2.1] # yd, kp, ud(k-1), ud, Hold(ud)
-    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.1], (0.0, Tf),
-        [kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0]) # recreate problem to empty saved values
+    prob_nosplit = ODEProblem(
+        ss_nosplit, [x => 0.1, kp => 1.0; ud(k - 1) => 2.1; ud(k - 2) => 2.0], (0.0, Tf)) # recreate problem to empty saved values
     sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
     # For all inputs in parameters, just initialize them to 0.0, and then set them
     # in the callback.
@@ -180,7 +190,7 @@ eqs = [yd ~ Sample(dt)(y)
            u ~ Hold(ud1) + Hold(ud2)
            D(x) ~ -x + u
            y ~ x]
-    @named sys = ODESystem(eqs, t)
+    @named sys = System(eqs, t)
     ci, varmap = infer_clocks(sys)
 
     d = Clock(dt)
@@ -192,10 +202,10 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[r] == Continuous
-    @test varmap[x] == Continuous
-    @test varmap[y] == Continuous
-    @test varmap[u] == Continuous
+    @test varmap[r] == ContinuousClock()
+    @test varmap[x] == ContinuousClock()
+    @test varmap[y] == ContinuousClock()
+    @test varmap[u] == ContinuousClock()
 
     @info "test composed systems"
 
@@ -208,7 +218,7 @@ eqs = [yd ~ Sample(dt)(y)
         @variables x(t)=1 u(t)=0 y(t)=0
         eqs = [D(x) ~ -x + u
                y ~ x]
-        ODESystem(eqs, t; name = name)
+        System(eqs, t; name = name)
     end
 
     function filt(; name)
@@ -216,7 +226,7 @@ eqs = [yd ~ Sample(dt)(y)
         a = 1 / exp(dt)
         eqs = [x ~ a * x(k - 1) + (1 - a) * u(k - 1)
                y ~ x]
-        ODESystem(eqs, t, name = name)
+        System(eqs, t, name = name)
     end
 
     function controller(kp; name)
@@ -224,7 +234,7 @@ eqs = [yd ~ Sample(dt)(y)
         @parameters kp = kp
         eqs = [yd ~ Sample(y)
                ud ~ kp * (r - yd)]
-        ODESystem(eqs, t; name = name)
+        System(eqs, t; name = name)
     end
 
     @named f = filt()
@@ -236,19 +246,19 @@ eqs = [yd ~ Sample(dt)(y)
                    Hold(c.ud) ~ p.u # controller output to plant input
                    p.y ~ c.y]
 
-    @named cl = ODESystem(connections, t, systems = [f, c, p])
+    @named cl = System(connections, t, systems = [f, c, p])
 
     ci, varmap = infer_clocks(cl)
 
     @test varmap[f.x] == Clock(0.5)
-    @test varmap[p.x] == Continuous
-    @test varmap[p.y] == Continuous
+    @test varmap[p.x] == ContinuousClock()
+    @test varmap[p.y] == ContinuousClock()
     @test varmap[c.ud] == Clock(0.5)
     @test varmap[c.yd] == Clock(0.5)
-    @test varmap[c.y] == Continuous
+    @test varmap[c.y] == ContinuousClock()
     @test varmap[f.y] == Clock(0.5)
     @test varmap[f.u] == Clock(0.5)
-    @test varmap[p.u] == Continuous
+    @test varmap[p.u] == ContinuousClock()
     @test varmap[c.r] == Clock(0.5)
 
     ## Multiple clock rates
@@ -271,7 +281,7 @@ eqs = [yd ~ Sample(dt)(y)
            D(x) ~ -x + u
            y ~ x]
 
-    @named cl = ODESystem(eqs, t)
+    @named cl = System(eqs, t)
 
     d = Clock(dt)
     d2 = Clock(dt2)
@@ -281,16 +291,16 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[x] == Continuous()
-    @test varmap[y] == Continuous()
-    @test varmap[u] == Continuous()
+    @test varmap[x] == ContinuousClock()
+    @test varmap[y] == ContinuousClock()
+    @test varmap[u] == ContinuousClock()
 
-    ss = structural_simplify(cl)
-    ss_nosplit = structural_simplify(cl; split = false)
+    ss = mtkcompile(cl)
+    ss_nosplit = mtkcompile(cl; split = false)
 
     if VERSION >= v"1.7"
-        prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
-        prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0], (0.0, 1.0), [kp => 1.0])
+        prob = ODEProblem(ss, [x => 0.0, kp => 1.0], (0.0, 1.0))
+        prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, kp => 1.0], (0.0, 1.0))
         sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
         sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
 
@@ -398,13 +408,13 @@ eqs = [yd ~ Sample(dt)(y)
 
     ci, varmap = infer_clocks(expand_connections(_model))
 
-    @test varmap[_model.plant.input.u] == Continuous()
-    @test varmap[_model.plant.u] == Continuous()
-    @test varmap[_model.plant.x] == Continuous()
-    @test varmap[_model.plant.y] == Continuous()
-    @test varmap[_model.plant.output.u] == Continuous()
-    @test varmap[_model.holder.output.u] == Continuous()
-    @test varmap[_model.sampler.input.u] == Continuous()
+    @test varmap[_model.plant.input.u] == ContinuousClock()
+    @test varmap[_model.plant.u] == ContinuousClock()
+    @test varmap[_model.plant.x] == ContinuousClock()
+    @test varmap[_model.plant.y] == ContinuousClock()
+    @test varmap[_model.plant.output.u] == ContinuousClock()
+    @test varmap[_model.holder.output.u] == ContinuousClock()
+    @test varmap[_model.sampler.input.u] == ContinuousClock()
     @test varmap[_model.controller.u] == d
     @test varmap[_model.holder.input.u] == d
     @test varmap[_model.controller.output.u] == d
@@ -417,7 +427,7 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[_model.feedback.output.u] == d
     @test varmap[_model.feedback.input2.u] == d
 
-    ssys = structural_simplify(model)
+    ssys = mtkcompile(model)
 
     Tf = 0.2
     timevec = 0:(d.dt):Tf
@@ -474,7 +484,7 @@ eqs = [yd ~ Sample(dt)(y)
 
     ## Test continuous clock
 
-    c = ModelingToolkit.SolverStepClock
+    c = ModelingToolkit.SolverStepClock()
     k = ShiftIndex(c)
 
     @mtkmodel CounterSys begin
@@ -508,7 +518,7 @@ eqs = [yd ~ Sample(dt)(y)
         end
     end
 
-    @mtkbuild model = FirstOrderWithStepCounter()
+    @mtkcompile model = FirstOrderWithStepCounter()
     prob = ODEProblem(model, [], (0.0, 10.0))
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
@@ -519,14 +529,14 @@ eqs = [yd ~ Sample(dt)(y)
     @variables x(t)=1.0 y(t)=1.0
     eqs = [D(y) ~ Hold(x)
            x ~ x(k - 1) + x(k - 2)]
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     prob = ODEProblem(sys, [], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 2.0
     @test int.ps[x(k - 1)] == 1.0
 
-    @test_throws ErrorException ODEProblem(sys, [], (0.0, 10.0), [x => 2.0])
-    prob = ODEProblem(sys, [], (0.0, 10.0), [x(k - 1) => 2.0])
+    @test_throws ErrorException ODEProblem(sys, [x => 2.0], (0.0, 10.0))
+    prob = ODEProblem(sys, [x(k - 1) => 2.0], (0.0, 10.0))
     int = init(prob, Tsit5(); kwargshandle = KeywordArgSilent)
     @test int.ps[x] == 3.0
     @test int.ps[x(k - 1)] == 2.0

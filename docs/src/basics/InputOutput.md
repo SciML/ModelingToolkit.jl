@@ -30,7 +30,7 @@ This function takes a vector of variables that are to be considered inputs, i.e.
 
 !!! note "Un-simplified system"
     
-    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `structural_simplify` internally.
+    This function expects `sys` to be un-simplified, i.e., `mtkcompile` or `@mtkcompile` should not be called on the system before passing it into this function. `generate_control_function` calls a special version of `mtkcompile` internally.
 
 ### Example:
 
@@ -44,7 +44,7 @@ import ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(x) ~ -k * (x + u)
        y ~ x]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 f, x_sym, ps = ModelingToolkit.generate_control_function(sys, [u], simplify = true);
 nothing # hide
 ```
@@ -75,7 +75,7 @@ u = [rand()]
 
 ## Generating an output function, ``g``
 
-ModelingToolkit can also generate a function that computes a specified output of a system, the function ``y = g(x, u, p, t)`` above. This is done using the function [`build_explicit_observed_function`](@ref). When generating an output function, the user must specify the output variable(s) of interest, as well as any inputs if inputs are relevant to compute the output.
+ModelingToolkit can also generate a function that computes a specified output of a system, the function ``y = g(x, u, p, t)`` above. This is done using the function [`ModelingToolkit.build_explicit_observed_function`](@ref). When generating an output function, the user must specify the output variable(s) of interest, as well as any inputs if inputs are relevant to compute the output.
 
 The order of the user-specified output variables determines the order of the output vector ``y``.
 
@@ -93,7 +93,7 @@ See [Linearization](@ref linearization).
 Pages = ["InputOutput.md"]
 ```
 
-```@docs
+```@docs; canonical=false
 ModelingToolkit.generate_control_function
 ModelingToolkit.build_explicit_observed_function
 ```

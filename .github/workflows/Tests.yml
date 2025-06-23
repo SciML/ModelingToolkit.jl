@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - 'release-'
+      - v10
     paths-ignore:
       - 'docs/**'
   push:
@@ -12,6 +13,7 @@ on:
       - master
     paths-ignore:
       - 'docs/**'
+      - 'benchmark/**'
 
 concurrency:
   # Skip intermediate builds: always, but for the master branch.
@@ -38,6 +40,7 @@ jobs:
           - Extensions
           - Downstream
           - RegressionI
+          - FMI
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       julia-version: "${{ matrix.version }}"

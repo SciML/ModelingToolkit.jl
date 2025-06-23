@@ -21,8 +21,8 @@ module PrecompilationMWE
 using ModelingToolkit
 
 @variables x(ModelingToolkit.t_nounits)
-@named sys = ODESystem([ModelingToolkit.D_nounits(x) ~ -x + 1], ModelingToolkit.t_nounits)
-prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [],
+@named sys = System([ModelingToolkit.D_nounits(x) ~ -x + 1], ModelingToolkit.t_nounits)
+prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), [],
     eval_expression = true, eval_module = @__MODULE__)
 
 end

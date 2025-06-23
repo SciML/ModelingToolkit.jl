@@ -13,14 +13,13 @@ addprocs(2)
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@everywhere @named de = ODESystem(eqs, t)
+@everywhere @named de = System(eqs, t)
 @everywhere de = complete(de)
-@everywhere ode_func = ODEFunction(de, [x, y, z], [σ, ρ, β])
 
-@everywhere u0 = [19.0, 20.0, 50.0]
-@everywhere params = [16.0, 45.92, 4]
+@everywhere u0 = unknowns(de) .=> [19.0, 20.0, 50.0]
+@everywhere params = parameters(de) .=> [16.0, 45.92, 4]
 
-@everywhere ode_prob = ODEProblem(ode_func, u0, (0.0, 10.0), params)
+@everywhere ode_prob = ODEProblem(de, [u0; params], (0.0, 10.0))
 
 @everywhere begin
     using OrdinaryDiffEq

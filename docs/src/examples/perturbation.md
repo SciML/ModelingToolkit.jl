@@ -40,16 +40,16 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
     
     The 0-th order equation can be solved analytically, but ModelingToolkit does currently not feature automatic analytical solution of ODEs, so we proceed with solving it numerically.
 
-These are the ODEs we want to solve. Now construct an `ODESystem`, which automatically inserts dummy derivatives for the velocities:
+These are the ODEs we want to solve. Now construct an `System`, which automatically inserts dummy derivatives for the velocities:
 
 ```@example perturbation
-@mtkbuild sys = ODESystem(eqs_pert, t)
+@mtkcompile sys = System(eqs_pert, t)
 ```
 
-To solve the `ODESystem`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
+To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
 ```@example perturbation
-using DifferentialEquations
+using OrdinaryDiffEq
 u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)
@@ -82,23 +82,24 @@ eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 
 with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
 
-We follow the same steps as in the previous example to construct the `ODESystem`:
+We follow the same steps as in the previous example to construct the `System`:
 
 ```@example perturbation
 eq_pert = substitute(eq, x => x_series)
 eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
-@mtkbuild sys = ODESystem(eqs_pert, t)
+@mtkcompile sys = System(eqs_pert, t)
 ```
 
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
+u0 = [y[0] => 0.0, y[1] => 0.0, y[2] => 0.0, D(y[0]) => 1.0, D(y[1]) => 0.0, D(y[2]) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
 plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
+@assert isapprox(sol(π/2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 

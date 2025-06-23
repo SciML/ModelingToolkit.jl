@@ -7,7 +7,7 @@ ModelingToolkit component or connector with metadata
 $(FIELDS)
 """
 struct Model{F, S}
-    """The constructor that returns ODESystem."""
+    """The constructor that returns System."""
     f::F
     """
     The dictionary with metadata like keyword arguments (:kwargs), base
@@ -29,8 +29,8 @@ Base.parentmodule(m::Model) = parentmodule(m.f)
 for f in (:connector, :mtkmodel)
     isconnector = f == :connector ? true : false
     @eval begin
-        macro $f(name::Symbol, body)
-            esc($(:_model_macro)(__module__, name, body, $isconnector))
+        macro $f(fullname::Union{Expr, Symbol}, body)
+            esc($(:_model_macro)(__module__, fullname, body, $isconnector))
         end
     end
 end
@@ -41,10 +41,18 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
 end
 
-function _model_macro(mod, name, expr, isconnector)
+function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
+    if fullname isa Symbol
+        name, type = fullname, :System
+    else
+        if fullname.head == :(::)
+            name, type = fullname.args
+        else
+            error("`$fullname` is not a valid name.")
+        end
+    end
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}(
-        :constants => Dict{Symbol, Dict}(),
         :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
         :structural_parameters => Dict{Symbol, Dict}()
@@ -56,12 +64,15 @@ function _model_macro(mod, name, expr, isconnector)
     ps, sps, vs, = [], [], []
     c_evts = []
     d_evts = []
+    cons = []
+    costs = []
     kwargs = OrderedCollections.OrderedSet()
     where_types = Union{Symbol, Expr}[]
 
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
-    push!(exprs.args, :(systems = ODESystem[]))
+    # We build `System` by default
+    push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
     push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
@@ -69,7 +80,7 @@ function _model_macro(mod, name, expr, isconnector)
     for arg in expr.args
         if arg.head == :macrocall
             parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                sps, c_evts, d_evts, dict, mod, arg, kwargs, where_types)
+                sps, c_evts, d_evts, cons, costs, dict, mod, arg, kwargs, where_types)
         elseif arg.head == :block
             push!(exprs.args, arg)
         elseif arg.head == :if
@@ -109,11 +120,16 @@ function _model_macro(mod, name, expr, isconnector)
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
-    @inline pop_structure_dict!.(
-        Ref(dict), [:constants, :defaults, :kwargs, :structural_parameters])
+    consolidate = get(dict, :consolidate, default_consolidate)
+    description = get(dict, :description, "")
 
-    sys = :($ODESystem($(flatten_equations)(equations), $iv, variables, parameters;
-        name, systems, gui_metadata = $gui_metadata, defaults))
+    @inline pop_structure_dict!.(
+        Ref(dict), [:defaults, :kwargs, :structural_parameters])
+
+    sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
+        name, description = $description, systems, gui_metadata = $gui_metadata,
+        continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
+        defaults, costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
 
     if length(ext) == 0
         push!(exprs.args, :(var"#___sys___" = $sys))
@@ -123,16 +139,6 @@ function _model_macro(mod, name, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
-
-    !isempty(c_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".continuous_events=$SymbolicContinuousCallback.([
-            $(c_evts...)
-        ]))))
-
-    !isempty(d_evts) && push!(exprs.args,
-        :($Setfield.@set!(var"#___sys___".discrete_events=$SymbolicDiscreteCallback.([
-            $(d_evts...)
-        ]))))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -244,8 +250,10 @@ end
 # The comments indicate the syntax matched by a block; either when parsed directly
 # when it is called recursively for parsing a part of an expression.
 # These variable definitions are part of test suite in `test/model_parsing.jl`
-function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
+Base.@nospecializeinfer function parse_variable_def!(
+        dict, mod, arg, varclass, kwargs, where_types;
         def = nothing, type::Type = Real, meta = Dict{DataType, Expr}())
+    @nospecialize
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         # Parses: `a`
@@ -311,6 +319,10 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                 $meta_val))
+            elseif varclass == :constants
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@constants ($a[$(indices...)]::$type = $varval),
+                $meta_val))
             else
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
@@ -342,6 +354,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                     var = :($varname = $varname === $NO_VALUE ? $val : $varname;
                     $varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
                     $(def_n_meta...)))
+                elseif varclass == :constants
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                    $varname = $first(@constants ($a[$(indices...)]::$type = $varval),
+                    $(def_n_meta...)))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -357,6 +375,11 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
                         assert_unique_independent_var(dict, a.args[end])
                     var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
                     $varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+                elseif varclass == :constants
+                    Meta.isexpr(a, :call) &&
+                        assert_unique_independent_var(dict, a.args[end])
+                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                    $varname = $first(@constants $a[$(indices...)]::$type = $varname))
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -384,6 +407,9 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, where_types;
             if varclass == :parameters
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
                 var = :($varname = $first(@parameters $a[$(indices...)]::$type = $varname))
+            elseif varclass == :constants
+                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
+                var = :($varname = $first(@constants $a[$(indices...)]::$type = $varname))
             elseif varclass == :variables
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
@@ -444,6 +470,8 @@ function generate_var(a, varclass; type = Real)
     var = Symbolics.variable(a; T = type)
     if varclass == :parameters
         var = toparam(var)
+    elseif varclass == :constants
+        var = toconstant(var)
     elseif varclass == :independent_variables
         var = toiv(var)
     end
@@ -497,13 +525,15 @@ function generate_var!(dict, a, b, varclass, mod;
     vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
-        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Any}, type})(iv)
+        first(@variables $a(iv)::type)
     else
         vd[a][:size] = Tuple(lastindex.(indices))
         first(@variables $a(iv)[indices...]::type)
     end
     if varclass == :parameters
         var = toparam(var)
+    elseif varclass == :constants
+        var = toconstant(var)
     end
     var
 end
@@ -595,10 +625,12 @@ function get_var(mod::Module, b)
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
-        dict, mod, arg, kwargs, where_types)
+        cons, costs, dict, mod, arg, kwargs, where_types)
     mname = arg.args[1]
     body = arg.args[end]
-    if mname == Symbol("@components")
+    if mname == Symbol("@description")
+        parse_description!(body, dict)
+    elseif mname == Symbol("@components")
         parse_components!(exprs, comps, dict, body, kwargs)
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, mod, body, kwargs)
@@ -611,7 +643,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@constants")
-        parse_constants!(exprs, dict, body, mod)
+        parse_variables!(exprs, ps, dict, mod, body, :constants, kwargs, where_types)
     elseif mname == Symbol("@continuous_events")
         parse_continuous_events!(c_evts, dict, body)
     elseif mname == Symbol("@discrete_events")
@@ -621,51 +653,14 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         parse_icon!(body, dict, icon, mod)
     elseif mname == Symbol("@defaults")
         parse_system_defaults!(exprs, arg, dict)
+    elseif mname == Symbol("@constraints")
+        parse_constraints!(cons, dict, body)
+    elseif mname == Symbol("@costs")
+        parse_costs!(costs, dict, body)
+    elseif mname == Symbol("@consolidate")
+        parse_consolidate!(body, dict)
     else
         error("$mname is not handled.")
-    end
-end
-
-function parse_constants!(exprs, dict, body, mod)
-    Base.remove_linenums!(body)
-    for arg in body.args
-        MLStyle.@match arg begin
-            Expr(:(=), Expr(:(::), a, type), Expr(:tuple, b, metadata)) || Expr(:(=), Expr(:(::), a, type), b) => begin
-                type = getfield(mod, type)
-                b = _type_check!(get_var(mod, b), a, type, :constants)
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, type, [:($a = $b), metadata], toconstant))))
-                dict[:constants][a] = Dict(:value => b, :type => type)
-                if @isdefined metadata
-                    for data in metadata.args
-                        dict[:constants][a][data.args[1]] = data.args[2]
-                    end
-                end
-            end
-            Expr(:(=), a, Expr(:tuple, b, metadata)) => begin
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, Real, [:($a = $b), metadata], toconstant))))
-                dict[:constants][a] = Dict{Symbol, Any}(:value => get_var(mod, b))
-                for data in metadata.args
-                    dict[:constants][a][data.args[1]] = data.args[2]
-                end
-            end
-            Expr(:(=), a, b) => begin
-                push!(exprs,
-                    :($(Symbolics._parse_vars(
-                        :constants, Real, [:($a = $b)], toconstant))))
-                dict[:constants][a] = Dict(:value => get_var(mod, b))
-            end
-            _ => error("""Malformed constant definition `$arg`. Please use the following syntax:
-                ```
-                @constants begin
-                    var = value, [description = "This is an example constant."]
-                end
-                ```
-            """)
-        end
     end
 end
 
@@ -933,6 +928,7 @@ function handle_conditional_vars!(
         arg, conditional_branch, mod, varclass, kwargs, where_types)
     conditional_dict = Dict(:kwargs => Dict(),
         :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
+        :constants => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     for _arg in arg.args
         name, ex = parse_variable_arg(
@@ -947,7 +943,7 @@ function prune_conditional_dict!(conditional_tuple::Tuple)
     prune_conditional_dict!.(collect(conditional_tuple))
 end
 function prune_conditional_dict!(conditional_dict::Dict)
-    for k in [:parameters, :variables]
+    for k in [:parameters, :variables, :constants]
         length(conditional_dict[k]) == 1 && isempty(first(conditional_dict[k])) &&
             delete!(conditional_dict, k)
     end
@@ -964,7 +960,7 @@ end
 
 function get_conditional_dict!(conditional_dict::Dict, conditional_y_tuple::Dict)
     merge!(conditional_dict[:kwargs], conditional_y_tuple[:kwargs])
-    for key in [:parameters, :variables]
+    for key in [:parameters, :variables, :constants]
         merge!(conditional_dict[key][1], conditional_y_tuple[key][1])
     end
     conditional_dict
@@ -983,6 +979,7 @@ function push_conditional_dict!(dict, condition, conditional_dict,
     end
     conditional_y_dict = Dict(:kwargs => Dict(),
         :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
+        :constants => Any[Dict{Symbol, Dict{Symbol, Any}}()],
         :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
     get_conditional_dict!(conditional_y_dict, conditional_y_tuple)
 
@@ -1117,8 +1114,16 @@ end
 function parse_continuous_events!(c_evts, dict, body)
     dict[:continuous_events] = []
     Base.remove_linenums!(body)
-    for arg in body.args
-        push!(c_evts, arg)
+    for line in body.args
+        if length(line.args) == 3 && line.args[1] == :(=>)
+            push!(c_evts, :(($line, ())))
+        elseif length(line.args) == 2
+            event = line.args[1]
+            kwargs = parse_event_kwargs(line.args[2])
+            push!(c_evts, :(($event, $kwargs)))
+        else
+            error("Malformed continuous event $line.")
+        end
         push!(dict[:continuous_events], readable_code.(c_evts)...)
     end
 end
@@ -1126,9 +1131,53 @@ end
 function parse_discrete_events!(d_evts, dict, body)
     dict[:discrete_events] = []
     Base.remove_linenums!(body)
-    for arg in body.args
-        push!(d_evts, arg)
+    for line in body.args
+        if length(line.args) == 3 && line.args[1] == :(=>)
+            push!(d_evts, :(($line, ())))
+        elseif length(line.args) == 2
+            event = line.args[1]
+            kwargs = parse_event_kwargs(line.args[2])
+            push!(d_evts, :(($event, $kwargs)))
+        else
+            error("Malformed discrete event $line.")
+        end
         push!(dict[:discrete_events], readable_code.(d_evts)...)
+    end
+end
+
+function parse_event_kwargs(disc_expr)
+    kwargs = :([])
+    for arg in disc_expr.args
+        (arg.head != :(=)) && error("Malformed event kwarg $arg.")
+        (arg.args[1] isa Symbol) || error("Invalid keyword argument name $(arg.args[1]).")
+        push!(kwargs.args, :($(QuoteNode(arg.args[1])) => $(arg.args[2])))
+    end
+    kwargs
+end
+
+function parse_constraints!(cons, dict, body)
+    dict[:constraints] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(cons, arg)
+        push!(dict[:constraints], readable_code(arg))
+    end
+end
+
+function parse_costs!(costs, dict, body)
+    dict[:costs] = []
+    Base.remove_linenums!(body)
+    for arg in body.args
+        push!(costs, arg)
+        push!(dict[:costs], readable_code(arg))
+    end
+end
+
+function parse_consolidate!(body, dict)
+    if !(occursin("->", string(body)) || occursin("=", string(body)))
+        error("Consolidate must be a function definition.")
+    else
+        dict[:consolidate] = body
     end
 end
 
@@ -1154,6 +1203,14 @@ end
 
 function parse_icon!(body::Symbol, dict, icon, mod)
     parse_icon!(getfield(mod, body), dict, icon, mod)
+end
+
+function parse_description!(body, dict)
+    if body isa String
+        dict[:description] = body
+    else
+        error("Invalid description string $body")
+    end
 end
 
 ### Parsing Components:
@@ -1343,7 +1400,9 @@ push_something!(v, x...) = push_something!.(Ref(v), x)
 
 define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
 
-function parse_top_level_branch(condition, x, y = nothing, branch = :if)
+Base.@nospecializeinfer function parse_top_level_branch(
+        condition, x, y = nothing, branch::Symbol = :if)
+    @nospecialize
     blocks::Vector{Union{Expr, Nothing}} = component_blk, equations_blk, parameter_blk, variable_blk = define_blocks(branch)
 
     for arg in x

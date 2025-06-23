@@ -56,7 +56,7 @@ end
             ρ
             β
         end
-        sys = ODESystem(
+        sys = System(
             [D(D(x)) ~ σ * (y - x)
              D(y) ~ x * (ρ - z) - y
              D(z) ~ x * y - β * z], iv; name)
@@ -68,15 +68,15 @@ end
         @parameters begin
             p[1:2, 1:2]
         end
-        sys = ODESystem([D(D(x)) ~ p * x], iv; name)
+        sys = System([D(D(x)) ~ p * x], iv; name)
     end
     function Outer(; name)
         @named 😄 = Lorenz()
         @named arr = ArrSys()
-        sys = ODESystem(Equation[], iv; name, systems = [😄, arr])
+        sys = System(Equation[], iv; name, systems = [😄, arr])
     end
 
-    @mtkbuild sys = Outer()
+    @mtkcompile sys = Outer()
     for (str, var) in [
         # unicode system, scalar variable
         ("😄.x", sys.😄.x),
@@ -144,4 +144,43 @@ end
     ]
         @test isequal(parse_variable(sys, str), var)
     end
+end
+
+@testset "isinitial" begin
+    t = ModelingToolkit.t_nounits
+    @variables x(t) z(t)[1:5]
+    @parameters a b c[1:4]
+    @test isinitial(Initial(z))
+    @test isinitial(Initial(x))
+    @test isinitial(Initial(a))
+    @test isinitial(Initial(z[1]))
+    @test isinitial(Initial(c[4]))
+    @test !isinitial(c)
+    @test !isinitial(x)
+end
+
+@testset "At" begin
+    @independent_variables u
+    @variables x(t) v(..) w(t)[1:3]
+    @parameters y z(u, t) r[1:3]
+
+    @test EvalAt(1)(x) isa Num
+    @test isequal(EvalAt(1)(y), y)
+    @test_throws ErrorException EvalAt(1)(z)
+    @test isequal(EvalAt(1)(v), v(1))
+    @test isequal(EvalAt(1)(v(t)), v(1))
+    @test isequal(EvalAt(1)(v(2)), v(2))
+
+    arr = EvalAt(1)(w)
+    var = EvalAt(1)(w[1])
+    @test arr isa Symbolics.Arr
+    @test var isa Num
+
+    @test isequal(EvalAt(1)(r), r)
+    @test isequal(EvalAt(1)(r[2]), r[2])
+
+    _x = ModelingToolkit.unwrap(x)
+    @test EvalAt(1)(_x) isa Symbolics.BasicSymbolic
+    @test only(arguments(EvalAt(1)(_x))) == 1
+    @test EvalAt(1)(D(x)) isa Num
 end

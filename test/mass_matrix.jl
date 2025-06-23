@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra
+using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra, StaticArrays
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 
 @variables y(t)[1:3]
@@ -8,17 +8,20 @@ eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
     D(y[2]) ~ k[1] * y[1] - k[3] * y[2] * y[3] - k[2] * y[2]^2,
     0 ~ y[1] + y[2] + y[3] - 1]
 
-@named sys = ODESystem(eqs, t, collect(y), [k])
+@named sys = System(eqs, t, collect(y), [k])
 sys = complete(sys)
-@test_throws ArgumentError ODESystem(eqs, y[1])
+@test_throws ModelingToolkit.OperatorIndepvarMismatchError System(eqs, y[1])
 M = calculate_massmatrix(sys)
+@test M isa Diagonal
 @test M == [1 0 0
             0 1 0
             0 0 0]
 
-prob_mm = ODEProblem(sys, [y => [1.0, 0.0, 0.0]], (0.0, 1e5),
-    [k => [0.04, 3e7, 1e4]])
+prob_mm = ODEProblem(sys, [y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
+@test prob_mm.f.mass_matrix isa Diagonal{Float64, Vector{Float64}}
 sol = solve(prob_mm, Rodas5(), reltol = 1e-8, abstol = 1e-8)
+prob_mm = ODEProblem(sys, SA[y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
+@test prob_mm.f.mass_matrix isa Diagonal{Float64, SVector{3, Float64}}
 
 function rober(du, u, p, t)
     y₁, y₂, y₃ = u
@@ -40,6 +43,20 @@ sol2 = solve(prob_mm2, Rodas5(), reltol = 1e-8, abstol = 1e-8, tstops = sol.t,
 # Test mass matrix in the identity case
 eqs = [D(y[1]) ~ y[1], D(y[2]) ~ y[2], D(y[3]) ~ y[3]]
 
-@named sys = ODESystem(eqs, t, collect(y), [k])
+@named sys = System(eqs, t, collect(y), [k])
 
 @test calculate_massmatrix(sys) === I
+
+@testset "Mass matrix `isa Diagonal` for `SDEProblem`" begin
+    eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
+        D(y[2]) ~ k[1] * y[1] - k[3] * y[2] * y[3] - k[2] * y[2]^2,
+        0 ~ y[1] + y[2] + y[3] - 1]
+
+    @named sys = System(eqs, t, collect(y), [k])
+    @named sys = SDESystem(sys, [1, 1, 0])
+    sys = complete(sys)
+    prob = SDEProblem(sys, [y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
+    @test prob.f.mass_matrix isa Diagonal{Float64, Vector{Float64}}
+    prob = SDEProblem(sys, SA[y => [1.0, 0.0, 0.0], k => [0.04, 3e7, 1e4]], (0.0, 1e5))
+    @test prob.f.mass_matrix isa Diagonal{Float64, SVector{3, Float64}}
+end

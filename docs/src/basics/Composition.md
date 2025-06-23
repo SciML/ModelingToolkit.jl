@@ -21,7 +21,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function decay(; name)
     @parameters a
     @variables x(t) f(t)
-    ODESystem([
+    System([
             D(x) ~ -a * x + f
         ], t;
         name = name)
@@ -31,8 +31,8 @@ end
 @named decay2 = decay()
 
 connected = compose(
-    ODESystem([decay2.f ~ decay1.x
-               D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
+    System([decay2.f ~ decay1.x
+            D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
 
@@ -42,7 +42,7 @@ equations(connected)
 # Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
 # Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
 
-simplified_sys = structural_simplify(connected)
+simplified_sys = mtkcompile(connected)
 
 equations(simplified_sys)
 ```
@@ -56,7 +56,7 @@ x0 = [decay1.x => 1.0
 p = [decay1.a => 0.1
      decay2.a => 0.2]
 
-using DifferentialEquations
+using OrdinaryDiffEq
 prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
 sol = solve(prob, Tsit5())
 sol[decay2.f]
@@ -69,7 +69,7 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = compose(ODESystem(eqs, indepvar, unknowns, ps), subsys)
+@named sys = compose(System(eqs, indepvar, unknowns, ps), subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
@@ -84,7 +84,7 @@ example, let's say there is a variable `x` in `unknowns` and a variable
 `x` in `subsys`. We can declare that these two variables are the same
 by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
-like `structural_simplify` which will be described later.
+like `mtkcompile` which will be described later.
 
 ### Numerics with Composed Models
 
@@ -122,7 +122,7 @@ With symbolic parameters, it is possible to set the default value of a parameter
 
 ```julia
 # ...
-sys = ODESystem(
+sys = System(
 # ...
 # directly in the defaults argument
     defaults = Pair{Num, Any}[x => u,
@@ -135,49 +135,41 @@ sys.y = u * 1.1
 In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every unknown and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
-@parameters a b c d e f
+@parameters a b c d
 
 # a is a local variable
 b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
 c = ParentScope(ParentScope(c)) # ParentScope can be nested
-d = DelayParentScope(d) # skips one level before applying ParentScope
-e = DelayParentScope(e, 2) # second argument allows skipping N levels
-f = GlobalScope(f)
+d = GlobalScope(d)
 
-p = [a, b, c, d, e, f]
+p = [a, b, c, d]
 
-level0 = ODESystem(Equation[], t, [], p; name = :level0)
-level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
+level0 = System(Equation[], t, [], p; name = :level0)
+level1 = System(Equation[], t, [], []; name = :level1) ∘ level0
 parameters(level1)
 #level0₊a
 #b
 #c
-#level0₊d
-#level0₊e
-#f
-level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
+#d
+level2 = System(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
 #level1₊level0₊a
 #level1₊b
 #c
-#level0₊d
-#level1₊level0₊e
-#f
-level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
+#d
+level3 = System(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
 #level2₊level1₊level0₊a
 #level2₊level1₊b
 #level2₊c
-#level2₊level0₊d
-#level1₊level0₊e
-#f
+#d
 ```
 
 ## Structural Simplify
 
 In many cases, the nicest way to build a model may leave a lot of
 unnecessary variables. Thus one may want to remove these equations
-before numerically solving. The `structural_simplify` function removes
+before numerically solving. The `mtkcompile` function removes
 these trivial equality relationships and trivial singularity equations,
 i.e. equations which result in `0~0` expressions, in over-specified systems.
 
@@ -202,12 +194,12 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 N = S + I + R
 @parameters β, γ
 
-@named seqn = ODESystem([D(S) ~ -β * S * I / N], t)
-@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t)
-@named reqn = ODESystem([D(R) ~ γ * I], t)
+@named seqn = System([D(S) ~ -β * S * I / N], t)
+@named ieqn = System([D(I) ~ β * S * I / N - γ * I], t)
+@named reqn = System([D(R) ~ γ * I], t)
 
 sir = compose(
-    ODESystem(
+    System(
         [
             S ~ ieqn.S,
             I ~ seqn.I,
@@ -235,7 +227,7 @@ values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
 
 ```@example compose
-sireqn_simple = structural_simplify(sir)
+sireqn_simple = mtkcompile(sir)
 
 equations(sireqn_simple)
 ```
@@ -259,7 +251,7 @@ sol[reqn.R]
 ## Tearing Problem Construction
 
 Some system types (specifically `NonlinearSystem`) can be further
-reduced if `structural_simplify` has already been applied to them. This is done
+reduced if `mtkcompile` has already been applied to them. This is done
 by using the alternative problem constructors (`BlockNonlinearProblem`).
 In these cases, the constructor uses the knowledge of the
 strongly connected components calculated during the process of simplification
@@ -274,6 +266,6 @@ equations are discontinuous in either the unknown or one of its derivatives. Thi
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
 handle such dynamics is to tell the solver about the discontinuity by a
-root-finding equation, which can be modeling using [`ODESystem`](@ref)'s event
+root-finding equation, which can be modeling using [`System`](@ref)'s event
 support. Please see the tutorial on [Callbacks and Events](@ref events) for
 details and examples.

@@ -10,10 +10,10 @@ eqs = [D(x) ~ 1
        x ~ y]
 initialization_eqs = [1 ~ exp(1 + x)]
 
-@named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+@named sys = System(eqs, t; initialization_eqs)
+sys = complete(mtkcompile(sys))
 tspan = (0.0, 0.2)
-prob = ODEProblem(sys, [], tspan, [])
+prob = ODEProblem(sys, [], tspan)
 
 @test prob.f.initializeprob[y] == 2.0
 @test prob.f.initializeprob[x] == 2.0
@@ -27,10 +27,10 @@ eqs = [D(x) ~ 1
        x ~ y]
 initialization_eqs = [1 ~ exp(1 + x)]
 
-@named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+@named sys = System(eqs, t; initialization_eqs)
+sys = complete(mtkcompile(sys))
 tspan = (0.0, 0.2)
-prob = ODEProblem(sys, [], tspan, [])
+prob = ODEProblem(sys, [], tspan)
 
 @test prob.f.initializeprob[x] == 2.0
 @test prob.f.initializeprob[y] == 2.0
@@ -45,11 +45,11 @@ eqs = [D(x) ~ a]
 
 initialization_eqs = [1 ~ exp(1 + x)]
 
-@named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+@named sys = System(eqs, t; initialization_eqs)
+sys = complete(mtkcompile(sys))
 
 tspan = (0.0, 0.2)
-prob = ODEProblem(sys, [], tspan, [])
+prob = ODEProblem(sys, [], tspan)
 
 @test prob.f.initializeprob[x] == -1.0
 sol = solve(prob.f.initializeprob; show_trace = Val(true))
@@ -65,11 +65,11 @@ eqs = [D(x) ~ a,
 
 initialization_eqs = [1 ~ exp(1 + x)]
 
-@named sys = ODESystem(eqs, t; initialization_eqs)
-sys = complete(structural_simplify(sys))
+@named sys = System(eqs, t; initialization_eqs)
+sys = complete(mtkcompile(sys))
 
 tspan = (0.0, 0.2)
-prob = ODEProblem(sys, [], tspan, [])
+prob = ODEProblem(sys, [], tspan)
 
 @test prob.f.initializeprob[x] == -1.0
 sol = solve(prob.f.initializeprob; show_trace = Val(true))
@@ -80,31 +80,31 @@ sol = solve(prob.f.initializeprob; show_trace = Val(true))
 @parameters x0
 @variables x(t)
 @variables y(t) = x
-@mtkbuild sys = ODESystem([x ~ x0, D(y) ~ x], t)
-prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+@mtkcompile sys = System([x ~ x0, D(y) ~ x], t)
+prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 @test prob[x] == 1.0
 @test prob[y] == 1.0
 
 @parameters x0
 @variables x(t)
 @variables y(t) = x0
-@mtkbuild sys = ODESystem([x ~ x0, D(y) ~ x], t)
-prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+@mtkcompile sys = System([x ~ x0, D(y) ~ x], t)
+prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 @test prob[x] == 1.0
 @test prob[y] == 1.0
 
 @parameters x0
 @variables x(t)
 @variables y(t) = x0
-@mtkbuild sys = ODESystem([x ~ y, D(y) ~ x], t)
-prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+@mtkcompile sys = System([x ~ y, D(y) ~ x], t)
+prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 @test prob[x] == 1.0
 @test prob[y] == 1.0
 
 @parameters x0
 @variables x(t) = x0
 @variables y(t) = x
-@mtkbuild sys = ODESystem([x ~ y, D(y) ~ x], t)
-prob = ODEProblem(sys, [], (0.0, 1.0), [x0 => 1.0])
+@mtkcompile sys = System([x ~ y, D(y) ~ x], t)
+prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 @test prob[x] == 1.0
 @test prob[y] == 1.0

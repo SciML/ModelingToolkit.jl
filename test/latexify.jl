@@ -3,6 +3,7 @@ using Latexify
 using ModelingToolkit
 using ReferenceTests
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkitStandardLibrary.Blocks
 
 ### Tips for generating latex tests:
 ### Latexify has an unexported macro:
@@ -47,3 +48,13 @@ eqs = [D(u[1]) ~ p[3] * (u[2] - u[1]),
 eqs = [D(x) ~ (1 + cos(t)) / (1 + 2 * x)]
 
 @test_reference "latexify/40.tex" latexify(eqs)
+
+@named P = FirstOrder(k = 1, T = 1)
+@named C = Gain(; k = -1)
+
+ap = AnalysisPoint(:plant_input)
+eqs = [connect(P.output, C.input)
+       connect(C.output, ap, P.input)]
+sys_ap = System(eqs, t, systems = [P, C], name = :hej)
+
+@test_reference "latexify/50.tex" latexify(sys_ap)

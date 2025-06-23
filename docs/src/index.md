@@ -36,6 +36,12 @@ If you use ModelingToolkit in your work, please cite the following:
 
 ## Feature Summary
 
+!!! danger "ModelingToolkit version 10"
+    
+    ModelingToolkit version 10 just released. Please refer to the [changelog](https://github.com/SciML/ModelingToolkit.jl/blob/master/NEWS.md)
+    for a summary of the changes. Some documentation pages may be broken while downstram
+    packages update to the new version.
+
 ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some
 of the features from symbolic computing packages like SymPy or Mathematica with
 the ideas of equation-based modeling systems like the causal Simulink and the
@@ -122,7 +128,7 @@ Below is an incomplete list of extension libraries one may want to be aware of:
   - [MomentClosure.jl](https://augustinas1.github.io/MomentClosure.jl/dev/): Automatic
     transformation of ReactionSystems into deterministic systems
     
-      + Generates ODESystems for the moment closures
+      + Generates Systems for the moment closures
       + Allows for geometrically-distributed random reaction rates
   - [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
     Simulating and analyzing large chemical reaction mechanisms
@@ -146,14 +152,14 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 
 All of the symbolic systems have a direct conversion to a numerical system, which
 can then be handled through the SciML interfaces. For example, after building a
-model and performing symbolic manipulations, an `ODESystem` can be converted into
+model and performing symbolic manipulations, an `System` can be converted into
 an `ODEProblem` to then be solved by a numerical ODE solver. Below is a list of
 the solver libraries which are the numerical targets of the ModelingToolkit
 system:
 
   - [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/)
     
-      + Multi-package interface of high performance numerical solvers for `ODESystem`,
+      + Multi-package interface of high performance numerical solvers for `System`,
         `SDESystem`, and `JumpSystem`
 
   - [NonlinearSolve.jl](https://docs.sciml.ai/NonlinearSolve/stable/)

@@ -54,6 +54,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
             D(eq.lhs)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
+        rhs = fast_substitute(rhs, state.param_derivative_map)
         substitution_dict = Dict(x.lhs => x.rhs
         for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
         sub_rhs = substitute(rhs, substitution_dict)
@@ -195,7 +196,7 @@ function pantelides!(
             eq′ = eq_to_diff[eq′]
         end # for _ in 1:maxiters
         pathfound ||
-            error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
+            error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::System; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
 
     finalize && for var in 1:ndsts(graph)
@@ -206,13 +207,13 @@ function pantelides!(
 end
 
 """
-    dae_index_lowering(sys::ODESystem; kwargs...) -> ODESystem
+    dae_index_lowering(sys::System; kwargs...) -> System
 
 Perform the Pantelides algorithm to transform a higher index DAE to an index 1
-DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged to call [`structural_simplify`](@ref)
+DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged to call [`mtkcompile`](@ref)
 instead, which calls this function internally.
 """
-function dae_index_lowering(sys::ODESystem; kwargs...)
+function dae_index_lowering(sys::System; kwargs...)
     state = TearingState(sys)
     var_eq_matching = pantelides!(state; finalize = false, kwargs...)
     return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))

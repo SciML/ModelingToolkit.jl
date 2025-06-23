@@ -6,6 +6,7 @@ on:
   pull_request:
     paths-ignore:
         - 'docs/**'
+        - 'benchmark/**'
 
 concurrency:
   # Skip intermediate builds: always, but for the master branch and tags.
@@ -26,18 +27,22 @@ jobs:
         os: [ubuntu-latest]
         package:
           - {user: SciML, repo: SciMLBase.jl, group: Downstream}
+          - {user: SciML, repo: SciMLBase.jl, group: SymbolicIndexingInterface}
           - {user: SciML, repo: Catalyst.jl, group: All}
-          - {user: SciML, repo: CellMLToolkit.jl, group: All}
+          - {user: SciML, repo: CellMLToolkit.jl, group: Core}
           - {user: SciML, repo: SBMLToolkit.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
-          - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
+          - {user: SciML, repo: StructuralIdentifiability.jl, group: Core}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core}
           - {user: SciML, repo: ModelOrderReduction.jl, group: All}
           - {user: SciML, repo: MethodOfLines.jl, group: Interface}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: ai4energy, repo: Ai4EComponentLib.jl, group: Downstream}
+          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: All}
+          - {user: SciML, repo: SciMLSensitivity.jl, group: Core8}
+
+          - {user: Neuroblox, repo: Neuroblox.jl, group: All}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1

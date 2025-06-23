@@ -1,16 +1,17 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
-using SymbolicIndexingInterface
+using SymbolicIndexingInterface, StaticArrays
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
-using BlockArrays: BlockedArray, Block
+using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
 using ForwardDiff
 using JET
 
 @parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
-@named sys = ODESystem(
-    Equation[], t, [], [a, c, d, e, f, g, h], parameter_dependencies = [b ~ 2a],
-    continuous_events = [[a ~ 0] => [c ~ 0]], defaults = Dict(a => 0.0))
+@named sys = System(
+    [b ~ 2a], t, [], [a, b, c, d, e, f, g, h];
+    continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
+        [a ~ 0] => [c ~ 0], discrete_parameters = c)], defaults = Dict(a => 0.0))
 sys = complete(sys)
 
 ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
@@ -18,9 +19,23 @@ ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
 
 ps = MTKParameters(sys, ivs)
 @test_nowarn copy(ps)
+ps_copy = copy(ps)
+ps_field_equals = map(fieldnames(typeof(ps))) do f
+    getfield(ps, f) == getfield(ps_copy, f)
+end
+@test all(ps_field_equals)
 # dependent initialization, also using defaults
 @test getp(sys, a)(ps) == getp(sys, b)(ps) == getp(sys, c)(ps) == 0.0
 @test getp(sys, d)(ps) isa Int
+
+@testset "`p_constructor`" begin
+    ps2 = MTKParameters(sys, ivs; p_constructor = x -> SArray{Tuple{size(x)...}}(x))
+    @test ps2.tunable isa SVector
+    @test ps2.initials isa SVector
+    @test ps2.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
+    @test ps2.constant isa Tuple{<:SVector, <:SVector, <:SVector{1, <:SMatrix}}
+    @test ps2.nonnumeric isa Tuple{<:SVector}
+end
 
 ivs[a] = 1.0
 ps = MTKParameters(sys, ivs)
@@ -91,6 +106,27 @@ end
 @test getp(sys, f)(newps) isa Matrix{UInt}
 @test getp(sys, g)(newps) isa Vector{Float32}
 
+@testset "Type-stability of `remake_buffer`" begin
+    prob = ODEProblem(sys, ivs, (0.0, 1.0))
+
+    idxs = (a, c, d, e, f, g, h)
+    vals = (1.0, 2.0, 3, ones(3), ones(Int, 3, 3), ones(2), "a")
+
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+    @test_throws ErrorException @inferred setter(prob, collect(vals))
+
+    idxs = (a, c, e...)
+    vals = Float16[1.0, 2.0, 3.0, 4.0, 5.0]
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+
+    idxs = [a, e]
+    vals = (Float16(1.0), ForwardDiff.Dual{Nothing, Float16, 0}[1.0, 2.0, 3.0])
+    setter = setsym_oop(prob, idxs)
+    @test_nowarn @inferred setter(prob, vals)
+end
+
 ps = MTKParameters(sys, ivs)
 function loss(value, sys, ps)
     @test value isa ForwardDiff.Dual
@@ -104,16 +140,16 @@ end
 @parameters p::Vector{Float64}
 @variables X(t)
 eq = D(X) ~ p[1] - p[2] * X
-@mtkbuild osys = ODESystem([eq], t)
+@mtkcompile osys = System([eq], t)
 
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
-p = MTKParameters(osys, ps, u0)
+p = MTKParameters(osys, [ps; u0])
 @test p.tunable == [2.0, 0.1]
 
 # Ensure partial update promotes the buffer
 @parameters p q r
-@named sys = ODESystem(Equation[], t, [], [p, q, r])
+@named sys = System(Equation[], t, [], [p, q, r])
 sys = complete(sys)
 ps = MTKParameters(sys, [p => 1.0, q => 2.0, r => 3.0])
 newps = remake_buffer(sys, ps, (p,), (1.0f0,))
@@ -124,14 +160,14 @@ newps = remake_buffer(sys, ps, (p,), (1.0f0,))
 @parameters p d
 @variables X(t)
 eqs = [D(X) ~ p - d * X]
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [X => 1.0]
 tspan = (0.0, 100.0)
 ps = [p => 1.0] # Value for `d` is missing
 
-@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, u0, tspan, ps)
-@test_nowarn ODEProblem(sys, u0, tspan, [ps..., d => 1.0])
+@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, [u0; ps], tspan)
+@test_nowarn ODEProblem(sys, [u0; ps; [d => 1.0]], tspan)
 
 # JET tests
 
@@ -142,11 +178,12 @@ function level1()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p2 * x * y
-           D(y) ~ -p3 * y + p4 * x * y]
+           D(y) ~ -p3 * y + p4 * x * y
+           y0 ~ 2p4]
 
-    sys = structural_simplify(complete(ODESystem(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+    sys = mtkcompile(complete(System(
+        eqs, t, name = :sys)))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters
@@ -156,11 +193,12 @@ function level2()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+           D(y) ~ -p23[2] * y + p4 * x * y
+           y0 ~ 2p4]
 
-    sys = structural_simplify(complete(ODESystem(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+    sys = mtkcompile(complete(System(
+        eqs, t, name = :sys)))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters with different scalar types
@@ -170,11 +208,12 @@ function level3()
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+           D(y) ~ -p23[2] * y + p4 * x * y
+           y0 ~ 2p4]
 
-    sys = structural_simplify(complete(ODESystem(
-        eqs, t, tspan = (0, 3.0), name = :sys, parameter_dependencies = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys)
+    sys = mtkcompile(complete(System(
+        eqs, t, name = :sys)))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 @testset "level$i" for (i, prob) in enumerate([level1(), level2(), level3()])
@@ -212,9 +251,9 @@ end
 @variables x(t) y(t)
 eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
-@mtkbuild odesys = ODESystem(eqs, t)
+@mtkcompile odesys = System(eqs, t)
 odeprob = ODEProblem(
-    odesys, [x => 1.0, y => 1.0], (0.0, 10.0), [α => 1.5, β => 1.0, γ => 3.0, δ => 1.0])
+    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0))
 tunables, _... = canonicalize(Tunable(), odeprob.p)
 @test tunables isa AbstractVector{Float64}
 
@@ -237,7 +276,7 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     end
 
     @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::Foo
-    @named sys = ODESystem(Equation[], t, [], [a, b, c, d, e, f])
+    @named sys = System(Equation[], t, [], [a, b, c, d, e, f])
     sys = complete(sys)
     ps = MTKParameters(sys,
         Dict(a => 1.0, b => 2, c => 3ones(2),
@@ -275,7 +314,7 @@ end
 
 @testset "Error on missing parameter defaults" begin
     @parameters a b c
-    @named sys = ODESystem(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
+    @named sys = System(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
     sys = complete(sys)
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
@@ -287,18 +326,18 @@ end
         D(V[1]) ~ k[1] - k[2] * V[1],
         D(V[2]) ~ k[3] - k[4] * V[2]
     ]
-    @mtkbuild osys_scal = ODESystem(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
+    @mtkcompile osys_scal = System(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
 
     u0 = [V => [10.0, 20.0]]
     ps_vec = [k => [2.0, 3.0, 4.0, 5.0]]
     ps_scal = [k[1] => 1.0, k[2] => 2.0, k[3] => 3.0, k[4] => 4.0]
-    oprob_scal_scal = ODEProblem(osys_scal, u0, 1.0, ps_scal)
+    oprob_scal_scal = ODEProblem(osys_scal, [u0; ps_scal], 1.0)
     newoprob = remake(oprob_scal_scal; p = ps_vec, build_initializeprob = false)
     @test newoprob.ps[k] == [2.0, 3.0, 4.0, 5.0]
 end
 
 # Parameter timeseries
-ps = MTKParameters(([1.0, 1.0],), (BlockedArray(zeros(4), [2, 2]),),
+ps = MTKParameters([1.0, 1.0], (), (BlockedArray(zeros(4), [2, 2]),),
     (), (), ())
 ps2 = SciMLStructures.replace(Discrete(), ps, ones(4))
 @test typeof(ps2.discrete) == typeof(ps.discrete)
@@ -314,7 +353,8 @@ with_updated_parameter_timeseries_values(
 
 # With multiple types and clocks
 ps = MTKParameters(
-    (), (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
+    (), (),
+    (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
         BlockedArray(falses(1), [1, 0])),
     (), (), ())
 @test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}

@@ -1,4 +1,5 @@
 using ModelingToolkit
+using DynamicQuantities
 
 # Bounds
 @variables u [bounds = (-1, 1)]
@@ -53,30 +54,30 @@ end
 
 # Guess
 @variables y [guess = 0]
-@test getguess(y) === 0
-@test hasguess(y) === true
+@test getguess(y) == 0
+@test hasguess(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).guess == 0
 
 # Default
 @variables y = 0
-@test ModelingToolkit.getdefault(y) === 0
-@test ModelingToolkit.hasdefault(y) === true
+@test ModelingToolkit.getdefault(y) == 0
+@test ModelingToolkit.hasdefault(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).default == 0
 
 # Issue#2653
 @variables y[1:3] [guess = ones(3)]
 @test getguess(y) == ones(3)
-@test hasguess(y) === true
+@test hasguess(y) == true
 @test ModelingToolkit.dump_variable_metadata(y).guess == ones(3)
 
 for i in 1:3
     @test getguess(y[i]) == 1.0
-    @test hasguess(y[i]) === true
+    @test hasguess(y[i]) == true
     @test ModelingToolkit.dump_variable_metadata(y[i]).guess == 1.0
 end
 
 @variables y
-@test hasguess(y) === false
+@test hasguess(y) == false
 @test !haskey(ModelingToolkit.dump_variable_metadata(y), :guess)
 
 # Disturbance
@@ -122,7 +123,7 @@ Dₜ = Differential(t)
 @parameters k2 [tunable = false]
 eqs = [Dₜ(x) ~ (-k2 * x + k * u) / T
        y ~ x]
-sys = ODESystem(eqs, t, name = :tunable_first_order)
+sys = System(eqs, t, name = :tunable_first_order)
 unk_meta = ModelingToolkit.dump_unknowns(sys)
 @test length(unk_meta) == 3
 @test all(iszero, meta.default for meta in unk_meta)
@@ -168,15 +169,16 @@ sp = Set(p)
 @independent_variables t
 @variables u(t) [description = "A short description of u"]
 @parameters p [description = "A description of p"]
-@named sys = ODESystem([u ~ p], t)
+@named sys = System([u ~ p], t)
 
 @test_nowarn show(stdout, "text/plain", sys)
 
 # Defaults, guesses overridden by system, parameter dependencies
 @variables x(t)=1.0 y(t) [guess = 1.0]
 @parameters p=2.0 q
-@named sys = ODESystem(Equation[], t, [x, y], [p]; defaults = Dict(x => 2.0, p => 3.0),
-    guesses = Dict(y => 2.0), parameter_dependencies = [q => 2p])
+@named sys = System([q ~ 2p], t, [x, y], [p, q]; defaults = Dict(x => 2.0, p => 3.0),
+    guesses = Dict(y => 2.0))
+sys = complete(sys)
 unks_meta = ModelingToolkit.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
 @test unks_meta[:x].default == 2.0
@@ -185,3 +187,42 @@ params_meta = ModelingToolkit.dump_parameters(sys)
 params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
 @test params_meta[:p].default == 3.0
 @test isequal(params_meta[:q].dependency, 2p)
+
+# Connect
+@variables x [connect = Flow]
+@test hasconnect(x)
+@test getconnect(x) == Flow
+@test ModelingToolkit.dump_variable_metadata(x).connect == Flow
+x = ModelingToolkit.setconnect(x, ModelingToolkit.Stream)
+@test getconnect(x) == ModelingToolkit.Stream
+
+struct BadConnect end
+@test_throws Exception ModelingToolkit.setconnect(x, BadConnect)
+
+# Unit
+@variables x [unit = u"s"]
+@test hasunit(x)
+@test getunit(x) == u"s"
+@test ModelingToolkit.dump_variable_metadata(x).unit == u"s"
+
+# Misc data
+@variables x [misc = [:good]]
+@test hasmisc(x)
+@test getmisc(x) == [:good]
+x = ModelingToolkit.setmisc(x, "okay")
+@test getmisc(x) == "okay"
+
+# Variable Type
+@variables x
+@test ModelingToolkit.getvariabletype(x) == ModelingToolkit.VARIABLE
+@test ModelingToolkit.dump_variable_metadata(x).variable_type == ModelingToolkit.VARIABLE
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
+x = ModelingToolkit.toparam(x)
+@test ModelingToolkit.getvariabletype(x) == ModelingToolkit.PARAMETER
+@test ModelingToolkit.dump_variable_metadata(x).variable_source == :variables
+
+@parameters y
+@test ModelingToolkit.getvariabletype(y) == ModelingToolkit.PARAMETER
+
+@brownians z
+@test ModelingToolkit.getvariabletype(z) == ModelingToolkit.BROWNIAN

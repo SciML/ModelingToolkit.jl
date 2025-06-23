@@ -63,7 +63,8 @@ function algebraic_variables_scc(state::TearingState)
         all(v -> !isdervar(state.structure, v),
             𝑠neighbors(graph, eq))
     end))
-    var_eq_matching = complete(maximal_matching(graph, e -> e in algeqs, v -> v in algvars))
+    var_eq_matching = complete(
+        maximal_matching(graph, e -> e in algeqs, v -> v in algvars), ndsts(graph))
     var_sccs = find_var_sccs(complete(graph), var_eq_matching)
 
     return var_eq_matching, var_sccs

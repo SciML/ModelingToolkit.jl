@@ -1,10 +1,11 @@
 symconvert(::Type{Symbolics.Struct{T}}, x) where {T} = convert(T, x)
-symconvert(::Type{T}, x) where {T} = convert(T, x)
-symconvert(::Type{Real}, x::Integer) = convert(Float64, x)
+symconvert(::Type{T}, x::V) where {T, V} = convert(promote_type(T, V), x)
+symconvert(::Type{Real}, x::Integer) = convert(Float16, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
-struct MTKParameters{T, D, C, N, H}
+struct MTKParameters{T, I, D, C, N, H}
     tunable::T
+    initials::I
     discrete::D
     constant::C
     nonnumeric::N
@@ -22,100 +23,55 @@ dependent systems. It is only required if the symbolic expressions also use the 
 variable of the system.
 
 This requires that `complete` has been called on the system (usually via
-`structural_simplify` or `@mtkbuild`) and the keyword `split = true` was passed (which is
+`mtkcompile` or `@mtkcompile`) and the keyword `split = true` was passed (which is
 the default behavior).
 """
 function MTKParameters(
-        sys::AbstractSystem, p, u0 = Dict(); tofloat = false, use_union = false,
-        t0 = nothing)
+        sys::AbstractSystem, op; tofloat = false,
+        t0 = nothing, substitution_limit = 1000, floatT = nothing,
+        p_constructor = identity)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
-    all_ps = Set(unwrap.(parameters(sys)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys))))
-    if p isa Vector && !(eltype(p) <: Pair) && !isempty(p)
-        ps = parameters(sys)
-        length(p) == length(ps) || error("Invalid parameters")
-        p = ps .=> p
-    end
-    if p isa SciMLBase.NullParameters || isempty(p)
-        p = Dict()
-    end
-    p = todict(p)
-    defs = Dict(default_toterm(unwrap(k)) => v for (k, v) in defaults(sys))
-    if eltype(u0) <: Pair
-        u0 = todict(u0)
-    elseif u0 isa AbstractArray && !isempty(u0)
-        u0 = Dict(unknowns(sys) .=> vec(u0))
-    elseif u0 === nothing || isempty(u0)
-        u0 = Dict()
-    end
-    defs = merge(defs, u0)
-    defs = merge(Dict(eq.lhs => eq.rhs for eq in observed(sys)), defs)
-    bigdefs = merge(defs, p)
+    all_ps = Set(unwrap.(parameters(sys; initial_parameters = true)))
+    union!(all_ps, default_toterm.(unwrap.(parameters(sys; initial_parameters = true))))
+
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
+    op = to_varmap(op, ps)
+    symbols_to_symbolics!(sys, op)
+    defs = add_toterms(recursive_unwrap(defaults(sys)))
+
+    is_time_dependent(sys) && add_observed!(sys, op)
+    add_parameter_dependencies!(sys, op)
+
+    u0map = anydict()
+    pmap = anydict()
+    missing_unknowns, missing_pars = build_operating_point!(sys, op,
+        u0map, pmap, defs, dvs, ps)
+
     if t0 !== nothing
-        bigdefs[get_iv(sys)] = t0
-    end
-    p = Dict()
-    missing_params = Set()
-    pdeps = has_parameter_dependencies(sys) ? parameter_dependencies(sys) : []
-
-    for sym in all_ps
-        ttsym = default_toterm(sym)
-        isarr = iscall(sym) && operation(sym) === getindex
-        arrparent = isarr ? arguments(sym)[1] : nothing
-        ttarrparent = isarr ? default_toterm(arrparent) : nothing
-        pname = hasname(sym) ? getname(sym) : nothing
-        ttpname = hasname(ttsym) ? getname(ttsym) : nothing
-        p[sym] = p[ttsym] = if haskey(bigdefs, sym)
-            bigdefs[sym]
-        elseif haskey(bigdefs, ttsym)
-            bigdefs[ttsym]
-        elseif haskey(bigdefs, pname)
-            isarr ? bigdefs[pname][arguments(sym)[2:end]...] : bigdefs[pname]
-        elseif haskey(bigdefs, ttpname)
-            isarr ? bigdefs[ttpname][arguments(sym)[2:end]...] : bigdefs[pname]
-        elseif isarr && haskey(bigdefs, arrparent)
-            bigdefs[arrparent][arguments(sym)[2:end]...]
-        elseif isarr && haskey(bigdefs, ttarrparent)
-            bigdefs[ttarrparent][arguments(sym)[2:end]...]
-        end
-        if get(p, sym, nothing) === nothing
-            push!(missing_params, sym)
-            continue
-        end
-        # We may encounter the `ttsym` version first, add it to `missing_params`
-        # then encounter the "normal" version of a parameter or vice versa
-        # Remove the old one in `missing_params` just in case
-        delete!(missing_params, sym)
-        delete!(missing_params, ttsym)
+        op[get_iv(sys)] = t0
     end
 
-    if !isempty(pdeps)
-        for eq in pdeps
-            sym = eq.lhs
-            expr = eq.rhs
-            sym = unwrap(sym)
-            ttsym = default_toterm(sym)
-            delete!(missing_params, sym)
-            delete!(missing_params, ttsym)
-            p[sym] = p[ttsym] = expr
-        end
+    if floatT === nothing
+        floatT = float(float_type_from_varmap(op))
     end
 
-    isempty(missing_params) || throw(MissingParametersError(collect(missing_params)))
-    p = Dict(unwrap(k) => (bigdefs[unwrap(k)] = fixpoint_sub(v, bigdefs)) for (k, v) in p)
-    for (sym, _) in p
-        if iscall(sym) && operation(sym) === getindex &&
-           first(arguments(sym)) in all_ps
-            error("Scalarized parameter values ($sym) are not supported. Instead of `[p[1] => 1.0, p[2] => 2.0]` use `[p => [1.0, 2.0]]`")
-        end
+    isempty(missing_pars) || throw(MissingParametersError(collect(missing_pars)))
+    evaluate_varmap!(op, ps; limit = substitution_limit)
+
+    p = op
+    filter!(p) do kvp
+        kvp[1] in all_ps
     end
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length)
+    initials_buffer = Vector{ic.initials_buffer_size.type}(
+        undef, ic.initials_buffer_size.length)
     disc_buffer = Tuple(BlockedArray(
                             Vector{subbuffer_sizes[1].type}(
                                 undef, sum(x -> x.length, subbuffer_sizes)),
@@ -130,6 +86,9 @@ function MTKParameters(
         if haskey(ic.tunable_idx, sym)
             idx = ic.tunable_idx[sym]
             tunable_buffer[idx] = val
+        elseif haskey(ic.initials_idx, sym)
+            idx = ic.initials_idx[sym]
+            initials_buffer[idx] = val
         elseif haskey(ic.discrete_idx, sym)
             idx = ic.discrete_idx[sym]
             disc_buffer[idx.buffer_idx][idx.idx_in_buffer] = val
@@ -156,6 +115,9 @@ function MTKParameters(
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)
         end
+        if ctype == Real && floatT !== nothing
+            ctype = floatT
+        end
         val = symconvert(ctype, val)
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
@@ -171,19 +133,25 @@ function MTKParameters(
             end
         end
     end
-    tunable_buffer = narrow_buffer_type(tunable_buffer)
+    tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)
     if isempty(tunable_buffer)
         tunable_buffer = SizedVector{0, Float64}()
     end
-    disc_buffer = narrow_buffer_type.(disc_buffer)
-    const_buffer = narrow_buffer_type.(const_buffer)
+    initials_buffer = narrow_buffer_type(initials_buffer; p_constructor)
+    if isempty(initials_buffer)
+        initials_buffer = SizedVector{0, Float64}()
+    end
+    disc_buffer = narrow_buffer_type.(disc_buffer; p_constructor)
+    const_buffer = narrow_buffer_type.(const_buffer; p_constructor)
     # Don't narrow nonnumeric types
-    nonnumeric_buffer = nonnumeric_buffer
+    if !isempty(nonnumeric_buffer)
+        nonnumeric_buffer = map(p_constructor, nonnumeric_buffer)
+    end
 
     mtkps = MTKParameters{
-        typeof(tunable_buffer), typeof(disc_buffer), typeof(const_buffer),
-        typeof(nonnumeric_buffer), typeof(())}(tunable_buffer,
-        disc_buffer, const_buffer, nonnumeric_buffer, ())
+        typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
+        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(())}(tunable_buffer,
+        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, ())
     return mtkps
 end
 
@@ -194,21 +162,42 @@ function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate..
     @set p.caches = buffers
 end
 
-function narrow_buffer_type(buffer::AbstractArray)
+function narrow_buffer_type(buffer::AbstractArray; p_constructor = identity)
     type = Union{}
     for x in buffer
         type = promote_type(type, typeof(x))
     end
-    return convert.(type, buffer)
+    return p_constructor(type.(buffer))
 end
 
-function narrow_buffer_type(buffer::AbstractArray{<:AbstractArray})
-    buffer = narrow_buffer_type.(buffer)
+function narrow_buffer_type(
+        buffer::AbstractArray{<:AbstractArray}; p_constructor = identity)
+    type = Union{}
+    for arr in buffer
+        for x in arr
+            type = promote_type(type, typeof(x))
+        end
+    end
+    buffer = map(buffer) do buf
+        p_constructor(type.(buf))
+    end
+    return p_constructor(buffer)
+end
+
+function narrow_buffer_type(buffer::BlockedArray; p_constructor = identity)
+    if eltype(buffer) <: AbstractArray
+        buffer = narrow_buffer_type.(buffer; p_constructor)
+    end
     type = Union{}
     for x in buffer
-        type = promote_type(type, eltype(x))
+        type = promote_type(type, typeof(x))
     end
-    return broadcast.(convert, type, buffer)
+    tmp = p_constructor(type.(buffer))
+    blocks = ntuple(Val(ndims(buffer))) do i
+        bsizes = blocksizes(buffer, i)
+        p_constructor(Int.(bsizes))
+    end
+    return BlockedArray(tmp, blocks...)
 end
 
 function buffer_to_arraypartition(buf)
@@ -303,6 +292,26 @@ function SciMLStructures.replace!(::SciMLStructures.Tunable, p::MTKParameters, n
     return nothing
 end
 
+function SciMLStructures.canonicalize(::SciMLStructures.Initials, p::MTKParameters)
+    arr = p.initials
+    repack = let p = p
+        function (new_val)
+            return SciMLStructures.replace(SciMLStructures.Initials(), p, new_val)
+        end
+    end
+    return arr, repack, true
+end
+
+function SciMLStructures.replace(::SciMLStructures.Initials, p::MTKParameters, newvals)
+    @set! p.initials = newvals
+    return p
+end
+
+function SciMLStructures.replace!(::SciMLStructures.Initials, p::MTKParameters, newvals)
+    copyto!(p.initials, newvals)
+    return nothing
+end
+
 for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
                                   (SciMLStructures.Constants, :constant, 1)
                                   (Nonnumeric, :nonnumeric, 1)
@@ -330,17 +339,27 @@ end
 
 function Base.copy(p::MTKParameters)
     tunable = copy(p.tunable)
+    initials = copy(p.initials)
     discrete = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.discrete)
     constant = Tuple(eltype(buf) <: Real ? copy(buf) : copy.(buf) for buf in p.constant)
-    nonnumeric = copy.(p.nonnumeric)
-    caches = copy.(p.caches)
+    nonnumeric = isempty(p.nonnumeric) ? p.nonnumeric : copy.(p.nonnumeric)
+    caches = isempty(p.caches) ? p.caches : copy.(p.caches)
     return MTKParameters(
         tunable,
+        initials,
         discrete,
         constant,
         nonnumeric,
         caches
     )
+end
+
+function ArrayInterface.ismutable(::Type{MTKParameters{
+        T, I, D, C, N, H}}) where {T, I, D, C, N, H}
+    ArrayInterface.ismutable(T) || ArrayInterface.ismutable(I) ||
+        any(ArrayInterface.ismutable, fieldtypes(D)) ||
+        any(ArrayInterface.ismutable, fieldtypes(C)) ||
+        any(ArrayInterface.ismutable, fieldtypes(N))
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
@@ -350,6 +369,9 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
     if portion isa SciMLStructures.Tunable
         return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
+    end
+    if portion isa SciMLStructures.Initials
+        return idx isa Int ? p.initials[idx] : view(p.initials, idx)
     end
     i, j, k... = idx
     if portion isa SciMLStructures.Discrete
@@ -371,6 +393,11 @@ function SymbolicIndexingInterface.set_parameter!(
             throw(InvalidParameterSizeException(size(idx), size(val)))
         end
         p.tunable[idx] = val
+    elseif portion isa SciMLStructures.Initials
+        if validate_size && size(val) !== size(idx)
+            throw(InvalidParameterSizeException(size(idx), size(val)))
+        end
+        p.initials[idx] = val
     else
         i, j, k... = idx
         if portion isa SciMLStructures.Discrete
@@ -445,7 +472,8 @@ end
 
 function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
     stype = get_buffer_template(ic, idx).type
-    if idx.portion == SciMLStructures.Tunable() && !(idx.idx isa Int)
+    if (idx.portion == SciMLStructures.Tunable() ||
+        idx.portion == SciMLStructures.Initials()) && !(idx.idx isa Int)
         stype = AbstractArray{<:stype}
     end
     validate_parameter_type(
@@ -454,6 +482,9 @@ end
 
 function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     (; portion) = index
+    if stype <: FnType
+        stype = fntype_to_function_type(stype)
+    end
     # Nonnumeric parameters have to match the type
     if portion === NONNUMERIC_PORTION
         val isa stype && return nothing
@@ -503,17 +534,149 @@ end
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
     _remake_buffer(indp, oldbuf, idxs, vals)
 end
+
+# For type-inference when using `SII.setp_oop`
+@generated function _remake_buffer(
+        indp, oldbuf::MTKParameters{T, I, D, C, N, H},
+        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex{P}}},
+        vals::Union{AbstractArray, Tuple}; validate = true) where {T, I, D, C, N, H, P}
+
+    # fallback to non-generated method if values aren't type-stable
+    if vals <: AbstractArray && !isconcretetype(eltype(vals))
+        return quote
+            $__remake_buffer(indp, oldbuf, collect(idxs), vals; validate)
+        end
+    end
+
+    # given an index in idxs/vals and the current `eltype` of the buffer,
+    # return the promoted eltype of the buffer
+    function promote_valtype(i, valT)
+        # tuples have distinct types, arrays have a common eltype
+        valT′ = vals <: AbstractArray ? eltype(vals) : fieldtype(vals, i)
+        # if the buffer is a scalarized buffer but the variable is an array
+        # e.g. an array tunable, take the eltype
+        if valT′ <: AbstractArray && !(valT <: AbstractArray)
+            valT′ = eltype(valT′)
+        end
+        return promote_type(valT, valT′)
+    end
+
+    # types of the idxs
+    idxtypes = if idxs <: AbstractArray
+        # if both are arrays, there is only one possible type to check
+        if vals <: AbstractArray
+            (eltype(idxs),)
+        else
+            # if `vals` is a tuple, we repeat `eltype(idxs)` to check against
+            # every possible type of the buffer
+            ntuple(Returns(eltype(idxs)), Val(fieldcount(vals)))
+        end
+    else
+        # `idxs` is a tuple, so we check against all buffers
+        fieldtypes(idxs)
+    end
+    # promote types
+    tunablesT = eltype(T)
+    for (i, idxT) in enumerate(idxtypes)
+        idxT <: ParameterIndex{SciMLStructures.Tunable} || continue
+        tunablesT = promote_valtype(i, tunablesT)
+    end
+    initialsT = eltype(I)
+    for (i, idxT) in enumerate(idxtypes)
+        idxT <: ParameterIndex{SciMLStructures.Initials} || continue
+        initialsT = promote_valtype(i, initialsT)
+    end
+    discretesT = ntuple(Val(fieldcount(D))) do i
+        bufT = eltype(fieldtype(D, i))
+        for (j, idxT) in enumerate(idxtypes)
+            idxT <: ParameterIndex{SciMLStructures.Discrete, i} || continue
+            bufT = promote_valtype(i, bufT)
+        end
+        bufT
+    end
+    constantsT = ntuple(Val(fieldcount(C))) do i
+        bufT = eltype(fieldtype(C, i))
+        for (j, idxT) in enumerate(idxtypes)
+            idxT <: ParameterIndex{SciMLStructures.Constants, i} || continue
+            bufT = promote_valtype(i, bufT)
+        end
+        bufT
+    end
+    nonnumericT = ntuple(Val(fieldcount(N))) do i
+        bufT = eltype(fieldtype(N, i))
+        for (j, idxT) in enumerate(idxtypes)
+            idxT <: ParameterIndex{Nonnumeric, i} || continue
+            bufT = promote_valtype(i, bufT)
+        end
+        bufT
+    end
+
+    expr = quote
+        tunables = $similar(oldbuf.tunable, $tunablesT)
+        copyto!(tunables, oldbuf.tunable)
+        initials = $similar(oldbuf.initials, $initialsT)
+        copyto!(initials, oldbuf.initials)
+        discretes = $(Expr(:tuple,
+            (:($similar(oldbuf.discrete[$i], $(discretesT[i]))) for i in 1:length(discretesT))...))
+        $((:($copyto!(discretes[$i], oldbuf.discrete[$i])) for i in 1:length(discretesT))...)
+        constants = $(Expr(:tuple,
+            (:($similar(oldbuf.constant[$i], $(constantsT[i]))) for i in 1:length(constantsT))...))
+        $((:($copyto!(constants[$i], oldbuf.constant[$i])) for i in 1:length(constantsT))...)
+        nonnumerics = $(Expr(:tuple,
+            (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i]))) for i in 1:length(nonnumericT))...))
+        $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i])) for i in 1:length(nonnumericT))...)
+        caches = copy.(oldbuf.caches)
+        newbuf = MTKParameters(
+            tunables, initials, discretes, constants, nonnumerics, caches)
+    end
+    if idxs <: AbstractArray
+        push!(expr.args, :(for (idx, val) in zip(idxs, vals)
+            $setindex!(newbuf, val, idx)
+        end))
+    else
+        for i in 1:fieldcount(idxs)
+            push!(expr.args, :($setindex!(newbuf, vals[$i], idxs[$i])))
+        end
+    end
+    if !ArrayInterface.ismutable(oldbuf)
+        push!(expr.args, :(tunables = $similar_type($T, $tunablesT)(tunables)))
+        push!(expr.args, :(initials = $similar_type($I, $initialsT)(initials)))
+        push!(expr.args,
+            :(discretes = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i])) for i in 1:length(discretesT))...))))
+        push!(expr.args,
+            :(constants = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(constantsT[i]))(constants[$i])) for i in 1:length(constantsT))...))))
+        push!(expr.args,
+            :(nonnumerics = $(Expr(:tuple,
+                (:($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i])) for i in 1:length(nonnumericT))...))))
+        push!(expr.args,
+            :(newbuf = MTKParameters(
+                tunables, initials, discretes, constants, nonnumerics, caches)))
+    end
+    push!(expr.args, :(return newbuf))
+
+    return expr
+end
+
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
+    return __remake_buffer(indp, oldbuf, idxs, vals; validate)
+end
+
+function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
     newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
+    @set! newbuf.initials = similar(oldbuf.initials, Any)
     @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
     @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
     @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
 
     function handle_parameter(ic, sym, idx, val)
-        if sym === nothing
-            validate_parameter_type(ic, idx, val)
-        else
-            validate_parameter_type(ic, sym, idx, val)
+        if validate
+            if sym === nothing
+                validate_parameter_type(ic, idx, val)
+            else
+                validate_parameter_type(ic, sym, idx, val)
+            end
         end
         # `ParameterIndex(idx)` turns off size validation since it relies on there
         # being an existing value
@@ -578,13 +741,42 @@ function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true
         T = promote_type(eltype(newbuf.tunable), Float64)
         @set! newbuf.tunable = T.(newbuf.tunable)
     end
+    @set! newbuf.initials = narrow_buffer_type_and_fallback_undefs(
+        oldbuf.initials, newbuf.initials)
+    if eltype(newbuf.initials) <: Integer
+        T = promote_type(eltype(newbuf.initials), Float64)
+        @set! newbuf.initials = T.(newbuf.initials)
+    end
     @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.constant, newbuf.constant)
     @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.nonnumeric, newbuf.nonnumeric)
+    if !ArrayInterface.ismutable(oldbuf)
+        @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
+        @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
+        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
+            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
+        end
+        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
+            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
+        end
+        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
+            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
+        end
+    end
     return newbuf
+end
+
+function as_any_buffer(p::MTKParameters)
+    @set! p.tunable = similar(p.tunable, Any)
+    @set! p.initials = similar(p.initials, Any)
+    @set! p.discrete = Tuple(similar(buf, Any) for buf in p.discrete)
+    @set! p.constant = Tuple(similar(buf, Any) for buf in p.constant)
+    @set! p.nonnumeric = Tuple(similar(buf, Any) for buf in p.nonnumeric)
+    @set! p.caches = Tuple(similar(buf, Any) for buf in p.caches)
+    return p
 end
 
 struct NestedGetIndex{T}
@@ -655,10 +847,13 @@ end
 # getindex indexes the vectors, setindex! linearly indexes values
 # it's inconsistent, but we need it to be this way
 @generated function Base.getindex(
-        ps::MTKParameters{T, D, C, N, H}, idx::Int) where {T, D, C, N, H}
+        ps::MTKParameters{T, I, D, C, N, H}, idx::Int) where {T, I, D, C, N, H}
     paths = []
     if !(T <: SizedVector{0, Float64})
         push!(paths, :(ps.tunable))
+    end
+    if !(I <: SizedVector{0, Float64})
+        push!(paths, :(ps.initials))
     end
     for i in 1:fieldcount(D)
         push!(paths, :(ps.discrete[$i]))
@@ -681,9 +876,13 @@ end
     return Expr(:block, expr, :(throw(BoundsError(ps, idx))))
 end
 
-@generated function Base.length(ps::MTKParameters{T, D, C, N, H}) where {T, D, C, N, H}
+@generated function Base.length(ps::MTKParameters{
+        T, I, D, C, N, H}) where {T, I, D, C, N, H}
     len = 0
     if !(T <: SizedVector{0, Float64})
+        len += 1
+    end
+    if !(I <: SizedVector{0, Float64})
         len += 1
     end
     len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
@@ -708,46 +907,11 @@ function Base.iterate(buf::MTKParameters, state = 1)
 end
 
 function Base.:(==)(a::MTKParameters, b::MTKParameters)
-    return a.tunable == b.tunable && a.discrete == b.discrete &&
+    return a.tunable == b.tunable && a.initials == b.initials && a.discrete == b.discrete &&
            a.constant == b.constant && a.nonnumeric == b.nonnumeric &&
            all(Iterators.map(a.caches, b.caches) do acache, bcache
                eltype(acache) == eltype(bcache) && length(acache) == length(bcache)
            end)
-end
-
-# to support linearize/linearization_function
-function jacobian_wrt_vars(pf::F, p::MTKParameters, input_idxs, chunk::C) where {F, C}
-    tunable, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
-    T = eltype(tunable)
-    tag = ForwardDiff.Tag(pf, T)
-    dualtype = ForwardDiff.Dual{typeof(tag), T, ForwardDiff.chunksize(chunk)}
-    p_big = SciMLStructures.replace(SciMLStructures.Tunable(), p, dualtype.(tunable))
-    p_closure = let pf = pf,
-        input_idxs = input_idxs,
-        p_big = p_big
-
-        function (p_small_inner)
-            for (i, val) in zip(input_idxs, p_small_inner)
-                set_parameter!(p_big, val, i)
-            end
-            return if pf isa SciMLBase.ParamJacobianWrapper
-                buffer = Array{dualtype}(undef, size(pf.u))
-                pf(buffer, p_big)
-                buffer
-            else
-                pf(p_big)
-            end
-        end
-    end
-    p_small = parameter_values.((p,), input_idxs)
-    cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
-    ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
-end
-
-function as_duals(p::MTKParameters, dualtype)
-    tunable = dualtype.(p.tunable)
-    discrete = dualtype.(p.discrete)
-    return MTKParameters{typeof(tunable), typeof(discrete)}(tunable, discrete)
 end
 
 const MISSING_PARAMETERS_MESSAGE = """
@@ -761,7 +925,7 @@ end
 
 function Base.showerror(io::IO, e::MissingParametersError)
     println(io, MISSING_PARAMETERS_MESSAGE)
-    println(io, e.vars)
+    println(io, join(e.vars, ", "))
 end
 
 function InvalidParameterSizeException(param, val)

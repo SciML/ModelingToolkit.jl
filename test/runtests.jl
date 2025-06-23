@@ -4,6 +4,12 @@ import REPL
 
 const GROUP = get(ENV, "GROUP", "All")
 
+function activate_fmi_env()
+    Pkg.activate("fmi")
+    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.instantiate()
+end
+
 function activate_extensions_env()
     Pkg.activate("extensions")
     Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
@@ -40,22 +46,22 @@ end
             @safetestset "Model Parsing Test" include("model_parsing.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
+            @safetestset "Basic transformations" include("basic_transformations.jl")
+            @safetestset "Change of variables" include("changeofvariables.jl")
             @safetestset "State Selection Test" include("state_selection.jl")
             @safetestset "Symbolic Event Test" include("symbolic_events.jl")
             @safetestset "Stream Connect Test" include("stream_connectors.jl")
             @safetestset "Domain Connect Test" include("domain_connectors.jl")
-            @safetestset "Lowering Integration Test" include("lowering_solving.jl")
             @safetestset "Dependency Graph Test" include("dep_graphs.jl")
             @safetestset "Function Registration Test" include("function_registration.jl")
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
-            @safetestset "FuncAffect Test" include("funcaffect.jl")
             @safetestset "Constants Test" include("constants.jl")
             @safetestset "Parameter Dependency Test" include("parameter_dependencies.jl")
-            @safetestset "Generate Custom Function Test" include("generate_custom_function.jl")
             @safetestset "Equation Type Accessors Test" include("equation_type_accessors.jl")
+            @safetestset "System Accessor Functions Test" include("accessor_functions.jl")
             @safetestset "Equations with complex values" include("complex.jl")
         end
     end
@@ -69,21 +75,31 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
+            @safetestset "Code Generation Test" include("code_generation.jl")
             @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "Variable Utils Test" include("variable_utils.jl")
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
             @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
+            @safetestset "Implicit Discrete System" include("implicit_discrete_system.jl")
             @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
             @safetestset "SDESystem Test" include("sdesystem.jl")
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
             @safetestset "SCCNonlinearProblem Test" include("scc_nonlinear_problem.jl")
-            @safetestset "PDE Construction Test" include("pde.jl")
+            @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
+            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Constraints Test" include("constraints.jl")
             @safetestset "IfLifting Test" include("if_lifting.jl")
+            @safetestset "Analysis Points Test" include("analysis_points.jl")
+            @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
+            @safetestset "Debugging Test" include("debugging.jl")
+            @safetestset "Namespacing test" include("namespacing.jl")
+            @safetestset "Subsystem replacement" include("substitute_component.jl")
+            @safetestset "Linearization Tests" include("linearize.jl")
+            @safetestset "LinearProblem Tests" include("linearproblem.jl")
         end
     end
 
@@ -107,17 +123,23 @@ end
 
     if GROUP == "All" || GROUP == "Downstream"
         activate_downstream_env()
-        @safetestset "Linearization Tests" include("downstream/linearize.jl")
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
+        @safetestset "Disturbance model Test" include("downstream/test_disturbance_model.jl")
+    end
+
+    if GROUP == "All" || GROUP == "FMI"
+        activate_fmi_env()
+        @safetestset "FMI Extension Test" include("fmi/fmi.jl")
     end
 
     if GROUP == "All" || GROUP == "Extensions"
         activate_extensions_env()
+        @safetestset "Dynamic Optimization Collocation Solvers" include("extensions/dynamic_optimization.jl")
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
-        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "LabelledArrays Test" include("labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
+        @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 end

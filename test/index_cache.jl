@@ -3,9 +3,9 @@ using ModelingToolkit: t_nounits as t
 
 # Ensure indexes of array symbolics are cached appropriately
 @variables x(t)[1:2]
-@named sys = ODESystem(Equation[], t, [x], [])
+@named sys = System(Equation[], t, [x], [])
 sys1 = complete(sys)
-@named sys = ODESystem(Equation[], t, [x...], [])
+@named sys = System(Equation[], t, [x...], [])
 sys2 = complete(sys)
 for sys in [sys1, sys2]
     for (sym, idx) in [(x, 1:2), (x[1], 1), (x[2], 2)]
@@ -15,9 +15,9 @@ for sys in [sys1, sys2]
 end
 
 @variables x(t)[1:2, 1:2]
-@named sys = ODESystem(Equation[], t, [x], [])
+@named sys = System(Equation[], t, [x], [])
 sys1 = complete(sys)
-@named sys = ODESystem(Equation[], t, [x...], [])
+@named sys = System(Equation[], t, [x...], [])
 sys2 = complete(sys)
 for sys in [sys1, sys2]
     @test is_variable(sys, x)
@@ -32,7 +32,7 @@ end
 @parameters p1 p2[1:2] p3::String
 @variables x(t) y(t)[1:2] z(t)
 
-@named sys = ODESystem(Equation[], t, [x, y, z], [p1, p2, p3])
+@named sys = System(Equation[], t, [x, y, z], [p1, p2, p3])
 sys = complete(sys)
 
 ic = ModelingToolkit.get_index_cache(sys)
@@ -46,7 +46,7 @@ ic = ModelingToolkit.get_index_cache(sys)
 
 @testset "tunable_parameters is ordered" begin
     @parameters p q[1:3] r[1:2, 1:2] s [tunable = false]
-    @named sys = ODESystem(Equation[], t, [], [p, q, r, s])
+    @named sys = System(Equation[], t, [], [p, q, r, s])
     sys = complete(sys)
     @test all(splat(isequal), zip(tunable_parameters(sys), parameters(sys)[1:3]))
 
@@ -65,7 +65,7 @@ end
 
 @testset "reorder_dimension_by_tunables" begin
     @parameters p q[1:3] r[1:2, 1:2] s [tunable = false]
-    @named sys = ODESystem(Equation[], t, [], [p, q, r, s])
+    @named sys = System(Equation[], t, [], [p, q, r, s])
     src = ones(8)
     dst = zeros(8)
     # system must be complete...
@@ -98,17 +98,19 @@ mutable struct ParamTest
 end
 (pt::ParamTest)(x) = pt.y - x
 @testset "Issue#3215: Callable discrete parameter" begin
-    function update_affect!(integ, u, p, ctx)
-        integ.p[p.p_1].y = integ.t
+    function update_affect!(mod, obs, ctx, integ)
+        p_1 = mod.p_1
+        p_1.y = integ.t
+        return (; p_1)
     end
 
     tp1 = typeof(ParamTest(1))
     @parameters (p_1::tp1)(..) = ParamTest(1)
     @variables x(ModelingToolkit.t_nounits) = 0
 
-    event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [p_1], nothing)
+    event1 = [1.0, 2, 3] => (f = update_affect!, modified = (; p_1))
 
-    @named sys = ODESystem([
+    @named sys = System([
             ModelingToolkit.D_nounits(x) ~ p_1(x)
         ],
         ModelingToolkit.t_nounits;
