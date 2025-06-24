@@ -193,14 +193,14 @@ end
 =#
 
 """
-Replace derivatives of non-selected unknown variables by dummy derivatives. 
+Replace derivatives of non-selected unknown variables by dummy derivatives.
 
 State selection may determine that some differential variables are
 algebraic variables in disguise. The derivative of such variables are
 called dummy derivatives.
 
-`SelectedState` information is no longer needed after this function is called. 
-State selection is done. All non-differentiated variables are algebraic 
+`SelectedState` information is no longer needed after this function is called.
+State selection is done. All non-differentiated variables are algebraic
 variables, and all variables that appear differentiated are differential variables.
 """
 function substitute_derivatives_algevars!(
@@ -241,7 +241,7 @@ function substitute_derivatives_algevars!(
     end
 end
 
-#= 
+#=
 There are three cases where we want to generate new variables to convert
 the system into first order (semi-implicit) ODEs.
 
@@ -288,32 +288,32 @@ where `:=` denotes assignment.
 As a final note, in all the above cases where we need to introduce new
 variables and equations, don't add them when they already exist.
 
-###### DISCRETE SYSTEMS ####### 
+###### DISCRETE SYSTEMS #######
 
 Documenting the differences to structural simplification for discrete systems:
 
 In discrete systems everything gets shifted forward a timestep by `shift_discrete_system`
-in order to properly generate the difference equations. 
+in order to properly generate the difference equations.
 
 In the system x(k) ~ x(k-1) + x(k-2), becomes Shift(t, 1)(x(t)) ~ x(t) + Shift(t, -1)(x(t))
 
-The lowest-order term is Shift(t, k)(x(t)), instead of x(t). As such we actually want 
+The lowest-order term is Shift(t, k)(x(t)), instead of x(t). As such we actually want
 dummy variables for the k-1 lowest order terms instead of the k-1 highest order terms.
 
 Shift(t, -1)(x(t)) -> x\_{t-1}(t)
 
-Since Shift(t, -1)(x) is not a derivative, it is directly substituted in `fullvars`. 
-No equation or variable is added for it. 
+Since Shift(t, -1)(x) is not a derivative, it is directly substituted in `fullvars`.
+No equation or variable is added for it.
 
-For ODESystems D(D(D(x))) in equations is recursively substituted as D(x) ~ x_t, D(x_t) ~ x_tt, etc. 
-The analogue for discrete systems, Shift(t, 1)(Shift(t,1)(Shift(t,1)(Shift(t, -3)(x(t))))) 
-does not actually appear. So `total_sub` in generate_system_equations` is directly 
-initialized with all of the lowered variables `Shift(t, -3)(x) -> x_t-3(t)`, etc. 
+For ODESystems D(D(D(x))) in equations is recursively substituted as D(x) ~ x_t, D(x_t) ~ x_tt, etc.
+The analogue for discrete systems, Shift(t, 1)(Shift(t,1)(Shift(t,1)(Shift(t, -3)(x(t)))))
+does not actually appear. So `total_sub` in generate_system_equations` is directly
+initialized with all of the lowered variables `Shift(t, -3)(x) -> x_t-3(t)`, etc.
 =#
 """
 Generate new derivative variables for the system.
 
-Effects on the system structure: 
+Effects on the system structure:
 - fullvars: add the new derivative variables x_t
 - neweqs: add the identity equations for the new variables, D(x) ~ x_t
 - graph: update graph with the new equations and variables, and their connections
@@ -484,7 +484,7 @@ function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
 end
 
 """
-Add a dummy derivative variable x_t corresponding to symbolic variable D(x) 
+Add a dummy derivative variable x_t corresponding to symbolic variable D(x)
 which has index dv in `fullvars`. Return the new index of x_t.
 """
 function add_dd_variable!(s::SystemStructure, fullvars, x_t, dv)
@@ -516,14 +516,14 @@ function add_dd_equation!(s::SystemStructure, neweqs, eq, dv, v_t)
 end
 
 """
-Solve the equations in `neweqs` to obtain the final equations of the 
+Solve the equations in `neweqs` to obtain the final equations of the
 system.
 
-For each equation of `neweqs`, do one of the following: 
+For each equation of `neweqs`, do one of the following:
    1. If the equation is solvable for a differentiated variable D(x),
       then solve for D(x), and add D(x) ~ sol as a differential equation
       of the system.
-   2. If the equation is solvable for an un-differentiated variable x, 
+   2. If the equation is solvable for an un-differentiated variable x,
       solve for x and then add x ~ sol as a solved equation. These will
       become observables.
    3. If the equation is not solvable, add it as an algebraic equation.
@@ -531,7 +531,7 @@ For each equation of `neweqs`, do one of the following:
 Solved equations are added to `total_sub`. Occurrences of differential
 or solved variables on the RHS of the final equations will get substituted.
 The topological sort of the equations ensures that variables are solved for
-before they appear in equations. 
+before they appear in equations.
 
 Reorder the equations and unknowns to be in the BLT sorted form.
 
@@ -610,7 +610,7 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     @unpack neweqs′, eq_ordering, var_ordering, solved_eqs, solved_vars = eq_generator
 
     is_diff_eq = .!iszero.(var_ordering)
-    # Generate new equations and orderings 
+    # Generate new equations and orderings
     diff_vars = var_ordering[is_diff_eq]
     diff_vars_set = BitSet(diff_vars)
     if length(diff_vars_set) != length(diff_vars)
@@ -695,7 +695,7 @@ struct EquationGenerator{S, D, I}
     neweqs′::Vector{Equation}
     """
     `eq_ordering[i]` is the index `neweqs′[i]` was originally at in the untorn equations of
-    the system. This is used to permute the state of the system into BLT sorted form. 
+    the system. This is used to permute the state of the system into BLT sorted form.
     """
     eq_ordering::Vector{Int}
     """
@@ -866,7 +866,7 @@ function make_solved_equation(var, eq, total_sub; simplify = false)
 end
 
 """
-Given the ordering returned by `generate_system_equations!`, update the 
+Given the ordering returned by `generate_system_equations!`, update the
 tearing state to account for the new order. Permute the variables and equations.
 Eliminate the solved variables and equations from the graph and permute the
 graph's vertices to account for the new variable/equation ordering.
@@ -916,7 +916,7 @@ function reorder_vars!(state::TearingState, var_eq_matching, var_sccs, eq_orderi
     # Remove empty SCCs
     filter!(!isempty, var_sccs)
 
-    # Update system structure 
+    # Update system structure
     @set! state.structure.graph = complete(new_graph)
     @set! state.structure.var_to_diff = new_var_to_diff
     @set! state.structure.eq_to_diff = new_eq_to_diff
@@ -933,7 +933,7 @@ function update_simplified_system!(
     @unpack fullvars, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
-    # Since we solved the highest order derivative varible in discrete systems,
+    # Since we solved the highest order derivative variable in discrete systems,
     # we make a list of the solved variables and avoid including them in the
     # unknowns.
     solved_vars = Set()
@@ -1058,7 +1058,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching::Matching,
             state, neweqs, var_eq_matching, full_var_eq_matching, var_sccs; iv, D)
     end
 
-    # Structural simplification 
+    # Structural simplification
     substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub; iv, D)
 
     var_sccs = generate_derivative_variables!(
