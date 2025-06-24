@@ -1189,10 +1189,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_A(sys::System, A::AbstractMatrix; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...)
     ps = reorder_parameters(sys)
 
-    res = build_function_wrapper(sys, A, ps...; p_start = 1, expression = Val{true},
+    res = build_function_wrapper(
+        sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
         similarto = typeof(A), kwargs...)
     return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
         eval_expression, eval_module)
@@ -1211,10 +1212,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_b(sys::System, b::AbstractVector; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...)
     ps = reorder_parameters(sys)
 
-    res = build_function_wrapper(sys, b, ps...; p_start = 1, expression = Val{true},
+    res = build_function_wrapper(
+        sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
         similarto = typeof(b), kwargs...)
     return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
         eval_expression, eval_module)
