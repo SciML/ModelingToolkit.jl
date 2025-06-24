@@ -2525,7 +2525,15 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    meta = merge(get_metadata(basesys), get_metadata(sys))
+    meta = MetadataT()
+    for kvp in get_metadata(basesys)
+        kvp[1] == MutableCacheKey && continue
+        meta = Base.ImmutableDict(meta, kvp)
+    end
+    for kvp in get_metadata(sys)
+        kvp[1] == MutableCacheKey && continue
+        meta = Base.ImmutableDict(meta, kvp)
+    end
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (observed = obs, continuous_events = cevs,
