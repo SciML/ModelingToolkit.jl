@@ -985,7 +985,7 @@ end
     $(TYPEDEF)
 
 A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
-Returns the value to use for the `u0` of the problem. 
+Returns the value to use for the `u0` of the problem.
 
 # Fields
 
@@ -1185,7 +1185,7 @@ function float_type_from_varmap(varmap, floatT = Bool)
 
         if v isa AbstractArray
             floatT = promote_type(floatT, eltype(v))
-        elseif v isa Real
+        elseif v isa Number
             floatT = promote_type(floatT, typeof(v))
         end
     end
@@ -1451,7 +1451,7 @@ function check_inputmap_keys(sys, op)
 end
 
 const BAD_KEY_MESSAGE = """
-                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned. 
+                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned.
                         The following keys are invalid:
                         """
 
