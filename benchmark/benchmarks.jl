@@ -45,12 +45,17 @@ end
 
 @named model = DCMotor()
 
+# first call
+mtkcompile(model)
 SUITE["mtkcompile"] = @benchmarkable mtkcompile($model)
 
 model = mtkcompile(model)
 u0 = unknowns(model) .=> 0.0
 tspan = (0.0, 6.0)
-SUITE["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
 
 prob = ODEProblem(model, u0, tspan)
+SUITE["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
+
+# first call
+init(prob)
 SUITE["init"] = @benchmarkable init($prob)
