@@ -388,8 +388,8 @@ function IndexCache(sys::AbstractSystem)
         observed_syms_to_timeseries,
         dependent_pars_to_timeseries,
         disc_buffer_templates,
-        BufferTemplate(Real, tunable_buffer_size),
-        BufferTemplate(Real, initials_buffer_size),
+        BufferTemplate(Number, tunable_buffer_size),
+        BufferTemplate(Number, initials_buffer_size),
         const_buffer_sizes,
         nonnumeric_buffer_sizes,
         symbol_to_variable
