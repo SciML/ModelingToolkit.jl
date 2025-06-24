@@ -985,7 +985,7 @@ end
     $(TYPEDEF)
 
 A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
-Returns the value to use for the `u0` of the problem. 
+Returns the value to use for the `u0` of the problem.
 
 # Fields
 
@@ -1451,7 +1451,7 @@ function check_inputmap_keys(sys, op)
 end
 
 const BAD_KEY_MESSAGE = """
-                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned. 
+                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned.
                         The following keys are invalid:
                         """
 
@@ -1634,7 +1634,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Turn key-value pairs in `kws` into assignments and appent them to `block.args`. `head` is
+Turn key-value pairs in `kws` into assignments and append them to `block.args`. `head` is
 the head of the `Expr` used to create the assignment. `filter` is a function that takes the
 key and returns whether or not to include it in the assignments.
 """

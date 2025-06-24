@@ -46,7 +46,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return a symbolic state for the given proble `prob.`. `t` is the independent variable.
+Return a symbolic state for the given problem `prob.`. `t` is the independent variable.
 `u_names` optionally contains the names to use for the created symbolic variables.
 """
 function construct_vars(prob, t, u_names = nothing)
@@ -287,7 +287,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return a symbolic parameter object for the given proble `prob.`. `t` is the independent
+Return a symbolic parameter object for the given problem `prob.`. `t` is the independent
 variable. `p_names` optionally contains the names to use for the created symbolic
 variables.
 """
@@ -319,7 +319,7 @@ end
     $(TYPEDSIGNATURES)
 
 Given the differential operator `D`, mass matrix `mm` and ordered list of unknowns `vars`,
-return the list of 
+return the list of
 """
 function lhs_from_mass_matrix(D, mm, vars)
     var_set = Set(vars)
