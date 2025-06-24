@@ -257,7 +257,7 @@ end
 
     @testset "Concrete function type" begin
         ts = 0.0:0.1:1.0
-        interp = LinearInterpolation(ts .^ 2, ts; extrapolate = true)
+        interp = LinearInterpolation(ts .^ 2, ts; extrapolation = ExtrapolationType.Extension)
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
         @mtkcompile sys = System(D(x) ~ fn(x), t)
@@ -267,7 +267,7 @@ end
         @inferred getter(prob)
         @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
         @test_nowarn sol = solve(prob, Tsit5())
-        @test_nowarn prob.ps[fn] = LinearInterpolation(ts .^ 3, ts; extrapolate = true)
+        @test_nowarn prob.ps[fn] = LinearInterpolation(ts .^ 3, ts; extrapolation = ExtrapolationType.Extension)
         @test_nowarn sol = solve(prob)
     end
 end
