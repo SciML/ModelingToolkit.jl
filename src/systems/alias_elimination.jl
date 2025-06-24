@@ -8,7 +8,7 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
     end
 
     @unpack graph, var_to_diff, solvable_graph = state.structure
-    mm = alias_eliminate_graph!(state, mm)
+    mm = alias_eliminate_graph!(state, mm; kwargs...)
     s = state.structure
     for g in (s.graph, s.solvable_graph)
         g === nothing && continue
@@ -347,7 +347,7 @@ function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     (rank1, rank2, rank3, pivots)
 end
 
-function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
+function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL; fully_determined = true, kwargs...)
     @unpack structure = state
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
@@ -355,19 +355,21 @@ function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLI
     #
     ils, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(structure, ils)
 
-    ## Step 2: Simplify the system using the Bareiss factorization
-    rk1vars = BitSet(@view pivots[1:rank1])
-    for v in solvable_variables
-        v in rk1vars && continue
-        @set! ils.nparentrows += 1
-        push!(ils.nzrows, ils.nparentrows)
-        push!(ils.row_cols, [v])
-        push!(ils.row_vals, [convert(eltype(ils), 1)])
-        add_vertex!(graph, SRC)
-        add_vertex!(solvable_graph, SRC)
-        add_edge!(graph, ils.nparentrows, v)
-        add_edge!(solvable_graph, ils.nparentrows, v)
-        add_vertex!(eq_to_diff)
+    if fully_determined == true
+        ## Step 2: Simplify the system using the Bareiss factorization
+        rk1vars = BitSet(@view pivots[1:rank1])
+        for v in solvable_variables
+            v in rk1vars && continue
+            @set! ils.nparentrows += 1
+            push!(ils.nzrows, ils.nparentrows)
+            push!(ils.row_cols, [v])
+            push!(ils.row_vals, [convert(eltype(ils), 1)])
+            add_vertex!(graph, SRC)
+            add_vertex!(solvable_graph, SRC)
+            add_edge!(graph, ils.nparentrows, v)
+            add_edge!(solvable_graph, ils.nparentrows, v)
+            add_vertex!(eq_to_diff)
+        end
     end
 
     return ils
