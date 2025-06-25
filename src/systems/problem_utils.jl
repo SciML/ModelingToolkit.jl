@@ -1185,7 +1185,7 @@ function float_type_from_varmap(varmap, floatT = Bool)
 
         if v isa AbstractArray
             floatT = promote_type(floatT, eltype(v))
-        elseif v isa Real
+        elseif v isa Number
             floatT = promote_type(floatT, typeof(v))
         end
     end
