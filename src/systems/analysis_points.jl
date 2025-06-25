@@ -348,7 +348,12 @@ function modify_nested_subsystem(
     end
     # ignore the name of the root
     if nameof(root) != hierarchy[1]
-        error("The name of the root system $(nameof(root)) must be included in the name passed to `modify_nested_subsystem`")
+        error("""
+        Invalid analysis point name `$(join(hierarchy, NAMESPACE_SEPARATOR))`. The name
+        must include the name of the root system `$(nameof(root))`. This typically happens
+        when  using an analysis point obtained by calling `getproperty` on a system marked
+        as `complete` to linearize a system that is not marked as `complete`.
+        """)
     end
     hierarchy = @view hierarchy[2:end]
 
@@ -432,19 +437,15 @@ function with_analysis_point_ignored(sys::AbstractSystem, ap::AnalysisPoint)
     has_ignored_connections(sys) || return sys
     ignored = get_ignored_connections(sys)
     if ignored === nothing
-        ignored = (IgnoredAnalysisPoint[], IgnoredAnalysisPoint[])
+        ignored = Connection[]
     else
-        ignored = copy.(ignored)
+        ignored = copy(ignored)
     end
     if ap.outputs === nothing
         error("Empty analysis point")
     end
 
-    if ap.input isa AbstractSystem && all(x -> x isa AbstractSystem, ap.outputs)
-        push!(ignored[1], IgnoredAnalysisPoint(ap.input, ap.outputs))
-    else
-        push!(ignored[2], IgnoredAnalysisPoint(unwrap(ap.input), unwrap.(ap.outputs)))
-    end
+    push!(ignored, Connection([unwrap(ap.input); unwrap.(ap.outputs)]))
 
     return @set sys.ignored_connections = ignored
 end
@@ -485,14 +486,19 @@ struct Break <: AnalysisPointTransformation
     Whether to add a new input variable connected to all the outputs of `ap`.
     """
     add_input::Bool
+    """
+    Whether the default of the added input variable should be the input of `ap`. Only
+    applicable if `add_input == true`.
+    """
+    default_outputs_to_input::Bool
 end
 
 """
     $(TYPEDSIGNATURES)
 
-`Break` the given analysis point `ap` without adding an input.
+`Break` the given analysis point `ap`.
 """
-Break(ap::AnalysisPoint) = Break(ap, false)
+Break(ap::AnalysisPoint, add_input::Bool = false) = Break(ap, add_input, false)
 
 function apply_transformation(tf::Break, sys::AbstractSystem)
     modify_nested_subsystem(sys, tf.ap) do breaksys
@@ -516,7 +522,11 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
             push!(breaksys_eqs, ap_var(outsys) ~ new_var)
         end
         defs = copy(get_defaults(breaksys))
-        defs[new_var] = new_def
+        defs[new_var] = if tf.default_outputs_to_input
+            ap_ivar
+        else
+            new_def
+        end
         @set! breaksys.defaults = defs
         unks = copy(get_unknowns(breaksys))
         push!(unks, new_var)
@@ -802,7 +812,7 @@ Given a list of analysis points, break the connection for each and set the outpu
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     for ap in canonicalize_ap(sys, aps)
-        sys, (outvar,) = apply_transformation(Break(ap, true), sys)
+        sys, (outvar,) = apply_transformation(Break(ap, true, true), sys)
         if Symbolics.isarraysymbolic(outvar)
             push!(get_eqs(sys), outvar ~ zeros(size(outvar)))
         else
@@ -814,7 +824,7 @@ end
 
 const DOC_LOOP_OPENINGS = """
     - `loop_openings`: A list of analysis points whose connections should be removed and
-      the outputs set to zero as a part of the linear analysis.
+      the outputs set to the input as a part of the linear analysis.
 """
 
 const DOC_SYS_MODIFIER = """
@@ -905,10 +915,11 @@ end
 for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
     utility_fun = Symbol(f, :_function)
     @eval function $f(
-            sys, ap, args...; loop_openings = [], system_modifier = identity, kwargs...)
+            sys, ap, args...; loop_openings = [], system_modifier = identity,
+            allow_input_derivatives = true, kwargs...)
         lin_fun, ssys = $(utility_fun)(
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
-        mats, extras = ModelingToolkit.linearize(ssys, lin_fun)
+        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; allow_input_derivatives)
         mats, ssys, extras
     end
 end
@@ -951,7 +962,7 @@ function linearization_ap_transform(sys,
     for input in inputs
         if nameof(input) in loop_openings
             delete!(loop_openings, nameof(input))
-            sys, (input_var,) = apply_transformation(Break(input, true), sys)
+            sys, (input_var,) = apply_transformation(Break(input, true, true), sys)
         else
             sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
         end

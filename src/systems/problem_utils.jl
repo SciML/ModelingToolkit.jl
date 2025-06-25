@@ -376,7 +376,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
-    if check
+    if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
         if !isempty(missing_vars)
             if is_initializeprob
@@ -387,7 +387,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         end
     end
     evaluate_varmap!(varmap, vars; limit = substitution_limit)
-    vals = map(x -> varmap[x], vars)
+    vals = map(x -> get(varmap, x, x), vars)
     if !allow_symbolic
         missingsyms = Any[]
         missingvals = Any[]
@@ -985,7 +985,7 @@ end
     $(TYPEDEF)
 
 A callable struct to use as the `get_updated_u0` field of `InitializationMetadata`.
-Returns the value to use for the `u0` of the problem. 
+Returns the value to use for the `u0` of the problem.
 
 # Fields
 
@@ -1185,11 +1185,25 @@ function float_type_from_varmap(varmap, floatT = Bool)
 
         if v isa AbstractArray
             floatT = promote_type(floatT, eltype(v))
-        elseif v isa Real
+        elseif v isa Number
             floatT = promote_type(floatT, typeof(v))
         end
     end
     return float(floatT)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the floating point type to use from the given `varmap` by looking at variables
+with a constant value. `u0Type` takes priority if it is a real-valued array type.
+"""
+function calculate_float_type(varmap, u0Type::Type, floatT = Bool)
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
+        return float(eltype(u0Type))
+    else
+        return float_type_from_varmap(varmap, floatT)
+    end
 end
 
 """
@@ -1206,6 +1220,41 @@ function calculate_resid_prototype(N::Int, u0, p)
             u0ElType)
     end
     return zeros(u0ElType, N)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the user-provided value of `u0_constructor`, the container type of user-provided
+`op`, the desired floating point type and whether a symbolic `u0` is allowed, return the
+updated `u0_constructor`.
+"""
+function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic_u0::Bool)
+    u0_constructor === identity || return u0_constructor
+    u0Type <: StaticArray || return u0_constructor
+    return function (vals)
+        elT = if symbolic_u0 && any(x -> symbolic_type(x) != NotSymbolic(), vals)
+            nothing
+        else
+            floatT
+        end
+        SymbolicUtils.Code.create_array(u0Type, elT, Val(1), Val(length(vals)), vals...)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the user-provided value of `p_constructor`, the container type of user-provided `op`,
+ans the desired floating point type, return the updated `p_constructor`.
+"""
+function get_p_constructor(p_constructor, pType::Type, floatT::Type)
+    p_constructor === identity || return p_constructor
+    pType <: StaticArray || return p_constructor
+    return function (vals)
+        SymbolicUtils.Code.create_array(
+            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...)
+    end
 end
 
 """
@@ -1260,7 +1309,7 @@ function process_SciMLProblem(
 
     check_inputmap_keys(sys, op)
 
-    defs = add_toterms(recursive_unwrap(defaults(sys)))
+    defs = add_toterms(recursive_unwrap(defaults(sys)); replace = is_discrete_system(sys))
     kwargs = NamedTuple(kwargs)
 
     if eltype(eqs) <: Equation
@@ -1274,26 +1323,15 @@ function process_SciMLProblem(
     missing_unknowns, missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
 
-    floatT = Bool
-    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
-        floatT = float(eltype(u0Type))
-    else
-        floatT = float_type_from_varmap(op, floatT)
-    end
-
+    floatT = calculate_float_type(op, u0Type)
     u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs)
     end
-    if u0_constructor === identity && u0Type <: StaticArray
-        u0_constructor = vals -> SymbolicUtils.Code.create_array(
-            u0Type, floatT, Val(1), Val(length(vals)), vals...)
-    end
-    if p_constructor === identity && pType <: StaticArray
-        p_constructor = vals -> SymbolicUtils.Code.create_array(
-            pType, floatT, Val(1), Val(length(vals)), vals...)
-    end
+
+    u0_constructor = get_u0_constructor(u0_constructor, u0Type, u0_eltype, symbolic_u0)
+    p_constructor = get_p_constructor(p_constructor, pType, floatT)
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
@@ -1413,7 +1451,7 @@ function check_inputmap_keys(sys, op)
 end
 
 const BAD_KEY_MESSAGE = """
-                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned. 
+                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned.
                         The following keys are invalid:
                         """
 
@@ -1596,7 +1634,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Turn key-value pairs in `kws` into assignments and appent them to `block.args`. `head` is
+Turn key-value pairs in `kws` into assignments and append them to `block.args`. `head` is
 the head of the `Expr` used to create the assignment. `filter` is a function that takes the
 key and returns whether or not to include it in the assignments.
 """

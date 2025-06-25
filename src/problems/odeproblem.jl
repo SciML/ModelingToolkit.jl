@@ -75,7 +75,7 @@ end
         eval_module, expression, check_compatibility, kwargs...)
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, kwargs...)
+        sys; expression, callback, eval_expression, eval_module, op, kwargs...)
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)

@@ -126,7 +126,7 @@ end
 eqns = [connect(n1m1.port_a, pipe.port_a)
         connect(pipe.port_b, sink.port)]
 
-@named sys = System(eqns, t)
+@named sys = System(eqns, t; systems = [n1m1, pipe, sink])
 
 eqns = [domain_connect(fluid, n1m1.port_a)
         connect(n1m1.port_a, pipe.port_a)
@@ -141,7 +141,7 @@ ssort(eqs) = sort(eqs, by = string)
              0 ~ source.port1.m_flow - port_a.m_flow
              source.port1.P ~ port_a.P
              source.port1.P ~ source.P
-             source.port1.h_outflow ~ port_a.h_outflow
+             port_a.h_outflow ~ source.port1.h_outflow
              source.port1.h_outflow ~ source.h])
 @unpack port_a, port_b = pipe
 @test ssort(equations(expand_connections(pipe))) ==
@@ -151,11 +151,11 @@ ssort(eqs) = sort(eqs, by = string)
              port_a.P ~ port_b.P
              port_a.h_outflow ~ instream(port_b.h_outflow)
              port_b.h_outflow ~ instream(port_a.h_outflow)])
-@test ssort(equations(expand_connections(sys))) ==
-      ssort([0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
-             0 ~ pipe.port_b.m_flow + sink.port.m_flow
-             n1m1.port_a.P ~ pipe.port_a.P
-             pipe.port_b.P ~ sink.port.P])
+@test equations(expand_connections(sys)) ⊇
+      [0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+       0 ~ pipe.port_b.m_flow + sink.port.m_flow
+       n1m1.port_a.P ~ pipe.port_a.P
+       pipe.port_b.P ~ sink.port.P]
 @test ssort(equations(expand_connections(n1m1Test))) ==
       ssort([0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
              0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
@@ -165,7 +165,7 @@ ssort(eqs) = sort(eqs, by = string)
              n1m1.port_a.P ~ pipe.port_a.P
              n1m1.source.port1.P ~ n1m1.port_a.P
              n1m1.source.port1.P ~ n1m1.source.P
-             n1m1.source.port1.h_outflow ~ n1m1.port_a.h_outflow
+             n1m1.port_a.h_outflow ~ n1m1.source.port1.h_outflow
              n1m1.source.port1.h_outflow ~ n1m1.source.h
              pipe.port_a.P ~ pipe.port_b.P
              pipe.port_a.h_outflow ~ sink.port.h_outflow
@@ -278,10 +278,8 @@ sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
 @test ssort(equations(sys)) == ssort([0 .~ collect(vp1.i)
              0 .~ collect(vp2.i)
              0 .~ collect(vp3.i)
-             vp1.v[1] ~ vp2.v[1]
-             vp1.v[2] ~ vp2.v[2]
-             vp1.v[1] ~ vp3.v[1]
-             vp1.v[2] ~ vp3.v[2]
+             vp1.v ~ vp2.v
+             vp1.v ~ vp3.v
              0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
              0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]])
 

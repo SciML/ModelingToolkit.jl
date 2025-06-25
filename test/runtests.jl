@@ -99,6 +99,7 @@ end
             @safetestset "Namespacing test" include("namespacing.jl")
             @safetestset "Subsystem replacement" include("substitute_component.jl")
             @safetestset "Linearization Tests" include("linearize.jl")
+            @safetestset "LinearProblem Tests" include("linearproblem.jl")
         end
     end
 
@@ -124,8 +125,7 @@ end
         activate_downstream_env()
         @safetestset "Linearization Dummy Derivative Tests" include("downstream/linearization_dd.jl")
         @safetestset "Inverse Models Test" include("downstream/inversemodel.jl")
-        @safetestset "Analysis Points Test" include("downstream/analysis_points.jl")
-        @safetestset "Analysis Points Test" include("downstream/test_disturbance_model.jl")
+        @safetestset "Disturbance model Test" include("downstream/test_disturbance_model.jl")
     end
 
     if GROUP == "All" || GROUP == "FMI"

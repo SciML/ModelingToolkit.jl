@@ -29,7 +29,7 @@ SciMLBase.DiscreteProblem
 SciMLBase.ImplicitDiscreteProblem
 ```
 
-## Nonlinear systems
+## Linear and Nonlinear systems
 
 ```@docs
 SciMLBase.NonlinearFunction
@@ -41,6 +41,7 @@ SciMLBase.IntervalNonlinearFunction
 SciMLBase.IntervalNonlinearProblem
 ModelingToolkit.HomotopyContinuationProblem
 SciMLBase.HomotopyNonlinearFunction
+SciMLBase.LinearProblem
 ```
 
 ## Optimization and optimal control

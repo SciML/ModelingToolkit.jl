@@ -455,14 +455,13 @@ sol = solve(prob, Tsit5())
 # Initialize with an observed variable
 prob = ODEProblem(simpsys, [z => 0.0], tspan, guesses = [x => 2.0, y => 4.0])
 sol = solve(prob, Tsit5())
-@test sol.u[1] == [0.0, 0.0]
+@test sol[z, 1] == 0.0
 
 prob = ODEProblem(simpsys, [z => 1.0, y => 1.0], tspan, guesses = [x => 2.0])
 sol = solve(prob, Tsit5())
 @test sol[[x, y], 1] == [0.0, 1.0]
 
-# This should warn, but logging tests can't be marked as broken
-@test_logs prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0])
+@test_warn "underdetermined" prob = ODEProblem(simpsys, [], tspan, guesses = [x => 2.0, y => 1.0])
 
 # Late Binding initialization_eqs
 # https://github.com/SciML/ModelingToolkit.jl/issues/2787

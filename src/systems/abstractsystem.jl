@@ -320,7 +320,7 @@ for traitT in [
             elseif is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
             elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
-                   is_variable(sys, operation(s)(get_iv(sys)))
+                   length(arguments(s)) == 1 && is_variable(sys, operation(s)(get_iv(sys)))
                 # DDEs case, to detect x(t - k)
                 push!(ts_idxs, ContinuousTimeseries())
             else
@@ -1368,104 +1368,6 @@ struct IgnoredAnalysisPoint
     outputs::Vector{Union{BasicSymbolic, AbstractSystem}}
 end
 
-const HierarchyVariableT = Vector{Union{BasicSymbolic, Symbol}}
-const HierarchySystemT = Vector{Union{AbstractSystem, Symbol}}
-"""
-The type returned from `analysis_point_common_hierarchy`.
-"""
-const HierarchyAnalysisPointT = Vector{Union{IgnoredAnalysisPoint, Symbol}}
-"""
-The type returned from `as_hierarchy`.
-"""
-const HierarchyT = Union{HierarchyVariableT, HierarchySystemT}
-
-"""
-    $(TYPEDSIGNATURES)
-
-The inverse operation of `as_hierarchy`.
-"""
-function from_hierarchy(hierarchy::HierarchyT)
-    namefn = hierarchy[1] isa AbstractSystem ? nameof : getname
-    foldl(@view hierarchy[2:end]; init = hierarchy[1]) do sys, name
-        rename(sys, Symbol(name, NAMESPACE_SEPARATOR, namefn(sys)))
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Represent an ignored analysis point as a namespaced hierarchy. The hierarchy is built
-using the common hierarchy of all involved systems/variables.
-"""
-function analysis_point_common_hierarchy(ap::IgnoredAnalysisPoint)::HierarchyAnalysisPointT
-    isys = as_hierarchy(ap.input)
-    osyss = as_hierarchy.(ap.outputs)
-    suffix = Symbol[]
-    while isys[end] == osyss[1][end] && allequal(last.(osyss))
-        push!(suffix, isys[end])
-        pop!(isys)
-        pop!.(osyss)
-    end
-    isys = from_hierarchy(isys)
-    osyss = from_hierarchy.(osyss)
-    newap = IgnoredAnalysisPoint(isys, osyss)
-    hierarchy = HierarchyAnalysisPointT([suffix; newap])
-    reverse!(hierarchy)
-    return hierarchy
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Represent a namespaced system (or variable) `sys` as a hierarchy. Return a vector, where
-the first element is the unnamespaced system (variable) and subsequent elements are
-`Symbol`s representing the parents of the unnamespaced system (variable) in order from
-inner to outer.
-"""
-function as_hierarchy(sys::Union{AbstractSystem, BasicSymbolic})::HierarchyT
-    namefn = sys isa AbstractSystem ? nameof : getname
-    # get the hierarchy
-    hierarchy = namespace_hierarchy(namefn(sys))
-    # rename the system with unnamespaced name
-    newsys = rename(sys, hierarchy[end])
-    # and remove it from the list
-    pop!(hierarchy)
-    # reverse it to go from inner to outer
-    reverse!(hierarchy)
-    # concatenate
-    T = sys isa AbstractSystem ? AbstractSystem : BasicSymbolic
-    return Union{Symbol, T}[newsys; hierarchy]
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the analysis points to ignore for `sys` and its subsystems. The returned value is a
-`Tuple` similar in structure to the `ignored_connections` field.
-"""
-function ignored_connections(sys::AbstractSystem)
-    has_ignored_connections(sys) ||
-        return (HierarchyAnalysisPointT[], HierarchyAnalysisPointT[])
-
-    ics = get_ignored_connections(sys)
-    if ics === nothing
-        ics = (HierarchyAnalysisPointT[], HierarchyAnalysisPointT[])
-    end
-    # turn into hierarchies
-    ics = (map(analysis_point_common_hierarchy, ics[1]),
-        map(analysis_point_common_hierarchy, ics[2]))
-    systems = get_systems(sys)
-    # for each subsystem, get its ignored connections, add the name of the subsystem
-    # to the hierarchy and concatenate corresponding buffers of the result
-    result = mapreduce(Broadcast.BroadcastFunction(vcat), systems; init = ics) do subsys
-        sub_ics = ignored_connections(subsys)
-        (map(Base.Fix2(push!, nameof(subsys)), sub_ics[1]),
-            map(Base.Fix2(push!, nameof(subsys)), sub_ics[2]))
-    end
-    return (Vector{HierarchyAnalysisPointT}(result[1]),
-        Vector{HierarchyAnalysisPointT}(result[2]))
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -1780,13 +1682,13 @@ function preface(sys::AbstractSystem)
 end
 
 function islinear(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(islinear(r, unknowns(sys)) for r in rhs)
 end
 
 function isaffine(sys::AbstractSystem)
-    rhs = [eq.rhs for eq in equations(sys)]
+    rhs = [eq.rhs for eq in full_equations(sys)]
 
     all(isaffine(r, unknowns(sys)) for r in rhs)
 end
@@ -1993,35 +1895,20 @@ function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
     isconnector(sys) && return length(get_unknowns(sys))
     sys = remove_analysis_points(sys)
-    n_variable_connect_eqs = 0
-    for eq in equations(sys)
-        is_causal_variable_connection(eq.rhs) || continue
-        n_variable_connect_eqs += length(get_systems(eq.rhs)) - 1
-    end
-
     sys, (csets, _) = generate_connection_set(sys)
-    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
-    n_outer_stream_variables = 0
-    for cset in instream_csets
-        n_outer_stream_variables += count(x -> x.isouter, cset.set)
+
+    n_extras = 0
+    for cset in csets
+        rep = cset[1]
+        if rep.type <: Union{InputVar, OutputVar, Equality}
+            n_extras += length(cset) - 1
+        elseif rep.type == Flow
+            n_extras += 1
+        elseif rep.type == Stream
+            n_extras += count(x -> x.isouter, cset)
+        end
     end
-
-    #n_toplevel_unused_flows = 0
-    #toplevel_flows = Set()
-    #for cset in csets
-    #    e1 = first(cset.set)
-    #    e1.sys.namespace === nothing || continue
-    #    for e in cset.set
-    #        get_connection_type(e.v) === Flow || continue
-    #        push!(toplevel_flows, e.v)
-    #    end
-    #end
-    #for m in get_systems(sys)
-    #    isconnector(m) || continue
-    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_unknowns(m))
-    #end
-
-    nextras = n_outer_stream_variables + length(ceqs) + n_variable_connect_eqs
+    return n_extras
 end
 
 Base.show(io::IO, sys::AbstractSystem; kws...) = show(io, MIME"text/plain"(), sys; kws...)

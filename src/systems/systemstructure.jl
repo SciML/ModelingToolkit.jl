@@ -363,7 +363,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             isdelay(v, iv) && continue
 
             if !symbolic_contains(v, dvs)
-                isvalid = iscall(v) && operation(v) isa Union{Shift, Sample, Hold}
+                isvalid = iscall(v) && (operation(v) isa Shift || is_transparent_operator(operation(v)))
                 v′ = v
                 while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
                     v′ = arguments(v′)[1]
@@ -753,7 +753,7 @@ function _mtkcompile!(state::TearingState; simplify = false,
         ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
         state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     end
-    sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
@@ -765,7 +765,7 @@ function _mtkcompile!(state::TearingState; simplify = false,
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+        sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
             sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
     else

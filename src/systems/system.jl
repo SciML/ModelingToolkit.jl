@@ -214,8 +214,7 @@ struct System <: AbstractSystem
     (ones between connector systems) and the second contains all such causal variable
     connections.
     """
-    ignored_connections::Union{
-        Nothing, Tuple{Vector{IgnoredAnalysisPoint}, Vector{IgnoredAnalysisPoint}}}
+    ignored_connections::Union{Nothing, Vector{Connection}}
     """
     `SymbolicUtils.Code.Assignment`s to prepend to all code generated from this system.
     """
@@ -625,12 +624,12 @@ function process_costs(costs::Vector, sts, ps, iv)
 end
 
 """
-Validate that all the variables in an auxiliary system of the (ODE) System (constraint or costs) are 
+Validate that all the variables in an auxiliary system of the (ODE) System (constraint or costs) are
 well-formed states or parameters.
  - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
  - Callable/delay parameters should be parameters of the system
 
-Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a 
+Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a
 parameter of the system.
 """
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
@@ -1073,14 +1072,14 @@ end
 
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
     println(io, """
-    Events are not supported in time-indepent systems. Provide an independent variable to \
+    Events are not supported in time-independent systems. Provide an independent variable to \
     make the system time-dependent or remove the events.
 
     The following continuous events were provided:
     $(err.cevents)
 
     The following discrete events were provided:
-    $(err.devents) 
+    $(err.devents)
     """)
 end
 

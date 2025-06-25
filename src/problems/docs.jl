@@ -391,3 +391,32 @@ $PROBLEM_INTERNALS_HEADER
 
 $PROBLEM_INTERNAL_KWARGS
 """ SciMLBase.IntervalNonlinearProblem
+
+@doc """
+    SciMLBase.LinearProblem(sys::System, op; kwargs...)
+    SciMLBase.LinearProblem{iip}(sys::System, op; kwargs...)
+
+Build a `LinearProblem` given a system `sys` and operating point `op`. `iip` is a boolean
+indicating whether the problem should be in-place. The operating point should be an
+iterable collection of key-value pairs mapping variables/parameters in the system to the
+(initial) values they should take in `LinearProblem`. Any values not provided will
+fallback to the corresponding default (if present).
+
+Note that since `u0` is optional for `LinearProblem`, values of unknowns do not need to be
+specified in `op` to create a `LinearProblem`. In such a case, `prob.u0` will be `nothing`
+and attempting to symbolically index the problem with an unknown, observable, or expression
+depending on unknowns/observables will error.
+
+Updating the parameters automatically updates the `A` and `b` arrays.
+
+# Keyword arguments
+
+$PROBLEM_KWARGS
+$(prob_fun_common_kwargs(LinearProblem, false))
+
+All other keyword arguments are forwarded to the $func constructor.
+
+$PROBLEM_INTERNALS_HEADER
+
+$PROBLEM_INTERNAL_KWARGS
+""" SciMLBase.LinearProblem

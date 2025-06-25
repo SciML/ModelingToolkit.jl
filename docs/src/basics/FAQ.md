@@ -27,7 +27,7 @@ are similarly undocumented. Following is the list of behaviors that should be re
     parameter with the given index.
   - `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
     parameter with the given index.
-  - `parameter_values(sys, sym)` will return a `ParameterIndex` object if `sys` has been
+  - `parameter_index(sys, sym)` will return a `ParameterIndex` object if `sys` has been
     `complete`d (through `mtkcompile`, `complete` or `@mtkcompile`).
   - `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
     memory used by the underlying buffers.

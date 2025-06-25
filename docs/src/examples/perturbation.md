@@ -93,12 +93,13 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
+u0 = [y[0] => 0.0, y[1] => 0.0, y[2] => 0.0, D(y[0]) => 1.0, D(y[1]) => 0.0, D(y[2]) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
 plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
+@assert isapprox(sol(π/2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 

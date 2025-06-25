@@ -727,6 +727,7 @@ function SciMLBase.late_binding_update_u0_p(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
     supports_initialization(sys) || return newu0, newp
     prob isa IntervalNonlinearProblem && return newu0, newp
+    prob isa LinearProblem && return newu0, newp
 
     initdata = prob.f.initialization_data
     meta = initdata === nothing ? nothing : initdata.metadata
@@ -771,7 +772,9 @@ function SciMLBase.late_binding_update_u0_p(
     return newu0, newp
 end
 
-function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw...)
+function DiffEqBase.get_updated_symbolic_problem(
+        sys::AbstractSystem, prob; u0 = state_values(prob),
+        p = parameter_values(prob), kw...)
     supports_initialization(sys) || return prob
     initdata = prob.f.initialization_data
     initdata isa SciMLBase.OverrideInitData || return prob
@@ -779,10 +782,8 @@ function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw..
     meta isa InitializationMetadata || return prob
     meta.get_updated_u0 === nothing && return prob
 
-    u0 = state_values(prob)
-    u0 === nothing && return prob
+    u0 === nothing && return remake(prob; p)
 
-    p = parameter_values(prob)
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
 
     if p isa MTKParameters
@@ -799,7 +800,7 @@ function DiffEqBase.get_updated_symbolic_problem(sys::AbstractSystem, prob; kw..
         T = StaticArrays.similar_type(u0)
     end
 
-    return remake(prob; u0 = T(meta.get_updated_u0(prob, initdata.initializeprob)))
+    return remake(prob; u0 = T(meta.get_updated_u0(prob, initdata.initializeprob)), p)
 end
 
 """
