@@ -1043,6 +1043,9 @@ function (siu::SetInitialUnknowns)(p::AbstractVector, u0)
     return p
 end
 
+safe_float(x) = x
+safe_float(x::AbstractArray) = isempty(x) ? x : float(x)
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1107,7 +1110,8 @@ function maybe_build_initialization_problem(
     if is_time_dependent(sys)
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        initializeprobmap = u0_constructor ∘ getu(initializeprob, solved_unknowns)
+        initializeprobmap = u0_constructor ∘ safe_float ∘
+                            getu(initializeprob, solved_unknowns)
     else
         initializeprobmap = nothing
     end
