@@ -805,7 +805,23 @@ has_equations(::AbstractSystem) = true
 
 Invalidate cached jacobians, etc.
 """
-invalidate_cache!(sys::AbstractSystem) = sys
+function invalidate_cache!(sys::AbstractSystem)
+    has_metadata(sys) || return sys
+    empty!(getmetadata(sys, MutableCacheKey, nothing))
+    return sys
+end
+
+# `::MetadataT` but that is defined later
+function refreshed_metadata(meta::Base.ImmutableDict)
+    newmeta = MetadataT()
+    for (k, v) in meta
+        if k === MutableCacheKey
+            v = MutableCacheT()
+        end
+        newmeta = Base.ImmutableDict(newmeta, k => v)
+    end
+    return newmeta
+end
 
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     getfield(obj, field)
@@ -815,6 +831,8 @@ end
         args = map(fieldnames(obj)) do fn
             if fn in fieldnames(patch)
                 :(patch.$fn)
+            elseif fn == :metadata
+                :($refreshed_metadata(getfield(obj, $(Meta.quot(fn)))))
             else
                 :(getfield(obj, $(Meta.quot(fn))))
             end
@@ -2507,7 +2525,15 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
-    meta = merge(get_metadata(basesys), get_metadata(sys))
+    meta = MetadataT()
+    for kvp in get_metadata(basesys)
+        kvp[1] == MutableCacheKey && continue
+        meta = Base.ImmutableDict(meta, kvp)
+    end
+    for kvp in get_metadata(sys)
+        kvp[1] == MutableCacheKey && continue
+        meta = Base.ImmutableDict(meta, kvp)
+    end
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (observed = obs, continuous_events = cevs,
@@ -2705,7 +2731,9 @@ function process_parameter_equations(sys::AbstractSystem)
                     is_sized_array_symbolic(sym) &&
                     all(Base.Fix1(is_parameter, sys), collect(sym))
         end
-            if !isparameter(eq.lhs)
+            # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
+            # check.
+            if !(eq.lhs in varsbuf)
                 throw(ArgumentError("""
                 LHS of parameter dependency equation must be a single parameter. Found \
                 $(eq.lhs).

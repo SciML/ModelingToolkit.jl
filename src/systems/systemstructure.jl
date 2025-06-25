@@ -208,12 +208,19 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     structure::SystemStructure
     extra_eqs::Vector
     param_derivative_map::Dict{BasicSymbolic, Any}
+    original_eqs::Vector{Equation}
+    """
+    Additional user-provided observed equations. The variables calculated here
+    are not used in the rest of the system.
+    """
+    additional_observed::Vector{Equation}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int})
     eqs = equations(ts)
     @set! ts.sys.eqs = eqs[ieqs]
+    @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs)
     ts
 end
@@ -276,6 +283,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     iv = length(ivs) == 1 ? ivs[1] : nothing
     # flatten array equations
     eqs = flatten_equations(equations(sys))
+    original_eqs = copy(eqs)
     neqs = length(eqs)
     param_derivative_map = Dict{BasicSymbolic, Any}()
     # * Scalarize unknowns
@@ -320,6 +328,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     varsbuf = Set()
     eqs_to_retain = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
+        _eq = eq
         if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
            isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
@@ -415,6 +424,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         end
     end
     eqs = eqs[eqs_to_retain]
+    original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
 
@@ -423,6 +433,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         # depending on order due to NP-completeness of tearing.
         sortidxs = Base.sortperm(eqs, by = string)
         eqs = eqs[sortidxs]
+        original_eqs = original_eqs[sortidxs]
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
@@ -516,8 +527,111 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     ts = TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
-        Any[], param_derivative_map)
+        Any[], param_derivative_map, original_eqs, Equation[])
 
+    return ts
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Preemptively identify observed equations in the system and tear them. This happens before
+any simplification. The equations torn by this process are ones that are already given in
+an explicit form in the system and where the LHS is not present in any other equation of
+the system except for other such preempitvely torn equations.
+"""
+function trivial_tearing!(ts::TearingState)
+    @assert length(ts.original_eqs) == length(equations(ts))
+    # equations that can be trivially torn an observed equations
+    trivial_idxs = BitSet()
+    # equations to never check
+    blacklist = BitSet()
+    torn_eqs = Equation[]
+    # variables that have been matched to trivially torn equations
+    matched_vars = BitSet()
+    # variable to index in fullvars
+    var_to_idx = Dict{Any, Int}(ts.fullvars .=> eachindex(ts.fullvars))
+
+    complete!(ts.structure)
+    var_to_diff = ts.structure.var_to_diff
+    graph = ts.structure.graph
+    while true
+        # track whether we added an equation to the trivial list this iteration
+        added_equation = false
+        for (i, eq) in enumerate(ts.original_eqs)
+            # don't check already torn equations
+            i in trivial_idxs && continue
+            i in blacklist && continue
+            # ensure it is an observed equation matched to a variable in fullvars
+            vari = get(var_to_idx, eq.lhs, 0)
+            iszero(vari) && continue
+            # don't tear irreducible variables
+            if isirreducible(eq.lhs)
+                push!(blacklist, i)
+                continue
+            end
+            # if a variable was the LHS of two trivial observed equations, we wouldn't have
+            # included it in the list. Error if somehow it made it through.
+            @assert !(vari in matched_vars)
+            # don't tear differential/shift equations (or differentiated/shifted variables)
+            var_to_diff[vari] === nothing || continue
+            invview(var_to_diff)[vari] === nothing || continue
+            # get the equations that the candidate matched variable is present in, except
+            # those equations which have already been torn as observed
+            eqidxs = setdiff(𝑑neighbors(graph, vari), trivial_idxs)
+            # it should only be present in this equation
+            length(eqidxs) == 1 || continue
+            eqi = only(eqidxs)
+            @assert eqi == i
+
+            # for every variable present in this equation, make sure it isn't _only_
+            # present in trivial equations
+            isvalid = true
+            for v in 𝑠neighbors(graph, eqi)
+                v == vari && continue
+                v in matched_vars && continue
+                # `> 1` and not `0` because one entry will be this equation (`eqi`)
+                isvalid &= count(!in(trivial_idxs), 𝑑neighbors(graph, v)) > 1
+                isvalid || break
+            end
+            isvalid || continue
+            # skip if the LHS is present in the RHS, since then this isn't explicit
+            if occursin(eq.lhs, eq.rhs)
+                push!(blacklist, i)
+                continue
+            end
+
+            added_equation = true
+            push!(trivial_idxs, eqi)
+            push!(torn_eqs, eq)
+            push!(matched_vars, vari)
+        end
+
+        # if we didn't add an equation this iteration, we won't add one next iteration
+        added_equation || break
+    end
+
+    deleteat!(var_to_diff.primal_to_diff, matched_vars)
+    deleteat!(var_to_diff.diff_to_primal, matched_vars)
+    deleteat!(ts.structure.eq_to_diff.primal_to_diff, trivial_idxs)
+    deleteat!(ts.structure.eq_to_diff.diff_to_primal, trivial_idxs)
+    delete_srcs!(ts.structure.graph, trivial_idxs; rm_verts = true)
+    delete_dsts!(ts.structure.graph, matched_vars; rm_verts = true)
+    if ts.structure.solvable_graph !== nothing
+        delete_srcs!(ts.structure.solvable_graph, trivial_idxs; rm_verts = true)
+        delete_dsts!(ts.structure.solvable_graph, matched_vars; rm_verts = true)
+    end
+    if ts.structure.var_types !== nothing
+        deleteat!(ts.structure.var_types, matched_vars)
+    end
+    deleteat!(ts.fullvars, matched_vars)
+    deleteat!(ts.original_eqs, trivial_idxs)
+    ts.additional_observed = torn_eqs
+    sys = ts.sys
+    eqs = copy(get_eqs(sys))
+    deleteat!(eqs, trivial_idxs)
+    @set! sys.eqs = eqs
+    ts.sys = sys
     return ts
 end
 
@@ -753,6 +867,7 @@ function _mtkcompile!(state::TearingState; simplify = false,
         ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
         state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     end
+    trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(

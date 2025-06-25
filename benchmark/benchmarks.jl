@@ -4,6 +4,7 @@ using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEqDefault
+using ModelingToolkit: t_nounits as t, D_nounits as D
 
 const SUITE = BenchmarkGroup()
 
@@ -45,12 +46,33 @@ end
 
 @named model = DCMotor()
 
+# first call
+mtkcompile(model)
 SUITE["mtkcompile"] = @benchmarkable mtkcompile($model)
 
 model = mtkcompile(model)
 u0 = unknowns(model) .=> 0.0
 tspan = (0.0, 6.0)
-SUITE["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
 
 prob = ODEProblem(model, u0, tspan)
+SUITE["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
+
+# first call
+init(prob)
 SUITE["init"] = @benchmarkable init($prob)
+
+large_param_init = SUITE["large_parameter_init"] = BenchmarkGroup()
+
+N = 25
+@variables x(t)[1:N]
+@parameters A[1:N, 1:N]
+
+defval = collect(x) * collect(x)'
+@mtkcompile model = System(
+    [D(x) ~ x], t, [x], [A]; defaults = [A => defval], guesses = [A => fill(NaN, N, N)])
+
+u0 = [x => rand(N)]
+prob = ODEProblem(model, u0, tspan)
+large_param_init["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
+
+large_param_init["init"] = @benchmarkable init($prob)
