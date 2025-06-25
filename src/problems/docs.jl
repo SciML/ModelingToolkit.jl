@@ -203,7 +203,11 @@ for (mod, prob, func, istd, kws) in [
     (SciMLBase, :SCCNonlinearProblem, NonlinearFunction, false, (; init = false)),
     (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false))
 ]
-    @eval @doc problem_docstring($mod.$prob, $func, $istd) $mod.$prob
+    kwexpr = Expr(:parameters)
+    for (k, v) in pairs(kws)
+        push!(kwexpr.args, Expr(:kw, k, v))
+    end
+    @eval @doc problem_docstring($kwexpr, $mod.$prob, $func, $istd) $mod.$prob
 end
 
 function function_docstring(func, istd, optionals)
