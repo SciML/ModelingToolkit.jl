@@ -464,3 +464,17 @@ end
     x = [1.0]
     @test_nowarn f[1](x, u, p, 0.0)
 end
+
+@testset "implicit focing of inputs" begin
+    @mtkmodel ImplicitForcing begin
+        @variables begin
+            u(t), [description = "Input Variable", input=true]
+            y(t), [description = "fully implicit output", output=true]
+        end
+        @equations begin
+            0 ~ sqrt(u) # implicitly forces output y because u=f(y) in  closed loop
+        end
+    end
+    @named implicit = ImplicitForcing()
+    mtkcompile(implicit; inputs = unbound_inputs(implicit)) # test for no error
+end
