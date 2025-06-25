@@ -2835,15 +2835,20 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     elseif sys isa ODESystem
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
-        eqs = fast_substitute(get_eqs(sys), rules)
-        pdeps = fast_substitute(get_parameter_dependencies(sys), rules)
-        defs = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        newsys = @set sys.eqs = fast_substitute(get_eqs(sys), rules)
+        @set! newsys.unknowns = map(get_unknowns(sys)) do var
+            get(rules, var, var)
+        end
+        @set! newsys.ps = map(get_ps(sys)) do var
+            get(rules, var, var)
+        end
+        @set! newsys.parameter_dependencies = fast_substitute(
+            get_parameter_dependencies(sys), rules)
+        @set! newsys.defaults = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_defaults(sys))
-        guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        @set! newsys.guesses = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_guesses(sys))
-        subsys = map(s -> substitute(s, rules), get_systems(sys))
-        ODESystem(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, parameter_dependencies = pdeps, systems = subsys)
+        @set! newsys.systems = map(s -> substitute(s, rules), get_systems(sys))
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
