@@ -184,6 +184,46 @@ function change_of_variables(
     return new_sys
 end
 
+function FDE_to_ODE(eqs, alpha, epsilon, T; initial=0)
+    @independent_variables t
+    @variables x(t)
+    D = Differential(t)
+    δ = (gamma(alpha+1) * epsilon)^(1/alpha)
+
+    a = pi/2*(1-(1-alpha)/((2-alpha) * log(epsilon^-1)))
+    h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha - 1)))
+
+    x_sub = (gamma(2-alpha) * epsilon)^(1/(1-alpha))
+    x_sup = -log(gamma(1-alpha) * epsilon)
+    M = floor(Int, log(x_sub / T) / h)
+    N = ceil(Int, log(x_sup / δ) / h)
+
+    function c_i(index)
+        h * sin(pi * alpha) / pi * exp((1-alpha)*h*index)
+    end
+
+    function γ_i(index)
+        exp(h * index)
+    end
+
+    new_eqs = Equation[]
+    rhs = initial
+    def = Pair{Num, Int64}[]
+
+    for index in range(M, N-1; step=1)
+        new_z = Symbol(:z, :_, index-M)
+        new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+        new_eq = D(new_z) ~ eqs - γ_i(index)*new_z
+        push!(new_eqs, new_eq)
+        push!(def, new_z=>0)
+        rhs += c_i(index)*new_z
+    end
+    eq = x ~ rhs
+    push!(new_eqs, eq)
+    @mtkcompile sys = System(new_eqs, t; defaults=def)
+    return sys
+end
+
 """
     change_independent_variable(
         sys::System, iv, eqs = [];
