@@ -1368,7 +1368,7 @@ end
         D(x) ~ p2,
         x2 ~ p_1(x)
     ]
-    @mtkcompile sys = ODESystem(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
+    @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
