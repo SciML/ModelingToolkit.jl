@@ -17,6 +17,8 @@ SciMLBase.ODEFunction
 SciMLBase.ODEProblem
 SciMLBase.DAEFunction
 SciMLBase.DAEProblem
+ModelingToolkit.SemilinearODEFunction
+ModelingToolkit.SemilinearODEProblem
 SciMLBase.SDEFunction
 SciMLBase.SDEProblem
 SciMLBase.DDEFunction

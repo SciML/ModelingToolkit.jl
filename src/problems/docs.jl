@@ -1,3 +1,6 @@
+struct SemilinearODEFunction{iip, spec} end
+struct SemilinearODEProblem{iip, spec} end
+
 const U0_P_DOCS = """
 The order of unknowns is determined by `unknowns(sys)`. If the system is split
 [`is_split`](@ref) create an [`MTKParameters`](@ref) object. Otherwise, a parameter vector.
@@ -92,6 +95,15 @@ function problem_ctors(prob, istd)
     end
 end
 
+function problem_ctors(prob::Type{<:SemilinearODEProblem}, istd)
+    @assert istd
+    """
+        SciMLBase.$prob(sys::System, op, tspan::NTuple{2}; kwargs...)
+        SciMLBase.$prob{iip}(sys::System, op, tspan::NTuple{2}; kwargs...)
+        SciMLBase.$prob{iip, specialize}(sys::System, op, tspan::NTuple{2}; stiff_linear = true, stiff_quadratic = false, stiff_nonlinear = false, kwargs...)
+    """
+end
+
 function prob_fun_common_kwargs(T, istd)
     return """
     - `check_compatibility`: Whether to check if the given system `sys` contains all the
@@ -103,7 +115,8 @@ function prob_fun_common_kwargs(T, istd)
     """
 end
 
-function problem_docstring(prob, func, istd; init = true, extra_body = "")
+function problem_docstring(prob, func, istd; init = true, extra_body = "",
+        extra_kwargs = "", extra_kwargs_desc = "")
     if func isa DataType
         func = "`$func`"
     end
@@ -127,8 +140,9 @@ function problem_docstring(prob, func, istd; init = true, extra_body = "")
     $PROBLEM_KWARGS
     $(istd ? TIME_DEPENDENT_PROBLEM_KWARGS : "")
     $(prob_fun_common_kwargs(prob, istd))
-
+    $(extra_kwargs)
     All other keyword arguments are forwarded to the $func constructor.
+    $(extra_kwargs_desc)
 
     $PROBLEM_INTERNALS_HEADER
 
@@ -186,6 +200,32 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 `BVProblem` must be solved using BVDAE solvers, such as Ascher.
 """
 
+const SEMILINEAR_EXTRA_BODY = """
+This is a special form of an ODE which uses a `SplitFunction` internally. The equations are
+separated into linear, quadratic and general terms and phrased as matrix operations. See
+[`calculate_semiquadratic_form`](@ref) for information on how the equations are split. This
+formulation allows leveraging split ODE solvers such as `KenCarp4` and is useful for systems
+where the stiff and non-stiff terms can be separated out in such a manner. Typically the linear
+part of the equations is the stiff part, but the keywords `stiff_linear`, `stiff_quadratic` and `stiff_nonlinear` can
+be used to control which parts are considered as stiff.
+"""
+
+const SEMILINEAR_A_B_C_KWARGS = """
+- `stiff_linear`: Whether the linear part of the equations should be part of the stiff function
+  in the split form. Has no effect if the equations have no linear part.
+- `stiff_quadratic`: Whether the quadratic part of the equations should be part of the stiff
+  function in the split form. Has no effect if the equations have no quadratic part.
+- `stiff_nonlinear`: Whether the non-linear non-quadratic part of the equations should be part of
+  the stiff function in the split form. Has no effect if the equations have no such
+  non-linear non-quadratic part.
+"""
+
+const SEMILINEAR_A_B_C_CONSTRAINT = """
+Note that all three of `stiff_linear`, `stiff_quadratic`, `stiff_nonlinear` cannot be identical, and at least
+two of `A`, `B`, `C` returned from [`calculate_semiquadratic_form`](@ref) must be
+non-`nothing`. In other words, both of the functions in the split form must be non-empty.
+"""
+
 for (mod, prob, func, istd, kws) in [
     (SciMLBase, :ODEProblem, ODEFunction, true, (;)),
     (SciMLBase, :SteadyStateProblem, ODEFunction, false, (;)),
@@ -201,7 +241,13 @@ for (mod, prob, func, istd, kws) in [
     (SciMLBase, :NonlinearProblem, NonlinearFunction, false, (;)),
     (SciMLBase, :NonlinearLeastSquaresProblem, NonlinearFunction, false, (;)),
     (SciMLBase, :SCCNonlinearProblem, NonlinearFunction, false, (; init = false)),
-    (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false))
+    (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false)),
+    (ModelingToolkit,
+        :SemilinearODEProblem,
+        :SemilinearODEFunction,
+        true,
+        (; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
+            extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))
 ]
     kwexpr = Expr(:parameters)
     for (k, v) in pairs(kws)
@@ -210,7 +256,8 @@ for (mod, prob, func, istd, kws) in [
     @eval @doc problem_docstring($kwexpr, $mod.$prob, $func, $istd) $mod.$prob
 end
 
-function function_docstring(func, istd, optionals)
+function function_docstring(
+        func, istd, optionals; extra_body = "", extra_kwargs = "", extra_kwargs_desc = "")
     return """
         $func(sys::System; kwargs...)
         $func{iip}(sys::System; kwargs...)
@@ -219,6 +266,8 @@ function function_docstring(func, istd, optionals)
     Create a `$func` from the given `sys`. `iip` is a boolean indicating whether the
     function should be in-place. `specialization` is a `SciMLBase.AbstractSpecalize`
     subtype indicating the level of specialization of the $func.
+
+    $(extra_body)
 
     Beyond the arguments listed below, this constructor accepts all keyword arguments
     supported by the DifferentialEquations.jl `solve` function. For a complete list
@@ -240,9 +289,11 @@ function function_docstring(func, istd, optionals)
       sparse matrices. Also controls whether the mass matrix is sparse, wherever applicable.
     $(prob_fun_common_kwargs(func, istd))
     $(process_optional_function_kwargs(optionals))
+    $(extra_kwargs)
     - `kwargs...`: Additional keyword arguments passed to the solver
 
     All other keyword arguments are forwarded to the `$func` struct constructor.
+    $(extra_kwargs_desc)
     """
 end
 
@@ -333,20 +384,30 @@ function process_optional_function_kwargs(choices::Vector{Symbol})
     join(map(Base.Fix1(getindex, OPTIONAL_FN_KWARGS_DICT), choices), "\n")
 end
 
-for (mod, func, istd, optionals) in [
-    (SciMLBase, :ODEFunction, true, [:jac, :tgrad]),
-    (SciMLBase, :ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac]),
-    (SciMLBase, :DAEFunction, true, [:jac, :tgrad]),
-    (SciMLBase, :DDEFunction, true, Symbol[]),
-    (SciMLBase, :SDEFunction, true, [:jac, :tgrad]),
-    (SciMLBase, :SDDEFunction, true, Symbol[]),
-    (SciMLBase, :DiscreteFunction, true, Symbol[]),
-    (SciMLBase, :ImplicitDiscreteFunction, true, Symbol[]),
-    (SciMLBase, :NonlinearFunction, false, [:resid_prototype, :jac]),
-    (SciMLBase, :IntervalNonlinearFunction, false, Symbol[]),
-    (SciMLBase, :OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j])
+for (mod, func, istd, optionals, kws) in [
+    (SciMLBase, :ODEFunction, true, [:jac, :tgrad], (;)),
+    (SciMLBase, :ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac], (;)),
+    (SciMLBase, :DAEFunction, true, [:jac, :tgrad], (;)),
+    (SciMLBase, :DDEFunction, true, Symbol[], (;)),
+    (SciMLBase, :SDEFunction, true, [:jac, :tgrad], (;)),
+    (SciMLBase, :SDDEFunction, true, Symbol[], (;)),
+    (SciMLBase, :DiscreteFunction, true, Symbol[], (;)),
+    (SciMLBase, :ImplicitDiscreteFunction, true, Symbol[], (;)),
+    (SciMLBase, :NonlinearFunction, false, [:resid_prototype, :jac], (;)),
+    (SciMLBase, :IntervalNonlinearFunction, false, Symbol[], (;)),
+    (SciMLBase, :OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j], (;)),
+    (ModelingToolkit,
+        :SemilinearODEFunction,
+        true,
+        [:jac],
+        (; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
+            extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))
 ]
-    @eval @doc function_docstring($mod.$func, $istd, $optionals) $mod.$func
+    kwexpr = Expr(:parameters)
+    for (k, v) in pairs(kws)
+        push!(kwexpr.args, Expr(:kw, k, v))
+    end
+    @eval @doc function_docstring($kwexpr, $mod.$func, $istd, $optionals) $mod.$func
 end
 
 @doc """
