@@ -810,6 +810,11 @@ function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     @set sys.metadata = meta
 end
 
+function SymbolicUtils.hasmetadata(sys::AbstractSystem, k::DataType)
+    meta = get_metadata(sys)
+    haskey(meta, k)
+end
+
 """
     $(TYPEDSIGNATURES)
 
