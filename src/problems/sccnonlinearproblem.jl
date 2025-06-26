@@ -269,5 +269,5 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
     @set! sys.eqs = new_eqs
     @set! sys.index_cache = subset_unknowns_observed(
         get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,)))
-    return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+    return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
 end
