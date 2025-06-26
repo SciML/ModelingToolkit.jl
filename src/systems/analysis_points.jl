@@ -810,13 +810,13 @@ end
 
 Given a list of analysis points, break the connection for each and set the output to zero.
 """
-function handle_loop_openings(sys::AbstractSystem, aps)
+function handle_loop_openings(sys::AbstractSystem, aps, input_vars)
     for ap in canonicalize_ap(sys, aps)
         sys, (outvar,) = apply_transformation(Break(ap, true, true), sys)
         if Symbolics.isarraysymbolic(outvar)
-            push!(get_eqs(sys), outvar ~ zeros(size(outvar)))
+            append!(input_vars, collect(outvar))
         else
-            push!(get_eqs(sys), outvar ~ 0)
+            push!(input_vars, outvar)
         end
     end
     return sys
@@ -849,10 +849,10 @@ All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...)
-    sys = handle_loop_openings(sys, loop_openings)
-    aps = canonicalize_ap(sys, aps)
     dus = []
     us = []
+    sys = handle_loop_openings(sys, loop_openings, dus)
+    aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
         push!(dus, du)
@@ -979,7 +979,7 @@ function linearization_ap_transform(sys,
         end
         push!(output_vars, output_var)
     end
-    sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
+    sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)), input_vars)
     return sys, input_vars, output_vars
 end
 
