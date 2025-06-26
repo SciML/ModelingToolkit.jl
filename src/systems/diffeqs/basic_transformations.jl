@@ -184,71 +184,83 @@ function change_of_variables(
     return new_sys
 end
 
-function FDE_to_ODE(eqs, alpha, epsilon, T; initial=0)
+function FDE_to_ODE(eqs, alphas, epsilon, T; initials=0)
     @independent_variables t
     @variables x(t)
     D = Differential(t)
+    i = 0
+    all_eqs = Equation[]
+    all_def = Pair{Num, Int64}[]
 
-    alpha_0 = alpha
-    if (alpha > 1)
-        coeff = 1/(alpha - 1)
-        m = 2
-        while (alpha - m > 0)
-            coeff /= alpha - m
-            m += 1
+    function FDE_helper(sub_eq, α; initial=0)
+        alpha_0 = α
+        if (α > 1)
+            coeff = 1/(α - 1)
+            m = 2
+            while (α - m > 0)
+                coeff /= α - m
+                m += 1
+            end
+            alpha_0 = α - m + 1
         end
-        alpha_0 = alpha - m + 1
-    end
 
-    δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
-    a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
-    h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
+        δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
+        a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
+        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
 
-    x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
-    x_sup = -log(gamma(1-alpha_0) * epsilon)
-    M = floor(Int, log(x_sub / T) / h)
-    N = ceil(Int, log(x_sup / δ) / h)
+        x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
+        x_sup = -log(gamma(1-alpha_0) * epsilon)
+        M = floor(Int, log(x_sub / T) / h)
+        N = ceil(Int, log(x_sup / δ) / h)
 
-    function c_i(index)
-        h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
-    end
-
-    function γ_i(index)
-        exp(h * index)
-    end
-
-    new_eqs = Equation[]
-    rhs = initial
-    def = Pair{Num, Int64}[]
-
-    if (alpha < 1)
-        for index in range(M, N-1; step=1)
-            new_z = Symbol(:z, :_, index-M)
-            new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
-            new_eq = D(new_z) ~ eqs - γ_i(index)*new_z
-            push!(new_eqs, new_eq)
-            push!(def, new_z=>0)
-            rhs += c_i(index)*new_z
+        function c_i(index)
+            h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
         end
-    else
-        for index in range(M, N-1; step=1)
-            new_z = Symbol(:z, :_, index-M)
-            start = eqs
-            γ = γ_i(index)
-            for k in range(1, m; step=1)
-                new_z = Symbol(:z, :_, index-M, :_, k)
+
+        function γ_i(index)
+            exp(h * index)
+        end
+
+        new_eqs = Equation[]
+        rhs = initial
+        def = Pair{Num, Int64}[]
+
+        if (α < 1)
+            for index in range(M, N-1; step=1)
+                new_z = Symbol(:z, :_, i)
+                i += 1
                 new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
-                new_eq = D(new_z) ~ start - γ*new_z
-                start = k * new_z
+                new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
                 push!(new_eqs, new_eq)
                 push!(def, new_z=>0)
+                rhs += c_i(index)*new_z
             end
-            rhs += coeff*c_i(index)*new_z
+        else
+            for index in range(M, N-1; step=1)
+                new_z = Symbol(:z, :_, i)
+                i += 1
+                γ = γ_i(index)
+                for k in range(1, m; step=1)
+                    new_z = Symbol(:z, :_, index-M, :_, k)
+                    new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                    new_eq = D(new_z) ~ sub_eq - γ*new_z
+                    sub_eq = k * new_z
+                    push!(new_eqs, new_eq)
+                    push!(def, new_z=>0)
+                end
+                rhs += coeff*c_i(index)*new_z
+            end
         end
+        push!(new_eqs, x ~ rhs)
+        return (new_eqs, def)
     end
-    eq = x ~ rhs
-    push!(new_eqs, eq)
-    @named sys = System(new_eqs, t; defaults=def)
+
+    for (eq, alpha) in zip(eqs, alphas)
+        (new_eqs, def) = FDE_helper(eq, alpha)
+        append!(all_eqs, new_eqs)
+        append!(all_def, def)
+    end
+    @named sys = System(all_eqs, t; defaults=all_def)
     return mtkcompile(sys)
 end
 
