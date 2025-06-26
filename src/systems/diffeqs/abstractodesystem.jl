@@ -1495,7 +1495,7 @@ function InitializationProblem{iip, specialize}(sys::AbstractSystem,
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), [unknowns(isys); observables(isys)])
+    uninit = setdiff(unknowns(sys), unknowns(isys), observables(isys))
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
