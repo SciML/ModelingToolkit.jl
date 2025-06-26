@@ -184,15 +184,14 @@ function change_of_variables(
     return new_sys
 end
 
-function FDE_to_ODE(eqs, alphas, epsilon, T; initials=0)
+function FDE_to_ODE(eqs, variables, alphas, epsilon, T; initials=0)
     @independent_variables t
-    @variables x(t)
     D = Differential(t)
     i = 0
     all_eqs = Equation[]
     all_def = Pair{Num, Int64}[]
 
-    function FDE_helper(sub_eq, α; initial=0)
+    function FDE_helper(sub_eq, sub_var, α; initial=0)
         alpha_0 = α
         if (α > 1)
             coeff = 1/(α - 1)
@@ -222,10 +221,10 @@ function FDE_to_ODE(eqs, alphas, epsilon, T; initials=0)
         end
 
         new_eqs = Equation[]
-        rhs = initial
         def = Pair{Num, Int64}[]
 
-        if (α < 1)
+        if (α < 1)  
+            rhs = initial
             for index in range(M, N-1; step=1)
                 new_z = Symbol(:z, :_, i)
                 i += 1
@@ -236,27 +235,32 @@ function FDE_to_ODE(eqs, alphas, epsilon, T; initials=0)
                 rhs += c_i(index)*new_z
             end
         else
+            rhs = 0
+            for (index, value) in enumerate(initial)
+                rhs += value * t^(index - 1) / gamma(index)
+            end
             for index in range(M, N-1; step=1)
                 new_z = Symbol(:z, :_, i)
                 i += 1
                 γ = γ_i(index)
+                base = sub_eq
                 for k in range(1, m; step=1)
                     new_z = Symbol(:z, :_, index-M, :_, k)
                     new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
-                    new_eq = D(new_z) ~ sub_eq - γ*new_z
-                    sub_eq = k * new_z
+                    new_eq = D(new_z) ~ base - γ*new_z
+                    base = k * new_z
                     push!(new_eqs, new_eq)
                     push!(def, new_z=>0)
                 end
                 rhs += coeff*c_i(index)*new_z
             end
         end
-        push!(new_eqs, x ~ rhs)
+        push!(new_eqs, sub_var ~ rhs)
         return (new_eqs, def)
     end
 
-    for (eq, alpha) in zip(eqs, alphas)
-        (new_eqs, def) = FDE_helper(eq, alpha)
+    for (eq, cur_var, alpha, init) in zip(eqs, variables, alphas, initials)
+        (new_eqs, def) = FDE_helper(eq, cur_var, alpha; initial=init)
         append!(all_eqs, new_eqs)
         append!(all_def, def)
     end
