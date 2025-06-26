@@ -1574,3 +1574,28 @@ end
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     @test prob.problem_type == "A"
 end
+
+@testset "`substitute` retains events and metadata" begin
+    @parameters p(t) = 1.0
+    @variables x(t) = 0.0
+    event = [0.5] => [p ~ Pre(t)]
+    event2 = [x ~ 0.75] => [p ~ 2 * Pre(t)]
+
+    struct TestMeta end
+
+    eq = [
+        D(x) ~ p
+    ]
+    @named sys = System(eq, t, [x], [p], discrete_events = [event],
+        continuous_events = [event2], metadata = Dict(TestMeta => "test"))
+
+    @variables x2(t) = 0.0
+    sys2 = substitute(sys, [x => x2])
+
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 1
+    @test length(ModelingToolkit.get_discrete_events(sys2)) == 1
+    @test length(ModelingToolkit.get_continuous_events(sys)) == 1
+    @test length(ModelingToolkit.get_continuous_events(sys2)) == 1
+    @test getmetadata(sys, TestMeta, nothing) == "test"
+    @test getmetadata(sys2, TestMeta, nothing) == "test"
+end
