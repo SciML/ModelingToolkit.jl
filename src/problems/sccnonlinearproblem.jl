@@ -118,7 +118,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
 
     _, u0,
     p = process_SciMLProblem(
-        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, kwargs...)
+        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true, kwargs...)
 
     explicitfuns = []
     nlfuns = []
@@ -247,17 +247,33 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         p = rebuild_with_caches(p, templates...)
     end
 
+    u0_eltype = Union{}
+    for x in u0
+        symbolic_type(x) == NotSymbolic() || continue
+        u0_eltype = typeof(x)
+        break
+    end
+    if u0_eltype == Union{}
+        u0_eltype = Float64
+    end
+    u0_eltype = float(u0_eltype)
     subprobs = []
-    for (f, vscc) in zip(nlfuns, var_sccs)
+    for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
             typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...)
+        symbolic_idxs = findall(x -> symbolic_type(x) != NotSymbolic(), _u0)
+        explicitfuns[i](p, subprobs)
         if f isa LinearFunction
+            _u0 = isempty(symbolic_idxs) ? _u0 : zeros(u0_eltype, length(_u0))
+            _u0 = u0_eltype.(_u0)
             symbolic_interface = f.interface
             A,
             b = get_A_b_from_LinearFunction(
                 sys, f, p; eval_expression, eval_module, u0_constructor, u0_eltype)
             prob = LinearProblem(A, b, p; f = symbolic_interface, u0 = _u0)
         else
+            isempty(symbolic_idxs) || throw(MissingGuessError(dvs[vscc], _u0))
+            _u0 = u0_eltype.(_u0)
             prob = NonlinearProblem(f, _u0, p)
         end
         push!(subprobs, prob)
