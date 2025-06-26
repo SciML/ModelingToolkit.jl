@@ -188,18 +188,29 @@ function FDE_to_ODE(eqs, alpha, epsilon, T; initial=0)
     @independent_variables t
     @variables x(t)
     D = Differential(t)
-    δ = (gamma(alpha+1) * epsilon)^(1/alpha)
 
-    a = pi/2*(1-(1-alpha)/((2-alpha) * log(epsilon^-1)))
-    h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha - 1)))
+    alpha_0 = alpha
+    if (alpha > 1)
+        coeff = 1/(alpha - 1)
+        m = 2
+        while (alpha - m > 0)
+            coeff /= alpha - m
+            m += 1
+        end
+        alpha_0 = alpha - m + 1
+    end
 
-    x_sub = (gamma(2-alpha) * epsilon)^(1/(1-alpha))
-    x_sup = -log(gamma(1-alpha) * epsilon)
+    δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
+    a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
+    h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
+
+    x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
+    x_sup = -log(gamma(1-alpha_0) * epsilon)
     M = floor(Int, log(x_sub / T) / h)
     N = ceil(Int, log(x_sup / δ) / h)
 
     function c_i(index)
-        h * sin(pi * alpha) / pi * exp((1-alpha)*h*index)
+        h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
     end
 
     function γ_i(index)
@@ -210,18 +221,35 @@ function FDE_to_ODE(eqs, alpha, epsilon, T; initial=0)
     rhs = initial
     def = Pair{Num, Int64}[]
 
-    for index in range(M, N-1; step=1)
-        new_z = Symbol(:z, :_, index-M)
-        new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
-        new_eq = D(new_z) ~ eqs - γ_i(index)*new_z
-        push!(new_eqs, new_eq)
-        push!(def, new_z=>0)
-        rhs += c_i(index)*new_z
+    if (alpha < 1)
+        for index in range(M, N-1; step=1)
+            new_z = Symbol(:z, :_, index-M)
+            new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+            new_eq = D(new_z) ~ eqs - γ_i(index)*new_z
+            push!(new_eqs, new_eq)
+            push!(def, new_z=>0)
+            rhs += c_i(index)*new_z
+        end
+    else
+        for index in range(M, N-1; step=1)
+            new_z = Symbol(:z, :_, index-M)
+            start = eqs
+            γ = γ_i(index)
+            for k in range(1, m; step=1)
+                new_z = Symbol(:z, :_, index-M, :_, k)
+                new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                new_eq = D(new_z) ~ start - γ*new_z
+                start = k * new_z
+                push!(new_eqs, new_eq)
+                push!(def, new_z=>0)
+            end
+            rhs += coeff*c_i(index)*new_z
+        end
     end
     eq = x ~ rhs
     push!(new_eqs, eq)
-    @mtkcompile sys = System(new_eqs, t; defaults=def)
-    return sys
+    @named sys = System(new_eqs, t; defaults=def)
+    return mtkcompile(sys)
 end
 
 """
