@@ -1783,3 +1783,26 @@ end
     @test !process_running(proc)
     kill(proc, Base.SIGKILL)
 end
+
+@testset "`substitute` retains events and metadata" begin
+    @parameters p(t) = 1.0
+    @variables x(t) = 0.0
+    event = [0.5] => [p ~ t]
+    event2 = [x ~ 0.75] => [p ~ 2 * t]
+
+    eq = [
+        D(x) ~ p
+    ]
+    @named sys = ODESystem(eq, t, [x], [p], discrete_events = [event],
+        continuous_events = [event2], metadata = "TEST")
+
+    @variables x2(t) = 0.0
+    sys2 = substitute(sys, [x => x2])
+
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 1
+    @test length(ModelingToolkit.get_discrete_events(sys2)) == 1
+    @test length(ModelingToolkit.get_continuous_events(sys)) == 1
+    @test length(ModelingToolkit.get_continuous_events(sys2)) == 1
+    @test ModelingToolkit.get_metadata(sys) == "TEST"
+    @test ModelingToolkit.get_metadata(sys2) == "TEST"
+end
