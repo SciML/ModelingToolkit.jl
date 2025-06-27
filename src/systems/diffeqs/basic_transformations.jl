@@ -184,6 +184,32 @@ function change_of_variables(
     return new_sys
 end
 
+"""
+Generates the system of ODEs to find solution to FDEs.
+
+Example:
+
+```julia
+@independent_variables t
+@variables x(t)
+D = Differential(t)
+tspan = (0., 1.)
+
+α = 0.5
+eqs = (9*gamma(1 + α)/4) - (3*t^(4 - α/2)*gamma(5 + α/2)/gamma(5 - α/2))
+eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
+sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
+
+prob = ODEProblem(sys, [], tspan)
+sol = solve(prob, radau5(), abstol = 1e-10, reltol = 1e-10)
+
+time = 0
+while(time <= 1)
+    @test isapprox((3/2*time^(α/2) - time^4)^2, sol(time, idxs=x), atol=1e-3)
+    time += 0.1
+end
+```
+"""
 function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0)
     @independent_variables t
     D = Differential(t)
