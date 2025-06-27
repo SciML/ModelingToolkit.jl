@@ -28,6 +28,7 @@ str = String(take!(io))
 
 sys = include_string(@__MODULE__, str)
 rc2 = expand_connections(rc_model)
+@test isapprox(sys, rc2)
 @test issetequal(equations(sys), equations(rc2))
 @test issetequal(unknowns(sys), unknowns(rc2))
 @test issetequal(parameters(sys), parameters(rc2))
