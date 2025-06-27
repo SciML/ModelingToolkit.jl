@@ -190,11 +190,13 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     push!(pars, get_iv(sys))
 
     # 8) use observed equations for guesses of observed variables if not provided
+    guessed = Set(keys(defs)) # x(t), D(x(t)), ...
+    guessed = union(guessed, Set(default_toterm.(guessed))) # x(t), D(x(t)), xˍt(t), ...
     for eq in trueobs
-        haskey(defs, eq.lhs) && continue
-        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
-
-        defs[eq.lhs] = eq.rhs
+        if !(eq.lhs in guessed)
+            defs[eq.lhs] = eq.rhs
+            #push!(guessed, eq.lhs) # should not encounter eq.lhs twice, so don't need to track it
+        end
     end
     append!(eqs_ics, trueobs)
 
