@@ -41,7 +41,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
         op = Dict(),
@@ -218,7 +218,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-independent `AbstractSystem`.
 """
 function generate_initializesystem_timeindependent(sys::AbstractSystem;
         op = Dict(),
