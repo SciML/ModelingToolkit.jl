@@ -1257,6 +1257,8 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
     end
 end
 
+abstract type ProblemConstructionHook end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1308,6 +1310,8 @@ function process_SciMLProblem(
     symbols_to_symbolics!(sys, op)
 
     check_inputmap_keys(sys, op)
+
+    op = getmetadata(sys, ProblemConstructionHook, identity)(op)
 
     defs = add_toterms(recursive_unwrap(defaults(sys)); replace = is_discrete_system(sys))
     kwargs = NamedTuple(kwargs)
