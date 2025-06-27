@@ -199,8 +199,8 @@ function split_system(ci::ClockInference{S}) where {S}
 
     # breaks the system up into a continous and 0 or more discrete systems
     tss = similar(cid_to_eq, S)
-    for (id, ieqs) in enumerate(cid_to_eq)
-        ts_i = system_subset(ts, ieqs)
+    for (id, (ieqs, ivars)) in enumerate(zip(cid_to_eq, cid_to_var))
+        ts_i = system_subset(ts, ieqs, ivars)
         if id != continuous_id
             ts_i = shift_discrete_system(ts_i)
             @set! ts_i.structure.only_discrete = true
