@@ -218,12 +218,12 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
-function system_subset(ts::TearingState, ieqs::Vector{Int})
+function system_subset(ts::TearingState, ieqs::Vector{Int}, ivars::Vector{Int})
     eqs = equations(ts)
     @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.original_eqs = ts.original_eqs[ieqs]
-    @set! ts.structure = system_subset(ts.structure, ieqs)
+    @set! ts.structure = system_subset(ts.structure, ieqs, ivars)
     if all(eq -> eq.rhs isa StateMachineOperator, get_eqs(ts.sys))
         names = Symbol[]
         for eq in get_eqs(ts.sys)
@@ -240,22 +240,33 @@ function system_subset(ts::TearingState, ieqs::Vector{Int})
     else
         @set! ts.statemachines = eltype(ts.statemachines)[]
     end
+    @set! ts.fullvars = ts.fullvars[ivars]
     ts
 end
 
-function system_subset(structure::SystemStructure, ieqs::Vector{Int})
-    @unpack graph, eq_to_diff = structure
+function system_subset(structure::SystemStructure, ieqs::Vector{Int}, ivars::Vector{Int})
+    @unpack graph = structure
     fadj = Vector{Int}[]
     eq_to_diff = DiffGraph(length(ieqs))
+    var_to_diff = DiffGraph(length(ivars))
+
     ne = 0
+    old_to_new_var = zeros(Int, ndsts(graph))
+    for (i, iv) in enumerate(ivars)
+        old_to_new_var[iv] = i
+        structure.var_to_diff[iv] === nothing && continue
+        var_to_diff[i] = old_to_new_var[structure.var_to_diff[iv]]
+    end
     for (j, eq_i) in enumerate(ieqs)
-        ivars = copy(graph.fadjlist[eq_i])
-        ne += length(ivars)
-        push!(fadj, ivars)
+        var_adj = [old_to_new_var[i] for i in graph.fadjlist[eq_i]]
+        @assert all(!iszero, var_adj)
+        ne += length(var_adj)
+        push!(fadj, var_adj)
         eq_to_diff[j] = structure.eq_to_diff[eq_i]
     end
-    @set! structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
+    @set! structure.graph = complete(BipartiteGraph(ne, fadj, length(ivars)))
     @set! structure.eq_to_diff = eq_to_diff
+    @set! structure.var_to_diff = complete(var_to_diff)
     structure
 end
 
@@ -440,7 +451,8 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             isdelay(v, iv) && continue
 
             if !symbolic_contains(v, dvs)
-                isvalid = iscall(v) && (operation(v) isa Shift || is_transparent_operator(operation(v)))
+                isvalid = iscall(v) &&
+                          (operation(v) isa Shift || is_transparent_operator(operation(v)))
                 v′ = v
                 while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
                     v′ = arguments(v′)[1]
