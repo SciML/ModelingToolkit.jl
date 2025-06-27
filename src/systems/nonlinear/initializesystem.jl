@@ -71,7 +71,6 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
-    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
 
@@ -230,12 +229,10 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     eqs = equations(sys)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
-    vars_set = Set(vars) # for efficient in-lookup
 
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
-    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
 
     # PREPROCESSING
