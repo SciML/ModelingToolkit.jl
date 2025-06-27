@@ -29,7 +29,7 @@ the default behavior).
 function MTKParameters(
         sys::AbstractSystem, op; tofloat = false,
         t0 = nothing, substitution_limit = 1000, floatT = nothing,
-        p_constructor = identity)
+        p_constructor = identity, fast_path = false)
     ic = if has_index_cache(sys) && get_index_cache(sys) !== nothing
         get_index_cache(sys)
     else
@@ -49,9 +49,12 @@ function MTKParameters(
 
     u0map = anydict()
     pmap = anydict()
-    missing_unknowns, missing_pars = build_operating_point!(sys, op,
-        u0map, pmap, defs, dvs, ps)
-
+    if fast_path
+        missing_pars = missingvars(op, ps)
+    else
+        _, missing_pars = build_operating_point!(sys, op,
+            u0map, pmap, defs, dvs, ps)
+    end
     if t0 !== nothing
         op[get_iv(sys)] = t0
     end

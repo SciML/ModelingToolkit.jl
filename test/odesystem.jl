@@ -1087,15 +1087,16 @@ end
     @named B1 = System(Equation[], t, [], [])
     @named A2 = System(Equation[], t, [], []; metadata = A)
     @named B2 = System(Equation[], t, [], []; metadata = B)
-    @test isempty(ModelingToolkit.get_metadata(extend(A1, B1)))
+    n_core_metadata = length(ModelingToolkit.get_metadata(A1))
+    @test length(ModelingToolkit.get_metadata(extend(A1, B1))) == n_core_metadata
     meta = ModelingToolkit.get_metadata(extend(A1, B2))
-    @test length(meta) == 1
+    @test length(meta) == n_core_metadata + 1
     @test meta[String] == 2
     meta = ModelingToolkit.get_metadata(extend(A2, B1))
-    @test length(meta) == 1
+    @test length(meta) == n_core_metadata + 1
     @test meta[Int] == 1
     meta = ModelingToolkit.get_metadata(extend(A2, B2))
-    @test length(meta) == 2
+    @test length(meta) == n_core_metadata + 2
     @test meta[Int] == 1
     @test meta[String] == 2
 end

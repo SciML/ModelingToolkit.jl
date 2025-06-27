@@ -922,8 +922,8 @@ end
             [D(x) ~ 2x + r + rhss, r ~ p + 2q, q ~ p + 3], t;
             guesses = [p => 1.0])
         prob = Problem(sys, [x => 1.0, p => missing], (0.0, 1.0))
-        @test length(equations(ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys))) ==
-              4
+        parent_isys = ModelingToolkit.get_parent(prob.f.initialization_data.initializeprob.f.sys)
+        @test length(equations(parent_isys)) == 4
         integ = init(prob, alg)
         @test integ.ps[p] ≈ 2
     end
@@ -1252,9 +1252,9 @@ end
     @test init(prob3)[x] ≈ 1.0
     prob4 = remake(prob; p = [p => 1.0])
     test_dummy_initialization_equation(prob4, x)
-    prob5 = remake(prob; p = [p => missing, q => 2.0])
+    prob5 = remake(prob; p = [p => missing, q => 4.0])
     @test prob5.f.initialization_data !== nothing
-    @test init(prob5).ps[p] ≈ 1.0
+    @test init(prob5).ps[p] ≈ 2.0
 end
 
 @testset "Variables provided as symbols" begin

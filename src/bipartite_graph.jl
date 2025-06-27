@@ -535,13 +535,39 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
     end
 end
 
-function delete_srcs!(g::BipartiteGraph, srcs)
+function delete_srcs!(g::BipartiteGraph{I}, srcs; rm_verts = false) where {I}
     for s in srcs
         set_neighbors!(g, s, ())
     end
+    if rm_verts
+        old_to_new_idxs = collect(one(I):I(nsrcs(g)))
+        for s in srcs
+            old_to_new_idxs[s] = zero(I)
+        end
+        offset = zero(I)
+        for i in eachindex(old_to_new_idxs)
+            if iszero(old_to_new_idxs[i])
+                offset += one(I)
+                continue
+            end
+            old_to_new_idxs[i] -= offset
+        end
+
+        if g.badjlist isa AbstractVector
+            for i in 1:ndsts(g)
+                for j in eachindex(g.badjlist[i])
+                    g.badjlist[i][j] = old_to_new_idxs[g.badjlist[i][j]]
+                end
+                filter!(!iszero, g.badjlist[i])
+            end
+        end
+        deleteat!(g.fadjlist, srcs)
+    end
     g
 end
-delete_dsts!(g::BipartiteGraph, srcs) = delete_srcs!(invview(g), srcs)
+function delete_dsts!(g::BipartiteGraph, srcs; rm_verts = false)
+    delete_srcs!(invview(g), srcs; rm_verts)
+end
 
 ###
 ### Edges iteration

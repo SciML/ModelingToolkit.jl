@@ -811,6 +811,14 @@ function observed_dependency_graph(eqs::Vector{Equation})
     return DiCMOBiGraph{false}(graph, matching)
 end
 
+abstract type ObservedGraphCacheKey end
+
+struct ObservedGraphCache
+    graph::DiCMOBiGraph{false, Int, BipartiteGraph{Int, Nothing},
+        Matching{Unassigned, Vector{Union{Unassigned, Int}}}}
+    obsvar_to_idx::Dict{Any, Int}
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -831,8 +839,19 @@ Keyword arguments:
 """
 function observed_equations_used_by(sys::AbstractSystem, exprs;
         involved_vars = vars(exprs; op = Union{Shift, Differential, Initial}), obs = observed(sys), available_vars = [])
-    obsvars = getproperty.(obs, :lhs)
-    graph = observed_dependency_graph(obs)
+    if iscomplete(sys) && obs == observed(sys)
+        cache = getmetadata(sys, MutableCacheKey, nothing)
+        obs_graph_cache = get!(cache, ObservedGraphCacheKey) do
+            obsvar_to_idx = Dict{Any, Int}([eq.lhs => i for (i, eq) in enumerate(obs)])
+            graph = observed_dependency_graph(obs)
+            return ObservedGraphCache(graph, obsvar_to_idx)
+        end
+        @unpack obsvar_to_idx, graph = obs_graph_cache
+    else
+        obsvar_to_idx = Dict([eq.lhs => i for (i, eq) in enumerate(obs)])
+        graph = observed_dependency_graph(obs)
+    end
+
     if !(available_vars isa Set)
         available_vars = Set(available_vars)
     end
@@ -841,7 +860,9 @@ function observed_equations_used_by(sys::AbstractSystem, exprs;
     for sym in involved_vars
         sym in available_vars && continue
         arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
-        idx = findfirst(v -> isequal(v, sym) || isequal(v, arrsym), obsvars)
+        idx = @something(get(obsvar_to_idx, sym, nothing),
+            get(obsvar_to_idx, arrsym, nothing),
+            Some(nothing))
         idx === nothing && continue
         idx in obsidxs && continue
         parents = dfs_parents(graph, idx)

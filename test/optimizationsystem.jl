@@ -73,7 +73,7 @@ end
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-    @test_skip sol.objective < 1.0
+    @test sol.objective < 1.0
 end
 
 @testset "equality constraint" begin
@@ -89,11 +89,11 @@ end
         grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())
     @test sol.objective < 1.0
-    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test sol[[x, z]]≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.objective < 1.0
-    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test sol[[x, z]]≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],

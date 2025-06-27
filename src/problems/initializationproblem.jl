@@ -39,7 +39,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     for k in keys(op)
         has_u0_ics |= is_variable(sys, k) || isdifferential(k) ||
                       symbolic_type(k) == ArraySymbolic() &&
-                      is_sized_array_symbolic(k) && is_variable(sys, first(collect(k)))
+                      is_sized_array_symbolic(k) && is_variable(sys, unwrap(first(wrap(k))))
     end
     if !has_u0_ics && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
@@ -79,7 +79,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), [unknowns(isys); observables(isys)])
+    uninit = setdiff(unknowns(sys), unknowns(isys), observables(isys))
 
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
