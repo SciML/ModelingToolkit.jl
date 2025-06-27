@@ -184,14 +184,14 @@ function change_of_variables(
     return new_sys
 end
 
-function FDE_to_ODE(eqs, variables, alphas, epsilon, T; initials=0)
+function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0)
     @independent_variables t
     D = Differential(t)
     i = 0
     all_eqs = Equation[]
     all_def = Pair{Num, Int64}[]
 
-    function FDE_helper(sub_eq, sub_var, α; initial=0)
+    function fto_helper(sub_eq, sub_var, α; initial=0)
         alpha_0 = α
         if (α > 1)
             coeff = 1/(α - 1)
@@ -260,7 +260,7 @@ function FDE_to_ODE(eqs, variables, alphas, epsilon, T; initials=0)
     end
 
     for (eq, cur_var, alpha, init) in zip(eqs, variables, alphas, initials)
-        (new_eqs, def) = FDE_helper(eq, cur_var, alpha; initial=init)
+        (new_eqs, def) = fto_helper(eq, cur_var, alpha; initial=init)
         append!(all_eqs, new_eqs)
         append!(all_def, def)
     end
