@@ -606,7 +606,7 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`. 
+Indicate whether the given equation type (Equation, Pair, etc) supports `collect_vars!`.
 Can be dispatched by higher-level libraries to indicate support.
 """
 eqtype_supports_collect_vars(eq) = false
@@ -791,7 +791,7 @@ Check if `T` is an appropriate symtype for a symbolic variable representing a fl
 point number or array of such numbers.
 """
 function is_floatingpoint_symtype(T::Type)
-    return T == Real || T == Number || T <: AbstractFloat ||
+    return T == Real || T == Number || T == Complex || T <: AbstractFloat ||
            T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
