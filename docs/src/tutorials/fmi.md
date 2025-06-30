@@ -85,7 +85,7 @@ We can interpolate the solution object to obtain values at arbitrary time points
 just like a normal solution.
 
 ```@repl fmi
-sol(0.0:0.1:1.0; idxs = sys.mass_a)
+sol(0.0:0.1:1.0; idxs = sys.mass__a)
 ```
 
 FMUs following version 3 of the specification can be simulated with almost the same process. This time,
