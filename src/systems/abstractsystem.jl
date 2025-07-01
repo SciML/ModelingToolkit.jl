@@ -820,6 +820,9 @@ function refreshed_metadata(meta::Base.ImmutableDict)
         end
         newmeta = Base.ImmutableDict(newmeta, k => v)
     end
+    if !haskey(newmeta, MutableCacheKey)
+        newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => MutableCacheT())
+    end
     return newmeta
 end
 

@@ -738,6 +738,7 @@ function SciMLBase.late_binding_update_u0_p(
         end
         newp = setp_oop(sys, syms)(newp, vals)
     else
+        allsyms = nothing
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
@@ -755,6 +756,9 @@ function SciMLBase.late_binding_update_u0_p(
     if eltype(p) <: Pair
         syms = []
         vals = []
+        if allsyms === nothing
+            allsyms = all_symbols(sys)
+        end
         for (k, v) in p
             v === nothing && continue
             (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
