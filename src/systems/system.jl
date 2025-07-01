@@ -411,7 +411,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         end
         metadata = meta
     end
-    metadata = Base.ImmutableDict(metadata, MutableCacheKey => MutableCacheT())
+    metadata = refreshed_metadata(metadata)
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
