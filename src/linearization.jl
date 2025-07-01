@@ -174,13 +174,13 @@ struct PreparedJacobian{iip, P, F, B, A}
 end
 
 function PreparedJacobian{true}(f, buf, autodiff, args...)
-    prep = DI.prepare_jacobian(f, buf, autodiff, args...)
+    prep = DI.prepare_jacobian(f, buf, autodiff, args...; strict = Val(false))
     return PreparedJacobian{true, typeof(prep), typeof(f), typeof(buf), typeof(autodiff)}(
         prep, f, buf, autodiff)
 end
 
 function PreparedJacobian{false}(f, autodiff, args...)
-    prep = DI.prepare_jacobian(f, autodiff, args...)
+    prep = DI.prepare_jacobian(f, autodiff, args...; strict = Val(false))
     return PreparedJacobian{true, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
         prep, f, nothing)
 end
