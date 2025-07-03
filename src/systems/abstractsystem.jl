@@ -820,6 +820,9 @@ function refreshed_metadata(meta::Base.ImmutableDict)
         end
         newmeta = Base.ImmutableDict(newmeta, k => v)
     end
+    if !haskey(newmeta, MutableCacheKey)
+        newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => MutableCacheT())
+    end
     return newmeta
 end
 
@@ -2683,22 +2686,27 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     elseif sys isa System
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
-        eqs = fast_substitute(get_eqs(sys), rules)
-        pdeps = fast_substitute(get_parameter_dependencies(sys), rules)
-        defs = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        newsys = @set sys.eqs = fast_substitute(get_eqs(sys), rules)
+        @set! newsys.unknowns = map(get_unknowns(sys)) do var
+            get(rules, var, var)
+        end
+        @set! newsys.ps = map(get_ps(sys)) do var
+            get(rules, var, var)
+        end
+        @set! newsys.parameter_dependencies = fast_substitute(
+            get_parameter_dependencies(sys), rules)
+        @set! newsys.defaults = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_defaults(sys))
-        guess = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        @set! newsys.guesses = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
         for (k, v) in get_guesses(sys))
-        noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
-        costs = fast_substitute(get_costs(sys), rules)
-        observed = fast_substitute(get_observed(sys), rules)
-        initialization_eqs = fast_substitute(get_initialization_eqs(sys), rules)
-        cstrs = fast_substitute(get_constraints(sys), rules)
-        subsys = map(s -> substitute(s, rules), get_systems(sys))
-        newsys = System(eqs, get_iv(sys); name = nameof(sys), defaults = defs,
-            guesses = guess, systems = subsys, noise_eqs,
-            observed, initialization_eqs, constraints = cstrs)
-        @set! newsys.parameter_dependencies = pdeps
+        @set! newsys.noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
+        @set! newsys.costs = Vector{Union{Real, BasicSymbolic}}(fast_substitute(
+            get_costs(sys), rules))
+        @set! newsys.observed = fast_substitute(get_observed(sys), rules)
+        @set! newsys.initialization_eqs = fast_substitute(
+            get_initialization_eqs(sys), rules)
+        @set! newsys.constraints = fast_substitute(get_constraints(sys), rules)
+        @set! newsys.systems = map(s -> substitute(s, rules), get_systems(sys))
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end

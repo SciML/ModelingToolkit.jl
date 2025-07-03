@@ -431,7 +431,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     if sort_eqs
         # sort equations lexicographically to reduce simplification issues
         # depending on order due to NP-completeness of tearing.
-        sortidxs = Base.sortperm(eqs, by = string)
+        sortidxs = Base.sortperm(string.(eqs)) # "by = string" creates more strings
         eqs = eqs[sortidxs]
         original_eqs = original_eqs[sortidxs]
         symbolic_incidence = symbolic_incidence[sortidxs]

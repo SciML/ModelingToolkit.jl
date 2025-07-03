@@ -41,7 +41,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
         op = Dict(),
@@ -71,7 +71,6 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
-    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
     idxs_diff = isdiffeq.(eqs)
 
@@ -190,11 +189,13 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     push!(pars, get_iv(sys))
 
     # 8) use observed equations for guesses of observed variables if not provided
+    guessed = Set(keys(defs)) # x(t), D(x(t)), ...
+    guessed = union(guessed, Set(default_toterm.(guessed))) # x(t), D(x(t)), xˍt(t), ...
     for eq in trueobs
-        haskey(defs, eq.lhs) && continue
-        any(x -> isequal(default_toterm(x), eq.lhs), keys(defs)) && continue
-
-        defs[eq.lhs] = eq.rhs
+        if !(eq.lhs in guessed)
+            defs[eq.lhs] = eq.rhs
+            #push!(guessed, eq.lhs) # should not encounter eq.lhs twice, so don't need to track it
+        end
     end
     append!(eqs_ics, trueobs)
 
@@ -216,7 +217,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of an `AbstractTimeDependentSystem`.
+Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-independent `AbstractSystem`.
 """
 function generate_initializesystem_timeindependent(sys::AbstractSystem;
         op = Dict(),
@@ -228,12 +229,10 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     eqs = equations(sys)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
-    vars_set = Set(vars) # for efficient in-lookup
 
     eqs_ics = Equation[]
     defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
     additional_guesses = anydict(guesses)
-    additional_initialization_eqs = Vector{Equation}(initialization_eqs)
     guesses = merge(get_guesses(sys), additional_guesses)
 
     # PREPROCESSING
@@ -738,6 +737,7 @@ function SciMLBase.late_binding_update_u0_p(
         end
         newp = setp_oop(sys, syms)(newp, vals)
     else
+        allsyms = nothing
         # if `p` is not provided or is symbolic
         p === missing || eltype(p) <: Pair || return newu0, newp
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
@@ -755,6 +755,9 @@ function SciMLBase.late_binding_update_u0_p(
     if eltype(p) <: Pair
         syms = []
         vals = []
+        if allsyms === nothing
+            allsyms = all_symbols(sys)
+        end
         for (k, v) in p
             v === nothing && continue
             (symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v)) || continue
