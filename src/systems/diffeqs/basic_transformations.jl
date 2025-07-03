@@ -185,6 +185,185 @@ function change_of_variables(
 end
 
 """
+Generates the system of ODEs to find solution to FDEs.
+
+Example:
+
+```julia
+@independent_variables t
+@variables x(t)
+D = Differential(t)
+tspan = (0., 1.)
+
+α = 0.5
+eqs = (9*gamma(1 + α)/4) - (3*t^(4 - α/2)*gamma(5 + α/2)/gamma(5 - α/2))
+eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
+sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
+
+prob = ODEProblem(sys, [], tspan)
+sol = solve(prob, radau5(), abstol = 1e-10, reltol = 1e-10)
+
+time = 0
+while(time <= 1)
+    @test isapprox((3/2*time^(α/2) - time^4)^2, sol(time, idxs=x), atol=1e-3)
+    time += 0.1
+end
+```
+"""
+function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0)
+    @independent_variables t
+    D = Differential(t)
+    i = 0
+    all_eqs = Equation[]
+    all_def = Pair{Num, Int64}[]
+
+    function fto_helper(sub_eq, sub_var, α; initial=0)
+        alpha_0 = α
+        if (α > 1)
+            coeff = 1/(α - 1)
+            m = 2
+            while (α - m > 0)
+                coeff /= α - m
+                m += 1
+            end
+            alpha_0 = α - m + 1
+        end
+
+        δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
+        a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
+        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
+
+        x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
+        x_sup = -log(gamma(1-alpha_0) * epsilon)
+        M = floor(Int, log(x_sub / T) / h)
+        N = ceil(Int, log(x_sup / δ) / h)
+
+        function c_i(index)
+            h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
+        end
+
+        function γ_i(index)
+            exp(h * index)
+        end
+
+        new_eqs = Equation[]
+        def = Pair{Num, Int64}[]
+
+        if (α < 1)  
+            rhs = initial
+            for index in range(M, N-1; step=1)
+                new_z = Symbol(:z, :_, i)
+                i += 1
+                new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+                push!(new_eqs, new_eq)
+                push!(def, new_z=>0)
+                rhs += c_i(index)*new_z
+            end
+        else
+            rhs = 0
+            for (index, value) in enumerate(initial)
+                rhs += value * t^(index - 1) / gamma(index)
+            end
+            for index in range(M, N-1; step=1)
+                new_z = Symbol(:z, :_, i)
+                i += 1
+                γ = γ_i(index)
+                base = sub_eq
+                for k in range(1, m; step=1)
+                    new_z = Symbol(:z, :_, index-M, :_, k)
+                    new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                    new_eq = D(new_z) ~ base - γ*new_z
+                    base = k * new_z
+                    push!(new_eqs, new_eq)
+                    push!(def, new_z=>0)
+                end
+                rhs += coeff*c_i(index)*new_z
+            end
+        end
+        push!(new_eqs, sub_var ~ rhs)
+        return (new_eqs, def)
+    end
+
+    for (eq, cur_var, alpha, init) in zip(eqs, variables, alphas, initials)
+        (new_eqs, def) = fto_helper(eq, cur_var, alpha; initial=init)
+        append!(all_eqs, new_eqs)
+        append!(all_def, def)
+    end
+    @named sys = System(all_eqs, t; defaults=all_def)
+    return mtkcompile(sys)
+end
+
+function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0)
+    @independent_variables t
+    @variables x_0(t)
+    D = Differential(t)
+    i = 0
+    all_eqs = Equation[]
+    all_def = Pair{Num, Int64}[]
+
+    function fto_helper(sub_eq, α)
+        δ = (gamma(α+1) * epsilon)^(1/α)
+        a = pi/2*(1-(1-α)/((2-α) * log(epsilon^-1)))
+        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(α - 1)))
+
+        x_sub = (gamma(2-α) * epsilon)^(1/(1-α))
+        x_sup = -log(gamma(1-α) * epsilon)
+        M = floor(Int, log(x_sub / T) / h)
+        N = ceil(Int, log(x_sup / δ) / h)
+
+        function c_i(index)
+            h * sin(pi * α) / pi * exp((1-α)*h*index)
+        end
+
+        function γ_i(index)
+            exp(h * index)
+        end
+
+        new_eqs = Equation[]
+        def = Pair{Num, Int64}[]
+        sum = 0
+        for index in range(M, N-1; step=1)
+            new_z = Symbol(:z, :_, i)
+            i += 1
+            new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+            new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+            push!(new_eqs, new_eq)
+            push!(def, new_z=>0)
+            sum += c_i(index)*new_z
+        end
+        return (new_eqs, def, sum)
+    end
+
+    previous = x_0
+    for i in range(1, ceil(Int, degrees[1]); step=1)
+        new_x = Symbol(:x, :_, i)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        push!(all_eqs, D(previous) ~ new_x)
+        push!(all_def, previous => initials[i])
+        previous = new_x
+    end
+
+    new_rhs = -rhs
+    for (degree, coeff) in zip(degrees, coeffs)
+        rounded = ceil(Int, degree)
+        new_x = Symbol(:x, :_, rounded)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        if isinteger(degree)
+            new_rhs += coeff * new_x
+        else
+            (new_eqs, def, sum) = fto_helper(new_x, rounded - degree)
+            append!(all_eqs, new_eqs)
+            append!(all_def, def)
+            new_rhs += coeff * sum
+        end
+    end
+    push!(all_eqs, 0 ~ new_rhs)
+    @named sys = System(all_eqs, t; defaults=all_def)
+    return mtkcompile(sys)
+end
+
+"""
     change_independent_variable(
         sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = false
