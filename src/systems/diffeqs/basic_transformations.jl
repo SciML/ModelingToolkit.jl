@@ -294,6 +294,75 @@ function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0
     return mtkcompile(sys)
 end
 
+function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0)
+    @independent_variables t
+    @variables x_0(t)
+    D = Differential(t)
+    i = 0
+    all_eqs = Equation[]
+    all_def = Pair{Num, Int64}[]
+
+    function fto_helper(sub_eq, α)
+        δ = (gamma(α+1) * epsilon)^(1/α)
+        a = pi/2*(1-(1-α)/((2-α) * log(epsilon^-1)))
+        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(α - 1)))
+
+        x_sub = (gamma(2-α) * epsilon)^(1/(1-α))
+        x_sup = -log(gamma(1-α) * epsilon)
+        M = floor(Int, log(x_sub / T) / h)
+        N = ceil(Int, log(x_sup / δ) / h)
+
+        function c_i(index)
+            h * sin(pi * α) / pi * exp((1-α)*h*index)
+        end
+
+        function γ_i(index)
+            exp(h * index)
+        end
+
+        new_eqs = Equation[]
+        def = Pair{Num, Int64}[]
+        sum = 0
+        for index in range(M, N-1; step=1)
+            new_z = Symbol(:z, :_, i)
+            i += 1
+            new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+            new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+            push!(new_eqs, new_eq)
+            push!(def, new_z=>0)
+            sum += c_i(index)*new_z
+        end
+        return (new_eqs, def, sum)
+    end
+
+    previous = x_0
+    for i in range(1, ceil(Int, degrees[1]); step=1)
+        new_x = Symbol(:x, :_, i)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        push!(all_eqs, D(previous) ~ new_x)
+        push!(all_def, previous => initials[i])
+        previous = new_x
+    end
+
+    new_rhs = -rhs
+    for (degree, coeff) in zip(degrees, coeffs)
+        rounded = ceil(Int, degree)
+        new_x = Symbol(:x, :_, rounded)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        if isinteger(degree)
+            new_rhs += coeff * new_x
+        else
+            (new_eqs, def, sum) = fto_helper(new_x, rounded - degree)
+            append!(all_eqs, new_eqs)
+            append!(all_def, def)
+            new_rhs += coeff * sum
+        end
+    end
+    push!(all_eqs, 0 ~ new_rhs)
+    @named sys = System(all_eqs, t; defaults=all_def)
+    return mtkcompile(sys)
+end
+
 """
     change_independent_variable(
         sys::System, iv, eqs = [];
