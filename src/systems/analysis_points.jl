@@ -824,7 +824,14 @@ Given a list of analysis points, break the connection for each and set the outpu
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     for ap in canonicalize_ap(sys, aps)
-        sys, _ = apply_transformation(Break(ap, true, true, true), sys)
+        sys, (d_v,) = apply_transformation(Break(ap, true, true, true), sys)
+        guesses = copy(get_guesses(sys))
+        guesses[d_v] = if symbolic_type(d_v) == ArraySymbolic()
+            fill(NaN, size(d_v))
+        else
+            NaN
+        end
+        @set! sys.guesses = guesses
     end
     return sys
 end
