@@ -491,6 +491,10 @@ struct Break <: AnalysisPointTransformation
     applicable if `add_input == true`.
     """
     default_outputs_to_input::Bool
+    """
+    Whether the added input is a parameter. Only applicable if `add_input == true`.
+    """
+    added_input_is_param::Bool
 end
 
 """
@@ -498,7 +502,9 @@ end
 
 `Break` the given analysis point `ap`.
 """
-Break(ap::AnalysisPoint, add_input::Bool = false) = Break(ap, add_input, false)
+function Break(ap::AnalysisPoint, add_input::Bool = false, default_outputs_to_input = false)
+    Break(ap, add_input, default_outputs_to_input, false)
+end
 
 function apply_transformation(tf::Break, sys::AbstractSystem)
     modify_nested_subsystem(sys, tf.ap) do breaksys
@@ -528,9 +534,15 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
             new_def
         end
         @set! breaksys.defaults = defs
-        unks = copy(get_unknowns(breaksys))
-        push!(unks, new_var)
-        @set! breaksys.unknowns = unks
+        if tf.added_input_is_param
+            ps = copy(get_ps(breaksys))
+            push!(ps, new_var)
+            @set! breaksys.ps = ps
+        else
+            unks = copy(get_unknowns(breaksys))
+            push!(unks, new_var)
+            @set! breaksys.unknowns = unks
+        end
 
         return breaksys, (new_var,)
     end
@@ -812,12 +824,14 @@ Given a list of analysis points, break the connection for each and set the outpu
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     for ap in canonicalize_ap(sys, aps)
-        sys, (outvar,) = apply_transformation(Break(ap, true, true), sys)
-        if Symbolics.isarraysymbolic(outvar)
-            push!(get_eqs(sys), outvar ~ zeros(size(outvar)))
+        sys, (d_v,) = apply_transformation(Break(ap, true, true, true), sys)
+        guesses = copy(get_guesses(sys))
+        guesses[d_v] = if symbolic_type(d_v) == ArraySymbolic()
+            fill(NaN, size(d_v))
         else
-            push!(get_eqs(sys), outvar ~ 0)
+            NaN
         end
+        @set! sys.guesses = guesses
     end
     return sys
 end
@@ -849,10 +863,10 @@ All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...)
-    sys = handle_loop_openings(sys, loop_openings)
-    aps = canonicalize_ap(sys, aps)
     dus = []
     us = []
+    sys = handle_loop_openings(sys, loop_openings)
+    aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
         push!(dus, du)
