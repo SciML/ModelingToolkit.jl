@@ -1215,15 +1215,18 @@ end
 
 ### Parsing Components:
 
-function component_args!(a, b, varexpr, kwargs; index_name = nothing)
+function component_args!(a, b, varexpr, kwargs; index_name = nothing, keywords = false)
+    # keywords indicates if whether or not the keyword arg delimiter ; has been seen
     # Whenever `b` is a function call, skip the first arg aka the function name.
     # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
+
     for i in start:lastindex(b.args)
         arg = b.args[i]
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
-            x::Symbol || Expr(:kw, x) => begin
+            Expr(:kw, x) || (x::Symbol && if keywords
+            end) => begin # handle keyword args
                 varname, _varname = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _varname)
                 push!(varexpr.args, :((if $varname !== nothing
@@ -1237,8 +1240,23 @@ function component_args!(a, b, varexpr, kwargs; index_name = nothing)
                 push!(kwargs, Expr(:kw, varname, nothing))
                 # dict[:kwargs][varname] = nothing
             end
+            x::Symbol && if !keywords
+            end => begin # handle positional args
+                varname, _varname = _rename(a, x)
+                b.args[i] = :($_varname)
+                push!(varexpr.args, :((if $varname !== nothing
+                    $_varname = $varname
+                elseif @isdefined $x
+                    # Allow users to define a var in `structural_parameters` and set
+                    # that as positional arg of subcomponents; it is useful for cases
+                    # where it needs to be passed to multiple subcomponents.
+                    $_varname = $x
+                end)))
+                push!(kwargs, Expr(:kw, varname, nothing))
+                # dict[:kwargs][varname] = nothing
+            end
             Expr(:parameters, x...) => begin
-                component_args!(a, arg, varexpr, kwargs)
+                component_args!(a, arg, varexpr, kwargs; keywords = true)
             end
             Expr(:kw, x, y) => begin
                 varname, _varname = _rename(a, x)
