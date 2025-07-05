@@ -300,10 +300,10 @@ function has_parameter_dependency_with_lhs(sys, sym)
 end
 
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
-    if is_variable(sys, sym) || is_independent_variable(sys, sym)
-        push!(ts_idxs, ContinuousTimeseries())
-    elseif is_timeseries_parameter(sys, sym)
+    if is_timeseries_parameter(sys, sym)
         push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
+    elseif is_variable(sys, sym) || is_independent_variable(sys, sym) || is_parameter(sys, sym)
+        push!(ts_idxs, ContinuousTimeseries())
     end
 end
 # Need this to avoid ambiguity with the array case
@@ -315,10 +315,10 @@ for traitT in [
         allsyms = vars(sym; op = Symbolics.Operator)
         for s in allsyms
             s = unwrap(s)
-            if is_variable(sys, s) || is_independent_variable(sys, s)
-                push!(ts_idxs, ContinuousTimeseries())
-            elseif is_timeseries_parameter(sys, s)
+            if is_timeseries_parameter(sys, s)
                 push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+            elseif is_variable(sys, s) || is_independent_variable(sys, s) || is_parameter(sys, sym)
+                push!(ts_idxs, ContinuousTimeseries())
             elseif is_time_dependent(sys) && iscall(s) && issym(operation(s)) &&
                    length(arguments(s)) == 1 && is_variable(sys, operation(s)(get_iv(sys)))
                 # DDEs case, to detect x(t - k)
