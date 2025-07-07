@@ -312,6 +312,8 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     ps = parameters(sys)
 
     @set! sys.ps = [ps; new_parameters]
+    @set! sys.inputs = OrderedSet{BasicSymbolic}(filter(isinput, fullvars))
+    @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
     @set! state.sys = sys
     @set! state.fullvars = Vector{BasicSymbolic}(new_fullvars)
     @set! state.structure = structure
