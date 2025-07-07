@@ -5,7 +5,7 @@ using Symbolics: get_variables
 Return all variables that mare marked as inputs. See also [`unbound_inputs`](@ref)
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref)
 """
-inputs(sys) = [filter(isinput, unknowns(sys)); filter(isinput, parameters(sys))]
+inputs(sys) = collect(get_inputs(sys))
 
 """
     outputs(sys)
@@ -14,13 +14,7 @@ Return all variables that mare marked as outputs. See also [`unbound_outputs`](@
 See also [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
 function outputs(sys)
-    o = observed(sys)
-    rhss = [eq.rhs for eq in o]
-    lhss = [eq.lhs for eq in o]
-    unique([filter(isoutput, unknowns(sys))
-            filter(isoutput, parameters(sys))
-            filter(x -> iscall(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> iscall(x) && isoutput(x), lhss)])
+    return collect(get_outputs(sys))
 end
 
 """
