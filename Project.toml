@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "10.7.0"
+version = "10.8.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -89,7 +89,7 @@ MTKPyomoDynamicOptExt = "Pyomo"
 ADTypes = "1.14.0"
 AbstractTrees = "0.3, 0.4"
 ArrayInterface = "6, 7"
-BifurcationKit = "0.4"
+BifurcationKit = "0.4, 0.5"
 BlockArrays = "1.1"
 BoundaryValueDiffEqAscher = "1.6.0"
 BoundaryValueDiffEqMIRK = "1.7.0"
