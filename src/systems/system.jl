@@ -190,6 +190,16 @@ struct System <: IntermediateDeprecationSystem
     """
     tstops::Vector{Any}
     """
+    $INTERNAL_FIELD_WARNING
+    The list of input variables of the system.
+    """
+    inputs::OrderedSet{BasicSymbolic}
+    """
+    $INTERNAL_FIELD_WARNING
+    The list of output variables of the system.
+    """
+    outputs::OrderedSet{BasicSymbolic}
+    """
     The `TearingState` of the system post-simplification with `mtkcompile`.
     """
     tearing_state::Any
@@ -255,8 +265,9 @@ struct System <: IntermediateDeprecationSystem
             brownians, iv, observed, parameter_dependencies, var_to_name, name, description,
             defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions = Dict{BasicSymbolic, String}(),
-            metadata = MetadataT(), gui_metadata = nothing,
-            is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
+            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
+            inputs = Set{BasicSymbolic}(), outputs = Set{BasicSymbolic}(),
+            tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, isscheduled = false,
@@ -296,7 +307,8 @@ struct System <: IntermediateDeprecationSystem
             observed, parameter_dependencies, var_to_name, name, description, defaults,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
+            tstops, inputs, outputs, tearing_state, namespacing,
+            complete, index_cache, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             isscheduled, schedule)
     end
@@ -367,15 +379,35 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
     defaults = anydict(defaults)
     guesses = anydict(guesses)
+    inputs = OrderedSet{BasicSymbolic}()
+    outputs = OrderedSet{BasicSymbolic}()
+    for subsys in systems
+        for var in ModelingToolkit.inputs(subsys)
+            push!(inputs, renamespace(subsys, var))
+        end
+        for var in ModelingToolkit.outputs(subsys)
+            push!(outputs, renamespace(subsys, var))
+        end
+    end
     var_to_name = anydict()
 
     let defaults = discover_from_metadata ? defaults : Dict(),
-        guesses = discover_from_metadata ? guesses : Dict()
+        guesses = discover_from_metadata ? guesses : Dict(),
+        inputs = discover_from_metadata ? inputs : Set(),
+        outputs = discover_from_metadata ? outputs : Set()
 
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
         process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in observed])
         process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in observed])
+
+        for var in dvs
+            if isinput(var)
+                push!(inputs, var)
+            elseif isoutput(var)
+                push!(outputs, var)
+            end
+        end
     end
     filter!(!(isnothing ∘ last), defaults)
     filter!(!(isnothing ∘ last), guesses)
@@ -417,7 +449,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
+        tstops, inputs, outputs, tearing_state, true, false,
+        nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
 end
 
@@ -1143,6 +1176,8 @@ function Base.isapprox(sysa::System, sysb::System)
            isequal(get_metadata(sysa), get_metadata(sysb)) &&
            isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
            issetequal(get_tstops(sysa), get_tstops(sysb)) &&
+           issetequal(get_inputs(sysa), get_inputs(sysb)) &&
+           issetequal(get_outputs(sysa), get_outputs(sysb)) &&
            safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
            isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
            isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
