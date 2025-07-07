@@ -220,7 +220,6 @@ end
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int}, ivars::Vector{Int})
     eqs = equations(ts)
-    @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.sys.eqs = eqs[ieqs]
     @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs, ivars)
