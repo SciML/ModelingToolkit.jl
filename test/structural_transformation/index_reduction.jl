@@ -68,5 +68,5 @@ let
         sys, [x => 1, y => 0, D(x) => 0.0, g => 1], (0.0, 10.0), guesses = [λ => 0.0])
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[x^2 + y^2][end] < 1.1
+    @test sol[x ^ 2 + y ^ 2][end] < 1.1
 end

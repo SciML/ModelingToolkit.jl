@@ -17,7 +17,9 @@ struct MXLinearInterpolation
     t::Vector{Float64}
     dt::Float64
 end
-Base.getindex(m::MXLinearInterpolation, i...) = length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
+function Base.getindex(m::MXLinearInterpolation, i...)
+    length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
+end
 
 mutable struct CasADiModel
     model::Opti
@@ -55,7 +57,7 @@ function (M::MXLinearInterpolation)(τ)
     (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
     colons = ntuple(_ -> (:), length(size(M.u)) - 1)
     if i < length(M.t)
-        M.u[colons..., i] + Δ*(M.u[colons..., i+1] - M.u[colons..., i])
+        M.u[colons..., i] + Δ*(M.u[colons..., i + 1] - M.u[colons..., i])
     else
         M.u[colons..., i]
     end
@@ -65,7 +67,9 @@ function MTK.CasADiDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         guesses = Dict(), kwargs...)
-    prob, _ = MTK.process_DynamicOptProblem(CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, guesses, kwargs...)
+    prob,
+    _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, guesses, kwargs...)
     prob
 end
 
@@ -127,10 +131,10 @@ function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
     for (i, t) in enumerate(model.U.t)
         if lo < t < hi
             Δt = min(dt, t - lo)
-            total += (0.5*Δt*(expr[i] + expr[i-1]))
+            total += (0.5*Δt*(expr[i] + expr[i - 1]))
         elseif t >= hi && (t - dt < hi)
             Δt = hi - t + dt
-            total += (0.5*Δt*(expr[i] + expr[i-1]))
+            total += (0.5*Δt*(expr[i] + expr[i - 1]))
         end
     end
     model.tₛ * total
@@ -186,9 +190,13 @@ struct CasADiCollocation <: AbstractCollocation
     tableau::DiffEqBase.ODERKTableau
 end
 
-MTK.CasADiCollocation(solver, tableau = MTK.constructDefault()) = CasADiCollocation(solver, tableau)
+function MTK.CasADiCollocation(solver, tableau = MTK.constructDefault())
+    CasADiCollocation(solver, tableau)
+end
 
-function MTK.prepare_and_optimize!(prob::CasADiDynamicOptProblem, solver::CasADiCollocation; verbose = false, solver_options = Dict(), plugin_options = Dict(), kwargs...)
+function MTK.prepare_and_optimize!(
+        prob::CasADiDynamicOptProblem, solver::CasADiCollocation; verbose = false,
+        solver_options = Dict(), plugin_options = Dict(), kwargs...)
     solver_opti = add_solve_constraints!(prob, solver.tableau)
     verbose || (solver_options["print_level"] = 0)
     solver!(solver_opti, "$(solver.solver)", plugin_options, solver_options)
@@ -224,9 +232,11 @@ function MTK.get_t_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
     ts = value_getter(model.solver_opti, model.tₛ) .* model.U.t
 end
-MTK.objective_value(model::CasADiModel) = CasADi.pyconvert(Float64, model.solver_opti.py.value(model.solver_opti.py.f))
+function MTK.objective_value(model::CasADiModel)
+    CasADi.pyconvert(Float64, model.solver_opti.py.value(model.solver_opti.py.f))
+end
 
-function MTK.successful_solve(m::CasADiModel) 
+function MTK.successful_solve(m::CasADiModel)
     isnothing(m.solver_opti) && return false
     retcode = CasADi.return_status(m.solver_opti)
     retcode == "Solve_Succeeded" || retcode == "Solved_To_Acceptable_Level"

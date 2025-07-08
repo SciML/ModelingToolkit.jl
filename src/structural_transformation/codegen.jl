@@ -45,6 +45,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     var_rename = ones(Int64, ndsts(graph))
     nlsolve_vars = Int[]
     for i in nlsolve_scc_idxs, c in var_sccs[i]
+
         append!(nlsolve_vars, c)
         for v in c
             var_rename[v] = 0

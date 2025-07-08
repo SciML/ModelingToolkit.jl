@@ -408,7 +408,7 @@ end
     @test prob.f.initialization_data.initializeprobmap === nothing
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol.ps[p^3 + q^3]≈sol.ps[4r] atol=1e-10
+    @test sol.ps[p ^ 3 + q ^ 3]≈sol.ps[4r] atol=1e-10
 
     @testset "Differential inside expression also substituted" begin
         @named sys = System([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)

@@ -74,6 +74,7 @@ function free_equations(graph, vars_scc, var_eq_matching, varfilter::F) where {F
     ne = nsrcs(graph)
     seen_eqs = falses(ne)
     for vars in vars_scc, var in vars
+
         varfilter(var) || continue
         ieq = var_eq_matching[var]
         if ieq isa Int

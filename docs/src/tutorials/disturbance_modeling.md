@@ -188,7 +188,9 @@ disturbance_inputs = [ssys.d1, ssys.d2]
 P = ssys.system_model
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 
-(f_oop, f_ip), x_sym, p_sym, io_sys = ModelingToolkit.generate_control_function(
+(f_oop, f_ip), x_sym,
+p_sym,
+io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, inputs, disturbance_inputs; disturbance_argument = true)
 
 g = ModelingToolkit.build_explicit_observed_function(

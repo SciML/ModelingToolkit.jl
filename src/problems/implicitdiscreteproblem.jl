@@ -50,7 +50,8 @@ end
     dvs = unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
-    f, u0, p = process_SciMLProblem(
+    f, u0,
+    p = process_SciMLProblem(
         ImplicitDiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility,
         expression, kwargs...)

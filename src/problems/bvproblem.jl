@@ -14,7 +14,8 @@
     # for initialization.
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
 
-    fode, u0, p = process_SciMLProblem(
+    fode, u0,
+    p = process_SciMLProblem(
         ODEFunction{iip, spec}, sys, _op; guesses,
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse,
         checkbounds, time_dependent_init = false, expression, kwargs...)

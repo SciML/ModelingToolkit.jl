@@ -15,7 +15,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Basic electric components
 @connector function Pin(; name)
-    @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
+    @variables v(t)=1.0 i(t)=1.0 [connect=Flow]
     System(Equation[], t, [v, i], [], name = name)
 end
 
@@ -36,7 +36,7 @@ function ConstantVoltage(; name, V = 1.0)
 end
 
 @connector function HeatPort(; name)
-    @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
+    @variables T(t)=293.15 Q_flow(t)=0.0 [connect=Flow]
     System(Equation[], t, [T, Q_flow], [], name = name)
 end
 

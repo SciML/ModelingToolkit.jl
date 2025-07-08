@@ -23,7 +23,8 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         _grad = nothing
     end
     if hess
-        _hess, hess_prototype = generate_cost_hessian(
+        _hess,
+        hess_prototype = generate_cost_hessian(
             sys; expression, wrap_gfw = Val{true}, eval_expression,
             eval_module, checkbounds, cse, sparse, simplify, return_sparsity = true,
             kwargs...)
@@ -40,7 +41,8 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         cons = generate_cons(sys; expression, wrap_gfw = Val{true},
             eval_expression, eval_module, checkbounds, cse, kwargs...)
         if cons_j
-            _cons_j, cons_jac_prototype = generate_constraint_jacobian(
+            _cons_j,
+            cons_jac_prototype = generate_constraint_jacobian(
                 sys; expression, wrap_gfw = Val{true}, eval_expression,
                 eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...)
@@ -48,7 +50,8 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
             _cons_j = cons_jac_prototype = nothing
         end
         if cons_h
-            _cons_h, cons_hess_prototype = generate_constraint_hessian(
+            _cons_h,
+            cons_hess_prototype = generate_constraint_hessian(
                 sys; expression, wrap_gfw = Val{true}, eval_expression,
                 eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...)
@@ -92,7 +95,8 @@ function SciMLBase.OptimizationProblem{iip}(
     check_complete(sys, OptimizationProblem)
     check_compatibility && check_compatible_system(OptimizationProblem, sys)
 
-    f, u0, p = process_SciMLProblem(OptimizationFunction{iip}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(OptimizationFunction{iip}, sys, op;
         check_compatibility, tofloat = false, check_length = false, expression, kwargs...)
 
     dvs = unknowns(sys)
