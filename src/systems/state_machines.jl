@@ -153,3 +153,36 @@ entry
 
 When used in a finite state machine, this operator returns `true` if the queried state is active and false otherwise. 
 """ activeState
+
+function vars!(vars, O::Transition; op = Differential)
+    vars!(vars, O.from)
+    vars!(vars, O.to)
+    vars!(vars, O.cond; op)
+    return vars
+end
+function vars!(vars, O::InitialState; op = Differential)
+    vars!(vars, O.s; op)
+    return vars
+end
+function vars!(vars, O::StateMachineOperator; op = Differential)
+    error("Unhandled state machine operator")
+end
+
+function namespace_expr(
+        O::Transition, sys, n = nameof(sys); ivs = independent_variables(sys))
+    return Transition(
+        O.from === nothing ? O.from : renamespace(sys, O.from),
+        O.to === nothing ? O.to : renamespace(sys, O.to),
+        O.cond === nothing ? O.cond : namespace_expr(O.cond, sys),
+        O.immediate, O.reset, O.synchronize, O.priority
+    )
+end
+
+function namespace_expr(
+        O::InitialState, sys, n = nameof(sys); ivs = independent_variables(sys))
+    return InitialState(O.s === nothing ? O.s : renamespace(sys, O.s))
+end
+
+function namespace_expr(O::StateMachineOperator, sys, n = nameof(sys); kwargs...)
+    error("Unhandled state machine operator")
+end

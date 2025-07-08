@@ -365,3 +365,14 @@ function input_timedomain(x)
         throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
     end
 end
+
+function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
+    return SymbolicContinuousCallback(
+        [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
+        affect_neg = down ? ImperativeAffect(Returns(nothing)) : nothing,
+        kwargs..., zero_crossing_id = name)
+end
+
+function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
+    return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
+end

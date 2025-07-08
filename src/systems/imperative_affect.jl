@@ -262,7 +262,9 @@ function compile_functional_affect(
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
 
             # write the new values back to the integrator
-            _generated_writeback(integ, upd_funs, upd_vals)
+            if !isnothing(upd_vals)
+                _generated_writeback(integ, upd_funs, upd_vals)
+            end
 
             reset_jumps && reset_aggregated_jumps!(integ)
         end

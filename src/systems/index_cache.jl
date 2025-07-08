@@ -1,5 +1,5 @@
 struct BufferTemplate
-    type::Union{DataType, UnionAll}
+    type::Union{DataType, UnionAll, Union}
     length::Int
 end
 
