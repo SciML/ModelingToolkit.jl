@@ -1183,8 +1183,8 @@ function maybe_build_initialization_problem(
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
-            initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
+        initializeprob, update_initializeprob!, initializeprobmap,
+        initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
 """
@@ -1335,7 +1335,8 @@ function process_SciMLProblem(
 
     u0map = anydict()
     pmap = anydict()
-    missing_unknowns, missing_pars = build_operating_point!(sys, op,
+    missing_unknowns,
+    missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
 
     floatT = calculate_float_type(op, u0Type)
@@ -1440,7 +1441,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,
             (;
                 resid_prototype = u0_constructor(calculate_resid_prototype(
-                    length(eqs), u0, p))))
+                length(eqs), u0, p))))
     end
 
     f = constructor(sys; u0 = u0, p = p,
@@ -1539,7 +1540,8 @@ function SymbolicTstops(
         end
     end
     rps = reorder_parameters(sys)
-    tstops, _ = build_function_wrapper(sys, tstops,
+    tstops,
+    _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
         t1;

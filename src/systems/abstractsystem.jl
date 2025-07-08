@@ -1552,7 +1552,8 @@ function full_equations(sys::AbstractSystem; simplify = false)
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~
+                   substitute_and_simplify(
                 eq.rhs, subs,
                 simplify)
         else
@@ -2275,7 +2276,8 @@ function component_post_processing(expr, isconnector)
                 if $isconnector
                     $Setfield.@set!(res.connector_type=$connector_type(res))
                 end
-                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
+                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(
+                    @__MODULE__, name)))
             else
                 res
             end
@@ -2736,8 +2738,8 @@ function process_parameter_equations(sys::AbstractSystem)
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                    is_sized_array_symbolic(sym) &&
-                    all(Base.Fix1(is_parameter, sys), collect(sym))
+                is_sized_array_symbolic(sym) &&
+                all(Base.Fix1(is_parameter, sys), collect(sym))
         end
             # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
             # check.

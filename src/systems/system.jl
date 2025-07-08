@@ -387,7 +387,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
     if length(unique_sysnames) != length(sysnames)
         throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
     end
-    continuous_events, discrete_events = create_symbolic_events(
+    continuous_events,
+    discrete_events = create_symbolic_events(
         continuous_events, discrete_events, eqs, iv)
 
     if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))
@@ -1081,16 +1082,17 @@ struct EventsInTimeIndependentSystemError <: Exception
 end
 
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
-    println(io, """
-    Events are not supported in time-independent systems. Provide an independent variable to \
-    make the system time-dependent or remove the events.
+    println(
+        io, """
+Events are not supported in time-independent systems. Provide an independent variable to \
+make the system time-dependent or remove the events.
 
-    The following continuous events were provided:
-    $(err.cevents)
+The following continuous events were provided:
+$(err.cevents)
 
-    The following discrete events were provided:
-    $(err.devents)
-    """)
+The following discrete events were provided:
+$(err.devents)
+""")
 end
 
 function supports_initialization(sys::System)

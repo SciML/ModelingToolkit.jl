@@ -29,7 +29,8 @@ Base.iterate(u::Unassigned, state) = nothing
 
 Base.show(io::IO, ::Unassigned) = printstyled(io, "u"; color = :light_black)
 
-struct Matching{U, V <: AbstractVector} <: AbstractVector{Union{U, Int}} #=> :Unassigned =#
+#U=> :Unassigned =#
+struct Matching{U, V <: AbstractVector} <: AbstractVector{Union{U, Int}}
     match::V
     inv_match::Union{Nothing, V}
 end
@@ -634,6 +635,7 @@ function Graphs.incidence_matrix(g::BipartiteGraph, val = true)
     I = Int[]
     J = Int[]
     for i in 𝑠vertices(g), n in 𝑠neighbors(g, i)
+
         push!(I, i)
         push!(J, n)
     end

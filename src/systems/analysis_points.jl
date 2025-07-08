@@ -238,8 +238,10 @@ end
 Return all the namespaces in `name`. Namespaces should be separated by `.` or
 `$NAMESPACE_SEPARATOR`.
 """
-namespace_hierarchy(name::Symbol) = map(
-    Symbol, split(string(name), ('.', NAMESPACE_SEPARATOR)))
+function namespace_hierarchy(name::Symbol)
+    map(
+        Symbol, split(string(name), ('.', NAMESPACE_SEPARATOR)))
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -311,15 +313,19 @@ by `fn`.
 `root`, and returns a 2-tuple consisting of the modified version of `target` and a tuple
 of the extra variables added.
 """
-modify_nested_subsystem(fn, root::AbstractSystem, target::AbstractSystem) = modify_nested_subsystem(
-    fn, root, nameof(target))
+function modify_nested_subsystem(fn, root::AbstractSystem, target::AbstractSystem)
+    modify_nested_subsystem(
+        fn, root, nameof(target))
+end
 """
     $(TYPEDSIGNATURES)
 
 Apply the modification to the system containing the namespaced analysis point `target`.
 """
-modify_nested_subsystem(fn, root::AbstractSystem, target::AnalysisPoint) = modify_nested_subsystem(
-    fn, root, @view namespace_hierarchy(nameof(target))[1:(end - 1)])
+function modify_nested_subsystem(fn, root::AbstractSystem, target::AnalysisPoint)
+    modify_nested_subsystem(
+        fn, root, @view namespace_hierarchy(nameof(target))[1:(end - 1)])
+end
 """
     $(TYPEDSIGNATURES)
 
@@ -327,8 +333,10 @@ Apply the modification to the nested subsystem of `root` whose namespaced name m
 the provided name `target`. The namespace separator in `target` should be `.` or
 `$NAMESPACE_SEPARATOR`. The `target` may include `nameof(root)` as the first namespace.
 """
-modify_nested_subsystem(fn, root::AbstractSystem, target::Symbol) = modify_nested_subsystem(
-    fn, root, namespace_hierarchy(target))
+function modify_nested_subsystem(fn, root::AbstractSystem, target::Symbol)
+    modify_nested_subsystem(
+        fn, root, namespace_hierarchy(target))
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -393,8 +401,10 @@ end
 Given a system `sys` and analysis point `ap`, return the index in `get_eqs(sys)`
 containing an equation which has as it's RHS an analysis point with name `nameof(ap)`.
 """
-analysis_point_index(sys::AbstractSystem, ap::AnalysisPoint) = analysis_point_index(
-    sys, nameof(ap))
+function analysis_point_index(sys::AbstractSystem, ap::AnalysisPoint)
+    analysis_point_index(
+        sys, nameof(ap))
+end
 """
     $(TYPEDSIGNATURES)
 
@@ -651,7 +661,8 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         tf.with_output || return ap_sys, (new_var,)
 
         # add output variable, equation, default
-        out_var, out_def = get_analysis_variable(
+        out_var,
+        out_def = get_analysis_variable(
             ap_ivar, nameof(ap), get_iv(sys); perturb = false)
         push!(ap_sys_eqs, out_var ~ ap_ivar + wrap(new_var))
         push!(unks, out_var)
@@ -701,7 +712,8 @@ function apply_transformation(tf::AddVariable, sys::AbstractSystem)
 
         # add equations involving new variable
         ap_ivar = ap_var(ap.input)
-        new_var, new_def = get_analysis_variable(
+        new_var,
+        new_def = get_analysis_variable(
             ap_ivar, tf.name, get_iv(sys); perturb = false)
         # add variable
         unks = copy(get_unknowns(ap_sys))
@@ -750,7 +762,8 @@ end
 
 function apply_transformation(cst::ComplementarySensitivityTransform, sys::AbstractSystem)
     sys, (u,) = apply_transformation(GetInput(cst.ap), sys)
-    sys, (du,) = apply_transformation(
+    sys,
+    (du,) = apply_transformation(
         AddVariable(
             cst.ap, Symbol(namespace_hierarchy(nameof(cst.ap))[end], :_comp_sens_du)),
         sys)
@@ -931,7 +944,8 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
     @eval function $f(
             sys, ap, args...; loop_openings = [], system_modifier = identity,
             allow_input_derivatives = true, kwargs...)
-        lin_fun, ssys = $(utility_fun)(
+        lin_fun,
+        ssys = $(utility_fun)(
             sys, ap, args...; loop_openings, system_modifier, kwargs...)
         mats, extras = ModelingToolkit.linearize(ssys, lin_fun; allow_input_derivatives)
         mats, ssys, extras
@@ -1000,7 +1014,8 @@ end
 function linearization_function(sys::AbstractSystem,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...)
-    sys, input_vars, output_vars = linearization_ap_transform(
+    sys, input_vars,
+    output_vars = linearization_ap_transform(
         sys, inputs, outputs, loop_openings)
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end

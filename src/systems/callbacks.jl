@@ -527,7 +527,7 @@ function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
     (is_discrete(e1) === is_discrete(e2)) || return false
     (isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) &&
      isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) &&
-        isequal(e1.reinitializealg, e2.reinitializealg) ||
+    isequal(e1.reinitializealg, e2.reinitializealg) ||
         return false
     is_discrete(e1) ||
         (isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind))
@@ -836,8 +836,8 @@ function compile_equational_affect(
             obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
         lhss = map(x -> x.lhs, update_eqs)
-        is_p = [lhs ∈ Set(ps_to_update) for lhs in lhss]
-        is_u = [lhs ∈ Set(dvs_to_update) for lhs in lhss]
+        is_p = [lhs in Set(ps_to_update) for lhs in lhss]
+        is_u = [lhs in Set(dvs_to_update) for lhs in lhss]
         dvs = unknowns(sys)
         ps = parameters(sys)
         t = get_iv(sys)
@@ -854,11 +854,13 @@ function compile_equational_affect(
         _ps = reorder_parameters(sys, ps)
         integ = gensym(:MTKIntegrator)
 
-        u_up, u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
+        u_up,
+        u_up! = build_function_wrapper(sys, (@view rhss[is_u]), dvs, _ps..., t;
             wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false},
             outputidxs = u_idxs, wrap_mtkparameters, cse = false, eval_expression,
             eval_module)
-        p_up, p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
+        p_up,
+        p_up! = build_function_wrapper(sys, (@view rhss[is_p]), dvs, _ps..., t;
             wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false},
             outputidxs = p_idxs, wrap_mtkparameters, cse = false, eval_expression,
             eval_module)
@@ -873,9 +875,8 @@ function compile_equational_affect(
             end
         end
     else
-        return let dvs_to_update = dvs_to_update,
-            affsys = affsys, ps_to_update = ps_to_update, aff = aff, sys = sys,
-            reset_jumps = reset_jumps
+        return let dvs_to_update = dvs_to_update, affsys = affsys,
+            ps_to_update = ps_to_update, aff = aff, sys = sys, reset_jumps = reset_jumps
 
             dvs_to_access = unknowns(affsys)
             ps_to_access = [unPre(p) for p in parameters(affsys)]
