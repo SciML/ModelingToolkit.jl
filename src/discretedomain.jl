@@ -11,6 +11,15 @@ is_transparent_operator(x) = is_transparent_operator(typeof(x))
 is_transparent_operator(::Type) = false
 
 """
+    $(TYPEDSIGNATURES)
+
+Trait to be implemented for operators which determines whether they are synchronous operators.
+Synchronous operators must implement `input_timedomain` and `output_timedomain`.
+"""
+is_synchronous_operator(x) = is_synchronous_operator(typeof(x))
+is_synchronous_operator(::Type) = false
+
+"""
     function SampleTime()
 
 `SampleTime()` can be used in the equations of a hybrid system to represent time sampled
@@ -52,6 +61,7 @@ struct Shift <: Operator
 end
 Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
+is_synchronous_operator(::Type{Shift}) = true
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
 
@@ -138,6 +148,7 @@ struct Sample <: Operator
     Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete()) = new(clock)
 end
 
+is_synchronous_operator(::Type{Sample}) = true
 is_transparent_operator(::Type{Sample}) = true
 
 function Sample(arg::Real)
@@ -193,6 +204,7 @@ struct Hold <: Operator
 end
 
 is_transparent_operator(::Type{Hold}) = true
+is_synchronous_operator(::Type{Hold}) = true
 
 (D::Hold)(x) = Term{symtype(x)}(D, Any[x])
 (D::Hold)(x::Num) = Num(D(value(x)))
@@ -314,12 +326,13 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
     input_timedomain(op::Operator)
 
 Return the time-domain type (`ContinuousClock()` or `InferredDiscrete()`) that `op` operates on.
+Should return a tuple containing the time domain type for each argument to the operator.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    (InferredDiscrete(),)
 end
 
 """
@@ -334,21 +347,19 @@ function output_timedomain(s::Shift, arg = nothing)
     InferredDiscrete()
 end
 
-input_timedomain(::Sample, _ = nothing) = ContinuousClock()
+input_timedomain(::Sample, _ = nothing) = (ContinuousClock(),)
 output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete() # the Hold accepts any discrete
+    (InferredDiscrete(),) # the Hold accepts any discrete
 end
 output_timedomain(::Hold, _ = nothing) = ContinuousClock()
 
 sampletime(op::Sample, _ = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)
-
-changes_domain(op) = isoperator(op, Union{Sample, Hold})
 
 function output_timedomain(x)
     if isoperator(x, Operator)

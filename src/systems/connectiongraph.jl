@@ -119,15 +119,15 @@ connection sets.
 
 $(TYPEDFIELDS)
 """
-struct ConnectionGraph
+struct HyperGraph{V}
     """
     Mapping from vertices to their integer ID.
     """
-    labels::Dict{ConnectionVertex, Int}
+    labels::Dict{V, Int}
     """
     Reverse mapping from integer ID to vertices.
     """
-    invmap::Vector{ConnectionVertex}
+    invmap::Vector{V}
     """
     Core data structure for storing the hypergraph. Each hyperedge is a source vertex and
     has bipartite edges to the connection vertices it is incident on.
@@ -135,14 +135,16 @@ struct ConnectionGraph
     graph::BipartiteGraph{Int, Nothing}
 end
 
+const ConnectionGraph = HyperGraph{ConnectionVertex}
+
 """
     $(TYPEDSIGNATURES)
 
 Create an empty `ConnectionGraph`.
 """
-function ConnectionGraph()
+function HyperGraph{V}() where {V}
     graph = BipartiteGraph(0, 0, Val(true))
-    return ConnectionGraph(Dict{ConnectionVertex, Int}(), ConnectionVertex[], graph)
+    return HyperGraph{V}(Dict{V, Int}(), V[], graph)
 end
 
 function Base.show(io::IO, graph::ConnectionGraph)
@@ -178,7 +180,7 @@ end
 Add the given vertex to the connection graph. Return the integer ID of the added vertex.
 No-op if the vertex already exists.
 """
-function Graphs.add_vertex!(graph::ConnectionGraph, dst::ConnectionVertex)
+function Graphs.add_vertex!(graph::HyperGraph{V}, dst::V) where {V}
     j = get(graph.labels, dst, 0)
     iszero(j) || return j
     j = Graphs.add_vertex!(graph.graph, DST)
@@ -188,7 +190,8 @@ function Graphs.add_vertex!(graph::ConnectionGraph, dst::ConnectionVertex)
     return j
 end
 
-const ConnectionGraphEdge = Union{Vector{ConnectionVertex}, Tuple{Vararg{ConnectionVertex}}}
+const HyperGraphEdge{V} = Union{Vector{V}, Tuple{Vararg{V}}, Set{V}}
+const ConnectionGraphEdge = HyperGraphEdge{ConnectionVertex}
 
 """
     $(TYPEDSIGNATURES)
@@ -196,7 +199,7 @@ const ConnectionGraphEdge = Union{Vector{ConnectionVertex}, Tuple{Vararg{Connect
 Add the given hyperedge to the connection graph. Adds all vertices in the given edge if
 they do not exist. Returns the integer ID of the added edge.
 """
-function Graphs.add_edge!(graph::ConnectionGraph, src::ConnectionGraphEdge)
+function Graphs.add_edge!(graph::HyperGraph{V}, src::HyperGraphEdge{V}) where {V}
     i = Graphs.add_vertex!(graph.graph, SRC)
     for vert in src
         j = Graphs.add_vertex!(graph, vert)
@@ -447,7 +450,7 @@ end
 Return the merged connection sets in `graph` as a `Vector{Vector{ConnectionVertex}}`. These
 are equivalent to the connected components of `graph`.
 """
-function connectionsets(graph::ConnectionGraph)
+function connectionsets(graph::HyperGraph{V}) where {V}
     bigraph = graph.graph
     invmap = graph.invmap
 
@@ -465,11 +468,11 @@ function connectionsets(graph::ConnectionGraph)
     # maps the root of a vertex in `disjoint_sets` to the index of the corresponding set
     # in `vertex_sets`
     root_to_set = Dict{Int, Int}()
-    vertex_sets = Vector{ConnectionVertex}[]
+    vertex_sets = Vector{V}[]
     for (vert_i, vert) in enumerate(invmap)
         root = find_root!(disjoint_sets, vert_i)
         set_i = get!(root_to_set, root) do
-            push!(vertex_sets, ConnectionVertex[])
+            push!(vertex_sets, V[])
             return length(vertex_sets)
         end
         push!(vertex_sets[set_i], vert)

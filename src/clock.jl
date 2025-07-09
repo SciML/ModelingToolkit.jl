@@ -1,10 +1,14 @@
 @data InferredClock begin
     Inferred
-    InferredDiscrete
+    InferredDiscrete(Int)
 end
 
 const InferredTimeDomain = InferredClock.Type
 using .InferredClock: Inferred, InferredDiscrete
+
+function InferredClock.InferredDiscrete()
+    return InferredDiscrete(0)
+end
 
 Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
 
