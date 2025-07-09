@@ -1600,3 +1600,17 @@ end
     @test getmetadata(sys, TestMeta, nothing) == "test"
     @test getmetadata(sys2, TestMeta, nothing) == "test"
 end
+
+struct TestWrapper
+    sys::ODESystem
+end
+
+@testset "`ODESystem` is a type" begin
+    @variables x(t)
+    @named sys = ODESystem(D(x) ~ x, t)
+    @test sys isa ODESystem
+    @test sys isa System
+    arr = ODESystem[]
+    @test_nowarn push!(arr, sys)
+    @test_nowarn TestWrapper(sys)
+end

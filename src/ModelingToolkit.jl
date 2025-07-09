@@ -138,6 +138,9 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
+# Solely so that `ODESystem` can be deprecated and still act as a valid type.
+# See `deprecations.jl`.
+abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
 function independent_variable end
 
@@ -275,7 +278,7 @@ PrecompileTools.@compile_workload begin
 end
 
 export ODEFunction, convert_system_indepvar,
-       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem
+       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
 export SDEFunction
 export SystemStructure
 export DiscreteProblem, DiscreteFunction

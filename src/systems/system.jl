@@ -24,7 +24,7 @@ structure.
 
 $(TYPEDFIELDS)
 """
-struct System <: AbstractSystem
+struct System <: IntermediateDeprecationSystem
     """
     $INTERNAL_FIELD_WARNING
     A unique integer tag for the system.
