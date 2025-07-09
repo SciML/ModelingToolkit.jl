@@ -1,3 +1,5 @@
+const System = AbstractODESystem
+
 function System(eqs::AbstractVector{<:Equation}, iv, args...; name = nothing,
         kw...)
     ODESystem(eqs, iv, args...; name, kw..., checks = false)

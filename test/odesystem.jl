@@ -1806,3 +1806,9 @@ end
     @test ModelingToolkit.get_metadata(sys) == "TEST"
     @test ModelingToolkit.get_metadata(sys2) == "TEST"
 end
+
+@testset "`System` works as a type" begin
+    @variables x(t)
+    @named sys = System([D(x) ~ 2x], t)
+    @test sys isa System
+end
