@@ -94,26 +94,25 @@ new_sol = solve(new_prob, Tsit5())
 
 """
 function change_of_variables(
-    sys::System, iv, forward_subs, backward_subs;
-    simplify=true, t0=missing, isSDE=false
+        sys::System, iv, forward_subs, backward_subs;
+        simplify = true, t0 = missing, isSDE = false
 )
     t = iv
 
     old_vars = first.(backward_subs)
     new_vars = last.(forward_subs)
-    
+
     # use: f = Y(t, X)
     # use: dY = (∂f/∂t + μ∂f/∂x + (1/2)*σ^2*∂2f/∂x2)dt + σ∂f/∂xdW
     old_eqs = equations(sys)
     neqs = get_noise_eqs(sys)
     brownvars = brownians(sys)
-    
-    
+
     if neqs === nothing && length(brownvars) === 0
         neqs = ones(1, length(old_eqs))
     elseif neqs !== nothing
         isSDE = true
-        neqs = [neqs[i,:] for i in 1:size(neqs,1)]
+        neqs = [neqs[i, :] for i in 1:size(neqs, 1)]
 
         brownvars = map([Symbol(:B, :_, i) for i in 1:length(neqs[1])]) do name
             unwrap(only(@brownians $name))
@@ -135,9 +134,10 @@ function change_of_variables(
     end
 
     # df/dt = ∂f/∂x dx/dt + ∂f/∂t
-    dfdt = Symbolics.derivative( first.(forward_subs), t )
-    ∂f∂x = [Symbolics.derivative( first(f_sub), old_var ) for (f_sub, old_var) in zip(forward_subs, old_vars)]
-    ∂2f∂x2 = Symbolics.derivative.( ∂f∂x, old_vars )
+    dfdt = Symbolics.derivative(first.(forward_subs), t)
+    ∂f∂x = [Symbolics.derivative(first(f_sub), old_var)
+            for (f_sub, old_var) in zip(forward_subs, old_vars)]
+    ∂2f∂x2 = Symbolics.derivative.(∂f∂x, old_vars)
     new_eqs = Equation[]
 
     for (new_var, ex, first, second) in zip(new_vars, dfdt, ∂f∂x, ∂2f∂x2)
@@ -154,7 +154,7 @@ function change_of_variables(
         ex = substitute(ex, Dict(forward_subs))
         ex = substitute(ex, Dict(backward_subs))
         if simplify
-            ex = Symbolics.simplify(ex, expand=true)
+            ex = Symbolics.simplify(ex, expand = true)
         end
         push!(new_eqs, Differential(t)(new_var) ~ ex)
     end
@@ -174,10 +174,11 @@ function change_of_variables(
         end
     end
 
-    @named new_sys = System(vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
-            defaults=new_defs,
-            observed=observed(sys)
-            )
+    @named new_sys = System(
+        vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
+        defaults = new_defs,
+        observed = observed(sys)
+    )
     if simplify
         return mtkcompile(new_sys)
     end
@@ -570,7 +571,8 @@ All accumulation variables have a default of zero.
 function add_accumulations(sys::System, vars::Vector{<:Pair})
     eqs = get_eqs(sys)
     avars = map(first, vars)
-    if (ints = intersect(avars, unknowns(sys)); !isempty(ints))
+    ints = intersect(avars, unknowns(sys))
+    if !isempty(ints)
         error("$ints already exist in the system!")
     end
     D = Differential(get_iv(sys))
