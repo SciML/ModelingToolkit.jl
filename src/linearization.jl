@@ -601,9 +601,8 @@ function Base.showerror(io::IO, err::IONotFoundError)
 
         ```julia
         @named sys = MyModel()
-        sys = toggle_namespacing(sys, false)
-        inputs = [sys.input_var]
-        sys = toggle_namespacing(sys, true)
+        sys_nns = toggle_namespacing(sys, false)
+        inputs = [sys_nns.input_var]
         mtkcompile(sys; inputs)
         ```
         """)
