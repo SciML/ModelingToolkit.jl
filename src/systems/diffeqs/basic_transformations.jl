@@ -294,6 +294,26 @@ function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0
     return mtkcompile(sys)
 end
 
+"""
+Generates the system of ODEs to find solution to FDEs.
+
+Example:
+
+```julia
+@independent_variables t
+@variables x_0(t)
+D = Differential(t)
+tspan = (0., 5000.)
+
+function expect(t)
+    return sqrt(2) * sin(t + pi/4)
+end
+
+sys = linear_fractional_to_ordinary([3, 2.5, 2, 1, .5, 0], [1, 1, 1, 4, 1, 4], 6*cos(t), 10^-5, 5000; initials=[1, 1, -1])
+prob = ODEProblem(sys, [], tspan)
+sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
+```
+"""
 function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0)
     @independent_variables t
     @variables x_0(t)
