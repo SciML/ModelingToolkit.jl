@@ -1045,7 +1045,7 @@ end
 
 function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
     print(io, """
-    Noise equations are ill-formed. The number of rows much must number of drift \
+    Noise equations are ill-formed. The number of rows must match the number of drift \
     equations. `size(neqs, 1) == $(err.noise_eqs_rows) != length(eqs) == \
     $(err.eqs_length)`.
     """)
