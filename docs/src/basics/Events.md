@@ -92,8 +92,8 @@ The basic purely symbolic continuous event interface to encode *one* continuous
 event is
 
 ```julia
-AbstractSystem(eqs, ...; continuous_events::Vector{Equation})
-AbstractSystem(eqs, ...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
+AbstractSystem(eqs, _...; continuous_events::Vector{Equation})
+AbstractSystem(eqs, _...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
 ```
 
 In the former, equations that evaluate to 0 will represent conditions that should
@@ -272,7 +272,7 @@ In addition to continuous events, discrete events are also supported. The
 general interface to represent a collection of discrete events is
 
 ```julia
-AbstractSystem(eqs, ...; discrete_events = [condition1 => affect1, condition2 => affect2])
+AbstractSystem(eqs, _...; discrete_events = [condition1 => affect1, condition2 => affect2])
 ```
 
 where conditions are symbolic expressions that should evaluate to `true` when an
@@ -497,7 +497,8 @@ so far we aren't using anything that's not possible with the implicit interface.
 You can also write
 
 ```julia
-[temp ~ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
+[temp ~
+ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
     furnace_on)) do x, o, i, c
     @set! x.furnace_on = false
 end
