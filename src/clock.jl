@@ -101,6 +101,7 @@ function is_discrete_domain(x)
 end
 
 sampletime(c) = Moshi.Match.@match c begin
+    x::SciMLBase.AbstractClock => nothing
     PeriodicClock(dt) => dt
     _ => nothing
 end

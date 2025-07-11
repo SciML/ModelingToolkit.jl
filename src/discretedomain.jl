@@ -363,7 +363,8 @@ sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)
 
 function output_timedomain(x)
     if isoperator(x, Operator)
-        return output_timedomain(operation(x), arguments(x)[])
+        args = arguments(x)
+        return output_timedomain(operation(x), if length(args) == 1 args[] else args end)
     else
         throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
     end
@@ -371,7 +372,8 @@ end
 
 function input_timedomain(x)
     if isoperator(x, Operator)
-        return input_timedomain(operation(x), arguments(x)[])
+        args = arguments(x)
+        return input_timedomain(operation(x), if length(args) == 1 args[] else args end)
     else
         throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
     end
