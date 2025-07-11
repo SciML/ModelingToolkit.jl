@@ -470,8 +470,9 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
                 addvar!(v, VARIABLE)
                 if iscall(v) && operation(v) isa Symbolics.Operator && !isdifferential(v) &&
                    (it = input_timedomain(v)) !== nothing
-                    v′ = only(arguments(v))
-                    addvar!(setmetadata(v′, VariableTimeDomain, it), VARIABLE)
+                    for v′ in arguments(v)
+                        addvar!(setmetadata(v′, VariableTimeDomain, it), VARIABLE)
+                    end
                 end
             end
 

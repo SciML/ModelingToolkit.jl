@@ -142,11 +142,16 @@ function infer_clocks!(ci::ClockInference)
             # now we only care about synchronous operators
             iscall(var) || continue
             op = operation(var)
-            is_synchronous_operator(op) || continue
+            if (!is_synchronous_operator(op)) && !(op isa Differential)
+                continue
+            end
 
             # arguments and corresponding time domains
             args = arguments(var)
             tdomains = input_timedomain(op)
+            if !(tdomains isa AbstractArray || tdomains isa Tuple)
+                tdomains = [tdomains]
+            end
             nargs = length(args)
             ndoms = length(tdomains)
             if nargs != ndoms
