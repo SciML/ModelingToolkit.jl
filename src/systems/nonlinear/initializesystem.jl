@@ -662,7 +662,7 @@ function SciMLBase.remake_initialization_data(
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
         missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
-        u0_constructor, p_constructor, allow_incomplete = true)
+        u0_constructor, p_constructor, allow_incomplete = true, check_units = false)
 
     odefn = remake(odefn; kws...)
     return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
