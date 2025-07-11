@@ -12,7 +12,9 @@ end
 const ODESystem = IntermediateDeprecationSystem
 
 function IntermediateDeprecationSystem(args...; kwargs...)
-    Base.depwarn("`ODESystem(args...; kwargs...)` is deprecated. Use `System(args...; kwargs...) instead`.", :ODESystem)
+    Base.depwarn(
+        "`ODESystem(args...; kwargs...)` is deprecated. Use `System(args...; kwargs...) instead`.",
+        :ODESystem)
 
     return System(args...; kwargs...)
 end

@@ -652,6 +652,8 @@ function complete(
         # Ideally we'd do `get_ps` but if `flatten = false`
         # we don't get all of them. So we call `parameters`.
         all_ps = parameters(sys; initial_parameters = true)
+        # inputs have to be maintained in a specific order
+        input_vars = inputs(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
@@ -670,6 +672,12 @@ function complete(
             end
             ordered_ps = vcat(
                 ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
+            if isscheduled(sys)
+                # ensure inputs are sorted
+                input_idxs = findfirst.(isequal.(input_vars), (ordered_ps,))
+                @assert all(!isnothing, input_idxs)
+                @assert issorted(input_idxs)
+            end
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)

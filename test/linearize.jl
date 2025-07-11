@@ -151,12 +151,12 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-@test_throws "Some specified inputs were not found" linearize(pid,
+@test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(pid,
     [
         pid.reference.u,
         pid.measurement.u
     ], [ctr_output.u])
-@test_throws "Some specified outputs were not found" linearize(pid,
+@test_throws ["outputs provided to `mtkcompile`", "not found"] linearize(pid,
     [
         reference.u,
         measurement.u
