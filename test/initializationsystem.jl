@@ -1112,6 +1112,10 @@ end
         guesses = ModelingToolkit.missing_variable_defaults(pend))
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
+
+    prob2 = remake(prob, u0 = [x => 0.5, y=>nothing])
+    sol2 = solve(prob2, Rodas5P())
+    @test SciMLBase.successful_retcode(sol2)
 end
 
 @testset "Issue#3205" begin
