@@ -31,7 +31,7 @@ lin_inputs = [force.f.u]
 # => nothing to remove extra defaults
 op = Dict(cart.s => 10, cart.v => 0, link1.A => -pi / 2, link1.dA => 0, force.f.u => 0,
     link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => nothing)
-guesses = [link1.fx1 => 0]
+guesses = [link1.fx1 => 0, link1.ddx_cm => 0]
 @info "named_ss"
 G = named_ss(model, lin_inputs, lin_outputs; allow_symbolic = true, op,
     allow_input_derivatives = true, zero_dummy_der = true, guesses)
