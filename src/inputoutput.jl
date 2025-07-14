@@ -200,7 +200,7 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         eval_module = @__MODULE__,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
-    if !iscomplete(sys)
+    if !isscheduled(sys)
         sys = mtkcompile(sys; inputs, disturbance_inputs)
     end
     if disturbance_inputs !== nothing
