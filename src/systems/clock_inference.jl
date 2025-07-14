@@ -264,8 +264,14 @@ function resize_or_push!(v, val, idx)
 end
 
 function is_time_domain_conversion(v)
-    iscall(v) && (o = operation(v)) isa Operator &&
-        input_timedomain(o) != output_timedomain(o)
+    iscall(v) || return false
+    o = operation(v)
+    o isa Operator || return false
+    itd = input_timedomain(o)
+    allequal(itd) || return true
+    otd = output_timedomain(o)
+    itd[1] == otd || return true
+    return false
 end
 
 """
