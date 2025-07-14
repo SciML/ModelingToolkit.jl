@@ -143,12 +143,11 @@ before the callback is triggered.
 """
 struct Pre <: Symbolics.Operator end
 Pre(x) = Pre()(x)
+is_timevarying_operator(::Type{Pre}) = false
 SymbolicUtils.promote_symtype(::Type{Pre}, T) = T
 SymbolicUtils.isbinop(::Pre) = false
 Base.nameof(::Pre) = :Pre
 Base.show(io::IO, x::Pre) = print(io, "Pre")
-input_timedomain(::Pre, _ = nothing) = ContinuousClock()
-output_timedomain(::Pre, _ = nothing) = ContinuousClock()
 unPre(x::Num) = unPre(unwrap(x))
 unPre(x::Symbolics.Arr) = unPre(unwrap(x))
 unPre(x::Symbolic) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x

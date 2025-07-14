@@ -142,9 +142,7 @@ function infer_clocks!(ci::ClockInference)
             # now we only care about synchronous operators
             iscall(var) || continue
             op = operation(var)
-            if (!is_synchronous_operator(op)) && !(op isa Differential)
-                continue
-            end
+            is_timevarying_operator(op) || continue
 
             # arguments and corresponding time domains
             args = arguments(var)

@@ -13,11 +13,16 @@ is_transparent_operator(::Type) = false
 """
     $(TYPEDSIGNATURES)
 
-Trait to be implemented for operators which determines whether they are synchronous operators.
-Synchronous operators must implement `input_timedomain` and `output_timedomain`.
+Trait to be implemented for operators which determines whether the operator is applied to
+a time-varying quantity and results in a time-varying quantity. For example, `Initial` and
+`Pre` are not time-varying since while they are applied to variables, the application
+results in a non-discrete-time parameter. `Differential`, `Shift`, `Sample` and `Hold` are
+all time-varying operators. All time-varying operators must implement `input_timedomain` and
+`output_timedomain`.
 """
-is_synchronous_operator(x) = is_synchronous_operator(typeof(x))
-is_synchronous_operator(::Type) = false
+is_timevarying_operator(x) = is_timevarying_operator(typeof(x))
+is_timevarying_operator(::Type{<:Symbolics.Operator}) = true
+is_timevarying_operator(::Type) = false
 
 """
     function SampleTime()
@@ -61,7 +66,6 @@ struct Shift <: Operator
 end
 Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
-is_synchronous_operator(::Type{Shift}) = true
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
 
@@ -148,7 +152,6 @@ struct Sample <: Operator
     Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete()) = new(clock)
 end
 
-is_synchronous_operator(::Type{Sample}) = true
 is_transparent_operator(::Type{Sample}) = true
 
 function Sample(arg::Real)
@@ -204,7 +207,6 @@ struct Hold <: Operator
 end
 
 is_transparent_operator(::Type{Hold}) = true
-is_synchronous_operator(::Type{Hold}) = true
 
 (D::Hold)(x) = Term{symtype(x)}(D, Any[x])
 (D::Hold)(x::Num) = Num(D(value(x)))

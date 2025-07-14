@@ -486,13 +486,12 @@ The `Initial` operator. Used by initialization to store constant constraints on 
 of a system. See the documentation section on initialization for more information.
 """
 struct Initial <: Symbolics.Operator end
+is_timevarying_operator(::Type{Initial}) = false
 Initial(x) = Initial()(x)
 SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
 SymbolicUtils.isbinop(::Initial) = false
 Base.nameof(::Initial) = :Initial
 Base.show(io::IO, x::Initial) = print(io, "Initial")
-input_timedomain(::Initial, _ = nothing) = ContinuousClock()
-output_timedomain(::Initial, _ = nothing) = ContinuousClock()
 
 function (f::Initial)(x)
     # wrap output if wrapped input
