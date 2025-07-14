@@ -54,7 +54,7 @@ has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 for op in [Differential]
-    @eval input_timedomain(::$op, arg = nothing) = ContinuousClock()
+    @eval input_timedomain(::$op, arg = nothing) = (ContinuousClock(),)
     @eval output_timedomain(::$op, arg = nothing) = ContinuousClock()
 end
 
