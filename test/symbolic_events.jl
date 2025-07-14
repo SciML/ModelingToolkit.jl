@@ -311,10 +311,13 @@ end
 
     cev = only(continuous_events(ball))
     @test isequal(only(equations(cev)), x ~ 0)
-    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
+    @test isequal(only(cev.affect.affect), v ~ -Pre(v))
     ball = mtkcompile(ball)
 
     @test length(ModelingToolkit.continuous_events(ball)) == 1
+    cev = only(continuous_events(ball))
+    @test isequal(only(equations(cev)), x ~ 0)
+    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
 
     tspan = (0.0, 5.0)
     prob = ODEProblem(ball, Pair[], tspan)
