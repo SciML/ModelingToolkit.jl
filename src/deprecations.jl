@@ -9,13 +9,7 @@ macro mtkbuild(exprs...)
     end |> esc
 end
 
-const ODESystem = IntermediateDeprecationSystem
-
-function IntermediateDeprecationSystem(args...; kwargs...)
-    Base.depwarn("`ODESystem(args...; kwargs...)` is deprecated. Use `System(args...; kwargs...) instead`.", :ODESystem)
-
-    return System(args...; kwargs...)
-end
+Base.@deprecate_binding ODESystem System
 
 for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
     @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)

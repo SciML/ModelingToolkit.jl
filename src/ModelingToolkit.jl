@@ -138,9 +138,6 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
-# Solely so that `ODESystem` can be deprecated and still act as a valid type.
-# See `deprecations.jl`.
-abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
 function independent_variable end
 
