@@ -75,6 +75,6 @@ end
         y(k) ~ x(k - 1) + x(k - 2),
         z(k) * x(k) ~ 3]
     @mtkcompile sys = System(eqs, t)
-    @test occursin("var\"Shift(t, 1)(x(t))\"",
+    @test occursin("var\"Shift(t, 1)(z(t))\"",
         string(ImplicitDiscreteFunction(sys; expression = Val{true})))
 end
