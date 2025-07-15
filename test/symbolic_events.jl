@@ -865,8 +865,7 @@ end
         end
         @discrete_events begin
             [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
-            [60] => [
-                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
+            [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.Δp ~ 1.0]
             [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
         end
     end
@@ -877,6 +876,11 @@ end
     # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
     sol = solve(prob)
+    # This is singular at the second event, but the derivatives are zero so it's
+    # constant after that point anyway. Just make sure it hits the last event and
+    # had the correct `u`.
+    @test_broken SciMLBase.successful_retcode(sol)
+    @test sol.t[end] >= 120.0
     @test sol[end] == [0.0, 0.0, 0.0]
 end
 
