@@ -11,6 +11,8 @@ using Pyomo
 import DiffEqBase: solve
 const M = ModelingToolkit
 
+const ENABLE_CASADI = VERSION >= v"1.11"
+
 @testset "ODE Solution, no cost" begin
     # Test solving without anything attached.
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
@@ -31,10 +33,13 @@ const M = ModelingToolkit
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRK4()))
     oprob = ODEProblem(sys, [u0map; parammap], tspan)
     osol = solve(oprob, SimpleRK4(), dt = 0.01)
-    cprob = CasADiDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+
     @test jsol.sol.u ≈ osol.u
-    @test csol.sol.u ≈ osol.u
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol.u ≈ osol.u
+    end
 
     # Implicit method.
     osol2 = solve(oprob, ImplicitEuler(), dt = 0.01, adaptive = false)
@@ -43,8 +48,10 @@ const M = ModelingToolkit
     iprob = InfiniteOptDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test ≈(isol.sol.u, osol2.u, rtol = 0.001)
-    csol2 = solve(cprob, CasADiCollocation("ipopt", constructImplicitEuler()))
-    @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
+    if ENABLE_CASADI
+        csol2 = solve(cprob, CasADiCollocation("ipopt", constructImplicitEuler()))
+        @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
+    end
     pprob = PyomoDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test all([≈(psol.sol(t), osol2(t), rtol = 1e-2) for t in 0.0:0.01:1.0])
@@ -61,11 +68,13 @@ const M = ModelingToolkit
     @test jsol.sol(0.6; idxs = x(t)) ≈ 3.5
     @test jsol.sol(0.3; idxs = x(t)) ≈ 7.0
 
-    cprob = CasADiDynamicOptProblem(
-        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
-    @test csol.sol(0.6; idxs = x(t)) ≈ 3.5
-    @test csol.sol(0.3; idxs = x(t)) ≈ 7.0
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
+        @test csol.sol(0.6; idxs = x(t)) ≈ 3.5
+        @test csol.sol(0.3; idxs = x(t)) ≈ 7.0
+    end
 
     pprob = PyomoDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
@@ -100,10 +109,12 @@ const M = ModelingToolkit
     psol = solve(pprob, PyomoCollocation("ipopt", MidpointEuler()))
     @test all(u -> u > [1, 1], psol.sol.u)
 
-    cprob = CasADiDynamicOptProblem(
-        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructRadauIA3()))
-    @test all(u -> u > [1, 1], csol.sol.u)
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRadauIA3()))
+        @test all(u -> u > [1, 1], csol.sol.u)
+    end
 end
 
 function is_bangbang(input_sol, lbounds, ubounds, rtol = 1e-4)
@@ -143,11 +154,13 @@ end
     # Test reached final position.
     @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1e-5)
 
-    cprob = CasADiDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructVerner8()))
-    @test is_bangbang(csol.input_sol, [-1.0], [1.0])
-    # Test reached final position.
-    @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1e-5)
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructVerner8()))
+        @test is_bangbang(csol.input_sol, [-1.0], [1.0])
+        # Test reached final position.
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1e-5)
+    end
 
     # Test dynamics
     @parameters (u_interp::ConstantInterpolation)(..)
@@ -156,7 +169,9 @@ end
     oprob = ODEProblem(block_ode, [u0map; [u_interp => spline]], tspan)
     osol = solve(oprob, Vern8(), dt = 0.01, adaptive = false)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.05)
-    @test ≈(csol.sol.u, osol.u, rtol = 0.05)
+    if ENABLE_CASADI
+        @test ≈(csol.sol.u, osol.u, rtol = 0.05)
+    end
 
     iprob = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
@@ -196,9 +211,11 @@ end
     iprob = InfiniteOptDynamicOptProblem(beesys, [u0map; pmap], tspan, dt = 0.01)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test is_bangbang(isol.input_sol, [0.0], [1.0])
-    cprob = CasADiDynamicOptProblem(beesys, [u0map; pmap], tspan; dt = 0.01)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
-    @test is_bangbang(csol.input_sol, [0.0], [1.0])
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(beesys, [u0map; pmap], tspan; dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
+        @test is_bangbang(csol.input_sol, [0.0], [1.0])
+    end
     pprob = PyomoDynamicOptProblem(beesys, [u0map; pmap], tspan, dt = 0.01)
     psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
     @test is_bangbang(psol.input_sol, [0.0], [1.0])
@@ -213,7 +230,9 @@ end
         tspan)
     osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
     @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
-    @test ≈(osol.u, csol.sol.u, rtol = 0.01)
+    if ENABLE_CASADI
+        @test ≈(osol.u, csol.sol.u, rtol = 0.01)
+    end
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
     @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.0:0.01:4.0])
@@ -246,10 +265,12 @@ end
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
     @test jsol.sol[h(t)][end] > 1.012
 
-    cprob = CasADiDynamicOptProblem(
-        rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
-    csol = solve(cprob, CasADiCollocation("ipopt"))
-    @test csol.sol[h(t)][end] > 1.012
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
+        csol = solve(cprob, CasADiCollocation("ipopt"))
+        @test csol.sol[h(t)][end] > 1.012
+    end
 
     iprob = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
@@ -269,7 +290,9 @@ end
     oprob = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap), (ts, te))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
-    @test ≈(csol.sol.u, osol.u, rtol = 0.02)
+    if ENABLE_CASADI
+        @test ≈(csol.sol.u, osol.u, rtol = 0.02)
+    end
 
     interpmap1 = Dict(T_interp => ctrl_to_spline(isol.input_sol, CubicSpline))
     oprob1 = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap1), (ts, te))
@@ -302,10 +325,12 @@ end
     @test isapprox(jsol.sol.t[end], 10.0, rtol = 1e-3)
     @test ≈(M.objective_value(jsol), -92.75, atol = 0.25)
 
-    cprob = CasADiDynamicOptProblem(rocket, [u0map; pmap], (0, tf); steps = 201)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
-    @test isapprox(csol.sol.t[end], 10.0, rtol = 1e-3)
-    @test ≈(M.objective_value(csol), -92.75, atol = 0.25)
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(rocket, [u0map; pmap], (0, tf); steps = 201)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
+        @test isapprox(csol.sol.t[end], 10.0, rtol = 1e-3)
+        @test ≈(M.objective_value(csol), -92.75, atol = 0.25)
+    end
 
     iprob = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (0, tf); steps = 200)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
@@ -334,9 +359,11 @@ end
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructVerner8()))
     @test isapprox(jsol.sol.t[end], 2.0, atol = 1e-5)
 
-    cprob = CasADiDynamicOptProblem(block, [u0map; parammap], (0, tf); steps = 51)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructVerner8()))
-    @test isapprox(csol.sol.t[end], 2.0, atol = 1e-5)
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(block, [u0map; parammap], (0, tf); steps = 51)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructVerner8()))
+        @test isapprox(csol.sol.t[end], 2.0, atol = 1e-5)
+    end
 
     iprob = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; steps = 51)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer), verbose = true)
@@ -380,9 +407,11 @@ end
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRK4()))
     @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
 
-    cprob = CasADiDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
-    csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
-    @test csol.sol.u[end] ≈ [π, 0, 0, 0]
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol.u[end] ≈ [π, 0, 0, 0]
+    end
 
     iprob = InfiniteOptDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
     isol = solve(iprob,
