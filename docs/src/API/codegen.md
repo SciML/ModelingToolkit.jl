@@ -23,6 +23,9 @@ ModelingToolkit.build_explicit_observed_function
 ModelingToolkit.generate_control_function
 ModelingToolkit.generate_update_A
 ModelingToolkit.generate_update_b
+ModelingToolkit.generate_semiquadratic_functions
+ModelingToolkit.generate_semiquadratic_jacobian
+ModelingToolkit.get_semiquadratic_W_sparsity
 ```
 
 For functions such as jacobian calculation which require symbolic computation, there
