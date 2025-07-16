@@ -104,7 +104,7 @@ end
 
     sol = solve(prob)
     # https://github.com/SciML/LinearSolve.jl/issues/532
-    @test_broken SciMLBase.successful_retcode(sol)
+    @test SciMLBase.successful_retcode(sol)
     @test prob.A * sol.u - prob.b≈zeros(3) atol=1e-10
 
     A2 = rand(3, 3)
@@ -131,7 +131,7 @@ end
 
         sol = solve(prob3)
         # https://github.com/SciML/LinearSolve.jl/issues/532
-        @test_broken SciMLBase.successful_retcode(sol)
+        @test SciMLBase.successful_retcode(sol)
         @test prob3.A * sol.u - prob3.b≈zeros(3) atol=1e-10
     end
 end
