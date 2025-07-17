@@ -96,8 +96,9 @@ end
     @mtkcompile sys = System(eqs, [u], [p1, p2])
     sccprob = SCCNonlinearProblem(sys, [u => u0, p1 => p[1], p2 => p[2][]])
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
+    sccresid = prob.f(sccsol[u], (u0, p))
     @test SciMLBase.successful_retcode(sccsol)
-    @test norm(sccsol.resid) < norm(sol.resid)
+    @test norm(sccresid) < norm(sol.resid)
 
     # Test BLT sorted
     @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
@@ -178,9 +179,11 @@ end
                               0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
                               0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
     sccprob = SCCNonlinearProblem(sys, [])
+    # since explicitfuns are called during problem construction
+    @test val[] == 1
     sccsol = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sccsol)
-    @test val[] == 1
+    @test val[] == 2
 end
 
 import ModelingToolkitStandardLibrary.Blocks as B
