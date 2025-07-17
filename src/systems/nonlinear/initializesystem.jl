@@ -568,7 +568,8 @@ function SciMLBase.remake_initialization_data(
         # is called is because `Initial` parameters are calculated from the corresponding
         # state values.
         history_fn = is_time_dependent(sys) && !is_markovian(sys) ? Returns(newu0) : nothing
-        new_initu0, new_initp = reconstruct_fn(
+        new_initu0,
+        new_initp = reconstruct_fn(
             ProblemState(; u = newu0, p = newp, t = t0, h = history_fn), oldinitprob)
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
@@ -645,7 +646,8 @@ function SciMLBase.remake_initialization_data(
 
     u0map = anydict()
     pmap = anydict()
-    missing_unknowns, missing_pars = build_operating_point!(sys, op,
+    missing_unknowns,
+    missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
     u0_constructor = p_constructor = identity
@@ -660,7 +662,7 @@ function SciMLBase.remake_initialization_data(
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
         missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
-        u0_constructor, p_constructor, allow_incomplete = true)
+        u0_constructor, p_constructor, allow_incomplete = true, check_units = false)
 
     odefn = remake(odefn; kws...)
     return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)

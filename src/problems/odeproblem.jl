@@ -70,7 +70,8 @@ end
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip, spec}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(ODEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, expression, check_compatibility, kwargs...)
 
@@ -88,7 +89,8 @@ end
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
-    f, u0, p = process_SciMLProblem(ODEFunction{iip}, sys, op;
+    f, u0,
+    p = process_SciMLProblem(ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
         time_dependent_init = false, kwargs...)
 

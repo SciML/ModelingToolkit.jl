@@ -177,7 +177,7 @@ end
     end
 
     function build_sspace_model(sspace)
-        @variables u(t)=1.0 x(t)=1.0 y(t) [guess = 1.0]
+        @variables u(t)=1.0 x(t)=1.0 y(t) [guess=1.0]
         @mtkcompile sys = System(
             [sspace.u ~ u, D(u) ~ t, D(x) ~ sspace.x + sspace.y, y^2 ~ sspace.y + sspace.x], t;
             systems = [sspace]

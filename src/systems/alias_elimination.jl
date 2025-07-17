@@ -215,6 +215,7 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
                 eqs = get(var_to_lineq, v, nothing)
                 eqs === nothing && continue
                 for eq in eqs, v′ in 𝑠neighbors(graph, eq)
+
                     if linear_variables[v′]
                         linear_variables[v′] = false
                         push!(stack, v′)
@@ -224,6 +225,7 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
         end
     end
     for eq in linear_equations, v in 𝑠neighbors(graph, eq)
+
         linear_variables[v] = true
         vlineqs = get!(() -> BitSet(), var_to_lineq, v)
         push!(vlineqs, eq)
@@ -347,7 +349,8 @@ function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     (rank1, rank2, rank3, pivots)
 end
 
-function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL; fully_determined = true, kwargs...)
+function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL;
+        fully_determined = true, kwargs...)
     @unpack structure = state
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear

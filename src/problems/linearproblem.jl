@@ -14,7 +14,8 @@ function SciMLBase.LinearProblem{iip}(
     check_complete(sys, LinearProblem)
     check_compatibility && check_compatible_system(LinearProblem, sys)
 
-    _, u0, p = process_SciMLProblem(
+    _, u0,
+    p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; check_length, expression,
         build_initializeprob = false, symbolic_u0 = true, u0_constructor, u0_eltype,
         kwargs...)

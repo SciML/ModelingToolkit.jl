@@ -26,7 +26,8 @@ function modelingtoolkitize(
     odefn = ODEFunction{SciMLBase.isinplace(prob)}(
         prob.f.f; mass_matrix = prob.f.mass_matrix, sys = prob.f.sys)
     odeprob = ODEProblem(odefn, prob.u0, prob.tspan, prob.p)
-    sys, vars, params = modelingtoolkitize(
+    sys, vars,
+    params = modelingtoolkitize(
         odeprob; u_names, p_names, return_symbolic_u0_p = true,
         name = gensym(:MTKizedSDE), kwargs...)
     t = get_iv(sys)

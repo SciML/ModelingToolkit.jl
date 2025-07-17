@@ -298,7 +298,8 @@ function (linfun::LinearizationFunction)(u, p, t)
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
         integ_cache = (linfun.caches,)
         integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
-        u, p, success = SciMLBase.get_initial_values(
+        u, p,
+        success = SciMLBase.get_initial_values(
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...)
         if !success
@@ -564,6 +565,50 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
+struct IONotFoundError <: Exception
+    variant::String
+    sysname::Symbol
+    not_found::Any
+end
+
+function Base.showerror(io::IO, err::IONotFoundError)
+    println(io,
+        "The following $(err.variant) provided to `mtkcompile` were not found in the system:")
+    maybe_namespace_issue = false
+    for var in err.not_found
+        println(io, "  ", var)
+        if hasname(var) && startswith(string(getname(var)), string(err.sysname))
+            maybe_namespace_issue = true
+        end
+    end
+    if maybe_namespace_issue
+        println(io, """
+        Some of the missing variables are namespaced with the name of the system \
+        `$(err.sysname)` passed to `mtkcompile`. This may be indicative of a namespacing \
+        issue. `mtkcompile` requires that the $(err.variant) provided are not namespaced \
+        with the name of the root system. This issue can occur when using `getproperty` \
+        to access the variables passed as $(err.variant). For example:
+
+        ```julia
+        @named sys = MyModel()
+        inputs = [sys.input_var]
+        mtkcompile(sys; inputs)
+        ```
+
+        Here, `mtkcompile` expects the input to be named `input_var`, but since `sys`
+        performs namespacing, it will be named `sys$(NAMESPACE_SEPARATOR)input_var`. To \
+        fix this issue, namespacing can be temporarily disabled:
+
+        ```julia
+        @named sys = MyModel()
+        sys_nns = toggle_namespacing(sys, false)
+        inputs = [sys_nns.input_var]
+        mtkcompile(sys; inputs)
+        ```
+        """)
+    end
+end
+
 """
 Modify the variable metadata of system variables to indicate which ones are inputs, outputs, and disturbances. Needed for `inputs`, `outputs`, `disturbances`, `unbound_inputs`, `unbound_outputs` to return the proper subsets.
 """
@@ -604,19 +649,16 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
     if check
         ikeys = keys(filter(!last, inputset))
         if !isempty(ikeys)
-            error(
-                "Some specified inputs were not found in system. The following variables were not found ",
-                ikeys)
+            throw(IONotFoundError("inputs", nameof(state.sys), ikeys))
         end
         dkeys = keys(filter(!last, disturbanceset))
         if !isempty(dkeys)
-            error(
-                "Specified disturbance inputs were not found in system. The following variables were not found ",
-                ikeys)
+            throw(IONotFoundError("disturbance inputs", nameof(state.sys), ikeys))
         end
-        (all(values(outputset)) || error(
-            "Some specified outputs were not found in system. The following Dict indicates the found variables ",
-            outputset))
+        okeys = keys(filter(!last, outputset))
+        if !isempty(okeys)
+            throw(IONotFoundError("outputs", nameof(state.sys), okeys))
+        end
     end
     state, orig_inputs
 end
@@ -750,7 +792,8 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...)
-    lin_fun, ssys = linearization_function(sys,
+    lin_fun,
+    ssys = linearization_function(sys,
         inputs,
         outputs;
         zero_dummy_der,

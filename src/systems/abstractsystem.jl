@@ -646,12 +646,24 @@ function complete(
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)
         end
+        if has_continuous_events(sys) && is_time_dependent(sys)
+            @set! sys.continuous_events = complete.(
+                get_continuous_events(sys); iv = get_iv(sys),
+                alg_eqs = [alg_equations(sys); observed(sys)])
+        end
+        if has_discrete_events(sys) && is_time_dependent(sys)
+            @set! sys.discrete_events = complete.(
+                get_discrete_events(sys); iv = get_iv(sys),
+                alg_eqs = [alg_equations(sys); observed(sys)])
+        end
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
         # Ideally we'd do `get_ps` but if `flatten = false`
         # we don't get all of them. So we call `parameters`.
         all_ps = parameters(sys; initial_parameters = true)
+        # inputs have to be maintained in a specific order
+        input_vars = inputs(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
             ps_split = reorder_parameters(sys, all_ps)
@@ -670,6 +682,12 @@ function complete(
             end
             ordered_ps = vcat(
                 ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
+            if isscheduled(sys)
+                # ensure inputs are sorted
+                input_idxs = findfirst.(isequal.(input_vars), (ordered_ps,))
+                @assert all(!isnothing, input_idxs)
+                @assert issorted(input_idxs)
+            end
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
@@ -1552,7 +1570,8 @@ function full_equations(sys::AbstractSystem; simplify = false)
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~
+                   substitute_and_simplify(
                 eq.rhs, subs,
                 simplify)
         else
@@ -2275,7 +2294,8 @@ function component_post_processing(expr, isconnector)
                 if $isconnector
                     $Setfield.@set!(res.connector_type=$connector_type(res))
                 end
-                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
+                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(
+                    @__MODULE__, name)))
             else
                 res
             end
@@ -2736,8 +2756,8 @@ function process_parameter_equations(sys::AbstractSystem)
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                    is_sized_array_symbolic(sym) &&
-                    all(Base.Fix1(is_parameter, sys), collect(sym))
+                is_sized_array_symbolic(sym) &&
+                all(Base.Fix1(is_parameter, sys), collect(sym))
         end
             # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
             # check.

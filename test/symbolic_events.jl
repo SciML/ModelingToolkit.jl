@@ -311,10 +311,13 @@ end
 
     cev = only(continuous_events(ball))
     @test isequal(only(equations(cev)), x ~ 0)
-    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
+    @test isequal(only(cev.affect.affect), v ~ -Pre(v))
     ball = mtkcompile(ball)
 
     @test length(ModelingToolkit.continuous_events(ball)) == 1
+    cev = only(continuous_events(ball))
+    @test isequal(only(equations(cev)), x ~ 0)
+    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
 
     tspan = (0.0, 5.0)
     prob = ODEProblem(ball, Pair[], tspan)
@@ -433,7 +436,8 @@ end
         compose(System(Equation[], t; name),
             spring, damper)
     end
-    connect_sd(sd, m1, m2) = [
+    connect_sd(
+        sd, m1, m2) = [
         sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
     sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
     @named mass1 = Mass(; m = 1)
@@ -861,8 +865,7 @@ end
         end
         @discrete_events begin
             [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
-            [60] => [
-                binary_valve_1.S ~ 1.0, binary_valve_2.S ~ 0.0, binary_valve_2.Δp ~ 1.0]
+            [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.Δp ~ 1.0]
             [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
         end
     end
@@ -873,6 +876,11 @@ end
     # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
     sol = solve(prob)
+    # This is singular at the second event, but the derivatives are zero so it's
+    # constant after that point anyway. Just make sure it hits the last event and
+    # had the correct `u`.
+    @test_broken SciMLBase.successful_retcode(sol)
+    @test sol.t[end] >= 120.0
     @test sol[end] == [0.0, 0.0, 0.0]
 end
 
@@ -1085,8 +1093,10 @@ end
         [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
     inited = false
     finaled = false
-    a = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (inited = true; return (;)))
-    b = ModelingToolkit.ImperativeAffect(f = (m, o, ctx, int) -> (finaled = true; return (;)))
+    a = ModelingToolkit.ImperativeAffect(f = (
+        m, o, ctx, int) -> (inited = true; return (;)))
+    b = ModelingToolkit.ImperativeAffect(f = (
+        m, o, ctx, int) -> (finaled = true; return (;)))
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0.1], nothing, initialize = a, finalize = b)
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
@@ -1374,4 +1384,29 @@ end
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
     @test sol[x, end]≈1.0 atol=1e-6
+end
+
+@testset "Symbolic affects are compiled in `complete`" begin
+    @parameters g
+    @variables x(t) [state_priority = 10.0] y(t) [guess = 1.0]
+    @variables λ(t) [guess = 1.0]
+    eqs = [D(D(x)) ~ λ * x
+           D(D(y)) ~ λ * y - g
+           x^2 + y^2 ~ 1]
+    cevts = [[x ~ 0.0] => [D(x) ~ Pre(D(x)) + 1sign(Pre(D(x)))]]
+    @named pend = System(eqs, t; continuous_events = cevts)
+
+    scc = only(continuous_events(pend))
+    @test scc.affect isa ModelingToolkit.SymbolicAffect
+
+    pend = mtkcompile(pend)
+
+    scc = only(continuous_events(pend))
+    @test scc.affect isa ModelingToolkit.AffectSystem
+    @test length(ModelingToolkit.all_equations(scc.affect)) == 5 # 1 affect, 3 algebraic, 1 observed
+
+    u0 = [x => -1/2, D(x) => 1/2, g => 1]
+    prob = ODEProblem(pend, u0, (0.0, 5.0))
+    sol = solve(prob, FBDF())
+    @test SciMLBase.successful_retcode(sol)
 end

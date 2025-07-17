@@ -138,6 +138,9 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
+# Solely so that `ODESystem` can be deprecated and still act as a valid type.
+# See `deprecations.jl`.
+abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
 function independent_variable end
 
@@ -239,43 +242,8 @@ const D_nounits = Differential(t_nounits)
 const D_unitful = Differential(t_unitful)
 const D = Differential(t)
 
-PrecompileTools.@compile_workload begin
-    using ModelingToolkit
-    @variables x(ModelingToolkit.t_nounits)
-    @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
-    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), jac = true)
-    @mtkmodel __testmod__ begin
-        @constants begin
-            c = 1.0
-        end
-        @structural_parameters begin
-            structp = false
-        end
-        if structp
-            @variables begin
-                x(t) = 0.0, [description = "foo", guess = 1.0]
-            end
-        else
-            @variables begin
-                x(t) = 0.0, [description = "foo w/o structp", guess = 1.0]
-            end
-        end
-        @parameters begin
-            a = 1.0, [description = "bar"]
-            if structp
-                b = 2 * a, [description = "if"]
-            else
-                c
-            end
-        end
-        @equations begin
-            x ~ a + b
-        end
-    end
-end
-
 export ODEFunction, convert_system_indepvar,
-       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem
+       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
 export SDEFunction
 export SystemStructure
 export DiscreteProblem, DiscreteFunction
@@ -374,6 +342,41 @@ for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
     hasfn = Symbol(:has_, prop)
     @eval @public $getter, $hasfn
+end
+
+PrecompileTools.@compile_workload begin
+    using ModelingToolkit
+    @variables x(ModelingToolkit.t_nounits)
+    @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
+    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), jac = true)
+    @mtkmodel __testmod__ begin
+        @constants begin
+            c = 1.0
+        end
+        @structural_parameters begin
+            structp = false
+        end
+        if structp
+            @variables begin
+                x(t) = 0.0, [description = "foo", guess = 1.0]
+            end
+        else
+            @variables begin
+                x(t) = 0.0, [description = "foo w/o structp", guess = 1.0]
+            end
+        end
+        @parameters begin
+            a = 1.0, [description = "bar"]
+            if structp
+                b = 2 * a, [description = "if"]
+            else
+                c
+            end
+        end
+        @equations begin
+            x ~ a + b
+        end
+    end
 end
 
 end # module

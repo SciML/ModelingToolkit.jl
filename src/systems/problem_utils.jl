@@ -711,7 +711,8 @@ end
     $(TYPEDEF)
 
 A callable struct which applies `p_constructor` to possibly nested arrays. It also
-ensures that views (including nested ones) are concretized.
+ensures that views (including nested ones) are concretized. This is implemented manually
+of using `narrow_buffer_type` to preserve type-stability.
 """
 struct PConstructorApplicator{F}
     p_constructor::F
@@ -721,8 +722,16 @@ function (pca::PConstructorApplicator)(x::AbstractArray)
     pca.p_constructor(x)
 end
 
+function (pca::PConstructorApplicator)(x::AbstractArray{Bool})
+    pca.p_constructor(BitArray(x))
+end
+
 function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray)
     collect(x)
+end
+
+function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{Bool})
+    BitArray(x)
 end
 
 function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{<:AbstractArray})
@@ -749,6 +758,7 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 """
 function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
         initials = false, unwrap_initials = false, p_constructor = identity)
+    _p_constructor = p_constructor
     p_constructor = PConstructorApplicator(p_constructor)
     # if we call `getu` on this (and it were able to handle empty tuples) we get the
     # fields of `MTKParameters` except caches.
@@ -802,14 +812,24 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         Base.Fix1(broadcast, p_constructor) ∘
         getu(srcsys, syms[3])
     end
-    rest_getters = map(Base.tail(Base.tail(Base.tail(syms)))) do buf
-        if buf == ()
-            return Returns(())
-        else
-            return Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, buf)
-        end
+    const_getter = if syms[4] == ()
+        Returns(())
+    else
+        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, syms[4])
     end
-    getters = (tunable_getter, initials_getter, discs_getter, rest_getters...)
+    nonnumeric_getter = if syms[5] == ()
+        Returns(())
+    else
+        ic = get_index_cache(dstsys)
+        buftypes = Tuple(map(ic.nonnumeric_buffer_sizes) do bufsize
+            Vector{bufsize.type}
+        end)
+        # nonnumerics retain the assigned buffer type without narrowing
+        Base.Fix1(broadcast, _p_constructor) ∘
+        Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ getu(srcsys, syms[5])
+    end
+    getters = (
+        tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter)
     getter = let getters = getters
         function _getter(valp, initprob)
             oldcache = parameter_values(initprob).caches
@@ -820,6 +840,10 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     end
 
     return getter
+end
+
+function call(f, args...)
+    f(args...)
 end
 
 """
@@ -1183,8 +1207,8 @@ function maybe_build_initialization_problem(
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
-            initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
+        initializeprob, update_initializeprob!, initializeprobmap,
+        initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
 """
@@ -1335,7 +1359,8 @@ function process_SciMLProblem(
 
     u0map = anydict()
     pmap = anydict()
-    missing_unknowns, missing_pars = build_operating_point!(sys, op,
+    missing_unknowns,
+    missing_pars = build_operating_point!(sys, op,
         u0map, pmap, defs, dvs, ps)
 
     floatT = calculate_float_type(op, u0Type)
@@ -1440,7 +1465,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,
             (;
                 resid_prototype = u0_constructor(calculate_resid_prototype(
-                    length(eqs), u0, p))))
+                length(eqs), u0, p))))
     end
 
     f = constructor(sys; u0 = u0, p = p,
@@ -1539,7 +1564,8 @@ function SymbolicTstops(
         end
     end
     rps = reorder_parameters(sys)
-    tstops, _ = build_function_wrapper(sys, tstops,
+    tstops,
+    _ = build_function_wrapper(sys, tstops,
         rps...,
         t0,
         t1;

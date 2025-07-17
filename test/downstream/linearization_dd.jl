@@ -31,9 +31,10 @@ lin_inputs = [force.f.u]
 # => nothing to remove extra defaults
 op = Dict(cart.s => 10, cart.v => 0, link1.A => -pi / 2, link1.dA => 0, force.f.u => 0,
     link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => nothing)
+guesses = [link1.fx1 => 0]
 @info "named_ss"
 G = named_ss(model, lin_inputs, lin_outputs; allow_symbolic = true, op,
-    allow_input_derivatives = true, zero_dummy_der = true)
+    allow_input_derivatives = true, zero_dummy_der = true, guesses)
 G = sminreal(G)
 @info "minreal"
 G = minreal(G)
@@ -43,9 +44,11 @@ ps = poles(G)
 @test minimum(abs, ps) < 1e-6
 @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
 
-lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
-    allow_input_derivatives = true, zero_dummy_der = true)
-lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
+lsys,
+syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
+    allow_input_derivatives = true, zero_dummy_der = true, guesses = guesses)
+lsyss,
+sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
     allow_input_derivatives = true)
 
 dummyder = setdiff(unknowns(sysss), unknowns(model))

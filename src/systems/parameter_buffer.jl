@@ -316,9 +316,9 @@ function SciMLStructures.replace!(::SciMLStructures.Initials, p::MTKParameters, 
 end
 
 for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
-                                  (SciMLStructures.Constants, :constant, 1)
-                                  (Nonnumeric, :nonnumeric, 1)
-                                  (SciMLStructures.Caches, :caches, 1)]
+     (SciMLStructures.Constants, :constant, 1)
+     (Nonnumeric, :nonnumeric, 1)
+     (SciMLStructures.Caches, :caches, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let p = p
@@ -620,14 +620,20 @@ end
         initials = $similar(oldbuf.initials, $initialsT)
         copyto!(initials, oldbuf.initials)
         discretes = $(Expr(:tuple,
-            (:($similar(oldbuf.discrete[$i], $(discretesT[i]))) for i in 1:length(discretesT))...))
-        $((:($copyto!(discretes[$i], oldbuf.discrete[$i])) for i in 1:length(discretesT))...)
+            (:($similar(oldbuf.discrete[$i], $(discretesT[i])))
+            for i in 1:length(discretesT))...))
+        $((:($copyto!(discretes[$i], oldbuf.discrete[$i]))
+        for i in 1:length(discretesT))...)
         constants = $(Expr(:tuple,
-            (:($similar(oldbuf.constant[$i], $(constantsT[i]))) for i in 1:length(constantsT))...))
-        $((:($copyto!(constants[$i], oldbuf.constant[$i])) for i in 1:length(constantsT))...)
+            (:($similar(oldbuf.constant[$i], $(constantsT[i])))
+            for i in 1:length(constantsT))...))
+        $((:($copyto!(constants[$i], oldbuf.constant[$i]))
+        for i in 1:length(constantsT))...)
         nonnumerics = $(Expr(:tuple,
-            (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i]))) for i in 1:length(nonnumericT))...))
-        $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i])) for i in 1:length(nonnumericT))...)
+            (:($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i])))
+            for i in 1:length(nonnumericT))...))
+        $((:($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i]))
+        for i in 1:length(nonnumericT))...)
         caches = copy.(oldbuf.caches)
         newbuf = MTKParameters(
             tunables, initials, discretes, constants, nonnumerics, caches)
@@ -646,13 +652,16 @@ end
         push!(expr.args, :(initials = $similar_type($I, $initialsT)(initials)))
         push!(expr.args,
             :(discretes = $(Expr(:tuple,
-                (:($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i])) for i in 1:length(discretesT))...))))
+                (:($similar_type($(fieldtype(D, i)), $(discretesT[i]))(discretes[$i]))
+                for i in 1:length(discretesT))...))))
         push!(expr.args,
             :(constants = $(Expr(:tuple,
-                (:($similar_type($(fieldtype(C, i)), $(constantsT[i]))(constants[$i])) for i in 1:length(constantsT))...))))
+                (:($similar_type($(fieldtype(C, i)), $(constantsT[i]))(constants[$i]))
+                for i in 1:length(constantsT))...))))
         push!(expr.args,
             :(nonnumerics = $(Expr(:tuple,
-                (:($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i])) for i in 1:length(nonnumericT))...))))
+                (:($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i]))
+                for i in 1:length(nonnumericT))...))))
         push!(expr.args,
             :(newbuf = MTKParameters(
                 tunables, initials, discretes, constants, nonnumerics, caches)))

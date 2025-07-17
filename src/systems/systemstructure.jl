@@ -19,7 +19,8 @@ using SparseArrays
 
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
-        similarterm = (x, f, args; kws...) -> maketerm(typeof(x), f, args,
+        similarterm = (x, f, args;
+            kws...) -> maketerm(typeof(x), f, args,
             SymbolicUtils.metadata(x),
             kws...))(expr)
 end
@@ -271,8 +272,8 @@ end
 function symbolic_contains(var, set)
     var in set ||
         symbolic_type(var) == ArraySymbolic() &&
-            Symbolics.shape(var) != Symbolics.Unknown() &&
-            all(x -> x in set, Symbolics.scalarize(var))
+        Symbolics.shape(var) != Symbolics.Unknown() &&
+        all(x -> x in set, Symbolics.scalarize(var))
 end
 
 function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
@@ -372,7 +373,8 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             isdelay(v, iv) && continue
 
             if !symbolic_contains(v, dvs)
-                isvalid = iscall(v) && (operation(v) isa Shift || is_transparent_operator(operation(v)))
+                isvalid = iscall(v) &&
+                          (operation(v) isa Shift || is_transparent_operator(operation(v)))
                 v′ = v
                 while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
                     v′ = arguments(v′)[1]
@@ -516,6 +518,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     # build incidence graph
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
+
         jv = var2idx[v]
         add_edge!(graph, ie, jv)
     end

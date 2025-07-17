@@ -185,7 +185,11 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
 @testset "Caching of subexpressions of different types" begin
     liquid_pressure(rho, rho_0, bulk) = (rho / rho_0 - 1) * bulk
     gas_pressure(rho, rho_0, p_gas, rho_gas) = rho * ((0 - p_gas) / (rho_0 - rho_gas))
-    full_pressure(rho, rho_0, bulk, p_gas, rho_gas) = ifelse(
+    full_pressure(rho,
+        rho_0,
+        bulk,
+        p_gas,
+        rho_gas) = ifelse(
         rho >= rho_0, liquid_pressure(rho, rho_0, bulk),
         gas_pressure(rho, rho_0, p_gas, rho_gas))
 

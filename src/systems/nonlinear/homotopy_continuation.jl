@@ -543,7 +543,8 @@ function HomotopyContinuationProblem{iip, spec}(
     if !iscomplete(sys)
         error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationProblem`")
     end
-    f, u0, p = process_SciMLProblem(
+    f, u0,
+    p = process_SciMLProblem(
         HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...)
 
     kwargs = filter_kwargs(kwargs)

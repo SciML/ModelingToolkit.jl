@@ -4,7 +4,7 @@ using CommonSolve: solve
 # r is an input, and y is an output.
 @independent_variables t
 @variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
-@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input=true]
 @parameters kp = 1
 D = Differential(t)
 
@@ -116,7 +116,8 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
+lsys0,
+ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
     op = Dict(reference.u => 0.0, measurement.u => 0.0))
 @unpack int, der = pid
 desired_order = [int.x, der.x]
@@ -127,7 +128,8 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 @test lsys.C == [400 -4000]
 @test lsys.D == [4400 -4400]
 
-lsyss0, ssys2 = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
+lsyss0,
+ssys2 = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
     [ctr_output.u])
 lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
 
@@ -149,12 +151,12 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-@test_throws "Some specified inputs were not found" linearize(pid,
+@test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(pid,
     [
         pid.reference.u,
         pid.measurement.u
     ], [ctr_output.u])
-@test_throws "Some specified outputs were not found" linearize(pid,
+@test_throws ["outputs provided to `mtkcompile`", "not found"] linearize(pid,
     [
         reference.u,
         measurement.u

@@ -24,7 +24,7 @@ structure.
 
 $(TYPEDFIELDS)
 """
-struct System <: AbstractSystem
+struct System <: IntermediateDeprecationSystem
     """
     $INTERNAL_FIELD_WARNING
     A unique integer tag for the system.
@@ -387,8 +387,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
     if length(unique_sysnames) != length(sysnames)
         throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
     end
-    continuous_events, discrete_events = create_symbolic_events(
-        continuous_events, discrete_events, eqs, iv)
+    continuous_events,
+    discrete_events = create_symbolic_events(
+        continuous_events, discrete_events)
 
     if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))
         throw(EventsInTimeIndependentSystemError(continuous_events, discrete_events))
@@ -1044,7 +1045,7 @@ end
 
 function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
     print(io, """
-    Noise equations are ill-formed. The number of rows much must number of drift \
+    Noise equations are ill-formed. The number of rows must match the number of drift \
     equations. `size(neqs, 1) == $(err.noise_eqs_rows) != length(eqs) == \
     $(err.eqs_length)`.
     """)
@@ -1081,16 +1082,17 @@ struct EventsInTimeIndependentSystemError <: Exception
 end
 
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
-    println(io, """
-    Events are not supported in time-independent systems. Provide an independent variable to \
-    make the system time-dependent or remove the events.
+    println(
+        io, """
+Events are not supported in time-independent systems. Provide an independent variable to \
+make the system time-dependent or remove the events.
 
-    The following continuous events were provided:
-    $(err.cevents)
+The following continuous events were provided:
+$(err.cevents)
 
-    The following discrete events were provided:
-    $(err.devents)
-    """)
+The following discrete events were provided:
+$(err.devents)
+""")
 end
 
 function supports_initialization(sys::System)

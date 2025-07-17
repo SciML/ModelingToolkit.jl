@@ -97,8 +97,8 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    tunable_buffers = Dict{Any, Set{BasicSymbolic}}()
-    initial_param_buffers = Dict{Any, Set{BasicSymbolic}}()
+    tunable_pars = BasicSymbolic[]
+    initial_pars = BasicSymbolic[]
     constant_buffers = Dict{Any, Set{BasicSymbolic}}()
     nonnumeric_buffers = Dict{Any, Set{SymbolicParam}}()
 
@@ -106,6 +106,10 @@ function IndexCache(sys::AbstractSystem)
         sym = unwrap(sym)
         buf = get!(buffers, ctype, S())
         push!(buf, sym)
+    end
+    function insert_by_type!(buffers::Vector{BasicSymbolic}, sym, ctype)
+        sym = unwrap(sym)
+        push!(buffers, sym)
     end
 
     disc_param_callbacks = Dict{SymbolicParam, Set{Int}}()
@@ -210,9 +214,9 @@ function IndexCache(sys::AbstractSystem)
                     ctype <: AbstractArray{Real} ||
                     ctype <: AbstractArray{<:AbstractFloat})
                     if iscall(p) && operation(p) isa Initial
-                        initial_param_buffers
+                        initial_pars
                     else
-                        tunable_buffers
+                        tunable_pars
                     end
                 else
                     constant_buffers
@@ -246,54 +250,50 @@ function IndexCache(sys::AbstractSystem)
         return idxs, buffer_sizes
     end
 
-    const_idxs, const_buffer_sizes = get_buffer_sizes_and_idxs(
+    const_idxs,
+    const_buffer_sizes = get_buffer_sizes_and_idxs(
         ParamIndexMap, constant_buffers)
-    nonnumeric_idxs, nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
+    nonnumeric_idxs,
+    nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
         NonnumericMap, nonnumeric_buffers)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
-    bufferlist = is_initializesystem(sys) ? (tunable_buffers, initial_param_buffers) :
-                 (tunable_buffers,)
-    for buffers in bufferlist
-        for (i, (_, buf)) in enumerate(buffers)
-            for (j, p) in enumerate(buf)
-                idx = if size(p) == ()
-                    tunable_buffer_size + 1
-                else
-                    reshape(
-                        (tunable_buffer_size + 1):(tunable_buffer_size + length(p)), size(p))
-                end
-                tunable_buffer_size += length(p)
-                tunable_idxs[p] = idx
-                tunable_idxs[default_toterm(p)] = idx
-                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
-                    symbol_to_variable[getname(p)] = p
-                    symbol_to_variable[getname(default_toterm(p))] = p
-                end
-            end
+    if is_initializesystem(sys)
+        append!(tunable_pars, initial_pars)
+        empty!(initial_pars)
+    end
+    for p in tunable_pars
+        idx = if size(p) == ()
+            tunable_buffer_size + 1
+        else
+            reshape(
+                (tunable_buffer_size + 1):(tunable_buffer_size + length(p)), size(p))
+        end
+        tunable_buffer_size += length(p)
+        tunable_idxs[p] = idx
+        tunable_idxs[default_toterm(p)] = idx
+        if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+            symbol_to_variable[getname(p)] = p
+            symbol_to_variable[getname(default_toterm(p))] = p
         end
     end
 
     initials_idxs = TunableIndexMap()
     initials_buffer_size = 0
-    if !is_initializesystem(sys)
-        for (i, (_, buf)) in enumerate(initial_param_buffers)
-            for (j, p) in enumerate(buf)
-                idx = if size(p) == ()
-                    initials_buffer_size + 1
-                else
-                    reshape(
-                        (initials_buffer_size + 1):(initials_buffer_size + length(p)), size(p))
-                end
-                initials_buffer_size += length(p)
-                initials_idxs[p] = idx
-                initials_idxs[default_toterm(p)] = idx
-                if hasname(p) && (!iscall(p) || operation(p) !== getindex)
-                    symbol_to_variable[getname(p)] = p
-                    symbol_to_variable[getname(default_toterm(p))] = p
-                end
-            end
+    for p in initial_pars
+        idx = if size(p) == ()
+            initials_buffer_size + 1
+        else
+            reshape(
+                (initials_buffer_size + 1):(initials_buffer_size + length(p)), size(p))
+        end
+        initials_buffer_size += length(p)
+        initials_idxs[p] = idx
+        initials_idxs[default_toterm(p)] = idx
+        if hasname(p) && (!iscall(p) || operation(p) !== getindex)
+            symbol_to_variable[getname(p)] = p
+            symbol_to_variable[getname(default_toterm(p))] = p
         end
     end
 
