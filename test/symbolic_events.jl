@@ -1410,3 +1410,21 @@ end
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Nested NamedTuple ImperativeAffect" begin
+    @variables x(t) y(t) z(t) w(t)
+    obs = (; a = (; b = (x, y)))
+    mod = (; p = (; q = y, r = z))
+    affect = ModelingToolkit.ImperativeAffect(mod, obs) do mod, obs, ctx, integ
+        @test integ[x] ≈ obs.a.b[1]
+        @test integ[y] ≈ obs.a.b[2]
+        @test integ[y] ≈ mod.p.q
+        @test integ[z] ≈ mod.p.r
+        return (; p = (; q = obs.a.b[1]))
+    end
+    event = 1.0 => affect
+    @mtkcompile sys = System([D(x) ~ x, D(y) ~ y, D(z) ~ z], t; discrete_events = [event])
+    prob = ODEProblem(sys, [x => 1.0, y => 2.0, z => 3.0], (0.0, 5.0))
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+end
