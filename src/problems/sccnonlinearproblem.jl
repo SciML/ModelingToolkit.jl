@@ -258,6 +258,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         p = rebuild_with_caches(p, templates...)
     end
 
+    # yes, `get_p_constructor` since this is only used for `LinearProblem` and
+    # will retain the shape of `A`
+    u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
     subprobs = []
     for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
@@ -271,7 +274,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
             A,
             b = get_A_b_from_LinearFunction(
                 sys, f, p; eval_expression, eval_module, u0_constructor, u0_eltype)
-            prob = LinearProblem(A, b, p; f = symbolic_interface, u0 = _u0)
+            prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
             isempty(symbolic_idxs) || throw(MissingGuessError(dvs[vscc], _u0))
             _u0 = u0_eltype.(_u0)

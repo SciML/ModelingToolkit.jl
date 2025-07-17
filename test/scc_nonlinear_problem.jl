@@ -36,7 +36,12 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
     sccprob = SCCNonlinearProblem{false}(model, SA[(collect(u[1:5]) .=> zeros(5))...])
     for prob in sccprob.probs
-        @test prob.u0 isa SVector
+        if prob isa LinearProblem
+            @test prob.A isa SMatrix
+            @test prob.b isa SVector
+        else
+            @test prob.u0 isa SVector
+        end
         @test !SciMLBase.isinplace(prob)
     end
 
