@@ -234,19 +234,6 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         push!(nlfuns, f)
     end
 
-    if !isempty(cachetypes)
-        templates = map(cachetypes, cachesizes) do T, n
-            # Real refers to `eltype(u0)`
-            if T == Real
-                T = eltype(u0)
-            elseif T <: Array && eltype(T) == Real
-                T = Array{eltype(u0), ndims(T)}
-            end
-            BufferTemplate(T, n)
-        end
-        p = rebuild_with_caches(p, templates...)
-    end
-
     u0_eltype = Union{}
     for x in u0
         symbolic_type(x) == NotSymbolic() || continue
@@ -257,6 +244,20 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         u0_eltype = Float64
     end
     u0_eltype = float(u0_eltype)
+
+    if !isempty(cachetypes)
+        templates = map(cachetypes, cachesizes) do T, n
+            # Real refers to `eltype(u0)`
+            if T == Real
+                T = u0_eltype
+            elseif T <: Array && eltype(T) == Real
+                T = Array{u0_eltype, ndims(T)}
+            end
+            BufferTemplate(T, n)
+        end
+        p = rebuild_with_caches(p, templates...)
+    end
+
     subprobs = []
     for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
