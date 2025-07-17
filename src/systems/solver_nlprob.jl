@@ -1,0 +1,56 @@
+function generate_ode_nlprobdata(sys::System, u0, p, mm = calculate_massmatrix(sys))
+    nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm)
+    state = ProblemState(; u = u0, p)
+    op = Dict()
+    op[ODE_GAMMA] = one(eltype(u0))
+    op[ODE_C] = zero(eltype(u0))
+    op[outer_tmp] = zeros(eltype(u0), size(outer_tmp))
+    op[inner_tmp] = zeros(eltype(u0), size(inner_tmp))
+    for v in [unknowns(nlsys); parameters(nlsys)]
+        haskey(op, v) && continue
+        op[v] = getsym(sys, v)(state)
+    end
+    nlprob = NonlinearProblem(nlsys, op; build_initializeprob = false)
+    set_gamma_c = setsym(nlsys, (ODE_GAMMA, ODE_C))
+    set_outer_tmp = setsym(nlsys, outer_tmp)
+    set_inner_tmp = setsym(nlsys, inner_tmp)
+    nlprobmap = getsym(nlsys, unknowns(sys))
+
+    return SciMLBase.ODE_NLProbData(nlprob, nothing, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
+end
+
+const ODE_GAMMA = only(@parameters γₘₜₖ)
+const ODE_C = only(@parameters cₘₜₖ)
+
+function get_outer_tmp(n::Int)
+    only(@parameters outer_tmpₘₜₖ[1:n])
+end
+
+function get_inner_tmp(n::Int)
+    only(@parameters inner_tmpₘₜₖ[1:n])
+end
+
+function inner_nlsystem(sys::System, mm)
+    dvs = unknowns(sys)
+    eqs = full_equations(sys)
+    t = get_iv(sys)
+    N = length(dvs)
+    @assert length(eqs) == N
+    @assert mm == I || size(mm) == (N, N)
+    rhss = [eq.rhs for eq in eqs]
+    gamma = ODE_GAMMA
+    c = ODE_C
+    outer_tmp = get_outer_tmp(N)
+    inner_tmp = get_inner_tmp(N)
+
+    subrules = Dict([v => v + inner_tmp[i] for (i, v) in enumerate(dvs)])
+    subrules[t] = t + c
+    new_rhss = map(Base.Fix2(fast_substitute, subrules), rhss)
+    new_rhss = mm * dvs - gamma .* new_rhss .+ collect(outer_tmp)
+    new_eqs = [0 ~ rhs for rhs in new_rhss]
+
+    new_dvs = unknowns(sys)
+    new_ps = [parameters(sys); [gamma, c, inner_tmp, outer_tmp]]
+    nlsys = mtkcompile(System(new_eqs, new_dvs, new_ps; name = :nlsys); split = is_split(sys))
+    return nlsys, outer_tmp, inner_tmp
+end
