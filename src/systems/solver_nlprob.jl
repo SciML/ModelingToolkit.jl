@@ -48,7 +48,7 @@ function inner_nlsystem(sys::System, mm)
     inner_tmp = get_inner_tmp(N)
 
     subrules = Dict([v => gamma2*v + inner_tmp[i] for (i, v) in enumerate(dvs)])
-    subrules[t] = t + c
+    subrules[t] = c
     new_rhss = map(Base.Fix2(fast_substitute, subrules), rhss)
     new_rhss = collect(outer_tmp) .+ gamma1 .* new_rhss .- gamma3 * mm * dvs
     new_eqs = [0 ~ rhs for rhs in new_rhss]
