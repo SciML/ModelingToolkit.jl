@@ -1,4 +1,4 @@
-function generate_ode_nlprobdata(sys::System, u0, p, mm = calculate_massmatrix(sys))
+function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys))
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm)
     state = ProblemState(; u = u0, p)
     op = Dict()
@@ -16,7 +16,7 @@ function generate_ode_nlprobdata(sys::System, u0, p, mm = calculate_massmatrix(s
     set_inner_tmp = setsym(nlsys, inner_tmp)
     nlprobmap = getsym(nlsys, unknowns(sys))
 
-    return SciMLBase.ODE_NLProbData(nlprob, nothing, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
+    return SciMLBase.ODENLStepData(nlprob, nothing, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
 end
 
 const ODE_GAMMA = only(@parameters γₘₜₖ)
