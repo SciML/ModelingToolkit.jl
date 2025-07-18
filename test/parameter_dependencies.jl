@@ -389,3 +389,12 @@ end
         [x(k - 1) ~ x(k) + y(k) + p2, p2 ~ 2p1], t)
     @test is_parameter(sys, p1)
 end
+
+@testset "Scalarized array as RHS of parameter dependency" begin
+    @parameters p[1:2] p1 p2
+    @variables x(t)
+    @named sys = System([D(x) ~ x, p1 ~ p[1], p2 ~ p[2]], t)
+    @test any(isequal(p), ModelingToolkit.get_ps(sys))
+    sys = mtkcompile(sys)
+    @test length(ModelingToolkit.parameter_dependencies(sys)) == 2
+end
