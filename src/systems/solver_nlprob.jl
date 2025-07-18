@@ -2,7 +2,9 @@ function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sy
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm)
     state = ProblemState(; u = u0, p)
     op = Dict()
-    op[ODE_GAMMA] = one(eltype(u0))
+    op[ODE_GAMMA[1]] = one(eltype(u0))
+    op[ODE_GAMMA[2]] = one(eltype(u0))
+    op[ODE_GAMMA[3]] = one(eltype(u0))
     op[ODE_C] = zero(eltype(u0))
     op[outer_tmp] = zeros(eltype(u0), size(outer_tmp))
     op[inner_tmp] = zeros(eltype(u0), size(inner_tmp))
@@ -11,15 +13,17 @@ function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sy
         op[v] = getsym(sys, v)(state)
     end
     nlprob = NonlinearProblem(nlsys, op; build_initializeprob = false)
+
+    subsetidxs = [findfirst(isequal(y),unknowns(sys)) for y in unknowns(nlsys)]
     set_gamma_c = setsym(nlsys, (ODE_GAMMA..., ODE_C))
     set_outer_tmp = setsym(nlsys, outer_tmp)
     set_inner_tmp = setsym(nlsys, inner_tmp)
     nlprobmap = getsym(nlsys, unknowns(sys))
 
-    return SciMLBase.ODENLStepData(nlprob, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
+    return SciMLBase.ODENLStepData(nlprob, subsetidxs, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
 end
 
-const ODE_GAMMA = @parameters γ₁ₘₜₖ, γ₂ₘₜₖ
+const ODE_GAMMA = @parameters γ₁ₘₜₖ, γ₂ₘₜₖ, γ₃ₘₜₖ 
 const ODE_C = only(@parameters cₘₜₖ)
 
 function get_outer_tmp(n::Int)
@@ -38,7 +42,7 @@ function inner_nlsystem(sys::System, mm)
     @assert length(eqs) == N
     @assert mm == I || size(mm) == (N, N)
     rhss = [eq.rhs for eq in eqs]
-    gamma1, gamma2 = ODE_GAMMA
+    gamma1, gamma2, gamma3 = ODE_GAMMA
     c = ODE_C
     outer_tmp = get_outer_tmp(N)
     inner_tmp = get_inner_tmp(N)
@@ -46,11 +50,11 @@ function inner_nlsystem(sys::System, mm)
     subrules = Dict([v => gamma2*v + inner_tmp[i] for (i, v) in enumerate(dvs)])
     subrules[t] = t + c
     new_rhss = map(Base.Fix2(fast_substitute, subrules), rhss)
-    new_rhss = mm * dvs - gamma1 .* new_rhss .+ collect(outer_tmp)
+    new_rhss = collect(outer_tmp) .+ gamma1 .* new_rhss .- gamma3 * mm * dvs
     new_eqs = [0 ~ rhs for rhs in new_rhss]
 
     new_dvs = unknowns(sys)
-    new_ps = [parameters(sys); [gamma1, gamma2, c, inner_tmp, outer_tmp]]
+    new_ps = [parameters(sys); [gamma1, gamma2, gamma3, c, inner_tmp, outer_tmp]]
     nlsys = mtkcompile(System(new_eqs, new_dvs, new_ps; name = :nlsys); split = is_split(sys))
     return nlsys, outer_tmp, inner_tmp
 end
