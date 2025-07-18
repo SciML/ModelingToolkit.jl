@@ -18,7 +18,7 @@ function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sy
     set_gamma_c = setsym(nlsys, (ODE_GAMMA..., ODE_C))
     set_outer_tmp = setsym(nlsys, outer_tmp)
     set_inner_tmp = setsym(nlsys, inner_tmp)
-    nlprobmap = getsym(nlsys, unknowns(sys))
+    nlprobmap = generate_nlprobmap(sys, nlsys)
 
     return SciMLBase.ODENLStepData(nlprob, subsetidxs, set_gamma_c, set_outer_tmp, set_inner_tmp, nlprobmap)
 end
@@ -57,4 +57,20 @@ function inner_nlsystem(sys::System, mm)
     new_ps = [parameters(sys); [gamma1, gamma2, gamma3, c, inner_tmp, outer_tmp]]
     nlsys = mtkcompile(System(new_eqs, new_dvs, new_ps; name = :nlsys); split = is_split(sys))
     return nlsys, outer_tmp, inner_tmp
+end
+
+struct NLStep_probmap{F}
+    f::F
+end
+
+function (nlp::NLStep_probmap)(buffer, nlsol)
+    nlp.f(buffer, state_values(nlsol), parameter_values(nlsol))
+end
+
+function (nlp::NLStep_probmap)(nlsol)
+    nlp.f(state_values(nlsol), parameter_values(nlsol))
+end
+
+function generate_nlprobmap(sys::System, nlsys::System)
+    return NLStep_probmap(build_explicit_observed_function(nlsys, unknowns(sys)))
 end
