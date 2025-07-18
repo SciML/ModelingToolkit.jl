@@ -176,6 +176,7 @@ include("problems/docs.jl")
 include("systems/codegen.jl")
 include("systems/problem_utils.jl")
 include("linearization.jl")
+include("systems/solver_nlprob.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")

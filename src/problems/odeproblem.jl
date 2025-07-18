@@ -3,7 +3,7 @@
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing, expression = Val{false},
-        check_compatibility = true, kwargs...) where {iip, spec}
+        check_compatibility = true, nlstep = false, kwargs...) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
@@ -41,6 +41,12 @@
     M = calculate_massmatrix(sys)
     _M = concrete_massmatrix(M; sparse, u0)
 
+    if nlstep
+        ode_nlstep = generate_ODENLStepData(sys, u0, p, M)
+    else
+        ode_nlstep = nothing
+    end
+
     observedfun = ObservedFunctionCache(
         sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse)
 
@@ -57,7 +63,8 @@
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
-        initialization_data)
+        initialization_data,
+        nlstep_data = ode_nlstep)
 
     maybe_codegen_scimlfn(expression, ODEFunction{iip, spec}, args; kwargs...)
 end
