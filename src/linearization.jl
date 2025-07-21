@@ -852,7 +852,7 @@ function reorder_unknowns(sys::NamedTuple, old, new)
     issorted(perm) && return sys # shortcut return, no reordering
     P = zeros(Int, nx, nx)
     for i in 1:nx # Build permutation matrix
-        P[i, perm[i]] = 1
+        P[perm[i], i] = 1
     end
     similarity_transform(sys, P; unitary = true)
 end
