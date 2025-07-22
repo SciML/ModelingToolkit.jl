@@ -1,6 +1,26 @@
 using ModelingToolkit, ADTypes, Test
 using CommonSolve: solve
 
+# Test reorder_unknowns
+# sys = ssrand(1,1,4);
+mats = let
+    A = [-1.617708540405859 0.14199864151523162 1.8120551022076838 -1.246419696614408;
+         0.6704209450894298 -2.4251566699889575 0.6782529705706082 -1.3731519847672025;
+         -0.09336677360807291 -0.11211714788917712 -3.6877851408229523 -0.7073967284605489;
+         -1.1743200892334098 1.1808779444006103 1.5721685015907167 -0.10858833182921268]
+    B = [-0.3286766047686936; -1.8473436385672866; -2.4092567234250954; -0.06371974677173559;;]
+    C = [-0.7144567541084362 0.18898849455229796 0.023473101245754475 1.0369097263843963]
+    D = [0.6397583934617636;;]
+    (; A, B, C, D)
+end
+@variables x1 x2 x3 x4
+new = [x4, x1, x3, x2]
+old = [x1, x2, x3, x4]
+lsys = ModelingToolkit.reorder_unknowns(mats, old, new)
+P = [0 1 0 0; 0 0 0 1; 0 0 1 0; 1 0 0 0]
+@test isequal(P*new, old)
+@test lsys.A == ModelingToolkit.similarity_transform(mats, P).A
+
 # r is an input, and y is an output.
 @independent_variables t
 @variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
