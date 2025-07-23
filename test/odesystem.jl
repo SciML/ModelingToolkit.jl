@@ -1642,3 +1642,40 @@ end
     sys1_complete = complete(sys1)
     @test ModelingToolkit.get_tspan(sys1_complete) == (0.0, 10.0)
 end
+
+@testset "Default tspan usage in problem constructors" begin
+    @variables x(t) y(t)
+    @parameters σ ρ β
+    
+    eqs = [D(x) ~ σ * (y - x),
+           D(y) ~ x * (ρ - x) - y]
+    
+    # Test system with tspan
+    @named sys_with_tspan = System(eqs, t, [x, y], [σ, ρ, β]; tspan = (0.0, 10.0))
+    sys_with_tspan = complete(sys_with_tspan)
+    
+    # Test system without tspan
+    @named sys_without_tspan = System(eqs, t, [x, y], [σ, ρ, β])
+    sys_without_tspan = complete(sys_without_tspan)
+    
+    # Test ODEProblem uses system's tspan as default
+    u0 = [x => 1.0, y => 2.0]
+    p = [σ => 10.0, ρ => 28.0, β => 8/3]
+    
+    @test_nowarn prob1 = ODEProblem(sys_with_tspan, u0; p = p)
+    prob1 = ODEProblem(sys_with_tspan, u0; p = p)
+    @test prob1.tspan == (0.0, 10.0)
+    
+    # Test that explicitly provided tspan overrides system's tspan
+    @test_nowarn prob2 = ODEProblem(sys_with_tspan, u0; tspan = (0.0, 5.0), p = p)
+    prob2 = ODEProblem(sys_with_tspan, u0; tspan = (0.0, 5.0), p = p)
+    @test prob2.tspan == (0.0, 5.0)
+    
+    # Test that error is thrown when neither system nor argument provides tspan
+    @test_throws ArgumentError ODEProblem(sys_without_tspan, u0; p = p)
+    
+    # Test that providing tspan explicitly works for system without tspan
+    @test_nowarn prob3 = ODEProblem(sys_without_tspan, u0; tspan = (0.0, 8.0), p = p)
+    prob3 = ODEProblem(sys_without_tspan, u0; tspan = (0.0, 8.0), p = p)
+    @test prob3.tspan == (0.0, 8.0)
+end

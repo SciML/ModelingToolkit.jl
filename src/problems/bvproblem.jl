@@ -1,5 +1,5 @@
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op; tspan = nothing,
         check_compatibility = true, cse = true,
         checkbounds = false, eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, guesses = Dict(), callback = nothing,
@@ -7,6 +7,14 @@
     check_complete(sys, BVProblem)
     check_compatibility && check_compatible_system(BVProblem, sys)
     isnothing(callback) || error("BVP solvers do not support callbacks.")
+    
+    # Use system's tspan as default if not provided
+    if tspan === nothing
+        tspan = get_tspan(sys)
+        if tspan === nothing
+            throw(ArgumentError("tspan must be provided either as an argument or defined in the system"))
+        end
+    end
 
     dvs = unknowns(sys)
     op = to_varmap(op, dvs)

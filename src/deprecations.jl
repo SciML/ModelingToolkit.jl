@@ -23,8 +23,90 @@ for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
     @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)
 end
 
-for T in [:ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,
-    :BVProblem, :DiscreteProblem, :ImplicitDiscreteProblem]
+# Time-dependent problems with keyword tspan
+for T in [:ODEProblem, :SDEProblem, :BVProblem, :DDEProblem, :SDDEProblem]
+    for (pType, pCanonical) in [
+            (AbstractDict, :p),
+            (AbstractArray{<:Pair}, :(Dict(p))),
+            (AbstractArray, :(isempty(p) ? Dict() : Dict(parameters(sys) .=> p)))
+        ],
+        (uType, uCanonical) in [
+            (Nothing, :(Dict())),
+            (AbstractDict, :u0),
+            (AbstractArray{<:Pair}, :(Dict(u0))),
+            (AbstractArray, :(isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0)))
+        ]
+
+        @eval function SciMLBase.$T(sys::System, u0::$uType, tspan, p::$pType; kw...)
+            ctor = string($T)
+            uCan = string($(QuoteNode(uCanonical)))
+            pCan = string($(QuoteNode(pCanonical)))
+            @warn """
+            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
+            `$ctor(sys, merge($uCan, $pCan); tspan=tspan)` instead.
+            """
+            SciMLBase.$T(sys, merge($uCanonical, $pCanonical); tspan=tspan, kw...)
+        end
+        @eval function SciMLBase.$T{iip}(
+                sys::System, u0::$uType, tspan, p::$pType; kw...) where {iip}
+            ctor = string($T{iip})
+            uCan = string($(QuoteNode(uCanonical)))
+            pCan = string($(QuoteNode(pCanonical)))
+            @warn """
+            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
+            `$ctor(sys, merge($uCan, $pCan); tspan=tspan)` instead.
+            """
+            return SciMLBase.$T{iip}(sys, merge($uCanonical, $pCanonical); tspan=tspan, kw...)
+        end
+        @eval function SciMLBase.$T{iip, spec}(
+                sys::System, u0::$uType, tspan, p::$pType; kw...) where {iip, spec}
+            ctor = string($T{iip, spec})
+            uCan = string($(QuoteNode(uCanonical)))
+            pCan = string($(QuoteNode(pCanonical)))
+            @warn """
+            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
+            `$ctor(sys, merge($uCan, $pCan); tspan=tspan)` instead.
+            """
+            return $T{iip, spec}(sys, merge($uCanonical, $pCanonical); tspan=tspan, kw...)
+        end
+    end
+
+    for pType in [SciMLBase.NullParameters, Nothing], uType in [Any, Nothing]
+
+        @eval function SciMLBase.$T(sys::System, u0::$uType, tspan, p::$pType; kw...)
+            ctor = string($T)
+            pT = string($(QuoteNode(pType)))
+            @warn """
+            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
+            `$ctor(sys, u0; tspan=tspan)` instead.
+            """
+            $T(sys, u0; tspan=tspan, kw...)
+        end
+        @eval function SciMLBase.$T{iip}(
+                sys::System, u0::$uType, tspan, p::$pType; kw...) where {iip}
+            ctor = string($T{iip})
+            pT = string($(QuoteNode(pType)))
+            @warn """
+            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
+            `$ctor(sys, u0; tspan=tspan)` instead.
+            """
+            return $T{iip}(sys, u0; tspan=tspan, kw...)
+        end
+        @eval function SciMLBase.$T{iip, spec}(
+                sys::System, u0::$uType, tspan, p::$pType; kw...) where {iip, spec}
+            ctor = string($T{iip, spec})
+            pT = string($(QuoteNode(pType)))
+            @warn """
+            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
+            `$ctor(sys, u0; tspan=tspan)` instead.
+            """
+            return $T{iip, spec}(sys, u0; tspan=tspan, kw...)
+        end
+    end
+end
+
+# Problems with positional tspan (unchanged)
+for T in [:DAEProblem, :DiscreteProblem, :ImplicitDiscreteProblem]
     for (pType, pCanonical) in [
             (AbstractDict, :p),
             (AbstractArray{<:Pair}, :(Dict(p))),

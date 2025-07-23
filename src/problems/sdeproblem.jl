@@ -65,12 +65,20 @@
 end
 
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op; tspan = nothing,
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
         sparsenoise = sparse, expression = Val{false}, kwargs...) where {iip, spec}
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
+    
+    # Use system's tspan as default if not provided
+    if tspan === nothing
+        tspan = get_tspan(sys)
+        if tspan === nothing
+            throw(ArgumentError("tspan must be provided either as an argument or defined in the system"))
+        end
+    end
 
     f, u0,
     p = process_SciMLProblem(SDEFunction{iip, spec}, sys, op;
