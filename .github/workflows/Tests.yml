@@ -41,7 +41,7 @@ jobs:
           - Downstream
           - RegressionI
           - FMI
-    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    uses: "SciML/.github/.github/workflows/tests.yml@master"
     with:
       julia-version: "${{ matrix.version }}"
       group: "${{ matrix.group }}"

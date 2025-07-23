@@ -2757,7 +2757,9 @@ function process_parameter_equations(sys::AbstractSystem)
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
                 is_sized_array_symbolic(sym) &&
-                all(Base.Fix1(is_parameter, sys), collect(sym))
+                all(Base.Fix1(is_parameter, sys), collect(sym)) ||
+                iscall(sym) &&
+                operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
         end
             # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
             # check.
