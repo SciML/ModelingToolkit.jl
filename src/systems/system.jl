@@ -190,6 +190,11 @@ struct System <: IntermediateDeprecationSystem
     """
     tstops::Vector{Any}
     """
+    The time span for time-dependent systems. This is a tuple of the start and end
+    time for the system, which can be symbolic expressions involving parameters.
+    """
+    tspan::Union{Nothing, Tuple{Any, Any}}
+    """
     The `TearingState` of the system post-simplification with `mtkcompile`.
     """
     tearing_state::Any
@@ -256,7 +261,7 @@ struct System <: IntermediateDeprecationSystem
             defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions = Dict{BasicSymbolic, String}(),
             metadata = MetadataT(), gui_metadata = nothing,
-            is_dde = false, tstops = [], tearing_state = nothing, namespacing = true,
+            is_dde = false, tstops = [], tspan = nothing, tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, isscheduled = false,
@@ -296,7 +301,7 @@ struct System <: IntermediateDeprecationSystem
             observed, parameter_dependencies, var_to_name, name, description, defaults,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, tearing_state, namespacing, complete, index_cache, ignored_connections,
+            tstops, tspan, tearing_state, namespacing, complete, index_cache, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             isscheduled, schedule)
     end
@@ -332,7 +337,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{BasicSymbolic, String}(),
         metadata = MetadataT(), gui_metadata = nothing,
-        is_dde = nothing, tstops = [], tearing_state = nothing,
+        is_dde = nothing, tstops = [], tspan = nothing, tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
@@ -417,7 +422,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, tearing_state, true, false, nothing, ignored_connections, preface, parent,
+        tstops, tspan, tearing_state, true, false, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
 end
 

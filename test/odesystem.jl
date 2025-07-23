@@ -1614,3 +1614,31 @@ end
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
 end
+
+@testset "Symbolic tspan" begin
+    @variables x(t) y(t)
+    @parameters σ ρ β
+
+    # Test creating a system with tspan
+    eqs = [D(x) ~ σ * (y - x),
+           D(y) ~ x * (ρ - x) - y]
+    
+    # Test with numeric tspan
+    @named sys1 = System(eqs, t, [x, y], [σ, ρ, β]; tspan = (0.0, 10.0))
+    @test ModelingToolkit.get_tspan(sys1) == (0.0, 10.0)
+    @test ModelingToolkit.has_tspan(sys1) == true
+    
+    # Test with symbolic tspan
+    @parameters t0 tf
+    @named sys2 = System(eqs, t, [x, y], [σ, ρ, β]; tspan = (t0, tf))
+    @test isequal(ModelingToolkit.get_tspan(sys2), (t0, tf))
+    
+    # Test without tspan
+    @named sys3 = System(eqs, t, [x, y], [σ, ρ, β])
+    @test ModelingToolkit.get_tspan(sys3) === nothing
+    @test ModelingToolkit.has_tspan(sys3) == true  # Field exists but is nothing
+    
+    # Test that tspan is preserved through system completion
+    sys1_complete = complete(sys1)
+    @test ModelingToolkit.get_tspan(sys1_complete) == (0.0, 10.0)
+end
