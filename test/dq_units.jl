@@ -283,3 +283,25 @@ end
 @test ModelingToolkit.get_unit.(filter(x -> occursin("ˍt", string(x)), unknowns(pend))) ==
       [u"m/s", u"m/s"]
 end
+
+# Test for issue #3787: Validation of units with non-SI units should work
+@testset "Issue #3787: Non-SI unit validation" begin
+    @parameters τ_ms [unit = u"ms"]
+    @variables t_ms [unit = u"ms"] E_kJ(t_ms) [unit = u"kJ"] P_MW(t_ms) [unit = u"MW"]
+    D_ms = Differential(t_ms)
+    
+    # This should pass: kJ/ms = kW, and MW and kW are dimensionally compatible (both power)
+    eqs_3787 = [D_ms(E_kJ) ~ P_MW - E_kJ / τ_ms,
+                0 ~ P_MW]
+    @test MT.validate(eqs_3787) == true
+    
+    # Additional test: compatible units of different scales
+    @variables x_m [unit = u"m"] y_km [unit = u"km"]
+    eq_scales = [x_m ~ y_km]
+    @test MT.validate(eq_scales) == true
+    
+    # Test that incompatible dimensions still fail
+    @variables a_length [unit = u"m"] b_time [unit = u"s"]
+    eq_incompatible = [a_length ~ b_time]
+    @test MT.validate(eq_incompatible) == false
+end

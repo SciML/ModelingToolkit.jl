@@ -104,7 +104,27 @@ function get_unit(op::Integral, args)
     return get_unit(args[1]) * unit
 end
 
-equivalent(x, y) = isequal(x, y)
+function equivalent(x, y)
+    # For DynamicQuantities, check dimensional compatibility rather than exact equality
+    if x isa DQ.AbstractQuantity && y isa DQ.AbstractQuantity
+        return DQ.dimension(x) == DQ.dimension(y)
+    elseif !(x isa DQ.AbstractQuantity) && !(y isa DQ.AbstractQuantity)
+        # Both are not quantities, use exact equality
+        return isequal(x, y)
+    else
+        # One is quantity, one is not - check if quantity is dimensionless
+        q = x isa DQ.AbstractQuantity ? x : y
+        non_q = x isa DQ.AbstractQuantity ? y : x
+        # Only consider equivalent if the quantity is dimensionless and other is zero/number
+        return DQ.dimension(q) == DQ.dimension(DQ.Quantity(1.0)) && (isequal(non_q, 0) || non_q isa Number)
+    end
+end
+
+# For connections, we may want stricter equivalence (same scale for safety)
+function equivalent_strict(x, y)
+    # Use exact equality for connections to ensure same scales
+    return isequal(x, y)
+end
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
@@ -234,7 +254,7 @@ function _validate(conn::Connection; info::String = "")
             else
                 aunit = safe_get_unit(x, info * string(nameof(sys)) * "#$i")
                 bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
-                if !equivalent(aunit, bunit)
+                if !equivalent_strict(aunit, bunit)
                     valid = false
                     str = "$info: connected system unknowns $x ($aunit) and $(sst[j]) ($bunit) have mismatched units."
                     if oneunit(aunit) == oneunit(bunit)
