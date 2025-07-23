@@ -785,6 +785,8 @@ const SYS_PROPS = [:eqs
                    :parent
                    :is_dde
                    :tstops
+                   :inputs
+                   :outputs
                    :index_cache
                    :isscheduled
                    :costs
