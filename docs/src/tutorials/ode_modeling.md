@@ -371,11 +371,21 @@ Here are some notes that may be helpful during your initial steps with MTK:
   - The `@mtkmodel` macro is for high-level usage of MTK. However, in many cases you
     may need to programmatically generate `System`s. If that's the case, check out
     the [Programmatically Generating and Scripting Systems Tutorial](@ref programmatically).
-  - Vector-valued parameters and variables are possible. A cleaner, more
-    consistent treatment of these is still a work in progress, however. Once finished,
-    this introductory tutorial will also cover this feature.
+  - Vector-valued parameters and variables are supported using array syntax like 
+    `@variables x[1:n](t)`. See the section below for a brief introduction.
 
-Where to go next?
+## Working with Array Variables
+
+Sometimes you need to model systems with many similar components, such as a chain of masses connected by springs, or a discretized PDE. ModelingToolkit supports array (vector) variables for these cases:
+
+```julia
+@variables x[1:3](t)  # Creates x[1](t), x[2](t), x[3](t)
+@parameters k[1:3]    # Creates k[1], k[2], k[3]
+```
+
+This is particularly useful for building large systems programmatically. For a comprehensive guide on using array variables, including multi-dimensional arrays and common patterns, see the [Working with Array Variables](@ref) tutorial.
+
+## Where to go next?
 
   - Not sure how MTK relates to similar tools and packages? Read
     [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).

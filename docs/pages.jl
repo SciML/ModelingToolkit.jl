@@ -1,7 +1,8 @@
 pages = [
     "Home" => "index.md",
     "tutorials/ode_modeling.md",
-    "Tutorials" => Any["tutorials/acausal_components.md",
+    "Tutorials" => Any["tutorials/array_variables.md",
+        "tutorials/acausal_components.md",
         "tutorials/nonlinear.md",
         "tutorials/initialization.md",
         "tutorials/optimization.md",
