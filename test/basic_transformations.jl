@@ -264,10 +264,22 @@ end
 end
 
 @testset "Change of variables, connections" begin
+    @mtkmodel NestedConnect begin
+        @components begin
+            out = RealOutput()
+        end
+    end
+    @mtkmodel DoubleNestedConnect begin
+        @components begin
+            nested = NestedConnect()
+        end
+    end
     @mtkmodel ConnectSys begin
         @components begin
             in = RealInput()
             out = RealOutput()
+            nested = NestedConnect()
+            double_nested = DoubleNestedConnect()
         end
         @variables begin
             x(t)
@@ -275,9 +287,11 @@ end
         end
         @equations begin
             connect(in, out)
+            connect(in, nested.out)
+            connect(in, double_nested.nested.out)
             in.u ~ x
-            D(x) ~ -out.u
-            D(y) ~ 1
+            D(x) ~ nested.out.u
+            D(y) ~ double_nested.nested.out.u
         end
     end
     @named sys = ConnectSys()
