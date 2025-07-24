@@ -1614,3 +1614,10 @@ end
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
 end
+
+module MtkbuildTestModule
+import ModelingToolkit: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
+@variables x(t)
+@mtkbuild sys = System(D(x) ~ t, t)
+@test sys isa System
+end
