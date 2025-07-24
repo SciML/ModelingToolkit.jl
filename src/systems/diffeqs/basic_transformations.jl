@@ -322,14 +322,30 @@ function change_independent_variable(
         return ex::T
     end
 
+    function transform(rhs::Connection, systems_map)
+        new_syss = map(rhs.systems) do sys
+            # in the case of connect(a, b.c.d.e), our systems_map will hold a and b. 
+            # Therefore, in the case of b.c.d.e, we will need to split the key into 
+            # name = b and subnames = [c, d, e] to recreate the connection of the new systems
+            sname = string(getname(sys))
+            parts = split(sname, NAMESPACE_SEPARATOR)
+            name, subnames = parts[1], parts[2:end]
+            if !(Symbol(name) in keys(systems_map))
+                error("The system $name was not found in the systems map.")
+            end
+            new_sys = systems_map[Symbol(name)]
+            for sub in subnames
+                new_sys = getproperty(new_sys, Symbol(sub))
+            end
+            return new_sys
+        end
+        return connect(new_syss...)
+    end
+
     # overload to specifically handle equations, which can be an equation or a connection
     function transform(eq::Equation, systems_map)
-        if eq.rhs isa Connection
-            eq = connect((systems_map[nameof(s)] for s in eq.rhs.systems)...)
-        else
-            eq = transform(eq)
-        end
-        return eq::Equation
+        new_eq = eq.rhs isa Connection ? transform(eq.rhs, systems_map) : transform(eq)
+        return new_eq::Equation
     end
 
     # Use the utility function to transform everything in the system!

@@ -290,8 +290,8 @@ end
             connect(in, nested.out)
             connect(in, double_nested.nested.out)
             in.u ~ x
-            D(x) ~ nested.out.u
-            D(y) ~ double_nested.nested.out.u
+            D(x) ~ -double_nested.nested.out.u
+            D(y) ~ 1
         end
     end
     @named sys = ConnectSys()
