@@ -58,10 +58,10 @@ function SciMLBase.OptimizationFunction{iip}(sys::System;
         else
             _cons_h = cons_hess_prototype = nothing
         end
-        cons_expr = cstr
+        cons_expr = Code.toexpr.(expand.([eq.lhs for eq in Symbolics.canonical_form.(cstr)]))
     end
 
-    obj_expr = cost(sys)
+    obj_expr = Code.toexpr(expand(cost(sys)))
 
     observedfun = ObservedFunctionCache(
         sys; expression, eval_expression, eval_module, checkbounds, cse)
