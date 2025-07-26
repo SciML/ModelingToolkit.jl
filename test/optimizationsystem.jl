@@ -64,6 +64,8 @@ end
     sys = complete(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
+    @test prob.f.cons_expr isa Vector{Expr}
+    @test prob.f.expr isa Expr
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
     @test sol.objective < 1.0
@@ -289,9 +291,8 @@ end
     sys = complete(sys)
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
-    @test prob.f.expr isa Symbolics.Symbolic
-    @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
-    for i in 1:length(prob.f.cons_expr))
+    @test prob.f.expr isa Expr
+    @test all(x -> x isa Expr, prob.f.cons_expr)
 end
 
 @testset "Derivatives, iip and oop" begin
