@@ -240,6 +240,21 @@ kwargs = (; name = 3)
 @test cool_name[1] == (42,)
 @test collect(cool_name[2]) == [:name => 3]
 
+name = 3
+@named cool_name = foo(42; name)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [:name => name]
+@named cool_name = foo(; name)
+@test collect(cool_name) == [:name => name]
+
+ff = 3
+@named cool_name = foo(42; ff)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [pp; :ff => ff]
+
+@named cool_name = foo(; ff)
+@test collect(cool_name) == [pp; :ff => ff]
+
 foo(i; name) = (; i, name)
 @named goo[1:3] = foo(10)
 @test isequal(goo, [(i = 10, name = Symbol(:goo_, i)) for i in 1:3])
