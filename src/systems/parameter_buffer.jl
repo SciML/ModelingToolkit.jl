@@ -316,9 +316,9 @@ function SciMLStructures.replace!(::SciMLStructures.Initials, p::MTKParameters, 
 end
 
 for (Portion, field, recurse) in [(SciMLStructures.Discrete, :discrete, 1)
-     (SciMLStructures.Constants, :constant, 1)
-     (Nonnumeric, :nonnumeric, 1)
-     (SciMLStructures.Caches, :caches, 1)]
+                                  (SciMLStructures.Constants, :constant, 1)
+                                  (Nonnumeric, :nonnumeric, 1)
+                                  (SciMLStructures.Caches, :caches, 1)]
     @eval function SciMLStructures.canonicalize(::$Portion, p::MTKParameters)
         as_vector = buffer_to_arraypartition(p.$field)
         repack = let p = p

@@ -159,7 +159,7 @@ end
     for split in [true, false]
         simplify = true
 
-        @variables x(t)=0 u(t)=0 [input=true]
+        @variables x(t)=0 u(t)=0 [input = true]
         eqs = [
             D(x) ~ -x + u
         ]
@@ -178,7 +178,7 @@ end
         @test f[1](x, u, p, 1) ≈ -x + u
 
         # With disturbance inputs
-        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        @variables x(t)=0 u(t)=0 [input = true] d(t)=0
         eqs = [
             D(x) ~ -x + u + d^2
         ]
@@ -198,7 +198,7 @@ end
         @test f[1](x, u, p, 1) ≈ -x + u
 
         ## With added d argument
-        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        @variables x(t)=0 u(t)=0 [input = true] d(t)=0
         eqs = [
             D(x) ~ -x + u + d^2
         ]
@@ -435,7 +435,7 @@ matrices = ModelingToolkit.reorder_unknowns(
 # @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
 
 @testset "Observed functions with inputs" begin
-    @variables x(t)=0 u(t)=0 [input=true]
+    @variables x(t)=0 u(t)=0 [input = true]
     eqs = [
         D(x) ~ -x + u
     ]
@@ -460,7 +460,7 @@ end
 end
 
 @testset "With callable symbolic" begin
-    @variables x(t)=0 u(t)=0 [input=true]
+    @variables x(t)=0 u(t)=0 [input = true]
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
     @named sys = System(eqs, t)

@@ -35,9 +35,8 @@ sol2 = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
 @variables x₀(t) x₁(t) x₂(..)
 tau = 1
 eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 * x₀
-       D(x₁) ~
-       (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
-       (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
+       D(x₁) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (1 - p0 + q0) * x₀ +
+               (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
        D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
 @mtkcompile sys = System(eqs, t)
 @test ModelingToolkit.is_dde(sys)
@@ -175,7 +174,7 @@ end
 
 @testset "Issue#3165 DDEs with non-tunables" begin
     @variables x(..) = 1.0
-    @parameters w=1.0 [tunable=false] τ=0.5
+    @parameters w=1.0 [tunable = false] τ=0.5
     eqs = [D(x(t)) ~ -w * x(t - τ)]
 
     @named sys = System(eqs, t)

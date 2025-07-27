@@ -437,7 +437,7 @@ end
             spring, damper)
     end
     connect_sd(
-        sd, m1, m2) = [
+    sd, m1, m2) = [
         sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
     sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
     @named mass1 = Mass(; m = 1)
@@ -1094,9 +1094,9 @@ end
     inited = false
     finaled = false
     a = ModelingToolkit.ImperativeAffect(f = (
-        m, o, ctx, int) -> (inited = true; return (;)))
+    m, o, ctx, int) -> (inited = true; return (;)))
     b = ModelingToolkit.ImperativeAffect(f = (
-        m, o, ctx, int) -> (finaled = true; return (;)))
+    m, o, ctx, int) -> (finaled = true; return (;)))
     cb2 = ModelingToolkit.SymbolicContinuousCallback(
         [x ~ 0.1], nothing, initialize = a, finalize = b)
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
@@ -1405,7 +1405,7 @@ end
     @test scc.affect isa ModelingToolkit.AffectSystem
     @test length(ModelingToolkit.all_equations(scc.affect)) == 5 # 1 affect, 3 algebraic, 1 observed
 
-    u0 = [x => -1/2, D(x) => 1/2, g => 1]
+    u0 = [x => -1 / 2, D(x) => 1 / 2, g => 1]
     prob = ODEProblem(pend, u0, (0.0, 5.0))
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)

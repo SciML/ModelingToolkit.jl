@@ -573,7 +573,7 @@ function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
     (is_discrete(e1) === is_discrete(e2)) || return false
     (isequal(e1.conditions, e2.conditions) && isequal(e1.affect, e2.affect) &&
      isequal(e1.initialize, e2.initialize) && isequal(e1.finalize, e2.finalize)) &&
-    isequal(e1.reinitializealg, e2.reinitializealg) ||
+        isequal(e1.reinitializealg, e2.reinitializealg) ||
         return false
     is_discrete(e1) ||
         (isequal(e1.affect_neg, e2.affect_neg) && isequal(e1.rootfind, e2.rootfind))

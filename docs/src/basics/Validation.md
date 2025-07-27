@@ -108,7 +108,7 @@ function ModelingToolkit.get_unit(op::typeof(dummycomplex), args)
 end
 
 sts = @variables a(t)=0 [unit = u"cm"]
-ps = @parameters s=-1 [unit=u"cm"] c=c [unit=u"cm"]
+ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
 eqs = [D(a) ~ dummycomplex(c, s);]
 sys = System(
     eqs, t, [sts...;], [ps...;], name = :sys, checks = ~ModelingToolkit.CheckUnits)

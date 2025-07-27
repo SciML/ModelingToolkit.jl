@@ -70,21 +70,21 @@ import ModelingToolkit: value
 
     @testset "Case $i" for (i, test_case) in enumerate([test_case_1, test_case_2])
         (;         # filter out vrjs in making graphs
-            eqs,         # eq to vars they depend on
-            eq_sdeps,
-            eq_sidepsf,
-            eq_sidepsb,         # eq to params they depend on
-            eq_pdeps,
-            eq_pidepsf,
-            eq_pidepsb,         # var to eqs that modify them
-            s_eqdepsf,
-            s_eqdepsb,
-            var_eq_ne,         # eq to eqs that depend on them
-            eq_eqdeps,
-            eq_eq_ne,         # var to vars that depend on them
-            var_vardeps,
-            var_var_ne
-        ) = test_case
+        eqs,         # eq to vars they depend on
+        eq_sdeps,
+        eq_sidepsf,
+        eq_sidepsb,         # eq to params they depend on
+        eq_pdeps,
+        eq_pidepsf,
+        eq_pidepsb,         # var to eqs that modify them
+        s_eqdepsf,
+        s_eqdepsb,
+        var_eq_ne,         # eq to eqs that depend on them
+        eq_eqdeps,
+        eq_eq_ne,         # var to vars that depend on them
+        var_vardeps,
+        var_var_ne
+) = test_case
         deps = equation_dependencies(js; eqs)
         @test length(deps) == length(eq_sdeps)
         @test all([issetequal(a, b) for (a, b) in zip(eq_sdeps, deps)])

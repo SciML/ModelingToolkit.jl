@@ -1207,8 +1207,8 @@ function maybe_build_initialization_problem(
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
-        initializeprob, update_initializeprob!, initializeprobmap,
-        initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
+            initializeprob, update_initializeprob!, initializeprobmap,
+            initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
 """
@@ -1465,7 +1465,7 @@ function process_SciMLProblem(
         kwargs = merge(kwargs,
             (;
                 resid_prototype = u0_constructor(calculate_resid_prototype(
-                length(eqs), u0, p))))
+                    length(eqs), u0, p))))
     end
 
     f = constructor(sys; u0 = u0, p = p,

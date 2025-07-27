@@ -172,7 +172,7 @@ nlprob.f(residual, reducedsol.u, pp)
 
 N = 5
 @variables xs[1:N]
-A = reshape(1:(N ^ 2), N, N)
+A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = System(eqs, [xs], [])
 sys = mtkcompile(sys′)
