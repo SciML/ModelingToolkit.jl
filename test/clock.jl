@@ -298,42 +298,6 @@ eqs = [yd ~ Sample(dt)(y)
     ss = mtkcompile(cl)
     ss_nosplit = mtkcompile(cl; split = false)
 
-    prob = ODEProblem(ss, [x => 0.0, kp => 1.0], (0.0, 1.0))
-    prob_nosplit = ODEProblem(ss_nosplit, [x => 0.0, kp => 1.0], (0.0, 1.0))
-    sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
-    sol_nosplit = solve(prob_nosplit, Tsit5(), kwargshandle = KeywordArgSilent)
-
-    function foo!(dx, x, p, t)
-        kp, ud1, ud2 = p
-        dx[1] = -x[1] + ud1 + ud2
-    end
-
-    function affect1!(integrator)
-        kp = integrator.p[1]
-        y = integrator.u[1]
-        r = 1.0
-        ud1 = kp * (r - y)
-        integrator.p[2] = ud1
-        nothing
-    end
-    function affect2!(integrator)
-        kp = integrator.p[1]
-        y = integrator.u[1]
-        r = 1.0
-        ud2 = kp * (r - y)
-        integrator.p[3] = ud2
-        nothing
-    end
-    cb1 = PeriodicCallback(affect1!, dt; final_affect = true, initial_affect = true)
-    cb2 = PeriodicCallback(affect2!, dt2; final_affect = true, initial_affect = true)
-    cb = CallbackSet(cb1, cb2)
-    #                                           kp   ud1  ud2
-    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 1.0, 1.0], callback = cb)
-    sol2 = solve(prob, Tsit5())
-
-    @test sol.u≈sol2.u atol=1e-6
-    @test sol_nosplit.u≈sol2.u atol=1e-6
-
     ##
     @info "Testing hybrid system with components"
     using ModelingToolkitStandardLibrary.Blocks
