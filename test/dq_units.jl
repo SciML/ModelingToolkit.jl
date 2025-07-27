@@ -39,18 +39,18 @@ System(eqs, t, name = :sys, checks = false)
 
 # connection validation
 @connector function Pin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"V"],
-        i(t)=1.0, [unit=u"A", connect=Flow])
+    sts = @variables(v(t)=1.0, [unit = u"V"],
+        i(t)=1.0, [unit = u"A", connect = Flow])
     System(Equation[], t, sts, []; name = name)
 end
 @connector function OtherPin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"mV"],
-        i(t)=1.0, [unit=u"mA", connect=Flow])
+    sts = @variables(v(t)=1.0, [unit = u"mV"],
+        i(t)=1.0, [unit = u"mA", connect = Flow])
     System(Equation[], t, sts, []; name = name)
 end
 @connector function LongPin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"V"],
-        i(t)=1.0, [unit=u"A", connect=Flow],
+    sts = @variables(v(t)=1.0, [unit = u"V"],
+        i(t)=1.0, [unit = u"A", connect = Flow],
         x(t)=1.0)
     System(Equation[], t, sts, []; name = name)
 end

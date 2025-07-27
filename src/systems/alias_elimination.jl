@@ -215,7 +215,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
                 eqs = get(var_to_lineq, v, nothing)
                 eqs === nothing && continue
                 for eq in eqs, v′ in 𝑠neighbors(graph, eq)
-
                     if linear_variables[v′]
                         linear_variables[v′] = false
                         push!(stack, v′)
@@ -225,7 +224,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
         end
     end
     for eq in linear_equations, v in 𝑠neighbors(graph, eq)
-
         linear_variables[v] = true
         vlineqs = get!(() -> BitSet(), var_to_lineq, v)
         push!(vlineqs, eq)

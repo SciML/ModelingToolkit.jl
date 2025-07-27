@@ -109,7 +109,6 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
             dvar2eq[fullvars[dv]] = only(deqs)
         end
         for (j, bj) in enumerate(brown_vars), i in 𝑑neighbors(graph, bj)
-
             push!(Is, i)
             push!(Js, j)
             eq = new_eqs[i]

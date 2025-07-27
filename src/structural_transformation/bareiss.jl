@@ -131,7 +131,6 @@ end
 
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot)
     @inbounds for i in (k + 1):size(M, 2), j in (k + 1):size(M, 1)
-
         M[j, i] = exactdiv(M[j, i] * pivot - M[j, k] * M[k, i], prev_pivot)
     end
     zero!(M, (k + 1):size(M, 1), k)
@@ -270,7 +269,6 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
     end
     @label out
     @inbounds for i in (rank + 1):m, j in 1:n
-
         A[i, j] = zero(T)
     end
     isreduced && return A

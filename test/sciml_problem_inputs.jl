@@ -111,7 +111,6 @@ end
     # Simulates problems for all input types, checking that identical solutions are found.
     # test failure.
     for u0 in u0_alts, p in p_alts
-
         oprob = remake(base_oprob; u0, p)
         @test base_sol == solve(oprob, Tsit5(); saveat = 1.0)
         eprob = remake(base_eprob; u0, p)
@@ -125,7 +124,6 @@ end
     base_sol = solve(base_nlprob, NewtonRaphson())
     # Solves problems for all input types, checking that identical solutions are found.
     for u0 in u0_alts, p in p_alts
-
         nlprob = remake(base_nlprob; u0, p)
         @test base_sol == solve(nlprob, NewtonRaphson())
     end
@@ -142,7 +140,6 @@ end
     # Simulates problems for all input types, checking that identical solutions are found.
     # test failure.
     for u0 in u0_alts, p in p_alts
-
         ssprob = remake(base_ssprob; u0, p)
         @test base_sol == solve(ssprob, DynamicSS(Tsit5()))
         eprob = remake(base_eprob; u0, p)
@@ -209,7 +206,6 @@ end
         (idiscsys, ImplicitDiscreteProblem{true, SciMLBase.FullSpecialize})
     ]
         @testset "$(typeof(u0)) - $(typeof(p))" for u0 in u0s, p in ps
-
             if u0 isa Vector{Float64} && ctor <: ImplicitDiscreteProblem
                 u0 = ones(2)
             end
@@ -228,7 +224,6 @@ end
         (optsys, OptimizationProblem{true})
     ]
         @testset "$(typeof(u0)) - $(typeof(p))" for u0 in u0s, p in ps
-
             @test_warn ["deprecated"] ctor(sys, u0, p)
         end
     end

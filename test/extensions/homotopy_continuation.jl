@@ -192,7 +192,7 @@ end
     disallowed_y = [7, 5, 4]
     @test all(!isapprox(sol[x]; atol = 1e-8), disallowed_x)
     @test all(!isapprox(sol[y]; atol = 1e-8), disallowed_y)
-    @test abs(sol[x ^ 2 - 4x + y]) >= 1e-8
+    @test abs(sol[x^2 - 4x + y]) >= 1e-8
 
     p = parameter_values(prob)
     for val in disallowed_x

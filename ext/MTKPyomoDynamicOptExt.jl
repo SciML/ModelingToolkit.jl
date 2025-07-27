@@ -142,17 +142,17 @@ end
 function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
     @unpack model, model_sym, t_sym, dummy_sym = m
     total = 0
-    dt = Pyomo.pyconvert(Float64, (model.t.at(-1) - model.t.at(1))/(model.steps - 1))
+    dt = Pyomo.pyconvert(Float64, (model.t.at(-1) - model.t.at(1)) / (model.steps - 1))
     f = Symbolics.build_function(arg, model_sym, t_sym, expression = false)
     for (i, t) in enumerate(model.t)
         if Bool(lo < t) && Bool(t < hi)
-            t_p = model.t.at(i-1)
+            t_p = model.t.at(i - 1)
             Δt = min(t - lo, t - t_p)
-            total += 0.5*Δt*(f(model, t) + f(model, t_p))
+            total += 0.5 * Δt * (f(model, t) + f(model, t_p))
         elseif Bool(t >= hi) && Bool(t - dt < hi)
-            t_p = model.t.at(i-1)
+            t_p = model.t.at(i - 1)
             Δt = hi - t + dt
-            total += 0.5*Δt*(f(model, t) + f(model, t_p))
+            total += 0.5 * Δt * (f(model, t) + f(model, t_p))
         end
     end
     PyomoVar(model.tₛ * total)

@@ -120,7 +120,7 @@ function same_or_inner_namespace(u, var)
     nu == nv ||           # namespaces are the same
         startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
-        !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
+            !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
 
 function inner_namespace(u, var)
@@ -129,7 +129,7 @@ function inner_namespace(u, var)
     nu == nv && return false
     startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
-        !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
+            !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
 
 """

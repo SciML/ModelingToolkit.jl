@@ -635,7 +635,6 @@ function Graphs.incidence_matrix(g::BipartiteGraph, val = true)
     I = Int[]
     J = Int[]
     for i in 𝑠vertices(g), n in 𝑠neighbors(g, i)
-
         push!(I, i)
         push!(J, n)
     end

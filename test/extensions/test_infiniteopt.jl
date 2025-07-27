@@ -53,13 +53,13 @@ m = InfiniteModel(optimizer_with_attributes(Ipopt.Optimizer,
 guess_xs = [t -> pi, t -> 0.1][permutation]
 guess_us = [t -> 0.1]
 InfiniteOpt.@variables(m,
-begin
-    # state variables
-    (lb[i] <= x[i = 1:nx] <= ub[i], Infinite(τ), start = guess_xs[i]) # state variables
-    -10 <= u[i = 1:nu] <= 10, Infinite(τ), (start = guess_us[i]) # control variables
-    0 <= tf <= 10, (start = 5) # Final time
-    0.2 <= L <= 0.6, (start = 0.4) # Length parameter
-end)
+    begin
+        # state variables
+        (lb[i] <= x[i = 1:nx] <= ub[i], Infinite(τ), start = guess_xs[i]) # state variables
+        -10 <= u[i = 1:nu] <= 10, Infinite(τ), (start = guess_us[i]) # control variables
+        0 <= tf <= 10, (start = 5) # Final time
+        0.2 <= L <= 0.6, (start = 0.4) # Length parameter
+    end)
 
 # Trace the dynamics
 x0 = ModelingToolkit.get_u0(io_sys, [model.θ => 0, model.ω => 0])

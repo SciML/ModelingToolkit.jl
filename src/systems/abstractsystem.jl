@@ -1570,8 +1570,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
-            return substitute_and_simplify(eq.lhs, subs, simplify) ~
-                   substitute_and_simplify(
+            return substitute_and_simplify(eq.lhs, subs, simplify) ~ substitute_and_simplify(
                 eq.rhs, subs,
                 simplify)
         else
@@ -2756,10 +2755,10 @@ function process_parameter_equations(sys::AbstractSystem)
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                is_sized_array_symbolic(sym) &&
-                all(Base.Fix1(is_parameter, sys), collect(sym)) ||
+                    is_sized_array_symbolic(sym) &&
+                        all(Base.Fix1(is_parameter, sys), collect(sym)) ||
                 iscall(sym) &&
-                operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
+                    operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
         end
             # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
             # check.

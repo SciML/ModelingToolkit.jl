@@ -57,7 +57,7 @@ function (M::MXLinearInterpolation)(τ)
     (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
     colons = ntuple(_ -> (:), length(size(M.u)) - 1)
     if i < length(M.t)
-        M.u[colons..., i] + Δ*(M.u[colons..., i + 1] - M.u[colons..., i])
+        M.u[colons..., i] + Δ * (M.u[colons..., i + 1] - M.u[colons..., i])
     else
         M.u[colons..., i]
     end
@@ -131,10 +131,10 @@ function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
     for (i, t) in enumerate(model.U.t)
         if lo < t < hi
             Δt = min(dt, t - lo)
-            total += (0.5*Δt*(expr[i] + expr[i - 1]))
+            total += (0.5 * Δt * (expr[i] + expr[i - 1]))
         elseif t >= hi && (t - dt < hi)
             Δt = hi - t + dt
-            total += (0.5*Δt*(expr[i] + expr[i - 1]))
+            total += (0.5 * Δt * (expr[i] + expr[i - 1]))
         end
     end
     model.tₛ * total
@@ -219,7 +219,7 @@ end
 function MTK.get_V_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
     (nu, nt) = size(model.V.u)
-    if nu*nt != 0
+    if nu * nt != 0
         V_vals = value_getter(model.solver_opti, model.V.u)
         size(V_vals, 2) == 1 && (V_vals = V_vals')
         V_vals = [[V_vals[i, j] for i in 1:nu] for j in 1:nt]
