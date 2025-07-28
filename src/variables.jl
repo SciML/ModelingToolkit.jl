@@ -600,10 +600,6 @@ time `t`. For variables that don't depend on time, `EvalAt` returns them unchang
 - For derivatives, `EvalAt` evaluates the derivative at the specified time
 - For arrays of variables, `EvalAt` is applied element-wise
 
-# Autodifferentiability
-`EvalAt` supports automatic differentiation when applied to differentiable expressions. The operator
-properly handles `Differential` operations, making it compatible with ModelingToolkit's symbolic
-differentiation system.
 
 # Examples
 ```julia
