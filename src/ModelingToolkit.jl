@@ -379,8 +379,6 @@ PrecompileTools.@compile_workload begin
 end
 
 # Default nonlinear solver algorithm - will be overridden by extension when NonlinearSolve is loaded
-function _get_default_nlsolve_alg()
-    error("NonlinearSolve.jl is required for linearization with initialization. Please load NonlinearSolve.jl to use this functionality.")
-end
+_get_default_nlsolve_alg() = error("NonlinearSolve.jl is required for linearization with initialization. Please load NonlinearSolve.jl to use this functionality.")
 
 end # module
