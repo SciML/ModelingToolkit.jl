@@ -578,6 +578,63 @@ getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
 ###################
 ### Evaluate at ###
 ###################
+"""
+    EvalAt(t)
+
+An operator that evaluates time-dependent variables at a specific absolute time point `t`.
+
+# Fields
+- `t::Union{Symbolic, Number}`: The absolute time at which to evaluate the variable.
+
+# Description
+`EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
+useful in optimization problems where you need to specify constraints or costs at particular moments 
+in time.
+
+The operator works by replacing the time argument of time-dependent variables with the specified 
+time `t`. For variables that don't depend on time, `EvalAt` returns them unchanged.
+
+# Behavior
+- For time-dependent variables like `x(t)`, `EvalAt(τ)(x)` returns `x(τ)` 
+- For time-independent parameters, `EvalAt` returns them unchanged
+- For derivatives, `EvalAt` evaluates the derivative at the specified time
+- For arrays of variables, `EvalAt` is applied element-wise
+
+# Autodifferentiability
+`EvalAt` supports automatic differentiation when applied to differentiable expressions. The operator
+properly handles `Differential` operations, making it compatible with ModelingToolkit's symbolic
+differentiation system.
+
+# Examples
+```julia
+using ModelingToolkit
+
+@variables t x(t) y(t)
+@parameters p
+
+# Evaluate x at time t=1.0
+EvalAt(1.0)(x)  # Returns x(1.0)
+
+# Works with parameters (returns unchanged)
+EvalAt(1.0)(p)  # Returns p
+
+# Works with derivatives
+D = Differential(t)
+EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
+
+# Use in optimization constraints
+@optimization_model model begin
+    @constraints begin
+        EvalAt(0.5)(x) ~ 2.0  # x must equal 2.0 at t=0.5
+    end
+end
+```
+
+# Errors
+- Throws an error when applied to variables with more than one argument (e.g., `z(u, t)`)
+
+See also: [`Differential`](@ref)
+"""
 struct EvalAt <: Symbolics.Operator
     t::Union{Symbolic, Number}
 end
