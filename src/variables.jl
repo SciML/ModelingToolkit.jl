@@ -589,7 +589,7 @@ An operator that evaluates time-dependent variables at a specific absolute time 
 # Description
 `EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
 useful in optimization problems where you need to specify constraints or costs at particular moments 
-in time.
+in time, or delay differential equations for setting a delay time.
 
 The operator works by replacing the time argument of time-dependent variables with the specified 
 time `t`. For variables that don't depend on time, `EvalAt` returns them unchanged.
