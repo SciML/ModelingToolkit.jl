@@ -1,5 +1,5 @@
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = nothing, kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -24,7 +24,7 @@ The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring in
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
   - `simplify`: Apply simplification in tearing.
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
-  - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
+  - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point. If `nothing` (default), a default algorithm will be used when NonlinearSolve.jl is loaded.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `kwargs`: Are passed on to `find_solvables!`
 
@@ -39,7 +39,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
-        initialization_solver_alg = TrustRegion(),
+        initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
@@ -81,9 +81,16 @@ function linearization_function(sys::AbstractSystem, inputs,
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
 
+    # Use default algorithm if none provided and initialization is enabled
+    actual_solver_alg = if initialization_solver_alg === nothing && initialize
+        _get_default_nlsolve_alg()
+    else
+        initialization_solver_alg
+    end
+    
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
-        nlsolve_alg = initialization_solver_alg)
+        nlsolve_alg = actual_solver_alg)
 
     p = parameter_values(prob)
     t0 = current_time(prob)

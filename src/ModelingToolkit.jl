@@ -52,8 +52,7 @@ import JuliaFormatter
 using MLStyle
 import Moshi
 using Moshi.Data: @data
-using NonlinearSolve
-import SCCNonlinearSolve
+# NonlinearSolve and SCCNonlinearSolve are now loaded via extension
 using ImplicitDiscreteSolve
 using Reexport
 using RecursiveArrayTools
@@ -377,6 +376,11 @@ PrecompileTools.@compile_workload begin
             x ~ a + b
         end
     end
+end
+
+# Default nonlinear solver algorithm - will be overridden by extension when NonlinearSolve is loaded
+function _get_default_nlsolve_alg()
+    error("NonlinearSolve.jl is required for linearization with initialization. Please load NonlinearSolve.jl to use this functionality.")
 end
 
 end # module
