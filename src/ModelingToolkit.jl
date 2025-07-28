@@ -52,8 +52,6 @@ import JuliaFormatter
 using MLStyle
 import Moshi
 using Moshi.Data: @data
-using NonlinearSolve
-import SCCNonlinearSolve
 using ImplicitDiscreteSolve
 using Reexport
 using RecursiveArrayTools
