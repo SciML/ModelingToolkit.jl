@@ -170,6 +170,7 @@ function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeq
     varidx = 0
     eqidx = 0
     for vs in var_scc, v in vs
+
         eq = var_eq_matching[v]
         if eq !== unassigned
             eqsmap[eq] = (eqidx += 1)
@@ -255,9 +256,9 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
                     # if any of the variables in `a` are present in fullvars (taking into account arrays)
                     if any(
                         v -> any(isequal(v), fullvars) ||
-                            symbolic_type(v) == ArraySymbolic() &&
-                                Symbolics.shape(v) != Symbolics.Unknown() &&
-                                any(x -> any(isequal(x), fullvars), collect(v)),
+                             symbolic_type(v) == ArraySymbolic() &&
+                             Symbolics.shape(v) != Symbolics.Unknown() &&
+                             any(x -> any(isequal(x), fullvars), collect(v)),
                         vars(
                             a; op = Union{Differential, Shift, Pre, Sample, Hold, Initial}))
                         continue

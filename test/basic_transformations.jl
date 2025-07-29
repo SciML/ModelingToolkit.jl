@@ -127,7 +127,7 @@ end
     p = [v => 10.0]
     prob = ODEProblem(Mx, [u0; p], (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
-    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t)^2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t) ^ 2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
 
 @testset "Change independent variable (free fall with 2nd order horizontal equation)" begin
@@ -140,7 +140,7 @@ end
     u0 = [Mx.y => 0.0, Dx(Mx.y) => 1.0, Mx.t => 0.0, Mx.xˍt => 10.0]
     prob = ODEProblem(Mx, u0, (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
-    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t)^2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t) ^ 2 / 2]; atol = 1e-10)) # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
 end
 
 @testset "Change independent variable (crazy 3rd order nonlinear system)" begin
@@ -159,8 +159,8 @@ end
     @variables x xˍt(x) xˍt(x) y(x) t(x)
     Dx = Differential(x)
     areequivalent(eq1,
-    eq2) = isequal(expand(eq1.lhs - eq2.lhs), 0) &&
-           isequal(expand(eq1.rhs - eq2.rhs), 0)
+        eq2) = isequal(expand(eq1.lhs - eq2.lhs), 0) &&
+               isequal(expand(eq1.rhs - eq2.rhs), 0)
     eq1lhs = xˍt^3 * (Dx^3)(y) + xˍt^2 * Dx(y) * (Dx^2)(xˍt) +
              xˍt * Dx(y) * (Dx(xˍt))^2 +
              3 * xˍt^2 * (Dx^2)(y) * Dx(xˍt)
@@ -195,8 +195,9 @@ end
     @test Set(equations(M2)) == Set([
         t ~ √(x),
         xˍt ~ 2t,
-        xˍt * Dx(y) ~ 1fc(t) + 2fc(x) + 3fc(y) +
-                      1callme(f, t) + 2callme(f, x) + 3callme(f, y)
+        xˍt * Dx(y) ~
+        1fc(t) + 2fc(x) + 3fc(y) +
+        1callme(f, t) + 2callme(f, x) + 3callme(f, y)
     ])
 
     _f = LinearInterpolation([1.0, 1.0], [-100.0, +100.0]) # constant value 1
@@ -231,7 +232,7 @@ end
     prob = ODEProblem(Mx, u0, (0.0, 20.0)) # 1 = dy/dx = (dy/dt)/(dx/dt) means equal initial horizontal and vertical velocities
     sol = solve(prob, Tsit5(); reltol = 1e-5)
     # compare to analytical solution (x(t) = v*t, y(t) = v*t - g*t^2/2)
-    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units)^2 / 2]; atol = 1e-10))
+    @test all(isapprox.(sol[Mx.y], sol[Mx.x - g * (Mx.t_units) ^ 2 / 2]; atol = 1e-10))
 end
 
 @testset "Change independent variable, no equations" begin

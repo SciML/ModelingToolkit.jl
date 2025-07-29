@@ -333,7 +333,7 @@ eqs = [yd ~ Sample(dt)(y)
 
     @test sol.u≈sol2.u atol=1e-6
     @test sol_nosplit.u≈sol2.u atol=1e-6
-    
+
     ##
     @info "Testing hybrid system with components"
     using ModelingToolkitStandardLibrary.Blocks
