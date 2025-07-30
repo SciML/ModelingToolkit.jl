@@ -1,3 +1,30 @@
+"""
+    BVProblem(sys::System, op, tspan; kwargs...)
+
+Construct a `BVProblem` from a ModelingToolkit `System` for boundary value problems.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the DifferentialEquations.jl `solve` function. For a complete list
+and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (with boundary conditions)
+- `op`: Operating point/initial conditions
+- `tspan`: Time span for the problem
+
+## Keywords
+- `check_compatibility=true`: Whether to check system compatibility
+- `cse=true`: Whether to perform common subexpression elimination
+- `checkbounds=false`: Whether to enable bounds checking
+- `eval_expression=false`: Whether to evaluate expressions
+- `eval_module=@__MODULE__`: Module for expression evaluation
+- `expression=Val{false}`: Expression evaluation mode
+- `guesses=Dict()`: Initial guesses for boundary value problem
+- `callback=nothing`: Callback functions (note: BVP solvers do not support callbacks)
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true, cse = true,

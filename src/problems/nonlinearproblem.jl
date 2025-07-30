@@ -54,6 +54,27 @@
     return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
+"""
+    NonlinearProblem(sys::System, op; kwargs...)
+
+Construct a `NonlinearProblem` from a ModelingToolkit `System` for nonlinear equations.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the NonlinearSolve.jl `solve` function. For a complete list
+and detailed descriptions, see the [NonlinearSolve.jl documentation](https://docs.sciml.ai/NonlinearSolve/stable/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (nonlinear system)
+- `op`: Operating point/initial guess
+
+## Keywords
+- `expression=Val{false}`: Expression evaluation mode
+- `check_length=true`: Whether to check length compatibility
+- `check_compatibility=true`: Whether to check system compatibility
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
         sys::System, op; expression = Val{false},
         check_length = true, check_compatibility = true, kwargs...) where {iip, spec}

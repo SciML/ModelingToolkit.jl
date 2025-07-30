@@ -6,6 +6,34 @@ function SciMLBase.LinearProblem(sys::System, op::StaticArray; kwargs...)
     SciMLBase.LinearProblem{false}(sys, op; kwargs...)
 end
 
+"""
+    LinearProblem(sys::System, op; kwargs...)
+
+Construct a `LinearProblem` from a ModelingToolkit `System` for linear systems.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the LinearSolve.jl `solve` function. For a complete list
+and detailed descriptions, see the [LinearSolve.jl documentation](https://docs.sciml.ai/LinearSolve/stable/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (linear system)
+- `op`: Operating point/initial conditions
+
+## Keywords
+- `check_length=true`: Whether to check length compatibility
+- `expression=Val{false}`: Expression evaluation mode
+- `check_compatibility=true`: Whether to check system compatibility
+- `sparse=false`: Whether to use sparse arrays
+- `eval_expression=false`: Whether to evaluate expressions
+- `eval_module=@__MODULE__`: Module for expression evaluation
+- `checkbounds=false`: Whether to enable bounds checking
+- `cse=true`: Whether to perform common subexpression elimination
+- `u0_constructor=identity`: Constructor for initial conditions
+- `u0_eltype=nothing`: Element type for initial conditions
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 function SciMLBase.LinearProblem{iip}(
         sys::System, op; check_length = true, expression = Val{false},
         check_compatibility = true, sparse = false, eval_expression = false,

@@ -38,6 +38,34 @@
     return maybe_codegen_scimlfn(expression, DDEFunction{iip, spec}, args; kwargs...)
 end
 
+"""
+    DDEProblem(sys::System, op, tspan; kwargs...)
+
+Construct a `DDEProblem` from a ModelingToolkit `System` for delay differential equations.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the DifferentialEquations.jl `solve` function. For a complete list
+and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (must contain delay equations)
+- `op`: Operating point/initial conditions
+- `tspan`: Time span for the problem
+
+## Keywords
+- `callback=nothing`: Callback functions for the solver
+- `check_length=true`: Whether to check length compatibility
+- `cse=true`: Whether to perform common subexpression elimination
+- `checkbounds=false`: Whether to enable bounds checking
+- `eval_expression=false`: Whether to evaluate expressions
+- `eval_module=@__MODULE__`: Module for expression evaluation
+- `check_compatibility=true`: Whether to check system compatibility
+- `u0_constructor=identity`: Constructor for initial conditions
+- `expression=Val{false}`: Expression evaluation mode
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 @fallback_iip_specialize function SciMLBase.DDEProblem{iip, spec}(
         sys::System, op, tspan;
         callback = nothing, check_length = true, cse = true, checkbounds = false,

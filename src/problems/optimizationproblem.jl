@@ -88,6 +88,28 @@ function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
     return OptimizationProblem{true}(sys, args...; kwargs...)
 end
 
+"""
+    OptimizationProblem(sys::System, op; kwargs...)
+
+Construct an `OptimizationProblem` from a ModelingToolkit `System` for optimization.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the Optimization.jl `solve` function. For a complete list
+and detailed descriptions, see the [Optimization.jl documentation](https://docs.sciml.ai/Optimization/stable/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (optimization system with cost and constraints)
+- `op`: Operating point/initial guess
+
+## Keywords
+- `lb=nothing`: Lower bounds for optimization variables
+- `ub=nothing`: Upper bounds for optimization variables
+- `check_compatibility=true`: Whether to check system compatibility
+- `expression=Val{false}`: Expression evaluation mode
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 function SciMLBase.OptimizationProblem{iip}(
         sys::System, op; lb = nothing,
         ub = nothing, check_compatibility = true, expression = Val{false},

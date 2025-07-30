@@ -64,6 +64,33 @@
     return maybe_codegen_scimlfn(expression, SDEFunction{iip, spec}, args; kwargs...)
 end
 
+"""
+    SDEProblem(sys::System, op, tspan; kwargs...)
+
+Construct an `SDEProblem` from a ModelingToolkit `System` with noise.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the DifferentialEquations.jl `solve` function. For a complete list
+and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (must contain noise equations)
+- `op`: Operating point/initial conditions
+- `tspan`: Time span for the problem
+
+## Keywords
+- `callback=nothing`: Callback functions for the solver
+- `check_length=true`: Whether to check length compatibility
+- `eval_expression=false`: Whether to evaluate expressions
+- `eval_module=@__MODULE__`: Module for expression evaluation
+- `check_compatibility=true`: Whether to check system compatibility
+- `sparse=false`: Whether to use sparse arrays
+- `sparsenoise=sparse`: Whether to use sparse noise representation
+- `expression=Val{false}`: Expression evaluation mode
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,

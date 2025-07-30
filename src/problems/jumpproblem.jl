@@ -1,3 +1,30 @@
+"""
+    JumpProblem(sys::System, op, tspan; kwargs...)
+
+Construct a `JumpProblem` from a ModelingToolkit `System` for jump processes.
+
+## Additional Keyword Arguments
+
+Beyond the arguments listed below, this constructor accepts all keyword arguments
+supported by the DifferentialEquations.jl `solve` function. For a complete list
+and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+
+## Arguments
+- `sys::System`: The ModelingToolkit system to convert (must contain jump processes)
+- `op`: Operating point/initial conditions
+- `tspan`: Time span for the problem (can be a tuple or nothing)
+
+## Keywords
+- `check_compatibility=true`: Whether to check system compatibility
+- `eval_expression=false`: Whether to evaluate expressions
+- `eval_module=@__MODULE__`: Module for expression evaluation
+- `checkbounds=false`: Whether to enable bounds checking
+- `cse=true`: Whether to perform common subexpression elimination
+- `aggregator=JumpProcesses.NullAggregator()`: Aggregator for jump processes
+- `callback=nothing`: Callback functions for the solver
+- `rng=nothing`: Random number generator
+- `kwargs...`: Additional keyword arguments passed to the solver
+"""
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
