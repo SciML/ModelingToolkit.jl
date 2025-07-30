@@ -28,8 +28,8 @@ jobs:
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Pkg,TOML
-      - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
+      - uses: julia-actions/julia-buildpkg@1
+      - uses: julia-actions/julia-runtest@1
         with:
           ALLOW_RERESOLVE: false
         env:
