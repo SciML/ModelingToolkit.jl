@@ -20,7 +20,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
-@mtkbuild pend = System(eqs, t)
+@mtkcompile pend = System(eqs, t)
 prob = ODEProblem(pend, [x => -1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
 
 sol = solve(prob, FBDF())
@@ -37,7 +37,7 @@ eqs = [
     D(z) ~ x * y - β * z + 0.1z * a
 ]
 
-@mtkbuild sys1 = System(eqs, t)
+@mtkcompile sys1 = System(eqs, t)
 
 eqs = [
     D(x) ~ σ * (y - x),
@@ -49,7 +49,7 @@ noiseeqs = [0.1*x;
             0.1*y;
             0.1*z;;]
 
-@mtkbuild sys2 = SDESystem(eqs, noiseeqs, t)
+@mtkcompile sys2 = SDESystem(eqs, noiseeqs, t)
 
 u0 = [
     x => 1.0,
@@ -73,7 +73,7 @@ odeprob = ODEProblem(sys1, u0, (0.0, 10.0), p; check_compatibility = false)
 eqs = [0 ~ σ * (y - x),
     y ~ x * (ρ - z),
     β * z ~ x * y]
-@mtkbuild sys = System(eqs)
+@mtkcompile sys = System(eqs)
 
 ## ImplicitDiscrete Affects
 
@@ -83,7 +83,7 @@ eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
 c_evt = [t ~ 5.0] => [x ~ Pre(x) + 0.1]
-@mtkbuild pend = System(eqs, t, continuous_events = c_evt)
+@mtkcompile pend = System(eqs, t, continuous_events = c_evt)
 prob = ODEProblem(pend, [x => -1, y => 0], (0.0, 10.0), [g => 1], guesses = [λ => 1])
 
 sol = solve(prob, FBDF())
@@ -104,4 +104,4 @@ function SysC(; name)
     @named subsys = SysB(; var1 = x)
     return System([D(x) ~ x], t; systems = [subsys], name)
 end
-@mtkbuild sys = SysC()
+@mtkcompile sys = SysC()
