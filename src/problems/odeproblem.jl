@@ -78,7 +78,8 @@ Construct an `ODEProblem` from a ModelingToolkit `System`.
 
 Beyond the arguments listed below, this constructor accepts all keyword arguments
 supported by the DifferentialEquations.jl `solve` function. For a complete list
-and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+and detailed descriptions, see the [ModelingToolkit.jl problem building documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/) 
+and the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
 
 ## Arguments
 - `sys::System`: The ModelingToolkit system to convert

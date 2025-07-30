@@ -63,7 +63,8 @@ Construct a `NonlinearProblem` from a ModelingToolkit `System` for nonlinear equ
 
 Beyond the arguments listed below, this constructor accepts all keyword arguments
 supported by the NonlinearSolve.jl `solve` function. For a complete list
-and detailed descriptions, see the [NonlinearSolve.jl documentation](https://docs.sciml.ai/NonlinearSolve/stable/).
+and detailed descriptions, see the [ModelingToolkit.jl problem building documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/) 
+and the [NonlinearSolve.jl documentation](https://docs.sciml.ai/NonlinearSolve/stable/).
 
 ## Arguments
 - `sys::System`: The ModelingToolkit system to convert (nonlinear system)

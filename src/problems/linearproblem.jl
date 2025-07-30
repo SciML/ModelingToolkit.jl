@@ -15,7 +15,8 @@ Construct a `LinearProblem` from a ModelingToolkit `System` for linear systems.
 
 Beyond the arguments listed below, this constructor accepts all keyword arguments
 supported by the LinearSolve.jl `solve` function. For a complete list
-and detailed descriptions, see the [LinearSolve.jl documentation](https://docs.sciml.ai/LinearSolve/stable/).
+and detailed descriptions, see the [ModelingToolkit.jl problem building documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/) 
+and the [LinearSolve.jl documentation](https://docs.sciml.ai/LinearSolve/stable/).
 
 ## Arguments
 - `sys::System`: The ModelingToolkit system to convert (linear system)

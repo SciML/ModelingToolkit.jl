@@ -97,7 +97,8 @@ Construct an `OptimizationProblem` from a ModelingToolkit `System` for optimizat
 
 Beyond the arguments listed below, this constructor accepts all keyword arguments
 supported by the Optimization.jl `solve` function. For a complete list
-and detailed descriptions, see the [Optimization.jl documentation](https://docs.sciml.ai/Optimization/stable/).
+and detailed descriptions, see the [ModelingToolkit.jl problem building documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/) 
+and the [Optimization.jl documentation](https://docs.sciml.ai/Optimization/stable/).
 
 ## Arguments
 - `sys::System`: The ModelingToolkit system to convert (optimization system with cost and constraints)
