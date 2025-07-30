@@ -93,7 +93,7 @@ function BifurcationKit.BifurcationProblem(nsys::System,
         jac = true,
         kwargs...)
     if !ModelingToolkit.iscomplete(nsys)
-        error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
+        error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `BifurcationProblem`")
     end
     if is_time_dependent(nsys)
         nsys = System([0 ~ eq.rhs for eq in full_equations(nsys)],

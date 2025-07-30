@@ -127,7 +127,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         # no differential variables
         __mtk_internal_u = Float64[]
     elseif type == :ME
-        # to avoid running into `structural_simplify` warnings about array variables
+        # to avoid running into `mtkcompile` warnings about array variables
         # and some unfortunate circular dependency issues, ME FMUs use an array of
         # symbolics instead. This is also not worse off in performance
         # because the former approach would allocate anyway.
