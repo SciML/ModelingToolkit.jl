@@ -14,31 +14,31 @@ code for a variety of such numerical problems.
 
 ```@docs
 SciMLBase.ODEFunction
-SciMLBase.ODEProblem
+ODEProblem
 SciMLBase.DAEFunction
 SciMLBase.DAEProblem
 SciMLBase.SDEFunction
-SciMLBase.SDEProblem
+SDEProblem
 SciMLBase.DDEFunction
 SciMLBase.DDEProblem
 SciMLBase.SDDEFunction
 SciMLBase.SDDEProblem
-JumpProcesses.JumpProblem
+JumpProblem
 SciMLBase.BVProblem
-SciMLBase.DiscreteProblem
-SciMLBase.ImplicitDiscreteProblem
+DiscreteProblem
+ImplicitDiscreteProblem
 ```
 
 ## Linear and Nonlinear systems
 
 ```@docs
 SciMLBase.NonlinearFunction
-SciMLBase.NonlinearProblem
+NonlinearProblem
 SciMLBase.SCCNonlinearProblem
 SciMLBase.NonlinearLeastSquaresProblem
-SciMLBase.SteadyStateProblem
+SteadyStateProblem
 SciMLBase.IntervalNonlinearFunction
-SciMLBase.IntervalNonlinearProblem
+IntervalNonlinearProblem
 ModelingToolkit.HomotopyContinuationProblem
 SciMLBase.HomotopyNonlinearFunction
 SciMLBase.LinearProblem
@@ -48,7 +48,7 @@ SciMLBase.LinearProblem
 
 ```@docs
 SciMLBase.OptimizationFunction
-SciMLBase.OptimizationProblem
+OptimizationProblem
 SciMLBase.ODEInputFunction
 ModelingToolkit.JuMPDynamicOptProblem
 ModelingToolkit.InfiniteOptDynamicOptProblem
