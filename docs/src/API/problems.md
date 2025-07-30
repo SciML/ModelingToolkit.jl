@@ -14,41 +14,41 @@ code for a variety of such numerical problems.
 
 ```@docs
 SciMLBase.ODEFunction
-ODEProblem
+SciMLBase.ODEProblem(::System, ::Any, ::Any)
 SciMLBase.DAEFunction
-SciMLBase.DAEProblem
+SciMLBase.DAEProblem(::System, ::Any, ::Any)
 SciMLBase.SDEFunction
-SDEProblem
+SciMLBase.SDEProblem(::System, ::Any, ::Any)
 SciMLBase.DDEFunction
-SciMLBase.DDEProblem
+SciMLBase.DDEProblem(::System, ::Any, ::Any)
 SciMLBase.SDDEFunction
 SciMLBase.SDDEProblem
-JumpProblem
-SciMLBase.BVProblem
-DiscreteProblem
-ImplicitDiscreteProblem
+JumpProcesses.JumpProblem(::System, ::Any, ::Any)
+SciMLBase.BVProblem(::System, ::Any, ::Any)
+SciMLBase.DiscreteProblem
+SciMLBase.ImplicitDiscreteProblem
 ```
 
 ## Linear and Nonlinear systems
 
 ```@docs
 SciMLBase.NonlinearFunction
-NonlinearProblem
+SciMLBase.NonlinearProblem(::System, ::Any)
 SciMLBase.SCCNonlinearProblem
 SciMLBase.NonlinearLeastSquaresProblem
-SteadyStateProblem
+DiffEqBase.SteadyStateProblem(::System, ::Any)
 SciMLBase.IntervalNonlinearFunction
-IntervalNonlinearProblem
+SciMLBase.IntervalNonlinearProblem
 ModelingToolkit.HomotopyContinuationProblem
 SciMLBase.HomotopyNonlinearFunction
-SciMLBase.LinearProblem
+SciMLBase.LinearProblem(::System, ::Any)
 ```
 
 ## Optimization and optimal control
 
 ```@docs
 SciMLBase.OptimizationFunction
-OptimizationProblem
+SciMLBase.OptimizationProblem(::System, ::Any)
 SciMLBase.ODEInputFunction
 ModelingToolkit.JuMPDynamicOptProblem
 ModelingToolkit.InfiniteOptDynamicOptProblem
