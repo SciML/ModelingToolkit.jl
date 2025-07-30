@@ -351,7 +351,10 @@ function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
         push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
     end
 end
-function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::NamedTuple)
+    _all_ts_idxs!(ts_idxs, NotSymbolic(), sys, values(sym))
+end
+function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::Union{AbstractArray, Tuple})
     for s in sym
         _all_ts_idxs!(ts_idxs, sys, s)
     end

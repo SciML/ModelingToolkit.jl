@@ -96,111 +96,87 @@ end
     m = ModelingToolkit.ImperativeAffect(fmfa)
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test m.obs == []
-    @test m.obs_syms == []
-    @test m.modified == []
-    @test m.mod_syms == []
+    @test m.observed == (;)
+    @test m.modified == (;)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (;))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test m.obs == []
-    @test m.obs_syms == []
-    @test m.modified == []
-    @test m.mod_syms == []
+    @test m.observed == (;)
+    @test m.modified == (;)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (; x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [])
-    @test m.obs_syms == []
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:x]
+    @test m.observed == (;)
+    @test m.modified == (; x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [])
-    @test m.obs_syms == []
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:y]
+    @test m.observed == (;)
+    @test m.modified == (; y = x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa; observed = (; y = x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:y]
-    @test m.modified == []
-    @test m.mod_syms == []
+    @test m.observed == (; y = x)
+    @test m.modified == (;)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [])
-    @test m.obs_syms == []
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:x]
+    @test m.observed == (;)
+    @test m.modified == (; x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa; modified = (; y = x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [])
-    @test m.obs_syms == []
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:y]
+    @test m.observed == (;)
+    @test m.modified == (; y = x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:x]
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:x]
+    @test m.observed == (; x)
+    @test m.modified == (; x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (; y = x), (; y = x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:y]
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:y]
+    @test m.observed == (; y = x)
+    @test m.modified == (; y = x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(
         fmfa; modified = (; y = x), observed = (; y = x))
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:y]
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:y]
+    @test m.observed == (; y = x)
+    @test m.modified == (; y = x)
     @test m.ctx === nothing
 
     m = ModelingToolkit.ImperativeAffect(
         fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:y]
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:y]
+    @test m.observed == (; y = x)
+    @test m.modified == (; y = x)
     @test m.ctx === 3
 
     m = ModelingToolkit.ImperativeAffect(fmfa, (; x), (; x), 3)
     @test m isa ModelingToolkit.ImperativeAffect
     @test m.f == fmfa
-    @test isequal(m.obs, [x])
-    @test m.obs_syms == [:x]
-    @test isequal(m.modified, [x])
-    @test m.mod_syms == [:x]
+    @test m.observed == (; x)
+    @test m.modified == (; x)
     @test m.ctx === 3
 end
 
@@ -966,8 +942,7 @@ end
         end)
     @named sys = System(eqs, t, [temp], params; continuous_events = [furnace_off])
     ss = mtkcompile(sys)
-    @test_logs (:warn,
-        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
+    @test_warn "The symbols [:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value." prob=ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
 
     @variables tempsq(t) # trivially eliminated
@@ -1010,7 +985,7 @@ end
     ss = mtkcompile(sys)
     prob = ODEProblem(
         ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-    @test_throws "Tried to write back to" solve(prob, Tsit5())
+    @test_throws "Invalid name" solve(prob, Tsit5())
 end
 
 @testset "Quadrature" begin
@@ -1408,5 +1383,23 @@ end
     u0 = [x => -1 / 2, D(x) => 1 / 2, g => 1]
     prob = ODEProblem(pend, u0, (0.0, 5.0))
     sol = solve(prob, FBDF())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Nested NamedTuple ImperativeAffect" begin
+    @variables x(t) y(t) z(t) w(t)
+    obs = (; a = (; b = (x, y)))
+    mod = (; p = (; q = y, r = z))
+    affect = ModelingToolkit.ImperativeAffect(mod, obs) do mod, obs, ctx, integ
+        @test integ[x] ≈ obs.a.b[1]
+        @test integ[y] ≈ obs.a.b[2]
+        @test integ[y] ≈ mod.p.q
+        @test integ[z] ≈ mod.p.r
+        return (; p = (; q = obs.a.b[1]))
+    end
+    event = 1.0 => affect
+    @mtkcompile sys = System([D(x) ~ x, D(y) ~ y, D(z) ~ z], t; discrete_events = [event])
+    prob = ODEProblem(sys, [x => 1.0, y => 2.0, z => 3.0], (0.0, 5.0))
+    sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
 end
