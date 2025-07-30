@@ -46,7 +46,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@mtkbuild sys = ODESystem(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [D(x) => 2.0,
     x => 1.0,
@@ -83,13 +83,13 @@ eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@named lorenz1 = ODESystem(eqs, t)
-@named lorenz2 = ODESystem(eqs, t)
+@named lorenz1 = System(eqs, t)
+@named lorenz2 = System(eqs, t)
 
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a * γ]
-@mtkbuild connected = ODESystem(connections, t, systems = [lorenz1, lorenz2])
+@mtkcompile connected = System(connections, t, systems = [lorenz1, lorenz2])
 
 u0 = [lorenz1.x => 1.0,
     lorenz1.y => 0.0,
