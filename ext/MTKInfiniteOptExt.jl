@@ -49,7 +49,7 @@ end
 
 MTK.generate_internal_model(m::Type{InfiniteOptModel}) = InfiniteModel()
 function MTK.generate_time_variable!(m::InfiniteModel, tspan, tsteps)
-    @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports=length(tsteps))
+    @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
 end
 function MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts)
     @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
@@ -59,7 +59,7 @@ function MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts)
 end
 
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
-    @variable(m, tₛ≥0, start=guess)
+    @variable(m, tₛ ≥ 0, start = guess)
     if !is_free_t
         fix(tₛ, 1, force = true)
         set_start_value(tₛ, 1)
@@ -69,11 +69,11 @@ end
 
 function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequality})
     if expr isa Equation
-        @constraint(m.model, expr.lhs - expr.rhs==0)
+        @constraint(m.model, expr.lhs - expr.rhs == 0)
     elseif expr.relational_op === Symbolics.geq
-        @constraint(m.model, expr.lhs - expr.rhs≥0)
+        @constraint(m.model, expr.lhs - expr.rhs ≥ 0)
     else
-        @constraint(m.model, expr.lhs - expr.rhs≤0)
+        @constraint(m.model, expr.lhs - expr.rhs ≤ 0)
     end
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)

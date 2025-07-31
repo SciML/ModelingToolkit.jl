@@ -376,68 +376,68 @@ const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Cha
                                                                                     # simple boolean laws
                                                                                     (@rule (!!(~x)) => (~x))
                                                                                     (@rule ((~x) &
-                                                                                    true) => (~x))
+                                                                                            true) => (~x))
                                                                                     (@rule ((~x) &
-                                                                                    false) => false)
+                                                                                            false) => false)
                                                                                     (@rule ((~x) |
-                                                                                    true) => true)
+                                                                                            true) => true)
                                                                                     (@rule ((~x) |
-                                                                                    false) => (~x))
+                                                                                            false) => (~x))
                                                                                     (@rule ((~x) &
-                                                                                    !(~x)) => false)
+                                                                                            !(~x)) => false)
                                                                                     (@rule ((~x) |
-                                                                                    !(~x)) => true)
+                                                                                            !(~x)) => true)
                                                                                     # reversed order of the above, because it matters and `@acrule` refuses to do its job
                                                                                     (@rule (true &
-                                                                                    (~x)) => (~x))
+                                                                                            (~x)) => (~x))
                                                                                     (@rule (false &
-                                                                                    (~x)) => false)
+                                                                                            (~x)) => false)
                                                                                     (@rule (true |
-                                                                                    (~x)) => true)
+                                                                                            (~x)) => true)
                                                                                     (@rule (false |
-                                                                                    (~x)) => (~x))
+                                                                                            (~x)) => (~x))
                                                                                     (@rule (!(~x) &
-                                                                                    (~x)) => false)
+                                                                                            (~x)) => false)
                                                                                     (@rule (!(~x) |
-                                                                                    (~x)) => true)
+                                                                                            (~x)) => true)
                                                                                     # idempotent
                                                                                     (@rule ((~x) &
-                                                                                    (~x)) => (~x))
+                                                                                            (~x)) => (~x))
                                                                                     (@rule ((~x) |
-                                                                                    (~x)) => (~x))
+                                                                                            (~x)) => (~x))
                                                                                     # ifelse with determined branches
                                                                                     (@rule ifelse(
-                                                                                    (~x),
-                                                                                    true,
-                                                                                    false) => (~x))
+                                                                                        (~x),
+                                                                                        true,
+                                                                                        false) => (~x))
                                                                                     (@rule ifelse(
-                                                                                    (~x),
-                                                                                    false,
-                                                                                    true) => !(~x))
+                                                                                        (~x),
+                                                                                        false,
+                                                                                        true) => !(~x))
                                                                                     # ifelse with identical branches
                                                                                     (@rule ifelse(
-                                                                                    (~x),
-                                                                                    (~y),
-                                                                                    (~y)) => (~y))
+                                                                                        (~x),
+                                                                                        (~y),
+                                                                                        (~y)) => (~y))
                                                                                     (@rule ifelse(
-                                                                                    (~x),
-                                                                                    (~y),
-                                                                                    !(~y)) => ((~x) &
-                                                                                               (~y)))
+                                                                                        (~x),
+                                                                                        (~y),
+                                                                                        !(~y)) => ((~x) &
+                                                                                                   (~y)))
                                                                                     (@rule ifelse(
-                                                                                    (~x),
-                                                                                    !(~y),
-                                                                                    (~y)) => ((~x) &
-                                                                                              !(~y)))
+                                                                                        (~x),
+                                                                                        !(~y),
+                                                                                        (~y)) => ((~x) &
+                                                                                                  !(~y)))
                                                                                     # ifelse with determined condition
                                                                                     (@rule ifelse(
-                                                                                    true,
-                                                                                    (~x),
-                                                                                    (~y)) => (~x))
+                                                                                        true,
+                                                                                        (~x),
+                                                                                        (~y)) => (~x))
                                                                                     (@rule ifelse(
-                                                                                    false,
-                                                                                    (~x),
-                                                                                    (~y)) => (~y))])))
+                                                                                        false,
+                                                                                        (~x),
+                                                                                        (~y)) => (~y))])))
 
 """
 If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.

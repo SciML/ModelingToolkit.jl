@@ -146,7 +146,7 @@ function change_of_variables(
                 ex = substitute(ex, eqs.lhs => eqs.rhs)
                 if isSDE
                     for (noise, B) in zip(neq, brownvars)
-                        ex = ex + 1 / 2 * noise^2 * second + noise * first * B
+                        ex = ex + 1/2 * noise^2 * second + noise*first*B
                     end
                 end
             end

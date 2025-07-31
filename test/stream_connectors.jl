@@ -265,7 +265,7 @@ sys_exp = expand_connections(compose(sys, [sp1, sp2]))
 
 # array var
 @connector function VecPin(; name)
-    sts = @variables v(t)[1:2]=[1.0, 0.0] i(t)[1:2]=1.0 [connect = Flow]
+    sts = @variables v(t)[1:2]=[1.0, 0.0] i(t)[1:2]=1.0 [connect=Flow]
     System(Equation[], t, [sts...;], []; name = name)
 end
 
@@ -284,7 +284,7 @@ sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
              0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]])
 
 @connector function VectorHeatPort(; name, N = 100, T0 = 0.0, Q0 = 0.0)
-    @variables (T(t))[1:N]=T0 (Q(t))[1:N]=Q0 [connect = Flow]
+    @variables (T(t))[1:N]=T0 (Q(t))[1:N]=Q0 [connect=Flow]
     System(Equation[], t, [T; Q], []; name = name)
 end
 

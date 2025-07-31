@@ -497,7 +497,8 @@ so far we aren't using anything that's not possible with the implicit interface.
 You can also write
 
 ```julia
-[temp ~ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
+[temp ~
+ furnace_off_threshold] => ModelingToolkit.ImperativeAffect(modified = (;
     furnace_on)) do x, o, i, c
     @set! x.furnace_on = false
 end
