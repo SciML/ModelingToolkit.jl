@@ -652,7 +652,8 @@ let
     vars = @variables x y
     arr = ModelingToolkit.varmap_to_vars(
         Dict([x => 0.0, y => [0.0, 1.0]]), vars; use_union = true) #error
-    sol = Union{Float64, Vector{Float64}}[0.0, [0.0, 1.0]]
+    sol = Union{Float64, Vector{Float64}}[0.0, [
+        0.0, 1.0]]
     @test arr == sol
     @test typeof(arr) == typeof(sol)
 end
@@ -1502,13 +1503,13 @@ end
     @mtkcompile sys=System(eqs, t) split=false
 
     u0 = SA[D(x) => 2.0f0,
-        x => 1.0f0,
-        y => 0.0f0,
-        z => 0.0f0]
+    x => 1.0f0,
+    y => 0.0f0,
+    z => 0.0f0]
 
     p = SA[σ => 28.0f0,
-        ρ => 10.0f0,
-        β => 8.0f0 / 3.0f0]
+    ρ => 10.0f0,
+    β => 8.0f0 / 3.0f0]
 
     tspan = (0.0f0, 100.0f0)
     prob = ODEProblem{false}(sys, [u0; p], tspan)
