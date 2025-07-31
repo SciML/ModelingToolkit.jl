@@ -64,6 +64,8 @@ end
     sys = complete(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
+    @test prob.f.cons_expr isa Vector{Expr}
+    @test prob.f.expr isa Expr
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
     @test sol.objective < 1.0
