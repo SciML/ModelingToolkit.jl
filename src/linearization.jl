@@ -1,5 +1,5 @@
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = TrustRegion(), kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = nothing, kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -39,7 +39,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
-        initialization_solver_alg = TrustRegion(),
+        initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
