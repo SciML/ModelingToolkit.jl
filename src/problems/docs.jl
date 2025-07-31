@@ -219,7 +219,7 @@ function function_docstring(func, istd, optionals)
     Beyond the arguments listed below, this constructor accepts all keyword arguments
     supported by the DifferentialEquations.jl `solve` function. For a complete list
     and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
-  
+
     # Keyword arguments
 
     - `u0`: The `u0` vector for the corresponding problem, if available. Can be obtained

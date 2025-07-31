@@ -680,7 +680,7 @@ end
     fr = CS.freqrespv(S, [0.01, 1, 100])
     # https://github.com/SciML/ModelingToolkit.jl/pull/3469
     reference_fr = ComplexF64[-1.2505330104772838e-11 - 2.500062613816021e-9im,
-        -0.0024688370221621625 - 0.002279011866413123im,
-        1.8100018764334602 + 0.3623845793211718im]
+    -0.0024688370221621625 - 0.002279011866413123im,
+    1.8100018764334602 + 0.3623845793211718im]
     @test isapprox(fr, reference_fr)
 end

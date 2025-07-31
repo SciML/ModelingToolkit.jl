@@ -306,13 +306,13 @@ end
     @mtkcompile sys = System(eqs, t)
 
     u0 = SA[D(x) => 2.0f0,
-        x => 1.0f0,
-        y => 0.0f0,
-        z => 0.0f0]
+    x => 1.0f0,
+    y => 0.0f0,
+    z => 0.0f0]
 
     p = SA[σ => 28.0f0,
-        ρ => 10.0f0,
-        β => 8.0f0 / 3]
+    ρ => 10.0f0,
+    β => 8.0f0 / 3]
 
     tspan = (0.0f0, 100.0f0)
     prob = ODEProblem(sys, [u0; p], tspan)
