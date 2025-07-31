@@ -18,13 +18,13 @@ new = [x4, x1, x3, x2]
 old = [x1, x2, x3, x4]
 lsys = ModelingToolkit.reorder_unknowns(mats, old, new)
 P = [0 1 0 0; 0 0 0 1; 0 0 1 0; 1 0 0 0]
-@test isequal(P * new, old)
+@test isequal(P*new, old)
 @test lsys.A == ModelingToolkit.similarity_transform(mats, P).A
 
 # r is an input, and y is an output.
 @independent_variables t
 @variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
-@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input = true]
+@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input=true]
 @parameters kp = 1
 D = Differential(t)
 

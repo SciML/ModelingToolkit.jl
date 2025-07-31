@@ -338,6 +338,7 @@ function generate_derivative_variables!(
     # We need the inverse mapping of `var_sccs` to update it efficiently later.
     v_to_scc = Vector{NTuple{2, Int}}(undef, ndsts(graph))
     for (i, scc) in enumerate(var_sccs), (j, v) in enumerate(scc)
+
         v_to_scc[v] = (i, j)
     end
     # Pairs of `(x_t, dx)` added below
@@ -475,7 +476,7 @@ function find_duplicate_dd(dv, solvable_graph, diff_to_var, linear_eqs, mm)
         if length(nzs) == 2 &&
            (abs(nzs[1]) == 1 && nzs[1] == -nzs[2]) &&
            (v_t = rvs[1] == dv ? rvs[2] : rvs[1];
-           diff_to_var[v_t] === nothing)
+               diff_to_var[v_t] === nothing)
             @assert dv in rvs
             return eq, v_t
         end
@@ -1128,6 +1129,7 @@ function add_additional_history!(
     # We need the inverse mapping of `var_sccs` to update it efficiently later.
     v_to_scc = Vector{NTuple{2, Int}}(undef, ndsts(graph))
     for (i, scc) in enumerate(var_sccs), (j, v) in enumerate(scc)
+
         v_to_scc[v] = (i, j)
     end
 

@@ -100,7 +100,7 @@ plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
 @assert isapprox(
-    sol(π / 2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π / 2, 0.1); atol = 1e-2) # compare around 1st peak # hide
+    sol(π/2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 

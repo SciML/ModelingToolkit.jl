@@ -7,7 +7,7 @@ using SymbolicIndexingInterface
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
-@mtkcompile sys=System([D(x) ~ t * x], t) simplify=false
+@mtkcompile sys=System([D(x)~t*x], t) simplify=false
 reorderer = getsym(sys, x)
 @test reorderer(get_u0(sys, [])) == [1.0, 2.0, 3.0]
 @test reorderer(get_u0(sys, [x => [2.0, 3.0, 4.0]])) == [2.0, 3.0, 4.0]
@@ -15,10 +15,10 @@ reorderer = getsym(sys, x)
 @test get_u0(sys, [2.0, 3.0, 4.0]) == [2.0, 3.0, 4.0]
 
 @mtkcompile sys=System([
-        D(x) ~ 3x,
-        D(y) ~ t,
-        D(z[1]) ~ z[2] + t,
-        D(z[2]) ~ y + z[1]
+        D(x)~3x,
+        D(y)~t,
+        D(z[1])~z[2]+t,
+        D(z[2])~y+z[1]
     ], t) simplify=false
 
 @test_throws ModelingToolkit.MissingVariablesError get_u0(sys, [])
@@ -119,7 +119,7 @@ end
 @testset "split=false systems with all parameter defaults" begin
     @variables x(t) = 1.0
     @parameters p=1.0 q=2.0 r=3.0
-    @mtkcompile sys=System(D(x) ~ p * x + q * t + r, t) split=false
+    @mtkcompile sys=System(D(x)~p*x+q*t+r, t) split=false
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
 end
@@ -254,7 +254,7 @@ end
 @testset "Array initials and scalar parameters with `split = false`" begin
     @variables x(t)[1:2]
     @parameters p
-    @mtkcompile sys=System([D(x[1]) ~ x[1], D(x[2]) ~ x[2] + p], t) split=false
+    @mtkcompile sys=System([D(x[1])~x[1], D(x[2])~x[2]+p], t) split=false
     ps = Set(parameters(sys; initial_parameters = true))
     @test length(ps) == 5
     for i in 1:2
