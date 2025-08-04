@@ -64,7 +64,6 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
-Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
@@ -74,6 +73,7 @@ FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 InfiniteOpt = "20393b10-9daf-11e9-18c9-8db751c92c57"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 Pyomo = "0e8e1daf-01b5-4eba-a626-3897743a3816"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [extensions]
 MTKBifurcationKitExt = "BifurcationKit"
@@ -83,6 +83,7 @@ MTKFMIExt = "FMI"
 MTKInfiniteOptExt = "InfiniteOpt"
 MTKLabelledArraysExt = "LabelledArrays"
 MTKPyomoDynamicOptExt = "Pyomo"
+ModelingToolkitUnitfulExt = "Unitful"
 
 [compat]
 ADTypes = "1.14.0"
@@ -165,7 +166,6 @@ SymbolicUtils = "3.26.1"
 Symbolics = "6.40"
 URIs = "1"
 UnPack = "0.1, 1.0"
-Unitful = "1.1"
 julia = "1.9"
 
 [extras]

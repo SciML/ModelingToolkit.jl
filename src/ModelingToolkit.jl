@@ -30,7 +30,7 @@ using InteractiveUtils
 using JumpProcesses
 using DataStructures
 using Base.Threads
-using Latexify, Unitful, ArrayInterface
+using Latexify, ArrayInterface
 using Setfield, ConstructionBase
 import Libdl
 using DocStringExtensions
@@ -93,7 +93,7 @@ export independent_variables, unknowns, observables, parameters, full_parameters
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import DynamicQuantities, Unitful
+import DynamicQuantities
 const DQ = DynamicQuantities
 
 import DifferentiationInterface as DI
@@ -232,15 +232,12 @@ include("deprecations.jl")
 const t_nounits = let
     only(@independent_variables t)
 end
-const t_unitful = let
-    only(@independent_variables t [unit = Unitful.u"s"])
-end
+# t_unitful and D_unitful moved to ModelingToolkitUnitfulExt extension
 const t = let
     only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
-const D_unitful = Differential(t_unitful)
 const D = Differential(t)
 
 export ODEFunction, convert_system_indepvar,
@@ -375,6 +372,16 @@ PrecompileTools.@compile_workload begin
         end
         @equations begin
             x ~ a + b
+        end
+    end
+end
+
+# Make UnitfulUnitCheck available when Unitful extension is loaded
+function __init__()
+    @static if hasfield(Main, :ModelingToolkitUnitfulExt)
+        # Extension is loaded, make UnitfulUnitCheck available
+        if hasfield(Main.ModelingToolkitUnitfulExt, :UnitfulUnitCheck)
+            const UnitfulUnitCheck = Main.ModelingToolkitUnitfulExt.UnitfulUnitCheck
         end
     end
 end

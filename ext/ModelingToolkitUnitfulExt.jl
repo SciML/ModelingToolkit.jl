@@ -1,93 +1,90 @@
-#For dispatching get_unit
-const Conditional = Union{typeof(ifelse)}
-const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
+module ModelingToolkitUnitfulExt
 
-struct ValidationError <: Exception
-    message::String
-end
+__precompile__(false)
 
-check_units(::Nothing, _...) = true
+using ModelingToolkit
+using Unitful
+using Symbolics: Symbolic, value, issym, isadd, ismul, ispow, arguments, operation, iscall, getmetadata
+using SciMLBase
+using RecursiveArrayTools
+using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
 
-function __get_literal_unit(x)
-    if x isa Pair
-        x = x[1]
-    end
-    if !(x isa Union{Num, Symbolic})
-        return nothing
-    end
-    v = value(x)
-    u = getmetadata(v, VariableUnit, nothing)
-    u isa DQ.AbstractQuantity ? screen_unit(u) : u
-end
-function __get_scalar_unit_type(v)
-    u = __get_literal_unit(v)
-    if u isa DQ.AbstractQuantity
+# Import necessary types and functions from ModelingToolkit
+import ModelingToolkit: ValidationError, Connection, instream, JumpType, VariableUnit,
+                        get_systems, Conditional, Comparison, Differential, 
+                        Integral, Num, check_units
+
+const MT = ModelingToolkit
+
+# Method extension for Unitful unit detection
+# This adds a method for the specific case where we have a Unitful unit
+function MT.__get_scalar_unit_type(v)
+    u = MT.__get_literal_unit(v)
+    if u isa MT.DQ.AbstractQuantity
         return Val(:DynamicQuantities)
-    end
-    # Unitful support via extension - specific methods will be added for Unitful types
-    return nothing
-end
-function __get_unit_type(vs′...)
-    for vs in vs′
-        if vs isa AbstractVector
-            for v in vs
-                u = __get_scalar_unit_type(v)
-                u === nothing || return u
-            end
-        else
-            v = vs
-            u = __get_scalar_unit_type(v)
-            u === nothing || return u
-        end
+    elseif u isa Unitful.Unitlike
+        return Val(:Unitful)  
     end
     return nothing
 end
 
+# Base operations for mixing Symbolic and Unitful
+Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
+Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
+
+"""
+Throw exception on invalid unit types, otherwise return argument.
+"""
 function screen_unit(result)
-    if result isa DQ.AbstractQuantity
-        d = DQ.dimension(result)
-        if d isa DQ.Dimensions
-            return result
-        elseif d isa DQ.SymbolicDimensions
-            return DQ.uexpand(oneunit(result))
-        else
-            throw(ValidationError("$result doesn't have a recognized unit"))
-        end
-    else
-        throw(ValidationError("$result doesn't have any unit."))
-    end
+    result isa Unitful.Unitlike ||
+        throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
+    result isa Unitful.ScalarUnits ||
+        throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
+    result == Unitful.u"°" &&
+        throw(ValidationError("Degrees are not supported. Use radians instead."))
+    result
 end
 
-const unitless = DQ.Quantity(1.0)
-get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
+"""
+Test unit equivalence.
+
+Example of implemented behavior:
+
+```julia
+using ModelingToolkit, Unitful
+MT = ModelingToolkit
+@parameters γ P [unit = u"MW"] E [unit = u"kJ"] τ [unit = u"ms"]
+@test MT.equivalent(u"MW", u"kJ/ms") # Understands prefixes
+@test !MT.equivalent(u"m", u"cm") # Units must be same magnitude
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E / τ)^γ)) # Handles symbolic exponents
+```
+"""
+equivalent(x, y) = isequal(1 * x, 1 * y)
+const unitless = Unitful.unit(1)
 
 """
 Find the unit of a symbolic item.
 """
 get_unit(x::Real) = unitless
-get_unit(x::DQ.AbstractQuantity) = screen_unit(x)
+get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
-get_unit(x::Num) = get_unit(unwrap(x))
-get_unit(x::Symbolics.Arr) = get_unit(unwrap(x))
+get_unit(x::Num) = get_unit(value(x))
+function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
+    get_literal_unit(x)
+end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
 
+get_literal_unit(x) = screen_unit(getmetadata(x, VariableUnit, unitless))
+
 function get_unit(op, args) # Fallback
-    result = oneunit(op(get_unit.(args)...))
+    result = op(1 .* get_unit.(args)...)
     try
-        get_unit(result)
+        Unitful.unit(result)
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
-    end
-end
-
-function get_unit(::Union{typeof(+), typeof(-)}, args)
-    u = get_unit(args[1])
-    if all(i -> get_unit(args[i]) == u, 2:length(args))
-        return u
     end
 end
 
@@ -103,7 +100,6 @@ function get_unit(op::Integral, args)
     return get_unit(args[1]) * unit
 end
 
-equivalent(x, y) = isequal(x, y)
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
@@ -129,9 +125,7 @@ function get_unit(op::Comparison, args)
 end
 
 function get_unit(x::Symbolic)
-    if (u = __get_literal_unit(x)) !== nothing
-        screen_unit(u)
-    elseif issym(x)
+    if issym(x)
         get_literal_unit(x)
     elseif isadd(x)
         terms = get_unit.(arguments(x))
@@ -145,7 +139,7 @@ function get_unit(x::Symbolic)
     elseif ispow(x)
         pargs = arguments(x)
         base, expon = get_unit.(pargs)
-        @assert oneunit(expon) == unitless
+        @assert expon isa Unitful.DimensionlessUnits
         if base == unitless
             unitless
         else
@@ -174,7 +168,7 @@ function safe_get_unit(term, info)
     try
         side = get_unit(term)
     catch err
-        if err isa DQ.DimensionError
+        if err isa Unitful.DimensionError
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
             @warn(info*err.message)
@@ -201,11 +195,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
                 first_label = label
             elseif !equivalent(first_unit, equnit)
                 valid = false
-                str = "$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match."
-                if oneunit(first_unit) == oneunit(equnit)
-                    str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
-                end
-                @warn(str)
+                @warn("$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
             end
         end
     end
@@ -216,30 +206,26 @@ function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
     sys = first(syss)
-    st = unknowns(sys)
+    unks = MT.unknowns(sys)
     for i in 2:length(syss)
         s = syss[i]
-        sst = unknowns(s)
-        if length(st) != length(sst)
+        _unks = MT.unknowns(s)
+        if length(unks) != length(_unks)
             valid = false
-            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) unknowns, cannot connect.")
+            @warn("$info: connected systems $(MT.nameof(sys)) and $(MT.nameof(s)) have $(length(unks)) and $(length(_unks)) unknowns, cannot connect.")
             continue
         end
-        for (i, x) in enumerate(st)
-            j = findfirst(isequal(x), sst)
+        for (i, x) in enumerate(unks)
+            j = findfirst(isequal(x), _unks)
             if j == nothing
                 valid = false
-                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same unknowns.")
+                @warn("$info: connected systems $(MT.nameof(sys)) and $(MT.nameof(s)) do not have the same unknowns.")
             else
-                aunit = safe_get_unit(x, info * string(nameof(sys)) * "#$i")
-                bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
+                aunit = safe_get_unit(x, info * string(MT.nameof(sys)) * "#$i")
+                bunit = safe_get_unit(_unks[j], info * string(MT.nameof(s)) * "#$j")
                 if !equivalent(aunit, bunit)
                     valid = false
-                    str = "$info: connected system unknowns $x ($aunit) and $(sst[j]) ($bunit) have mismatched units."
-                    if oneunit(aunit) == oneunit(bunit)
-                        str *= " If there are non-SI units in the system, please use symbolic units like `us\"ms\"`"
-                    end
-                    @warn(str)
+                    @warn("$info: connected system unknowns $x and $(_unks[j]) have mismatched units.")
                 end
             end
         end
@@ -247,9 +233,7 @@ function _validate(conn::Connection; info::String = "")
     valid
 end
 
-function validate(jump::Union{VariableRateJump,
-            ConstantRateJump}, t::Symbolic;
-        info::String = "")
+function validate(jump::Union{VariableRateJump, ConstantRateJump}, t::Symbolic; info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
@@ -275,18 +259,19 @@ function validate(jumps::Vector{JumpType}, t::Symbolic)
     all([validate(js, t; info) for (js, info) in zip(splitjumps, labels)])
 end
 
-function validate(eq::Union{Inequality, Equation}; info::String = "")
+function validate(eq::MT.Equation; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
 end
-function validate(eq::Equation,
-        term::Union{Symbolic, DQ.AbstractQuantity, Num}; info::String = "")
+
+function validate(eq::MT.Equation, term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
-function validate(eq::Equation, terms::Vector; info::String = "")
+
+function validate(eq::MT.Equation, terms::Vector; info::String = "")
     _validate(vcat([eq.lhs, eq.rhs], terms),
         vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
 end
@@ -297,23 +282,64 @@ Returns true iff units of equations are valid.
 function validate(eqs::Vector; info::String = "")
     all([validate(eqs[idx], info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
+
 function validate(eqs::Vector, noise::Vector; info::String = "")
     all([validate(eqs[idx], noise[idx], info = info * " in eq. #$idx")
          for idx in 1:length(eqs)])
 end
+
 function validate(eqs::Vector, noise::Matrix; info::String = "")
     all([validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
          for idx in 1:length(eqs)])
 end
+
 function validate(eqs::Vector, term::Symbolic; info::String = "")
     all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
-validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== nothing
+
+validate(term::Symbolic) = safe_get_unit(term, "") !== nothing
 
 """
 Throws error if units of equations are invalid.
 """
-function check_units(::Val{:DynamicQuantities}, eqs...)
+function check_units(::Val{:Unitful}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
+
+# Model parsing functions for Unitful
+function convert_units(varunits::Unitful.FreeUnits, value)
+    Unitful.ustrip(varunits, value)
+end
+
+convert_units(::Unitful.FreeUnits, value::MT.NoValue) = MT.NO_VALUE
+
+function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
+    Unitful.ustrip.(varunits, value)
+end
+
+convert_units(::Unitful.FreeUnits, value::Num) = value
+
+# Extend model parsing error handling to include Unitful.DimensionError
+MT._is_dimension_error(e::Unitful.DimensionError) = true
+
+# Define Unitful time variables (moved from main module)
+const t_unitful = let
+    MT.only(MT.@independent_variables t [unit = Unitful.u"s"])
+end
+const D_unitful = MT.Differential(t_unitful)
+
+# Create a UnitfulUnitCheck module for backward compatibility
+module UnitfulUnitCheck
+    using ..ModelingToolkitUnitfulExt
+    # Re-export all functions from the extension for backward compatibility
+    const equivalent = ModelingToolkitUnitfulExt.equivalent
+    const unitless = ModelingToolkitUnitfulExt.unitless
+    const get_unit = ModelingToolkitUnitfulExt.get_unit
+    const get_literal_unit = ModelingToolkitUnitfulExt.get_literal_unit
+    const safe_get_unit = ModelingToolkitUnitfulExt.safe_get_unit
+    const validate = ModelingToolkitUnitfulExt.validate
+    const screen_unit = ModelingToolkitUnitfulExt.screen_unit
+end
+
+end # module
