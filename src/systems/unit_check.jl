@@ -76,11 +76,19 @@ get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
 
 function get_unit(op, args) # Fallback
-    result = oneunit(op(get_unit.(args)...))
+    unit_args = get_unit.(args)
     try
-        get_unit(result)
+        result = op(unit_args...)
+        # For operations that return a unit directly, return it
+        return screen_unit(result)
     catch
-        throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
+        try
+            # Try with oneunit for numeric operations
+            result = oneunit(op(unit_args...))
+            return get_unit(result)
+        catch
+            throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
+        end
     end
 end
 

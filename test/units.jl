@@ -1,7 +1,21 @@
 using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
-UMT = ModelingToolkit.UnitfulUnitCheck
+
+# Create UnitfulUnitCheck compatibility interface
+# With the extension, all functions are accessible directly from ModelingToolkit
+const unitless_unit = ModelingToolkit.DQ.Quantity(1.0)  # Use DQ unitless consistently
+UMT = (
+    equivalent = ModelingToolkit.equivalent,
+    unitless = unitless_unit,
+    get_unit = ModelingToolkit.get_unit,
+    get_literal_unit = ModelingToolkit.get_literal_unit,
+    safe_get_unit = ModelingToolkit.safe_get_unit,
+    validate = ModelingToolkit.validate,
+    screen_unit = ModelingToolkit.screen_unit,
+    ValidationError = ModelingToolkit.ValidationError,
+    SciMLBase = SciMLBase
+)
 @independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"] γ
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
