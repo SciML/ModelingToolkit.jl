@@ -2,66 +2,55 @@ using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, Unitful
 using Test
 MT = ModelingToolkit
 
-# Create UnitfulUnitCheck compatibility interface
-# With the extension, all functions are accessible directly from ModelingToolkit
-const unitless_unit = ModelingToolkit.DQ.Quantity(1.0)  # Use DQ unitless consistently
-UMT = (
-    equivalent = ModelingToolkit.equivalent,
-    unitless = unitless_unit,
-    get_unit = ModelingToolkit.get_unit,
-    get_literal_unit = ModelingToolkit.get_literal_unit,
-    safe_get_unit = ModelingToolkit.safe_get_unit,
-    validate = ModelingToolkit.validate,
-    screen_unit = ModelingToolkit.screen_unit,
-    ValidationError = ModelingToolkit.ValidationError,
-    SciMLBase = SciMLBase
-)
+# All unit functions are now directly available from ModelingToolkit
+# Extension automatically loads when Unitful is imported
+const unitless = ModelingToolkit.DQ.Quantity(1.0)
 @independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"] γ
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
 #This is how equivalent works:
-@test UMT.equivalent(u"MW", u"kJ/ms")
-@test !UMT.equivalent(u"m", u"cm")
-@test UMT.equivalent(UMT.get_unit(P^γ), UMT.get_unit((E / τ)^γ))
+@test ModelingToolkit.equivalent(u"MW", u"kJ/ms")
+@test !ModelingToolkit.equivalent(u"m", u"cm")
+@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(P^γ), ModelingToolkit.get_unit((E / τ)^γ))
 
 # Basic access
-@test UMT.get_unit(t) == u"ms"
-@test UMT.get_unit(E) == u"kJ"
-@test UMT.get_unit(τ) == u"ms"
-@test UMT.get_unit(γ) == UMT.unitless
-@test UMT.get_unit(0.5) == UMT.unitless
-@test UMT.get_unit(UMT.SciMLBase.NullParameters()) == UMT.unitless
+@test ModelingToolkit.get_unit(t) == u"ms"
+@test ModelingToolkit.get_unit(E) == u"kJ"
+@test ModelingToolkit.get_unit(τ) == u"ms"
+@test ModelingToolkit.get_unit(γ) == unitless
+@test ModelingToolkit.get_unit(0.5) == unitless
+@test ModelingToolkit.get_unit(ModelingToolkit.SciMLBase.NullParameters()) == unitless
 
 # Prohibited unit types
 @parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
-@test_throws UMT.ValidationError UMT.get_unit(β)
-@test_throws UMT.ValidationError UMT.get_unit(α)
-@test_throws UMT.ValidationError UMT.get_unit(γ)
+@test_throws ModelingToolkit.ValidationError ModelingToolkit.get_unit(β)
+@test_throws ModelingToolkit.ValidationError ModelingToolkit.get_unit(α)
+@test_throws ModelingToolkit.ValidationError ModelingToolkit.get_unit(γ)
 
 # Non-trivial equivalence & operators
-@test UMT.get_unit(τ^-1) == u"ms^-1"
-@test UMT.equivalent(UMT.get_unit(D(E)), u"MW")
-@test UMT.equivalent(UMT.get_unit(E / τ), u"MW")
-@test UMT.get_unit(2 * P) == u"MW"
-@test UMT.get_unit(t / τ) == UMT.unitless
-@test UMT.equivalent(UMT.get_unit(P - E / τ), u"MW")
-@test UMT.equivalent(UMT.get_unit(D(D(E))), u"MW/ms")
-@test UMT.get_unit(ifelse(t > t, P, E / τ)) == u"MW"
-@test UMT.get_unit(1.0^(t / τ)) == UMT.unitless
-@test UMT.get_unit(exp(t / τ)) == UMT.unitless
-@test UMT.get_unit(sin(t / τ)) == UMT.unitless
-@test UMT.get_unit(sin(1 * u"rad")) == UMT.unitless
-@test UMT.get_unit(t^2) == u"ms^2"
+@test ModelingToolkit.get_unit(τ^-1) == u"ms^-1"
+@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(D(E)), u"MW")
+@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(E / τ), u"MW")
+@test ModelingToolkit.get_unit(2 * P) == u"MW"
+@test ModelingToolkit.get_unit(t / τ) == unitless
+@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(P - E / τ), u"MW")
+@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(D(D(E))), u"MW/ms")
+@test ModelingToolkit.get_unit(ifelse(t > t, P, E / τ)) == u"MW"
+@test ModelingToolkit.get_unit(1.0^(t / τ)) == unitless
+@test ModelingToolkit.get_unit(exp(t / τ)) == unitless
+@test ModelingToolkit.get_unit(sin(t / τ)) == unitless
+@test ModelingToolkit.get_unit(sin(1 * u"rad")) == unitless
+@test ModelingToolkit.get_unit(t^2) == u"ms^2"
 
 eqs = [D(E) ~ P - E / τ
        0 ~ P]
-@test UMT.validate(eqs)
+@test ModelingToolkit.validate(eqs)
 @named sys = System(eqs, t)
 
-@test !UMT.validate(D(D(E)) ~ P)
-@test !UMT.validate(0 ~ P + E * τ)
+@test !ModelingToolkit.validate(D(D(E)) ~ P)
+@test !ModelingToolkit.validate(0 ~ P + E * τ)
 
 # Disabling unit validation/checks selectively
 @test_throws MT.ArgumentError System(eqs, t, [E, P, t], [τ], name = :sys)
@@ -102,9 +91,9 @@ end
 good_eqs = [connect(p1, p2)]
 bad_eqs = [connect(p1, p2, op)]
 bad_length_eqs = [connect(op, lp)]
-@test UMT.validate(good_eqs)
-@test !UMT.validate(bad_eqs)
-@test !UMT.validate(bad_length_eqs)
+@test ModelingToolkit.validate(good_eqs)
+@test !ModelingToolkit.validate(bad_eqs)
+@test !ModelingToolkit.validate(bad_length_eqs)
 @named sys = System(good_eqs, t, [], [])
 @test_throws MT.ValidationError System(bad_eqs, t, [], []; name = :sys)
 
@@ -144,7 +133,7 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 # Invalid noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
-@test !UMT.validate(eqs, noiseeqs)
+@test !ModelingToolkit.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
 @independent_variables t [unit = u"s"]
@@ -236,7 +225,7 @@ end
 @test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
 
 @variables x(t)
-@test ModelingToolkit.get_unit(sin(x)) == ModelingToolkit.unitless
+@test ModelingToolkit.get_unit(sin(x)) == unitless
 
 @mtkmodel ExpressionParametersTest begin
     @parameters begin

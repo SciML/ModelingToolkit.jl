@@ -376,6 +376,6 @@ PrecompileTools.@compile_workload begin
     end
 end
 
-# UnitfulUnitCheck will be available when the extension loads
+# Unitful-specific functionality is available when the ModelingToolkitUnitfulExt extension loads
 
 end # module

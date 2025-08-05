@@ -76,17 +76,6 @@ const t_unitful = let
 end
 const D_unitful = MT.Differential(t_unitful)
 
-# For backward compatibility - provide UnitfulUnitCheck module interface
-# Extensions can access all the main package functions through MT
-const UnitfulUnitCheck = (
-    equivalent = MT.equivalent,
-    unitless = Unitful.unit(1),
-    get_unit = MT.get_unit,
-    get_literal_unit = MT.get_literal_unit,
-    safe_get_unit = MT.safe_get_unit,
-    validate = MT.validate,
-    screen_unit = MT.screen_unit,
-    ValidationError = ValidationError
-)
+# Extension loaded - all Unitful-specific functionality is now available
 
 end # module
