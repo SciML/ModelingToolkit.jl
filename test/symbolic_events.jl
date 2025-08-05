@@ -1410,3 +1410,12 @@ end
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Algebraic equation with input variable in symbolic affect" begin
+    # Specifically happens when the variable marked as an input is an algebraic variable
+    # in the affect system.
+    @variables x(t) [input = true] y(t)
+    dev = ModelingToolkit.SymbolicDiscreteCallback(1.0, [y ~ Pre(y) + 1])
+    @named sys = System([D(y) ~ 2x + 1, x^2 ~ 2y^3], t; discrete_events = [dev])
+    sys = @test_nowarn mtkcompile(sys)
+end
