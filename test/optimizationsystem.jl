@@ -64,6 +64,8 @@ end
     sys = complete(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true)
+    @test prob.f.cons_expr isa Vector{Expr}
+    @test prob.f.expr isa Expr
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
     @test sol.objective < 1.0
@@ -98,10 +100,10 @@ end
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
         grad = false, hess = false, cons_j = false, cons_h = false)
-    @test_broken sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-    @test_skip sol.objective < 1.0
-    @test_skip sol.u≈[0.808, -0.064] atol=1e-3
-    @test_skip sol[x]^2 + sol[y]^2 ≈ 1.0
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.objective < 1.0
+    @test_broken sol.u≈[0.808, -0.064] atol=1e-3
+    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
 @testset "rosenbrock" begin
@@ -289,9 +291,8 @@ end
     sys = complete(sys)
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
-    @test prob.f.expr isa Symbolics.Symbolic
-    @test all(prob.f.cons_expr[i].lhs isa Symbolics.Symbolic
-    for i in 1:length(prob.f.cons_expr))
+    @test prob.f.expr isa Expr
+    @test all(x -> x isa Expr, prob.f.cons_expr)
 end
 
 @testset "Derivatives, iip and oop" begin
