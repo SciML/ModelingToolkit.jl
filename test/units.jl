@@ -19,9 +19,9 @@ D = Differential(t)
 @test ModelingToolkit.get_unit(t) == u"ms"
 @test ModelingToolkit.get_unit(E) == u"kJ"
 @test ModelingToolkit.get_unit(τ) == u"ms"
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(γ), unitless)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(0.5), unitless)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(ModelingToolkit.SciMLBase.NullParameters()), unitless)
+@test ModelingToolkit.get_unit(γ) == unitless
+@test ModelingToolkit.get_unit(0.5) == unitless
+@test ModelingToolkit.get_unit(ModelingToolkit.SciMLBase.NullParameters()) == unitless
 
 # Prohibited unit types
 @parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
@@ -34,14 +34,14 @@ D = Differential(t)
 @test ModelingToolkit.equivalent(ModelingToolkit.get_unit(D(E)), u"MW")
 @test ModelingToolkit.equivalent(ModelingToolkit.get_unit(E / τ), u"MW")
 @test ModelingToolkit.get_unit(2 * P) == u"MW"
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(t / τ), unitless)
+@test ModelingToolkit.get_unit(t / τ) == unitless
 @test ModelingToolkit.equivalent(ModelingToolkit.get_unit(P - E / τ), u"MW")
 @test ModelingToolkit.equivalent(ModelingToolkit.get_unit(D(D(E))), u"MW/ms")
 @test ModelingToolkit.get_unit(ifelse(t > t, P, E / τ)) == u"MW"
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(1.0^(t / τ)), unitless)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(exp(t / τ)), unitless)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(sin(t / τ)), unitless)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(sin(1 * u"rad")), unitless)
+@test ModelingToolkit.get_unit(1.0^(t / τ)) == unitless
+@test ModelingToolkit.get_unit(exp(t / τ)) == unitless
+@test ModelingToolkit.get_unit(sin(t / τ)) == unitless
+@test ModelingToolkit.get_unit(sin(1 * u"rad")) == unitless
 @test ModelingToolkit.get_unit(t^2) == u"ms^2"
 
 eqs = [D(E) ~ P - E / τ
@@ -225,7 +225,7 @@ end
 @test ModelingToolkit.getdefault(sys.a) ≈ [0.01, 0.03]
 
 @variables x(t)
-@test ModelingToolkit.equivalent(ModelingToolkit.get_unit(sin(x)), unitless)
+@test ModelingToolkit.get_unit(sin(x)) == unitless
 
 @mtkmodel ExpressionParametersTest begin
     @parameters begin
