@@ -376,14 +376,6 @@ PrecompileTools.@compile_workload begin
     end
 end
 
-# Make UnitfulUnitCheck available when Unitful extension is loaded
-function __init__()
-    @static if hasfield(Main, :ModelingToolkitUnitfulExt)
-        # Extension is loaded, make UnitfulUnitCheck available
-        if hasfield(Main.ModelingToolkitUnitfulExt, :UnitfulUnitCheck)
-            const UnitfulUnitCheck = Main.ModelingToolkitUnitfulExt.UnitfulUnitCheck
-        end
-    end
-end
+# UnitfulUnitCheck will be available when the extension loads
 
 end # module
