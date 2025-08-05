@@ -81,7 +81,32 @@ function get_unit(op, args) # Fallback
         result = op(unit_args...)
         # For operations that return a unit directly, return it
         return screen_unit(result)
-    catch
+    catch e
+        # If we get an ambiguous method error mixing DQ and Unitful, 
+        # try to handle common cases
+        if e isa MethodError && length(unit_args) >= 2
+            # Check if we have mixed DQ and Unitful units
+            unit_types = _get_unittype.(unit_args)
+            if Val(:DynamicQuantities) in unit_types && Val(:Unitful) in unit_types
+                # For multiplication/division operations involving unitless and Unitful
+                if op === (*) 
+                    # If first argument is unitless (like -1), result should have the unit of the second
+                    if unit_args[1] == unitless && length(unit_args) == 2
+                        return screen_unit(unit_args[2])
+                    elseif length(unit_args) == 2 && unit_args[2] == unitless
+                        return screen_unit(unit_args[1])
+                    end
+                elseif op === (/) && unit_args[1] == unitless
+                    # 1 / unitful_unit should give unitful_unit^-1
+                    try
+                        return screen_unit(inv(unit_args[2]))
+                    catch
+                        # Fall through to original error handling
+                    end
+                end
+            end
+        end
+        
         try
             # Try with oneunit for numeric operations
             result = oneunit(op(unit_args...))
@@ -153,8 +178,11 @@ function get_unit(x::Symbolic)
     elseif ispow(x)
         pargs = arguments(x)
         base, expon = get_unit.(pargs)
-        @assert oneunit(expon) == unitless
-        if base == unitless
+        # Check that exponent is dimensionless (works for both DQ and Unitful)
+        if !equivalent(expon, unitless)
+            throw(ValidationError("Power exponent must be dimensionless, got $expon"))
+        end
+        if equivalent(base, unitless)
             unitless
         else
             pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]

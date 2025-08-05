@@ -40,8 +40,40 @@ function MT.equivalent(x::Unitful.Unitlike, y::Unitful.Unitlike)
 end
 
 # Mixed equivalence checks
-MT.equivalent(x::Unitful.Unitlike, y) = isequal(1 * x, y)
-MT.equivalent(x, y::Unitful.Unitlike) = isequal(x, 1 * y)
+function MT.equivalent(x::Unitful.Unitlike, y)
+    if y isa MT.DQ.AbstractQuantity
+        # Handle dimensionless case
+        if Unitful.dimension(x) == Unitful.NoDims && MT.DQ.is_unitless(y)
+            return true
+        end
+        # For mixed unit systems, we can't reliably compare
+        # This would require a full dimensional analysis system
+        return false
+    else
+        try
+            return isequal(1 * x, y)
+        catch
+            return false
+        end
+    end
+end
+
+function MT.equivalent(x, y::Unitful.Unitlike)
+    if x isa MT.DQ.AbstractQuantity
+        # Handle dimensionless case
+        if Unitful.dimension(y) == Unitful.NoDims && MT.DQ.is_unitless(x)
+            return true
+        end
+        # For mixed unit systems, we can't reliably compare
+        return false
+    else
+        try
+            return isequal(x, 1 * y)
+        catch
+            return false
+        end
+    end
+end
 
 # The safe_get_unit function stays in the main package and already handles DQ.DimensionError
 # We just need to make sure it can handle Unitful.DimensionError too
