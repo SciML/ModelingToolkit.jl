@@ -7,6 +7,7 @@ using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
 using ModelingToolkitStandardLibrary.Mechanical.TranslationalPosition
 using Test
+import NonlinearSolve
 
 using ControlSystemsMTK
 using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
