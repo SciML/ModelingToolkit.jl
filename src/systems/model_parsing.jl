@@ -891,7 +891,6 @@ function convert_units(
 end
 
 
-# Dimension error check function is defined in unit_check.jl
 
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
