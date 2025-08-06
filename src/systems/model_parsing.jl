@@ -909,7 +909,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                     try
                         $setdefault($vv, $convert_units($unit, $name))
                     catch e
-                        if isa(e, $(DynamicQuantities.DimensionError)) || ($(ModelingToolkit)._is_dimension_error(e))
+                        if _is_dimension_error($e)
                             error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                         elseif isa(e, MethodError)
                             error("No or invalid units provided for \'" * string(:($$vv)) *
