@@ -1,5 +1,5 @@
-function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys))
-    nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm)
+function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys), nlstep_compile::Bool = true)
+    nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
     state = ProblemState(; u = u0, p)
     op = Dict()
     op[ODE_GAMMA[1]] = one(eltype(u0))
@@ -35,7 +35,7 @@ function get_inner_tmp(n::Int)
     only(@parameters inner_tmpₘₜₖ[1:n])
 end
 
-function inner_nlsystem(sys::System, mm)
+function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     dvs = unknowns(sys)
     eqs = full_equations(sys)
     t = get_iv(sys)
@@ -56,8 +56,12 @@ function inner_nlsystem(sys::System, mm)
 
     new_dvs = unknowns(sys)
     new_ps = [parameters(sys); [gamma1, gamma2, gamma3, c, inner_tmp, outer_tmp]]
-    nlsys = mtkcompile(
-        System(new_eqs, new_dvs, new_ps; name = :nlsys); split = is_split(sys))
+    nlsys = System(new_eqs, new_dvs, new_ps; name = :nlsys)
+    nlsys = if nlstep_compile
+        mtkcompile(nlsys; split = is_split(sys))
+    else
+        complete(nlsys; split = is_split(sys))
+    end
     return nlsys, outer_tmp, inner_tmp
 end
 
