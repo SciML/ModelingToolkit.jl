@@ -1,6 +1,7 @@
 @data ClockVertex begin
     Variable(Int)
     Equation(Int)
+    InitEquation(Int)
     Clock(SciMLBase.AbstractClock)
 end
 
@@ -9,6 +10,8 @@ struct ClockInference{S}
     ts::S
     """The time domain (discrete clock, continuous) of each equation."""
     eq_domain::Vector{TimeDomain}
+    """The time domain (discrete clock, continuous) of each initialization equation."""
+    init_eq_domain::Vector{TimeDomain}
     """The output time domain (discrete clock, continuous) of each variable."""
     var_domain::Vector{TimeDomain}
     inference_graph::HyperGraph{ClockVertex.Type}
@@ -20,6 +23,8 @@ function ClockInference(ts::TransformationState)
     @unpack structure = ts
     @unpack graph = structure
     eq_domain = TimeDomain[ContinuousClock() for _ in 1:nsrcs(graph)]
+    init_eq_domain = TimeDomain[ContinuousClock()
+                                for _ in 1:length(initialization_equations(ts.sys))]
     var_domain = TimeDomain[ContinuousClock() for _ in 1:ndsts(graph)]
     inferred = BitSet()
     for (i, v) in enumerate(get_fullvars(ts))
@@ -33,6 +38,9 @@ function ClockInference(ts::TransformationState)
     for i in 1:nsrcs(graph)
         add_vertex!(inference_graph, ClockVertex.Equation(i))
     end
+    for i in eachindex(initialization_equations(ts.sys))
+        add_vertex!(inference_graph, ClockVertex.InitEquation(i))
+    end
     for i in 1:ndsts(graph)
         varvert = ClockVertex.Variable(i)
         add_vertex!(inference_graph, varvert)
@@ -43,7 +51,7 @@ function ClockInference(ts::TransformationState)
         add_vertex!(inference_graph, dvert)
         add_edge!(inference_graph, (varvert, dvert))
     end
-    ClockInference(ts, eq_domain, var_domain, inference_graph, inferred)
+    ClockInference(ts, eq_domain, init_eq_domain, var_domain, inference_graph, inferred)
 end
 
 struct NotInferredTimeDomain end
@@ -96,7 +104,7 @@ end
 Update the equation-to-time domain mapping by inferring the time domain from the variables.
 """
 function infer_clocks!(ci::ClockInference)
-    @unpack ts, eq_domain, var_domain, inferred, inference_graph = ci
+    @unpack ts, eq_domain, init_eq_domain, var_domain, inferred, inference_graph = ci
     @unpack var_to_diff, graph = ts.structure
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
@@ -124,13 +132,18 @@ function infer_clocks!(ci::ClockInference)
     # mapping from `i` in `InferredDiscrete(i)` to the vertices in that inferred partition
     relative_hyperedges = Dict{Int, Set{ClockVertex.Type}}()
 
-    for (ieq, eq) in enumerate(equations(ts))
+    function infer_equation(ieq, eq, is_initialization_equation)
         empty!(varsbuf)
         empty!(hyperedge)
         # get variables in equation
         vars!(varsbuf, eq; op = Symbolics.Operator)
         # add the equation to the hyperedge
-        push!(hyperedge, ClockVertex.Equation(ieq))
+        eq_node = if is_initialization_equation
+            ClockVertex.InitEquation(ieq)
+        else
+            ClockVertex.Equation(ieq)
+        end
+        push!(hyperedge, eq_node)
         for var in varsbuf
             idx = get(var_to_idx, var, nothing)
             # if this is just a single variable, add it to the hyperedge
@@ -215,6 +228,12 @@ function infer_clocks!(ci::ClockInference)
 
         add_edge!(inference_graph, hyperedge)
     end
+    for (ieq, eq) in enumerate(equations(ts))
+        infer_equation(ieq, eq, false)
+    end
+    for (ieq, eq) in enumerate(initialization_equations(ts.sys))
+        infer_equation(ieq, eq, true)
+    end
 
     clock_partitions = connectionsets(inference_graph)
     for partition in clock_partitions
@@ -243,6 +262,7 @@ function infer_clocks!(ci::ClockInference)
             Moshi.Match.@match vert begin
                 ClockVertex.Variable(i) => (var_domain[i] = clock)
                 ClockVertex.Equation(i) => (eq_domain[i] = clock)
+                ClockVertex.InitEquation(i) => (init_eq_domain[i] = clock)
                 ClockVertex.Clock(_) => nothing
             end
         end
@@ -278,7 +298,7 @@ end
 For multi-clock systems, create a separate system for each clock in the system, along with associated equations. Return the updated tearing state, and the sets of clocked variables associated with each time domain.
 """
 function split_system(ci::ClockInference{S}) where {S}
-    @unpack ts, eq_domain, var_domain, inferred = ci
+    @unpack ts, eq_domain, init_eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
     @unpack graph = ts.structure
     continuous_id = Ref(0)
@@ -286,6 +306,8 @@ function split_system(ci::ClockInference{S}) where {S}
     id_to_clock = TimeDomain[]
     eq_to_cid = Vector{Int}(undef, nsrcs(graph))
     cid_to_eq = Vector{Int}[]
+    init_eq_to_cid = Vector{Int}(undef, length(initialization_equations(ts.sys)))
+    cid_to_init_eq = Vector{Int}[]
     var_to_cid = Vector{Int}(undef, ndsts(graph))
     cid_to_var = Vector{Int}[]
     # cid_counter = number of clocks
@@ -311,6 +333,15 @@ function split_system(ci::ClockInference{S}) where {S}
         eq_to_cid[i] = cid
         resize_or_push!(cid_to_eq, i, cid)
     end
+    # NOTE: This assumes that there is at least one equation for each clock
+    for _ in 1:length(cid_to_eq)
+        push!(cid_to_init_eq, Int[])
+    end
+    for (i, d) in enumerate(init_eq_domain)
+        cid = clock_to_id[d]
+        init_eq_to_cid[i] = cid
+        push!(cid_to_init_eq[cid], i)
+    end
     continuous_id = continuous_id[]
     # for each clock partition what are the input (indexes/vars)
     input_idxs = map(_ -> Int[], 1:cid_counter[])
@@ -334,8 +365,8 @@ function split_system(ci::ClockInference{S}) where {S}
 
     # breaks the system up into a continous and 0 or more discrete systems
     tss = similar(cid_to_eq, S)
-    for (id, (ieqs, ivars)) in enumerate(zip(cid_to_eq, cid_to_var))
-        ts_i = system_subset(ts, ieqs, ivars)
+    for (id, (ieqs, iieqs, ivars)) in enumerate(zip(cid_to_eq, cid_to_init_eq, cid_to_var))
+        ts_i = system_subset(ts, ieqs, iieqs, ivars)
         if id != continuous_id
             ts_i = shift_discrete_system(ts_i)
             @set! ts_i.structure.only_discrete = true

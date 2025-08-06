@@ -219,9 +219,11 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
-function system_subset(ts::TearingState, ieqs::Vector{Int}, ivars::Vector{Int})
+function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, ivars::Vector{Int})
     eqs = equations(ts)
+    initeqs = initialization_equations(ts.sys)
     @set! ts.sys.eqs = eqs[ieqs]
+    @set! ts.sys.initialization_eqs = initeqs[iieqs]
     @set! ts.original_eqs = ts.original_eqs[ieqs]
     @set! ts.structure = system_subset(ts.structure, ieqs, ivars)
     if all(eq -> eq.rhs isa StateMachineOperator, get_eqs(ts.sys))

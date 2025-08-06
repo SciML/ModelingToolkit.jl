@@ -118,6 +118,34 @@ eqs = [yd ~ Sample(dt)(y)
 @named sys = System(eqs, t)
 @test_throws ModelingToolkit.HybridSystemNotSupportedException ss=mtkcompile(sys);
 
+@testset "Clock inference uses and splits initialization equations" begin
+    @variables x(t) y(t) z(t)
+    k = ShiftIndex()
+    clk = Clock(0.1)
+    eqs = [D(x) ~ x, y ~ Sample(clk)(x), z ~ z(k-1) + 1]
+    initialization_eqs = [y ~ z, x ~ 1]
+    @named sys = System(eqs, t; initialization_eqs)
+    ts = TearingState(sys)
+    ci = ModelingToolkit.ClockInference(ts)
+    @test length(ci.init_eq_domain) == 2
+    ModelingToolkit.infer_clocks!(ci)
+    canonical_eqs = map(eqs) do eq
+        if iscall(eq.lhs) && operation(eq.lhs) isa Differential
+            return eq
+        else
+            return 0 ~ eq.rhs - eq.lhs
+        end
+    end
+    eqs_idxs = findfirst.(isequal.(canonical_eqs), (equations(ci.ts),))
+    @test ci.eq_domain[eqs_idxs[1]] == ContinuousClock()
+    @test ci.eq_domain[eqs_idxs[2]] == clk
+    @test ci.eq_domain[eqs_idxs[3]] == clk
+    varmap = Dict(ci.ts.fullvars .=> ci.var_domain)
+    @test varmap[x] == ContinuousClock()
+    @test varmap[y] == clk
+    @test varmap[z] == clk
+end
+
 @test_skip begin
     Tf = 1.0
     prob = ODEProblem(
