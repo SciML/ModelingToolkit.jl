@@ -232,7 +232,6 @@ include("deprecations.jl")
 const t_nounits = let
     only(@independent_variables t)
 end
-# t_unitful and D_unitful moved to ModelingToolkitUnitfulExt extension
 const t = let
     only(@independent_variables t [unit = DQ.u"s"])
 end
