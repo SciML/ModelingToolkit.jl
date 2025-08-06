@@ -295,7 +295,6 @@ export map_variables_to_equations
 
 export toexpr, get_variables
 export simplify, substitute
-export get_unit, validate, equivalent, screen_unit, get_literal_unit, oneunit
 export build_function
 export modelingtoolkitize
 export generate_initializesystem, Initial, isinitial, InitializationProblem
