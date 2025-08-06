@@ -1546,7 +1546,12 @@ struct SymbolicTstops{F}
 end
 
 function (st::SymbolicTstops)(p, tspan)
-    unique!(sort!(reduce(vcat, st.fn(p, tspan...))))
+    buffer = reduce(vcat, st.fn(p, tspan...))
+    if ArrayInterface.ismutable(buffer)
+        return unique!(sort!(buffer))
+    else
+        return unique(sort(buffer))
+    end
 end
 
 function SymbolicTstops(

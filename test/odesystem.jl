@@ -1414,6 +1414,10 @@ end
     sol2 = solve(prob2, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+
+    @mtkcompile sys = System([D(x) ~ x + p], t; tstops = [[p]])
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.kwargs[:tstops](prob.p, prob.tspan) ≈ [0.15]
 end
 
 @testset "Validate input types" begin
