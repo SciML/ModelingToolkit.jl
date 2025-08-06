@@ -61,6 +61,11 @@ end
 const unitless = DQ.Quantity(1.0)
 get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
 
+# Get unit value of a quantity (oneunit functionality)
+oneunit(x::DQ.AbstractQuantity) = DQ.Quantity(1.0, DQ.dimension(x))
+oneunit(x::Real) = unitless
+oneunit(x) = get_unit(x)
+
 """
 Find the unit of a symbolic item.
 """
@@ -79,8 +84,8 @@ function get_unit(op, args) # Fallback
     unit_args = get_unit.(args)
     try
         result = op(unit_args...)
-        # For operations that return a unit directly, return it
-        return screen_unit(result)
+        # For operations that return a unit directly, return oneunit to get the unit structure
+        return oneunit(result)
     catch
         try
             # Try with oneunit for numeric operations
@@ -174,7 +179,8 @@ function get_unit(x::Symbolic)
     end
 end
 
-# Add DQ.DimensionError method to existing _is_dimension_error function
+# Dimension error detection function - extensible for different unit systems
+_is_dimension_error(e) = false  # Default fallback
 _is_dimension_error(e::DQ.DimensionError) = true
 
 """

@@ -892,8 +892,7 @@ end
 
 # Unitful convert_units functions moved to ModelingToolkitUnitfulExt extension
 
-# Extensible dimension error check - extensions can add methods
-_is_dimension_error(e) = false
+# Dimension error check function is defined in unit_check.jl
 
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
@@ -912,7 +911,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                     try
                         $setdefault($vv, $convert_units($unit, $name))
                     catch e
-                        if isa(e, $(DynamicQuantities.DimensionError)) || (_is_dimension_error(e))
+                        if isa(e, $(DynamicQuantities.DimensionError)) || ($(ModelingToolkit)._is_dimension_error(e))
                             error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                         elseif isa(e, MethodError)
                             error("No or invalid units provided for \'" * string(:($$vv)) *
