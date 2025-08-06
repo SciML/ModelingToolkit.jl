@@ -890,7 +890,6 @@ function convert_units(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
-# Unitful convert_units functions moved to ModelingToolkitUnitfulExt extension
 
 # Dimension error check function is defined in unit_check.jl
 
