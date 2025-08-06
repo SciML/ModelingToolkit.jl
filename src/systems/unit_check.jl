@@ -80,13 +80,7 @@ function get_unit(op, args) # Fallback
     try
         get_unit(result)
     catch
-        try
-            # Try with oneunit for numeric operations
-            result = oneunit(op(unit_args...))
-            return get_unit(result)
-        catch
-            throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
-        end
+        throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
 end
 
