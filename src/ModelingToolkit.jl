@@ -377,6 +377,4 @@ PrecompileTools.@compile_workload begin
     end
 end
 
-# Unitful-specific functionality is available when the ModelingToolkitUnitfulExt extension loads
-
 end # module
