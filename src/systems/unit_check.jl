@@ -76,7 +76,7 @@ get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
 
 function get_unit(op, args) # Fallback
-    unit_args = get_unit.(args)
+    result = oneunit(op(get_unit.(args)...))
     try
         result = op(unit_args...)
         # For operations that return a unit directly, return oneunit to get the unit structure
