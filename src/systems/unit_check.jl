@@ -103,7 +103,10 @@ function get_unit(op::Integral, args)
     return get_unit(args[1]) * unit
 end
 
-equivalent(x, y) = isequal(x, y)
+"""
+Test unit equivalence.
+"""
+equivalent(x, y) = isequal(1 * x, 1 * y)
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
