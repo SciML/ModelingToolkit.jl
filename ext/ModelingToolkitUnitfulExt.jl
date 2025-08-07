@@ -96,7 +96,6 @@ end
 
 const unitless = Unitful.unit(1)
 
-get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 
 
 end # module UnitfulUnitCheck
