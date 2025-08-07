@@ -84,7 +84,7 @@ const D_unitful = MT.Differential(t_unitful)
 """
 Throw exception on invalid unit types, otherwise return argument.
 """
-function screen_unit(result)
+function screen_unit(result::Unitful.AbstractQuantity)
     result isa Unitful.Unitlike ||
         throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits ||
