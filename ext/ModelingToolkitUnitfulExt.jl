@@ -1,8 +1,12 @@
 module ModelingToolkitUnitfulExt
 
-using ModelingToolkit
+using ModelingToolkit, Symbolics, SciMLBase, Unitful, RecursiveArrayTools
+using ModelingToolkit: ValidationError, Connection, instream, JumpType, VariableUnit,
+                         get_systems, Conditional, Comparison, Integral, Differential
+using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
+using Symbolics: Symbolic, value, issym, isadd, ismul, ispow, iscall, operation, arguments, getmetadata
+
 using Unitful
-using Symbolics: Symbolic, value
 using SciMLBase
 
 # Import necessary types and functions from ModelingToolkit
@@ -75,21 +79,6 @@ const t_unitful = let
     MT.only(MT.@independent_variables t [unit = Unitful.u"s"])
 end
 const D_unitful = MT.Differential(t_unitful)
-
-# Extension loaded - all Unitful-specific functionality is now available
-
-end # module
-
-# Create the UnitfulUnitCheck module inside ModelingToolkit for backward compatibility
-@eval ModelingToolkit module UnitfulUnitCheck
-
-using ModelingToolkit, Symbolics, SciMLBase, Unitful, RecursiveArrayTools
-using ModelingToolkit: ValidationError, Connection, instream, JumpType, VariableUnit,
-                         get_systems, Conditional, Comparison, Integral, Differential
-using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
-using Symbolics: Symbolic, value, issym, isadd, ismul, ispow, iscall, operation, arguments, getmetadata
-
-const MT = ModelingToolkit
 
 Base.:*(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
 Base.:/(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
@@ -210,8 +199,5 @@ function get_unit(x::Symbolic)
         throw(ArgumentError("Unsupported value $x."))
     end
 end
-
-# Re-use validation functions from main package
-using ModelingToolkit: safe_get_unit, _validate, validate
 
 end # module UnitfulUnitCheck
