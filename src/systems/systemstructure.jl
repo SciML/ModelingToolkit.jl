@@ -915,6 +915,11 @@ function mtkcompile!(state::TearingState; simplify = false,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
+    if !is_time_dependent(state.sys)
+        return _mtkcompile!(state; simplify, check_consistency,
+            inputs, outputs, disturbance_inputs,
+            fully_determined, kwargs...)
+    end
     # split_system returns one or two systems and the inputs for each
     # mod clock inference to be binary
     # if it's continous keep going, if not then error unless given trait impl in additional passes
