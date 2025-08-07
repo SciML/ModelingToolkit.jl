@@ -98,13 +98,5 @@ const unitless = Unitful.unit(1)
 
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 
-function get_unit(op, args) # Fallback
-    result = op(1 .* get_unit.(args)...)
-    try
-        Unitful.unit(result)
-    catch
-        throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
-    end
-end
 
 end # module UnitfulUnitCheck
