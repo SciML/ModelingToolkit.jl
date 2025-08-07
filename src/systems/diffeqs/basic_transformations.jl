@@ -211,15 +211,15 @@ while(time <= 1)
 end
 ```
 """
-function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0)
-    @independent_variables t
-    D = Differential(t)
+function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0, additional_eqs = [], iv = only(@independent_variables t))
+    D = Differential(iv)
     i = 0
     all_eqs = Equation[]
     all_def = Pair{Num, Int64}[]
 
     function fto_helper(sub_eq, sub_var, α; initial=0)
         alpha_0 = α
+
         if (α > 1)
             coeff = 1/(α - 1)
             m = 2
@@ -253,9 +253,9 @@ function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0
         if (α < 1)  
             rhs = initial
             for index in range(M, N-1; step=1)
-                new_z = Symbol(:z, :_, i)
+                new_z = Symbol(:ʐ, :_, i)
                 i += 1
-                new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                new_z = ModelingToolkit.unwrap(only(@variables $new_z(iv)))
                 new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
                 push!(new_eqs, new_eq)
                 push!(def, new_z=>0)
@@ -264,16 +264,16 @@ function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0
         else
             rhs = 0
             for (index, value) in enumerate(initial)
-                rhs += value * t^(index - 1) / gamma(index)
+                rhs += value * iv^(index - 1) / gamma(index)
             end
             for index in range(M, N-1; step=1)
-                new_z = Symbol(:z, :_, i)
+                new_z = Symbol(:ʐ, :_, i)
                 i += 1
                 γ = γ_i(index)
                 base = sub_eq
                 for k in range(1, m; step=1)
-                    new_z = Symbol(:z, :_, index-M, :_, k)
-                    new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+                    new_z = Symbol(:ʐ, :_, index-M, :_, k)
+                    new_z = ModelingToolkit.unwrap(only(@variables $new_z(iv)))
                     new_eq = D(new_z) ~ base - γ*new_z
                     base = k * new_z
                     push!(new_eqs, new_eq)
@@ -291,7 +291,8 @@ function fractional_to_ordinary(eqs, variables, alphas, epsilon, T; initials = 0
         append!(all_eqs, new_eqs)
         append!(all_def, def)
     end
-    @named sys = System(all_eqs, t; defaults=all_def)
+    append!(all_eqs, additional_eqs)
+    @named sys = System(all_eqs, iv; defaults=all_def)
     return mtkcompile(sys)
 end
 
@@ -315,10 +316,11 @@ prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
 ```
 """
-function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0)
-    @independent_variables t
-    @variables x_0(t)
-    D = Differential(t)
+function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0, symbol = :x, iv = only(@independent_variables t))
+    previous = Symbol(symbol, :_, 0)
+    previous = ModelingToolkit.unwrap(only(@variables $previous(iv)))
+    @variables x_0(iv)
+    D = Differential(iv)
     i = 0
     all_eqs = Equation[]
     all_def = Pair{Num, Int64}[]
@@ -345,9 +347,9 @@ function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initial
         def = Pair{Num, Int64}[]
         sum = 0
         for index in range(M, N-1; step=1)
-            new_z = Symbol(:z, :_, i)
+            new_z = Symbol(:ʐ, :_, i)
             i += 1
-            new_z = ModelingToolkit.unwrap(only(@variables $new_z(t)))
+            new_z = ModelingToolkit.unwrap(only(@variables $new_z(iv)))
             new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
             push!(new_eqs, new_eq)
             push!(def, new_z=>0)
@@ -356,10 +358,9 @@ function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initial
         return (new_eqs, def, sum)
     end
 
-    previous = x_0
     for i in range(1, ceil(Int, degrees[1]); step=1)
-        new_x = Symbol(:x, :_, i)
-        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        new_x = Symbol(symbol, :_, i)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(iv)))
         push!(all_eqs, D(previous) ~ new_x)
         push!(all_def, previous => initials[i])
         previous = new_x
@@ -368,8 +369,8 @@ function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initial
     new_rhs = -rhs
     for (degree, coeff) in zip(degrees, coeffs)
         rounded = ceil(Int, degree)
-        new_x = Symbol(:x, :_, rounded)
-        new_x = ModelingToolkit.unwrap(only(@variables $new_x(t)))
+        new_x = Symbol(symbol, :_, rounded)
+        new_x = ModelingToolkit.unwrap(only(@variables $new_x(iv)))
         if isinteger(degree)
             new_rhs += coeff * new_x
         else
@@ -380,7 +381,79 @@ function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initial
         end
     end
     push!(all_eqs, 0 ~ new_rhs)
-    @named sys = System(all_eqs, t; defaults=all_def)
+    @named sys = System(all_eqs, iv; defaults=all_def)
+    return mtkcompile(sys)
+end
+
+function fto_matrix(eqs, variables, alphas, epsilon, T; initials = 0, additional_eqs = [], iv = only(@independent_variables t))
+    D = Differential(iv)
+    i = 0
+    all_eqs = Equation[]
+    all_def = Pair[]
+
+    function fto_helper(sub_eq, sub_var, α; initial=0)
+        alpha_0 = α
+
+        if (α > 1)
+            coeff = 1/(α - 1)
+            m = 2
+            while (α - m > 0)
+                coeff /= α - m
+                m += 1
+            end
+            alpha_0 = α - m + 1
+        end
+
+        δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
+        a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
+        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
+
+        x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
+        x_sup = -log(gamma(1-alpha_0) * epsilon)
+        M = floor(Int, log(x_sub / T) / h)
+        N = ceil(Int, log(x_sup / δ) / h)
+
+        function c_i(index)
+            h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
+        end
+
+        function γ_i(index)
+            exp(h * index)
+        end
+
+        new_eqs = Equation[]
+        def = Pair[]
+        new_z = Symbol(:ʐ, :_, i)
+        i += 1
+        γs = diagm([γ_i(index) for index in M:N-1])
+        cs = [c_i(index) for index in M:N-1]
+
+        if (α < 1)
+            new_z = only(@variables $new_z(iv)[1:N-M])
+            new_eq = D(new_z) ~ -γs*new_z .+ sub_eq
+            rhs = dot(cs, new_z) + initial
+            push!(def, new_z=>zeros(N-M))
+        else
+            new_z = only(@variables $new_z(iv)[1:N-M, 1:m])
+            new_eq = D(new_z) ~ -γs*new_z + hcat(fill(sub_eq, N-M, 1), collect(new_z[:, 1:m-1]*diagm(1:m-1)))
+            rhs = coeff*sum(cs[i]*new_z[i, m] for i in 1:N-M)
+            for (index, value) in enumerate(initial)
+                rhs += value * iv^(index - 1) / gamma(index)
+            end
+            push!(def, new_z=>zeros(N-M, m))
+        end
+        push!(new_eqs, new_eq)
+        push!(new_eqs, sub_var ~ rhs)
+        return (new_eqs, def)
+    end
+
+    for (eq, cur_var, alpha, init) in zip(eqs, variables, alphas, initials)
+        (new_eqs, def) = fto_helper(eq, cur_var, alpha; initial=init)
+        append!(all_eqs, new_eqs)
+        append!(all_def, def)
+    end
+    append!(all_eqs, additional_eqs)
+    @named sys = System(all_eqs, iv; defaults=all_def)
     return mtkcompile(sys)
 end
 
