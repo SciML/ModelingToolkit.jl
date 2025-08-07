@@ -239,12 +239,8 @@ function infer_clocks!(ci::ClockInference)
     for partition in clock_partitions
         clockidxs = findall(vert -> Moshi.Data.isa_variant(vert, ClockVertex.Clock), partition)
         if isempty(clockidxs)
-            vidxs = Int[vert.:1
-                        for vert in partition
-                        if Moshi.Data.isa_variant(vert, ClockVertex.Variable)]
-            throw(ArgumentError("""
-            Found clock partion with no associated clock. Involved variables: $(fullvars[vidxs]).
-            """))
+            push!(partition, ClockVertex.Clock(ContinuousClock()))
+            push!(clockidxs, length(partition))
         end
         if length(clockidxs) > 1
             vidxs = Int[vert.:1
