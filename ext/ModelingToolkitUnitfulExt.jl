@@ -80,8 +80,6 @@ const t_unitful = let
 end
 const D_unitful = MT.Differential(t_unitful)
 
-Base.:*(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
-Base.:/(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
 
 """
 Throw exception on invalid unit types, otherwise return argument.
