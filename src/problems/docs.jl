@@ -216,6 +216,10 @@ function function_docstring(func, istd, optionals)
     function should be in-place. `specialization` is a `SciMLBase.AbstractSpecalize`
     subtype indicating the level of specialization of the $func.
 
+    Beyond the arguments listed below, this constructor accepts all keyword arguments
+    supported by the DifferentialEquations.jl `solve` function. For a complete list
+    and detailed descriptions, see the [DifferentialEquations.jl solve documentation](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/).
+
     # Keyword arguments
 
     - `u0`: The `u0` vector for the corresponding problem, if available. Can be obtained
@@ -232,6 +236,7 @@ function function_docstring(func, istd, optionals)
       sparse matrices. Also controls whether the mass matrix is sparse, wherever applicable.
     $(prob_fun_common_kwargs(func, istd))
     $(process_optional_function_kwargs(optionals))
+    - `kwargs...`: Additional keyword arguments passed to the solver
 
     All other keyword arguments are forwarded to the `$func` struct constructor.
     """

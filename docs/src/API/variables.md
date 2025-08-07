@@ -337,6 +337,7 @@ ModelingToolkit also defines a plethora of custom operators.
 Pre
 Initial
 Shift
+EvalAt
 ```
 
 While not an operator, `ShiftIndex` is commonly used to use `Shift` operators in a more

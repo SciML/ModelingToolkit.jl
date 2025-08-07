@@ -240,22 +240,20 @@ kwargs = (; name = 3)
 @test cool_name[1] == (42,)
 @test collect(cool_name[2]) == [:name => 3]
 
-if VERSION >= v"1.5"
-    name = 3
-    @named cool_name = foo(42; name)
-    @test cool_name[1] == (42,)
-    @test collect(cool_name[2]) == [:name => name]
-    @named cool_name = foo(; name)
-    @test collect(cool_name) == [:name => name]
+name = 3
+@named cool_name = foo(42; name)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [:name => name]
+@named cool_name = foo(; name)
+@test collect(cool_name) == [:name => name]
 
-    ff = 3
-    @named cool_name = foo(42; ff)
-    @test cool_name[1] == (42,)
-    @test collect(cool_name[2]) == [pp; :ff => ff]
+ff = 3
+@named cool_name = foo(42; ff)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [pp; :ff => ff]
 
-    @named cool_name = foo(; ff)
-    @test collect(cool_name) == [pp; :ff => ff]
-end
+@named cool_name = foo(; ff)
+@test collect(cool_name) == [pp; :ff => ff]
 
 foo(i; name) = (; i, name)
 @named goo[1:3] = foo(10)

@@ -8,10 +8,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(xx) ~ some_input]
 @named model = System(eqs, t)
 @test_throws ExtraVariablesSystemException mtkcompile(model)
-if VERSION >= v"1.8"
-    err = "In particular, the unset input(s) are:\n some_input(t)"
-    @test_throws err mtkcompile(model)
-end
+err = "In particular, the unset input(s) are:\n some_input(t)"
+@test_throws err mtkcompile(model)
 
 # Test input handling
 @variables x(t) u(t) [input = true] v(t)[1:2] [input = true]

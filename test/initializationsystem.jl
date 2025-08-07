@@ -1293,7 +1293,7 @@ end
     @test SciMLBase.successful_retcode(solve(prob))
 
     seta = setsym_oop(prob, [a])
-    (newu0, newp) = seta(prob, ForwardDiff.Dual{ForwardDiff.Tag{:tag, Float64}}.([1.0], 1))
+    (newu0, newp) = seta(prob, ForwardDiff.Dual{ForwardDiff.Tag{:tag, Float64}}.([1.0], 0))
     newprob = remake(prob, u0 = newu0, p = newp)
 
     @test SciMLBase.successful_retcode(solve(newprob))

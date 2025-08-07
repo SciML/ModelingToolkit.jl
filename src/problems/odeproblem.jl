@@ -3,7 +3,7 @@
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing, expression = Val{false},
-        check_compatibility = true, nlstep = false, kwargs...) where {iip, spec}
+        check_compatibility = true, nlstep = false, nlstep_compile = true, kwargs...) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
@@ -42,7 +42,7 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     if nlstep
-        ode_nlstep = generate_ODENLStepData(sys, u0, p, M)
+        ode_nlstep = generate_ODENLStepData(sys, u0, p, M, nlstep_compile)
     else
         ode_nlstep = nothing
     end

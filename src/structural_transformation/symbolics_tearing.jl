@@ -972,7 +972,10 @@ function update_simplified_system!(
         # Algebraic variables are shifted forward by one, so we backshift them.
         unknowns = map(enumerate(unknowns)) do (i, var)
             if iscall(var) && operation(var) isa Shift && operation(var).steps == 1
-                backshift_expr(var, iv)
+                # We might have shifted a variable with io metadata. That is irrelevant now
+                # because we handled io variables earlier in `_mtkcompile!` so just ignore
+                # it here.
+                setio(backshift_expr(var, iv), false, false)
             else
                 var
             end

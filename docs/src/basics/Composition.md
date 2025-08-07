@@ -126,8 +126,8 @@ sys = System(
 # ...
 # directly in the defaults argument
     defaults = Pair{Num, Any}[x => u,
-    y => σ,
-    z => u - 0.1])
+y => σ,
+z => u - 0.1])
 # by assigning to the parameter
 sys.y = u * 1.1
 ```

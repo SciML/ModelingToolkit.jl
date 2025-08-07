@@ -1,0 +1,36 @@
+name: Downgrade
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - 'benchmark/**'
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - 'benchmark/**'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        downgrade_mode: ['alldeps']
+        julia-version: ['1.10']
+        group: ['InterfaceI']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/julia-downgrade-compat@v2
+        with:
+          skip: Pkg,TOML
+      - uses: julia-actions/julia-buildpkg@1
+      - uses: julia-actions/julia-runtest@1
+        with:
+          ALLOW_RERESOLVE: false
+        env:
+          GROUP: ${{ matrix.group }}

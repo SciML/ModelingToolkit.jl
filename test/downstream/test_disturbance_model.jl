@@ -6,6 +6,7 @@ analysis-point specific method for `generate_control_function`.
 using ModelingToolkit, OrdinaryDiffEqTsit5, LinearAlgebra, Test
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
+import NonlinearSolve
 using ModelingToolkit: connect
 # using Plots
 
