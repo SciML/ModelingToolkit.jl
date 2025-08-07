@@ -44,18 +44,7 @@ function __get_unit_type(vs′...)
 end
 
 function screen_unit(result)
-    if result isa DQ.AbstractQuantity
-        d = DQ.dimension(result)
-        if d isa DQ.Dimensions
-            return result
-        elseif d isa DQ.SymbolicDimensions
-            return DQ.uexpand(oneunit(result))
-        else
-            throw(ValidationError("$result doesn't have a recognized unit"))
-        end
-    else
-        throw(ValidationError("$result doesn't have any unit."))
-    end
+    throw(ValidationError("$result doesn't have any unit."))
 end
 
 const unitless = DQ.Quantity(1.0)
