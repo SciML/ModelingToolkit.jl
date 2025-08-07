@@ -166,6 +166,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
             disturbance_inputs = disturbances(sys);
             implicit_dae       = false,
             simplify           = false,
+            split              = true,
         )
 
 For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
