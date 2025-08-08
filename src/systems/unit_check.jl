@@ -62,6 +62,8 @@ end
 const unitless = DQ.Quantity(1.0)
 get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
 
+_oneunit(x) = oneunit(x)
+
 """
 Find the unit of a symbolic item.
 """
