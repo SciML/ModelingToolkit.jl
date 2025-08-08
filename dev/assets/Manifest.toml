@@ -293,10 +293,10 @@ uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.5.0"
 
 [[deps.CPUSummary]]
-deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
-git-tree-sha1 = "5a97e67919535d6841172016c9530fd69494e5ec"
+deps = ["CpuId", "IfElse", "PrecompileTools", "Preferences", "Static"]
+git-tree-sha1 = "f3a21d7fc84ba618a779d1ed2fcca2e682865bab"
 uuid = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
-version = "0.2.6"
+version = "0.2.7"
 
 [[deps.CPUTime]]
 git-tree-sha1 = "2dcc50ea6a0a1ef6440d6eecd0fe3813e5671f45"
@@ -507,9 +507,9 @@ version = "0.6.3"
 
 [[deps.ControlSystemsBase]]
 deps = ["ForwardDiff", "Hungarian", "LinearAlgebra", "MacroTools", "MatrixEquations", "MatrixPencils", "Polynomials", "PrecompileTools", "Printf", "Random", "RecipesBase", "StaticArraysCore", "UUIDs"]
-git-tree-sha1 = "3605e29395741fd07b5effca2117ee171dbeddc8"
+git-tree-sha1 = "eaf7f2115e11f7ca5cafaa1f92a7227ede917d35"
 uuid = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
-version = "1.18.1"
+version = "1.18.2"
 
     [deps.ControlSystemsBase.extensions]
     ControlSystemsBaseDSPExt = ["DSP"]
@@ -609,9 +609,9 @@ version = "1.9.1"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ConcreteStructs", "DataStructures", "DocStringExtensions", "EnumX", "EnzymeCore", "FastBroadcast", "FastClosures", "FastPower", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "SciMLStructures", "Setfield", "Static", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "TruncatedStacktraces"]
-git-tree-sha1 = "c1ae1a949a95ee1895e3b48e11982f102152c3aa"
+git-tree-sha1 = "803ea1b97e06d9f4b0da348589d451c5a456e9f4"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.182.0"
+version = "6.182.1"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseCUDAExt = "CUDA"
@@ -1965,9 +1965,9 @@ version = "1.42.1"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
-git-tree-sha1 = "6e64d2321257cc52f47e193407d0659ea1b2b431"
+git-tree-sha1 = "a370fef694c109e1950836176ed0d5eabbb65479"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
-version = "0.6.5"
+version = "0.6.6"
 
 [[deps.MatrixEquations]]
 deps = ["LinearAlgebra", "LinearMaps"]
@@ -1977,9 +1977,9 @@ version = "2.5.3"
 
 [[deps.MatrixPencils]]
 deps = ["LinearAlgebra", "Polynomials", "Random"]
-git-tree-sha1 = "fda7ccf6c795d48521d2cfd70efcd354bd881935"
+git-tree-sha1 = "7f63bbf568058c9b95d48a35bb38c6c311ba8e5e"
 uuid = "48965c70-4690-11ea-1f13-43a2532b2fa8"
-version = "1.8.5"
+version = "1.8.6"
 
 [[deps.MaybeInplace]]
 deps = ["ArrayInterface", "LinearAlgebra", "MacroTools"]
@@ -2281,9 +2281,9 @@ version = "1.5.0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "87510f7292a2b21aeff97912b0898f9553cc5c2c"
+git-tree-sha1 = "2ae7d4ddec2e13ad3bddf5c0796f7547cf682391"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.1+0"
+version = "3.5.2+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -3052,9 +3052,9 @@ version = "2.7.0"
 
 [[deps.SimpleTraits]]
 deps = ["InteractiveUtils", "MacroTools"]
-git-tree-sha1 = "5d7e3f4e11935503d3ecaf7186eac40602e7d231"
+git-tree-sha1 = "be8eeac05ec97d379347584fa9fe2f5f76795bcb"
 uuid = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
-version = "0.9.4"
+version = "0.9.5"
 
 [[deps.SimpleUnPack]]
 git-tree-sha1 = "58e6353e72cde29b90a69527e56df1b5c3d8c437"
