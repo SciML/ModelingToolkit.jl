@@ -1,10 +1,14 @@
 @data InferredClock begin
     Inferred
-    InferredDiscrete
+    InferredDiscrete(Int)
 end
 
 const InferredTimeDomain = InferredClock.Type
 using .InferredClock: Inferred, InferredDiscrete
+
+function InferredClock.InferredDiscrete()
+    return InferredDiscrete(0)
+end
 
 Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
 
@@ -50,7 +54,7 @@ has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 for op in [Differential]
-    @eval input_timedomain(::$op, arg = nothing) = ContinuousClock()
+    @eval input_timedomain(::$op, arg = nothing) = (ContinuousClock(),)
     @eval output_timedomain(::$op, arg = nothing) = ContinuousClock()
 end
 
@@ -97,6 +101,7 @@ function is_discrete_domain(x)
 end
 
 sampletime(c) = Moshi.Match.@match c begin
+    x::SciMLBase.AbstractClock => nothing
     PeriodicClock(dt) => dt
     _ => nothing
 end
