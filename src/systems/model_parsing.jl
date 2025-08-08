@@ -890,17 +890,7 @@ function convert_units(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
-function convert_units(varunits::Unitful.FreeUnits, value)
-    Unitful.ustrip(varunits, value)
-end
 
-convert_units(::Unitful.FreeUnits, value::NoValue) = NO_VALUE
-
-function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
-    Unitful.ustrip.(varunits, value)
-end
-
-convert_units(::Unitful.FreeUnits, value::Num) = value
 
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
@@ -919,8 +909,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                     try
                         $setdefault($vv, $convert_units($unit, $name))
                     catch e
-                        if isa(e, $(DynamicQuantities.DimensionError)) ||
-                           isa(e, $(Unitful.DimensionError))
+                        if $_is_dimension_error(e)
                             error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                         elseif isa(e, MethodError)
                             error("No or invalid units provided for \'" * string(:($$vv)) *

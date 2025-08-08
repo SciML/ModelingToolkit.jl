@@ -30,7 +30,7 @@ using InteractiveUtils
 using JumpProcesses
 using DataStructures
 using Base.Threads
-using Latexify, Unitful, ArrayInterface
+using Latexify, ArrayInterface
 using Setfield, ConstructionBase
 import Libdl
 using DocStringExtensions
@@ -92,7 +92,7 @@ export independent_variables, unknowns, observables, parameters, full_parameters
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import DynamicQuantities, Unitful
+import DynamicQuantities
 const DQ = DynamicQuantities
 
 import DifferentiationInterface as DI
@@ -231,15 +231,11 @@ include("deprecations.jl")
 const t_nounits = let
     only(@independent_variables t)
 end
-const t_unitful = let
-    only(@independent_variables t [unit = Unitful.u"s"])
-end
 const t = let
     only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
-const D_unitful = Differential(t_unitful)
 const D = Differential(t)
 
 export ODEFunction, convert_system_indepvar,
