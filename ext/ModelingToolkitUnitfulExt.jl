@@ -20,6 +20,8 @@ function MT._get_unittype(u::Unitful.Unitlike)
     return Val(:Unitful)
 end
 
+MT._oneunit(x::Unitful.FreeUnits) = x(1)
+
 # Base operations for mixing Symbolic and Unitful
 Base.:*(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
 Base.:/(x::Union{MT.Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
