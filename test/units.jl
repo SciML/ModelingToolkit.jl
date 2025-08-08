@@ -4,7 +4,7 @@ MT = ModelingToolkit
 
 # All unit functions are now directly available from ModelingToolkit
 # Extension automatically loads when Unitful is imported
-unitless = Unitful.unit(1)
+unitless = 1
 @independent_variables t [unit = u"ms"]
 @parameters τ [unit = u"ms"] γ
 @variables E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
