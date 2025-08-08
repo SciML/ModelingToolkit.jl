@@ -5,7 +5,8 @@
 macro mtkbuild(exprs...)
     return quote
         Base.depwarn("`@mtkbuild` is deprecated. Use `@mtkcompile` instead.", :mtkbuild)
-        @mtkcompile $(exprs...)
+        $(Expr(:macrocall, var"@mtkcompile",
+            LineNumberNode(@__LINE__, @__FILE__), exprs...))
     end |> esc
 end
 

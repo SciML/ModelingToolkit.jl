@@ -1615,3 +1615,12 @@ end
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
 end
+
+# ensure `@mtkbuild` works when `@mtkcompile` is not imported
+module MtkbuildTestModule
+import ModelingToolkit: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
+import Test: @test
+@variables x(t)
+@mtkbuild sys = System(D(x) ~ t, t)
+@test sys isa System
+end
