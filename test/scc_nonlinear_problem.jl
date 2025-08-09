@@ -27,16 +27,21 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     @test_throws ["not compatible"] SCCNonlinearProblem(_model, [])
     model = mtkcompile(model)
     prob = NonlinearProblem(model, [u => zeros(8)])
-    sccprob = SCCNonlinearProblem(model, [u => zeros(8)])
+    sccprob = SCCNonlinearProblem(model, collect(u[1:5]) .=> zeros(5))
     sol1 = solve(prob, NewtonRaphson())
     sol2 = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sol1)
     @test SciMLBase.successful_retcode(sol2)
     @test sol1[u] ≈ sol2[u]
 
-    sccprob = SCCNonlinearProblem{false}(model, SA[u => zeros(8)])
+    sccprob = SCCNonlinearProblem{false}(model, SA[(collect(u[1:5]) .=> zeros(5))...])
     for prob in sccprob.probs
-        @test prob.u0 isa SVector
+        if prob isa LinearProblem
+            @test prob.A isa SMatrix
+            @test prob.b isa SVector
+        else
+            @test prob.u0 isa SVector
+        end
         @test !SciMLBase.isinplace(prob)
     end
 
@@ -91,8 +96,9 @@ end
     @mtkcompile sys = System(eqs, [u], [p1, p2])
     sccprob = SCCNonlinearProblem(sys, [u => u0, p1 => p[1], p2 => p[2][]])
     sccsol = solve(sccprob, SimpleNewtonRaphson(); abstol = 1e-9)
+    sccresid = prob.f(sccsol[u], (u0, p))
     @test SciMLBase.successful_retcode(sccsol)
-    @test norm(sccsol.resid) < norm(sol.resid)
+    @test norm(sccresid) < norm(sol.resid)
 
     # Test BLT sorted
     @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)
@@ -173,9 +179,11 @@ end
                               0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
                               0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
     sccprob = SCCNonlinearProblem(sys, [])
+    # since explicitfuns are called during problem construction
+    @test val[] == 1
     sccsol = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sccsol)
-    @test val[] == 1
+    @test val[] == 2
 end
 
 import ModelingToolkitStandardLibrary.Blocks as B
