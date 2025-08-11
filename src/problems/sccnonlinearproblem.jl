@@ -10,7 +10,7 @@ end
 
 function CacheWriter(sys::AbstractSystem, buffer_types::Vector{TypeT},
         exprs::Dict{TypeT, Vector{Any}}, solsyms, obseqs::Vector{Equation};
-        eval_expression = false, eval_module = @__MODULE__, cse = true)
+        eval_expression = false, eval_module = @__MODULE__, cse = true, sparse = false)
     ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
     obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
@@ -39,9 +39,22 @@ end
 struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
-        sys::System, _eqs, _dvs, _obs, cachesyms; eval_expression = false,
+        sys::System, _eqs, _dvs, _obs, cachesyms, op; eval_expression = false,
         eval_module = @__MODULE__, cse = true, kwargs...) where {iip}
     ps = parameters(sys; initial_parameters = true)
+    subsys = System(
+        _eqs, _dvs, ps; observed = _obs, name = nameof(sys), defaults = defaults(sys))
+    @set! subsys.parameter_dependencies = parameter_dependencies(sys)
+    if get_index_cache(sys) !== nothing
+        @set! subsys.index_cache = subset_unknowns_observed(
+            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.complete = true
+    end
+    # generate linear problem instead
+    if isaffine(subsys)
+        return LinearFunction{iip}(
+            subsys; eval_expression, eval_module, cse, cachesyms, kwargs...)
+    end
     rps = reorder_parameters(sys, ps)
 
     obs_assignments = [eq.lhs ← eq.rhs for eq in _obs]
@@ -54,14 +67,6 @@ function SCCNonlinearFunction{iip}(
     f_oop, f_iip = eval_or_rgf.(f_gen; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(2, 2, is_split(sys))}(f_oop, f_iip)
 
-    subsys = System(_eqs, _dvs, ps; observed = _obs,
-        parameter_dependencies = parameter_dependencies(sys), name = nameof(sys))
-    if get_index_cache(sys) !== nothing
-        @set! subsys.index_cache = subset_unknowns_observed(
-            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
-        @set! subsys.complete = true
-    end
-
     return NonlinearFunction{iip}(f; sys = subsys)
 end
 
@@ -70,7 +75,7 @@ function SciMLBase.SCCNonlinearProblem(sys::System, args...; kwargs...)
 end
 
 function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = false,
-        eval_module = @__MODULE__, cse = true, kwargs...) where {iip}
+        eval_module = @__MODULE__, cse = true, u0_constructor = identity, kwargs...) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
@@ -113,7 +118,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
 
     _, u0,
     p = process_SciMLProblem(
-        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, kwargs...)
+        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true, kwargs...)
 
     explicitfuns = []
     nlfuns = []
@@ -224,28 +229,57 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
             get(cachevars, T, [])
         end)
         f = SCCNonlinearFunction{iip}(
-            sys, _eqs, _dvs, _obs, cachebufsyms; eval_expression, eval_module, cse, kwargs...)
+            sys, _eqs, _dvs, _obs, cachebufsyms, op;
+            eval_expression, eval_module, cse, kwargs...)
         push!(nlfuns, f)
     end
+
+    u0_eltype = Union{}
+    for x in u0
+        symbolic_type(x) == NotSymbolic() || continue
+        u0_eltype = typeof(x)
+        break
+    end
+    if u0_eltype == Union{}
+        u0_eltype = Float64
+    end
+    u0_eltype = float(u0_eltype)
 
     if !isempty(cachetypes)
         templates = map(cachetypes, cachesizes) do T, n
             # Real refers to `eltype(u0)`
             if T == Real
-                T = eltype(u0)
+                T = u0_eltype
             elseif T <: Array && eltype(T) == Real
-                T = Array{eltype(u0), ndims(T)}
+                T = Array{u0_eltype, ndims(T)}
             end
             BufferTemplate(T, n)
         end
         p = rebuild_with_caches(p, templates...)
     end
 
+    # yes, `get_p_constructor` since this is only used for `LinearProblem` and
+    # will retain the shape of `A`
+    u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
     subprobs = []
-    for (f, vscc) in zip(nlfuns, var_sccs)
+    for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
             typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...)
-        prob = NonlinearProblem(f, _u0, p)
+        symbolic_idxs = findall(x -> symbolic_type(x) != NotSymbolic(), _u0)
+        explicitfuns[i](p, subprobs)
+        if f isa LinearFunction
+            _u0 = isempty(symbolic_idxs) ? _u0 : zeros(u0_eltype, length(_u0))
+            _u0 = u0_eltype.(_u0)
+            symbolic_interface = f.interface
+            A,
+            b = get_A_b_from_LinearFunction(
+                sys, f, p; eval_expression, eval_module, u0_constructor, u0_eltype)
+            prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
+        else
+            isempty(symbolic_idxs) || throw(MissingGuessError(dvs[vscc], _u0))
+            _u0 = u0_eltype.(_u0)
+            prob = NonlinearProblem(f, _u0, p)
+        end
         push!(subprobs, prob)
     end
 
@@ -255,5 +289,5 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
     @set! sys.eqs = new_eqs
     @set! sys.index_cache = subset_unknowns_observed(
         get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,)))
-    return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+    return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
 end
