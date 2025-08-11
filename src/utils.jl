@@ -88,9 +88,31 @@ function readable_code(expr)
 end
 
 # System validation enums
+"""
+    const CheckNone
+
+Value that can be provided to the `check` keyword of `System` to disable checking of input.
+"""
 const CheckNone = 0
+"""
+    const CheckAll
+
+Value that can be provided to the `check` keyword of `System` to enable all input
+validation.
+"""
 const CheckAll = 1 << 0
+"""
+    const CheckComponents
+
+Value that can be provided to the `check` keyword of `System` to only enable checking of
+basic components of the system, such as equations, variables, etc.
+"""
 const CheckComponents = 1 << 1
+"""
+    const CheckUnits
+
+Value that can be provided to the `check` keyword of `System` to enable checking of units.
+"""
 const CheckUnits = 1 << 2
 
 function check_independent_variables(ivs)

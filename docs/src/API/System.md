@@ -186,3 +186,17 @@ ModelingToolkit.is_bound
 ```@docs
 debug_system
 ```
+
+## Input validation
+
+The following values can be passed to the `check` keyword of `System` to toggle validation
+of input. Flags can be combined with bitwise `|` and `&`.
+
+```@docs
+ModelingToolkit.CheckAll
+ModelingToolkit.CheckNone
+ModelingToolkit.CheckComponents
+ModelingToolkit.CheckUnits
+```
+
+These can also be used by custom `AbstractSystem` subtypes.
