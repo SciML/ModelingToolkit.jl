@@ -147,3 +147,27 @@ function split_parameters_by_type(ps)
         end
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Change the tunable parameters of a system to a new set of tunables.
+
+The new tunable parameters must be a subset of the current tunables as discovered by [`tunable_parameters`](@ref).
+The remaining parameters will be set as constants in the system.
+"""
+function change_tunables(sys, new_tunables)
+    cur_tunables = tunable_parameters(sys, parameters(sys))
+    diff_params = setdiff(cur_tunables, new_tunables)
+
+    if !isempty(setdiff(new_tunables, cur_tunables))
+        throw(ArgumentError("New tunables must be a subset of the current tunables. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables))"))
+    end
+    cur_ps = get_ps(sys)
+    const_ps = toconstant.(diff_params)
+
+    new_ps = replace(cur_ps, (diff_params .=> const_ps)...)
+    new_ps = replace(new_ps, (Initial.(diff_params) .=> Initial.(const_ps))...)
+    @set! sys.ps = new_ps
+    complete(sys)
+end
