@@ -337,6 +337,7 @@ export DynamicOptSolution
 @public similarity_transform, inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
 @public unbound_outputs, is_bound
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
+@public t, D, t_nounits, D_nounits, t_unitful, D_unitful
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
