@@ -10,7 +10,6 @@ struct VariableUnit end
 Symbolic metadata key for storing the type of connector that a variable is.
 """
 struct VariableConnectType end
-struct VariableNoiseType end
 """
     $TYPEDEF
 

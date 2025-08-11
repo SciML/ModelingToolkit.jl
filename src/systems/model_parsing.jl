@@ -186,7 +186,6 @@ function update_readable_metadata!(varclass_dict, meta::Dict, varname)
         (:description, VariableDescription),
         (:unit, VariableUnit),
         (:bounds, VariableBounds),
-        (:noise, VariableNoiseType),
         (:input, VariableInput),
         (:output, VariableOutput),
         (:irreducible, VariableIrreducible),
