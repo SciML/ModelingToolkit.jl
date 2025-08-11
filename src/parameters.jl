@@ -176,7 +176,6 @@ function subset_tunables(sys, new_tunables)
     const_ps = toconstant.(diff_params)
 
     new_ps = replace(cur_ps, (diff_params .=> const_ps)...)
-    new_ps = replace(new_ps, (Initial.(diff_params) .=> Initial.(const_ps))...)
     @set! sys.ps = new_ps
     complete(sys)
 end
