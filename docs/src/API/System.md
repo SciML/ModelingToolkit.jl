@@ -7,6 +7,7 @@ optimizations).
 
 ```@docs
 System
+ModelingToolkit.AbstractSystem
 ```
 
 ## Utility constructors
