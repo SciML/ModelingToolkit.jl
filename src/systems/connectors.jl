@@ -343,10 +343,7 @@ abstract type FrameOrientation end
 
 "Return orientation object of a multibody frame."
 function ori(sys)
-    val = getmetadata(sys, FrameOrientation, nothing)
-    if val === nothing
-        error("System $(sys.name) does not have an orientation object.")
-    end
+    getmetadata(sys, FrameOrientation, nothing)
 end
 
 """
