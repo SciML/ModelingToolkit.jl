@@ -224,3 +224,28 @@ following functions are useful for manipulating namespacing functionality.
 ModelingToolkit.renamespace
 ModelingToolkit.namespace_equations
 ```
+
+## Linearization and Analysis
+
+Functions for linearization and analysis of systems.
+
+```@docs
+LinearizationProblem
+linearization_ap_transform
+get_sensitivity_function
+get_comp_sensitivity_function
+get_looptransfer_function
+get_sensitivity
+get_comp_sensitivity
+get_looptransfer
+open_loop
+```
+
+## Additional Equation Classification
+
+```@docs
+alg_equations
+diff_equations
+has_alg_equations
+has_diff_equations
+```

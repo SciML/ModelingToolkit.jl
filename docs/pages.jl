@@ -32,6 +32,8 @@ pages = [
         "API/variables.md",
         "API/model_building.md",
         "API/problems.md",
+        "API/structural_transformation.md",
+        "API/bipartite_graph.md",
         "API/dynamic_opt.md",
         "API/codegen.md",
         "API/PDESystem.md"],
