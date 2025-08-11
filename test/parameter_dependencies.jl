@@ -185,8 +185,9 @@ end
 
     new_tunables = [L, b]
     sys2 = ModelingToolkit.change_tunables(sys, new_tunables)
-    @test length(ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2))) == 2
-    @test isempty(setdiff(ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2)), new_tunables))
+    sys2_tunables = ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2))
+    @test length(sys2_tunables) == 2
+    @test isempty(setdiff(sys2_tunables, new_tunables))
     @test_throws ArgumentError ModelingToolkit.change_tunables(sys, [errp])
 end
 
