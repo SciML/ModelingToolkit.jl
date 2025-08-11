@@ -156,12 +156,21 @@ Change the tunable parameters of a system to a new set of tunables.
 The new tunable parameters must be a subset of the current tunables as discovered by [`tunable_parameters`](@ref).
 The remaining parameters will be set as constants in the system.
 """
-function change_tunables(sys, new_tunables)
+function subset_tunables(sys, new_tunables)
+    if !iscomplete(sys)
+        throw(ArgumentError("System must be `complete` before changing tunables."))
+    end
+    if !is_split(sys)
+        throw(ArgumentError("Tunable parameters can only be changed for split systems."))
+    end
+
     cur_tunables = tunable_parameters(sys, parameters(sys))
     diff_params = setdiff(cur_tunables, new_tunables)
 
     if !isempty(setdiff(new_tunables, cur_tunables))
-        throw(ArgumentError("New tunables must be a subset of the current tunables. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables))"))
+        throw(ArgumentError("""New tunable parameters must be a subset of the current tunable parameters. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables)).
+        Note that array parameters can only be set as tunable or non-tunable, not partially tunable. They should be specified in the un-scalarized form.
+        """))
     end
     cur_ps = get_ps(sys)
     const_ps = toconstant.(diff_params)
