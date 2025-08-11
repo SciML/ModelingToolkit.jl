@@ -194,6 +194,10 @@ end
     sys3_tunables = ModelingToolkit.tunable_parameters(sys3, ModelingToolkit.parameters(sys3))
     @test length(sys3_tunables) == 0
 
+    sys_incomplete = pendulum_sys
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys_incomplete, new_tunables)
+    sys_nonsplit = mtkcompile(pendulum_sys; split = false)
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys_nonsplit, new_tunables)
 end
 
 struct CallableFoo
