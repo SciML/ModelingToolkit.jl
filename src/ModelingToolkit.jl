@@ -134,7 +134,7 @@ in a non-breaking release. Usage of these arguments is not advised.
 """
 $(TYPEDEF)
 
-TODO
+Abstract supertype of all system types. Any custom system types must subtype this.
 """
 abstract type AbstractSystem end
 # Solely so that `ODESystem` can be deprecated and still act as a valid type.
@@ -336,6 +336,15 @@ export DynamicOptSolution
 @public is_diff_equation, Equality, linearize_symbolic, reorder_unknowns
 @public similarity_transform, inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
 @public unbound_outputs, is_bound
+@public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
+@public t, D, t_nounits, D_nounits, t_unitful, D_unitful
+@public SymbolicContinuousCallback, SymbolicDiscreteCallback
+@public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
+@public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
+@public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
+@public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
+@public getdefault, setdefault, iscomplete, isparameter, modified_unknowns!
+@public renamespace, namespace_equations
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

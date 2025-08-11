@@ -7,6 +7,7 @@ optimizations).
 
 ```@docs
 System
+ModelingToolkit.AbstractSystem
 ```
 
 ## Utility constructors
@@ -184,4 +185,42 @@ ModelingToolkit.is_bound
 
 ```@docs
 debug_system
+```
+
+## Input validation
+
+The following values can be passed to the `check` keyword of `System` to toggle validation
+of input. Flags can be combined with bitwise `|` and `&`.
+
+```@docs
+ModelingToolkit.CheckAll
+ModelingToolkit.CheckNone
+ModelingToolkit.CheckComponents
+ModelingToolkit.CheckUnits
+```
+
+These can also be used by custom `AbstractSystem` subtypes.
+
+## Utility functions
+
+These utility functions can be useful when manipulating systems, especially when building
+custom `AbstractSystem` subtypes.
+
+```@docs
+ModelingToolkit.collect_scoped_vars!
+ModelingToolkit.collect_var_to_name!
+ModelingToolkit.collect_vars!
+ModelingToolkit.eqtype_supports_collect_vars
+ModelingToolkit.modified_unknowns!
+```
+
+## Namepsace manipulation
+
+ModelingToolkit namespaces variables from subsystems when using them in a parent system to
+disambiguate from identically named variables in other subsystems or the parent system. The
+following functions are useful for manipulating namespacing functionality.
+
+```@docs
+ModelingToolkit.renamespace
+ModelingToolkit.namespace_equations
 ```

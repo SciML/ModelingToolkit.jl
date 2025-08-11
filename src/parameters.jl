@@ -1,9 +1,27 @@
 import SymbolicUtils: symtype, term, hasmetadata, issym
+
+"""
+    @enum VariableType
+
+The type of the declared variable, used for automatic identification of
+variables/parameters/brownians/etc. by the `System` constructor.
+"""
 @enum VariableType VARIABLE PARAMETER BROWNIAN
+
+"""
+    $TYPEDEF
+
+The symbolic metadata key for storing the `VariableType`.
+"""
 struct MTKVariableTypeCtx end
 
 getvariabletype(x, def = VARIABLE) = getmetadata(unwrap(x), MTKVariableTypeCtx, def)
 
+"""
+    $TYPEDEF
+
+Check if the variable contains the metadata identifying it as a parameter.
+"""
 function isparameter(x)
     x = unwrap(x)
 

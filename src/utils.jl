@@ -88,9 +88,31 @@ function readable_code(expr)
 end
 
 # System validation enums
+"""
+    const CheckNone
+
+Value that can be provided to the `check` keyword of `System` to disable checking of input.
+"""
 const CheckNone = 0
+"""
+    const CheckAll
+
+Value that can be provided to the `check` keyword of `System` to enable all input
+validation.
+"""
 const CheckAll = 1 << 0
+"""
+    const CheckComponents
+
+Value that can be provided to the `check` keyword of `System` to only enable checking of
+basic components of the system, such as equations, variables, etc.
+"""
 const CheckComponents = 1 << 1
+"""
+    const CheckUnits
+
+Value that can be provided to the `check` keyword of `System` to enable checking of units.
+"""
 const CheckUnits = 1 << 2
 
 function check_independent_variables(ivs)
@@ -228,8 +250,23 @@ function iv_from_nested_derivative(x, op = Differential)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the symbolic variable `v` has a default value.
+"""
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the default value of symbolic variable `v`.
+"""
 getdefault(v) = value(Symbolics.getdefaultval(v))
+"""
+    $(TYPEDSIGNATURES)
+
+Set the default value of symbolic variable `v` to `val`.
+"""
 function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
