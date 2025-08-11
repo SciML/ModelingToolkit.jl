@@ -1095,6 +1095,12 @@ end
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Namespace `x` with the name of `sys`.
+"""
 function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
@@ -1141,6 +1147,11 @@ function namespace_guesses(sys)
     Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return `equations(sys)`, namespaced by the name of `sys`.
+"""
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
@@ -1162,6 +1173,11 @@ function namespace_tstops(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Namespace the given equation with the name of the given system `sys`.
+"""
 function namespace_equation(eq::Equation,
         sys,
         n = nameof(sys);

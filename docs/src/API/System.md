@@ -213,3 +213,14 @@ ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
 ```
+
+## Namepsace manipulation
+
+ModelingToolkit namespaces variables from subsystems when using them in a parent system to
+disambiguate from identically named variables in other subsystems or the parent system. The
+following functions are useful for manipulating namespacing functionality.
+
+```@docs
+ModelingToolkit.renamespace
+ModelingToolkit.namespace_equations
+```

@@ -344,6 +344,7 @@ export DynamicOptSolution
 @public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
 @public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
 @public getdefault, setdefault, iscomplete, isparameter, modified_unknowns!
+@public renamespace, namespace_equations
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
