@@ -180,7 +180,7 @@ end
         D(θ) ~ ω,
         D(ω) ~ -(g/L)*sin(θ) - b*ω
     ]
-    @named pendulum_sys = ODESystem(eqs, t, [θ, ω], [g, L, b])
+    @named pendulum_sys = System(eqs, t, [θ, ω], [g, L, b])
     sys = mtkcompile(pendulum_sys)
 
     new_tunables = [L, b]
