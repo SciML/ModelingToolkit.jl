@@ -173,6 +173,23 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
+@testset "Change Tunables" begin
+    @variables θ(t)=π/6 ω(t)=0.
+    @parameters g=9.81 L=1.0 b=0.1 errp=1
+    eqs = [
+        D(θ) ~ ω,
+        D(ω) ~ -(g/L)*sin(θ) - b*ω
+    ]
+    @named pendulum_sys = ODESystem(eqs, t, [θ, ω], [g, L, b])
+    sys = mtkcompile(pendulum_sys)
+
+    new_tunables = [L, b]
+    sys2 = ModelingToolkit.change_tunables(sys, new_tunables)
+    @test length(ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2))) == 2
+    @test isempty(setdiff(ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2)), new_tunables))
+    @test_throws ArgumentError ModelingToolkit.change_tunables(sys, [errp])
+end
+
 struct CallableFoo
     p::Any
 end
