@@ -343,7 +343,7 @@ export DynamicOptSolution
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
 @public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
 @public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
-@public getdefault, setdefault
+@public getdefault, setdefault, iscomplete, isparameter
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

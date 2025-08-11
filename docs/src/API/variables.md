@@ -289,6 +289,7 @@ This metadata is used by the [`System`](@ref) constructor for automatically iden
 ```@docs
 ModelingToolkit.VariableType
 ModelingToolkit.MTKVariableTypeCtx
+ModelingToolkit.isparameter
 ```
 
 ## Miscellaneous metadata

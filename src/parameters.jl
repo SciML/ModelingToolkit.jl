@@ -17,6 +17,11 @@ struct MTKVariableTypeCtx end
 
 getvariabletype(x, def = VARIABLE) = getmetadata(unwrap(x), MTKVariableTypeCtx, def)
 
+"""
+    $TYPEDEF
+
+Check if the variable contains the metadata identifying it as a parameter.
+"""
 function isparameter(x)
     x = unwrap(x)
 
