@@ -200,3 +200,15 @@ ModelingToolkit.CheckUnits
 ```
 
 These can also be used by custom `AbstractSystem` subtypes.
+
+## Utility functions
+
+These utility functions can be useful when manipulating systems, especially when building
+custom `AbstractSystem` subtypes.
+
+```@docs
+ModelingToolkit.collect_scoped_vars!
+ModelingToolkit.collect_var_to_name!
+ModelingToolkit.collect_vars!
+ModelingToolkit.eqtype_supports_collect_vars
+```

@@ -341,7 +341,8 @@ export DynamicOptSolution
 @public SymbolicContinuousCallback, SymbolicDiscreteCallback
 @public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
-@public VariableOutput, VariableStatePriority, VariableUnit
+@public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
+@public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
