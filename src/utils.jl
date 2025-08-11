@@ -250,8 +250,23 @@ function iv_from_nested_derivative(x, op = Differential)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Check if the symbolic variable `v` has a default value.
+"""
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
+"""
+    $(TYPEDSIGNATURES)
+
+Return the default value of symbolic variable `v`.
+"""
 getdefault(v) = value(Symbolics.getdefaultval(v))
+"""
+    $(TYPEDSIGNATURES)
+
+Set the default value of symbolic variable `v` to `val`.
+"""
 function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end

@@ -18,6 +18,17 @@ Symbolic variables can have metadata attached to them. The defaults and guesses 
 at variable construction time are examples of this metadata. ModelingToolkit also defines
 additional types of metadata.
 
+## Variable defaults
+
+Variables can be assigned default values to avoid having to specify defaults to the
+[`System`](@ref) constructor.
+
+```@docs
+ModelingToolkit.hasdefault
+ModelingToolkit.getdefault
+ModelingToolkit.setdefault
+```
+
 ## Variable descriptions
 
 Descriptive strings can be attached to variables using the `[description = "descriptive string"]` syntax:
