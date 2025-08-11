@@ -211,4 +211,5 @@ ModelingToolkit.collect_scoped_vars!
 ModelingToolkit.collect_var_to_name!
 ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
+ModelingToolkit.modified_unknowns!
 ```

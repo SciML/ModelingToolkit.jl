@@ -210,6 +210,13 @@ function get_variables!(dep, jump::MassActionJump, variables)
 end
 
 ### Functions to determine which unknowns are modified by a given jump
+
+"""
+    $(TYPEDSIGNATURES)
+
+Push to `munknowns` the variables modified by jump `jump`. `sts` is the list of unknowns of
+the system. Return the modified `munknowns`.
+"""
 function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
