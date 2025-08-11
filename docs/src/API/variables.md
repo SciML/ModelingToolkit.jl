@@ -56,6 +56,7 @@ help?> u
 ```@docs
 hasdescription
 getdescription
+ModelingToolkit.VariableDescription
 ```
 
 ## Connect
@@ -83,6 +84,7 @@ getconnect(k)
 ```@docs
 hasconnect
 getconnect
+ModelingToolkit.VariableConnectType
 ```
 
 ```@docs; canonical=false
@@ -112,6 +114,8 @@ isinput
 isoutput
 ModelingToolkit.setinput
 ModelingToolkit.setoutput
+ModelingToolkit.VariableInput
+ModelingToolkit.VariableOutput
 ```
 
 ## Bounds
@@ -144,6 +148,7 @@ hasbounds(x[2])
 ```@docs
 hasbounds
 getbounds
+ModelingToolkit.VariableBounds
 ```
 
 ## Guess
@@ -232,6 +237,7 @@ isirreducible(important_value)
 
 ```@docs
 isirreducible
+ModelingToolkit.VariableIrreducible
 ```
 
 ## State Priority
@@ -245,6 +251,7 @@ state_priority(important_dof)
 
 ```@docs
 state_priority
+ModelingToolkit.VariableStatePriority
 ```
 
 ## Units
@@ -261,6 +268,7 @@ getunit(speed)
 ```@docs
 hasunit
 getunit
+ModelingToolkit.VariableUnit
 ```
 
 ## Variable type
@@ -286,6 +294,7 @@ getmisc(y)
 ```@docs
 hasmisc
 getmisc
+ModelingToolkit.VariableMisc
 ```
 
 ## Dumping metadata
