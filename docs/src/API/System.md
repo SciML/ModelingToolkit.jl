@@ -230,7 +230,6 @@ ModelingToolkit.namespace_equations
 Functions for linearization and analysis of systems.
 
 ```@docs
-LinearizationProblem
 linearization_ap_transform
 get_sensitivity_function
 get_comp_sensitivity_function
