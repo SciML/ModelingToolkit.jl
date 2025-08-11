@@ -339,6 +339,7 @@ export DynamicOptSolution
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
 @public t, D, t_nounits, D_nounits, t_unitful, D_unitful
 @public SymbolicContinuousCallback, SymbolicDiscreteCallback
+@public VariableType, MTKVariableTypeCtx
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

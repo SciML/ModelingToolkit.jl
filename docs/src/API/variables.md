@@ -263,6 +263,15 @@ hasunit
 getunit
 ```
 
+## Variable type
+
+This metadata is used by the [`System`](@ref) constructor for automatically identifying the different types of variables in a system.
+
+```@docs
+ModelingToolkit.VariableType
+ModelingToolkit.MTKVariableTypeCtx
+```
+
 ## Miscellaneous metadata
 
 User-defined metadata can be added using the `misc` metadata. This can be queried
