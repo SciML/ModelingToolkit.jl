@@ -1,5 +1,8 @@
 # Structural Transformation
 
+!!! warning "Internal API"
+    The functions documented on this page are internal implementation details of ModelingToolkit. They are not part of the public API and may change or be removed without notice in non-breaking releases. This documentation is provided to help contributors understand the codebase.
+
 These functions are used for structural analysis and transformation of equation systems, including index reduction, tearing, and other algebraic manipulations used in the simplification process.
 
 ## Tearing and Algebraic Simplification

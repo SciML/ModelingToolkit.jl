@@ -32,8 +32,6 @@ pages = [
         "API/variables.md",
         "API/model_building.md",
         "API/problems.md",
-        "API/structural_transformation.md",
-        "API/bipartite_graph.md",
         "API/dynamic_opt.md",
         "API/codegen.md",
         "API/PDESystem.md"],
@@ -49,5 +47,8 @@ pages = [
         "basics/Precompilation.md",
         "basics/FAQ.md"],
     "comparison.md",
-    "internals.md"
+    "Internal Details" => Any[
+        "internals.md",
+        "internals/structural_transformation.md",
+        "internals/bipartite_graph.md"]
 ]

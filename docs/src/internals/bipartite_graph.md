@@ -1,5 +1,8 @@
 # Bipartite Graphs
 
+!!! warning "Internal API"
+    The functions documented on this page are internal implementation details of ModelingToolkit. They are not part of the public API and may change or be removed without notice in non-breaking releases. This documentation is provided to help contributors understand the codebase.
+
 ModelingToolkit uses bipartite graphs to represent relationships between equations and variables in systems. These functions provide tools for working with and analyzing these graphs.
 
 ## Graph Types
