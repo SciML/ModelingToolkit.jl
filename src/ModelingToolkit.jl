@@ -346,7 +346,6 @@ export DynamicOptSolution
 @public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
 @public getdefault, setdefault, iscomplete, isparameter, modified_unknowns!
 @public renamespace, namespace_equations
-@public subset_tunables
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
