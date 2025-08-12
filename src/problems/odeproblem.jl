@@ -177,6 +177,11 @@ end
         iip, spec}
     check_complete(sys, SemilinearODEProblem)
     check_compatibility && check_compatible_system(SemilinearODEProblem, sys)
+    if sparse
+        error("""
+        The sparse form for `SemilinearODEProblem` is currently unavailable.
+        """)
+    end
 
     A, B, C = semiquadratic_form = calculate_semiquadratic_form(sys; sparse)
     eqs = equations(sys)
