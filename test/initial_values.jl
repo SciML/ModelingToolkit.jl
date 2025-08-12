@@ -147,7 +147,8 @@ end
     catch
     end
     @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
-        sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false)
+        sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
+        substitution_limit = 10)
 
     @parameters p q
     @mtkcompile sys = System(
