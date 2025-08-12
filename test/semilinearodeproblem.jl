@@ -198,14 +198,17 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         end
 
         @testset "Sparse" begin
-            prob = SemilinearODEProblem(sys, nothing, tspan; sparse = true, kwargs...)
-            sol = solve(prob, KenCarp47())
-            @test SciMLBase.successful_retcode(sol)
-            @test refsol(sol.t).u≈sol.u atol=1e-8 rtol=1e-8
+            @test_throws ["sparse form", "unavailable"] SemilinearODEProblem(
+                sys, nothing, tspan; sparse = true, kwargs...)
+            @test_skip begin
+                sol = solve(prob, KenCarp47())
+                @test SciMLBase.successful_retcode(sol)
+                @test refsol(sol.t).u≈sol.u atol=1e-8 rtol=1e-8
+            end
         end
 
         @testset "Sparsejac" begin
-            @test_throws ["not implemented"] SemilinearODEProblem(
+            @test_throws ["sparse form", "unavailable"] SemilinearODEProblem(
                 sys, nothing, tspan; jac = true, sparse = true, kwargs...)
         end
     end
