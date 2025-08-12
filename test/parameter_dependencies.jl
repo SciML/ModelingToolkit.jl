@@ -173,6 +173,33 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
+@testset "Change Tunables" begin
+    @variables θ(t)=π/6 ω(t)=0.
+    @parameters g=9.81 L=1.0 b=0.1 errp=1
+    eqs = [
+        D(θ) ~ ω,
+        D(ω) ~ -(g/L)*sin(θ) - b*ω
+    ]
+    @named pendulum_sys = System(eqs, t, [θ, ω], [g, L, b])
+    sys = mtkcompile(pendulum_sys)
+
+    new_tunables = [L, b]
+    sys2 = ModelingToolkit.subset_tunables(sys, new_tunables)
+    sys2_tunables = ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2))
+    @test length(sys2_tunables) == 2
+    @test isempty(setdiff(sys2_tunables, new_tunables))
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys, [errp])
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys, [θ, L])
+    sys3 = ModelingToolkit.subset_tunables(sys, [])
+    sys3_tunables = ModelingToolkit.tunable_parameters(sys3, ModelingToolkit.parameters(sys3))
+    @test length(sys3_tunables) == 0
+
+    sys_incomplete = pendulum_sys
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys_incomplete, new_tunables)
+    sys_nonsplit = mtkcompile(pendulum_sys; split = false)
+    @test_throws ArgumentError ModelingToolkit.subset_tunables(sys_nonsplit, new_tunables)
+end
+
 struct CallableFoo
     p::Any
 end

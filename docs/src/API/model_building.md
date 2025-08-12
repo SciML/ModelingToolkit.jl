@@ -226,6 +226,7 @@ change_independent_variable
 add_accumulations
 noise_to_brownians
 convert_system_indepvar
+subset_tunables
 ```
 
 ## Hybrid systems
