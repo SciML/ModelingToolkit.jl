@@ -1628,3 +1628,9 @@ import Test: @test
 @mtkbuild sys = System(D(x) ~ t, t)
 @test sys isa System
 end
+
+@testset "Empty system can be simplified" begin
+    @named sys = System(Equation[], t)
+    ss = mtkcompile(sys)
+    @test length(equations(ss)) == length(unknowns(ss)) == 0
+end

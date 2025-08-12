@@ -928,7 +928,7 @@ function mtkcompile!(state::TearingState; simplify = false,
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
         Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
     tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-    if continuous_id == 0
+    if !isempty(tss) && continuous_id == 0
         # do a trait check here - handle fully discrete system
         additional_passes = get(kwargs, :additional_passes, nothing)
         if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
