@@ -47,5 +47,8 @@ pages = [
         "basics/Precompilation.md",
         "basics/FAQ.md"],
     "comparison.md",
-    "internals.md"
+    "Internal Details" => Any[
+        "internals.md",
+        "internals/structural_transformation.md",
+        "internals/bipartite_graph.md"]
 ]
