@@ -1,4 +1,5 @@
-function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys), nlstep_compile::Bool = true)
+function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys),
+        nlstep_compile::Bool = true, nlstep_scc::Bool = false)
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
     state = ProblemState(; u = u0, p)
     op = Dict()
@@ -12,7 +13,11 @@ function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sy
         haskey(op, v) && continue
         op[v] = getsym(sys, v)(state)
     end
-    nlprob = NonlinearProblem(nlsys, op; build_initializeprob = false)
+    nlprob = if nlstep_scc
+        SCCNonlinearProblem(nlsys, op; build_initializeprob = false)
+    else
+        NonlinearProblem(nlsys, op; build_initializeprob = false)
+    end
 
     subsetidxs = [findfirst(isequal(y), unknowns(sys)) for y in unknowns(nlsys)]
     set_gamma_c = setsym(nlsys, (ODE_GAMMA..., ODE_C))
