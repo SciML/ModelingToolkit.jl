@@ -1262,13 +1262,10 @@ function parse_metadata_block!(body, dict, mod)
     for arg in body.args
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
-                @show esc(b)
-                # dict[:metadata][a] = get_var(mod, b)
-                dict[:metadata][a] = Core.eval(mod, b)
+                dict[:metadata][a] = get_var(mod, b)
             end
             Expr(:call, :(=>), a, b) => begin
-                # dict[:metadata][a] = get_var(mod, b)
-                dict[:metadata][a] = Core.eval(mod, b)
+                dict[:metadata][a] = get_var(mod, b)
             end
             _ => error("Invalid metadata entry: $arg. Expected key = value or key => value format.")
         end
