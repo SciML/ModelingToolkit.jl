@@ -55,7 +55,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     dict = Dict{Symbol, Any}(
         :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
-        :structural_parameters => Dict{Symbol, Dict}()
+        :structural_parameters => Dict{Symbol, Dict}(),
+        :metadata => Dict{Symbol, Any}()
     )
     comps = Union{Symbol, Expr}[]
     ext = []
@@ -678,6 +679,8 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         parse_costs!(costs, dict, body)
     elseif mname == Symbol("@consolidate")
         parse_consolidate!(body, dict)
+    elseif mname == Symbol("@metadata")
+        parse_metadata_block!(body, dict, mod)
     else
         error("$mname is not handled.")
     end
@@ -1251,6 +1254,24 @@ function parse_description!(body, dict)
         dict[:description] = body
     else
         error("Invalid description string $body")
+    end
+end
+
+function parse_metadata_block!(body, dict, mod)
+    Base.remove_linenums!(body)
+    for arg in body.args
+        MLStyle.@match arg begin
+            Expr(:(=), a, b) => begin
+                @show esc(b)
+                # dict[:metadata][a] = get_var(mod, b)
+                dict[:metadata][a] = Core.eval(mod, b)
+            end
+            Expr(:call, :(=>), a, b) => begin
+                # dict[:metadata][a] = get_var(mod, b)
+                dict[:metadata][a] = Core.eval(mod, b)
+            end
+            _ => error("Invalid metadata entry: $arg. Expected key = value or key => value format.")
+        end
     end
 end
 
