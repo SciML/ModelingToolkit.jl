@@ -342,14 +342,14 @@ prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
 ```
 """
-function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0, symbol = :x, iv = only(@independent_variables t))
+function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0, symbol = :x, iv = only(@independent_variables t), matrix=false)
     previous = Symbol(symbol, :_, 0)
     previous = ModelingToolkit.unwrap(only(@variables $previous(iv)))
     @variables x_0(iv)
     D = Differential(iv)
     i = 0
     all_eqs = Equation[]
-    all_def = Pair{Num, Int64}[]
+    all_def = Pair[]
 
     function fto_helper(sub_eq, α)
         δ = (gamma(α+1) * epsilon)^(1/α)
@@ -370,16 +370,29 @@ function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initial
         end
 
         new_eqs = Equation[]
-        def = Pair{Num, Int64}[]
-        sum = 0
-        for index in range(M, N-1; step=1)
+        def = Pair[]
+        if matrix
             new_z = Symbol(:ʐ, :_, i)
             i += 1
-            new_z = ModelingToolkit.unwrap(only(@variables $new_z(iv)))
-            new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+            γs = diagm([γ_i(index) for index in M:N-1])
+            cs = [c_i(index) for index in M:N-1]
+
+            new_z = only(@variables $new_z(iv)[1:N-M])
+            new_eq = D(new_z) ~ -γs*new_z .+ sub_eq
+            sum = dot(cs, new_z)
+            push!(def, new_z=>zeros(N-M))
             push!(new_eqs, new_eq)
-            push!(def, new_z=>0)
-            sum += c_i(index)*new_z
+        else
+            sum = 0
+            for index in range(M, N-1; step=1)
+                new_z = Symbol(:ʐ, :_, i)
+                i += 1
+                new_z = ModelingToolkit.unwrap(only(@variables $new_z(iv)))
+                new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+                push!(new_eqs, new_eq)
+                push!(def, new_z=>0)
+                sum += c_i(index)*new_z
+            end
         end
         return (new_eqs, def, sum)
     end
