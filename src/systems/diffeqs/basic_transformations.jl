@@ -342,7 +342,10 @@ prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
 ```
 """
-function linear_fractional_to_ordinary(degrees, coeffs, rhs, epsilon, T; initials = 0, symbol = :x, iv = only(@independent_variables t), matrix=false)
+function linear_fractional_to_ordinary(
+        degrees, coeffs, rhs, epsilon, T;
+        initials = 0, symbol = :x, iv = only(@independent_variables t), matrix=false
+)
     previous = Symbol(symbol, :_, 0)
     previous = ModelingToolkit.unwrap(only(@variables $previous(iv)))
     @variables x_0(iv)
