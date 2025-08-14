@@ -11,6 +11,20 @@ is_transparent_operator(x) = is_transparent_operator(typeof(x))
 is_transparent_operator(::Type) = false
 
 """
+    $(TYPEDSIGNATURES)
+
+Trait to be implemented for operators which determines whether the operator is applied to
+a time-varying quantity and results in a time-varying quantity. For example, `Initial` and
+`Pre` are not time-varying since while they are applied to variables, the application
+results in a non-discrete-time parameter. `Differential`, `Shift`, `Sample` and `Hold` are
+all time-varying operators. All time-varying operators must implement `input_timedomain` and
+`output_timedomain`.
+"""
+is_timevarying_operator(x) = is_timevarying_operator(typeof(x))
+is_timevarying_operator(::Type{<:Symbolics.Operator}) = true
+is_timevarying_operator(::Type) = false
+
+"""
     function SampleTime()
 
 `SampleTime()` can be used in the equations of a hybrid system to represent time sampled
@@ -314,12 +328,13 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
     input_timedomain(op::Operator)
 
 Return the time-domain type (`ContinuousClock()` or `InferredDiscrete()`) that `op` operates on.
+Should return a tuple containing the time domain type for each argument to the operator.
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete()
+    (InferredDiscrete(),)
 end
 
 """
@@ -334,25 +349,28 @@ function output_timedomain(s::Shift, arg = nothing)
     InferredDiscrete()
 end
 
-input_timedomain(::Sample, _ = nothing) = ContinuousClock()
+input_timedomain(::Sample, _ = nothing) = (ContinuousClock(),)
 output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
-    InferredDiscrete() # the Hold accepts any discrete
+    (InferredDiscrete(),) # the Hold accepts any discrete
 end
 output_timedomain(::Hold, _ = nothing) = ContinuousClock()
 
 sampletime(op::Sample, _ = nothing) = sampletime(op.clock)
 sampletime(op::ShiftIndex, _ = nothing) = sampletime(op.clock)
 
-changes_domain(op) = isoperator(op, Union{Sample, Hold})
-
 function output_timedomain(x)
     if isoperator(x, Operator)
-        return output_timedomain(operation(x), arguments(x)[])
+        args = arguments(x)
+        return output_timedomain(operation(x), if length(args) == 1
+            args[]
+        else
+            args
+        end)
     else
         throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
     end
@@ -360,8 +378,24 @@ end
 
 function input_timedomain(x)
     if isoperator(x, Operator)
-        return input_timedomain(operation(x), arguments(x)[])
+        args = arguments(x)
+        return input_timedomain(operation(x), if length(args) == 1
+            args[]
+        else
+            args
+        end)
     else
         throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
     end
+end
+
+function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
+    return SymbolicContinuousCallback(
+        [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
+        affect_neg = down ? ImperativeAffect(Returns(nothing)) : nothing,
+        kwargs..., zero_crossing_id = name)
+end
+
+function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
+    return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
 end

@@ -206,18 +206,20 @@ end
 
 @testset "Condition Compilation" begin
     @named sys = System(eqs, t, continuous_events = [x ~ 1])
+    cevt1 = getfield(sys, :continuous_events)[]
     @test getfield(sys, :continuous_events)[] ==
-          SymbolicContinuousCallback(Equation[x ~ 1], nothing)
+          SymbolicContinuousCallback(Equation[x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
     @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
     fsys = flatten(sys)
     @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
 
     @named sys2 = System([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
+    cevt2 = getfield(sys2, :continuous_events)[]
     @test getfield(sys2, :continuous_events)[] ==
-          SymbolicContinuousCallback(Equation[x ~ 2], nothing)
+          SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id)
     @test all(ModelingToolkit.continuous_events(sys2) .== [
-        SymbolicContinuousCallback(Equation[x ~ 2], nothing),
-        SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing)
+        SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id),
+        SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
     ])
 
     @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)

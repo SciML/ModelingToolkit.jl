@@ -1670,7 +1670,7 @@ end
            x[1] ~ 0.01exp(-1)
            x[2] ~ 0.01cos(t)]
 
-    @mtkbuild sys = ODESystem(eqs, t)
+    @mtkcompile sys = System(eqs, t)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
@@ -1678,7 +1678,7 @@ end
 
 @testset "Defaults removed with ` => nothing` aren't retained" begin
     @variables x(t)[1:2]
-    @mtkbuild sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; defaults = [x[1] => 1])
+    @mtkcompile sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; defaults = [x[1] => 1])
     prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0))
     @test SciMLBase.initialization_status(prob) == SciMLBase.FULLY_DETERMINED
 end
@@ -1696,7 +1696,7 @@ end
             D(x) ~ r * x
         end
     end
-    @mtkbuild sys = Foo(p = "a")
+    @mtkcompile sys = Foo(p = "a")
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p.nonnumeric[1] isa Vector{AbstractString}
     integ = init(prob)

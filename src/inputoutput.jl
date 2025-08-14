@@ -166,6 +166,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
             disturbance_inputs = disturbances(sys);
             implicit_dae       = false,
             simplify           = false,
+            split              = true,
         )
 
 For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
@@ -198,10 +199,11 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         simplify = false,
         eval_expression = false,
         eval_module = @__MODULE__,
+        split = true,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
     if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs)
+        sys = mtkcompile(sys; inputs, disturbance_inputs, split)
     end
     if disturbance_inputs !== nothing
         # add to inputs for the purposes of io processing

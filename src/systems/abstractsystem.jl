@@ -486,13 +486,12 @@ The `Initial` operator. Used by initialization to store constant constraints on 
 of a system. See the documentation section on initialization for more information.
 """
 struct Initial <: Symbolics.Operator end
+is_timevarying_operator(::Type{Initial}) = false
 Initial(x) = Initial()(x)
 SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
 SymbolicUtils.isbinop(::Initial) = false
 Base.nameof(::Initial) = :Initial
 Base.show(io::IO, x::Initial) = print(io, "Initial")
-input_timedomain(::Initial, _ = nothing) = ContinuousClock()
-output_timedomain(::Initial, _ = nothing) = ContinuousClock()
 
 function (f::Initial)(x)
     # wrap output if wrapped input
@@ -1096,6 +1095,12 @@ end
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Namespace `x` with the name of `sys`.
+"""
 function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
@@ -1142,6 +1147,11 @@ function namespace_guesses(sys)
     Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return `equations(sys)`, namespaced by the name of `sys`.
+"""
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
@@ -1163,6 +1173,11 @@ function namespace_tstops(sys::AbstractSystem)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Namespace the given equation with the name of the given system `sys`.
+"""
 function namespace_equation(eq::Equation,
         sys,
         n = nameof(sys);
@@ -1246,6 +1261,7 @@ function namespace_expr(
         O
     end
 end
+
 _nonum(@nospecialize x) = x isa Num ? x.val : x
 
 """

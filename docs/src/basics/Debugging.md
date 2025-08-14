@@ -19,7 +19,7 @@ sys = mtkcompile(sys)
 This problem causes the ODE solver to crash:
 
 ```@repl debug
-prob = ODEProblem(sys, [], (0.0, 10.0), []);
+prob = ODEProblem(sys, [], (0.0, 10.0));
 sol = solve(prob, Tsit5());
 ```
 
@@ -28,7 +28,7 @@ In such situations, the `debug_system` function is helpful:
 
 ```@repl debug
 dsys = debug_system(sys; functions = [sqrt]);
-dprob = ODEProblem(dsys, [], (0.0, 10.0), []);
+dprob = ODEProblem(dsys, [], (0.0, 10.0));
 dsol = solve(dprob, Tsit5());
 ```
 

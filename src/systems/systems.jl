@@ -36,7 +36,7 @@ function mtkcompile(
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     newsys′ = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs,
+        inputs, outputs, disturbance_inputs, additional_passes,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -75,12 +75,13 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
     end
 
+    sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
-    state = TearingState(sys; sort_eqs)
+    state = TearingState(sys)
+    append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
-    eqs = equations(state)
     brown_vars = Int[]
     new_idxs = zeros(Int, length(var_types))
     idx = 0
@@ -98,7 +99,8 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         Is = Int[]
         Js = Int[]
         vals = Num[]
-        new_eqs = copy(eqs)
+        make_eqs_zero_equals!(state)
+        new_eqs = copy(equations(state))
         dvar2eq = Dict{Any, Int}()
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue
@@ -293,3 +295,8 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
 
     return mapping
 end
+
+"""
+Mark whether an extra pass `p` can support compiling discrete systems.
+"""
+discrete_compile_pass(p) = false

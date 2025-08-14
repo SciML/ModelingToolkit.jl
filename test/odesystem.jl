@@ -1414,6 +1414,10 @@ end
     sol2 = solve(prob2, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+
+    @mtkcompile sys = System([D(x) ~ x + p], t; tstops = [[p]])
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.kwargs[:tstops](prob.p, prob.tspan) ≈ [0.15]
 end
 
 @testset "Validate input types" begin
@@ -1614,4 +1618,19 @@ end
     arr = ODESystem[]
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
+end
+
+# ensure `@mtkbuild` works when `@mtkcompile` is not imported
+module MtkbuildTestModule
+import ModelingToolkit: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
+import Test: @test
+@variables x(t)
+@mtkbuild sys = System(D(x) ~ t, t)
+@test sys isa System
+end
+
+@testset "Empty system can be simplified" begin
+    @named sys = System(Equation[], t)
+    ss = mtkcompile(sys)
+    @test length(equations(ss)) == length(unknowns(ss)) == 0
 end

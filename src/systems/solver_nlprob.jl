@@ -1,4 +1,5 @@
-function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys), nlstep_compile::Bool = true)
+function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys),
+        nlstep_compile::Bool = true, nlstep_scc::Bool = false)
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
     state = ProblemState(; u = u0, p)
     op = Dict()
@@ -12,7 +13,11 @@ function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sy
         haskey(op, v) && continue
         op[v] = getsym(sys, v)(state)
     end
-    nlprob = NonlinearProblem(nlsys, op; build_initializeprob = false)
+    nlprob = if nlstep_scc
+        SCCNonlinearProblem(nlsys, op; build_initializeprob = false)
+    else
+        NonlinearProblem(nlsys, op; build_initializeprob = false)
+    end
 
     subsetidxs = [findfirst(isequal(y), unknowns(sys)) for y in unknowns(nlsys)]
     set_gamma_c = setsym(nlsys, (ODE_GAMMA..., ODE_C))
@@ -48,8 +53,8 @@ function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     outer_tmp = get_outer_tmp(N)
     inner_tmp = get_inner_tmp(N)
 
-    subrules = Dict([v => gamma2*v + inner_tmp[i] for (i, v) in enumerate(dvs)])
-    subrules[t] = c
+    subrules = Dict([v => unwrap(gamma2*v + inner_tmp[i]) for (i, v) in enumerate(dvs)])
+    subrules[t] = unwrap(c)
     new_rhss = map(Base.Fix2(fast_substitute, subrules), rhss)
     new_rhss = collect(outer_tmp) .+ gamma1 .* new_rhss .- gamma3 * mm * dvs
     new_eqs = [0 ~ rhs for rhs in new_rhss]
