@@ -219,6 +219,8 @@ symbolic analysis.
 
 ```@docs
 liouville_transform
+fractional_to_ordinary
+linear_fractional_to_ordinary
 change_of_variables
 stochastic_integral_transform
 Girsanov_transform
