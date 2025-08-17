@@ -855,7 +855,7 @@ end
 function default_operating_point(affsys::AffectSystem)
     sys = system(affsys)
 
-    op = Dict(unknowns(sys) .=> 0.0)
+    op = AnyDict(unknowns(sys) .=> 0.0)
     for p in parameters(sys)
         T = symtype(p)
         if T <: Number
