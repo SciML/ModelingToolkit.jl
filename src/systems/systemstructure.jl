@@ -993,13 +993,9 @@ function _mtkcompile!(state::TearingState; simplify = false,
     else
         check_consistency = true
     end
-    has_io = !isempty(inputs) || !isempty(outputs) !== nothing ||
-             !isempty(disturbance_inputs)
     orig_inputs = Set()
-    if has_io
-        ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
-        state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
-    end
+    ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
+    state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
