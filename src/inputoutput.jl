@@ -282,7 +282,12 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
             push!(new_fullvars, v)
         end
     end
-    ninputs == 0 && return state
+    if ninputs == 0
+        @set! sys.inputs = OrderedSet{BasicSymbolic}()
+        @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
+        state.sys = sys
+        return state
+    end
 
     nvars = ndsts(graph) - ninputs
     new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
@@ -312,7 +317,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     ps = parameters(sys)
 
     @set! sys.ps = [ps; new_parameters]
-    @set! sys.inputs = OrderedSet{BasicSymbolic}(filter(isinput, fullvars))
+    @set! sys.inputs = OrderedSet{BasicSymbolic}(new_parameters)
     @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
     @set! state.sys = sys
     @set! state.fullvars = Vector{BasicSymbolic}(new_fullvars)
