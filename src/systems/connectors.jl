@@ -759,6 +759,7 @@ function generate_connection_equations_and_stream_connections(
         var = variable_from_vertex(sys, cvert)::BasicSymbolic
         vtype = cvert.type
         if vtype <: Union{InputVar, OutputVar}
+            length(cset) > 1 || continue
             inner_output = nothing
             outer_input = nothing
             for cvert in cset
@@ -780,11 +781,11 @@ function generate_connection_equations_and_stream_connections(
                     inner_output = cvert
                 end
             end
-            root, rest = Iterators.peel(cset)
-            root_var = variable_from_vertex(sys, root)
-            for cvert in rest
-                var = variable_from_vertex(sys, cvert)
-                push!(eqs, root_var ~ var)
+            root_vert = something(inner_output, outer_input)
+            root_var = variable_from_vertex(sys, root_vert)
+            for cvert in cset
+                isequal(cvert, root_vert) && continue
+                push!(eqs, variable_from_vertex(sys, cvert) ~ root_var)
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
@@ -807,10 +808,37 @@ function generate_connection_equations_and_stream_connections(
                 push!(eqs, 0 ~ rhs)
             end
         else # Equality
-            base = variable_from_vertex(sys, cset[1])
-            for i in 2:length(cset)
-                v = variable_from_vertex(sys, cset[i])
-                push!(eqs, base ~ v)
+            vars = map(Base.Fix1(variable_from_vertex, sys), cset)
+            outer_input = inner_output = nothing
+            all_io = true
+            # attempt to interpret the equality as a causal connectionset if
+            # possible
+            for (cvert, vert) in zip(cset, vars)
+                is_i = isinput(vert)
+                is_o = isoutput(vert)
+                all_io &= is_i || is_o
+                all_io || break
+                if cvert.isouter && is_i && outer_input === nothing
+                    outer_input = cvert
+                elseif !cvert.isouter && is_o && inner_output === nothing
+                    inner_output = cvert
+                end
+            end
+            # this doesn't necessarily mean this is a well-structured causal connection,
+            # but it is sufficient and we're generating equalities anyway.
+            if all_io && xor(outer_input !== nothing, inner_output !== nothing)
+                root_vert = something(inner_output, outer_input)
+                root_var = variable_from_vertex(sys, root_vert)
+                for (cvert, var) in zip(cset, vars)
+                    isequal(cvert, root_vert) && continue
+                    push!(eqs, var ~ root_var)
+                end
+            else
+                base = variable_from_vertex(sys, cset[1])
+                for i in 2:length(cset)
+                    v = vars[i]
+                    push!(eqs, base ~ v)
+                end
             end
         end
     end
