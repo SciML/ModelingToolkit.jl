@@ -344,7 +344,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{BasicSymbolic, String}(),
         metadata = MetadataT(), gui_metadata = nothing,
-        is_dde = nothing, tstops = [], tearing_state = nothing,
+        is_dde = nothing, tstops = [], inputs = OrderedSet{BasicSymbolic}(),
+        outputs = OrderedSet{BasicSymbolic}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
@@ -379,8 +380,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
     defaults = anydict(defaults)
     guesses = anydict(guesses)
-    inputs = OrderedSet{BasicSymbolic}()
-    outputs = OrderedSet{BasicSymbolic}()
+    inputs = OrderedSet{BasicSymbolic}(inputs)
+    outputs = OrderedSet{BasicSymbolic}(outputs)
     for subsys in systems
         for var in ModelingToolkit.inputs(subsys)
             push!(inputs, renamespace(subsys, var))
@@ -764,6 +765,7 @@ function flatten(sys::System, noeqs = false)
         discrete_events = discrete_events(sys), assertions = assertions(sys),
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
+        inputs = inputs(sys), outputs = outputs(sys),
         # without this, any defaults/guesses obtained from metadata that were
         # later removed by the user will be re-added. Right now, we just want to
         # retain `defaults(sys)` as-is.
