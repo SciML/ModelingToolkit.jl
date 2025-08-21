@@ -128,6 +128,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     consolidate = get(dict, :consolidate, default_consolidate)
     description = get(dict, :description, "")
+    model_meta = get(dict, :metadata, Dict{Symbol, Any}())
 
     @inline pop_structure_dict!.(
         Ref(dict), [:defaults, :kwargs, :structural_parameters])
@@ -145,6 +146,14 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
+
+    meta_exprs = quote
+        for (k, v) in $model_meta
+            var"#___sys___" = setmetadata(var"#___sys___", $get_var($mod, k), v)
+        end
+    end
+    push!(exprs.args, meta_exprs)
+    push!(exprs.args, :(var"#___sys___"))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
