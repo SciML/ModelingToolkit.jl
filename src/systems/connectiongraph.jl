@@ -455,7 +455,7 @@ function connectionsets(graph::HyperGraph{V}) where {V}
     invmap = graph.invmap
 
     # union all of the hyperedges
-    disjoint_sets = IntDisjointSets(length(invmap))
+    disjoint_sets = IntDisjointSet(length(invmap))
     for edge_i in 𝑠vertices(bigraph)
         hyperedge = 𝑠neighbors(bigraph, edge_i)
         isempty(hyperedge) && continue
