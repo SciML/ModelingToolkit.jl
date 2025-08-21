@@ -841,6 +841,27 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Check if `sym` represents a symbolic number or array of numbers.
+"""
+function is_variable_numeric(sym)
+    sym = unwrap(sym)
+    T = symtype(sym)
+    is_numeric_symtype(T)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Check if `T` is an appropriate symtype for a symbolic variable representing a number or
+array of numbers.
+"""
+function is_numeric_symtype(T::Type)
+    return T <: Number || T <: AbstractArray && is_numeric_symtype(eltype(T))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
 """
 function observed_dependency_graph(eqs::Vector{Equation})
