@@ -98,6 +98,9 @@ const DQ = DynamicQuantities
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 import SciMLPublic: @public
+import PreallocationTools
+import PreallocationTools: DiffCache
+import FillArrays
 
 export @derivatives
 
@@ -256,6 +259,7 @@ export IntervalNonlinearProblem
 export OptimizationProblem, constraints
 export SteadyStateProblem
 export JumpProblem
+export SemilinearODEFunction, SemilinearODEProblem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
