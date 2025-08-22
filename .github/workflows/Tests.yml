@@ -48,5 +48,5 @@ jobs:
       # Disable cache for self-hosted runners since they persist between runs
       # Set USE_SELF_HOSTED repository variable to 'true' when using self-hosted runners
       self-hosted: ${{ vars.USE_SELF_HOSTED == 'true' }}
-      cache: ${{ vars.USE_SELF_HOSTED != 'true' }}
+      cache: false
     secrets: "inherit"
