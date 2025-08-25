@@ -1224,6 +1224,10 @@ function is_array_of_symbolics(x)
         any(y -> symbolic_type(y) != NotSymbolic() || is_array_of_symbolics(y), x)
 end
 
+function is_array_of_symbolics(x::SparseMatrixCSC)
+    return is_array_of_symbolics(nonzeros(x))
+end
+
 function namespace_expr(
         O, sys, n = (sys === nothing ? nothing : nameof(sys));
         ivs = sys === nothing ? nothing : independent_variables(sys))
