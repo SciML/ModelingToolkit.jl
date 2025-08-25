@@ -207,3 +207,12 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["AmplNLWriter", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq", "Pkg", "JET", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve"]
+
+[sources]
+DiffEqBase = { url = "https://github.com/AayushSabharwal/DiffEqBase.jl", rev = "as/better-disc-save" }
+DelayDiffEq = { url = "https://github.com/AayushSabharwal/DelayDiffEq.jl", rev = "as/fix-disc-save" }
+JumpProcesses = { url = "https://github.com/AayushSabharwal/JumpProcesses.jl", rev = "as/fix-disc-save" }
+OrdinaryDiffEqCore = { url = "https://github.com/AayushSabharwal/OrdinaryDiffEq.jl", rev = "as/fix-disc-save", subdir = "lib/OrdinaryDiffEqCore" }
+SciMLBase = { url = "https://github.com/AayushSabharwal/SciMLBase.jl", rev = "as/callback-save" }
+StochasticDelayDiffEq = { url = "https://github.com/AayushSabharwal/StochasticDelayDiffEq.jl", rev = "as/fix-disc-save" }
+StochasticDiffEq = { url = "https://github.com/AayushSabharwal/StochasticDiffEq.jl", rev = "as/fix-disc-save" }
