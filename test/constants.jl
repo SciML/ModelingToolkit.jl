@@ -1,7 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq, Unitful
 using Test
 MT = ModelingToolkit
-UMT = ModelingToolkit.UnitfulUnitCheck
 
 @constants a = 1
 @test isconstant(a)
@@ -25,7 +24,7 @@ simp = mtkcompile(sys)
 
 #Constant with units
 @constants β=1 [unit = u"m/s"]
-UMT.get_unit(β)
+ModelingToolkit.get_unit(β)
 @test MT.isconstant(β)
 @test !MT.istunable(β)
 @independent_variables t [unit = u"s"]

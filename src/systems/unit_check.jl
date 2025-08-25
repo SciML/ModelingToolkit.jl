@@ -19,14 +19,13 @@ function __get_literal_unit(x)
     u = getmetadata(v, VariableUnit, nothing)
     u isa DQ.AbstractQuantity ? screen_unit(u) : u
 end
+# Extensible unit type detection - extensions can add methods for specific unit types
+_get_unittype(u) = nothing
+_get_unittype(u::DQ.AbstractQuantity) = Val(:DynamicQuantities)
+
 function __get_scalar_unit_type(v)
     u = __get_literal_unit(v)
-    if u isa DQ.AbstractQuantity
-        return Val(:DynamicQuantities)
-    elseif u isa Unitful.Unitlike
-        return Val(:Unitful)
-    end
-    return nothing
+    return _get_unittype(u)
 end
 function __get_unit_type(vs′...)
     for vs in vs′
@@ -44,23 +43,26 @@ function __get_unit_type(vs′...)
     return nothing
 end
 
-function screen_unit(result)
-    if result isa DQ.AbstractQuantity
-        d = DQ.dimension(result)
-        if d isa DQ.Dimensions
-            return result
-        elseif d isa DQ.SymbolicDimensions
-            return DQ.uexpand(oneunit(result))
-        else
-            throw(ValidationError("$result doesn't have a recognized unit"))
-        end
+
+function screen_unit(result::DQ.AbstractQuantity)
+    d = DQ.dimension(result)
+    if d isa DQ.Dimensions
+        return result
+    elseif d isa DQ.SymbolicDimensions
+        return DQ.uexpand(oneunit(result))
     else
-        throw(ValidationError("$result doesn't have any unit."))
+        throw(ValidationError("$result doesn't have a recognized unit"))
     end
+end
+
+function screen_unit(result)
+    throw(ValidationError("$result doesn't have any unit."))
 end
 
 const unitless = DQ.Quantity(1.0)
 get_literal_unit(x) = screen_unit(something(__get_literal_unit(x), unitless))
+
+_oneunit(x) = oneunit(x)
 
 """
 Find the unit of a symbolic item.
@@ -69,7 +71,9 @@ get_unit(x::Real) = unitless
 get_unit(x::DQ.AbstractQuantity) = screen_unit(x)
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(unwrap(x))
-get_unit(x::Symbolics.Arr) = get_unit(unwrap(x))
+function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
+    get_literal_unit(x)
+end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
@@ -77,7 +81,7 @@ get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
 
 function get_unit(op, args) # Fallback
-    result = oneunit(op(get_unit.(args)...))
+    result = _oneunit(op(get_unit.(args)...))
     try
         get_unit(result)
     catch
@@ -104,7 +108,10 @@ function get_unit(op::Integral, args)
     return get_unit(args[1]) * unit
 end
 
-equivalent(x, y) = isequal(x, y)
+"""
+Test unit equivalence.
+"""
+equivalent(x, y) = isequal(1 * x, 1 * y)
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
@@ -167,6 +174,10 @@ function get_unit(x::Symbolic)
     end
 end
 
+# Dimension error detection function - extensible for different unit systems
+_is_dimension_error(e) = false  # Default fallback
+_is_dimension_error(e::DQ.DimensionError) = true
+
 """
 Get unit of term, returning nothing & showing warning instead of throwing errors.
 """
@@ -175,8 +186,8 @@ function safe_get_unit(term, info)
     try
         side = get_unit(term)
     catch err
-        if err isa DQ.DimensionError
-            @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
+        if _is_dimension_error(err)
+            @warn("$info: dimension error occurred.")
         elseif err isa ValidationError
             @warn(info*err.message)
         elseif err isa MethodError
