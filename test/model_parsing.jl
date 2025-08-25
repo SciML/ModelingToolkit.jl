@@ -1052,6 +1052,8 @@ end
     struct License end
     struct Category end
     struct Tags end
+    struct MyBool end
+    struct NewInt end
 
     @mtkmodel TestMetadataModel begin
         @metadata begin
@@ -1060,6 +1062,8 @@ end
             License = "MIT"
             Category => "example"
             Tags = ["test", "demo", "metadata"]
+            MyBool => false
+            NewInt => 1
         end
         
         @parameters begin
@@ -1082,4 +1086,6 @@ end
     @test ModelingToolkit.getmetadata(test_model, Author, nothing) == "Test Author"
     @test ModelingToolkit.getmetadata(test_model, MyVersion, nothing) == "1.0.0"
     @test ModelingToolkit.getmetadata(test_model, UnknownMetaKey, nothing) === nothing
+    @test ModelingToolkit.getmetadata(test_model, MyBool, nothing) === false
+    @test ModelingToolkit.getmetadata(test_model, NewInt, nothing) === 1
 end
