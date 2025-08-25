@@ -25,6 +25,12 @@ function SymbolicAffect(affect::SymbolicAffect; kwargs...)
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
 
+function Symbolics.fast_substitute(aff::SymbolicAffect, rules)
+    substituter = Base.Fix2(fast_substitute, rules)
+    SymbolicAffect(map(substituter, aff.affect), map(substituter, aff.alg_eqs),
+        map(substituter, aff.discrete_parameters))
+end
+
 struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
     system::AbstractSystem
@@ -34,6 +40,19 @@ struct AffectSystem
     parameters::Vector
     """Parameters of the parent ODESystem whose values are modified by the affect."""
     discretes::Vector
+end
+
+function Symbolics.fast_substitute(aff::AffectSystem, rules)
+    substituter = Base.Fix2(fast_substitute, rules)
+    sys = aff.system
+    @set! sys.eqs = map(substituter, get_eqs(sys))
+    @set! sys.parameter_dependencies = map(substituter, get_parameter_dependencies(sys))
+    @set! sys.defaults = Dict([k => substituter(v) for (k, v) in defaults(sys)])
+    @set! sys.guesses = Dict([k => substituter(v) for (k, v) in guesses(sys)])
+    @set! sys.unknowns = map(substituter, get_unknowns(sys))
+    @set! sys.ps = map(substituter, get_ps(sys))
+    AffectSystem(sys, map(substituter, aff.unknowns),
+        map(substituter, aff.parameters), map(substituter, aff.discretes))
 end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
