@@ -55,7 +55,8 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     dict = Dict{Symbol, Any}(
         :defaults => Dict{Symbol, Any}(),
         :kwargs => Dict{Symbol, Dict}(),
-        :structural_parameters => Dict{Symbol, Dict}()
+        :structural_parameters => Dict{Symbol, Dict}(),
+        :metadata => Dict{Symbol, Any}()
     )
     comps = Union{Symbol, Expr}[]
     ext = []
@@ -127,6 +128,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     consolidate = get(dict, :consolidate, default_consolidate)
     description = get(dict, :description, "")
+    model_meta = get(dict, :metadata, Dict{Symbol, Any}())
 
     @inline pop_structure_dict!.(
         Ref(dict), [:defaults, :kwargs, :structural_parameters])
@@ -144,6 +146,14 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     isconnector && push!(exprs.args,
         :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
+
+    meta_exprs = quote
+        for (k, v) in $model_meta
+            var"#___sys___" = setmetadata(var"#___sys___", $get_var($mod, k), v)
+        end
+    end
+    push!(exprs.args, meta_exprs)
+    push!(exprs.args, :(var"#___sys___"))
 
     f = if length(where_types) == 0
         :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
@@ -678,6 +688,8 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps, c_evts, d_evts,
         parse_costs!(costs, dict, body)
     elseif mname == Symbol("@consolidate")
         parse_consolidate!(body, dict)
+    elseif mname == Symbol("@metadata")
+        parse_metadata_block!(body, dict, mod)
     else
         error("$mname is not handled.")
     end
@@ -1251,6 +1263,21 @@ function parse_description!(body, dict)
         dict[:description] = body
     else
         error("Invalid description string $body")
+    end
+end
+
+function parse_metadata_block!(body, dict, mod)
+    Base.remove_linenums!(body)
+    for arg in body.args
+        MLStyle.@match arg begin
+            Expr(:(=), a, b) => begin
+                dict[:metadata][a] = get_var(mod, b)
+            end
+            Expr(:call, :(=>), a, b) => begin
+                dict[:metadata][a] = get_var(mod, b)
+            end
+            _ => error("Invalid metadata entry: $arg. Expected key = value or key => value format.")
+        end
     end
 end
 
