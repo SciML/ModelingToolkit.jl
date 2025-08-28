@@ -335,3 +335,25 @@ end
     sys = complete(outer)
     @test getmetadata(sys, Int, nothing) == "test"
 end
+
+@testset "Causal connections generate causal equations" begin
+    # test interpretation of `Equality` cset as causal connection
+    @named input = RealInput()
+    @named comp1 = System(Equation[], t; systems = [input])
+    @named output = RealOutput()
+    @named comp2 = System(Equation[], t; systems = [output])
+    @named sys = System([connect(comp2.output, comp1.input)], t; systems = [comp1, comp2])
+    eq = only(equations(expand_connections(sys)))
+    # as opposed to `output.u ~ input.u`
+    @test isequal(eq, comp1.input.u ~ comp2.output.u)
+
+    # test causal ordering of true causal cset
+    @named input = RealInput()
+    @named comp1 = System(Equation[], t; systems = [input])
+    @named output = RealOutput()
+    @named comp2 = System(Equation[], t; systems = [output])
+    @named sys = System([connect(comp2.output.u, comp1.input.u)], t; systems = [comp1, comp2])
+    eq = only(equations(expand_connections(sys)))
+    # as opposed to `output.u ~ input.u`
+    @test isequal(eq, comp1.input.u ~ comp2.output.u)
+end

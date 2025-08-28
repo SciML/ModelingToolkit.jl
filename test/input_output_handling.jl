@@ -468,3 +468,20 @@ end
     x = [1.0]
     @test_nowarn f[1](x, u, p, 0.0)
 end
+
+@testset "Observed inputs and outputs" begin
+    @variables x(t) y(t) [input = true] z(t) [output = true]
+    eqs = [D(x) ~ x + y + z
+           y ~ z]
+    @named sys = System(eqs, t)
+    @test issetequal(ModelingToolkit.inputs(sys), [y])
+    @test issetequal(ModelingToolkit.outputs(sys), [z])
+
+    ss1 = mtkcompile(sys, inputs = [y], outputs = [z])
+    @test issetequal(ModelingToolkit.inputs(ss1), [y])
+    @test issetequal(ModelingToolkit.outputs(ss1), [z])
+
+    ss2 = mtkcompile(sys, inputs = [z], outputs = [y])
+    @test issetequal(ModelingToolkit.inputs(ss2), [z])
+    @test issetequal(ModelingToolkit.outputs(ss2), [y])
+end

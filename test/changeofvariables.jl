@@ -135,7 +135,7 @@ new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test noise_eqs(new_sys)[1, 1] === value(σ)
 @test noise_eqs(new_sys)[1, 2] === value(0)
 @test noise_eqs(new_sys)[2, 1] === value(0)
-@test noise_eqs(new_sys)[2, 2] === value(substitute(2*α*y, backward_subs[2]))
+@test noise_eqs(new_sys)[2, 2] === value(simplify(substitute(2*α*y, backward_subs[2])))
 @test noise_eqs(new_sys)[3, 1] === value(σ)
 @test noise_eqs(new_sys)[3, 2] === value(α)
 
