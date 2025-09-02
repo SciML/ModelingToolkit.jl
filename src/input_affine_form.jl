@@ -43,12 +43,13 @@ are nonlinear in the inputs, the result may not be meaningful.
 """
 function input_affine_form(eqs, inputs)
     # Extract the input matrix g(x) by taking coefficients of each input
-    g = [Symbolics.coeff(Symbolics.simplify(eq, expand=true), u) for eq in eqs, u in inputs]
-    g = Symbolics.simplify.(g, expand=true)
-    
+    g = [Symbolics.coeff(Symbolics.simplify(eq, expand = true), u)
+         for eq in eqs, u in inputs]
+    g = Symbolics.simplify.(g, expand = true)
+
     # Extract the drift term f(x) by substituting inputs = 0
     f = Symbolics.substitute.(eqs, Ref(Dict(inputs .=> 0)))
-    f = Symbolics.simplify.(f, expand=true)
-    
+    f = Symbolics.simplify.(f, expand = true)
+
     return f, g
 end

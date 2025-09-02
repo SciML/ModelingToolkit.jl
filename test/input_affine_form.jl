@@ -8,18 +8,18 @@ using StaticArrays
         @variables x1 x2 u1 u2
         state = [x1, x2]
         inputs = [u1, u2]
-        
+
         eqs = [
             -x1 + 2*x2 + u1,
             x1*x2 - x2 + u1 + 2*u2
         ]
-        
+
         f, g = input_affine_form(eqs, inputs)
-        
+
         # Verify reconstruction
         eqs_reconstructed = f + g * inputs
         @test isequal(Symbolics.simplify.(eqs_reconstructed), Symbolics.simplify.(eqs))
-        
+
         # Check dimensions
         @test length(f) == length(eqs)
         @test size(g) == (length(eqs), length(inputs))
@@ -45,19 +45,19 @@ using StaticArrays
         function H(q, q̇)
             return SA[
                 -m * L * sin(q[2]) * q̇[2] + bt * (q̇[1] - R * q̇[2]) / R,
-                -m * grav * L * sin(q[2]) - bt * (q̇[1] - R * q̇[2]),
+                -m * grav * L * sin(q[2]) - bt * (q̇[1] - R * q̇[2])
             ]
         end
         B(q) = SA[Km / R, -Km]
 
         # Convert to control affine form
         function f_seg(x)
-            q, q̇ = x[SA[1,2]], x[SA[3,4]]
+            q, q̇ = x[SA[1, 2]], x[SA[3, 4]]
             return [q̇; -D(q) \ H(q, q̇)]
         end
         function g_seg(x)
-            q, q̇ = x[SA[1,2]], x[SA[3,4]]
-            return [SA[0,0]; D(q) \ B(q)]
+            q, q̇ = x[SA[1, 2]], x[SA[3, 4]]
+            return [SA[0, 0]; D(q) \ B(q)]
         end
 
         # Trace dynamics symbolically
@@ -68,17 +68,17 @@ using StaticArrays
 
         # Extract control-affine form
         fe, ge = input_affine_form(eqs, inputs)
-        
+
         # Test reconstruction
         eqs2 = fe + ge * inputs
-        diff = Symbolics.simplify.(eqs2 - eqs, expand=true)
-        
+        diff = Symbolics.simplify.(eqs2 - eqs, expand = true)
+
         # The difference should be zero or very close to zero symbolically
         # We test numerically since symbolic simplification might not be perfect
-        f2, _ = build_function(fe, x, expression=false)
-        g2, _ = build_function(ge, x, expression=false)
-        
-        for i = 1:10
+        f2, _ = build_function(fe, x, expression = false)
+        g2, _ = build_function(ge, x, expression = false)
+
+        for i in 1:10
             x_val = rand(length(x))
             @test f2(x_val) ≈ f_seg(x_val) rtol=1e-10
             @test g2(x_val) ≈ g_seg(x_val) rtol=1e-10
@@ -90,24 +90,25 @@ using StaticArrays
         @variables x1 x2 x3 u1 u2
         state = [x1, x2, x3]
         inputs = [u1, u2]
-        
+
         eqs = [
             x2,
             x3,
             -x1 - 2*x2 - x3 + u1 + 3*u2
         ]
-        
+
         f, g = input_affine_form(eqs, inputs)
-        
+
         # Expected results
         f_expected = [x2, x3, -x1 - 2*x2 - x3]
         g_expected = [0 0; 0 0; 1 3]
-        
+
         @test isequal(Symbolics.simplify.(f), Symbolics.simplify.(f_expected))
-        
+
         # Test g matrix elements
         for i in 1:size(g, 1), j in 1:size(g, 2)
-            @test isequal(Symbolics.simplify(g[i,j]), g_expected[i,j])
+
+            @test isequal(Symbolics.simplify(g[i, j]), g_expected[i, j])
         end
     end
 
@@ -116,20 +117,19 @@ using StaticArrays
         @variables x1 x2 u
         state = [x1, x2]
         inputs = [u]
-        
+
         eqs = [
             x2,
             -sin(x1) - x2 + u
         ]
-        
+
         f, g = input_affine_form(eqs, inputs)
-        
+
         # Expected results
         f_expected = [x2, -sin(x1) - x2]
         g_expected = reshape([0, 1], 2, 1)
-        
+
         @test isequal(Symbolics.simplify.(f), Symbolics.simplify.(f_expected))
         @test isequal(g, g_expected)
     end
-
 end
