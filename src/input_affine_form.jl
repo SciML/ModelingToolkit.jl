@@ -48,7 +48,7 @@ function input_affine_form(eqs, inputs)
     g = Symbolics.simplify.(g, expand = true)
 
     # Extract the drift term f(x) by substituting inputs = 0
-    f = Symbolics.substitute.(eqs, Ref(Dict(inputs .=> 0)))
+    f = Symbolics.fast_substitute.(eqs, Ref(Dict(inputs .=> 0)))
     f = Symbolics.simplify.(f, expand = true)
 
     return f, g
