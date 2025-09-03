@@ -39,17 +39,10 @@ f, g = input_affine_form(eqs, inputs)
 
 # Notes
 The function assumes that the equations are affine in the inputs. If the equations
-are nonlinear in the inputs, the result may not be meaningful.
+are nonlinear in the inputs, an error is thrown.
 """
 function input_affine_form(eqs, inputs)
-    # Extract the input matrix g(x) by taking coefficients of each input
-    g = [Symbolics.coeff(Symbolics.simplify(eq, expand = true), u)
-         for eq in eqs, u in inputs]
-    g = Symbolics.simplify.(g, expand = true)
-
-    # Extract the drift term f(x) by substituting inputs = 0
-    f = Symbolics.fast_substitute.(eqs, Ref(Dict(inputs .=> 0)))
-    f = Symbolics.simplify.(f, expand = true)
-
+    g, f, flag = linear_expansion(eqs, inputs)
+    flag || error("The system is not affine in the inputs.")
     return f, g
 end
