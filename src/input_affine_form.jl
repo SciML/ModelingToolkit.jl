@@ -42,6 +42,7 @@ The function assumes that the equations are affine in the inputs. If the equatio
 are nonlinear in the inputs, an error is thrown.
 """
 function input_affine_form(eqs, inputs)
+    any(is_alg_equation, eqs) && error("All equations must be differential equations.")
     g, f, flag = Symbolics.linear_expansion(getfield.(eqs, :rhs), inputs)
     flag || error("The system is not affine in the inputs.")
     return f, g
