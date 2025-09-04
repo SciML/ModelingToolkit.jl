@@ -2,6 +2,8 @@ using ModelingToolkit, Test
 using Symbolics
 using StaticArrays
 
+rhs(eq) = simplify(eq.rhs)
+
 @testset "input_affine_form" begin
     # Test with simple linear system
     @testset "Simple linear system" begin
@@ -9,7 +11,7 @@ using StaticArrays
         state = [x1, x2]
         inputs = [u1, u2]
 
-        eqs = [
+        eqs = D.(state) .~ [
             -x1 + 2*x2 + u1,
             x1*x2 - x2 + u1 + 2*u2
         ]
@@ -18,7 +20,7 @@ using StaticArrays
 
         # Verify reconstruction
         eqs_reconstructed = f + g * inputs
-        @test isequal(Symbolics.simplify.(eqs_reconstructed), Symbolics.simplify.(eqs))
+        @test isequal(Symbolics.simplify.(eqs_reconstructed), rhs.(eqs))
 
         # Check dimensions
         @test length(f) == length(eqs)
@@ -41,7 +43,7 @@ using StaticArrays
         bt = 2 * 1.225
 
         # Dynamics of Segway in Euler-Lagrange form
-        D(q) = [m0 m*L*cos(q[2]); m*L*cos(q[2]) J0]
+        Dq(q) = [m0 m*L*cos(q[2]); m*L*cos(q[2]) J0]
         function H(q, q̇)
             return SA[
                 -m * L * sin(q[2]) * q̇[2] + bt * (q̇[1] - R * q̇[2]) / R,
@@ -53,25 +55,25 @@ using StaticArrays
         # Convert to control affine form
         function f_seg(x)
             q, q̇ = x[SA[1, 2]], x[SA[3, 4]]
-            return [q̇; -D(q) \ H(q, q̇)]
+            return [q̇; -Dq(q) \ H(q, q̇)]
         end
         function g_seg(x)
             q, q̇ = x[SA[1, 2]], x[SA[3, 4]]
-            return [SA[0, 0]; D(q) \ B(q)]
+            return [SA[0, 0]; Dq(q) \ B(q)]
         end
 
         # Trace dynamics symbolically
         @variables q1 q2 qd1 qd2 u
         x = [q1; q2; qd1; qd2]
         inputs = [u]
-        eqs = f_seg(x) + g_seg(x) * u
+        eqs = D.(x) .~ f_seg(x) + g_seg(x) * u
 
         # Extract control-affine form
         fe, ge = input_affine_form(eqs, inputs)
 
         # Test reconstruction
         eqs2 = fe + ge * inputs
-        diff = Symbolics.simplify.(eqs2 - eqs, expand = true)
+        diff = Symbolics.simplify.(eqs2 - rhs.(eqs), expand = true)
 
         # The difference should be zero or very close to zero symbolically
         # We test numerically since symbolic simplification might not be perfect
@@ -91,7 +93,7 @@ using StaticArrays
         state = [x1, x2, x3]
         inputs = [u1, u2]
 
-        eqs = [
+        eqs = D.(state) .~ [
             x2,
             x3,
             -x1 - 2*x2 - x3 + u1 + 3*u2
@@ -118,7 +120,7 @@ using StaticArrays
         state = [x1, x2]
         inputs = [u]
 
-        eqs = [
+        eqs = D.(state) .~ [
             x2,
             -sin(x1) - x2 + u
         ]

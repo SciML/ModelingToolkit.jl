@@ -29,8 +29,8 @@ inputs = [u1, u2]
 
 # Define system equations: ẋ = F(x, u)
 eqs = [
-    -x1 + 2*x2 + u1,
-    x1*x2 - x2 + u1 + 2*u2
+    D(x1) ~ -x1 + 2*x2 + u1,
+    D(x2) ~ x1*x2 - x2 + u1 + 2*u2
 ]
 
 # Extract control-affine form
@@ -42,7 +42,7 @@ The function assumes that the equations are affine in the inputs. If the equatio
 are nonlinear in the inputs, an error is thrown.
 """
 function input_affine_form(eqs, inputs)
-    g, f, flag = linear_expansion(eqs, inputs)
+    g, f, flag = Symbolics.linear_expansion(getfield.(eqs, :rhs), inputs)
     flag || error("The system is not affine in the inputs.")
     return f, g
 end
