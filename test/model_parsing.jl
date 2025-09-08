@@ -1067,12 +1067,12 @@ end
         end
         
         @parameters begin
-            k = 1.0, [description = "Gain parameter"]
+            k = 1.0
         end
         
         @variables begin
-            x(t), [description = "State variable"]
-            y(t), [description = "Output variable"]
+            x(t)
+            y(t)
         end
         
         @equations begin
