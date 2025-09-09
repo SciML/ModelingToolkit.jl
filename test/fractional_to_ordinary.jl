@@ -21,8 +21,7 @@ sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
-time = 0
-while(time <= 1)
+for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
     time += 0.1
 end
@@ -35,10 +34,8 @@ sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1; matrix=true)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
-time = 0
-while(time <= 1)
+for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
-    time += 0.1
 end
 
 α = 0.9
@@ -49,10 +46,8 @@ sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
-time = 0
-while(time <= 1)
+for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
-    time += 0.1
 end
 
 # Testing for example 2 of Section 7
