@@ -203,12 +203,6 @@ sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, radau5(), abstol = 1e-10, reltol = 1e-10)
-
-time = 0
-while(time <= 1)
-    @test isapprox((3/2*time^(α/2) - time^4)^2, sol(time, idxs=x), atol=1e-3)
-    time += 0.1
-end
 ```
 """
 function fractional_to_ordinary(
