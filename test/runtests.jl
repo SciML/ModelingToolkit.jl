@@ -100,9 +100,10 @@ end
             @safetestset "Subsystem replacement" include("substitute_component.jl")
             @safetestset "Linearization Tests" include("linearize.jl")
             @safetestset "LinearProblem Tests" include("linearproblem.jl")
+            @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
         end
     end
-
+    
     if GROUP == "All" || GROUP == "SymbolicIndexingInterface"
         @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
         @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
