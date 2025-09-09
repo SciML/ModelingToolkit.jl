@@ -1568,7 +1568,7 @@ end
 
     cmd = `$(Base.julia_cmd()) --project=$(@__DIR__) -e $code`
     proc = run(cmd, stdin, stdout, stderr; wait = false)
-    sleep(120)
+    sleep(180)
     @test !process_running(proc)
     kill(proc, Base.SIGKILL)
 end

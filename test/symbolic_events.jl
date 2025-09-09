@@ -1421,3 +1421,22 @@ end
     @named sys = System([D(y) ~ 2x + 1, x^2 ~ 2y^3], t; discrete_events = [dev])
     sys = @test_nowarn mtkcompile(sys)
 end
+
+@testset "Non-`Real` symtype parameters in callback with unknown" begin
+    @mtkmodel MWE begin
+        @variables begin
+            x(t) = 1.0
+        end
+        @parameters begin
+            p(t)::Int = 1
+        end
+        @equations begin
+            D(x) ~ p * x
+        end
+        @discrete_events begin
+            1.0 => [x ~ p * Pre(x) * sin(x)]
+        end
+    end
+    @mtkcompile sys = MWE()
+    @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+end

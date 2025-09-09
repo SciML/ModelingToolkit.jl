@@ -1,5 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
+using SymbolicUtils: symtype
 
 @independent_variables t
 D = Differential(t)
@@ -327,4 +328,69 @@ end
            D(ac) ~ (x + y)^2
            D(x) ~ y]
     @test issetequal(equations(asys), eqs)
+end
+
+abstract type AbstractFoo end
+
+struct Bar <: AbstractFoo end
+struct Baz <: AbstractFoo end
+
+foofn(x) = 4
+@register_symbolic foofn(x::AbstractFoo)
+
+@testset "`respecialize`" begin
+    @parameters p::AbstractFoo p2(t)::AbstractFoo = p q[1:2]::AbstractFoo r
+    rp,
+    rp2 = let
+        only(@parameters p::Bar),
+        SymbolicUtils.term(operation(p2), arguments(p2)...; type = Baz)
+    end
+    @variables x(t) = 1.0
+    @named sys1 = System([D(x) ~ foofn(p) + foofn(p2) + x], t, [x], [p, p2, q, r])
+
+    @test_throws ["completed systems"] respecialize(sys1)
+    @test_throws ["completed systems"] respecialize(sys1, [])
+    @test_throws ["split systems"] respecialize(complete(sys1; split = false))
+    @test_throws ["split systems"] respecialize(complete(sys1; split = false), [])
+
+    sys = complete(sys1)
+
+    @test_throws ["Parameter p", "associated value"] respecialize(sys)
+    @test_throws ["Parameter p", "associated value"] respecialize(sys, [p])
+
+    @test_throws ["Parameter p2", "symbolic default"] respecialize(sys, [p2])
+
+    sys2 = respecialize(sys, [p => Bar()])
+    @test ModelingToolkit.iscomplete(sys2)
+    @test ModelingToolkit.is_split(sys2)
+    ps = ModelingToolkit.get_ps(sys2)
+    idx = findfirst(isequal(rp), ps)
+    @test defaults(sys2)[rp] == Bar()
+    @test symtype(ps[idx]) <: Bar
+    ic = ModelingToolkit.get_index_cache(sys2)
+    @test any(x -> x.type == Bar && x.length == 1, ic.nonnumeric_buffer_sizes)
+    prob = ODEProblem(sys2, [p2 => Bar(), q => [Bar(), Bar()], r => 1], (0.0, 1.0))
+    @test any(x -> x isa Vector{Bar} && length(x) == 1, prob.p.nonnumeric)
+
+    defaults(sys)[p2] = Baz()
+    sys2 = respecialize(sys, [p => Bar()]; all = true)
+    @test ModelingToolkit.iscomplete(sys2)
+    @test ModelingToolkit.is_split(sys2)
+    ps = ModelingToolkit.get_ps(sys2)
+    idx = findfirst(isequal(rp2), ps)
+    @test defaults(sys2)[rp2] == Baz()
+    @test symtype(ps[idx]) <: Baz
+    ic = ModelingToolkit.get_index_cache(sys2)
+    @test any(x -> x.type == Baz && x.length == 1, ic.nonnumeric_buffer_sizes)
+    delete!(defaults(sys), p2)
+    prob = ODEProblem(sys2, [q => [Bar(), Bar()], r => 1], (0.0, 1.0))
+    @test any(x -> x isa Vector{Bar} && length(x) == 1, prob.p.nonnumeric)
+    @test any(x -> x isa Vector{Baz} && length(x) == 1, prob.p.nonnumeric)
+
+    @test_throws ["Numeric types cannot be respecialized"] respecialize(sys, [r => 1])
+    @test_throws ["array symbolics"] respecialize(sys, [q => Bar[Bar(), Bar()]])
+    @test_throws ["scalarized array"] respecialize(sys, [q[1] => Bar()])
+
+    @parameters foo::AbstractFoo
+    @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
 end

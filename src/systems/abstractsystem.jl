@@ -784,6 +784,8 @@ const SYS_PROPS = [:eqs
                    :parent
                    :is_dde
                    :tstops
+                   :inputs
+                   :outputs
                    :index_cache
                    :isscheduled
                    :costs
@@ -1820,6 +1822,17 @@ function push_vars!(stmt, name, typ, vars)
             ex = nameof(s)
         end
         push!(vars_expr.args, ex)
+
+        meta_kvps = Expr[]
+        if isinput(s)
+            push!(meta_kvps, :(input = true))
+        end
+        if isoutput(s)
+            push!(meta_kvps, :(output = true))
+        end
+        if !isempty(meta_kvps)
+            push!(vars_expr.args, Expr(:vect, meta_kvps...))
+        end
     end
     push!(stmt, :($name = $collect($vars_expr)))
     return

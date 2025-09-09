@@ -1219,6 +1219,7 @@ with a constant value.
 """
 function float_type_from_varmap(varmap, floatT = Bool)
     for (k, v) in varmap
+        is_variable_floatingpoint(k) || continue
         symbolic_type(v) == NotSymbolic() || continue
         is_array_of_symbolics(v) && continue
 
