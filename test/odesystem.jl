@@ -865,7 +865,7 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
     prob2 = @test_nowarn ODEProblem(sys, [x => ones(3), p => ones(3, 3)], (0.0, 10.0))
     sol2 = @test_nowarn solve(prob2, Tsit5())
 
-    @test sol1.u ≈ sol2.u[2:end]
+    @test sol1.u ≈ sol2.u
 end
 
 # Requires fix in symbolics for `linear_expansion(p * x, D(y))`
