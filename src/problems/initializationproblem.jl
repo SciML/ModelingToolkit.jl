@@ -84,7 +84,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     # TODO: throw on uninitialized arrays
     filter!(x -> !(x isa Symbolics.Arr), uninit)
     if time_dependent_init && !isempty(uninit)
-        allow_incomplete || throw(IncompleteInitializationError(uninit))
+        allow_incomplete || throw(IncompleteInitializationError(uninit, sys))
         # for incomplete initialization, we will add the missing variables as parameters.
         # they will be updated by `update_initializeprob!` and `initializeprobmap` will
         # use them to construct the new `u0`.
@@ -146,9 +146,10 @@ const INCOMPLETE_INITIALIZATION_MESSAGE = """
 
 struct IncompleteInitializationError <: Exception
     uninit::Any
+    sys::Any
 end
 
 function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
-    println(io, e.uninit)
+    println(io, underscore_to_D(e.uninit, e.sys))
 end

@@ -1079,3 +1079,23 @@ function Base.showerror(io::IO, ::NotPossibleError)
     This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE.
     """)
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given a vector of variables in the system, return the corresponding `Differential` form of variable if possible.
+Else returns the variable as-is.
+"""
+function underscore_to_D(v::AbstractVector, sys)
+    maps = get_schedule(sys).dummy_sub
+    inv_maps = Dict{valtype(maps), Vector{Base.keytype(maps)}}()
+
+    for (k, v) in maps
+        push!(get!(() -> valtype(inv_maps)[], inv_maps, v), k)
+    end
+    map(Base.Fix2(underscore_to_D, inv_maps), v)
+end
+
+function underscore_to_D(v, inv_map)
+    only(get(inv_map, v, [v]))
+end
