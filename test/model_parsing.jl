@@ -1045,3 +1045,47 @@ end
     @test Example.structure[:constraints] == ["(EvalAt(0.3))(x) ~ 3", "y ≲ 4"]
     @test Example.structure[:costs] == ["x + y", "(EvalAt(1))(y) ^ 2"]
 end
+
+@testset "Model Level Metadata" begin
+    struct Author end
+    struct MyVersion end
+    struct License end
+    struct Category end
+    struct Tags end
+    struct MyBool end
+    struct NewInt end
+
+    @mtkmodel TestMetadataModel begin
+        @metadata begin
+            Author = "Test Author"
+            MyVersion = "1.0.0"
+            License = "MIT"
+            Category => "example"
+            Tags = ["test", "demo", "metadata"]
+            MyBool => false
+            NewInt => 1
+        end
+        
+        @parameters begin
+            k = 1.0
+        end
+        
+        @variables begin
+            x(t)
+            y(t)
+        end
+        
+        @equations begin
+            D(x) ~ -k * x
+            y ~ x
+        end
+    end
+    @named test_model = TestMetadataModel()
+
+    struct UnknownMetaKey end
+    @test ModelingToolkit.getmetadata(test_model, Author, nothing) == "Test Author"
+    @test ModelingToolkit.getmetadata(test_model, MyVersion, nothing) == "1.0.0"
+    @test ModelingToolkit.getmetadata(test_model, UnknownMetaKey, nothing) === nothing
+    @test ModelingToolkit.getmetadata(test_model, MyBool, nothing) === false
+    @test ModelingToolkit.getmetadata(test_model, NewInt, nothing) === 1
+end

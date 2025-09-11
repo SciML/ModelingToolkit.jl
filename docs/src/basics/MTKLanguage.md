@@ -31,6 +31,7 @@ set to `false`.
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its unknowns
   - `@icon` : for embedding the model icon
+  - `@metadata`: for assigning key-value pairs as model level metadata
   - `@parameters`: for specifying the symbolic parameters
   - `@structural_parameters`: for specifying non-symbolic parameters
   - `@variables`: for specifying the unknowns
@@ -92,6 +93,16 @@ end
     end
     @defaults begin
         v_for_defaults => 2.0
+    end
+end
+
+struct Author end
+struct ModelVersion end
+@mtkmodel ModelD begin
+    @description "A component with some metadata."
+    @metadata begin
+        Author = "Test Author"
+        ModelVersion = "1.0.0"
     end
 end
 ```
@@ -255,6 +266,30 @@ using ModelingToolkit
         (t == 2.5) => [k ~ Pre(k) * 2], [discrete_parameters = k]
     end
 end
+```
+
+#### `@metadata` begin block
+
+  - Assign key-value pairs as model level metadata.
+  - The keys must be `DataType` to avoid any key collisions.
+  - Assignments can be made using either `=` or `=>`.
+  - Metadata can be retrieved using [`getmetadata`](@ref).
+  - Metadata can be set using [`setmetadata`](@ref).
+
+```@example mtkmodel-example
+using ModelingToolkit
+
+struct Author end
+struct ModelVersion end
+
+@mtkmodel MetadataModel begin
+    @metadata begin
+        Author = "Test Author"
+        ModelVersion => "1.0.0"
+    end
+end
+@named model = MetadataModel()
+getmetadata(model, Author, nothing) == "Test Author"
 ```
 
 #### A begin block
