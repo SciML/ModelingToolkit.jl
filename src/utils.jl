@@ -1093,9 +1093,31 @@ function underscore_to_D(v::AbstractVector, sys)
     for (k, v) in maps
         push!(get!(() -> valtype(inv_maps)[], inv_maps, v), k)
     end
-    map(Base.Fix2(underscore_to_D, inv_maps), v)
+    iv = get_iv(sys)
+    map(x -> underscore_to_D(x, iv, inv_maps), v)
 end
 
-function underscore_to_D(v, inv_map)
-    only(get(inv_map, v, [v]))
+function underscore_to_D(v, iv, inv_map)
+    if haskey(inv_map, v)
+        only(get(inv_map, v, [v]))
+    else
+        v = ModelingToolkit.detime_dvs(v)
+        s = split(string(getname(v)), 'ˍ')
+        if length(s) > 1
+            n, suffix = s
+        else
+            n, suffix = first(s), ""
+        end
+        repeats = length(suffix) ÷ length(string(iv))
+        D = Differential(iv)
+        wrap_with_D(Symbol(n), D, repeats)
+    end
+end
+
+function wrap_with_D(n, D, repeats)
+    if repeats <= 0
+        return n
+    else
+        wrap_with_D(D(n), D, repeats - 1)
+    end
 end
