@@ -22,7 +22,7 @@ struct Model{F, S}
         """
     isconnector::Bool
 end
-(m::Model)(args...; kw...) = m.f(args...; kw...)
+(m::Model)(args...; name=:unnamed, kw...) = m.f(args...; name, kw...)
 
 Base.parentmodule(m::Model) = parentmodule(m.f)
 
@@ -1441,34 +1441,54 @@ function handle_conditional_components(condition, dict, exprs, kwargs, x, y = no
     push!(dict[:components], (:if, condition, comps, ycomps))
 end
 
+""" `push!`, or `append!`, depending on `x`'s type """
+push_append!(vec, x::AbstractVector) = append!(vec, x)
+push_append!(vec, x) = push!(vec, x)
+
+""" Helper; renames a single component or a vector of component. """
+component_rename(obj, name::Symbol) = rename(obj, name)
+component_rename(objs::Vector, name::Symbol) =
+    [rename(obj, Symbol(name, :_, i)) for (i, obj) in enumerate(objs)]
+
+""" Recursively parse an expression inside of the `@components` block. """
+function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
+    MLStyle.@match compexpr begin
+        Expr(:block, args...) => begin
+            for a in args
+                parse_components_expr!(exprs, cs, dict, a, kwargs)
+            end
+        end
+        Expr(:if, condition, x) => begin
+            then_exprs = []
+            parse_components_expr!(then_exprs, cs, dict, x, kwargs)
+            push!(exprs, :(if $condition begin $(then_exprs...) end end))
+        end
+        Expr(:if, condition, x, y) => begin
+            then_exprs = []
+            else_exprs = []
+            parse_components_expr!(then_exprs, cs, dict, x, kwargs)
+            parse_components_expr!(else_exprs, cs, dict, y, kwargs)
+            push!(exprs, :(if $condition
+                               begin $(then_exprs...) end
+                           else
+                               begin $(else_exprs...) end
+                           end))
+        end
+        Expr(:elseif, args...) => parse_components_expr!(exprs, cs, dict, Expr(:if, args...), kwargs)
+        Expr(:(=), lhs, rhs) => begin
+            # push!(dict[:components], comps...)  # TODO
+            # push!(kwargs, Expr(:kw, lhs, rhs))  # this is to support components as kwargs
+            push!(exprs, :($lhs = $component_rename($rhs, $(Expr(:quote, lhs)))))
+            push!(exprs, :($push_append!(systems, $lhs)))
+        end
+        _ => error("Expression not handled ", compexpr)
+    end
+end
+
 function parse_components!(exprs, cs, dict, compbody, kwargs)
     dict[:components] = []
     Base.remove_linenums!(compbody)
-    for arg in compbody.args
-        MLStyle.@match arg begin
-            Expr(:if, condition,
-                x) => begin
-                handle_conditional_components(condition, dict, exprs, kwargs, x)
-            end
-            Expr(:if,
-                condition,
-                x,
-                y) => begin
-                handle_conditional_components(condition, dict, exprs, kwargs, x, y)
-            end
-            # Either the arg is top level component declaration or an invalid cause - both are handled by `_parse_components`
-            _ => begin
-                comp_names, comps, expr_vec,
-                varexpr = _parse_components!(:(begin
-                        $arg
-                    end),
-                    kwargs)
-                push!(cs, comp_names...)
-                push!(dict[:components], comps...)
-                push!(exprs, varexpr, expr_vec)
-            end
-        end
-    end
+    parse_components_expr!(exprs, cs, dict, compbody, kwargs)
 end
 
 function _rename(compname, varname)
