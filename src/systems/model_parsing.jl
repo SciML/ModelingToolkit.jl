@@ -1476,7 +1476,7 @@ function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
         end
         Expr(:elseif, args...) => parse_components_expr!(exprs, cs, dict, Expr(:if, args...), kwargs)
         Expr(:(=), lhs, rhs) => begin
-            # push!(dict[:components], comps...)  # TODO
+            push!(dict[:components], [lhs, :unimplemented])  # TODO
             # push!(kwargs, Expr(:kw, lhs, rhs))  # this is to support components as kwargs
             push!(exprs, :($lhs = $component_rename($rhs, $(Expr(:quote, lhs)))))
             push!(exprs, :($push_append!(systems, $lhs)))
