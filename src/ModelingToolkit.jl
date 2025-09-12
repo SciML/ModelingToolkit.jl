@@ -224,6 +224,7 @@ include("structural_transformation/StructuralTransformations.jl")
 
 @reexport using .StructuralTransformations
 include("inputoutput.jl")
+include("input_affine_form.jl")
 
 include("adjoints.jl")
 include("deprecations.jl")
@@ -259,6 +260,7 @@ export JumpProblem
 export alias_elimination, flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
+export input_affine_form
 export initial_state, transition, activeState, entry, ticksInState, timeInState
 export @component, @mtkmodel, @mtkcompile, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
