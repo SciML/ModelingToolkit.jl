@@ -1087,7 +1087,7 @@ Given a vector of variables in the system, return the corresponding `Differentia
 Else returns the variable as-is.
 """
 function underscore_to_D(v::AbstractVector, sys)
-    maps = get_schedule(sys).dummy_sub
+    maps = isscheduled(sys) ? get_schedule(sys).dummy_sub : Dict()
     inv_maps = Dict{valtype(maps), Vector{Base.keytype(maps)}}()
 
     for (k, v) in maps
