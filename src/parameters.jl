@@ -164,7 +164,7 @@ function subset_tunables(sys, new_tunables)
         throw(ArgumentError("Tunable parameters can only be changed for split systems."))
     end
 
-    cur_tunables = tunable_parameters(sys, parameters(sys))
+    cur_tunables = tunable_parameters(sys, tunable_parameters(sys))
     diff_params = setdiff(cur_tunables, new_tunables)
 
     if !isempty(setdiff(new_tunables, cur_tunables))
