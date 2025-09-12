@@ -261,7 +261,7 @@ u: 10001-element Vector{Vector{Float64}}:
  [148.1166294129045]
  [148.26482012532432]
  [148.26482012532432]
- [148.41315910257674]</code></pre><p>The variables of the FMU are discrete, and their timeseries can be obtained at intervals of <code>communication_step_size</code>.</p><pre><code class="language-julia hljs">sol[sys.inner.mass__s]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5001-element Vector{Float64}:
+ [148.41315910257674]</code></pre><p>The variables of the FMU are discrete, and their timeseries can be obtained at intervals of <code>communication_step_size</code>.</p><pre><code class="language-julia hljs">sol[sys.inner.mass__s]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5000-element Vector{Float64}:
  0.5
  0.5000032557675739
  0.5000126065628254
@@ -273,6 +273,7 @@ u: 10001-element Vector{Vector{Float64}}:
  0.5001934523600614
  0.5002445581957897
  ⋮
+ 1.698203779175412
  1.6980584968463255
  1.697907233814026
  1.6977499916178909
@@ -280,7 +281,6 @@ u: 10001-element Vector{Vector{Float64}}:
  1.6974175761995924
  1.6972424063642613
  1.697061264138831
- 1.696874151370973
  1.696874151370973</code></pre><h2 id="FMUs-of-components"><a class="docs-heading-anchor" href="#FMUs-of-components">FMUs of components</a><a id="FMUs-of-components-1"></a><a class="docs-heading-anchor-permalink" href="#FMUs-of-components" title="Permalink"></a></h2><p>FMUs can also be imported as individual components. For this example, we will use custom FMUs used in the test suite of ModelingToolkit.jl.</p><pre><code class="language-julia hljs">fmu = loadFMU(
     joinpath(@__DIR__, &quot;..&quot;, &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;fmi&quot;, &quot;fmus&quot;, &quot;SimpleAdder.fmu&quot;);
     type = :ME)
@@ -427,4 +427,4 @@ u: 2004-element Vector{Vector{Float64}}:
  [4.681757919680873, 16.420855218475776, 1.498001999999985]
  [4.681757919678864, 16.45258983225982, 1.499000499999985]
  [4.685252429942133, 16.45258983225982, 1.499000499999985]
- [4.68525242994012, 16.484377130747994, 1.4999999999999851]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../disturbance_modeling/">« Disturbance and input modeling modeling</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Monday 25 August 2025 09:00">Monday 25 August 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [4.68525242994012, 16.484377130747994, 1.4999999999999851]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../disturbance_modeling/">« Disturbance and input modeling modeling</a><a class="docs-footer-nextpage" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 12 September 2025 12:48">Friday 12 September 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
