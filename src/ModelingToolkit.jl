@@ -224,6 +224,7 @@ include("structural_transformation/StructuralTransformations.jl")
 
 @reexport using .StructuralTransformations
 include("inputoutput.jl")
+include("inputs.jl")
 
 include("adjoints.jl")
 include("deprecations.jl")
