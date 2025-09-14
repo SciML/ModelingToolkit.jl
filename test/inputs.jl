@@ -25,12 +25,17 @@ eqs = [
 ]
 
 @mtkcompile sys = System(eqs, t, vars, []) inputs=[x]
-sys, set_input!, finalize! = ModelingToolkit.setup_inputs(sys);
+ins = ModelingToolkit.unbound_inputs(sys)
+# ins_ = [sys.x]
+sys, input_funs = ModelingToolkit.setup_inputs(sys, ins);
 prob = ODEProblem(sys, [], (0, 4))
 
 # indeterminate form -----------------------
 
 integrator = init(prob, Tsit5())
+
+set_input! = input_funs
+finalize! = input_funs
 
 set_input!(integrator, sys.x, 1.0)
 step!(integrator, 1.0, true)
@@ -54,7 +59,7 @@ finalize!(integrator)
 
 # determinate form -----------------------
 input = ModelingToolkit.Input(sys.x, SA[1,2,3,4], SA[0,1,2,3])
-sol = solve(prob, input, Tsit5(); input_funs = (set_input!, finalize!));
+sol = solve(prob, [input], Tsit5(); input_funs);
 
 
 @test sol(0.0; idxs=sys.x) == 1.0
