@@ -67,6 +67,12 @@ function ImperativeAffect(; f, kwargs...)
     ImperativeAffect(f; kwargs...)
 end
 
+function Symbolics.fast_substitute(aff::ImperativeAffect, rules)
+    substituter = Base.Fix2(fast_substitute, rules)
+    ImperativeAffect(aff.f, map(substituter, aff.obs), aff.obs_syms,
+        map(substituter, aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
+end
+
 function Base.show(io::IO, mfa::ImperativeAffect)
     obs_vals = join(map((ob, nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
     mod_vals = join(map((md, nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
@@ -262,7 +268,9 @@ function compile_functional_affect(
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
 
             # write the new values back to the integrator
-            _generated_writeback(integ, upd_funs, upd_vals)
+            if !isnothing(upd_vals)
+                _generated_writeback(integ, upd_funs, upd_vals)
+            end
 
             reset_jumps && reset_aggregated_jumps!(integ)
         end

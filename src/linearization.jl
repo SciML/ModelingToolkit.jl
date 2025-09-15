@@ -572,8 +572,7 @@ struct IONotFoundError <: Exception
 end
 
 function Base.showerror(io::IO, err::IONotFoundError)
-    println(io,
-        "The following $(err.variant) provided to `mtkcompile` were not found in the system:")
+    println(io, "The following $(err.variant) provided to `mtkcompile` were not found in the system:")
     maybe_namespace_issue = false
     for var in err.not_found
         println(io, "  ", var)

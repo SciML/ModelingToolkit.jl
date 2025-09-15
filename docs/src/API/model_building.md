@@ -3,6 +3,29 @@
 This page lists functionality and utilities related to building hierarchical models. It is
 recommended to read the page on the [`System`](@ref System_type) before this.
 
+## Common definitions of `t` and `D`
+
+ModelingToolkit provides common definitions for the independent variable `t` (time) and the
+derivative with respect to it `D`.
+
+```@docs
+ModelingToolkit.t_nounits
+ModelingToolkit.D_nounits
+ModelingToolkit.t
+ModelingToolkit.D
+ModelingToolkit.t_unitful
+ModelingToolkit.D_unitful
+```
+
+Users are recommended to use the appropriate common definition in their models. The required
+definitions can be imported with convenient aliased names. For example:
+
+```julia
+using ModelingToolkit: t_nounits as t, D_nounits as D
+```
+
+Allows using `t` and `D` to refer to `t_nounits` and `D_nounits` respectively.
+
 ## Hierarchical model composition
 
 The `System` data structure can represent a tree-like hierarchy of systems for building models
@@ -203,6 +226,8 @@ change_independent_variable
 add_accumulations
 noise_to_brownians
 convert_system_indepvar
+subset_tunables
+respecialize
 ```
 
 ## Hybrid systems

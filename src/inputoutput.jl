@@ -5,7 +5,7 @@ using Symbolics: get_variables
 Return all variables that mare marked as inputs. See also [`unbound_inputs`](@ref)
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref)
 """
-inputs(sys) = [filter(isinput, unknowns(sys)); filter(isinput, parameters(sys))]
+inputs(sys) = collect(get_inputs(sys))
 
 """
     outputs(sys)
@@ -14,13 +14,7 @@ Return all variables that mare marked as outputs. See also [`unbound_outputs`](@
 See also [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
 function outputs(sys)
-    o = observed(sys)
-    rhss = [eq.rhs for eq in o]
-    lhss = [eq.lhs for eq in o]
-    unique([filter(isoutput, unknowns(sys))
-            filter(isoutput, parameters(sys))
-            filter(x -> iscall(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> iscall(x) && isoutput(x), lhss)])
+    return collect(get_outputs(sys))
 end
 
 """
@@ -166,6 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
             disturbance_inputs = disturbances(sys);
             implicit_dae       = false,
             simplify           = false,
+            split              = true,
         )
 
 For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
@@ -198,10 +193,11 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         simplify = false,
         eval_expression = false,
         eval_module = @__MODULE__,
+        split = true,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
     if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs)
+        sys = mtkcompile(sys; inputs, disturbance_inputs, split)
     end
     if disturbance_inputs !== nothing
         # add to inputs for the purposes of io processing
@@ -286,7 +282,12 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
             push!(new_fullvars, v)
         end
     end
-    ninputs == 0 && return state
+    if ninputs == 0
+        @set! sys.inputs = OrderedSet{BasicSymbolic}()
+        @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
+        state.sys = sys
+        return state
+    end
 
     nvars = ndsts(graph) - ninputs
     new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
@@ -316,6 +317,8 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     ps = parameters(sys)
 
     @set! sys.ps = [ps; new_parameters]
+    @set! sys.inputs = OrderedSet{BasicSymbolic}(new_parameters)
+    @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
     @set! state.sys = sys
     @set! state.fullvars = Vector{BasicSymbolic}(new_fullvars)
     @set! state.structure = structure

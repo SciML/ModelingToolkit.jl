@@ -122,8 +122,8 @@ But that's not a satisfying answer, so what do you do about it?
 ### Transforming Higher Order DAEs to Index-1 DAEs
 
 It turns out that higher order DAEs can be transformed into lower order DAEs.
-[If you differentiate the last equation two times and perform a substitution,
-you can arrive at the following set of equations](https://people.math.wisc.edu/%7Echr/am205/g_act/DAE_slides.pdf):
+If you differentiate the last equation two times and perform a substitution,
+you can arrive at the following set of equations:
 
 ```math
 \begin{aligned}

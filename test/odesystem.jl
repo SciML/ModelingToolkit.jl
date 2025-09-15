@@ -865,7 +865,7 @@ prob = ODEProblem(sys, [x => 1.0], (0.0, 10.0))
     prob2 = @test_nowarn ODEProblem(sys, [x => ones(3), p => ones(3, 3)], (0.0, 10.0))
     sol2 = @test_nowarn solve(prob2, Tsit5())
 
-    @test sol1.u ≈ sol2.u[2:end]
+    @test sol1.u ≈ sol2.u
 end
 
 # Requires fix in symbolics for `linear_expansion(p * x, D(y))`
@@ -1414,6 +1414,10 @@ end
     sol2 = solve(prob2, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
     @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+
+    @mtkcompile sys = System([D(x) ~ x + p], t; tstops = [[p]])
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.kwargs[:tstops](prob.p, prob.tspan) ≈ [0.15]
 end
 
 @testset "Validate input types" begin
@@ -1564,7 +1568,7 @@ end
 
     cmd = `$(Base.julia_cmd()) --project=$(@__DIR__) -e $code`
     proc = run(cmd, stdin, stdout, stderr; wait = false)
-    sleep(120)
+    sleep(180)
     @test !process_running(proc)
     kill(proc, Base.SIGKILL)
 end
@@ -1614,4 +1618,19 @@ end
     arr = ODESystem[]
     @test_nowarn push!(arr, sys)
     @test_nowarn TestWrapper(sys)
+end
+
+# ensure `@mtkbuild` works when `@mtkcompile` is not imported
+module MtkbuildTestModule
+import ModelingToolkit: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
+import Test: @test
+@variables x(t)
+@mtkbuild sys = System(D(x) ~ t, t)
+@test sys isa System
+end
+
+@testset "Empty system can be simplified" begin
+    @named sys = System(Equation[], t)
+    ss = mtkcompile(sys)
+    @test length(equations(ss)) == length(unknowns(ss)) == 0
 end

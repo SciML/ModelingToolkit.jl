@@ -1,9 +1,27 @@
 import SymbolicUtils: symtype, term, hasmetadata, issym
+
+"""
+    @enum VariableType
+
+The type of the declared variable, used for automatic identification of
+variables/parameters/brownians/etc. by the `System` constructor.
+"""
 @enum VariableType VARIABLE PARAMETER BROWNIAN
+
+"""
+    $TYPEDEF
+
+The symbolic metadata key for storing the `VariableType`.
+"""
 struct MTKVariableTypeCtx end
 
 getvariabletype(x, def = VARIABLE) = getmetadata(unwrap(x), MTKVariableTypeCtx, def)
 
+"""
+    $TYPEDEF
+
+Check if the variable contains the metadata identifying it as a parameter.
+"""
 function isparameter(x)
     x = unwrap(x)
 
@@ -128,4 +146,43 @@ function split_parameters_by_type(ps)
             return (split_ps...,), split_idxs
         end
     end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Change the tunable parameters of a system to a new set of tunables.
+
+The new tunable parameters must be a subset of the current tunables as discovered by [`tunable_parameters`](@ref).
+The remaining parameters will be set as constants in the system.
+"""
+function subset_tunables(sys, new_tunables)
+    if !iscomplete(sys)
+        throw(ArgumentError("System must be `complete` before changing tunables."))
+    end
+    if !is_split(sys)
+        throw(ArgumentError("Tunable parameters can only be changed for split systems."))
+    end
+
+    cur_tunables = tunable_parameters(sys, parameters(sys))
+    diff_params = setdiff(cur_tunables, new_tunables)
+
+    if !isempty(setdiff(new_tunables, cur_tunables))
+        throw(ArgumentError("""New tunable parameters must be a subset of the current tunable parameters. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables)).
+        Note that array parameters can only be set as tunable or non-tunable, not partially tunable. They should be specified in the un-scalarized form.
+        """))
+    end
+    cur_ps = get_ps(sys)
+    const_ps = toconstant.(diff_params)
+
+    for (idx, p) in enumerate(cur_ps)
+        for (d, c) in zip(diff_params, const_ps)
+            if isequal(p, d)
+                setindex!(cur_ps, c, idx)
+                break
+            end
+        end
+    end
+    @set! sys.ps = cur_ps
+    complete(sys)
 end

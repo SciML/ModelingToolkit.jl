@@ -36,13 +36,13 @@ end
            connect(C.output.u, P.input.u)]
     sys1 = System(eqs, t, systems = [P, C], name = :hej)
     sys = expand_connections(sys1)
-    @test any(isequal(P.output.u ~ C.input.u), equations(sys))
-    @test any(isequal(C.output.u ~ P.input.u), equations(sys))
+    @test any(isequal(C.input.u ~ P.output.u), equations(sys))
+    @test any(isequal(P.input.u ~ C.output.u), equations(sys))
 
     @named sysouter = System(Equation[], t; systems = [sys1])
     sys = expand_connections(sysouter)
-    @test any(isequal(sys1.P.output.u ~ sys1.C.input.u), equations(sys))
-    @test any(isequal(sys1.C.output.u ~ sys1.P.input.u), equations(sys))
+    @test any(isequal(sys1.C.input.u ~ sys1.P.output.u), equations(sys))
+    @test any(isequal(sys1.P.input.u ~ sys1.C.output.u), equations(sys))
 end
 
 @testset "With Analysis Points" begin
@@ -117,7 +117,7 @@ end
     @named sys = Outer()
     ss = toggle_namespacing(sys, false)
     eqs = equations(expand_connections(sys))
-    @test issetequal(eqs, [ss.u ~ ss.inner.x
+    @test issetequal(eqs, [ss.inner.x ~ ss.u
                            ss.inner.y ~ ss.inner.x
-                           ss.inner.y ~ ss.v])
+                           ss.v ~ ss.inner.y])
 end

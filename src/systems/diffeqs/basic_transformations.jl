@@ -706,3 +706,143 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
     @set! sys.var_to_name = var_to_name
     return sys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Shorthand for `respecialize(sys, []; all = true)`
+"""
+respecialize(sys::AbstractSystem) = respecialize(sys, []; all = true)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Specialize nonnumeric parameters in `sys` by changing their symtype to a concrete type.
+`mapping` is an iterable, where each element can be a parameter or a pair mapping a parameter
+to a value. If the element is a parameter, it must have a default. Each specified parameter
+is updated to have the symtype of the value associated with it (either in `mapping` or in
+the defaults). This operation can only be performed on nonnumeric, non-array parameters. The
+defaults of respecialized parameters are set to the associated values.
+
+This operation can only be performed on `complete`d systems.
+
+# Keyword arguments
+
+- `all`: Specialize all nonnumeric parameters in the system. This will error if any such
+  parameter does not have a default.
+"""
+function respecialize(sys::AbstractSystem, mapping; all = false)
+    if !iscomplete(sys)
+        error("""
+        This operation can only be performed on completed systems. Use `complete(sys)` or
+        `mtkcompile(sys)`.
+        """)
+    end
+    if !is_split(sys)
+        error("""
+        This operation can only be performed on split systems. Use `complete(sys)` or
+        `mtkcompile(sys)` with the `split = true` keyword argument.
+        """)
+    end
+
+    new_ps = copy(get_ps(sys))
+    @set! sys.ps = new_ps
+
+    extras = []
+    if all
+        for x in filter(!is_variable_numeric, get_ps(sys))
+            if any(y -> isequal(x, y) || y isa Pair && isequal(x, y[1]), mapping) ||
+               symbolic_type(x) === ArraySymbolic() ||
+               iscall(x) && operation(x) === getindex
+                continue
+            end
+            push!(extras, x)
+        end
+    end
+    ps_to_specialize = Iterators.flatten((extras, mapping))
+
+    defs = copy(defaults(sys))
+    @set! sys.defaults = defs
+    final_defs = copy(defs)
+    evaluate_varmap!(final_defs, ps_to_specialize)
+
+    subrules = Dict()
+
+    for element in ps_to_specialize
+        if element isa Pair
+            k, v = element
+        else
+            k = element
+            v = get(final_defs, k, nothing)
+            @assert v !== nothing """
+            Parameter $k needs an associated value to be respecialized.
+            """
+            @assert symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) """
+            Parameter $k needs an associated value to be respecialized. Found symbolic \
+            default $v.
+            """
+        end
+
+        k = unwrap(k)
+        T = typeof(v)
+
+        @assert !is_variable_numeric(k) """
+        Numeric types cannot be respecialized - tried to respecialize $k.
+        """
+        @assert symbolic_type(k) !== ArraySymbolic() """
+        Cannot respecialize array symbolics - tried to respecialize $k.
+        """
+        @assert !iscall(k) || operation(k) !== getindex """
+        Cannot respecialized scalarized array variables - tried to respecialize $k.
+        """
+        idx = findfirst(isequal(k), get_ps(sys))
+        @assert idx !== nothing """
+        Parameter $k does not exist in the system.
+        """
+
+        if iscall(k)
+            op = operation(k)
+            args = arguments(k)
+            new_p = SymbolicUtils.term(op, args...; type = T)
+        else
+            new_p = SymbolicUtils.Sym{T}(getname(k))
+        end
+
+        get_ps(sys)[idx] = new_p
+        defaults(sys)[new_p] = v
+        subrules[unwrap(k)] = unwrap(new_p)
+    end
+
+    substituter = Base.Fix2(fast_substitute, subrules)
+    @set! sys.eqs = map(substituter, get_eqs(sys))
+    @set! sys.observed = map(substituter, get_observed(sys))
+    @set! sys.initialization_eqs = map(substituter, get_initialization_eqs(sys))
+    if get_noise_eqs(sys) !== nothing
+        @set! sys.noise_eqs = map(substituter, get_noise_eqs(sys))
+    end
+    @set! sys.assertions = Dict([substituter(k) => v for (k, v) in assertions(sys)])
+    @set! sys.parameter_dependencies = map(substituter, get_parameter_dependencies(sys))
+    @set! sys.defaults = Dict([substituter(k) => substituter(v) for (k, v) in defaults(sys)])
+    @set! sys.guesses = Dict([k => substituter(v) for (k, v) in guesses(sys)])
+    @set! sys.continuous_events = map(get_continuous_events(sys)) do cev
+        SymbolicContinuousCallback(
+            map(substituter, cev.conditions), substituter(cev.affect),
+            substituter(cev.affect_neg), substituter(cev.initialize),
+            substituter(cev.finalize), cev.rootfind,
+            cev.reinitializealg, cev.zero_crossing_id)
+    end
+    @set! sys.discrete_events = map(get_discrete_events(sys)) do dev
+        SymbolicDiscreteCallback(map(substituter, dev.conditions), substituter(dev.affect),
+            substituter(dev.initialize), substituter(dev.finalize), dev.reinitializealg)
+    end
+    if get_schedule(sys) !== nothing
+        sched = get_schedule(sys)
+        @set! sys.schedule = Schedule(
+            sched.var_sccs, AnyDict(k => substituter(v) for (k, v) in sched.dummy_sub))
+    end
+    @set! sys.constraints = map(substituter, get_constraints(sys))
+    @set! sys.tstops = map(substituter, get_tstops(sys))
+    @set! sys.costs = Vector{Union{Real, BasicSymbolic}}(map(substituter, get_costs(sys)))
+    sys = complete(sys; split = is_split(sys))
+    return sys
+end

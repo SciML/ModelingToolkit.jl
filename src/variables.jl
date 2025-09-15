@@ -1,10 +1,45 @@
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing the unit associated with a symbolic variable.
+"""
 struct VariableUnit end
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing the type of connector that a variable is.
+"""
 struct VariableConnectType end
-struct VariableNoiseType end
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing whether a symbolic variable is an input or not.
+"""
 struct VariableInput end
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing whether a symbolic variable is an output or not.
+"""
 struct VariableOutput end
+"""
+  $TYPEDEF
+
+Symbolic metadata key for storing whether a symbolic variable is irreducible or not.
+"""
 struct VariableIrreducible end
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing the priority a variable has for being selected during
+state selection.
+"""
 struct VariableStatePriority end
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing miscellaneous information about a symbolic variable.
+"""
 struct VariableMisc end
 # Metadata for renamed shift variables xₜ₋₁
 struct VariableUnshifted end
@@ -227,6 +262,11 @@ function default_toterm(x)
 end
 
 ## Bounds ======================================================================
+"""
+    $TYPEDEF
+
+Symbolic metadata key for specifying the bounds of a symbolic variable.
+"""
 struct VariableBounds end
 Symbolics.option_to_metadata_type(::Val{:bounds}) = VariableBounds
 
@@ -436,6 +476,11 @@ function getbounds(p::AbstractVector)
 end
 
 ## Description =================================================================
+"""
+    $TYPEDEF
+
+Symbolic metadata key for storing the description of a symbolic variable.
+"""
 struct VariableDescription end
 Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
 

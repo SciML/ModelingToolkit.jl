@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, OrdinaryDiffEq
+using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
