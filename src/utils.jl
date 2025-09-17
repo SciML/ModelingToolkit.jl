@@ -1174,7 +1174,7 @@ function underscore_to_D(v, iv, inv_map)
         end
         repeats = length(suffix) ÷ length(string(iv))
         D = Differential(iv)
-        wrap_with_D(Symbol(n), D, repeats)
+        wrap_with_D(v, D, repeats)
     end
 end
 
