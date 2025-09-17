@@ -362,6 +362,11 @@ tspan = (0.0, 100.0)
 @test_throws ModelingToolkit.IncompleteInitializationError prob=ODEProblem(
     sys, [u0; p], tspan, jac = true)
 
+u0 = [y => 0.0,
+    z => 0.0]
+@test_throws "Differential(t)(x(t))" prob=ODEProblem(
+    sys, [u0; p], tspan, jac = true)
+
 # DAE Initialization on ODE with nonlinear system for initial conditions
 # https://github.com/SciML/ModelingToolkit.jl/issues/2508
 
