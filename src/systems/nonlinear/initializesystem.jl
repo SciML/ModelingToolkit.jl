@@ -166,7 +166,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
         for eq in initialization_eqs
-            eq = fixpoint_sub(eq, diffmap) # expand dummy derivatives
+            eq = fixpoint_sub(expand_derivatives(eq), diffmap) # expand dummy derivatives
             push!(eqs_ics, eq)
         end
     end
