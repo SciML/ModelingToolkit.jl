@@ -426,20 +426,20 @@ function topsort_equations(eqs, unknowns; check = true)
 
     q = Queue{Int}(neqs)
     for (i, d) in enumerate(degrees)
-        d == 0 && enqueue!(q, i)
+        d == 0 && push!(q, i)
     end
 
     idx = 0
     ordered_eqs = similar(eqs, 0)
     sizehint!(ordered_eqs, neqs)
     while !isempty(q)
-        𝑠eq = dequeue!(q)
+        𝑠eq = popfirst!(q)
         idx += 1
         push!(ordered_eqs, eqs[𝑠eq])
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
-            degree == 0 && enqueue!(q, 𝑑eq)
+            degree == 0 && push!(q, 𝑑eq)
         end
     end
 
