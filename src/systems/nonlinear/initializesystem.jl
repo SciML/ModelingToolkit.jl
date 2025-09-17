@@ -154,7 +154,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     # 3) process other variables
     for var in vars
         if var ∈ keys(op)
-            push!(eqs_ics, var ~ defs[var])
+            push!(eqs_ics, var ~ op[var])
         elseif var ∈ keys(guesses)
             push!(defs, var => guesses[var])
         elseif check_defguess
