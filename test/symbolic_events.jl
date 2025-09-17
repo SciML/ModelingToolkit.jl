@@ -1179,6 +1179,94 @@ end
     @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
 end
 
+@testset "Contact force (or lack thereof); #2994" begin
+    triggered = 0
+    @component function ContactForce2(; name, surface = nothing)
+        vars = @variables begin
+            q(t) = 1
+            v(t) = 0
+            f(t)
+            h(t)
+            hd(t)
+            hdd(t)
+            (λ(t) = 0), [irreducible = true]
+        end
+        pars = @parameters begin
+            contact::Int = 0    # discrete.time state variable
+            a0 = 100
+            a1 = 20
+            a2 = 1e6
+        end
+
+        equations = [0 ~ ifelse((contact == 1), hdd + a1 * hd + a0 * h + a2 * h^3, λ)
+                     f ~ contact * λ
+                     D(q) ~ v
+                     1 * D(v) ~ -1 * 9.81 + f
+                     h ~ q
+                     hd ~ D(h)
+                     hdd ~ D(hd)]
+
+        function affect!(integ, u, p, _)
+            triggered += 1
+        end
+        continuous_events = ModelingToolkit.SymbolicContinuousCallback(
+            [h ~ 0], (affect!, [h], [], [], nothing))
+
+        ODESystem(equations, t, vars, pars; name, continuous_events)
+    end
+    @named model = ContactForce2()
+    model = complete(model)
+    ssys = structural_simplify(model)
+    prob = ODEProblem(ssys, [], (0.0, 5.0))
+    sol = solve(prob, Rodas4())
+    @test sol[model.h][end] < -20.0 # the object has fallen successfully
+    @test triggered == 1
+end
+
+@testset "Inductor converter; #2994" begin
+    @parameters Rd Rsw C1 L1 V1 Rl
+    @variables I_L1(t) I_V1(t) v1(t) v2(t) [irreducible = true] v3(t) [irreducible = true]
+
+    eqs = [I_L1 + I_V1 ~ 0
+           -I_L1 + v2 / Rsw + v2 / Rd - v3 / Rd ~ 0
+           C1 * D(v3) + v3 / Rl - v2 / Rd + v3 / Rd ~ 0
+           v1 ~ 10 * sin(2 * pi * 50 * t)
+           -D(I_L1) * L1 + v1 - v2 ~ 0]
+
+    function D_on(i, u, p, ctx)
+        i.ps[p.Rd] = 1e-3
+    end
+    function D_off(i, u, p, ctx)
+        i.ps[p.Rd] = 1e3
+    end
+    c = ModelingToolkit.SymbolicContinuousCallback(
+        [v2 - v3 ~ 0], (D_on, [v2, v3], [Rd], [], nothing);
+        affect_neg = (D_off, [v2, v3], [Rd], [], nothing),
+        rootfind = SciMLBase.LeftRootFind)
+
+    @mtkbuild pend = ODESystem(eqs, t; continuous_events = c)
+
+    u0 = [
+        I_L1 => 0.0,
+        v3 => 0.0
+    ]
+
+    g = [
+        v1 => 0.0,
+        v2 => 0.0,
+        I_V1 => 0.0]
+    p = [
+        Rd => 0.001,
+        Rsw => 1e6,
+        C1 => 0.01,
+        L1 => 0.001,
+        V1 => 10.0,
+        Rl => 20.0]
+    prob = ODEProblem(pend, u0, (0.0, 1.5), p, guesses = g)
+    sol = solve(prob, Rodas5P(), dtmax = 1e-4)
+    @test all(x -> x[1] < 0.5 || x[2] < 10, sol[[t, v3]])
+end
+
 @testset "Issue#3154 Array variable in discrete condition" begin
     @mtkmodel DECAY begin
         @parameters begin
