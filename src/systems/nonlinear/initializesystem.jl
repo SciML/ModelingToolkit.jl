@@ -824,8 +824,6 @@ Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works w
 initialization.
 """
 function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
-    subs = Dict()
-    tempvars = Set()
     rm_idxs = Int[]
     for (i, eq) in enumerate(obseqs)
         iscall(eq.rhs) || continue
@@ -835,20 +833,7 @@ function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
         end
     end
 
-    for (i, eq) in enumerate(obseqs)
-        if eq.lhs in tempvars
-            subs[eq.lhs] = eq.rhs
-            push!(rm_idxs, i)
-        end
-    end
-
     obseqs = obseqs[setdiff(eachindex(obseqs), rm_idxs)]
-    obseqs = map(obseqs) do eq
-        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
-    end
-    eqs = map(eqs) do eq
-        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
-    end
     return obseqs, eqs
 end
 
