@@ -184,6 +184,7 @@ end
     sys = mtkcompile(pendulum_sys)
 
     new_tunables = [L, b]
+    old_tunables = copy(ModelingToolkit.tunable_parameters(sys, ModelingToolkit.parameters(sys)))
     sys2 = ModelingToolkit.subset_tunables(sys, new_tunables)
     sys2_tunables = ModelingToolkit.tunable_parameters(sys2, ModelingToolkit.parameters(sys2))
     @test length(sys2_tunables) == 2
@@ -199,7 +200,7 @@ end
     sys_nonsplit = mtkcompile(pendulum_sys; split = false)
     @test_throws ArgumentError ModelingToolkit.subset_tunables(sys_nonsplit, new_tunables)
 
-    @test length(ModelingToolkit.tunable_parameters(sys)) == 3
+    @test length(ModelingToolkit.tunable_parameters(sys)) == length(old_tunables)
 end
 
 struct CallableFoo
