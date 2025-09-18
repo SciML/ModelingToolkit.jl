@@ -174,7 +174,7 @@ end
 end
 
 @testset "Change Tunables" begin
-    @variables θ(t)=π/6 ω(t)=0.0
+    @variables θ(t)=π/6 ω(t)=0.
     @parameters g=9.81 L=1.0 b=0.1 errp=1
     eqs = [
         D(θ) ~ ω,

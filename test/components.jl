@@ -352,8 +352,7 @@ end
     @named comp1 = System(Equation[], t; systems = [input])
     @named output = RealOutput()
     @named comp2 = System(Equation[], t; systems = [output])
-    @named sys = System([connect(comp2.output.u, comp1.input.u)], t; systems = [
-        comp1, comp2])
+    @named sys = System([connect(comp2.output.u, comp1.input.u)], t; systems = [comp1, comp2])
     eq = only(equations(expand_connections(sys)))
     # as opposed to `output.u ~ input.u`
     @test isequal(eq, comp1.input.u ~ comp2.output.u)

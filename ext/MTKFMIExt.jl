@@ -373,11 +373,13 @@ function parseFMIVariableName(name::AbstractString)
             safe_name = name
         end
 
+
         idx = findfirst(',', safe_name)
         if idx === nothing
             name = @view name[5:(end - 1)]
             der = 1
         else
+            
             der = parse(Int, @view name[(idx + 1):(end - 1)])
             name = @view name[5:(idx - 1)]
         end
