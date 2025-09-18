@@ -275,6 +275,12 @@ end
             sol.t; idxs = [sys.adder1.c, sys.adder2.c]).u rtol=1e-3
     end
 
+    @testset "multiDimArray Support" begin
+        path_to_FMU = joinpath(FMU_DIR, "SimpleArrayModel.fmu")
+        fmu = loadFMU(path_to_FMU)
+        @named model = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @test model !== nothing
+    end
     function build_looped_sspace(sspace1, sspace2)
         @variables x(t) = 1
         @mtkcompile sys = System([D(x) ~ x, sspace1.u ~ sspace2.x, sspace2.u ~ sspace1.y],
