@@ -363,11 +363,24 @@ function parseFMIVariableName(name::AbstractString)
     name = replace(name, "." => "__")
     der = 0
     if startswith(name, "der(")
-        idx = findfirst(',', name)
+
+        # account for multi-dimensional array variable derivatives, e.g. der(x[1,2], 2)
+        array_variable_pattern = r"\[\d+?,\d+?\]"
+        patternmatches = match(array_variable_pattern, name)
+        if (patternmatches !== nothing)
+            safe_array_index_str = replace(String(patternmatches.match), "," => "_")
+            safe_name = replace(name, array_variable_pattern => safe_array_index_str)
+        else
+            safe_name = name
+        end
+
+
+        idx = findfirst(',', safe_name)
         if idx === nothing
             name = @view name[5:(end - 1)]
             der = 1
         else
+            
             der = parse(Int, @view name[(idx + 1):(end - 1)])
             name = @view name[5:(idx - 1)]
         end
