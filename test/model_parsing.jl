@@ -1065,16 +1065,16 @@ end
             MyBool => false
             NewInt => 1
         end
-        
+
         @parameters begin
             k = 1.0
         end
-        
+
         @variables begin
             x(t)
             y(t)
         end
-        
+
         @equations begin
             D(x) ~ -k * x
             y ~ x
