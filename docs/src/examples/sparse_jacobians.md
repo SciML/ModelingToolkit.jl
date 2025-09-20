@@ -60,7 +60,6 @@ Now let's use `modelingtoolkitize` to generate the symbolic version:
 
 ```@example sparsejac
 @mtkcompile sys = modelingtoolkitize(prob);
-nothing # hide
 ```
 
 Now we regenerate the problem using `jac=true` for the analytical Jacobian
@@ -74,21 +73,20 @@ Hard? No! How much did that help?
 
 ```@example sparsejac
 using BenchmarkTools
-@btime solve(prob, save_everystep = false);
+@btime solve(prob, FBDF(), save_everystep = false);
 return nothing # hide
 ```
 
 ```@example sparsejac
-@btime solve(sparseprob, save_everystep = false);
+@btime solve(sparseprob, FBDF(), save_everystep = false);
 return nothing # hide
 ```
 
-Notice though that the analytical solution to the Jacobian can be quite expensive.
-Thus in some cases we may only want to get the sparsity pattern. In this case,
-we can simply do:
+It is also possible to use the numerical Jacobian,
+but take advantage of the analytical sparsity pattern:
 
 ```@example sparsejac
 sparsepatternprob = ODEProblem(sys, Pair[], (0.0, 11.5), sparse = true)
-@btime solve(sparsepatternprob, save_everystep = false);
+@btime solve(sparsepatternprob, FBDF(), save_everystep = false);
 return nothing # hide
 ```
