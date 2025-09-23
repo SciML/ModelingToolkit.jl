@@ -565,13 +565,13 @@ let
     eqs = [D(x[1]) ~ x[2]
            D(x[2]) ~ -x[1] - 0.5 * x[2] + k
            y ~ 0.9 * x[1] + x[2]]
-    @named sys = System(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
+    @named sys = System(eqs, t, vcat(x, [y]), [k])
     sys = mtkcompile(sys)
 
     u0 = x .=> [0.5, 0]
     du0 = D.(x) .=> 0.0
-    prob = DAEProblem(sys, [du0; u0], (0, 50))
-    @test prob[x] ≈ [0.5, 0.0]
+    prob = DAEProblem(sys, du0, (0, 50); guesses = u0)
+    @test prob[x] ≈ [0.5, 1.0]
     @test prob.du0 ≈ [0.0, 0.0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -579,19 +579,18 @@ let
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5],
-        (0, 50))
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0)
 
-    @test prob[x] ≈ [0.5, 0]
+    @test prob[x] ≈ [0.5, 1]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, x[1] => 0.5, k => 2],
-        (0, 50))
-    @test prob[x] ≈ [0.5, 0]
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, k => 2],
+        (0, 50); guesses = u0)
+    @test prob[x] ≈ [0.5, 3]
     @test prob.du0 ≈ [0, 0]
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 2
@@ -600,7 +599,7 @@ let
 
     # no initial conditions for D(x[1]) and D(x[2]) provided
     @test_throws ModelingToolkit.MissingVariablesError prob=DAEProblem(
-        sys, Pair[], (0, 50))
+        sys, Pair[], (0, 50); guesses = u0)
 
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
