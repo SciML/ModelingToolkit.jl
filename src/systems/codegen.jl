@@ -667,10 +667,9 @@ function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
     obj = cost(sys)
     dvs = unknowns(sys)
     if sparse
-        exprs = Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
-        sparsity = similar(exprs, Float64)
+        return Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
     else
-        exprs = Symbolics.hessian(obj, dvs; simplify)
+        return Symbolics.hessian(obj, dvs; simplify)
     end
 end
 
