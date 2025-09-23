@@ -5,6 +5,7 @@ using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D, observed
 using DynamicQuantities
+using DiffEqBase: BrownFullBasicInit
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
