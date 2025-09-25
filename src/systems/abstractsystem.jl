@@ -1140,7 +1140,12 @@ namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
+    sys_params = Set(parameters(sys))
+    sys_unknowns = Set(unknowns(sys))
+    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) =>
+         # Don't namespace values that are parameters from parent scope
+         # (i.e., not in this system's local parameters or unknowns)
+         (isparameter(v) && !(unwrap(v) in sys_params || unwrap(v) in sys_unknowns) ? v : namespace_expr(v, sys))
     for (k, v) in pairs(defs))
 end
 
