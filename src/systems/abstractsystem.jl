@@ -1142,10 +1142,33 @@ function namespace_defaults(sys)
     defs = defaults(sys)
     sys_params = Set(parameters(sys))
     sys_unknowns = Set(unknowns(sys))
+
+    function should_namespace(val)
+        # If it's a parameter from parent scope, don't namespace it
+        if isparameter(val) && !(unwrap(val) in sys_params || unwrap(val) in sys_unknowns)
+            return false
+        end
+
+        # Check if the expression contains any parent scope parameters
+        # vars() collects all variables in an expression
+        try
+            expr_vars = vars(val; op = Nothing)
+            for var in expr_vars
+                var_unwrapped = unwrap(var)
+                # If any variable in the expression is from parent scope, don't namespace
+                if isparameter(var_unwrapped) && !(var_unwrapped in sys_params || var_unwrapped in sys_unknowns)
+                    return false
+                end
+            end
+        catch
+            # If vars() fails, fall back to default behavior
+        end
+
+        return true
+    end
+
     Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) =>
-         # Don't namespace values that are parameters from parent scope
-         # (i.e., not in this system's local parameters or unknowns)
-         (isparameter(v) && !(unwrap(v) in sys_params || unwrap(v) in sys_unknowns) ? v : namespace_expr(v, sys))
+         (should_namespace(v) ? namespace_expr(v, sys) : v)
     for (k, v) in pairs(defs))
 end
 
