@@ -635,6 +635,7 @@ function trivial_tearing!(ts::TearingState)
     matched_vars = BitSet()
     # variable to index in fullvars
     var_to_idx = Dict{Any, Int}(ts.fullvars .=> eachindex(ts.fullvars))
+    sys_eqs = equations(ts)
 
     complete!(ts.structure)
     var_to_diff = ts.structure.var_to_diff
@@ -654,6 +655,14 @@ function trivial_tearing!(ts::TearingState)
                 push!(blacklist, i)
                 continue
             end
+            # Edge case for `var ~ var` equations. They don't show up in the incidence
+            # graph because `TearingState` makes them `0 ~ 0`, but they do cause `var`
+            # to show up twice in `original_eqs` which fails the assertion.
+            sys_eq = sys_eqs[i]
+            if isequal(sys_eq.lhs, 0) && isequal(sys_eq.rhs, 0)
+                continue
+            end
+
             # if a variable was the LHS of two trivial observed equations, we wouldn't have
             # included it in the list. Error if somehow it made it through.
             @assert !(vari in matched_vars)
