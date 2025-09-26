@@ -172,7 +172,7 @@ function subset_tunables(sys, new_tunables)
         Note that array parameters can only be set as tunable or non-tunable, not partially tunable. They should be specified in the un-scalarized form.
         """))
     end
-    cur_ps = get_ps(sys)
+    cur_ps = copy(get_ps(sys))
     const_ps = toconstant.(diff_params)
 
     for (idx, p) in enumerate(cur_ps)
