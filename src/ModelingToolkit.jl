@@ -29,6 +29,7 @@ using LinearAlgebra, SparseArrays
 using InteractiveUtils
 using JumpProcesses
 using DataStructures
+import DataStructures: IntDisjointSet
 using Base.Threads
 using Latexify, Unitful, ArrayInterface
 using Setfield, ConstructionBase
