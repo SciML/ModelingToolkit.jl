@@ -161,7 +161,11 @@ function add_fallbacks!(
                 val = @something get(varmap, arrvar, nothing) get(varmap, ttarrvar, nothing) get(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
-                    val = val[idxs...]
+                    idxs = CartesianIndex(idxs...)
+                    if iscall(val) && operation(val) == StructuralTransformations.change_origin # TODO: remove hack
+                        idxs -= arguments(val)[1] - eachindex(val)[1] # subtract non-1-based offset
+                    end
+                    val = val[idxs]
                     is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
                 end
             else
