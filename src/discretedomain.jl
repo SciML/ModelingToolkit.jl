@@ -33,7 +33,8 @@ at the inferred clock for that equation.
 struct SampleTime <: Operator
     SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
 end
-SymbolicUtils.promote_symtype(::Type{<:SampleTime}, t...) = Real
+SymbolicUtils.promote_symtype(::Type{SampleTime}, ::Type{T}) where {T} = Real
+SymbolicUtils.promote_shape(::Type{SampleTime}, @nospecialize(x::SU.ShapeT)) = x
 Base.nameof(::SampleTime) = :SampleTime
 SymbolicUtils.isbinop(::SampleTime) = false
 
@@ -71,11 +72,7 @@ SymbolicUtils.isbinop(::Shift) = false
 
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
-    if Symbolics.isarraysymbolic(x)
-        Symbolics.array_term(D, x)
-    else
-        term(D, x)
-    end
+    term(D, x; type = symtype(x), shape = SU.shape(x))
 end
 function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
@@ -94,7 +91,8 @@ function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
     end
     wrap(D(vt, allow_zero))
 end
-SymbolicUtils.promote_symtype(::Shift, t) = t
+SymbolicUtils.promote_symtype(::Shift, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Shift, @nospecialize(x::SU.ShapeT)) = x
 
 Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, ")")
 
@@ -164,7 +162,8 @@ function Sample(arg::Real)
 end
 (D::Sample)(x) = STerm(D, SArgsT((x,)); type = symtype(x), shape = SU.shape(x))
 (D::Sample)(x::Num) = Num(D(value(x)))
-SymbolicUtils.promote_symtype(::Sample, x) = x
+SymbolicUtils.promote_symtype(::Sample, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Sample, @nospecialize(x::SU.ShapeT)) = x
 Base.nameof(::Sample) = :Sample
 SymbolicUtils.isbinop(::Sample) = false
 
@@ -211,7 +210,8 @@ is_transparent_operator(::Type{Hold}) = true
 (D::Hold)(x) = STerm(D, SArgsT((x,)); type = symtype(x), shape = SU.shape(x))
 (D::Hold)(x::Number) = x
 (D::Hold)(x::Num) = Num(D(value(x)))
-SymbolicUtils.promote_symtype(::Hold, x) = x
+SymbolicUtils.promote_symtype(::Hold, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Hold, @nospecialize(x::SU.ShapeT)) = x
 Base.nameof(::Hold) = :Hold
 SymbolicUtils.isbinop(::Hold) = false
 

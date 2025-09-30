@@ -488,7 +488,8 @@ of a system. See the documentation section on initialization for more informatio
 struct Initial <: Symbolics.Operator end
 is_timevarying_operator(::Type{Initial}) = false
 Initial(x) = Initial()(x)
-SymbolicUtils.promote_symtype(::Type{Initial}, T) = T
+SymbolicUtils.promote_symtype(::Initial, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Initial, @nospecialize(x::SU.ShapeT)) = x
 SymbolicUtils.isbinop(::Initial) = false
 Base.nameof(::Initial) = :Initial
 Base.show(io::IO, x::Initial) = print(io, "Initial")
@@ -508,15 +509,14 @@ function (f::Initial)(x)
     # don't double wrap
     iscall(x) && operation(x) isa Initial && return x
     result = if symbolic_type(x) == ArraySymbolic()
-        # create an array for `Initial(array)`
-        Symbolics.array_term(f, x)
+        term(f, x; type = symtype(x), shape = SU.shape(x))
     elseif iscall(x) && operation(x) == getindex
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
-        term(getindex, f(arr), arguments(x)[2:end]...)
+        f(arr)[arguments(x)[2:end]...]
     else
-        term(f, x)
+        term(f, x; type = symtype(x), shape = SU.shape(x))
     end
     # the result should be a parameter
     result = toparam(result)
@@ -524,15 +524,6 @@ function (f::Initial)(x)
         result = wrap(result)
     end
     return result
-end
-
-# This is required so `substitute` works
-function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
-    val = Initial()(args...)
-    if symbolic_type(val) == NotSymbolic()
-        return val
-    end
-    return metadata(val, meta)
 end
 
 supports_initialization(sys::AbstractSystem) = true

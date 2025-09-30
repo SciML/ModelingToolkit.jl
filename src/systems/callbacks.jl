@@ -183,16 +183,13 @@ function (p::Pre)(x)
     end
     # don't double wrap
     iscall(x) && operation(x) isa Pre && return x
-    result = if symbolic_type(x) == ArraySymbolic()
-        # create an array for `Pre(array)`
-        Symbolics.array_term(p, x)
-    elseif iscall(x) && operation(x) == getindex
+    result = if iscall(x) && operation(x) === getindex
         # instead of `Pre(x[1])` create `Pre(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
-        term(getindex, p(arr), arguments(x)[2:end]...)
+        p(arr)[arguments(x)[2:end]...]
     else
-        term(p, x)
+        term(p, x; type = symtype(x), shape = SU.shape(x))
     end
     # the result should be a parameter
     result = toparam(result)
