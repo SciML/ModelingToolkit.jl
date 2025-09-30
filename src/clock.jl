@@ -77,7 +77,7 @@ See also [`is_continuous_domain`](@ref)
 """
 function has_continuous_domain(x)
     issym(x) && return is_continuous_domain(x)
-    hasderiv(x) || hasdiff(x) || hassample(x) || hashold(x)
+    hasderiv(x) || hassample(x) || hashold(x)
 end
 
 """

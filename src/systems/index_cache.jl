@@ -3,11 +3,6 @@ struct BufferTemplate
     length::Int
 end
 
-function BufferTemplate(s::Type{<:Symbolics.Struct}, length::Int)
-    T = Symbolics.juliatype(s)
-    BufferTemplate(T, length)
-end
-
 struct Nonnumeric <: SciMLStructures.AbstractPortion end
 const NONNUMERIC_PORTION = Nonnumeric()
 

@@ -70,9 +70,9 @@ using RuntimeGeneratedFunctions: drop_expr
 
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
+                 exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
                  VariableSource, getname, variable,
-                 NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
+                 NAMESPACE_SEPARATOR, setdefaultval,
                  hasnode, fixpoint_sub, fast_substitute,
                  CallWithMetadata, CallWithParent
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
@@ -83,7 +83,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  substituter, scalarize, getparent, hasderiv, hasdiff
+                  scalarize, getparent, hasderiv
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, full_parameters,
