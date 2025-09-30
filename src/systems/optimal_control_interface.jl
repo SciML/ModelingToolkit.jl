@@ -442,16 +442,16 @@ function substitute_model_vars(model, sys, exprs, tspan)
     t = get_iv(sys)
 
     exprs = map(
-        c -> Symbolics.fast_substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
+        c -> substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
 
     (ti, tf) = tspan
     if symbolic_type(tf) === ScalarSymbolic()
         _tf = model.tₛ + ti
         exprs = map(
-            c -> Symbolics.fast_substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
-        exprs = map(c -> Symbolics.fast_substitute(c, Dict(tf => _tf)), exprs)
+            c -> substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
+        exprs = map(c -> substitute(c, Dict(tf => _tf)), exprs)
     end
-    exprs = map(c -> Symbolics.fast_substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
+    exprs = map(c -> substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
     exprs
 end
 
@@ -525,7 +525,7 @@ end
 
 function substitute_toterm(vars, exprs)
     toterm_map = Dict([u => default_toterm(value(u)) for u in vars])
-    exprs = map(c -> Symbolics.fast_substitute(c, toterm_map), exprs)
+    exprs = map(c -> substitute(c, toterm_map), exprs)
 end
 
 function substitute_params(pmap::Dict, exprs)

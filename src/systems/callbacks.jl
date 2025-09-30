@@ -25,10 +25,8 @@ function SymbolicAffect(affect::SymbolicAffect; kwargs...)
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
 
-function Symbolics.fast_substitute(aff::SymbolicAffect, rules)
-    substituter = Base.Fix2(fast_substitute, rules)
-    SymbolicAffect(map(substituter, aff.affect), map(substituter, aff.alg_eqs),
-        map(substituter, aff.discrete_parameters))
+function (s::SymbolicUtils.Substituter)(aff::SymbolicAffect)
+    SymbolicAffect(s(aff.affect), s(aff.alg_eqs), s(aff.discrete_parameters))
 end
 
 struct AffectSystem
@@ -42,17 +40,16 @@ struct AffectSystem
     discretes::Vector
 end
 
-function Symbolics.fast_substitute(aff::AffectSystem, rules)
-    substituter = Base.Fix2(fast_substitute, rules)
+function (s::SymbolicUtils.Substituter)(aff::AffectSystem)
     sys = aff.system
-    @set! sys.eqs = map(substituter, get_eqs(sys))
-    @set! sys.parameter_dependencies = map(substituter, get_parameter_dependencies(sys))
-    @set! sys.defaults = Dict([k => substituter(v) for (k, v) in defaults(sys)])
-    @set! sys.guesses = Dict([k => substituter(v) for (k, v) in guesses(sys)])
-    @set! sys.unknowns = map(substituter, get_unknowns(sys))
-    @set! sys.ps = map(substituter, get_ps(sys))
-    AffectSystem(sys, map(substituter, aff.unknowns),
-        map(substituter, aff.parameters), map(substituter, aff.discretes))
+    @set! sys.eqs = s(get_eqs(sys))
+    @set! sys.parameter_dependencies = (get_parameter_dependencies(sys))
+    @set! sys.defaults = Dict([k => s(v) for (k, v) in defaults(sys)])
+    @set! sys.guesses = Dict([k => s(v) for (k, v) in guesses(sys)])
+    @set! sys.unknowns = s(get_unknowns(sys))
+    @set! sys.ps = s(get_ps(sys))
+    AffectSystem(sys, s(aff.unknowns), s(aff.parameters), s(aff.discretes))
+    
 end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
@@ -105,8 +102,8 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
 
     rev_map = Dict(zip(discrete_parameters, discretes))
     subs = merge(rev_map, Dict(zip(dvs, _dvs)))
-    affect = Symbolics.fast_substitute(affect, subs)
-    alg_eqs = Symbolics.fast_substitute(alg_eqs, subs)
+    affect = substitute(affect, subs)
+    alg_eqs = substitute(alg_eqs, subs)
 
     @named affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
@@ -904,7 +901,7 @@ function compile_equational_affect(
 
     obseqs, eqs = unhack_observed(observed(affsys), equations(affsys))
     if isempty(equations(affsys))
-        update_eqs = Symbolics.fast_substitute(
+        update_eqs = substitute(
             obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
         lhss = map(x -> x.lhs, update_eqs)

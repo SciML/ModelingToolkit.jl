@@ -408,7 +408,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
            isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
-            # we want to store `nothing` in the map because that means `fast_substitute`
+            # we want to store `nothing` in the map because that means `substitute`
             # will ignore the rule. We will this identify the presence of `eq′.lhs` in
             # the differentiated expression and error.
             param_derivative_map[eq.lhs] = coalesce(eq.rhs, nothing)
@@ -761,11 +761,11 @@ function shift_discrete_system(ts::TearingState)
     if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold, Pre}))
 
     for i in eachindex(fullvars)
-        fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+        fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
             fullvars[i], discmap; operator = Union{Sample, Hold, Pre}))
     end
     for i in eachindex(eqs)
-        eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
+        eqs[i] = StructuralTransformations.simplify_shifts(substitute(
             eqs[i], discmap; operator = Union{Sample, Hold, Pre}))
     end
     @set! ts.sys.eqs = eqs

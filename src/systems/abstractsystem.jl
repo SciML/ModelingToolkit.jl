@@ -526,7 +526,7 @@ function (f::Initial)(x)
     return result
 end
 
-# This is required so `fast_substitute` works
+# This is required so `substitute` works
 function SymbolicUtils.maketerm(::Type{<:BasicSymbolic}, ::Initial, args, meta)
     val = Initial()(args...)
     if symbolic_type(val) == NotSymbolic()
@@ -2750,26 +2750,26 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     elseif sys isa System
         rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
             collect(rules)))
-        newsys = @set sys.eqs = fast_substitute(get_eqs(sys), rules)
+        newsys = @set sys.eqs = substitute(get_eqs(sys), rules)
         @set! newsys.unknowns = map(get_unknowns(sys)) do var
             get(rules, var, var)
         end
         @set! newsys.ps = map(get_ps(sys)) do var
             get(rules, var, var)
         end
-        @set! newsys.parameter_dependencies = fast_substitute(
+        @set! newsys.parameter_dependencies = substitute(
             get_parameter_dependencies(sys), rules)
-        @set! newsys.defaults = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        @set! newsys.defaults = Dict(substitute(k, rules) => substitute(v, rules)
         for (k, v) in get_defaults(sys))
-        @set! newsys.guesses = Dict(fast_substitute(k, rules) => fast_substitute(v, rules)
+        @set! newsys.guesses = Dict(substitute(k, rules) => substitute(v, rules)
         for (k, v) in get_guesses(sys))
-        @set! newsys.noise_eqs = fast_substitute(get_noise_eqs(sys), rules)
-        @set! newsys.costs = Vector{Union{Real, BasicSymbolic}}(fast_substitute(
+        @set! newsys.noise_eqs = substitute(get_noise_eqs(sys), rules)
+        @set! newsys.costs = Vector{Union{Real, BasicSymbolic}}(substitute(
             get_costs(sys), rules))
-        @set! newsys.observed = fast_substitute(get_observed(sys), rules)
-        @set! newsys.initialization_eqs = fast_substitute(
+        @set! newsys.observed = substitute(get_observed(sys), rules)
+        @set! newsys.initialization_eqs = substitute(
             get_initialization_eqs(sys), rules)
-        @set! newsys.constraints = fast_substitute(get_constraints(sys), rules)
+        @set! newsys.constraints = substitute(get_constraints(sys), rules)
         @set! newsys.systems = map(s -> substitute(s, rules), get_systems(sys))
     else
         error("substituting symbols is not supported for $(typeof(sys))")

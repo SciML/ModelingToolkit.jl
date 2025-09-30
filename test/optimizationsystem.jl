@@ -399,7 +399,7 @@ end
     prob = OptimizationProblem(sys, [x => [42.0, 12.37]]; hess = true, sparse = true)
 
     symbolic_hess = Symbolics.hessian(cost(sys), unknowns(sys))
-    symbolic_hess_value = Symbolics.fast_substitute(symbolic_hess, Dict(x[1] => prob[x[1]], x[2] => prob[x[2]]))
+    symbolic_hess_value = substitute(symbolic_hess, Dict(x[1] => prob[x[1]], x[2] => prob[x[2]]))
 
     oop_hess = prob.f.hess(prob.u0, prob.p)
     @test oop_hess ≈ symbolic_hess_value
