@@ -1251,7 +1251,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
         array || continue
         iscall(lhs) || continue
         operation(lhs) === getindex || continue
-        Symbolics.shape(lhs) != Symbolics.Unknown() || continue
+        SU.shape(lhs) isa SU.Unknown && continue
         arg1 = arguments(lhs)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
         arr_obs_occurrences[arg1] = cnt + 1
@@ -1264,7 +1264,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     for sym in unknowns
         iscall(sym) || continue
         operation(sym) === getindex || continue
-        Symbolics.shape(sym) != Symbolics.Unknown() || continue
+        SU.shape(sym) isa SU.Unknown && continue
         arg1 = arguments(sym)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
         cnt == 0 && continue

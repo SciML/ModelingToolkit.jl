@@ -2783,7 +2783,7 @@ function process_parameter_equations(sys::AbstractSystem)
         if all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
-                is_sized_array_symbolic(sym) &&
+                symbolic_has_known_size(sym) &&
                 all(Base.Fix1(is_parameter, sys), collect(sym)) ||
                 iscall(sym) &&
                 operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
