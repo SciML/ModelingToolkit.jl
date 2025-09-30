@@ -304,7 +304,7 @@ end
 function symbolic_contains(var, set)
     var in set ||
         symbolic_type(var) == ArraySymbolic() &&
-        Symbolics.shape(var) != Symbolics.Unknown() &&
+        symbolic_has_known_size(var) &&
         all(x -> x in set, Symbolics.scalarize(var))
 end
 
@@ -375,7 +375,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     ps = Set{SymbolicT}()
     for x in full_parameters(sys)
         push!(ps, x)
-        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
             xx = Symbolics.scalarize(x)
             union!(ps, xx)
         end

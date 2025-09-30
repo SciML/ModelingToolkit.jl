@@ -271,8 +271,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         vars!(vs, eq; op = Initial)
         allpars = full_parameters(sys)
         for p in allpars
-            if symbolic_type(p) == ArraySymbolic() &&
-               Symbolics.shape(p) != Symbolics.Unknown()
+            if symbolic_type(p) == ArraySymbolic() && SU.shape(p) isa SU.Unknown
                 append!(allpars, Symbolics.scalarize(p))
             end
         end
@@ -502,7 +501,7 @@ function get_possibly_array_fallback_singletons(varmap, p)
         return varmap[p]
     end
     if symbolic_type(p) == ArraySymbolic()
-        is_sized_array_symbolic(p) || return nothing
+        symbolic_has_known_size(p) || return nothing
         scal = collect(p)
         if all(x -> haskey(varmap, x), scal)
             res = [varmap[x] for x in scal]

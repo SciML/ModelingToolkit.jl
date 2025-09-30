@@ -257,7 +257,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
                     if any(
                         v -> any(isequal(v), fullvars) ||
                              symbolic_type(v) == ArraySymbolic() &&
-                             Symbolics.shape(v) != Symbolics.Unknown() &&
+                             SU.shape(v) isa SU.Unknown ||
                              any(x -> any(isequal(x), fullvars), collect(v)),
                         vars(
                             a; op = Union{Differential, Shift, Pre, Sample, Hold, Initial}))

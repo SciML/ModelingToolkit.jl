@@ -968,7 +968,7 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     end
     any(isequal(expr), vars) && return expr
     iscall(expr) || return expr
-    Symbolics.shape(expr) == Symbolics.Unknown() && return expr
+    symbolic_has_known_size(expr) || return expr
     haskey(state, expr) && return state[expr]
     op = operation(expr)
     args = arguments(expr)
@@ -1059,7 +1059,7 @@ function var_in_varlist(var, varlist::AbstractSet, iv)
            # indexed array symbolic, unscalarized array present
            (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
            # unscalarized sized array symbolic, all scalarized elements present
-           (symbolic_type(var) == ArraySymbolic() && is_sized_array_symbolic(var) &&
+           (symbolic_type(var) == ArraySymbolic() && symbolic_has_known_size(var) &&
             all(x -> x in varlist, collect(var))) ||
            # delayed variables
            (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
