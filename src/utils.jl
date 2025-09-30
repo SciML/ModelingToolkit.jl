@@ -329,9 +329,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Difference
-        error("The Difference operator is deprecated, use ShiftIndex instead")
-    elseif op === Differential
+    if op === Differential
         optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
