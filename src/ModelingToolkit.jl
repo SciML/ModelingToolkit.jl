@@ -88,7 +88,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  scalarize, getparent, hasderiv
+                  scalarize, hasderiv
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, full_parameters,

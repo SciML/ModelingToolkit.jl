@@ -190,13 +190,13 @@ function setconnect(x, t::Type{T}) where {T <: AbstractConnectType}
     setmetadata(x, VariableConnectType, t)
 end
 
-### Input, Output, Irreducible 
-isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
-function isvarkind(m, x)
-    iskind = getmetadata(x, m, nothing)
-    iskind !== nothing && return iskind
-    x = getparent(x, x)
-    getmetadata(x, m, false)
+### Input, Output, Irreducible
+isvarkind(m, x, def = false) = safe_getmetadata(m, x, def)
+safe_getmetadata(m, x::Union{Num, Symbolics.Arr}, def) = safe_getmetadata(m, value(x), def)
+function safe_getmetadata(m, x, default)
+    hasmetadata(x, m) && return getmetadata(x, m)
+    iscall(x) && operation(x) === getindex && return safe_getmetadata(m, arguments(x)[1], default)
+    return default
 end
 
 """
@@ -282,8 +282,8 @@ Create parameters with bounds like this
 """
 function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
     x = unwrap(x)
-    p = Symbolics.getparent(x, nothing)
-    if p === nothing
+    if operation(p) === getindex
+        p = arguments(p)[1]
         bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
         if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
             bounds = map(bounds) do b
@@ -339,9 +339,7 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDisturbance, false)
+    isvarkind(VariableDisturbance, x)
 end
 
 setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
@@ -372,9 +370,7 @@ Create a tunable parameter by
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = true)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableTunable, default)
+    isvarkind(VariableTunable, x, default)
 end
 
 ## Dist ========================================================================
@@ -398,9 +394,7 @@ getdist(u) # retrieve distribution
 ```
 """
 function getdist(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDistribution, nothing)
+    safe_getmetadata(VariableDistribution, x, nothing)
 end
 
 """
@@ -492,9 +486,7 @@ getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 Return any description attached to variables `x`. If no description is attached, an empty string is returned.
 """
 function getdescription(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDescription, "")
+    safe_getmetadata(VariableDescription, x, "")
 end
 
 """

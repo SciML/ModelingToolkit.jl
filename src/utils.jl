@@ -310,18 +310,12 @@ function collect_var_to_name!(vars, xs)
     for x in xs
         symbolic_type(x) == NotSymbolic() && continue
         x = unwrap(x)
-        if hasmetadata(x, Symbolics.GetindexParent)
-            xarr = getmetadata(x, Symbolics.GetindexParent)
-            hasname(xarr) || continue
-            vars[Symbolics.getname(xarr)] = xarr
-        else
-            if iscall(x) && operation(x) === getindex
-                x = arguments(x)[1]
-            end
-            x = unwrap(x)
-            hasname(x) || continue
-            vars[Symbolics.getname(unwrap(x))] = x
+        if iscall(x) && operation(x) === getindex
+            x = arguments(x)[1]
         end
+        x = unwrap(x)
+        hasname(x) || continue
+        vars[Symbolics.getname(unwrap(x))] = x
     end
 end
 
@@ -388,9 +382,7 @@ isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
     x isa SymbolicT || return false
-    p = getparent(x, nothing)
-    p === nothing || (x = p)
-    hasmetadata(x, VariableSource)
+    hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])
 end
 
 """
