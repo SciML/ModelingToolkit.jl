@@ -856,7 +856,7 @@ function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
             " variables\n")
         Base.print_matrix(io, SystemStructurePrintMatrix(s))
     else
-        S = incidence_matrix(s.graph, Num(Sym{Real}(:×)))
+        S = incidence_matrix(s.graph, Num(SSym(:×; type = Real, shape = SU.ShapeVecT())))
         print(io, "Incidence matrix:")
         show(io, mime, S)
     end

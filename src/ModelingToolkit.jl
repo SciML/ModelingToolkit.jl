@@ -9,10 +9,10 @@ using PrecompileTools, Reexport
 end
 
 import SymbolicUtils
+import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
                       isadd, ismul, ispow, issym, FnType,
-                      @rule, Rewriters, substitute, metadata, BasicSymbolic,
-                      Sym, Term
+                      @rule, Rewriters, substitute, metadata, BasicSymbolic
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -79,7 +79,7 @@ using Symbolics: parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
                  VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, setdefaultval,
-                 hasnode, fixpoint_sub, CallAndWrap
+                 hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,

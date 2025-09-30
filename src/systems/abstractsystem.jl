@@ -69,7 +69,7 @@ function wrap_assignments(isscalar, assignments; let_block = false)
     end
 end
 
-const MTKPARAMETERS_ARG = Sym{Vector{Vector}}(:___mtkparameters___)
+const MTKPARAMETERS_ARG = SSym(:___mtkparameters___; type = Vector{Vector{Any}}, shape = SymbolicUtils.Unknown(1))
 
 """
     $(TYPEDSIGNATURES)

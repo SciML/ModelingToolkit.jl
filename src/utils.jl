@@ -20,7 +20,7 @@ function detime_dvs(op)
     if !iscall(op)
         op
     elseif issym(operation(op))
-        Sym{Real}(nameof(operation(op)))
+        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
     else
         maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
             metadata(op))
@@ -33,7 +33,7 @@ end
 Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
-    issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
+    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
     iscall(op) ?
     maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
         metadata(op)) :

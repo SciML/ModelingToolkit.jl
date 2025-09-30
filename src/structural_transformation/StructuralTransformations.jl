@@ -14,7 +14,7 @@ using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, vars, SymbolicT, diff2term_with_unit,
                        shift2term_with_unit, value,
-                       operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
+                       operation, arguments, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,
