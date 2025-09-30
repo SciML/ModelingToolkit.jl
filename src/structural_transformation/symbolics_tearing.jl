@@ -65,7 +65,7 @@ function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
 
     sys = ts.sys
     eq = equations(ts)[ieq]
-    eq = 0 ~ fast_substitute(
+    eq = 0 ~ substitute(
         ModelingToolkit.derivative(
             eq.rhs - eq.lhs, get_iv(sys); throw_no_derivative = true), ts.param_derivative_map)
 
@@ -217,7 +217,7 @@ function substitute_derivatives_algevars!(
             v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
-                neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)
+                neweqs[eq] = substitute(neweqs[eq], dd => v_t)
             end
             fullvars[dv] = v_t
             # If we have:
@@ -230,7 +230,7 @@ function substitute_derivatives_algevars!(
             while (ddx = var_to_diff[dx]) !== nothing
                 dx_t = D(x_t)
                 for eq in 𝑑neighbors(graph, ddx)
-                    neweqs[eq] = fast_substitute(neweqs[eq], fullvars[ddx] => dx_t)
+                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dx_t)
                 end
                 fullvars[ddx] = dx_t
                 dx = ddx
@@ -961,8 +961,8 @@ function update_simplified_system!(
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs;
-           fast_substitute(state.additional_observed, obs_sub)]
+    obs = [substitute(observed(sys), obs_sub); solved_eqs;
+           substitute(state.additional_observed, obs_sub)]
 
     unknown_idxs = filter(
         i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars), eachindex(state.fullvars))

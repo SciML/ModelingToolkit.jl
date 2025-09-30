@@ -97,7 +97,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     nvs_orig = ndsts(graph_orig)
     for ieq in eqs_to_update
         eq = eqs[ieq]
-        eqs[ieq] = fast_substitute(eq, subs)
+        eqs[ieq] = substitute(eq, subs)
     end
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]

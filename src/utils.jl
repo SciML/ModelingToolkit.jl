@@ -687,7 +687,7 @@ function collect_var!(unknowns, parameters, var, iv; depth = 0)
         Encountered a wrapped value in `collect_var!`. This function should only ever \
         receive unwrapped symbolic variables. This is likely a bug in the code generating \
         an expression passed to `collect_vars!` or `collect_scoped_vars!`. A common cause \
-        is using `substitute` or `fast_substitute` with rules where the values are \
+        is using `substitute` with rules where the values are \
         wrapped symbolic variables.
         """)
     end
