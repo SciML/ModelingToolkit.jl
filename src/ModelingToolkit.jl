@@ -75,7 +75,7 @@ using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
 
 using Symbolics: degree, VartypeT, SymbolicT
-using Symbolics: _parse_vars, value, @derivatives, get_variables,
+using Symbolics: parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
                  VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, set_scalar_metadata, setdefaultval,
