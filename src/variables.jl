@@ -526,10 +526,10 @@ macro brownians(xs...)
         x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$ || Meta.isexpr(x, :$),
         xs) ||
         error("@brownians only takes scalar expressions!")
-    Symbolics._parse_vars(:brownian,
+    Symbolics.parse_vars(:brownian,
         Real,
         xs,
-        tobrownian) |> esc
+        tobrownian)
 end
 
 ## Guess ======================================================================
