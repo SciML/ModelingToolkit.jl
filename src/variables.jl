@@ -179,7 +179,7 @@ struct Stream <: AbstractConnectType end   # special stream connector
 Get the connect type of x. See also [`hasconnect`](@ref).
 """
 getconnect(x::Num) = getconnect(unwrap(x))
-getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
+getconnect(x::SymbolicT) = Symbolics.getmetadata(x, VariableConnectType, nothing)
 """
     hasconnect(x)
 
@@ -280,7 +280,7 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 """
-function getbounds(x::Union{Num, Symbolics.Arr, SymbolicUtils.Symbolic})
+function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
     x = unwrap(x)
     p = Symbolics.getparent(x, nothing)
     if p === nothing
@@ -512,7 +512,7 @@ end
 
 Maps the brownianiable to an unknown.
 """
-tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
+tobrownian(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))
 isbrownian(s) = getvariabletype(s) === BROWNIAN
 
@@ -587,7 +587,7 @@ Fetch any miscellaneous data associated with symbolic variable `x`.
 See also [`hasmisc(x)`](@ref).
 """
 getmisc(x::Num) = getmisc(unwrap(x))
-getmisc(x::Symbolic) = Symbolics.getmetadata(x, VariableMisc, nothing)
+getmisc(x::SymbolicT) = Symbolics.getmetadata(x, VariableMisc, nothing)
 """
     hasmisc(x)
 
@@ -606,7 +606,7 @@ setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
 Fetch the unit associated with variable `x`. This function is a metadata getter for an individual variable, while `get_unit` is used for unit inference on more complicated sdymbolic expressions.
 """
 getunit(x::Num) = getunit(unwrap(x))
-getunit(x::Symbolic) = Symbolics.getmetadata(x, VariableUnit, nothing)
+getunit(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnit, nothing)
 """
     hasunit(x)
 
@@ -615,10 +615,10 @@ Check if the variable `x` has a unit.
 hasunit(x) = getunit(x) !== nothing
 
 getunshifted(x::Num) = getunshifted(unwrap(x))
-getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
+getunshifted(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
 
 getshift(x::Num) = getshift(unwrap(x))
-getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
+getshift(x::SymbolicT) = Symbolics.getmetadata(x, VariableShift, 0)
 
 ###################
 ### Evaluate at ###
@@ -629,7 +629,7 @@ getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
 An operator that evaluates time-dependent variables at a specific absolute time point `t`.
 
 # Fields
-- `t::Union{Symbolic, Number}`: The absolute time at which to evaluate the variable.
+- `t::Union{SymbolicT, Number}`: The absolute time at which to evaluate the variable.
 
 # Description
 `EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
@@ -677,10 +677,10 @@ end
 See also: [`Differential`](@ref)
 """
 struct EvalAt <: Symbolics.Operator
-    t::Union{Symbolic, Number}
+    t::Union{SymbolicT, Number}
 end
 
-function (A::EvalAt)(x::Symbolic)
+function (A::EvalAt)(x::SymbolicT)
     if symbolic_type(x) == NotSymbolic() || !iscall(x)
         if x isa Symbolics.CallWithMetadata
             return x(A.t)

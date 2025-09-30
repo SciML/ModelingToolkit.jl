@@ -72,7 +72,7 @@ end
 Get the connection type of symbolic variable `s` from the `VariableConnectType` metadata.
 Defaults to `Equality` if not present.
 """
-function get_connection_type(s::Symbolic)
+function get_connection_type(s::SymbolicT)
     s = unwrap(s)
     if iscall(s) && operation(s) === getindex
         s = arguments(s)[1]

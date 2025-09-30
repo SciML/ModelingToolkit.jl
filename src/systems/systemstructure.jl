@@ -1,11 +1,11 @@
 using DataStructures
 using Symbolics: linear_expansion, unwrap
-using SymbolicUtils: iscall, operation, arguments, Symbolic
+using SymbolicUtils: iscall, operation, arguments
 using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, Connection,
+                          isparameter, Connection, SymbolicT
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
@@ -372,7 +372,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             union!(dvs, xx)
         end
     end
-    ps = Set{Symbolic}()
+    ps = Set{SymbolicT}()
     for x in full_parameters(sys)
         push!(ps, x)
         if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()

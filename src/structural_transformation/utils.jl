@@ -249,7 +249,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         a, b, islinear = linear_expansion(term, var)
         a, b = unwrap(a), unwrap(b)
         islinear || (all_int_vars = false; continue)
-        if a isa Symbolic
+        if a isa SymbolicT
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter

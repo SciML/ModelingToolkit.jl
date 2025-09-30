@@ -13,6 +13,6 @@ macro independent_variables(ts...)
         toiv) |> esc
 end
 
-toiv(s::Symbolic) = GlobalScope(setmetadata(s, MTKVariableTypeCtx, PARAMETER))
+toiv(s::SymbolicT) = GlobalScope(setmetadata(s, MTKVariableTypeCtx, PARAMETER))
 toiv(s::Symbolics.Arr) = wrap(toiv(value(s)))
 toiv(s::Num) = Num(toiv(value(s)))

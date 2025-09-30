@@ -169,7 +169,7 @@ Base.nameof(::Pre) = :Pre
 Base.show(io::IO, x::Pre) = print(io, "Pre")
 unPre(x::Num) = unPre(unwrap(x))
 unPre(x::Symbolics.Arr) = unPre(unwrap(x))
-unPre(x::Symbolic) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
+unPre(x::SymbolicT) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
 
 function (p::Pre)(x)
     iw = Symbolics.iswrapped(x)
@@ -420,14 +420,14 @@ A callback that triggers at the first timestep that the conditions are satisfied
 The condition can be one of: 
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
-- eqs::Vector{Symbolic} - events trigger when the condition evaluates to true
+- eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
 
 Arguments: 
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
 - alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Union{Number, Vector{<:Number}, Symbolic{Bool}}
+    conditions::Union{Number, Vector{<:Number}, SymbolicT}
     affect::Union{Affect, SymbolicAffect, Nothing}
     initialize::Union{Affect, SymbolicAffect, Nothing}
     finalize::Union{Affect, SymbolicAffect, Nothing}
@@ -435,9 +435,10 @@ struct SymbolicDiscreteCallback <: AbstractCallback
 end
 
 function SymbolicDiscreteCallback(
-        condition::Union{Symbolic{Bool}, Number, Vector{<:Number}}, affect = nothing;
+        condition::Union{SymbolicT, Number, Vector{<:Number}}, affect = nothing;
         initialize = nothing, finalize = nothing,
         reinitializealg = nothing, kwargs...)
+    @assert !(condition isa SymbolicT && symtype(condition) != Bool)
     c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
     if isnothing(reinitializealg)

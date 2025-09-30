@@ -25,19 +25,19 @@ Check if the variable contains the metadata identifying it as a parameter.
 function isparameter(x)
     x = unwrap(x)
 
-    if x isa Symbolic && (varT = getvariabletype(x, nothing)) !== nothing
+    if x isa SymbolicT && (varT = getvariabletype(x, nothing)) !== nothing
         return varT === PARAMETER
         #TODO: Delete this branch
-    elseif x isa Symbolic && Symbolics.getparent(x, false) !== false
+    elseif x isa SymbolicT && Symbolics.getparent(x, false) !== false
         p = Symbolics.getparent(x)
         isparameter(p) ||
             (hasmetadata(p, Symbolics.VariableSource) &&
              getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
-    elseif iscall(x) && operation(x) isa Symbolic
+    elseif iscall(x) && operation(x) isa SymbolicT
         varT === PARAMETER || isparameter(operation(x))
     elseif iscall(x) && operation(x) == (getindex)
         isparameter(arguments(x)[1])
-    elseif x isa Symbolic
+    elseif x isa SymbolicT
         varT === PARAMETER
     else
         false
@@ -80,7 +80,7 @@ toparam(s::Num) = wrap(toparam(value(s)))
 
 Maps the variable to an unknown.
 """
-tovar(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
+tovar(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
 tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 
 """

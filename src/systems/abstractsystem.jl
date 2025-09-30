@@ -1019,7 +1019,7 @@ struct LocalScope <: SymScope end
 
 Apply `LocalScope` to `sym`.
 """
-function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
+function LocalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
             args = arguments(sym)
@@ -1051,7 +1051,7 @@ end
 
 Apply `ParentScope` to `sym`, with `parent` being `LocalScope`.
 """
-function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
+function ParentScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
             args = arguments(sym)
@@ -1081,7 +1081,7 @@ struct GlobalScope <: SymScope end
 
 Apply `GlobalScope` to `sym`.
 """
-function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num}})
+function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
             args = arguments(sym)
@@ -1106,7 +1106,7 @@ Namespace `x` with the name of `sys`.
 function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
-    if x isa Symbolic
+    if x isa SymbolicT
         T = typeof(x)
         if iscall(x) && operation(x) isa Operator
             return maketerm(typeof(x), operation(x),
@@ -1500,10 +1500,8 @@ function defaults_and_guesses(sys::AbstractSystem)
 end
 
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)
-for vType in [Symbolics.Arr, Symbolics.Symbolic{<:AbstractArray}]
-    @eval unknowns(sys::AbstractSystem, v::$vType) = namespace_expr(v, sys)
-    @eval parameters(sys::AbstractSystem, v::$vType) = toparam(unknowns(sys, v))
-end
+unknowns(sys::AbstractSystem, v::Symbolics.Arr) = namespace_expr(v, sys)
+parameters(sys::AbstractSystem, v::Symbolics.Arr) = toparam(unknowns(sys, v))
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
 for f in [:unknowns, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
@@ -2257,7 +2255,7 @@ end
 
 function default_to_parentscope(v)
     uv = unwrap(v)
-    uv isa Symbolic || return v
+    uv isa SymbolicT || return v
     apply_to_variables(v) do sym
         ParentScope(sym)
     end
