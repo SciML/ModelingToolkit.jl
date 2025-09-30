@@ -28,8 +28,8 @@ function isparameter(x)
     if x isa SymbolicT && (varT = getvariabletype(x, nothing)) !== nothing
         return varT === PARAMETER
         #TODO: Delete this branch
-    elseif x isa SymbolicT && Symbolics.getparent(x, false) !== false
-        p = Symbolics.getparent(x)
+    elseif x isa SymbolicT && iscall(x) && operation(x) === getindex
+        p = arguments(x)[1]
         isparameter(p) ||
             (hasmetadata(p, Symbolics.VariableSource) &&
              getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
