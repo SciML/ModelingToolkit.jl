@@ -6,7 +6,7 @@ using ..ModelingToolkit: ValidationError,
                          get_systems,
                          Conditional, Comparison
 using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
-using Symbolics: SymbolicT, value, issym, isadd, ismul, ispow
+using Symbolics: SymbolicT, value, issym, isadd, ismul, ispow, CallAndWrap
 const MT = ModelingToolkit
 
 Base.:*(x::Union{Num, SymbolicT}, y::Unitful.AbstractQuantity) = x * y
@@ -49,7 +49,7 @@ get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(value(x))
-function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
+function get_unit(x::Union{Symbolics.Arr, CallAndWrap})
     get_literal_unit(x)
 end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)

@@ -79,8 +79,7 @@ using Symbolics: parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
                  VariableSource, getname, variable,
                  NAMESPACE_SEPARATOR, setdefaultval,
-                 hasnode, fixpoint_sub,
-                 CallWithMetadata, CallWithParent
+                 hasnode, fixpoint_sub, CallAndWrap
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,

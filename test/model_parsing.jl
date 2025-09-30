@@ -1007,7 +1007,7 @@ end
     vars = Symbolics.get_variables(only(equations(ex)))
     @test length(vars) == 2
     for u in Symbolics.unwrap.(unknowns(ex))
-        @test !Symbolics.hasmetadata(u, Symbolics.CallWithParent)
+        @test !SymbolicUtils.is_function_symbolic(u)
         @test any(isequal(u), vars)
     end
 end
