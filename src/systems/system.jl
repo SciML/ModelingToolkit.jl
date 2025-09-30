@@ -456,6 +456,8 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         initializesystem, is_initializesystem, is_discrete; checks)
 end
 
+SymbolicIndexingInterface.getname(x::System) = nameof(x)
+
 """
     $(TYPEDSIGNATURES)
 
