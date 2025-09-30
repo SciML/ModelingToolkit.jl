@@ -29,15 +29,14 @@ struct DiscreteIndex
 end
 
 const ParamIndexMap = Dict{BasicSymbolic, Tuple{Int, Int}}
-const NonnumericMap = Dict{
-    Union{BasicSymbolic, Symbolics.CallWithMetadata}, Tuple{Int, Int}}
+const NonnumericMap = Dict{SymbolicT, Tuple{Int, Int}}
 const UnknownIndexMap = Dict{
     BasicSymbolic, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
 const TunableIndexMap = Dict{BasicSymbolic,
     Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}}
 const TimeseriesSetType = Set{Union{ContinuousTimeseries, Int}}
 
-const SymbolicParam = Union{BasicSymbolic, CallWithMetadata}
+const SymbolicParam = SymbolicT
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
@@ -50,8 +49,7 @@ struct IndexCache
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
     observed_syms_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
-    dependent_pars_to_timeseries::Dict{
-        Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}
+    dependent_pars_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     initials_buffer_size::BufferTemplate
@@ -325,8 +323,7 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    dependent_pars_to_timeseries = Dict{
-        Union{BasicSymbolic, CallWithMetadata}, TimeseriesSetType}()
+    dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
 
     for eq in get_parameter_dependencies(sys)
         sym = eq.lhs
@@ -533,10 +530,9 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false, flatten = 
     disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF))
                                    for _ in 1:(sum(x -> x.length, temp))]
     for temp in ic.discrete_buffer_sizes)
-    const_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
+    const_buf = Tuple(SymbolicT[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.constant_buffer_sizes)
-    nonnumeric_buf = Tuple(Union{BasicSymbolic, CallWithMetadata}[unwrap(variable(:DEF))
-                                                                  for _ in 1:(temp.length)]
+    nonnumeric_buf = Tuple(SymbolicT[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
     for temp in ic.nonnumeric_buffer_sizes)
     for p in ps
         p = unwrap(p)
