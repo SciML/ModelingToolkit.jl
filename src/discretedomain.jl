@@ -60,7 +60,7 @@ julia> Δ = Shift(t)
 """
 struct Shift <: Operator
     """Fixed Shift"""
-    t::Union{Nothing, Symbolic}
+    t::Union{Nothing, SymbolicT}
     steps::Int
     Shift(t, steps = 1) = new(value(t), steps)
 end

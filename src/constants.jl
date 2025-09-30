@@ -3,7 +3,7 @@ Test whether `x` is a constant-type Sym.
 """
 function isconstant(x)
     x = unwrap(x)
-    x isa Symbolic && !getmetadata(x, VariableTunable, true)
+    x isa SymbolicT && !getmetadata(x, VariableTunable, true)
 end
 
 """

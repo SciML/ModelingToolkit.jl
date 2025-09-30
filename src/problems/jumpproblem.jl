@@ -196,13 +196,13 @@ end
 ### Functions to determine which unknowns a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
     jr = value(jump.rate)
-    (jr isa Symbolic) && get_variables!(dep, jr, variables)
+    (jr isa SymbolicT) && get_variables!(dep, jr, variables)
     dep
 end
 
 function get_variables!(dep, jump::MassActionJump, variables)
     sr = value(jump.scaled_rates)
-    (sr isa Symbolic) && get_variables!(dep, sr, variables)
+    (sr isa SymbolicT) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
         any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
     end

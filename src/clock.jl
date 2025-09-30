@@ -45,7 +45,7 @@ has_time_domain(_, x) = has_time_domain(x)
 
 Determine if variable `x` has a time-domain attributed to it.
 """
-function has_time_domain(x::Symbolic)
+function has_time_domain(x::SymbolicT)
     # getmetadata(x, ContinuousClock, nothing) !== nothing ||
     # getmetadata(x, Discrete,   nothing) !== nothing
     getmetadata(x, VariableTimeDomain, nothing) !== nothing
