@@ -948,8 +948,7 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
         stream_var = only(arguments(expr))
         iscall(stream_var) && operation(stream_var) === getindex || continue
         args = arguments(stream_var)
-        new_expr = Symbolics.array_term(
-            instream, args[1]; size = size(args[1]), ndims = ndims(args[1]))[args[2:end]...]
+        new_expr = term(instream, args[1]; type = symtype(args[1]), shape = SU.shape(args[1]))[args[2:end]...]
         instream_subs[expr] = new_expr
     end
 
