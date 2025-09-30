@@ -535,7 +535,7 @@ sys = complete(sys)
     us = map(s -> (@variables $s(t))[1], syms)
     ps = map(s -> (@variables $s(t))[1], syms_p)
     buffer, = @variables $buffername[1:length(u0)]
-    dummy_var = Sym{Any}(:_) # this is safe because _ cannot be a rvalue in Julia
+    dummy_var = Symbolics.SSym(:_; type = Any) # this is safe because _ cannot be a rvalue in Julia
 
     ss = Iterators.flatten((us, ps))
     vv = Iterators.flatten((u0, p0))

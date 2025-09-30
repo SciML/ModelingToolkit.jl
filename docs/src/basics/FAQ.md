@@ -192,7 +192,7 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 # changes to the array will be reflected in parameter values
 ```
 
-# ERROR: ArgumentError: SymbolicUtils.BasicSymbolic{Real}[xˍt(t)] are missing from the variable map.
+# ERROR: ArgumentError: `[xˍt(t)]` are missing from the variable map.
 
 This error can come up after running `mtkcompile` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
 

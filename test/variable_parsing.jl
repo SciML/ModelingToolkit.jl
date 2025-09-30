@@ -2,15 +2,16 @@ using ModelingToolkit
 using Test
 
 using ModelingToolkit: value, Flow
-using SymbolicUtils: FnType
+using Symbolics: SSym
+using SymbolicUtils: FnType, ShapeVecT
 
 @independent_variables t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
-x1 = Num(Sym{FnType{Tuple{Any}, Real}}(:x)(value(t)))
-y1 = Num(Sym{FnType{Tuple{Any}, Real}}(:y)(value(t)))
-z1 = Num(Sym{FnType{Tuple{Any}, Real}}(:z)(value(t)))
+x1 = Num(SSym(:x)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
+y1 = Num(SSym(:y)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
+z1 = Num(SSym(:z)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
 
 @test isequal(x1, x)
 @test isequal(y1, y)
@@ -22,9 +23,9 @@ z1 = Num(Sym{FnType{Tuple{Any}, Real}}(:z)(value(t)))
 end
 @parameters σ(..)
 
-t1 = Num(Sym{Real}(:t))
-s1 = Num(Sym{Real}(:s))
-σ1 = Num(Sym{FnType{Tuple, Real}}(:σ))
+t1 = Num(SSym(:t; type = Real, shape = ShapeVecT()))
+s1 = Num(SSym(:s; type = Real, shape = ShapeVecT()))
+σ1 = Num(SSym(:σ; type = FnType{Tuple, Real}, shape = ShapeVecT()))
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1(t), σ(t))

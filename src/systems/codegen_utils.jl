@@ -135,8 +135,8 @@ end
 """
 The argument of generated functions corresponding to the history function.
 """
-const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
-const BVP_SOLUTION = Sym{Symbolics.FnType{Tuple{<:Real}, Vector{Real}}}(:__sol__)
+const DDE_HISTORY_FUN = SSym(:___history___; type = SU.FnType{Tuple{Any, <:Real}, Vector{Real}}, shape = SU.Unknown(1))
+const BVP_SOLUTION = SSym(:__sol__; type = Symbolics.FnType{Tuple{<:Real}, Vector{Real}}, shape = SU.Unknown(1))
 
 """
     $(TYPEDSIGNATURES)
