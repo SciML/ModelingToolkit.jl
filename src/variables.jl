@@ -682,7 +682,7 @@ end
 
 function (A::EvalAt)(x::SymbolicT)
     if symbolic_type(x) == NotSymbolic() || !iscall(x)
-        if x isa Symbolics.CallWithMetadata
+        if x isa CallAndWrap
             return x(A.t)
         else
             return x
