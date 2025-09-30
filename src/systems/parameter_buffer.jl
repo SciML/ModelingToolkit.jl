@@ -143,7 +143,7 @@ function MTKParameters(
         val = symconvert(ctype, val)
         done = set_value(sym, val)
         if !done && Symbolics.isarraysymbolic(sym)
-            if Symbolics.shape(sym) === Symbolics.Unknown()
+            if !symbolic_has_known_size(sym)
                 for i in eachindex(val)
                     set_value(sym[i], val[i])
                 end
@@ -483,11 +483,11 @@ function validate_parameter_type(ic::IndexCache, p, idx::ParameterIndex, val)
     end
     stype = symtype(p)
     sz = if stype <: AbstractArray
-        Symbolics.shape(p) == Symbolics.Unknown() ? Symbolics.Unknown() : size(p)
+        size(p)
     elseif stype <: Number
         size(p)
     else
-        Symbolics.Unknown()
+        SU.Unknown(-1)
     end
     validate_parameter_type(ic, stype, sz, p, idx, val)
 end
@@ -499,7 +499,7 @@ function validate_parameter_type(ic::IndexCache, idx::ParameterIndex, val)
         stype = AbstractArray{<:stype}
     end
     validate_parameter_type(
-        ic, stype, Symbolics.Unknown(), nothing, idx, val)
+        ic, stype, SU.Unknown(-1), nothing, idx, val)
 end
 
 function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
@@ -519,7 +519,7 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
             :validate_parameter_type, sym === nothing ? index : sym, stype, val))
     end
     # ... and must match sizes
-    if stype <: AbstractArray && sz != Symbolics.Unknown() && size(val) != sz
+    if stype <: AbstractArray && !(sz isa SU.Unknown) && size(val) != sz
         throw(InvalidParameterSizeException(sym, val))
     end
     # Early exit
@@ -738,7 +738,7 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
             sym = idx
             idx = parameter_index(ic, sym)
             if idx === nothing
-                Symbolics.shape(sym) == Symbolics.Unknown() &&
+                symbolic_has_known_size(sym) ||
                     throw(ParameterNotInSystem(sym))
                 size(sym) == size(val) || throw(InvalidParameterSizeException(sym, val))
 

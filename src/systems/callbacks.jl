@@ -875,7 +875,7 @@ function default_operating_point(affsys::AffectSystem)
         T = symtype(p)
         if T <: Number
             op[p] = false
-        elseif T <: Array{<:Real} && is_sized_array_symbolic(p)
+        elseif T <: Array{<:Real} && symbolic_has_known_size(p)
             op[p] = zeros(size(p))
         end
     end

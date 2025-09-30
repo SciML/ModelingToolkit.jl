@@ -614,15 +614,13 @@ function gather_array_params(ps)
     for p in ps
         if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
-            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
-               all(par[i] in ps for i in eachindex(par))
+            if symbolic_has_known_size(par) && all(par[i] in ps for i in eachindex(par))
                 push!(new_ps, par)
             else
                 push!(new_ps, p)
             end
         else
-            if symbolic_type(p) == ArraySymbolic() &&
-               Symbolics.shape(unwrap(p)) != Symbolics.Unknown()
+            if symbolic_type(p) == ArraySymbolic() && symbolic_has_known_size(p)
                 for i in eachindex(p)
                     delete!(new_ps, p[i])
                 end

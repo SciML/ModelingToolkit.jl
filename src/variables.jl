@@ -285,7 +285,7 @@ function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
     if operation(p) === getindex
         p = arguments(p)[1]
         bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
-        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
             bounds = map(bounds) do b
                 b isa AbstractArray && return b
                 return fill(b, size(x))
@@ -297,7 +297,7 @@ function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
         idxs = arguments(x)[2:end]
         bounds = map(bounds) do b
             if b isa AbstractArray
-                if Symbolics.shape(p) != Symbolics.Unknown() && size(p) != size(b)
+                if symbolic_has_known_size(p) && size(p) != size(b)
                     throw(DimensionMismatch("Expected array variable $p with shape $(size(p)) to have bounds of identical size. Found $bounds of size $(size(bounds))."))
                 end
                 return b[idxs...]

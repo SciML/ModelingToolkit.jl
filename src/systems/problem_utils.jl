@@ -17,10 +17,10 @@ anydict(x) = AnyDict(x)
 """
     $(TYPEDSIGNATURES)
 
-Check if `x` is a symbolic with known size. Assumes `Symbolics.shape(unwrap(x))`
+Check if `x` is a symbolic with known size. Assumes `SymbolicUtils.shape(unwrap(x))`
 is a valid operation.
 """
-is_sized_array_symbolic(x) = Symbolics.shape(unwrap(x)) != Symbolics.Unknown()
+symbolic_has_known_size(x) = !(SU.shape(unwrap(x)) isa SU.Unknown)
 
 """
     $(TYPEDSIGNATURES)
@@ -128,7 +128,7 @@ function add_fallbacks!(
         haskey(varmap, ttvar) && continue
 
         # array symbolics with a defined size may be present in the scalarized form
-        if Symbolics.isarraysymbolic(var) && is_sized_array_symbolic(var)
+        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
             val = map(eachindex(var)) do idx
                 # @something is lazy and saves from writing a massive if-elseif-else
                 @something(get(varmap, var[idx], nothing),
@@ -162,7 +162,7 @@ function add_fallbacks!(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
                     val = val[idxs...]
-                    is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
+                    symbolic_has_known_size(arrvar) && push!(arrvars, arrvar)
                 end
             else
                 val = nothing
@@ -197,7 +197,7 @@ function missingvars(
         ttsym = toterm(var)
         haskey(varmap, ttsym) && continue
 
-        if Symbolics.isarraysymbolic(var) && is_sized_array_symbolic(var)
+        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
             mask = map(eachindex(var)) do idx
                 !haskey(varmap, var[idx]) && !haskey(varmap, ttsym[idx])
             end
@@ -542,7 +542,7 @@ If a scalarized entry already exists, it is not overridden.
 function scalarize_vars_in_varmap!(varmap::AbstractDict, vars)
     for var in vars
         symbolic_type(var) == ArraySymbolic() || continue
-        is_sized_array_symbolic(var) || continue
+        symbolic_has_known_size(var) || continue
         haskey(varmap, var) || continue
         for i in eachindex(var)
             haskey(varmap, var[i]) && continue

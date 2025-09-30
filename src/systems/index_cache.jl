@@ -220,7 +220,7 @@ function IndexCache(sys::AbstractSystem)
         haskey(nonnumeric_buffers, ctype) && p in nonnumeric_buffers[ctype] && continue
         insert_by_type!(
             if ctype <: Real || ctype <: AbstractArray{<:Real}
-                if istunable(p, true) && Symbolics.shape(p) != Symbolics.Unknown() &&
+                if istunable(p, true) && symbolic_has_known_size(p) &&
                    (ctype == Real || ctype <: AbstractFloat ||
                     ctype <: AbstractArray{Real} ||
                     ctype <: AbstractArray{<:AbstractFloat})
@@ -435,7 +435,7 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
     end
     sym = unwrap(sym)
     validate_size = Symbolics.isarraysymbolic(sym) && symtype(sym) <: AbstractArray &&
-                    Symbolics.shape(sym) !== Symbolics.Unknown()
+                    symbolic_has_known_size(sym)
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing

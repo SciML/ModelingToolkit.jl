@@ -9,6 +9,7 @@ using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
 using SymbolicUtils: maketerm, iscall
+import SymbolicUtils as SU
 
 using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
