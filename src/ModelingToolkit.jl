@@ -10,7 +10,7 @@ end
 
 import SymbolicUtils
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      Symbolic, isadd, ismul, ispow, issym, FnType,
+                      isadd, ismul, ispow, issym, FnType,
                       @rule, Rewriters, substitute, metadata, BasicSymbolic,
                       Sym, Term
 using SymbolicUtils.Code
@@ -74,7 +74,7 @@ import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
 
-using Symbolics: degree
+using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, build_expr, unwrap, wrap,
                  VariableSource, getname, variable,

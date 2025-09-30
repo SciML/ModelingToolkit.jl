@@ -133,7 +133,7 @@ end
 
 function MTK.lowered_var(m::CasADiModel, uv, i, t)
     X = getfield(m, uv)
-    t isa Union{Num, Symbolics.Symbolic} ? X.u[i, :] : X(t)[i]
+    t isa Union{Num, SymbolicT} ? X.u[i, :] : X(t)[i]
 end
 
 function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)

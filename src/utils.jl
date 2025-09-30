@@ -389,7 +389,7 @@ isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)::Bool
-    x isa Symbolic || return false
+    x isa SymbolicT || return false
     p = getparent(x, nothing)
     p === nothing || (x = p)
     hasmetadata(x, VariableSource)
@@ -412,7 +412,7 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-function vars(exprs::Symbolic; op = Differential)
+function vars(exprs::SymbolicT; op = Differential)
     iscall(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
@@ -545,7 +545,7 @@ function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Dif
         for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
             if eq isa Equation
-                eq.lhs isa Union{Symbolic, Number} || continue
+                eq.lhs isa Union{SymbolicT, Number} || continue
             end
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
@@ -810,7 +810,7 @@ end
 
 function _with_unit(f, x, t, args...)
     x = f(x, args...)
-    if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
+    if hasmetadata(x, VariableUnit) && (t isa SymbolicT && hasmetadata(t, VariableUnit))
         xu = getmetadata(x, VariableUnit)
         tu = getmetadata(t, VariableUnit)
         x = setmetadata(x, VariableUnit, xu / tu)

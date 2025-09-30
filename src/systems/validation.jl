@@ -6,11 +6,11 @@ using ..ModelingToolkit: ValidationError,
                          get_systems,
                          Conditional, Comparison
 using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
-using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
+using Symbolics: SymbolicT, value, issym, isadd, ismul, ispow
 const MT = ModelingToolkit
 
-Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
-Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
+Base.:*(x::Union{Num, SymbolicT}, y::Unitful.AbstractQuantity) = x * y
+Base.:/(x::Union{Num, SymbolicT}, y::Unitful.AbstractQuantity) = x / y
 
 """
 Throw exception on invalid unit types, otherwise return argument.
@@ -104,7 +104,7 @@ function get_unit(op::Comparison, args)
     return unitless
 end
 
-function get_unit(x::Symbolic)
+function get_unit(x::SymbolicT)
     if issym(x)
         get_literal_unit(x)
     elseif isadd(x)
@@ -225,14 +225,14 @@ function _validate(conn::Connection; info::String = "")
 end
 
 function validate(jump::Union{MT.VariableRateJump,
-            MT.ConstantRateJump}, t::Symbolic;
+            MT.ConstantRateJump}, t::SymbolicT;
         info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
-function validate(jump::MT.MassActionJump, t::Symbolic; info::String = "")
+function validate(jump::MT.MassActionJump, t::SymbolicT; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
     all_symbols = vcat(left_symbols, net_symbols)
@@ -243,7 +243,7 @@ function validate(jump::MT.MassActionJump, t::Symbolic; info::String = "")
         ["scaled_rates", "1/(t*reactants^$n))"]; info)
 end
 
-function validate(jumps::Vector{JumpType}, t::Symbolic)
+function validate(jumps::Vector{JumpType}, t::SymbolicT)
     labels = ["in Mass Action Jumps,", "in Constant Rate Jumps,", "in Variable Rate Jumps,"]
     majs = filter(x -> x isa MassActionJump, jumps)
     crjs = filter(x -> x isa ConstantRateJump, jumps)
@@ -260,7 +260,7 @@ function validate(eq::MT.Equation; info::String = "")
     end
 end
 function validate(eq::MT.Equation,
-        term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
+        term::Union{SymbolicT, Unitful.Quantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
 function validate(eq::MT.Equation, terms::Vector; info::String = "")
@@ -282,10 +282,10 @@ function validate(eqs::Vector, noise::Matrix; info::String = "")
     all([validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
          for idx in 1:length(eqs)])
 end
-function validate(eqs::Vector, term::Symbolic; info::String = "")
+function validate(eqs::Vector, term::SymbolicT; info::String = "")
     all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
-validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== nothing
+validate(term::SymbolicT) = safe_get_unit(term, "") !== nothing
 
 """
 Throws error if units of equations are invalid.

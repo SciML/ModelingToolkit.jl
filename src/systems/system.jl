@@ -484,7 +484,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     diffeqs = Equation[]
     othereqs = Equation[]
     for eq in eqs
-        if !(eq.lhs isa Union{Symbolic, Number, AbstractArray})
+        if !(eq.lhs isa Union{SymbolicT, Number, AbstractArray})
             push!(othereqs, eq)
             continue
         end

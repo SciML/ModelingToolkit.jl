@@ -144,7 +144,7 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
         eq = 0 ~ eq.rhs - eq.lhs
     end
     rhs = eq.rhs
-    if rhs isa Symbolic
+    if rhs isa SymbolicT
         # Check if the RHS is solvable in all unknown variable derivatives and if those
         # the linear terms for them are all zero. If so, move them to the
         # LHS.
@@ -1204,7 +1204,7 @@ end
 Backshift the given expression `ex`.
 """
 function backshift_expr(ex, iv)
-    ex isa Symbolic || return ex
+    ex isa SymbolicT || return ex
     return descend_lower_shift_varname_with_unit(
         simplify_shifts(distribute_shift(Shift(iv, -1)(ex))), iv)
 end
