@@ -89,7 +89,7 @@ function get_unit(op::Conditional, args)
     return terms[2]
 end
 
-function get_unit(op::typeof(Symbolics._mapreduce), args)
+function get_unit(op::typeof(mapreduce), args)
     if args[2] == +
         get_unit(args[3])
     else
