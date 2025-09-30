@@ -94,7 +94,7 @@ struct System <: IntermediateDeprecationSystem
     The independent variable for a time-dependent system, or `nothing` for a time-independent
     system.
     """
-    iv::Union{Nothing, BasicSymbolic{Real}}
+    iv::Union{Nothing, SymbolicT}
     """
     Equations that compute variables of a system that have been eliminated from the set of
     unknowns by `mtkcompile`. More generally, this contains all variables that can be
@@ -278,6 +278,7 @@ struct System <: IntermediateDeprecationSystem
             variable $iv.
             """))
         end
+        @assert iv === nothing || symtype(iv) === Real
         jumps = Vector{JumpType}(jumps)
         if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
             check_independent_variables([iv])

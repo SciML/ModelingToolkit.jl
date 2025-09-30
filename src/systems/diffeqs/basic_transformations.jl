@@ -470,7 +470,7 @@ julia> M = change_independent_variable(M, x);
 julia> M = mtkcompile(M; allow_symbolic = true);
 
 julia> unknowns(M)
-3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+3-element Vector{Symbolics.SymbolicsT}:
  xˍt(x)
  y(x)
  yˍx(x)
@@ -1037,13 +1037,13 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         """
 
         if iscall(k)
-            op = operation(k)::BasicSymbolic
+            op = operation(k)::SymbolicT
             @assert !iscall(op)
-            op = SymbolicUtils.Sym{SymbolicUtils.FnType{Tuple{Any}, T}}(nameof(op))
+            op = SU.Sym{VartypeT}(nameof(op); type = SU.FnType{Tuple, T, Nothing}, shape = SU.shape(k))
             args = arguments(k)
             new_p = op(args...)
         else
-            new_p = SymbolicUtils.Sym{T}(getname(k))
+            new_p = SSym(getname(k); type = T, shape = SU.shape(v))
         end
 
         get_ps(sys)[idx] = new_p

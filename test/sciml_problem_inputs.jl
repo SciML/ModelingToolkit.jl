@@ -2,7 +2,7 @@
 
 # Fetch packages
 using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, StaticArrays,
-      SteadyStateDiffEq, StochasticDiffEq, SciMLBase, Test
+      SteadyStateDiffEq, StochasticDiffEq, SciMLBase, Test, SymbolicUtils
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Sets rnd number.
@@ -29,7 +29,7 @@ begin
     ]
     noise_eqs = fill(0.01, 3, 6)
     jumps = [
-        MassActionJump(kp, Pair{Symbolics.BasicSymbolic{Real}, Int64}[], [X => 1]),
+        MassActionJump(kp, Pair{Symbolics.SymbolicT, Int64}[], [X => 1]),
         MassActionJump(kd, [X => 1], [X => -1]),
         MassActionJump(k1, [X => 1], [X => -1, Y => 1]),
         MassActionJump(k2, [Y => 1], [X => 1, Y => -1]),

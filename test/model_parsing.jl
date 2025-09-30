@@ -201,8 +201,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 
     @named pi_model = PiModel()
 
-    @test typeof(ModelingToolkit.getdefault(pi_model.p)) <:
-          SymbolicUtils.BasicSymbolic{Irrational}
+    @test symtype(ModelingToolkit.getdefault(pi_model.p)) <: Irrational
     @test getdefault(getdefault(pi_model.p)) == π
 end
 
