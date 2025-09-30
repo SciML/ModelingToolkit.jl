@@ -312,7 +312,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     @set! structure.graph = complete(new_graph)
 
     @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
-                    fast_substitute(equations(sys), input_to_parameters)
+                    substitute(equations(sys), input_to_parameters)
     @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 

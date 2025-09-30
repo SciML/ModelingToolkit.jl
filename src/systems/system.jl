@@ -899,7 +899,7 @@ function NonlinearSystem(sys::System)
         subrules[var] = 0.0
     end
     eqs = map(eqs) do eq
-        fast_substitute(eq, subrules)
+        substitute(eq, subrules)
     end
     nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
         defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),

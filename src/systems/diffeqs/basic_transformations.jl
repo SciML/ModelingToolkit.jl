@@ -1051,7 +1051,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         subrules[unwrap(k)] = unwrap(new_p)
     end
 
-    substituter = Base.Fix2(fast_substitute, subrules)
+    substituter = Base.Fix2(substitute, subrules)
     @set! sys.eqs = map(substituter, get_eqs(sys))
     @set! sys.observed = map(substituter, get_observed(sys))
     @set! sys.initialization_eqs = map(substituter, get_initialization_eqs(sys))

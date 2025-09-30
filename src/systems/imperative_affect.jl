@@ -67,10 +67,10 @@ function ImperativeAffect(; f, kwargs...)
     ImperativeAffect(f; kwargs...)
 end
 
-function Symbolics.fast_substitute(aff::ImperativeAffect, rules)
-    substituter = Base.Fix2(fast_substitute, rules)
-    ImperativeAffect(aff.f, map(substituter, aff.obs), aff.obs_syms,
-        map(substituter, aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
+function (s::SymbolicUtils.Substituter)(aff::ImperativeAffect)
+    ImperativeAffect(aff.f, s(aff.obs), aff.obs_syms,
+        s(aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
+    
 end
 
 function Base.show(io::IO, mfa::ImperativeAffect)

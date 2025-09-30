@@ -195,7 +195,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
             dvs[i] = irrvar
         end
     end
-    econs = fast_substitute.(econs, (irreducible_subs,))
+    econs = substitute.(econs, (irreducible_subs,))
     nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
     snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)
     obs = observed(snlsys)

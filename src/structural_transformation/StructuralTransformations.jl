@@ -3,7 +3,7 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, fast_substitute
+using Symbolics: unwrap, linear_expansion
 import Symbolics
 using SymbolicUtils
 using SymbolicUtils.Code
