@@ -139,3 +139,18 @@ end
     @test J == prob.f.jac(prob.u0, prob.p, 1.0)
     @test J ≈ prob.f.jac(prob.u0, prob.p, 1.0)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/3871
+@testset "Issue#3871: Sparsity with observed derivatives" begin
+    t = ModelingToolkit.t_nounits
+    D = ModelingToolkit.D_nounits
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t)
+    @test ModelingToolkit.jacobian_sparsity(sys) == [1 1; 1 1] # all nonzero
+    J1 = calculate_jacobian(sys)
+    J2 = isequal(unknowns(sys)[1], x) ? [2x-y -x; 1 -1] : [-1 1; -x 2x-y] # analytical result
+    @test isequal(J1, J2)
+    prob = ODEProblem(sys, [x => 1.0, y => 0.0], (0.0, 1.0); jac = true, sparse = true)
+    sol = solve(prob, FBDF())
+    @test SciMLBase.successful_retcode(sol)
+end
