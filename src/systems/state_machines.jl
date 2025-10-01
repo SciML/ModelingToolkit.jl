@@ -75,7 +75,7 @@ for (s, T) in [(:timeInState, :Real),
     seed = hash(s)
     @eval begin
         $s(x) = wrap(term($s, x))
-        SymbolicUtils.promote_symtype(::typeof($s), _...) = $T
+        SymbolicUtils.promote_symtype(::typeof($s), ::Type{S}) where {S} = $T
         function SymbolicUtils.show_call(io, ::typeof($s), args)
             if isempty(args)
                 print(io, $s, "()")
