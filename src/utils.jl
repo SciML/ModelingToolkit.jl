@@ -271,51 +271,73 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
-function process_variables!(var_to_name, defs, guesses, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
     collect_defaults!(defs, vars)
     collect_guesses!(guesses, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function process_variables!(var_to_name, defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, vars::Vector{SymbolicT})
     collect_defaults!(defs, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function collect_defaults!(defs, vars)
+function collect_defaults!(defs::SymmapT, vars::Vector{SymbolicT})
     for v in vars
-        symbolic_type(v) == NotSymbolic() && continue
-        if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
+        isconst(v) && continue
+        haskey(defs, v) && continue
+        def = Symbolics.getdefaultval(v, nothing)
+        if def !== nothing
+            defs[v] = SU.Const{VartypeT}(def)
             continue
         end
-        defs[v] = getdefault(v)
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) && if f === getindex end => begin
+                haskey(defs, args[1]) && continue
+                def = Symbolics.getdefaultval(args[1], nothing)
+                def === nothing && continue
+                defs[args[1]] = def
+            end
+            _ => nothing
+        end
     end
     return defs
 end
 
-function collect_guesses!(guesses, vars)
+function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     for v in vars
+        isconst(v) && continue
         symbolic_type(v) == NotSymbolic() && continue
-        if haskey(guesses, v) || !hasguess(unwrap(v)) || (def = getguess(v)) === nothing
+        haskey(guesses, v) && continue
+        def = getguess(v)
+        if def !== nothing
+            guesses[v] = SU.Const{VartypeT}(def)
             continue
         end
-        guesses[v] = getguess(v)
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) && if f === getindex end => begin
+                haskey(guesses, args[1]) && continue
+                def = Symbolics.getdefaultval(args[1], nothing)
+                def === nothing && continue
+                guesses[args[1]] = def
+            end
+            _ => nothing
+        end
     end
     return guesses
 end
 
-function collect_var_to_name!(vars, xs)
+function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
-        symbolic_type(x) == NotSymbolic() && continue
-        x = unwrap(x)
-        if iscall(x) && operation(x) === getindex
-            x = arguments(x)[1]
+        x = Moshi.Match.@match x begin
+            BSImpl.Const(;) => continue
+            BSImpl.Term(; f, args) && if f === getindex end => args[1]
+            _ => x
         end
-        x = unwrap(x)
         hasname(x) || continue
-        vars[Symbolics.getname(unwrap(x))] = x
+        vars[getname(x)] = x
     end
 end
 
