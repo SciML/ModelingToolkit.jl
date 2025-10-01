@@ -455,8 +455,9 @@ end
 Return the sparsity pattern of the jacobian of `sys` as a matrix.
 """
 function jacobian_sparsity(sys::System)
-    sparsity = torn_system_jacobian_sparsity(sys)
-    sparsity === nothing || return sparsity
+    # disable to fix https://github.com/SciML/ModelingToolkit.jl/issues/3871
+    #sparsity = torn_system_jacobian_sparsity(sys)
+    #sparsity === nothing || return sparsity
 
     Symbolics.jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
         [dv for dv in unknowns(sys)])
