@@ -84,7 +84,7 @@ end
 function readable_code(expr)
     expr = Base.remove_linenums!(_readable_code(expr))
     rec_remove_macro_linenums!(expr)
-    JuliaFormatter.format_text(string(expr), JuliaFormatter.SciMLStyle())
+    return string(expr)
 end
 
 # System validation enums

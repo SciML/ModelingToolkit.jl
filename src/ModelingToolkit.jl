@@ -54,7 +54,6 @@ using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, Ti
                  PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
                  NoInit
 using Distributed
-import JuliaFormatter
 using MLStyle
 import Moshi
 using Moshi.Data: @data
