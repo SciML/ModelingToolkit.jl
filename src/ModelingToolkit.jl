@@ -364,10 +364,93 @@ for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
 end
 
 PrecompileTools.@compile_workload begin
-    using ModelingToolkit
+        fold1 = Val{false}()
+        using SymbolicUtils
+        using SymbolicUtils: shape
+        using Symbolics
+        @syms x y f(t) q[1:5]
+        SymbolicUtils.Sym{SymReal}(:a; type = Real, shape = SymbolicUtils.ShapeVecT())
+        x + y
+        x * y
+        x / y
+        x ^ y
+        x ^ 5
+        6 ^ x
+        x - y
+        -y
+        2y
+        z = 2
+        dict = SymbolicUtils.ACDict{VartypeT}()
+        dict[x] = 1
+        dict[y] = 1
+        type::typeof(DataType) = rand() < 0.5 ? Real : Float64
+        nt = (; type, shape, unsafe = true)
+        Base.pairs(nt)
+        BSImpl.AddMul{VartypeT}(1, dict, SymbolicUtils.AddMulVariant.MUL; type, shape = SymbolicUtils.ShapeVecT(), unsafe = true)
+        *(y, z)
+        *(z, y)
+        SymbolicUtils.symtype(y)
+        f(x)
+        (5x / 5)
+        expand((x + y) ^ 2)
+        simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)
+        ex = x + 2y + sin(x)
+        rules1 = Dict(x => y)
+        rules2 = Dict(x => 1)
+        Dx = Differential(x)
+        Differential(y)(ex)
+        uex = unwrap(ex)
+        Symbolics.executediff(Dx, uex)
+        # Running `fold = Val(true)` invalidates the precompiled statements
+        # for `fold = Val(false)` and itself doesn't precompile anyway.
+        # substitute(ex, rules1)
+        substitute(ex, rules1; fold = fold1)
+        substitute(ex, rules2; fold = fold1)
+        @variables foo
+        f(foo)
+        @variables x y f(::Real) q[1:5]
+        x + y
+        x * y
+        x / y
+        x ^ y
+        x ^ 5
+        # 6 ^ x
+        x - y
+        -y
+        2y
+        symtype(y)
+        z = 2
+        *(y, z)
+        *(z, y)
+        f(x)
+        (5x / 5)
+        [x, y]
+        [x, f, f]
+        promote_type(Int, Num)
+        promote_type(Real, Num)
+        promote_type(Float64, Num)
+        # expand((x + y) ^ 2)
+        # simplify(x ^ (1//2) + (sin(x) ^ 2 + cos(x) ^ 2) + 2(x + y) - x - y)
+        ex = x + 2y + sin(x)
+        rules1 = Dict(x => y)
+        # rules2 = Dict(x => 1)
+        # Running `fold = Val(true)` invalidates the precompiled statements
+        # for `fold = Val(false)` and itself doesn't precompile anyway.
+        # substitute(ex, rules1)
+        substitute(ex, rules1; fold = fold1)
+        Symbolics.linear_expansion(ex, y)
+        # substitute(ex, rules2; fold = fold1)
+        # substitute(ex, rules2)
+        # substitute(ex, rules1; fold = fold2)
+        # substitute(ex, rules2; fold = fold2)
+        q[1]
+        q'q
+     using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits)
-    @named sys = System([ModelingToolkit.D_nounits(x) ~ -x], ModelingToolkit.t_nounits)
-    prob = ODEProblem(mtkcompile(sys), [x => 30.0], (0, 100), jac = true)
+    isequal(ModelingToolkit.D_nounits.x, ModelingToolkit.t_nounits)
+    sys = System([ModelingToolkit.D_nounits(x) ~ x], ModelingToolkit.t_nounits, [x], Num[]; name = :sys)
+    sys = System([ModelingToolkit.D_nounits(x) ~ x], ModelingToolkit.t_nounits, [x], Num[]; name = :sys)
+    # mtkcompile(sys)
     @mtkmodel __testmod__ begin
         @constants begin
             c = 1.0
@@ -397,5 +480,17 @@ PrecompileTools.@compile_workload begin
         end
     end
 end
+
+precompile(Tuple{typeof(Base.merge), NamedTuple{(:f, :args, :metadata, :hash, :hash2, :shape, :type, :id), Tuple{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, SymbolicUtils.SmallVec{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, Array{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, 1}}, Nothing, UInt64, UInt64, SymbolicUtils.SmallVec{Base.UnitRange{Int64}, Array{Base.UnitRange{Int64}, 1}}, DataType, SymbolicUtils.IDType}}, NamedTuple{(:metadata,), Tuple{Base.ImmutableDict{DataType, Any}}}})
+precompile(Tuple{typeof(Base.merge), NamedTuple{(:f, :args, :metadata, :hash, :hash2, :shape, :type, :id), Tuple{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, SymbolicUtils.SmallVec{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, Array{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, 1}}, Base.ImmutableDict{DataType, Any}, UInt64, UInt64, SymbolicUtils.SmallVec{Base.UnitRange{Int64}, Array{Base.UnitRange{Int64}, 1}}, DataType, SymbolicUtils.IDType}}, NamedTuple{(:id, :hash, :hash2), Tuple{Nothing, Int64, Int64}}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:f, :args, :metadata, :hash, :hash2, :shape, :type, :id), Tuple{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, SymbolicUtils.SmallVec{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, Array{SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}, 1}}, Base.ImmutableDict{DataType, Any}, Int64, Int64, SymbolicUtils.SmallVec{Base.UnitRange{Int64}, Array{Base.UnitRange{Int64}, 1}}, DataType, Nothing}}, Type{SymbolicUtils.BasicSymbolicImpl.Term{SymbolicUtils.SymReal}}})
+precompile(Tuple{typeof(Symbolics.parse_vars), Symbol, Type, Tuple{Symbol, Symbol}, Function})
+precompile(Tuple{typeof(Base.merge), NamedTuple{(:name, :metadata, :hash, :hash2, :shape, :type, :id), Tuple{Symbol, Base.ImmutableDict{DataType, Any}, UInt64, UInt64, SymbolicUtils.SmallVec{Base.UnitRange{Int64}, Array{Base.UnitRange{Int64}, 1}}, DataType, SymbolicUtils.IDType}}, NamedTuple{(:metadata,), Tuple{Base.ImmutableDict{DataType, Any}}}})
+precompile(Tuple{typeof(Base.vect), Symbolics.Equation, Vararg{Symbolics.Equation}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:name, :defaults), Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}}}, Type{ModelingToolkit.System}, Array{Symbolics.Equation, 1}, Symbolics.Num, Array{Symbolics.Num, 1}, Array{Symbolics.Num, 1}})
+precompile(Tuple{Type{NamedTuple{(:name, :defaults), T} where T<:Tuple}, Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}}})
+precompile(Tuple{typeof(SymbolicUtils.isequal_somescalar), Float64, Float64})
+precompile(Tuple{Type{NamedTuple{(:name, :defaults, :guesses), T} where T<:Tuple}, Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}, Base.Dict{Symbolics.Num, Float64}}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:name, :defaults, :guesses), Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}, Base.Dict{Symbolics.Num, Float64}}}, Type{ModelingToolkit.System}, Array{Symbolics.Equation, 1}, Symbolics.Num, Array{Symbolics.Num, 1}, Array{Symbolics.Num, 1}})
 
 end # module
