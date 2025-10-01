@@ -1,5 +1,5 @@
 function contains_variable(x, wrt)
-    any(y -> occursin(y, x), wrt)
+    any(y -> SU.query(isequal(y), x), wrt)
 end
 
 """
@@ -270,7 +270,7 @@ function PolynomialTransformation(sys::System)
     transformation_err = nothing
     for t in all_non_poly_terms
         # if the term involves multiple unknowns, we can't invert it
-        dvs_in_term = map(x -> occursin(x, t), dvs)
+        dvs_in_term = map(x -> SU.query(isequal(x), t), dvs)
         if count(dvs_in_term) > 1
             transformation_err = MultivarTerm(t, dvs[dvs_in_term])
             is_poly = false
@@ -369,7 +369,7 @@ function transform_system(sys::System, transformation::PolynomialTransformation;
         t = Symbolics.fixpoint_sub(t, subrules; maxiters = length(dvs))
         # the substituted variable occurs outside the substituted term
         poly_and_nonpoly = map(dvs) do x
-            all(!isequal(x), new_dvs) && occursin(x, t)
+            all(!isequal(x), new_dvs) && SU.query(isequal(x), t)
         end
         if any(poly_and_nonpoly)
             return NotPolynomialError(

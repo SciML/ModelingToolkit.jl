@@ -5,6 +5,7 @@ using DiffEqBase
 using UnPack
 using NaNMath
 using Setfield
+import SymbolicUtils as SU
 const MTK = ModelingToolkit
 
 const SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
@@ -122,7 +123,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
         Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = false)
 
     cons_sym = Symbol("cons", hash(cons))
-    if occursin(Symbolics.unwrap(t_sym), expr)
+    if SU.query(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(f)))
     else
@@ -134,7 +135,7 @@ end
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = false)
-    if occursin(Symbolics.unwrap(t_sym), expr)
+    if SU.query(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
     else
