@@ -1115,4 +1115,4 @@ function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
                   for k in 1:M and ck.m_flow.max > 0
     =#
 end
-SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Vararg) = Real
+SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Type{T}, ::Type{S}, ::Type{R}) where {T, S, R} = Real
