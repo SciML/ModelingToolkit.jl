@@ -535,7 +535,7 @@ function shift2term(var)
               Symbol(string(nameof(oldop)))
 
     newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname),
-        Symbolics.children(O), Symbolics.metadata(O))
+        arguments(O), SU.metadata(O))
     newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
     newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
     newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)
