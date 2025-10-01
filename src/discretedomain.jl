@@ -72,7 +72,7 @@ SymbolicUtils.isbinop(::Shift) = false
 
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
-    term(D, x; type = symtype(x), shape = shape(x))
+    term(D, x; type = symtype(x), shape = SU.shape(x))
 end
 function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
