@@ -1089,40 +1089,51 @@ renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
 
+renamespace(sys, tgt::AbstractSystem) = rename(tgt, renamespace(sys, nameof(tgt)))
+renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL, tgt)
+
 """
     $(TYPEDSIGNATURES)
 
 Namespace `x` with the name of `sys`.
 """
-function renamespace(sys, x)
-    sys === nothing && return x
-    x = unwrap(x)
-    if x isa SymbolicT
-        T = typeof(x)
-        if iscall(x) && operation(x) isa Operator
-            return maketerm(typeof(x), operation(x),
-                Any[renamespace(sys, only(arguments(x)))],
-                metadata(x))::T
-        end
-        if iscall(x) && operation(x) === getindex
-            args = arguments(x)
-            return maketerm(
-                typeof(x), operation(x), vcat(renamespace(sys, args[1]), args[2:end]),
-                metadata(x))::T
-        end
-        let scope = getmetadata(x, SymScope, LocalScope())
+function renamespace(sys, x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Sym(; name) => let scope = getmetadata(x, SymScope, LocalScope())::Union{LocalScope, ParentScope, GlobalScope}
             if scope isa LocalScope
-                rename(x, renamespace(getname(sys), getname(x)))::T
+                return rename(x, renamespace(getname(sys), name))::SymbolicT
             elseif scope isa ParentScope
-                setmetadata(x, SymScope, scope.parent)::T
-            else # GlobalScope
-                x::T
+                return setmetadata(x, SymScope, scope.parent)::SymbolicT
+            elseif scope isa GlobalScope
+                return x
             end
+            error()
         end
-    elseif x isa AbstractSystem
-        rename(x, renamespace(sys, nameof(x)))
-    else
-        Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL, x)
+        BSImpl.Term(; f, args, shape, type, metadata) => begin
+            if f === getindex
+                newargs = copy(parent(args))
+                newargs[1] = renamespace(sys, args[1])
+                return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
+            elseif f isa SymbolicT
+                let scope = getmetadata(x, SymScope, LocalScope())::Union{LocalScope, ParentScope, GlobalScope}
+                    if scope isa LocalScope
+                        return rename(x, renamespace(getname(sys), getname(x)))::SymbolicT
+                    elseif scope isa ParentScope
+                        return setmetadata(x, SymScope, scope.parent)::SymbolicT
+                    elseif scope isa GlobalScope
+                        return x
+                    end
+                    error()
+                end
+            elseif f isa Operator
+                newargs = copy(parent(args))
+                for (i, arg) in enumerate(args)
+                    newargs[i] = renamespace(sys, arg)
+                end
+                return BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata)
+            end
+            error()
+        end
     end
 end
 
