@@ -51,7 +51,8 @@ end
 
 function getcalledparameter(x)
     x = unwrap(x)
-    return CallAndWrap(operation(x))
+    @assert iscalledparameter(x)
+    return operation(x)
 end
 
 """
