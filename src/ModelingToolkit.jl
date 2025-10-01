@@ -159,6 +159,9 @@ include("parameters.jl")
 include("independent_variables.jl")
 include("constants.jl")
 
+const SymmapT = Dict{SymbolicT, SymbolicT}
+const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
+
 include("utils.jl")
 
 include("systems/index_cache.jl")
