@@ -250,7 +250,7 @@ Remove all `AnalysisPoint`s in `sys` and any of its subsystems, replacing them b
 """
 function remove_analysis_points(sys::AbstractSystem)
     eqs = map(get_eqs(sys)) do eq
-        eq.lhs isa AnalysisPoint ? to_connection(eq.rhs) : eq
+        value(eq.lhs) isa AnalysisPoint ? to_connection(value(eq.rhs)) : eq
     end
     @set! sys.eqs = eqs
     @set! sys.systems = map(remove_analysis_points, get_systems(sys))
