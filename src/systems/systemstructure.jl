@@ -762,11 +762,11 @@ function shift_discrete_system(ts::TearingState)
 
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
-            fullvars[i], discmap; operator = Union{Sample, Hold, Pre}))
+            fullvars[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
     end
     for i in eachindex(eqs)
         eqs[i] = StructuralTransformations.simplify_shifts(substitute(
-            eqs[i], discmap; operator = Union{Sample, Hold, Pre}))
+            eqs[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
     end
     @set! ts.sys.eqs = eqs
     @set! ts.fullvars = fullvars
