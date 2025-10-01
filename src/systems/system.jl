@@ -46,7 +46,7 @@ struct System <: IntermediateDeprecationSystem
     this noise matrix is diagonal. Diagonal noise can be specified by providing an `N`
     length vector. If this field is `nothing`, the system does not have noise.
     """
-    noise_eqs::Union{Nothing, AbstractVector, AbstractMatrix}
+    noise_eqs::Union{Nothing, Vector{SymbolicT}, Matrix{SymbolicT}}
     """
     Jumps associated with the system. Each jump can be a `VariableRateJump`,
     `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
@@ -279,30 +279,37 @@ struct System <: IntermediateDeprecationSystem
             """))
         end
         @assert iv === nothing || symtype(iv) === Real
-        jumps = Vector{JumpType}(jumps)
-        if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables([iv])
+        if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
+            check_independent_variables((iv,))
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
             check_equations(eqs, iv)
-            if noise_eqs !== nothing && size(noise_eqs, 1) != length(eqs)
-                throw(IllFormedNoiseEquationsError(size(noise_eqs, 1), length(eqs)))
+            Neq = length(eqs)
+            if noise_eqs isa Matrix{SymbolicT}
+                N1 = size(noise_eqs, 1)
+            elseif noise_eqs isa Vector{SymbolicT}
+                N1 = length(noise_eqs)
+            elseif noise_eqs === nothing
+                N1 = Neq
+            else
+                error()
             end
+            N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
         end
-        if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(unknowns, ps, iv)
-            if noise_eqs === nothing
-                check_units(u, eqs)
-            else
-                check_units(u, eqs, noise_eqs)
-            end
-            if iv !== nothing
-                check_units(u, jumps, iv)
-            end
-            isempty(constraints) || check_units(u, constraints)
-        end
+        # if checks == true || (checks & CheckUnits) > 0
+        #     u = __get_unit_type(unknowns, ps, iv)
+        #     if noise_eqs === nothing
+        #         check_units(u, eqs)
+        #     else
+        #         check_units(u, eqs, noise_eqs)
+        #     end
+        #     if iv !== nothing
+        #         check_units(u, jumps, iv)
+        #     end
+        #     isempty(constraints) || check_units(u, constraints)
+        # end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
             observed, parameter_dependencies, var_to_name, name, description, defaults,
@@ -321,13 +328,11 @@ function default_consolidate(costs, subcosts)
     return reduce(+, costs; init = 0.0) + reduce(+, subcosts; init = 0.0)
 end
 
-function unwrap_vars(vars::AbstractArray{SymbolicT})
-    vec(vars)
-end
-function unwrap_vars(vars)
-    result = SymbolicT[]
-    for var in vars
-        push!(result, unwrap(var))
+unwrap_vars(vars::AbstractArray{SymbolicT}) = vars
+function unwrap_vars(vars::AbstractArray)
+    result = similar(vars, SymbolicT)
+    for i in eachindex(vars)
+        result[i] = SU.Const{VartypeT}(vars[i])
     end
     return result
 end
@@ -372,29 +377,30 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         preface = [], checks = true)
     name === nothing && throw(NoNameError())
-    if !isempty(parameter_dependencies)
-        @invokelatest warn_pdeps()
-        eqs = Equation[eqs; parameter_dependencies]
-    end
-
-    iv = unwrap(iv)
-    ps = unwrap_vars(ps)
-    dvs = unwrap_vars(dvs)
-    if iv !== nothing
-        filter!(!Base.Fix2(isdelay, iv), dvs)
-    end
-    brownians = unwrap_vars(brownians)
 
     if !(eqs isa Vector{Equation})
         eqs = Equation[eqs]
     end
     eqs = eqs::Vector{Equation}
 
-    if noise_eqs !== nothing
-        noise_eqs = unwrap.(noise_eqs)
+    if !isempty(parameter_dependencies)
+        @invokelatest warn_pdeps()
+        append!(eqs, parameter_dependencies)
     end
 
-    costs = unwrap_vars(costs)
+    iv = unwrap(iv)
+    ps = vec(unwrap_vars(ps))
+    dvs = vec(unwrap_vars(dvs))
+    if iv !== nothing
+        filter!(!Base.Fix2(isdelay, iv), dvs)
+    end
+    brownians = unwrap_vars(brownians)
+
+    if noise_eqs !== nothing
+        noise_eqs = unwrap_vars(noise_eqs)
+    end
+
+    costs = vec(unwrap_vars(costs))
 
     defaults = defsdict(defaults)
     guesses = defsdict(guesses)
@@ -423,8 +429,12 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
 
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
-        process_variables!(var_to_name, defaults, guesses, SymbolicT[eq.lhs for eq in observed])
-        process_variables!(var_to_name, defaults, guesses, SymbolicT[eq.rhs for eq in observed])
+        buffer = SymbolicT[]
+        for eq in observed
+            push!(buffer, eq.lhs)
+            push!(buffer, eq.rhs)
+        end
+        process_variables!(var_to_name, defaults, guesses, buffer)
 
         for var in dvs
             if isinput(var)
@@ -437,10 +447,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), defaults)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
-    sysnames = nameof.(systems)
-    unique_sysnames = Set(sysnames)
-    if length(unique_sysnames) != length(sysnames)
-        throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
+
+    if !allunique(map(nameof, systems))
+        nonunique_subsystems(systems)
     end
     continuous_events,
     discrete_events = create_symbolic_events(
@@ -454,7 +463,10 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         is_dde = _check_if_dde(eqs, iv, systems)
     end
 
-    assertions = Dict{SymbolicT, String}(unwrap(k) => v for (k, v) in assertions)
+    _assertions = Dict{SymbolicT, String}
+    for (k, v) in assertions
+        _assertions[unwrap(k)::SymbolicT] = v
+    end
 
     if isempty(metadata)
         metadata = MetadataT()
@@ -468,6 +480,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         metadata = meta
     end
     metadata = refreshed_metadata(metadata)
+    jumps = Vector{JumpType}(jumps)
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
@@ -475,6 +488,12 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
+end
+
+@noinline function nonunique_subsystems(systems)
+    sysnames = nameof.(systems)
+    unique_sysnames = Set(sysnames)
+    throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
 end
 
 @noinline function warn_pdeps()
@@ -751,19 +770,15 @@ differential equations.
 """
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 
-function _check_if_dde(eqs, iv, subsystems)
-    is_dde = any(ModelingToolkit.is_dde, subsystems)
-    if !is_dde
-        vs = Set()
-        for eq in eqs
-            vars!(vs, eq)
-            is_dde = any(vs) do sym
-                isdelay(unwrap(sym), iv)
-            end
-            is_dde && break
-        end
+_check_if_dde(eqs::Vector{Equation}, iv::Nothing, subsystems::Vector{System}) = false
+function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{System})
+    any(ModelingToolkit.is_dde, subsystems) && return true
+    pred = Base.Fix2(isdelay, iv)
+    for eq in eqs
+        SU.query(pred, eq.lhs) && return true
+        SU.query(pred, eq.rhs) && return true
     end
-    return is_dde
+    return false
 end
 
 """

@@ -568,6 +568,9 @@ conditions(cb::AbstractCallback) = cb.conditions
 function conditions(cbs::Vector{<:AbstractCallback})
     reduce(vcat, conditions(cb) for cb in cbs; init = [])
 end
+function conditions(cbs::Vector{SymbolicContinuousCallback})
+    mapreduce(conditions, vcat, cbs; init = Equation[])
+end
 equations(cb::AbstractCallback) = conditions(cb)
 equations(cb::Vector{<:AbstractCallback}) = conditions(cb)
 

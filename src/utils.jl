@@ -117,9 +117,12 @@ const CheckUnits = 1 << 2
 
 function check_independent_variables(ivs)
     for iv in ivs
-        isparameter(iv) ||
-            @warn "Independent variable $iv should be defined with @independent_variables $iv."
+        isparameter(iv) || @invokelatest warn_indepvar(iv)
     end
+end
+
+@noinline function warn_indepvar(iv::SymbolicT)
+    @warn "Independent variable $iv should be defined with @independent_variables $iv."
 end
 
 function check_parameters(ps, iv)
@@ -129,22 +132,16 @@ function check_parameters(ps, iv)
     end
 end
 
-function is_delay_var(iv, var)
-    if Symbolics.isarraysymbolic(var)
-        return is_delay_var(iv, first(collect(var)))
+function is_delay_var(iv::SymbolicT, var::SymbolicT)
+    Moshi.Match.@match var begin
+        BSImpl.Term(; f, args) => begin
+            length(args) > 1 && return false
+            arg = args[1]
+            isequal(arg, iv) && return false
+            return symtype(arg) <: Real
+        end
+        _ => false
     end
-    args = nothing
-    try
-        args = arguments(var)
-    catch
-        return false
-    end
-    length(args) > 1 && return false
-    isequal(first(args), iv) && return false
-    delay = iv - first(args)
-    delay isa Integer ||
-        delay isa AbstractFloat ||
-        (delay isa Num && isreal(value(delay)))
 end
 
 function check_variables(dvs, iv)
@@ -187,20 +184,35 @@ function collect_ivs(eqs, op = Differential)
     return ivs
 end
 
+struct IndepvarCheckPredicate
+    iv::SymbolicT
+end
+
+function (icp::IndepvarCheckPredicate)(ex::SymbolicT)
+    Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Differential end => begin
+            f = f::Differential
+            isequal(f.x, icp.iv) || throw_multiple_iv(icp.iv, f.x)
+            return false
+        end
+        _ => false
+    end
+end
+
+@noinline function throw_multiple_iv(iv, newiv)
+    throw(ArgumentError("Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
+end
+
 """
     check_equations(eqs, iv)
 
 Assert that equations are well-formed when building ODE, i.e., only containing a single independent variable.
 """
-function check_equations(eqs, iv)
-    ivs = collect_ivs(eqs)
-    display = collect(ivs)
-    length(ivs) <= 1 ||
-        throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
-    if length(ivs) == 1
-        single_iv = pop!(ivs)
-        isequal(single_iv, iv) ||
-            throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
+function check_equations(eqs::Vector{Equation}, iv::SymbolicT)
+    icp = IndepvarCheckPredicate(iv)
+    for eq in eqs
+        SU.query!(icp, eq.lhs)
+        SU.query!(icp, eq.rhs)
     end
 end
 
@@ -211,10 +223,12 @@ Assert that the subsystems have the appropriate namespacing behavior.
 """
 function check_subsystems(systems)
     idxs = findall(!does_namespacing, systems)
-    if !isempty(idxs)
-        names = join("  " .* string.(nameof.(systems[idxs])), "\n")
-        throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
-    end
+    isempty(idxs) || throw_bad_namespacing(systems, idxs)
+end
+
+@noinline function throw_bad_namespacing(systems, idxs)
+    names = join("  " .* string.(nameof.(systems[idxs])), "\n")
+    throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
 end
 
 """
@@ -626,6 +640,7 @@ function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics
     if issym(expr)
         return collect_var!(unknowns, parameters, expr, iv; depth)
     end
+    SymbolicUtils.isconst(expr) && return
     for var in vars(expr; op)
         while iscall(var) && operation(var) isa op
             validate_operator(operation(var), arguments(var), iv; context = expr)
