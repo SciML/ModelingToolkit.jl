@@ -9,9 +9,9 @@ using SymbolicUtils: FnType, ShapeVecT
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
-x1 = Num(SSym(:x)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
-y1 = Num(SSym(:y)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
-z1 = Num(SSym(:z)(value(t); type = FnType{Tuple{Any}, Real}, shape = ShapeVecT()))
+x1 = Num(SSym(:x; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
+y1 = Num(SSym(:y; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
+z1 = Num(SSym(:z; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
 
 @test isequal(x1, x)
 @test isequal(y1, y)
