@@ -57,7 +57,7 @@ We can use `debug_system` to log the failing assertions in each call to the RHS 
 ```@repl debug
 dsys = debug_system(sys; functions = []);
 dprob = ODEProblem(dsys, [], (0.0, 10.0));
-dsol = solve(dprob, Tsit5());
+dsol = solve(dprob, Tsit5(); dtmin = 0.1); # high dtmin only to show less clutter on this page
 ```
 
 Note the logs containing the failed assertion and corresponding message. To temporarily disable
