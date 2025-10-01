@@ -1,3 +1,13 @@
+module MTKChainRulesCoreExt
+
+import ChainRulesCore
+import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
+using ModelingToolkit: MTKParameters, NONNUMERIC_PORTION, AbstractSystem
+import ModelingToolkit as MTK
+import SciMLStructures
+import SymbolicIndexingInterface: remake_buffer
+import SciMLBase: AbstractNonlinearProblem, remake
+
 function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
     function mtp_pullback(dt)
         dt = unthunk(dt)
@@ -104,3 +114,11 @@ function ChainRulesCore.rrule(
 end
 
 ChainRulesCore.@non_differentiable Base.getproperty(sys::AbstractSystem, x::Symbol)
+
+function ModelingToolkit.update_initializeprob!(initprob::AbstractNonlinearProblem, prob)
+    pgetter = ChainRulesCore.@ignore_derivatives MTK.get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
+    p = pgetter(prob, initprob)
+    return remake(initprob; p)
+end
+
+end
