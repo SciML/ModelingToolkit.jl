@@ -632,8 +632,8 @@ function returned from `generate_isouter`.
 """
 function handle_maybe_connect_equation!(eqs, state::AbstractConnectionState,
         eq::Equation, namespace::Vector{Symbol}, isouter)
-    lhs = eq.lhs
-    rhs = eq.rhs
+    lhs = value(eq.lhs)
+    rhs = value(eq.rhs)
 
     if !(lhs isa Connection)
         # split connections and equations
