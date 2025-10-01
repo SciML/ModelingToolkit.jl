@@ -514,7 +514,7 @@ function (f::Initial)(x)
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
-        f(arr)[arguments(x)[2:end]]
+        f(arr)[arguments(x)[2:end]...]
     else
         term(f, x; type = symtype(x), shape = SU.shape(x))
     end
