@@ -142,7 +142,7 @@ function change_of_variables(
 
     for (new_var, ex, first, second) in zip(new_vars, dfdt, ∂f∂x, ∂2f∂x2)
         for (eqs, neq) in zip(old_eqs, neqs)
-            if occursin(value(eqs.lhs), value(ex))
+            if SU.query(isequal(value(eqs.lhs)), value(ex))
                 ex = substitute(ex, eqs.lhs => eqs.rhs)
                 if isSDE
                     for (noise, B) in zip(neq, brownvars)

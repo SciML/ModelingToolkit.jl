@@ -680,7 +680,7 @@ function trivial_tearing!(ts::TearingState)
             end
             isvalid || continue
             # skip if the LHS is present in the RHS, since then this isn't explicit
-            if occursin(eq.lhs, eq.rhs)
+            if SU.query(isequal(eq.lhs), eq.rhs)
                 push!(blacklist, i)
                 continue
             end

@@ -108,7 +108,7 @@ end
 
 function solve_equation(eq, var, simplify)
     rhs = value(symbolic_linear_solve(eq, var; simplify = simplify, check = false))
-    occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
+    SU.query(in(var), rhs) && throw(EquationSolveErrors(eq, var, rhs))
     var ~ rhs
 end
 

@@ -69,7 +69,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
     discrete_parameters = unwrap.(discrete_parameters)
 
     for p in discrete_parameters
-        occursin(unwrap(iv), unwrap(p)) ||
+        SU.query(isequal(unwrap(iv)), unwrap(p)) ||
             error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
     end
 
