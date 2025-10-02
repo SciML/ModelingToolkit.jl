@@ -486,7 +486,7 @@ end
 function reorder_parameters(
         sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys), ps; kwargs...)
+        reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
     elseif ps isa Tuple
         ps
     else
@@ -494,46 +494,54 @@ function reorder_parameters(
     end
 end
 
-function reorder_parameters(ic::IndexCache, ps; drop_missing = false, flatten = true)
-    isempty(ps) && return ()
-    param_buf = if ic.tunable_buffer_size.length == 0
-        ()
-    else
-        (BasicSymbolic[unwrap(variable(:DEF))
-                       for _ in 1:(ic.tunable_buffer_size.length)],)
-    end
-    initials_buf = if ic.initials_buffer_size.length == 0
-        ()
-    else
-        (BasicSymbolic[unwrap(variable(:DEF))
-                       for _ in 1:(ic.initials_buffer_size.length)],)
-    end
+const COMMON_DEFAULT_VAR = unwrap(only(@variables __DEF__))
 
-    disc_buf = Tuple(BasicSymbolic[unwrap(variable(:DEF))
-                                   for _ in 1:(sum(x -> x.length, temp))]
-    for temp in ic.discrete_buffer_sizes)
-    const_buf = Tuple(SymbolicT[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
-    for temp in ic.constant_buffer_sizes)
-    nonnumeric_buf = Tuple(SymbolicT[unwrap(variable(:DEF)) for _ in 1:(temp.length)]
-    for temp in ic.nonnumeric_buffer_sizes)
+function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing = false, flatten = true)
+    isempty(ps) && return ()
+    result = Vector{Union{Vector{SymbolicT}, Vector{Vector{SymbolicT}}}}()
+    param_buf = fill(COMMON_DEFAULT_VAR, ic.tunable_buffer_size.length)
+    push!(result, param_buf)
+    initials_buf = fill(COMMON_DEFAULT_VAR, ic.initials_buffer_size.length)
+    push!(result, initials_buf)
+
+    disc_buf = Vector{SymbolicT}[]
+    for bufszs in ic.discrete_buffer_sizes
+        push!(disc_buf, fill(COMMON_DEFAULT_VAR, sum(x -> x.length, bufszs)))
+    end
+    const_buf = Vector{SymbolicT}[]
+    for bufsz in ic.constant_buffer_sizes
+        push!(const_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
+    end
+    nonnumeric_buf = Vector{SymbolicT}[]
+    for bufsz in ic.nonnumeric_buffer_sizes
+        push!(nonnumeric_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
+    end
+    if flatten
+        append!(result, disc_buf)
+        append!(result, const_buf)
+        append!(result, nonnumeric_buf)
+    else
+        push!(result, disc_buf)
+        push!(result, const_buf)
+        push!(result, nonnumeric_buf)
+    end
     for p in ps
-        p = unwrap(p)
         if haskey(ic.discrete_idx, p)
             idx = ic.discrete_idx[p]
             disc_buf[idx.buffer_idx][idx.idx_in_buffer] = p
         elseif haskey(ic.tunable_idx, p)
             i = ic.tunable_idx[p]
             if i isa Int
-                param_buf[1][i] = unwrap(p)
+                param_buf[i] = p
             else
-                param_buf[1][i] = unwrap.(collect(p))
+                param_buf[i] = collect(p)
             end
         elseif haskey(ic.initials_idx, p)
             i = ic.initials_idx[p]
             if i isa Int
-                initials_buf[1][i] = unwrap(p)
+                initials_buf[i] = p
             else
-                initials_buf[1][i] = unwrap.(collect(p))
+                initials_buf[i] = collect(p)
             end
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]
@@ -546,37 +554,20 @@ function reorder_parameters(ic::IndexCache, ps; drop_missing = false, flatten = 
         end
     end
 
-    param_buf = broadcast.(unwrap, param_buf)
-    initials_buf = broadcast.(unwrap, initials_buf)
-    disc_buf = broadcast.(unwrap, disc_buf)
-    const_buf = broadcast.(unwrap, const_buf)
-    nonnumeric_buf = broadcast.(unwrap, nonnumeric_buf)
-
     if drop_missing
-        filterer = !isequal(unwrap(variable(:DEF)))
-        param_buf = filter.(filterer, param_buf)
-        initials_buf = filter.(filterer, initials_buf)
-        disc_buf = filter.(filterer, disc_buf)
-        const_buf = filter.(filterer, const_buf)
-        nonnumeric_buf = filter.(filterer, nonnumeric_buf)
+        filterer = !isequal(COMMON_DEFAULT_VAR)
+        for inner in result
+            if inner isa Vector{SymbolicT}
+                filter!(filterer, inner)
+            elseif inner isa Vector{Vector{SymbolicT}}
+                for buf in inner
+                    filter!(filterer, buf)
+                end
+            end
+        end
     end
 
-    if flatten
-        result = (
-            param_buf..., initials_buf..., disc_buf..., const_buf..., nonnumeric_buf...)
-        if all(isempty, result)
-            return ()
-        end
-        return result
-    else
-        if isempty(param_buf)
-            param_buf = ((),)
-        end
-        if isempty(initials_buf)
-            initials_buf = ((),)
-        end
-        return (param_buf..., initials_buf..., disc_buf, const_buf, nonnumeric_buf)
-    end
+    return result
 end
 
 # Given a parameter index, find the index of the buffer it is in when
