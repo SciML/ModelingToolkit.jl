@@ -503,43 +503,57 @@ end
 """
 Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
 """
-function shift2term(var)
-    iscall(var) || return var
-    op = operation(var)
-    op isa Shift || return var
-    iv = op.t
-    arg = only(arguments(var))
-    if operation(arg) === getindex
-        idxs = arguments(arg)[2:end]
-        newvar = shift2term(op(first(arguments(arg))))[idxs...]
-        unshifted = ModelingToolkit.getunshifted(newvar)[idxs...]
-        newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, unshifted)
-        return newvar
+function shift2term(var::SymbolicT)
+    Moshi.Match.@match var begin
+        BSImpl.Term(f, args) && if f isa Shift end => begin
+            op = f
+            arg = args[1]
+            Moshi.Match.@match arg begin
+                BSImpl.Term(; f, args, type, shape, metadata) && if f === getindex end => begin
+                    newargs = copy(parent(args))
+                    newargs[1] = shift2term(op(newargs[1]))
+                    unshifted_args = copy(newargs)
+                    unshifted_args[1] = ModelingToolkit.getunshifted(newargs[1])
+                    unshifted = BSImpl.Term{VartypeT}(getindex, unshifted_args; type, shape, metadata)
+                    if metadata === nothing
+                        metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
+                    elseif metadata isa Base.ImmutableDict{DataType, Any}
+                        metadata = Base.ImmutableDict(metadata, VariableUnshifted, unshifted)
+                    end
+                    return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
+                end
+                _ => nothing
+            end
+            unshifted = ModelingToolkit.getunshifted(arg)
+            is_lowered = unshifted !== nothing
+            backshift = op.steps + ModelingToolkit.getshift(arg)
+            iszero(backshift) && return unshifted
+            io = IOBuffer()
+            O = (is_lowered ? unshifted : arg)::SymbolicT
+            write(io, getname(O))
+            # Char(0x209c) = ₜ
+            write(io, Char(0x209c))
+            # Char(0x208b) = ₋ (subscripted minus)
+            # Char(0x208a) = ₊ (subscripted plus)
+            pm = backshift > 0 ? Char(0x208a) : Char(0x208b)
+            write(io, pm)
+            _backshift = backshift
+            backshift = abs(backshift)
+            N = ndigits(backshift)
+            den = 10 ^ (N - 1)
+            for _ in 1:N
+                # subscripted number, e.g. ₁
+                write(io, Char(0x2080 + div(backshift, den) % 10))
+                den = div(den, 10)
+            end
+            newname = Symbol(take!(io))
+            newvar = Symbolics.rename(arg, newname)
+            newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
+            newvar = setmetadata(newvar, ModelingToolkit.VariableShift, _backshift)
+            return newvar
+        end
+        _ => return var
     end
-    is_lowered = !isnothing(ModelingToolkit.getunshifted(arg))
-
-    backshift = is_lowered ? op.steps + ModelingToolkit.getshift(arg) : op.steps
-
-    # Char(0x208b) = ₋ (subscripted minus)
-    # Char(0x208a) = ₊ (subscripted plus)
-    pm = backshift > 0 ? Char(0x208a) : Char(0x208b)
-    # subscripted number, e.g. ₁
-    num = join(Char(0x2080 + d) for d in reverse!(digits(abs(backshift))))
-    # Char(0x209c) = ₜ
-    # ds = ₜ₋₁
-    ds = join([Char(0x209c), pm, num])
-
-    O = is_lowered ? ModelingToolkit.getunshifted(arg) : arg
-    oldop = operation(O)
-    newname = backshift != 0 ? Symbol(string(nameof(oldop)), ds) :
-              Symbol(string(nameof(oldop)))
-
-    newvar = maketerm(typeof(O), Symbolics.rename(oldop, newname),
-        arguments(O), SU.metadata(O))
-    newvar = setmetadata(newvar, Symbolics.VariableSource, (:variables, newname))
-    newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
-    newvar = setmetadata(newvar, ModelingToolkit.VariableShift, backshift)
-    return newvar
 end
 
 function isdoubleshift(var)

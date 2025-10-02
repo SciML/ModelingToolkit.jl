@@ -3,17 +3,19 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion
+using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT
 import Symbolics
 using SymbolicUtils
+using SymbolicUtils: BSImpl
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: maketerm, iscall
+using SymbolicUtils: maketerm, iscall, symtype
 import SymbolicUtils as SU
+import Moshi
 
 using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
-                       unknowns, equations, vars, SymbolicT, diff2term_with_unit,
+                       unknowns, equations, vars, diff2term_with_unit,
                        shift2term_with_unit, value,
                        operation, arguments, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
@@ -28,7 +30,8 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule, schedule, iscomplete, get_schedule
+                       Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
+                       VariableShift
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -41,7 +44,7 @@ using ModelingToolkit: algeqs, EquationsView,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,
                        get_fullvars, system_subset
-using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic
+using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
