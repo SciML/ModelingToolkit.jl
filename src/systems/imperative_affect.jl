@@ -67,10 +67,10 @@ function ImperativeAffect(; f, kwargs...)
     ImperativeAffect(f; kwargs...)
 end
 
-function Symbolics.fast_substitute(aff::ImperativeAffect, rules)
-    substituter = Base.Fix2(fast_substitute, rules)
-    ImperativeAffect(aff.f, map(substituter, aff.obs), aff.obs_syms,
-        map(substituter, aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
+function (s::SymbolicUtils.Substituter)(aff::ImperativeAffect)
+    ImperativeAffect(aff.f, s(aff.obs), aff.obs_syms,
+        s(aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
+    
 end
 
 function Base.show(io::IO, mfa::ImperativeAffect)
@@ -85,10 +85,16 @@ context(a::ImperativeAffect) = a.ctx
 observed(a::ImperativeAffect) = a.obs
 observed_syms(a::ImperativeAffect) = a.obs_syms
 function discretes(a::ImperativeAffect)
-    Iterators.filter(ModelingToolkit.isparameter,
-        Iterators.flatten(Iterators.map(
-            x -> symbolic_type(x) == NotSymbolic() && x isa AbstractArray ? x : [x],
-            a.modified)))
+    discs = SymbolicT[]
+    for val in a.modified
+        val = unwrap(val)
+        if val isa SymbolicT
+            isparameter(a) && push!(discs, val)
+        elseif val isa AbstractArray
+            append!(discs, filter(isparameter, map(unwrap, val)))
+        end
+    end
+    return discs
 end
 modified(a::ImperativeAffect) = a.modified
 modified_syms(a::ImperativeAffect) = a.mod_syms

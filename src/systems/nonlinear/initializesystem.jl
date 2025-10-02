@@ -271,8 +271,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         vars!(vs, eq; op = Initial)
         allpars = full_parameters(sys)
         for p in allpars
-            if symbolic_type(p) == ArraySymbolic() &&
-               Symbolics.shape(p) != Symbolics.Unknown()
+            if symbolic_type(p) == ArraySymbolic() && SU.shape(p) isa SU.Unknown
                 append!(allpars, Symbolics.scalarize(p))
             end
         end
@@ -502,7 +501,7 @@ function get_possibly_array_fallback_singletons(varmap, p)
         return varmap[p]
     end
     if symbolic_type(p) == ArraySymbolic()
-        is_sized_array_symbolic(p) || return nothing
+        symbolic_has_known_size(p) || return nothing
         scal = collect(p)
         if all(x -> haskey(varmap, x), scal)
             res = [varmap[x] for x in scal]
@@ -824,30 +823,19 @@ Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works w
 initialization.
 """
 function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
-    subs = Dict()
-    tempvars = Set()
-    rm_idxs = Int[]
+    subs = Dict{SymbolicT, SymbolicT}()
+    mask = trues(length(obseqs))
     for (i, eq) in enumerate(obseqs)
-        iscall(eq.rhs) || continue
-        if operation(eq.rhs) == StructuralTransformations.change_origin
-            push!(rm_idxs, i)
-            continue
-        end
+        mask[i] = !iscall(eq.rhs) || operation(eq.rhs) !== StructuralTransformations.change_origin
     end
 
-    for (i, eq) in enumerate(obseqs)
-        if eq.lhs in tempvars
-            subs[eq.lhs] = eq.rhs
-            push!(rm_idxs, i)
-        end
+    obseqs = obseqs[mask]
+    for i in eachindex(obseqs)
+        obseqs[i] = fixpoint_sub(obseqs[i].lhs, subs) ~ fixpoint_sub(obseqs[i], subs)
     end
-
-    obseqs = obseqs[setdiff(eachindex(obseqs), rm_idxs)]
-    obseqs = map(obseqs) do eq
-        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
-    end
-    eqs = map(eqs) do eq
-        fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
+    eqs = copy(eqs)
+    for i in eachindex(eqs)
+        eqs[i] = fixpoint_sub(eqs[i].lhs, subs) ~ fixpoint_sub(eqs[i], subs)
     end
     return obseqs, eqs
 end

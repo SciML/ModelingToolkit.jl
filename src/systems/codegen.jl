@@ -562,7 +562,7 @@ function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression =
     cons = [con.lhs - con.rhs for con in constraints(sys)]
     # conssubs = Dict()
     # get_constraint_unknown_subs!(conssubs, cons, stidxmap, iv, sol)
-    # cons = map(x -> fast_substitute(x, conssubs), cons)
+    # cons = map(x -> substitute(x, conssubs), cons)
 
     init_conds = Any[]
     for i in u0_idxs
@@ -1066,7 +1066,7 @@ function build_explicit_observed_function(sys, ts;
             Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
-    ts = fast_substitute(ts, namespace_subs)
+    ts = substitute(ts, namespace_subs)
 
     obsfilter = if param_only
         if is_split(sys)

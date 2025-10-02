@@ -72,7 +72,7 @@ end
 Get the connection type of symbolic variable `s` from the `VariableConnectType` metadata.
 Defaults to `Equality` if not present.
 """
-function get_connection_type(s::Symbolic)
+function get_connection_type(s::SymbolicT)
     s = unwrap(s)
     if iscall(s) && operation(s) === getindex
         s = arguments(s)[1]
@@ -632,8 +632,8 @@ function returned from `generate_isouter`.
 """
 function handle_maybe_connect_equation!(eqs, state::AbstractConnectionState,
         eq::Equation, namespace::Vector{Symbol}, isouter)
-    lhs = eq.lhs
-    rhs = eq.rhs
+    lhs = value(eq.lhs)
+    rhs = value(eq.rhs)
 
     if !(lhs isa Connection)
         # split connections and equations
@@ -948,8 +948,7 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
         stream_var = only(arguments(expr))
         iscall(stream_var) && operation(stream_var) === getindex || continue
         args = arguments(stream_var)
-        new_expr = Symbolics.array_term(
-            instream, args[1]; size = size(args[1]), ndims = ndims(args[1]))[args[2:end]...]
+        new_expr = term(instream, args[1]; type = symtype(args[1]), shape = SU.shape(args[1]))[args[2:end]...]
         instream_subs[expr] = new_expr
     end
 
@@ -1116,4 +1115,4 @@ function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
                   for k in 1:M and ck.m_flow.max > 0
     =#
 end
-SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Vararg) = Real
+SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Type{T}, ::Type{S}, ::Type{R}) where {T, S, R} = Real

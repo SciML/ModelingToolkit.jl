@@ -122,7 +122,7 @@ end
 
 function MTK.lowered_var(m::InfiniteOptModel, uv, i, t)
     X = getfield(m, uv)
-    t isa Union{Num, Symbolics.Symbolic} ? X[i] : X[i](t)
+    t isa Union{Num, SymbolicT} ? X[i] : X[i](t)
 end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
@@ -256,13 +256,13 @@ for ff in [acos, log1p, acosh, log2, asin, tan, atanh, cos, log, sin, log10, sqr
 end
 
 # JuMP variables and Symbolics variables never compare equal. When tracing through dynamics, a function argument can be either a JuMP variable or A Symbolics variable, it can never be both.
-function Base.isequal(::SymbolicUtils.Symbolic,
+function Base.isequal(::SymbolicT,
         ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, InfiniteOpt.AbstractInfOptExpr})
     false
 end
 function Base.isequal(
         ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, InfiniteOpt.AbstractInfOptExpr},
-        ::SymbolicUtils.Symbolic)
+        ::SymbolicT)
     false
 end
 end

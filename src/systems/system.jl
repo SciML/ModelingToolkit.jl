@@ -46,7 +46,7 @@ struct System <: IntermediateDeprecationSystem
     this noise matrix is diagonal. Diagonal noise can be specified by providing an `N`
     length vector. If this field is `nothing`, the system does not have noise.
     """
-    noise_eqs::Union{Nothing, AbstractVector, AbstractMatrix}
+    noise_eqs::Union{Nothing, Vector{SymbolicT}, Matrix{SymbolicT}}
     """
     Jumps associated with the system. Each jump can be a `VariableRateJump`,
     `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
@@ -63,7 +63,7 @@ struct System <: IntermediateDeprecationSystem
     loss of an optimization problem. Scalar loss values must also be provided as a single-
     element vector.
     """
-    costs::Vector{<:Union{BasicSymbolic, Real}}
+    costs::Vector{SymbolicT}
     """
     A function which combines costs into a scalar value. This should take two arguments,
     the `costs` of this system and the consolidated costs of all subsystems in the order
@@ -76,25 +76,25 @@ struct System <: IntermediateDeprecationSystem
     The variables being solved for by this system. For example, in a differential equation
     system, this contains the dependent variables.
     """
-    unknowns::Vector
+    unknowns::Vector{SymbolicT}
     """
     The parameters of the system. Parameters can either be variables that parameterize the
     problem being solved for (e.g. the spring constant of a mass-spring system) or
     additional unknowns not part of the main dynamics of the system (e.g. discrete/clocked
     variables in a hybrid ODE).
     """
-    ps::Vector
+    ps::Vector{SymbolicT}
     """
     The brownian variables of the system, created via `@brownians`. Each brownian variable
     represents an independent noise. A system with brownians cannot be simulated directly.
     It needs to be compiled using `mtkcompile` into `noise_eqs`.
     """
-    brownians::Vector
+    brownians::Vector{SymbolicT}
     """
     The independent variable for a time-dependent system, or `nothing` for a time-independent
     system.
     """
-    iv::Union{Nothing, BasicSymbolic{Real}}
+    iv::Union{Nothing, SymbolicT}
     """
     Equations that compute variables of a system that have been eliminated from the set of
     unknowns by `mtkcompile`. More generally, this contains all variables that can be
@@ -117,7 +117,7 @@ struct System <: IntermediateDeprecationSystem
     A mapping from the name of a variable to the actual symbolic variable in the system.
     This is used to enable `getproperty` syntax to access variables of a system.
     """
-    var_to_name::Dict{Symbol, Any}
+    var_to_name::Dict{Symbol, SymbolicT}
     """
     The name of the system.
     """
@@ -132,11 +132,11 @@ struct System <: IntermediateDeprecationSystem
     by initial values provided to the problem constructor. Defaults of parent systems
     take priority over those in child systems.
     """
-    defaults::Dict
+    defaults::SymmapT
     """
     Guess values for variables of a system that are solved for during initialization.
     """
-    guesses::Dict
+    guesses::SymmapT
     """
     A list of subsystems of this system. Used for hierarchically building models.
     """
@@ -167,7 +167,7 @@ struct System <: IntermediateDeprecationSystem
     associated error message. By default these assertions cause the generated code to
     output `NaN`s if violated, but can be made to error using `debug_system`.
     """
-    assertions::Dict{BasicSymbolic, String}
+    assertions::Dict{SymbolicT, String}
     """
     The metadata associated with this system, as a `Base.ImmutableDict`. This follows
     the same interface as SymbolicUtils.jl. Metadata can be queried and updated using
@@ -193,12 +193,12 @@ struct System <: IntermediateDeprecationSystem
     $INTERNAL_FIELD_WARNING
     The list of input variables of the system.
     """
-    inputs::OrderedSet{BasicSymbolic}
+    inputs::OrderedSet{SymbolicT}
     """
     $INTERNAL_FIELD_WARNING
     The list of output variables of the system.
     """
-    outputs::OrderedSet{BasicSymbolic}
+    outputs::OrderedSet{SymbolicT}
     """
     The `TearingState` of the system post-simplification with `mtkcompile`.
     """
@@ -264,9 +264,9 @@ struct System <: IntermediateDeprecationSystem
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
             brownians, iv, observed, parameter_dependencies, var_to_name, name, description,
             defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
-            connector_type, assertions = Dict{BasicSymbolic, String}(),
+            connector_type, assertions = Dict{SymbolicT, String}(),
             metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
-            inputs = Set{BasicSymbolic}(), outputs = Set{BasicSymbolic}(),
+            inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
@@ -278,30 +278,38 @@ struct System <: IntermediateDeprecationSystem
             variable $iv.
             """))
         end
-        jumps = Vector{JumpType}(jumps)
-        if (checks == true || (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables([iv])
+        @assert iv === nothing || symtype(iv) === Real
+        if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
+            check_independent_variables((iv,))
             check_variables(unknowns, iv)
             check_parameters(ps, iv)
             check_equations(eqs, iv)
-            if noise_eqs !== nothing && size(noise_eqs, 1) != length(eqs)
-                throw(IllFormedNoiseEquationsError(size(noise_eqs, 1), length(eqs)))
+            Neq = length(eqs)
+            if noise_eqs isa Matrix{SymbolicT}
+                N1 = size(noise_eqs, 1)
+            elseif noise_eqs isa Vector{SymbolicT}
+                N1 = length(noise_eqs)
+            elseif noise_eqs === nothing
+                N1 = Neq
+            else
+                error()
             end
+            N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
         end
-        if checks == true || (checks & CheckUnits) > 0
-            u = __get_unit_type(unknowns, ps, iv)
-            if noise_eqs === nothing
-                check_units(u, eqs)
-            else
-                check_units(u, eqs, noise_eqs)
-            end
-            if iv !== nothing
-                check_units(u, jumps, iv)
-            end
-            isempty(constraints) || check_units(u, constraints)
-        end
+        # if checks == true || (checks & CheckUnits) > 0
+        #     u = __get_unit_type(unknowns, ps, iv)
+        #     if noise_eqs === nothing
+        #         check_units(u, eqs)
+        #     else
+        #         check_units(u, eqs, noise_eqs)
+        #     end
+        #     if iv !== nothing
+        #         check_units(u, jumps, iv)
+        #     end
+        #     isempty(constraints) || check_units(u, constraints)
+        # end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
             observed, parameter_dependencies, var_to_name, name, description, defaults,
@@ -320,6 +328,24 @@ function default_consolidate(costs, subcosts)
     return reduce(+, costs; init = 0.0) + reduce(+, subcosts; init = 0.0)
 end
 
+unwrap_vars(vars::AbstractArray{SymbolicT}) = vars
+function unwrap_vars(vars::AbstractArray)
+    result = similar(vars, SymbolicT)
+    for i in eachindex(vars)
+        result[i] = SU.Const{VartypeT}(vars[i])
+    end
+    return result
+end
+
+defsdict(x::SymmapT) = x
+function defsdict(x::AbstractDict)
+    result = SymmapT()
+    for (k, v) in x
+        result[unwrap(k)] = SU.Const{VartypeT}(v)
+    end
+    return result
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -336,71 +362,77 @@ for time-independent systems, unknowns `dvs`, parameters `ps` and brownian varia
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
 """
-function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
-        constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = [],
-        costs = BasicSymbolic[], consolidate = default_consolidate,
-        observed = Equation[], parameter_dependencies = Equation[], defaults = Dict(),
-        guesses = Dict(), systems = System[], initialization_eqs = Equation[],
+function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
+        constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
+        costs = SymbolicT[], consolidate = default_consolidate,
+        observed = Equation[], parameter_dependencies = Equation[], defaults = SymmapT(),
+        guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
-        connector_type = nothing, assertions = Dict{BasicSymbolic, String}(),
+        connector_type = nothing, assertions = Dict{SymbolicT, String}(),
         metadata = MetadataT(), gui_metadata = nothing,
-        is_dde = nothing, tstops = [], inputs = OrderedSet{BasicSymbolic}(),
-        outputs = OrderedSet{BasicSymbolic}(), tearing_state = nothing,
+        is_dde = nothing, tstops = [], inputs = OrderedSet{SymbolicT}(),
+        outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         preface = [], checks = true)
     name === nothing && throw(NoNameError())
+
+    if !(eqs isa Vector{Equation})
+        eqs = Equation[eqs]
+    end
+    eqs = eqs::Vector{Equation}
+
     if !isempty(parameter_dependencies)
-        @warn """
-        The `parameter_dependencies` keyword argument is deprecated. Please provide all
-        such equations as part of the normal equations of the system.
-        """
-        eqs = Equation[eqs; parameter_dependencies]
+        @invokelatest warn_pdeps()
+        append!(eqs, parameter_dependencies)
     end
 
     iv = unwrap(iv)
-    ps = unwrap.(ps)
-    dvs = unwrap.(dvs)
-    filter!(!Base.Fix2(isdelay, iv), dvs)
-    brownians = unwrap.(brownians)
-
-    if !(eqs isa AbstractArray)
-        eqs = [eqs]
+    ps = vec(unwrap_vars(ps))
+    dvs = vec(unwrap_vars(dvs))
+    if iv !== nothing
+        filter!(!Base.Fix2(isdelay, iv), dvs)
     end
+    brownians = unwrap_vars(brownians)
 
     if noise_eqs !== nothing
-        noise_eqs = unwrap.(noise_eqs)
+        noise_eqs = unwrap_vars(noise_eqs)
     end
 
-    costs = unwrap.(costs)
-    if isempty(costs)
-        costs = Union{BasicSymbolic, Real}[]
-    end
+    costs = vec(unwrap_vars(costs))
 
-    defaults = anydict(defaults)
-    guesses = anydict(guesses)
-    inputs = OrderedSet{BasicSymbolic}(inputs)
-    outputs = OrderedSet{BasicSymbolic}(outputs)
+    defaults = defsdict(defaults)
+    guesses = defsdict(guesses)
+    if !(inputs isa OrderedSet{SymbolicT})
+        inputs = OrderedSet{SymbolicT}(inputs)
+    end
+    if !(outputs isa OrderedSet{SymbolicT})
+        outputs = OrderedSet{SymbolicT}(outputs)
+    end
     for subsys in systems
-        for var in ModelingToolkit.inputs(subsys)
+        for var in get_inputs(subsys)
             push!(inputs, renamespace(subsys, var))
         end
-        for var in ModelingToolkit.outputs(subsys)
+        for var in get_outputs(subsys)
             push!(outputs, renamespace(subsys, var))
         end
     end
-    var_to_name = anydict()
+    var_to_name = Dict{Symbol, SymbolicT}()
 
-    let defaults = discover_from_metadata ? defaults : Dict(),
-        guesses = discover_from_metadata ? guesses : Dict(),
-        inputs = discover_from_metadata ? inputs : Set(),
-        outputs = discover_from_metadata ? outputs : Set()
+    let defaults = discover_from_metadata ? defaults : SymmapT(),
+        guesses = discover_from_metadata ? guesses : SymmapT(),
+        inputs = discover_from_metadata ? inputs : OrderedSet{SymbolicT}(),
+        outputs = discover_from_metadata ? outputs : OrderedSet{SymbolicT}()
 
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
-        process_variables!(var_to_name, defaults, guesses, [eq.lhs for eq in observed])
-        process_variables!(var_to_name, defaults, guesses, [eq.rhs for eq in observed])
+        buffer = SymbolicT[]
+        for eq in observed
+            push!(buffer, eq.lhs)
+            push!(buffer, eq.rhs)
+        end
+        process_variables!(var_to_name, defaults, guesses, buffer)
 
         for var in dvs
             if isinput(var)
@@ -410,15 +442,12 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
             end
         end
     end
-    filter!(!(isnothing ∘ last), defaults)
-    filter!(!(isnothing ∘ last), guesses)
-    defaults = anydict([unwrap(k) => unwrap(v) for (k, v) in defaults])
-    guesses = anydict([unwrap(k) => unwrap(v) for (k, v) in guesses])
+    filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), defaults)
+    filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
-    sysnames = nameof.(systems)
-    unique_sysnames = Set(sysnames)
-    if length(unique_sysnames) != length(sysnames)
-        throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
+
+    if !allunique(map(nameof, systems))
+        nonunique_subsystems(systems)
     end
     continuous_events,
     discrete_events = create_symbolic_events(
@@ -432,7 +461,10 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         is_dde = _check_if_dde(eqs, iv, systems)
     end
 
-    assertions = Dict{BasicSymbolic, String}(unwrap(k) => v for (k, v) in assertions)
+    _assertions = Dict{SymbolicT, String}
+    for (k, v) in assertions
+        _assertions[unwrap(k)::SymbolicT] = v
+    end
 
     if isempty(metadata)
         metadata = MetadataT()
@@ -446,6 +478,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         metadata = meta
     end
     metadata = refreshed_metadata(metadata)
+    jumps = Vector{JumpType}(jumps)
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
@@ -454,6 +487,21 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
         nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
 end
+
+@noinline function nonunique_subsystems(systems)
+    sysnames = nameof.(systems)
+    unique_sysnames = Set(sysnames)
+    throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
+end
+
+@noinline function warn_pdeps()
+    @warn """
+    The `parameter_dependencies` keyword argument is deprecated. Please provide all
+    such equations as part of the normal equations of the system.
+    """
+end
+
+SymbolicIndexingInterface.getname(x::System) = nameof(x)
 
 """
     $(TYPEDSIGNATURES)
@@ -481,7 +529,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     diffeqs = Equation[]
     othereqs = Equation[]
     for eq in eqs
-        if !(eq.lhs isa Union{Symbolic, Number, AbstractArray})
+        if !(eq.lhs isa Union{SymbolicT, Number, AbstractArray})
             push!(othereqs, eq)
             continue
         end
@@ -608,15 +656,13 @@ function gather_array_params(ps)
     for p in ps
         if iscall(p) && operation(p) === getindex
             par = arguments(p)[begin]
-            if Symbolics.shape(Symbolics.unwrap(par)) !== Symbolics.Unknown() &&
-               all(par[i] in ps for i in eachindex(par))
+            if symbolic_has_known_size(p) && all(par[i] in ps for i in eachindex(par))
                 push!(new_ps, par)
             else
                 push!(new_ps, p)
             end
         else
-            if symbolic_type(p) == ArraySymbolic() &&
-               Symbolics.shape(unwrap(p)) != Symbolics.Unknown()
+            if symbolic_type(p) == ArraySymbolic() && symbolic_has_known_size(p)
                 for i in eachindex(p)
                     delete!(new_ps, p[i])
                 end
@@ -677,7 +723,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
     for var in auxvars
         if !iscall(var)
-            occursin(iv, var) && (var ∈ sts ||
+            SU.query!(isequal(iv), var) && (var ∈ sts ||
              throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
@@ -722,19 +768,15 @@ differential equations.
 """
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 
-function _check_if_dde(eqs, iv, subsystems)
-    is_dde = any(ModelingToolkit.is_dde, subsystems)
-    if !is_dde
-        vs = Set()
-        for eq in eqs
-            vars!(vs, eq)
-            is_dde = any(vs) do sym
-                isdelay(unwrap(sym), iv)
-            end
-            is_dde && break
-        end
+_check_if_dde(eqs::Vector{Equation}, iv::Nothing, subsystems::Vector{System}) = false
+function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{System})
+    any(ModelingToolkit.is_dde, subsystems) && return true
+    pred = Base.Fix2(isdelay, iv)
+    for eq in eqs
+        SU.query!(pred, eq.lhs) && return true
+        SU.query!(pred, eq.rhs) && return true
     end
-    return is_dde
+    return false
 end
 
 """
@@ -896,7 +938,7 @@ function NonlinearSystem(sys::System)
         subrules[var] = 0.0
     end
     eqs = map(eqs) do eq
-        fast_substitute(eq, subrules)
+        substitute(eq, subrules)
     end
     nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
         defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),

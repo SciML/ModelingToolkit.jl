@@ -97,7 +97,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     nvs_orig = ndsts(graph_orig)
     for ieq in eqs_to_update
         eq = eqs[ieq]
-        eqs[ieq] = fast_substitute(eq, subs)
+        eqs[ieq] = substitute(eq, subs)
     end
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
@@ -411,7 +411,7 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, unknowns; check = true)
+function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
     graph, assigns = observed2graph(eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
@@ -426,20 +426,20 @@ function topsort_equations(eqs, unknowns; check = true)
 
     q = Queue{Int}(neqs)
     for (i, d) in enumerate(degrees)
-        d == 0 && enqueue!(q, i)
+        d == 0 && push!(q, i)
     end
 
     idx = 0
     ordered_eqs = similar(eqs, 0)
     sizehint!(ordered_eqs, neqs)
     while !isempty(q)
-        𝑠eq = dequeue!(q)
+        𝑠eq = popfirst!(q)
         idx += 1
         push!(ordered_eqs, eqs[𝑠eq])
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
-            degree == 0 && enqueue!(q, 𝑑eq)
+            degree == 0 && push!(q, 𝑑eq)
         end
     end
 
@@ -448,22 +448,25 @@ function topsort_equations(eqs, unknowns; check = true)
     return ordered_eqs
 end
 
-function observed2graph(eqs, unknowns)
+function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
     graph = BipartiteGraph(length(eqs), length(unknowns))
-    v2j = Dict(unknowns .=> 1:length(unknowns))
+    v2j = Dict{SymbolicT, Int}(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
-
+    vars = Set{SymbolicT}()
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
             throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
-        vs = vars(eq.rhs; op = Symbolics.Operator)
-        for v in vs
+        empty!(vars)
+        SU.search_variables!(vars, eq.rhs; is_atomic = OperatorIsAtomic{SU.Operator}())
+        for v in vars
             j = get(v2j, v, nothing)
-            j !== nothing && add_edge!(graph, i, j)
+            if j isa Int
+                add_edge!(graph, i, j)
+            end
         end
     end
 

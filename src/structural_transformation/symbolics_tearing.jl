@@ -65,7 +65,7 @@ function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
 
     sys = ts.sys
     eq = equations(ts)[ieq]
-    eq = 0 ~ fast_substitute(
+    eq = 0 ~ substitute(
         ModelingToolkit.derivative(
             eq.rhs - eq.lhs, get_iv(sys); throw_no_derivative = true), ts.param_derivative_map)
 
@@ -108,7 +108,7 @@ end
 
 function solve_equation(eq, var, simplify)
     rhs = value(symbolic_linear_solve(eq, var; simplify = simplify, check = false))
-    occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
+    SU.query!(in(var), rhs) && throw(EquationSolveErrors(eq, var, rhs))
     var ~ rhs
 end
 
@@ -144,7 +144,7 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
         eq = 0 ~ eq.rhs - eq.lhs
     end
     rhs = eq.rhs
-    if rhs isa Symbolic
+    if rhs isa SymbolicT
         # Check if the RHS is solvable in all unknown variable derivatives and if those
         # the linear terms for them are all zero. If so, move them to the
         # LHS.
@@ -217,7 +217,7 @@ function substitute_derivatives_algevars!(
             v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
-                neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)
+                neweqs[eq] = substitute(neweqs[eq], dd => v_t)
             end
             fullvars[dv] = v_t
             # If we have:
@@ -230,7 +230,7 @@ function substitute_derivatives_algevars!(
             while (ddx = var_to_diff[dx]) !== nothing
                 dx_t = D(x_t)
                 for eq in 𝑑neighbors(graph, ddx)
-                    neweqs[eq] = fast_substitute(neweqs[eq], fullvars[ddx] => dx_t)
+                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dx_t)
                 end
                 fullvars[ddx] = dx_t
                 dx = ddx
@@ -961,8 +961,8 @@ function update_simplified_system!(
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = [fast_substitute(observed(sys), obs_sub); solved_eqs;
-           fast_substitute(state.additional_observed, obs_sub)]
+    obs = [substitute(observed(sys), obs_sub); solved_eqs;
+           substitute(state.additional_observed, obs_sub)]
 
     unknown_idxs = filter(
         i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars), eachindex(state.fullvars))
@@ -1189,7 +1189,7 @@ end
 Backshift the given expression `ex`.
 """
 function backshift_expr(ex, iv)
-    ex isa Symbolic || return ex
+    ex isa SymbolicT || return ex
     return descend_lower_shift_varname_with_unit(
         simplify_shifts(distribute_shift(Shift(iv, -1)(ex))), iv)
 end
@@ -1251,7 +1251,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
         array || continue
         iscall(lhs) || continue
         operation(lhs) === getindex || continue
-        Symbolics.shape(lhs) != Symbolics.Unknown() || continue
+        SU.shape(lhs) isa SU.Unknown && continue
         arg1 = arguments(lhs)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
         arr_obs_occurrences[arg1] = cnt + 1
@@ -1264,7 +1264,7 @@ function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     for sym in unknowns
         iscall(sym) || continue
         operation(sym) === getindex || continue
-        Symbolics.shape(sym) != Symbolics.Unknown() || continue
+        SU.shape(sym) isa SU.Unknown && continue
         arg1 = arguments(sym)[1]
         cnt = get(arr_obs_occurrences, arg1, 0)
         cnt == 0 && continue

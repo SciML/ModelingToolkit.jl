@@ -20,7 +20,7 @@ function detime_dvs(op)
     if !iscall(op)
         op
     elseif issym(operation(op))
-        Sym{Real}(nameof(operation(op)))
+        SSym(nameof(operation(op)); type = Real, shape = SU.ShapeVecT())
     else
         maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
             metadata(op))
@@ -33,7 +33,7 @@ end
 Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
-    issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
+    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
     iscall(op) ?
     maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
         metadata(op)) :
@@ -84,7 +84,7 @@ end
 function readable_code(expr)
     expr = Base.remove_linenums!(_readable_code(expr))
     rec_remove_macro_linenums!(expr)
-    JuliaFormatter.format_text(string(expr), JuliaFormatter.SciMLStyle())
+    return string(expr)
 end
 
 # System validation enums
@@ -117,9 +117,12 @@ const CheckUnits = 1 << 2
 
 function check_independent_variables(ivs)
     for iv in ivs
-        isparameter(iv) ||
-            @warn "Independent variable $iv should be defined with @independent_variables $iv."
+        isparameter(iv) || @invokelatest warn_indepvar(iv)
     end
+end
+
+@noinline function warn_indepvar(iv::SymbolicT)
+    @warn "Independent variable $iv should be defined with @independent_variables $iv."
 end
 
 function check_parameters(ps, iv)
@@ -129,29 +132,23 @@ function check_parameters(ps, iv)
     end
 end
 
-function is_delay_var(iv, var)
-    if Symbolics.isarraysymbolic(var)
-        return is_delay_var(iv, first(collect(var)))
+function is_delay_var(iv::SymbolicT, var::SymbolicT)
+    Moshi.Match.@match var begin
+        BSImpl.Term(; f, args) => begin
+            length(args) > 1 && return false
+            arg = args[1]
+            isequal(arg, iv) && return false
+            return symtype(arg) <: Real
+        end
+        _ => false
     end
-    args = nothing
-    try
-        args = arguments(var)
-    catch
-        return false
-    end
-    length(args) > 1 && return false
-    isequal(first(args), iv) && return false
-    delay = iv - first(args)
-    delay isa Integer ||
-        delay isa AbstractFloat ||
-        (delay isa Num && isreal(value(delay)))
 end
 
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) &&
             throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        (is_delay_var(iv, dv) || occursin(iv, dv)) ||
+        (is_delay_var(iv, dv) || SU.query!(isequal(iv), dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
@@ -187,20 +184,35 @@ function collect_ivs(eqs, op = Differential)
     return ivs
 end
 
+struct IndepvarCheckPredicate
+    iv::SymbolicT
+end
+
+function (icp::IndepvarCheckPredicate)(ex::SymbolicT)
+    Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Differential end => begin
+            f = f::Differential
+            isequal(f.x, icp.iv) || throw_multiple_iv(icp.iv, f.x)
+            return false
+        end
+        _ => false
+    end
+end
+
+@noinline function throw_multiple_iv(iv, newiv)
+    throw(ArgumentError("Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
+end
+
 """
     check_equations(eqs, iv)
 
 Assert that equations are well-formed when building ODE, i.e., only containing a single independent variable.
 """
-function check_equations(eqs, iv)
-    ivs = collect_ivs(eqs)
-    display = collect(ivs)
-    length(ivs) <= 1 ||
-        throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
-    if length(ivs) == 1
-        single_iv = pop!(ivs)
-        isequal(single_iv, iv) ||
-            throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
+function check_equations(eqs::Vector{Equation}, iv::SymbolicT)
+    icp = IndepvarCheckPredicate(iv)
+    for eq in eqs
+        SU.query!(icp, eq.lhs)
+        SU.query!(icp, eq.rhs)
     end
 end
 
@@ -211,10 +223,12 @@ Assert that the subsystems have the appropriate namespacing behavior.
 """
 function check_subsystems(systems)
     idxs = findall(!does_namespacing, systems)
-    if !isempty(idxs)
-        names = join("  " .* string.(nameof.(systems[idxs])), "\n")
-        throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
-    end
+    isempty(idxs) || throw_bad_namespacing(systems, idxs)
+end
+
+@noinline function throw_bad_namespacing(systems, idxs)
+    names = join("  " .* string.(nameof.(systems[idxs])), "\n")
+    throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))
 end
 
 """
@@ -271,57 +285,51 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
-function process_variables!(var_to_name, defs, guesses, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
     collect_defaults!(defs, vars)
     collect_guesses!(guesses, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function process_variables!(var_to_name, defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, vars::Vector{SymbolicT})
     collect_defaults!(defs, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function collect_defaults!(defs, vars)
+function collect_defaults!(defs::SymmapT, vars::Vector{SymbolicT})
     for v in vars
-        symbolic_type(v) == NotSymbolic() && continue
-        if haskey(defs, v) || !hasdefault(unwrap(v)) || (def = getdefault(v)) === nothing
+        isconst(v) && continue
+        if haskey(defs, v) || (def = Symbolics.getdefaultval(v, nothing)) === nothing
             continue
         end
-        defs[v] = getdefault(v)
+        defs[v] = SU.Const{VartypeT}(def)
     end
     return defs
 end
 
-function collect_guesses!(guesses, vars)
+function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     for v in vars
+        isconst(v) && continue
         symbolic_type(v) == NotSymbolic() && continue
-        if haskey(guesses, v) || !hasguess(unwrap(v)) || (def = getguess(v)) === nothing
+        if haskey(guesses, v) || (def = getguess(v)) === nothing
             continue
         end
-        guesses[v] = getguess(v)
+        guesses[v] = SU.Const{VartypeT}(def)
     end
     return guesses
 end
 
-function collect_var_to_name!(vars, xs)
+function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
-        symbolic_type(x) == NotSymbolic() && continue
-        x = unwrap(x)
-        if hasmetadata(x, Symbolics.GetindexParent)
-            xarr = getmetadata(x, Symbolics.GetindexParent)
-            hasname(xarr) || continue
-            vars[Symbolics.getname(xarr)] = xarr
-        else
-            if iscall(x) && operation(x) === getindex
-                x = arguments(x)[1]
-            end
-            x = unwrap(x)
-            hasname(x) || continue
-            vars[Symbolics.getname(unwrap(x))] = x
+        x = Moshi.Match.@match x begin
+            BSImpl.Const(;) => continue
+            BSImpl.Term(; f, args) && if f === getindex end => args[1]
+            _ => x
         end
+        hasname(x) || continue
+        vars[getname(x)] = x
     end
 end
 
@@ -329,9 +337,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Difference
-        error("The Difference operator is deprecated, use ShiftIndex instead")
-    elseif op === Differential
+    if op === Differential
         optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
@@ -388,11 +394,9 @@ isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
-function isvariable(x)::Bool
-    x isa Symbolic || return false
-    p = getparent(x, nothing)
-    p === nothing || (x = p)
-    hasmetadata(x, VariableSource)
+function isvariable(x)
+    x isa SymbolicT || return false
+    hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])::Bool
 end
 
 """
@@ -412,7 +416,7 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-function vars(exprs::Symbolic; op = Differential)
+function vars(exprs::SymbolicT; op = Differential)
     iscall(exprs) ? vars([exprs]; op = op) : Set([exprs])
 end
 vars(exprs::Num; op = Differential) = vars(unwrap(exprs); op)
@@ -522,13 +526,10 @@ ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
 
 The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
 """
-function collect_applied_operators(x, op)
-    v = vars(x, op = op)
-    filter(v) do x
-        issym(x) && return false
-        iscall(x) && return operation(x) isa op
-        false
-    end
+function collect_applied_operators(x::SymbolicT, ::Type{op}) where {op}
+    v = Set{SymbolicT}()
+    SU.search_variables!(v, x; is_atomic = OnlyOperatorIsAtomic{op}())
+    return v
 end
 
 """
@@ -539,12 +540,12 @@ Search through equations and parameter dependencies of `sys`, where sys is at a 
 recursively searches through all subsystems of `sys`, increasing the depth if it is not
 `-1`. A depth of `-1` indicates searching for variables with `GlobalScope`.
 """
-function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
+function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, sys::AbstractSystem, iv::Union{SymbolicT, Nothing}; depth = 1, op = Differential)
     if has_eqs(sys)
         for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
             if eq isa Equation
-                eq.lhs isa Union{Symbolic, Number} || continue
+                symtype(eq.lhs) <: Number || continue
             end
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
@@ -618,6 +619,24 @@ function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
     end
 end
 
+struct OnlyOperatorIsAtomic{O} end
+
+function (::OnlyOperatorIsAtomic{O})(ex::SymbolicT) where {O}
+    Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa O end => true
+        _ => false
+    end
+end
+
+struct OperatorIsAtomic{O} end
+
+function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
+    SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Operator end => f isa O
+        _ => true
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -632,16 +651,27 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
-    if issym(expr)
-        return collect_var!(unknowns, parameters, expr, iv; depth)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+    Moshi.Match.@match expr begin
+        BSImpl.Const(;) => return
+        BSImpl.Sym(;) => return collect_var!(unknowns, parameters, expr, iv; depth)
+        _ => nothing
     end
-    for var in vars(expr; op)
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
+    for var in vars
         while iscall(var) && operation(var) isa op
             validate_operator(operation(var), arguments(var), iv; context = expr)
             var = arguments(var)[1]
         end
         collect_var!(unknowns, parameters, var, iv; depth)
+    end
+    return nothing
+end
+
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray{SymbolicT}, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+    for var in expr
+        collect_vars!(unknowns, parameters, var, iv; depth, op)
     end
     return nothing
 end
@@ -687,11 +717,11 @@ function collect_var!(unknowns, parameters, var, iv; depth = 0)
         Encountered a wrapped value in `collect_var!`. This function should only ever \
         receive unwrapped symbolic variables. This is likely a bug in the code generating \
         an expression passed to `collect_vars!` or `collect_scoped_vars!`. A common cause \
-        is using `substitute` or `fast_substitute` with rules where the values are \
+        is using `substitute` with rules where the values are \
         wrapped symbolic variables.
         """)
     end
-    check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
+    check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
@@ -719,7 +749,7 @@ function check_scope_depth(scope, depth)
     if scope isa LocalScope
         return depth == 0
     elseif scope isa ParentScope
-        return depth > 0 && check_scope_depth(scope.parent, depth - 1)
+        return depth > 0 && check_scope_depth(scope.parent, depth - 1)::Bool
     elseif scope isa GlobalScope
         return depth == -1
     end
@@ -803,7 +833,7 @@ end
 
 function _with_unit(f, x, t, args...)
     x = f(x, args...)
-    if hasmetadata(x, VariableUnit) && (t isa Symbolic && hasmetadata(t, VariableUnit))
+    if hasmetadata(x, VariableUnit) && (t isa SymbolicT && hasmetadata(t, VariableUnit))
         xu = getmetadata(x, VariableUnit)
         tu = getmetadata(t, VariableUnit)
         x = setmetadata(x, VariableUnit, xu / tu)
@@ -833,8 +863,8 @@ end
 Check if `T` is an appropriate symtype for a symbolic variable representing a floating
 point number or array of such numbers.
 """
-function is_floatingpoint_symtype(T::Type)
-    return T == Real || T == Number || T == Complex || T <: AbstractFloat ||
+function is_floatingpoint_symtype(T)
+    return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
            T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
@@ -978,7 +1008,7 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     end
     any(isequal(expr), vars) && return expr
     iscall(expr) || return expr
-    Symbolics.shape(expr) == Symbolics.Unknown() && return expr
+    symbolic_has_known_size(expr) || return expr
     haskey(state, expr) && return state[expr]
     op = operation(expr)
     args = arguments(expr)
@@ -1069,7 +1099,7 @@ function var_in_varlist(var, varlist::AbstractSet, iv)
            # indexed array symbolic, unscalarized array present
            (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
            # unscalarized sized array symbolic, all scalarized elements present
-           (symbolic_type(var) == ArraySymbolic() && is_sized_array_symbolic(var) &&
+           (symbolic_type(var) == ArraySymbolic() && symbolic_has_known_size(var) &&
             all(x -> x in varlist, collect(var))) ||
            # delayed variables
            (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))

@@ -49,6 +49,13 @@ See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@re
 """
 unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 
+function _is_atomic_inside_operator(ex::SymbolicT)
+    SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Operator end => false
+        _ => true
+    end
+end
+
 """
     is_bound(sys, u)
 
@@ -75,8 +82,11 @@ function is_bound(sys, u, stack = [])
     eqs = equations(sys)
     eqs = filter(eq -> has_var(eq, u), eqs) # Only look at equations that contain u
     # isout = isoutput(u)
+    vars = Set{SymbolicT}()
     for eq in eqs
-        vars = [get_variables(eq.rhs); get_variables(eq.lhs)]
+        empty!(vars)
+        get_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
+        get_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
         for var in vars
             var === u && continue
             if !same_or_inner_namespace(u, var)
@@ -88,7 +98,9 @@ function is_bound(sys, u, stack = [])
     oeqs = observed(sys)
     oeqs = filter(eq -> has_var(eq, u), oeqs) # Only look at equations that contain u
     for eq in oeqs
-        vars = [get_variables(eq.rhs); get_variables(eq.lhs)]
+        empty!(vars)
+        get_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
+        get_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
         for var in vars
             var === u && continue
             if !same_or_inner_namespace(u, var)
@@ -312,7 +324,7 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     @set! structure.graph = complete(new_graph)
 
     @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
-                    fast_substitute(equations(sys), input_to_parameters)
+                    substitute(equations(sys), input_to_parameters)
     @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
     ps = parameters(sys)
 

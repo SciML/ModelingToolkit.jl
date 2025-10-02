@@ -53,7 +53,7 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     end
 end
 
-function pysym_getproperty(s::Union{Num, Symbolics.Symbolic}, name::Symbol)
+function pysym_getproperty(s::Union{Num, SymbolicT}, name::Symbol)
     Symbolics.wrap(SymbolicUtils.term(
         _getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}))
 end
@@ -112,7 +112,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
         Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = false)
 
     cons_sym = Symbol("cons", hash(cons))
-    if occursin(Symbolics.unwrap(t_sym), expr)
+    if SU.query!(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         setproperty!(model, cons_sym, pyomo.Constraint(model.t, rule = Pyomo.pyfunc(f)))
     else
@@ -124,7 +124,7 @@ end
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = false)
-    if occursin(Symbolics.unwrap(t_sym), expr)
+    if SU.query!(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
     else
@@ -165,7 +165,7 @@ end
 
 function MTK.lowered_var(m::PyomoDynamicOptModel, uv, i, t)
     X = Symbolics.value(pysym_getproperty(m.model_sym, uv))
-    var = t isa Union{Num, Symbolics.Symbolic} ? X[i, m.t_sym] : X[i, t]
+    var = t isa Union{Num, SymbolicT} ? X[i, m.t_sym] : X[i, t]
     Symbolics.unwrap(var)
 end
 

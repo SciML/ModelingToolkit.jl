@@ -25,19 +25,19 @@ Check if the variable contains the metadata identifying it as a parameter.
 function isparameter(x)
     x = unwrap(x)
 
-    if x isa Symbolic && (varT = getvariabletype(x, nothing)) !== nothing
+    if x isa SymbolicT && (varT = getvariabletype(x, nothing)) !== nothing
         return varT === PARAMETER
         #TODO: Delete this branch
-    elseif x isa Symbolic && Symbolics.getparent(x, false) !== false
-        p = Symbolics.getparent(x)
+    elseif x isa SymbolicT && iscall(x) && operation(x) === getindex
+        p = arguments(x)[1]
         isparameter(p) ||
             (hasmetadata(p, Symbolics.VariableSource) &&
              getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
-    elseif iscall(x) && operation(x) isa Symbolic
+    elseif iscall(x) && operation(x) isa SymbolicT
         varT === PARAMETER || isparameter(operation(x))
     elseif iscall(x) && operation(x) == (getindex)
         isparameter(arguments(x)[1])
-    elseif x isa Symbolic
+    elseif x isa SymbolicT
         varT === PARAMETER
     else
         false
@@ -46,17 +46,13 @@ end
 
 function iscalledparameter(x)
     x = unwrap(x)
-    return isparameter(getmetadata(x, CallWithParent, nothing))
+    return SymbolicUtils.is_called_function_symbolic(x) && isparameter(operation(x))
 end
 
 function getcalledparameter(x)
     x = unwrap(x)
-    # `parent` is a `CallWithMetadata` with the correct metadata,
-    # but no namespacing. `operation(x)` has the correct namespacing,
-    # but is not a `CallWithMetadata` and doesn't have any metadata.
-    # This approach combines both.
-    parent = getmetadata(x, CallWithParent)
-    return CallWithMetadata(operation(x), metadata(parent))
+    @assert iscalledparameter(x)
+    return operation(x)
 end
 
 """
@@ -80,7 +76,7 @@ toparam(s::Num) = wrap(toparam(value(s)))
 
 Maps the variable to an unknown.
 """
-tovar(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
+tovar(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
 tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 
 """
@@ -91,10 +87,10 @@ Define one or more known parameters.
 See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
 macro parameters(xs...)
-    Symbolics._parse_vars(:parameters,
+    Symbolics.parse_vars(:parameters,
         Real,
         xs,
-        toparam) |> esc
+        toparam)
 end
 
 function find_types(array)

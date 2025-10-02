@@ -201,8 +201,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 
     @named pi_model = PiModel()
 
-    @test typeof(ModelingToolkit.getdefault(pi_model.p)) <:
-          SymbolicUtils.BasicSymbolic{Irrational}
+    @test symtype(ModelingToolkit.getdefault(pi_model.p)) <: Irrational
     @test getdefault(getdefault(pi_model.p)) == π
 end
 
@@ -1007,7 +1006,7 @@ end
     vars = Symbolics.get_variables(only(equations(ex)))
     @test length(vars) == 2
     for u in Symbolics.unwrap.(unknowns(ex))
-        @test !Symbolics.hasmetadata(u, Symbolics.CallWithParent)
+        @test !SymbolicUtils.is_function_symbolic(u)
         @test any(isequal(u), vars)
     end
 end

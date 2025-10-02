@@ -3,18 +3,21 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, fast_substitute
+using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT
 import Symbolics
 using SymbolicUtils
+using SymbolicUtils: BSImpl
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
 using SymbolicUtils: maketerm, iscall
+import SymbolicUtils as SU
+import Moshi
 
 using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
-                       unknowns, equations, vars, Symbolic, diff2term_with_unit,
+                       unknowns, equations, vars, diff2term_with_unit,
                        shift2term_with_unit, value,
-                       operation, arguments, Sym, Term, simplify, symbolic_linear_solve,
+                       operation, arguments, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,
@@ -27,7 +30,8 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
-                       Schedule, schedule, iscomplete, get_schedule
+                       Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
+                       VariableShift
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -40,7 +44,7 @@ using ModelingToolkit: algeqs, EquationsView,
                        dervars_range, diffvars_range, algvars_range,
                        DiffGraph, complete!,
                        get_fullvars, system_subset
-using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic
+using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays

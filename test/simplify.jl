@@ -1,5 +1,7 @@
 using ModelingToolkit
 using ModelingToolkit: value
+using Symbolics: STerm
+import SymbolicUtils
 using Test
 
 @independent_variables t
@@ -11,7 +13,7 @@ null_op = 0 * t
 one_op = 1 * t
 @test isequal(simplify(one_op), t)
 
-identity_op = Num(Term(identity, [value(x)]))
+identity_op = Num(STerm(identity, [value(x)]; type = Real, shape = SymbolicUtils.ShapeVecT()))
 @test isequal(simplify(identity_op), x)
 
 minus_op = -x

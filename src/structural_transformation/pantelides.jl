@@ -37,7 +37,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         # LHS variable is looked up from var_to_diff
         # the var_to_diff[i]-th variable is the differentiated version of var at i
         eq = out_eqs[eqidx]
-        lhs = if !(eq.lhs isa Symbolic)
+        lhs = if !(eq.lhs isa SymbolicT)
             0
         elseif isdiffeq(eq)
             # look up the variable that represents D(lhs)
@@ -54,9 +54,9 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
             D(eq.lhs)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
-        rhs = fast_substitute(rhs, state.param_derivative_map)
+        rhs = substitute(rhs, state.param_derivative_map)
         substitution_dict = Dict(x.lhs => x.rhs
-        for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
+        for x in out_eqs if x !== nothing && x.lhs isa SymbolicT)
         sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[diff] = lhs ~ sub_rhs
     end

@@ -1,11 +1,11 @@
 using DataStructures
 using Symbolics: linear_expansion, unwrap
-using SymbolicUtils: iscall, operation, arguments, Symbolic
+using SymbolicUtils: iscall, operation, arguments
 using SymbolicUtils: quick_cancel, maketerm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, Connection,
+                          isparameter, Connection, SymbolicT
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           InferredTimeDomain,
@@ -304,7 +304,7 @@ end
 function symbolic_contains(var, set)
     var in set ||
         symbolic_type(var) == ArraySymbolic() &&
-        Symbolics.shape(var) != Symbolics.Unknown() &&
+        symbolic_has_known_size(var) &&
         all(x -> x in set, Symbolics.scalarize(var))
 end
 
@@ -372,10 +372,10 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
             union!(dvs, xx)
         end
     end
-    ps = Set{Symbolic}()
+    ps = Set{SymbolicT}()
     for x in full_parameters(sys)
         push!(ps, x)
-        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
             xx = Symbolics.scalarize(x)
             union!(ps, xx)
         end
@@ -408,7 +408,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
            isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
             # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
-            # we want to store `nothing` in the map because that means `fast_substitute`
+            # we want to store `nothing` in the map because that means `substitute`
             # will ignore the rule. We will this identify the presence of `eq′.lhs` in
             # the differentiated expression and error.
             param_derivative_map[eq.lhs] = coalesce(eq.rhs, nothing)
@@ -680,7 +680,7 @@ function trivial_tearing!(ts::TearingState)
             end
             isvalid || continue
             # skip if the LHS is present in the RHS, since then this isn't explicit
-            if occursin(eq.lhs, eq.rhs)
+            if SU.query!(isequal(eq.lhs), eq.rhs)
                 push!(blacklist, i)
                 continue
             end
@@ -751,12 +751,12 @@ function shift_discrete_system(ts::TearingState)
     if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold, Pre}))
 
     for i in eachindex(fullvars)
-        fullvars[i] = StructuralTransformations.simplify_shifts(fast_substitute(
-            fullvars[i], discmap; operator = Union{Sample, Hold, Pre}))
+        fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
+            fullvars[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
     end
     for i in eachindex(eqs)
-        eqs[i] = StructuralTransformations.simplify_shifts(fast_substitute(
-            eqs[i], discmap; operator = Union{Sample, Hold, Pre}))
+        eqs[i] = StructuralTransformations.simplify_shifts(substitute(
+            eqs[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
     end
     @set! ts.sys.eqs = eqs
     @set! ts.fullvars = fullvars
@@ -846,7 +846,7 @@ function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
             " variables\n")
         Base.print_matrix(io, SystemStructurePrintMatrix(s))
     else
-        S = incidence_matrix(s.graph, Num(Sym{Real}(:×)))
+        S = incidence_matrix(s.graph, Num(SSym(:×; type = Real, shape = SU.ShapeVecT())))
         print(io, "Incidence matrix:")
         show(io, mime, S)
     end

@@ -12,7 +12,7 @@ function __get_literal_unit(x)
     if x isa Pair
         x = x[1]
     end
-    if !(x isa Union{Num, Symbolic})
+    if !(x isa Union{Num, SymbolicT})
         return nothing
     end
     v = value(x)
@@ -71,7 +71,6 @@ get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(unwrap(x))
 get_unit(x::Symbolics.Arr) = get_unit(unwrap(x))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
@@ -114,7 +113,7 @@ function get_unit(op::Conditional, args)
     return terms[2]
 end
 
-function get_unit(op::typeof(Symbolics._mapreduce), args)
+function get_unit(op::typeof(mapreduce), args)
     if args[2] == +
         get_unit(args[3])
     else
@@ -129,7 +128,7 @@ function get_unit(op::Comparison, args)
     return unitless
 end
 
-function get_unit(x::Symbolic)
+function get_unit(x::SymbolicT)
     if (u = __get_literal_unit(x)) !== nothing
         screen_unit(u)
     elseif issym(x)
@@ -156,8 +155,8 @@ function get_unit(x::Symbolic)
         op = operation(x)
         if issym(op) || (iscall(op) && iscall(operation(op))) # Dependent variables, not function calls
             return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
-        elseif iscall(op) && !iscall(operation(op))
-            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
+        elseif iscall(op) && operation(op) === getindex
+            gp = arguments(op)[1]
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
         end  # Actual function calls:
         args = arguments(x)
@@ -249,14 +248,14 @@ function _validate(conn::Connection; info::String = "")
 end
 
 function validate(jump::Union{VariableRateJump,
-            ConstantRateJump}, t::Symbolic;
+            ConstantRateJump}, t::SymbolicT;
         info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
-function validate(jump::MassActionJump, t::Symbolic; info::String = "")
+function validate(jump::MassActionJump, t::SymbolicT; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
     all_symbols = vcat(left_symbols, net_symbols)
@@ -267,7 +266,7 @@ function validate(jump::MassActionJump, t::Symbolic; info::String = "")
         ["scaled_rates", "1/(t*reactants^$n))"]; info)
 end
 
-function validate(jumps::Vector{JumpType}, t::Symbolic)
+function validate(jumps::Vector{JumpType}, t::SymbolicT)
     labels = ["in Mass Action Jumps,", "in Constant Rate Jumps,", "in Variable Rate Jumps,"]
     majs = filter(x -> x isa MassActionJump, jumps)
     crjs = filter(x -> x isa ConstantRateJump, jumps)
@@ -284,7 +283,7 @@ function validate(eq::Union{Inequality, Equation}; info::String = "")
     end
 end
 function validate(eq::Equation,
-        term::Union{Symbolic, DQ.AbstractQuantity, Num}; info::String = "")
+        term::Union{SymbolicT, DQ.AbstractQuantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
 function validate(eq::Equation, terms::Vector; info::String = "")
@@ -306,10 +305,10 @@ function validate(eqs::Vector, noise::Matrix; info::String = "")
     all([validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
          for idx in 1:length(eqs)])
 end
-function validate(eqs::Vector, term::Symbolic; info::String = "")
+function validate(eqs::Vector, term::SymbolicT; info::String = "")
     all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
-validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== nothing
+validate(term::SymbolicT) = safe_get_unit(term, "") !== nothing
 
 """
 Throws error if units of equations are invalid.

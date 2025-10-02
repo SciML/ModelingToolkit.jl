@@ -179,7 +179,7 @@ struct Stream <: AbstractConnectType end   # special stream connector
 Get the connect type of x. See also [`hasconnect`](@ref).
 """
 getconnect(x::Num) = getconnect(unwrap(x))
-getconnect(x::Symbolic) = Symbolics.getmetadata(x, VariableConnectType, nothing)
+getconnect(x::SymbolicT) = Symbolics.getmetadata(x, VariableConnectType, nothing)
 """
     hasconnect(x)
 
@@ -190,13 +190,13 @@ function setconnect(x, t::Type{T}) where {T <: AbstractConnectType}
     setmetadata(x, VariableConnectType, t)
 end
 
-### Input, Output, Irreducible 
-isvarkind(m, x::Union{Num, Symbolics.Arr}) = isvarkind(m, value(x))
-function isvarkind(m, x)
-    iskind = getmetadata(x, m, nothing)
-    iskind !== nothing && return iskind
-    x = getparent(x, x)
-    getmetadata(x, m, false)
+### Input, Output, Irreducible
+isvarkind(m, x, def = false) = safe_getmetadata(m, x, def)
+safe_getmetadata(m, x::Union{Num, Symbolics.Arr}, def) = safe_getmetadata(m, value(x), def)
+function safe_getmetadata(m, x, default)
+    hasmetadata(x, m) && return getmetadata(x, m)
+    iscall(x) && operation(x) === getindex && return safe_getmetadata(m, arguments(x)[1], default)
+    return default
 end
 
 """
@@ -218,13 +218,13 @@ setio(x, i::Bool, o::Bool) = setoutput(setinput(x, i), o)
 
 Check if variable `x` is marked as an input.
 """
-isinput(x) = isvarkind(VariableInput, x)
+isinput(x) = isvarkind(VariableInput, x)::Bool
 """
     $(TYPEDSIGNATURES)
 
 Check if variable `x` is marked as an output.
 """
-isoutput(x) = isvarkind(VariableOutput, x)
+isoutput(x) = isvarkind(VariableOutput, x)::Bool
 
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
@@ -234,7 +234,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 Check if `x` is marked as irreducible. This prevents it from being eliminated as an
 observed variable in `mtkcompile`.
 """
-isirreducible(x) = isvarkind(VariableIrreducible, x)
+isirreducible(x) = isvarkind(VariableIrreducible, x)::Bool
 setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 """
@@ -245,19 +245,30 @@ chosen as a state in `mtkcompile`.
 """
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
-normalize_to_differential(x) = x
-
-function default_toterm(x)
-    if iscall(x) && (op = operation(x)) isa Operator
-        if !(op isa Differential)
-            if op isa Shift && op.steps < 0
-                return shift2term(x)
-            end
-            x = normalize_to_differential(op)(arguments(x)...)
-        end
-        Symbolics.diff2term(x)
+function normalize_to_differential(@nospecialize(op))
+    if op isa Shift && op.t isa SymbolicT
+        return Differential(op.t) ^ op.steps
     else
-        x
+        return op
+    end
+end
+
+default_toterm(x) = x
+function default_toterm(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args, shape, type, metadata) && if f isa Operator end => begin
+            if f isa Shift && f.steps < 0
+                return shift2term(x)
+            elseif f isa Differential
+                return Symbolics.diff2term(x)
+            else
+                newf = normalize_to_differential(f)
+                f === newf && return x
+                x = BSImpl.Term{VartypeT}(newf, args; type, shape, metadata)
+                return Symbolics.diff2term(x)
+            end
+        end
+        _ => return x
     end
 end
 
@@ -280,12 +291,12 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 """
-function getbounds(x::Union{Num, Symbolics.Arr, SymbolicUtils.Symbolic})
+function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
     x = unwrap(x)
-    p = Symbolics.getparent(x, nothing)
-    if p === nothing
+    if operation(p) === getindex
+        p = arguments(p)[1]
         bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
-        if symbolic_type(x) == ArraySymbolic() && Symbolics.shape(x) != Symbolics.Unknown()
+        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
             bounds = map(bounds) do b
                 b isa AbstractArray && return b
                 return fill(b, size(x))
@@ -297,7 +308,7 @@ function getbounds(x::Union{Num, Symbolics.Arr, SymbolicUtils.Symbolic})
         idxs = arguments(x)[2:end]
         bounds = map(bounds) do b
             if b isa AbstractArray
-                if Symbolics.shape(p) != Symbolics.Unknown() && size(p) != size(b)
+                if symbolic_has_known_size(p) && size(p) != size(b)
                     throw(DimensionMismatch("Expected array variable $p with shape $(size(p)) to have bounds of identical size. Found $bounds of size $(size(bounds))."))
                 end
                 return b[idxs...]
@@ -339,9 +350,7 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDisturbance, false)
+    isvarkind(VariableDisturbance, x)::Bool
 end
 
 setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
@@ -372,9 +381,7 @@ Create a tunable parameter by
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = true)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableTunable, default)
+    isvarkind(VariableTunable, x, default)::Bool
 end
 
 ## Dist ========================================================================
@@ -398,9 +405,7 @@ getdist(u) # retrieve distribution
 ```
 """
 function getdist(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDistribution, nothing)
+    safe_getmetadata(VariableDistribution, x, nothing)
 end
 
 """
@@ -492,9 +497,7 @@ getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 Return any description attached to variables `x`. If no description is attached, an empty string is returned.
 """
 function getdescription(x)
-    p = Symbolics.getparent(x, nothing)
-    p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableDescription, "")
+    safe_getmetadata(VariableDescription, x, "")
 end
 
 """
@@ -512,7 +515,7 @@ end
 
 Maps the brownianiable to an unknown.
 """
-tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
+tobrownian(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))
 isbrownian(s) = getvariabletype(s) === BROWNIAN
 
@@ -526,10 +529,10 @@ macro brownians(xs...)
         x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$ || Meta.isexpr(x, :$),
         xs) ||
         error("@brownians only takes scalar expressions!")
-    Symbolics._parse_vars(:brownian,
+    Symbolics.parse_vars(:brownian,
         Real,
         xs,
-        tobrownian) |> esc
+        tobrownian)
 end
 
 ## Guess ======================================================================
@@ -587,7 +590,7 @@ Fetch any miscellaneous data associated with symbolic variable `x`.
 See also [`hasmisc(x)`](@ref).
 """
 getmisc(x::Num) = getmisc(unwrap(x))
-getmisc(x::Symbolic) = Symbolics.getmetadata(x, VariableMisc, nothing)
+getmisc(x::SymbolicT) = Symbolics.getmetadata(x, VariableMisc, nothing)
 """
     hasmisc(x)
 
@@ -606,7 +609,7 @@ setmisc(x, miscdata) = setmetadata(x, VariableMisc, miscdata)
 Fetch the unit associated with variable `x`. This function is a metadata getter for an individual variable, while `get_unit` is used for unit inference on more complicated sdymbolic expressions.
 """
 getunit(x::Num) = getunit(unwrap(x))
-getunit(x::Symbolic) = Symbolics.getmetadata(x, VariableUnit, nothing)
+getunit(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnit, nothing)
 """
     hasunit(x)
 
@@ -615,10 +618,10 @@ Check if the variable `x` has a unit.
 hasunit(x) = getunit(x) !== nothing
 
 getunshifted(x::Num) = getunshifted(unwrap(x))
-getunshifted(x::Symbolic) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
+getunshifted(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnshifted, nothing)::Union{SymbolicT, Nothing}
 
 getshift(x::Num) = getshift(unwrap(x))
-getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
+getshift(x::SymbolicT) = Symbolics.getmetadata(x, VariableShift, 0)::Int
 
 ###################
 ### Evaluate at ###
@@ -629,7 +632,7 @@ getshift(x::Symbolic) = Symbolics.getmetadata(x, VariableShift, 0)
 An operator that evaluates time-dependent variables at a specific absolute time point `t`.
 
 # Fields
-- `t::Union{Symbolic, Number}`: The absolute time at which to evaluate the variable.
+- `t::Union{SymbolicT, Number}`: The absolute time at which to evaluate the variable.
 
 # Description
 `EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
@@ -677,12 +680,12 @@ end
 See also: [`Differential`](@ref)
 """
 struct EvalAt <: Symbolics.Operator
-    t::Union{Symbolic, Number}
+    t::Union{SymbolicT, Number}
 end
 
-function (A::EvalAt)(x::Symbolic)
+function (A::EvalAt)(x::SymbolicT)
     if symbolic_type(x) == NotSymbolic() || !iscall(x)
-        if x isa Symbolics.CallWithMetadata
+        if x isa CallAndWrap
             return x(A.t)
         else
             return x

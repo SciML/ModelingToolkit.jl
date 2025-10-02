@@ -142,7 +142,7 @@ function change_of_variables(
 
     for (new_var, ex, first, second) in zip(new_vars, dfdt, ∂f∂x, ∂2f∂x2)
         for (eqs, neq) in zip(old_eqs, neqs)
-            if occursin(value(eqs.lhs), value(ex))
+            if SU.query!(isequal(value(eqs.lhs)), value(ex))
                 ex = substitute(ex, eqs.lhs => eqs.rhs)
                 if isSDE
                     for (noise, B) in zip(neq, brownvars)
@@ -470,7 +470,7 @@ julia> M = change_independent_variable(M, x);
 julia> M = mtkcompile(M; allow_symbolic = true);
 
 julia> unknowns(M)
-3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+3-element Vector{Symbolics.SymbolicsT}:
  xˍt(x)
  y(x)
  yˍx(x)
@@ -1039,9 +1039,9 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         if iscall(k)
             op = operation(k)
             args = arguments(k)
-            new_p = SymbolicUtils.term(op, args...; type = T)
+            new_p = SymbolicUtils.term(op, args...; type = T, shape = SU.shape(v))
         else
-            new_p = SymbolicUtils.Sym{T}(getname(k))
+            new_p = SSym(getname(k); type = T, shape = SU.shape(v))
         end
 
         get_ps(sys)[idx] = new_p
@@ -1049,7 +1049,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         subrules[unwrap(k)] = unwrap(new_p)
     end
 
-    substituter = Base.Fix2(fast_substitute, subrules)
+    substituter = Base.Fix2(substitute, subrules)
     @set! sys.eqs = map(substituter, get_eqs(sys))
     @set! sys.observed = map(substituter, get_observed(sys))
     @set! sys.initialization_eqs = map(substituter, get_initialization_eqs(sys))

@@ -17,10 +17,10 @@ anydict(x) = AnyDict(x)
 """
     $(TYPEDSIGNATURES)
 
-Check if `x` is a symbolic with known size. Assumes `Symbolics.shape(unwrap(x))`
+Check if `x` is a symbolic with known size. Assumes `SymbolicUtils.shape(unwrap(x))`
 is a valid operation.
 """
-is_sized_array_symbolic(x) = Symbolics.shape(unwrap(x)) != Symbolics.Unknown()
+symbolic_has_known_size(x) = !(SU.shape(unwrap(x)) isa SU.Unknown)
 
 """
     $(TYPEDSIGNATURES)
@@ -128,7 +128,7 @@ function add_fallbacks!(
         haskey(varmap, ttvar) && continue
 
         # array symbolics with a defined size may be present in the scalarized form
-        if Symbolics.isarraysymbolic(var) && is_sized_array_symbolic(var)
+        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
             val = map(eachindex(var)) do idx
                 # @something is lazy and saves from writing a massive if-elseif-else
                 @something(get(varmap, var[idx], nothing),
@@ -162,7 +162,7 @@ function add_fallbacks!(
                     fallbacks, arrvar, nothing) get(fallbacks, ttarrvar, nothing) Some(nothing)
                 if val !== nothing
                     val = val[idxs...]
-                    is_sized_array_symbolic(arrvar) && push!(arrvars, arrvar)
+                    symbolic_has_known_size(arrvar) && push!(arrvars, arrvar)
                 end
             else
                 val = nothing
@@ -197,7 +197,7 @@ function missingvars(
         ttsym = toterm(var)
         haskey(varmap, ttsym) && continue
 
-        if Symbolics.isarraysymbolic(var) && is_sized_array_symbolic(var)
+        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
             mask = map(eachindex(var)) do idx
                 !haskey(varmap, var[idx]) && !haskey(varmap, ttsym[idx])
             end
@@ -486,7 +486,7 @@ function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
         v === nothing && continue
         symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
         haskey(varmap, k) || continue
-        varmap[k] = fixpoint_sub(v, varmap; maxiters = limit)
+        varmap[k] = value(fixpoint_sub(v, varmap; maxiters = limit))
     end
 end
 
@@ -535,7 +535,7 @@ If a scalarized entry already exists, it is not overridden.
 function scalarize_vars_in_varmap!(varmap::AbstractDict, vars)
     for var in vars
         symbolic_type(var) == ArraySymbolic() || continue
-        is_sized_array_symbolic(var) || continue
+        symbolic_has_known_size(var) || continue
         haskey(varmap, var) || continue
         for i in eachindex(var)
             haskey(varmap, var[i]) && continue
@@ -958,9 +958,11 @@ end
 
 A function to be used as `update_initializeprob!` in `OverrideInitData`. Requires
 `is_update_oop = Val(true)` to be passed to `update_initializeprob!`.
+
+Any changes to this method should also be made to the one in ChainRulesCoreExt.
 """
 function update_initializeprob!(initprob, prob)
-    pgetter = ChainRulesCore.@ignore_derivatives get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
+    pgetter = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
     p = pgetter(prob, initprob)
     return remake(initprob; p)
 end

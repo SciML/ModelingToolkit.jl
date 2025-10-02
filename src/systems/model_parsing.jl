@@ -629,7 +629,7 @@ function _set_var_metadata!(metadata_with_exprs, a, m, v::Expr)
     a
 end
 function _set_var_metadata!(metadata_with_exprs, a, m, v)
-    wrap(set_scalar_metadata(unwrap(a), m, v))
+    wrap(setmetadata(unwrap(a), m, v))
 end
 
 function set_var_metadata(a, ms)
