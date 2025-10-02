@@ -1,5 +1,3 @@
-const TypeT = Union{DataType, UnionAll}
-
 struct CacheWriter{F}
     fn::F
 end
