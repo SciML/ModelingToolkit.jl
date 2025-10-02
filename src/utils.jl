@@ -394,9 +394,9 @@ isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
 isvariable(x::Num)::Bool = isvariable(value(x))
-function isvariable(x)::Bool
+function isvariable(x)
     x isa SymbolicT || return false
-    hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])
+    hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])::Bool
 end
 
 """
