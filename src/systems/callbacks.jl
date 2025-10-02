@@ -7,15 +7,19 @@ end
 struct SymbolicAffect
     affect::Vector{Equation}
     alg_eqs::Vector{Equation}
-    discrete_parameters::Vector{Any}
+    discrete_parameters::Vector{SymbolicT}
 end
 
 function SymbolicAffect(affect::Vector{Equation}; alg_eqs = Equation[],
-        discrete_parameters = Any[], kwargs...)
-    if !(discrete_parameters isa AbstractVector)
-        discrete_parameters = Any[discrete_parameters]
-    elseif !(discrete_parameters isa Vector{Any})
-        discrete_parameters = Vector{Any}(discrete_parameters)
+        discrete_parameters = SymbolicT[], kwargs...)
+    if symbolic_type(discrete_parameters) !== NotSymbolic()
+        discrete_parameters = SymbolicT[unwrap(discrete_parameters)]
+    elseif !(discrete_parameters isa Vector{SymbolicT})
+        _discs = SymbolicT[]
+        for p in discrete_parameters
+            push!(_discs, unwrap(p))
+        end
+        discrete_parameters = _discs
     end
     SymbolicAffect(affect, alg_eqs, discrete_parameters)
 end
@@ -33,11 +37,11 @@ struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
     system::AbstractSystem
     """Unknowns of the parent ODESystem whose values are modified or accessed by the affect."""
-    unknowns::Vector
+    unknowns::Vector{SymbolicT}
     """Parameters of the parent ODESystem whose values are accessed by the affect."""
-    parameters::Vector
+    parameters::Vector{SymbolicT}
     """Parameters of the parent ODESystem whose values are modified by the affect."""
-    discretes::Vector
+    discretes::Vector{SymbolicT}
 end
 
 function (s::SymbolicUtils.Substituter)(aff::AffectSystem)
@@ -57,7 +61,11 @@ function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], 
         discrete_parameters = spec.discrete_parameters, kwargs...)
 end
 
-function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
+@noinline function warn_algebraic_equation(eq::Equation)
+    @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
+end
+
+function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[],
         iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
     isempty(affect) && return nothing
     if isnothing(iv)
@@ -65,26 +73,24 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
 
-    discrete_parameters isa AbstractVector || (discrete_parameters = [discrete_parameters])
-    discrete_parameters = unwrap.(discrete_parameters)
+    discrete_parameters = SymbolicAffect(affect; alg_eqs, discrete_parameters).discrete_parameters
 
     for p in discrete_parameters
         SU.query(isequal(unwrap(iv)), unwrap(p)) ||
             error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
     end
 
-    dvs = OrderedSet()
-    params = OrderedSet()
-    _varsbuf = Set()
+    dvs = OrderedSet{SymbolicT}()
+    params = OrderedSet{SymbolicT}()
+    _varsbuf = Set{SymbolicT}()
     for eq in affect
-        if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
-             symbolic_type(eq.lhs) === NotSymbolic())
-            @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
+        if !haspre(eq) && !(isconst(eq.lhs) && isconst(eq.rhs))
+            @invokelatest warn_algebraic_equation(eq)
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
         empty!(_varsbuf)
-        vars!(_varsbuf, eq; op = Pre)
-        filter!(x -> iscall(x) && operation(x) isa Pre, _varsbuf)
+        SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Pre}())
+        filter!(x -> iscall(x) && operation(x) === Pre(), _varsbuf)
         union!(params, _varsbuf)
         diffvs = collect_applied_operators(eq, Differential)
         union!(dvs, diffvs)
@@ -92,16 +98,22 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
     for eq in alg_eqs
         collect_vars!(dvs, params, eq, iv)
     end
-    pre_params = filter(haspre ∘ value, params)
-    discrete_parameters = gather_array_params(OrderedSet(discrete_parameters))
-    sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
-    discrete_parameters = collect(discrete_parameters)
+    pre_params = filter(haspre, params)
+    sys_params = SymbolicT[]
+    disc_ps_set = Set{SymbolicT}(discrete_parameters)
+    disc_ps_set = gather_array_params(disc_ps_set)
+    discrete_parameters = collect(disc_ps_set)
+    for p in params
+        p in disc_ps_set && continue
+        p in pre_params && continue
+        push!(sys_params, p)
+    end
     discretes = map(tovar, discrete_parameters)
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
 
-    rev_map = Dict(zip(discrete_parameters, discretes))
-    subs = merge(rev_map, Dict(zip(dvs, _dvs)))
+    rev_map = Dict{SymbolicT, SymbolicT}(zip(discrete_parameters, discretes))
+    subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
     affect = substitute(affect, subs)
     alg_eqs = substitute(alg_eqs, subs)
 
@@ -110,14 +122,13 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
         collect(union(pre_params, sys_params)); is_discrete = true)
     affectsys = mtkcompile(affectsys; fully_determined = nothing)
     # get accessed parameters p from Pre(p) in the callback parameters
-    accessed_params = Vector{Any}(filter(isparameter, map(unPre, collect(pre_params))))
+    accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
-    _dvs = reduce(vcat, map(scalarize, _dvs), init = Any[])
+    _dvs = reduce(vcat, map(scalarize, _dvs), init = SymbolicT[])
 
-    AffectSystem(affectsys, collect(_dvs), collect(accessed_params),
-        collect(discrete_parameters))
+    AffectSystem(affectsys, _dvs, accessed_params, discrete_parameters)
 end
 
 system(a::AffectSystem) = a.system
