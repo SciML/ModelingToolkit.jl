@@ -823,16 +823,15 @@ Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works w
 initialization.
 """
 function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
-    rm_idxs = Int[]
+    mask = trues(length(obseqs))
     for (i, eq) in enumerate(obseqs)
-        iscall(eq.rhs) || continue
-        if operation(eq.rhs) == StructuralTransformations.change_origin
-            push!(rm_idxs, i)
-            continue
+        mask[i] = Moshi.Match.@match eq.rhs begin
+            BSImpl.Term(; f) => f !== StructuralTransformations.change_origin
+            _ => true
         end
     end
 
-    obseqs = obseqs[setdiff(eachindex(obseqs), rm_idxs)]
+    obseqs = obseqs[mask]
     return obseqs, eqs
 end
 
