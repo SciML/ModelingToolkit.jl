@@ -540,16 +540,20 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     supports_initialization(sys) || return sys
     is_initializesystem(sys) && return sys
 
-    all_initialvars = Set{BasicSymbolic}()
+    all_initialvars = Set{SymbolicT}()
     # time-independent systems don't initialize unknowns
     # but may initialize parameters using guesses for unknowns
     eqs = equations(sys)
-    if !(eqs isa Vector{Equation})
-        eqs = Equation[x for x in eqs if x isa Equation]
-    end
     obs, eqs = unhack_observed(observed(sys), eqs)
-    for x in Iterators.flatten((unknowns(sys), Iterators.map(eq -> eq.lhs, obs)))
-        x = unwrap(x)
+    for x in unknowns(sys)
+        if iscall(x) && operation(x) == getindex && split
+            push!(all_initialvars, arguments(x)[1])
+        else
+            push!(all_initialvars, x)
+        end
+    end
+    for eq in obs
+        x = eq.lhs
         if iscall(x) && operation(x) == getindex && split
             push!(all_initialvars, arguments(x)[1])
         else
@@ -559,15 +563,19 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
 
     # add derivatives of all variables for steady-state initial conditions
     if is_time_dependent(sys) && !is_discrete_system(sys)
-        D = Differential(get_iv(sys))
-        union!(all_initialvars, [D(v) for v in all_initialvars if iscall(v)])
+        D = Differential(get_iv(sys)::SymbolicT)
+        for v in collect(all_initialvars)
+            iscall(v) && push!(all_initialvars, D(v))
+        end
     end
     for eq in get_parameter_dependencies(sys)
         is_variable_floatingpoint(eq.lhs) || continue
         push!(all_initialvars, eq.lhs)
     end
-    all_initialvars = collect(all_initialvars)
-    initials = map(Initial(), all_initialvars)
+    initials = collect(all_initialvars)
+    for (i, v) in enumerate(initials)
+        initials[i] = Initial()(v)
+    end
     @set! sys.ps = unique!([get_ps(sys); initials])
     defs = copy(get_defaults(sys))
     for ivar in initials
@@ -575,7 +583,8 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             defs[ivar] = false
         else
             defs[ivar] = collect(ivar)
-            for scal_ivar in defs[ivar]
+            for idx in SU.stable_eachindex(ivar)
+                scal_ivar = ivar[idx]
                 defs[scal_ivar] = false
             end
         end
