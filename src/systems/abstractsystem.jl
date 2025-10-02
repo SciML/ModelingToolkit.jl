@@ -94,11 +94,11 @@ See also [`@independent_variables`](@ref) and [`ModelingToolkit.get_iv`](@ref).
 """
 function independent_variables(sys::AbstractSystem)
     if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
-        return [getfield(sys, :iv)]
+        return SymbolicT[getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
-        return getfield(sys, :ivs)
+        return unwrap.(getfield(sys, :ivs))::Vector{SymbolicT}
     else
-        return []
+        return SymbolicT[]
     end
 end
 
