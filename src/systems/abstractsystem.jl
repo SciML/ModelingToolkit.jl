@@ -513,15 +513,16 @@ function (f::Initial)(x)
     end
     # don't double wrap
     iscall(x) && operation(x) isa Initial && return x
-    result = if symbolic_type(x) == ArraySymbolic()
-        term(f, x; type = symtype(x), shape = SU.shape(x))
-    elseif iscall(x) && operation(x) == getindex
+    sh = SU.shape(x)
+    result = if SU.is_array_shape(sh)
+        term(f, x; type = symtype(x), shape = sh)
+    elseif iscall(x) && operation(x) === getindex
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
         arr = arguments(x)[1]
         f(arr)[arguments(x)[2:end]...]
     else
-        term(f, x; type = symtype(x), shape = SU.shape(x))
+        term(f, x; type = symtype(x), shape = sh)
     end
     # the result should be a parameter
     result = toparam(result)
