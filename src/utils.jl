@@ -526,13 +526,10 @@ ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
 
 The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
 """
-function collect_applied_operators(x, op)
-    v = vars(x, op = op)
-    filter(v) do x
-        issym(x) && return false
-        iscall(x) && return operation(x) isa op
-        false
-    end
+function collect_applied_operators(x::SymbolicT, ::Type{op}) where {op}
+    v = Set{SymbolicT}()
+    SU.search_variables!(v, x; is_atomic = OnlyOperatorIsAtomic{op}())
+    return v
 end
 
 """
@@ -543,12 +540,12 @@ Search through equations and parameter dependencies of `sys`, where sys is at a 
 recursively searches through all subsystems of `sys`, increasing the depth if it is not
 `-1`. A depth of `-1` indicates searching for variables with `GlobalScope`.
 """
-function collect_scoped_vars!(unknowns, parameters, sys, iv; depth = 1, op = Differential)
+function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, sys::AbstractSystem, iv::Union{SymbolicT, Nothing}; depth = 1, op = Differential)
     if has_eqs(sys)
         for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
             if eq isa Equation
-                eq.lhs isa Union{SymbolicT, Number} || continue
+                symtype(eq.lhs) <: Number || continue
             end
             collect_vars!(unknowns, parameters, eq, iv; depth, op)
         end
@@ -622,6 +619,24 @@ function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
     end
 end
 
+struct OnlyOperatorIsAtomic{O} end
+
+function (::OnlyOperatorIsAtomic{O})(ex::SymbolicT) where {O}
+    Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa O end => true
+        _ => false
+    end
+end
+
+struct OperatorIsAtomic{O} end
+
+function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
+    SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Operator end => f isa O
+        _ => true
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -636,17 +651,27 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
-    if issym(expr)
-        return collect_var!(unknowns, parameters, expr, iv; depth)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+    Moshi.Match.@match expr begin
+        BSImpl.Const(;) => return
+        BSImpl.Sym(;) => return collect_var!(unknowns, parameters, expr, iv; depth)
+        _ => nothing
     end
-    SymbolicUtils.isconst(expr) && return
-    for var in vars(expr; op)
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
+    for var in vars
         while iscall(var) && operation(var) isa op
             validate_operator(operation(var), arguments(var), iv; context = expr)
             var = arguments(var)[1]
         end
         collect_var!(unknowns, parameters, var, iv; depth)
+    end
+    return nothing
+end
+
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray{SymbolicT}, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+    for var in expr
+        collect_vars!(unknowns, parameters, var, iv; depth, op)
     end
     return nothing
 end
@@ -696,7 +721,7 @@ function collect_var!(unknowns, parameters, var, iv; depth = 0)
         wrapped symbolic variables.
         """)
     end
-    check_scope_depth(getmetadata(var, SymScope, LocalScope()), depth) || return nothing
+    check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
@@ -724,7 +749,7 @@ function check_scope_depth(scope, depth)
     if scope isa LocalScope
         return depth == 0
     elseif scope isa ParentScope
-        return depth > 0 && check_scope_depth(scope.parent, depth - 1)
+        return depth > 0 && check_scope_depth(scope.parent, depth - 1)::Bool
     elseif scope isa GlobalScope
         return depth == -1
     end
@@ -838,8 +863,8 @@ end
 Check if `T` is an appropriate symtype for a symbolic variable representing a floating
 point number or array of such numbers.
 """
-function is_floatingpoint_symtype(T::Type)
-    return T == Real || T == Number || T == Complex || T <: AbstractFloat ||
+function is_floatingpoint_symtype(T)
+    return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
            T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
