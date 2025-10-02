@@ -410,14 +410,16 @@ function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
     parameter_index(ic, sym) !== nothing
 end
 
-function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return nothing
-    end
-    sym = unwrap(sym)
-    validate_size = Symbolics.isarraysymbolic(sym) && symtype(sym) <: AbstractArray &&
-                    symbolic_has_known_size(sym)
+function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
+    parameter_index(ic, unwrap(sym))
+end
+function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Symbol)
+    sym = get(ic.symbol_to_variable, sym, nothing)
+    sym === nothing && return nothing
+    parameter_index(ic, sym)
+end
+function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::SymbolicT)
+    validate_size = Symbolics.isarraysymbolic(sym) && symbolic_has_known_size(sym)
     return if (idx = check_index_map(ic.tunable_idx, sym)) !== nothing
         ParameterIndex(SciMLStructures.Tunable(), idx, validate_size)
     elseif (idx = check_index_map(ic.initials_idx, sym)) !== nothing
@@ -464,23 +466,14 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
         idx.timeseries_idx, (idx.parameter_idx..., args[2:end]...))
 end
 
-function check_index_map(idxmap, sym)
-    if (idx = get(idxmap, sym, nothing)) !== nothing
-        return idx
-    elseif !isa(sym, Symbol) && (!iscall(sym) || operation(sym) !== getindex) &&
-           hasname(sym) && (idx = get(idxmap, getname(sym), nothing)) !== nothing
-        return idx
-    end
+function check_index_map(idxmap::Dict{SymbolicT, V}, sym::SymbolicT)::Union{V, Nothing} where {V}
+    idx = get(idxmap, sym, nothing)
+    idx === nothing || return idx
     dsym = default_toterm(sym)
     isequal(sym, dsym) && return nothing
-    if (idx = get(idxmap, dsym, nothing)) !== nothing
-        idx
-    elseif !isa(dsym, Symbol) && (!iscall(dsym) || operation(dsym) !== getindex) &&
-           hasname(dsym) && (idx = get(idxmap, getname(dsym), nothing)) !== nothing
-        idx
-    else
-        nothing
-    end
+    idx = get(idxmap, dsym, nothing)
+    idx === nothing || return idx
+    return nothing
 end
 
 function reorder_parameters(
