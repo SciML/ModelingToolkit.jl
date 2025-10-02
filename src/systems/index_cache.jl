@@ -28,12 +28,12 @@ struct DiscreteIndex
     idx_in_clock::Int
 end
 
-const ParamIndexMap = Dict{BasicSymbolic, Tuple{Int, Int}}
+const MaybeUnknownArrayIndexT = Union{Int, UnitRange{Int}, AbstractArray{Int}}
+const MaybeArrayIndexT = Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}
+const ParamIndexMap = Dict{SymbolicT, Tuple{Int, Int}}
 const NonnumericMap = Dict{SymbolicT, Tuple{Int, Int}}
-const UnknownIndexMap = Dict{
-    BasicSymbolic, Union{Int, UnitRange{Int}, AbstractArray{Int}}}
-const TunableIndexMap = Dict{BasicSymbolic,
-    Union{Int, UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}}
+const UnknownIndexMap = Dict{SymbolicT, MaybeUnknownArrayIndexT}
+const TunableIndexMap = Dict{SymbolicT, MaybeArrayIndexT}
 const TimeseriesSetType = Set{Union{ContinuousTimeseries, Int}}
 
 const SymbolicParam = SymbolicT
@@ -48,8 +48,8 @@ struct IndexCache
     initials_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
-    observed_syms_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
-    dependent_pars_to_timeseries::Dict{BasicSymbolic, TimeseriesSetType}
+    observed_syms_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
+    dependent_pars_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
     tunable_buffer_size::BufferTemplate
     initials_buffer_size::BufferTemplate
@@ -75,26 +75,36 @@ function IndexCache(sys::AbstractSystem)
 
     let idx = 1
         for sym in unks
-            usym = unwrap(sym)
-            rsym = renamespace(sys, usym)
-            sym_idx = if Symbolics.isarraysymbolic(sym)
+            rsym = renamespace(sys, sym)
+            sym_idx::MaybeUnknownArrayIndexT = if Symbolics.isarraysymbolic(sym)
                 reshape(idx:(idx + length(sym) - 1), size(sym))
             else
                 idx
             end
-            unk_idxs[usym] = sym_idx
+            unk_idxs[sym] = sym_idx
             unk_idxs[rsym] = sym_idx
             idx += length(sym)
         end
+        found_array_syms = Set{SymbolicT}()
         for sym in unks
-            usym = unwrap(sym)
             iscall(sym) && operation(sym) === getindex || continue
             arrsym = arguments(sym)[1]
-            all(haskey(unk_idxs, arrsym[i]) for i in eachindex(arrsym)) || continue
-
-            idxs = [unk_idxs[arrsym[i]] for i in eachindex(arrsym)]
+            arrsym in found_array_syms && continue
+            idxs = Int[]
+            valid_arrsym = true
+            for i in eachindex(arrsym)
+                idxsym = arrsym[i]
+                idx = get(unk_idxs, idxsym, nothing)::Union{Int, Nothing}
+                valid_arrsym = idx !== nothing
+                valid_arrsym || break
+                push!(idxs, idx::Int)
+            end
+            push!(found_array_syms, arrsym)
+            valid_arrsym || break
             if idxs == idxs[begin]:idxs[end]
-                idxs = reshape(idxs[begin]:idxs[end], size(idxs))
+                idxs = reshape(idxs[begin]:idxs[end], size(arrsym))::AbstractArray{Int}
+            else
+                idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
             end
             rsym = renamespace(sys, arrsym)
             unk_idxs[arrsym] = idxs
@@ -102,68 +112,24 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    tunable_pars = BasicSymbolic[]
-    initial_pars = BasicSymbolic[]
-    constant_buffers = Dict{Any, Set{BasicSymbolic}}()
-    nonnumeric_buffers = Dict{Any, Set{SymbolicParam}}()
+    tunable_pars = SymbolicT[]
+    initial_pars = SymbolicT[]
+    constant_buffers = Dict{TypeT, Set{SymbolicT}}()
+    nonnumeric_buffers = Dict{TypeT, Set{SymbolicT}}()
 
-    function insert_by_type!(buffers::Dict{Any, S}, sym, ctype) where {S}
-        sym = unwrap(sym)
-        buf = get!(buffers, ctype, S())
-        push!(buf, sym)
+    disc_param_callbacks = Dict{SymbolicParam, BitSet}()
+    cevs = continuous_events(sys)
+    devs = discrete_events(sys)
+    events = Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}[cevs; devs]
+    parse_callbacks_for_discretes!(sys, cevs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, 0)
+    parse_callbacks_for_discretes!(sys, devs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, length(cevs))
+    clock_partitions = unique(collect(values(disc_param_callbacks)))::Vector{BitSet}
+    disc_symtypes = Set{TypeT}()
+    for x in keys(disc_param_callbacks)
+        push!(disc_symtypes, symtype(x))
     end
-    function insert_by_type!(buffers::Vector{BasicSymbolic}, sym, ctype)
-        sym = unwrap(sym)
-        push!(buffers, sym)
-    end
-
-    disc_param_callbacks = Dict{SymbolicParam, Set{Int}}()
-    events = vcat(continuous_events(sys), discrete_events(sys))
-    for (i, event) in enumerate(events)
-        discs = Set{SymbolicParam}()
-        affs = affects(event)
-        if !(affs isa AbstractArray)
-            affs = [affs]
-        end
-        for affect in affs
-            if affect isa AffectSystem || affect isa ImperativeAffect
-                union!(discs, unwrap.(discretes(affect)))
-            elseif isnothing(affect)
-                continue
-            else
-                error("Unhandled affect type $(typeof(affect))")
-            end
-        end
-
-        for sym in discs
-            if !is_parameter(sys, sym)
-                if iscall(sym) && operation(sym) === getindex &&
-                   is_parameter(sys, arguments(sym)[1])
-                    sym = arguments(sym)[1]
-                else
-                    error("Expected discrete variable $sym in callback to be a parameter")
-                end
-            end
-
-            # Only `foo(t)`-esque parameters can be saved
-            if iscall(sym) && length(arguments(sym)) == 1 &&
-               isequal(only(arguments(sym)), get_iv(sys))
-                clocks = get!(() -> Set{Int}(), disc_param_callbacks, sym)
-                push!(clocks, i)
-            elseif is_variable_floatingpoint(sym)
-                insert_by_type!(constant_buffers, sym, symtype(sym))
-            else
-                stype = symtype(sym)
-                if stype <: FnType
-                    stype = fntype_to_function_type(stype)
-                end
-                insert_by_type!(nonnumeric_buffers, sym, stype)
-            end
-        end
-    end
-    clock_partitions = unique(collect(values(disc_param_callbacks)))
-    disc_symtypes = unique(symtype.(keys(disc_param_callbacks)))
-    disc_symtype_idx = Dict(disc_symtypes .=> eachindex(disc_symtypes))
+    disc_symtypes = collect(disc_symtypes)::Vector{TypeT}
+    disc_symtype_idx = Dict{TypeT, Int}(zip(disc_symtypes, eachindex(disc_symtypes)))
     disc_syms_by_symtype = [SymbolicParam[] for _ in disc_symtypes]
     for sym in keys(disc_param_callbacks)
         push!(disc_syms_by_symtype[disc_symtype_idx[symtype(sym)]], sym)
@@ -171,13 +137,12 @@ function IndexCache(sys::AbstractSystem)
     disc_syms_by_symtype_by_partition = [Vector{SymbolicParam}[] for _ in disc_symtypes]
     for (i, buffer) in enumerate(disc_syms_by_symtype)
         for partition in clock_partitions
-            push!(disc_syms_by_symtype_by_partition[i],
-                [sym for sym in buffer if disc_param_callbacks[sym] == partition])
+            push!(disc_syms_by_symtype_by_partition[i], filter(==(partition) ∘ Base.Fix1(getindex, disc_param_callbacks), buffer))
         end
     end
     disc_idxs = Dict{SymbolicParam, DiscreteIndex}()
     callback_to_clocks = Dict{
-        Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}, Set{Int}}()
+        Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}, BitSet}()
     for (typei, disc_syms_by_partition) in enumerate(disc_syms_by_symtype_by_partition)
         symi = 0
         for (parti, disc_syms) in enumerate(disc_syms_by_partition)
@@ -205,15 +170,13 @@ function IndexCache(sys::AbstractSystem)
     disc_buffer_templates = Vector{BufferTemplate}[]
     for (symtype, disc_syms_by_partition) in zip(
         disc_symtypes, disc_syms_by_symtype_by_partition)
-        push!(disc_buffer_templates,
-            [BufferTemplate(symtype, length(buf)) for buf in disc_syms_by_partition])
+        push!(disc_buffer_templates, map(Base.Fix1(BufferTemplate, symtype) ∘ length, disc_syms_by_partition))
     end
 
     for p in parameters(sys; initial_parameters = true)
-        p = unwrap(p)
         ctype = symtype(p)
         if ctype <: FnType
-            ctype = fntype_to_function_type(ctype)
+            ctype = fntype_to_function_type(ctype)::TypeT
         end
         haskey(disc_idxs, p) && continue
         haskey(constant_buffers, ctype) && p in constant_buffers[ctype] && continue
@@ -224,7 +187,7 @@ function IndexCache(sys::AbstractSystem)
                    (ctype == Real || ctype <: AbstractFloat ||
                     ctype <: AbstractArray{Real} ||
                     ctype <: AbstractArray{<:AbstractFloat})
-                    if iscall(p) && operation(p) isa Initial
+                    if iscall(p) && operation(p) === Initial()
                         initial_pars
                     else
                         tunable_pars
@@ -240,33 +203,10 @@ function IndexCache(sys::AbstractSystem)
         )
     end
 
-    function get_buffer_sizes_and_idxs(T, buffers::Dict)
-        idxs = T()
-        buffer_sizes = BufferTemplate[]
-        for (i, (T, buf)) in enumerate(buffers)
-            for (j, p) in enumerate(buf)
-                ttp = default_toterm(p)
-                rp = renamespace(sys, p)
-                rttp = renamespace(sys, ttp)
-                idxs[p] = (i, j)
-                idxs[ttp] = (i, j)
-                idxs[rp] = (i, j)
-                idxs[rttp] = (i, j)
-            end
-            if T <: Symbolics.FnType
-                T = Any
-            end
-            push!(buffer_sizes, BufferTemplate(T, length(buf)))
-        end
-        return idxs, buffer_sizes
-    end
-
     const_idxs,
-    const_buffer_sizes = get_buffer_sizes_and_idxs(
-        ParamIndexMap, constant_buffers)
+    const_buffer_sizes = get_buffer_sizes_and_idxs(ParamIndexMap, sys, constant_buffers)
     nonnumeric_idxs,
-    nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(
-        NonnumericMap, nonnumeric_buffers)
+    nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(NonnumericMap, sys, nonnumeric_buffers)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
@@ -275,7 +215,8 @@ function IndexCache(sys::AbstractSystem)
         empty!(initial_pars)
     end
     for p in tunable_pars
-        idx = if size(p) == ()
+        sh = SU.shape(p)
+        idx = if !SU.is_array_shape(sh)
             tunable_buffer_size + 1
         else
             reshape(
@@ -293,7 +234,8 @@ function IndexCache(sys::AbstractSystem)
     initials_idxs = TunableIndexMap()
     initials_buffer_size = 0
     for p in initial_pars
-        idx = if size(p) == ()
+        sh = SU.shape(p)
+        idx = if !SU.is_array_shape(sh)
             initials_buffer_size + 1
         else
             reshape(
@@ -311,23 +253,27 @@ function IndexCache(sys::AbstractSystem)
     for k in collect(keys(tunable_idxs))
         v = tunable_idxs[k]
         v isa AbstractArray || continue
-        for (kk, vv) in zip(collect(k), v)
+        v = v::Union{UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}
+        iter = vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}
+        for (kk::SymbolicT, vv) in zip(iter, v)
             tunable_idxs[kk] = vv
         end
     end
     for k in collect(keys(initials_idxs))
         v = initials_idxs[k]
         v isa AbstractArray || continue
-        for (kk, vv) in zip(collect(k), v)
+        v = v::Union{UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}
+        iter = vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}
+        for (kk, vv) in zip(iter, v)
             initials_idxs[kk] = vv
         end
     end
 
     dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
-
+    vs = Set{SymbolicT}()
     for eq in get_parameter_dependencies(sys)
         sym = eq.lhs
-        vs = vars(eq.rhs)
+        SU.search_variables!(vs, eq.rhs)
         timeseries = TimeseriesSetType()
         if is_time_dependent(sys)
             for v in vs
@@ -341,24 +287,29 @@ function IndexCache(sys::AbstractSystem)
         rttsym = renamespace(sys, ttsym)
         for s in (sym, ttsym, rsym, rttsym)
             dependent_pars_to_timeseries[s] = timeseries
-            if hasname(s) && (!iscall(s) || operation(s) != getindex)
+            if hasname(s) && (!iscall(s) || operation(s) !== getindex)
                 symbol_to_variable[getname(s)] = sym
             end
         end
     end
 
-    observed_syms_to_timeseries = Dict{BasicSymbolic, TimeseriesSetType}()
+    observed_syms_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
     for eq in observed(sys)
         if symbolic_type(eq.lhs) != NotSymbolic()
             sym = eq.lhs
-            vs = vars(eq.rhs; op = Nothing)
+            empty!(vs)
+            SU.search_variables!(vs, eq.rhs)
             timeseries = TimeseriesSetType()
             if is_time_dependent(sys)
                 for v in vs
                     if (idx = get(disc_idxs, v, nothing)) !== nothing
                         push!(timeseries, idx.clock_idx)
-                    elseif iscall(v) && operation(v) === getindex &&
-                           (idx = get(disc_idxs, arguments(v)[1], nothing)) !== nothing
+                    elseif Moshi.Match.@match v begin
+                            BSImpl.Term(; f, args) => begin
+                                f === getindex && (idx = get(disc_idxs, args[1], nothing)) !== nothing
+                            end
+                            _ => false
+                        end
                         push!(timeseries, idx.clock_idx)
                     elseif haskey(observed_syms_to_timeseries, v)
                         union!(timeseries, observed_syms_to_timeseries[v])
@@ -379,13 +330,13 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    for sym in Iterators.flatten((keys(unk_idxs), keys(disc_idxs), keys(tunable_idxs),
-        keys(const_idxs), keys(nonnumeric_idxs),
-        keys(observed_syms_to_timeseries), independent_variable_symbols(sys)))
-        if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
-            symbol_to_variable[getname(sym)] = sym
-        end
-    end
+    populate_symbol_to_var!(symbol_to_variable, keys(unk_idxs))
+    populate_symbol_to_var!(symbol_to_variable, keys(disc_idxs))
+    populate_symbol_to_var!(symbol_to_variable, keys(tunable_idxs))
+    populate_symbol_to_var!(symbol_to_variable, keys(const_idxs))
+    populate_symbol_to_var!(symbol_to_variable, keys(nonnumeric_idxs))
+    populate_symbol_to_var!(symbol_to_variable, independent_variable_symbols(sys))
+    populate_symbol_to_var!(symbol_to_variable, observables(sys))
 
     return IndexCache(
         unk_idxs,
@@ -404,6 +355,86 @@ function IndexCache(sys::AbstractSystem)
         nonnumeric_buffer_sizes,
         symbol_to_variable
     )
+end
+
+function populate_symbol_to_var!(symbol_to_variable::Dict{Symbol, SymbolicT}, vars)
+    for sym::SymbolicT in vars
+        if hasname(sym) && (!iscall(sym) || operation(sym) !== getindex)
+            symbol_to_variable[getname(sym)] = sym
+        end
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Utility function for the `IndexCache` constructor.
+"""
+function insert_by_type!(buffers::Dict{TypeT, Set{SymbolicT}}, sym::SymbolicT, ctype::TypeT)
+    buf = get!(Set{SymbolicT}, buffers, ctype)
+    push!(buf, sym)
+end
+function insert_by_type!(buffers::Vector{SymbolicT}, sym::SymbolicT, ::TypeT)
+    push!(buffers, sym)
+end
+
+function parse_callbacks_for_discretes!(sys::AbstractSystem, events::Vector, disc_param_callbacks::Dict{SymbolicT, BitSet}, constant_buffers::Dict{TypeT, Set{SymbolicT}}, nonnumeric_buffers::Dict{TypeT, Set{SymbolicT}}, offset::Int)
+    for (i, event) in enumerate(events)
+        discs = Set{SymbolicParam}()
+        affect = event.affect::Union{AffectSystem, ImperativeAffect, Nothing}
+        if affect isa AffectSystem || affect isa ImperativeAffect
+            union!(discs, discretes(affect))
+        elseif affect === nothing
+            continue
+        end
+
+        for sym in discs
+            if !is_parameter(sys, sym)
+                if iscall(sym) && operation(sym) === getindex &&
+                   is_parameter(sys, arguments(sym)[1])
+                    sym = arguments(sym)[1]
+                else
+                    error("Expected discrete variable $sym in callback to be a parameter")
+                end
+            end
+
+            # Only `foo(t)`-esque parameters can be saved
+            if iscall(sym) && length(arguments(sym)) == 1 &&
+               isequal(only(arguments(sym)), get_iv(sys))
+                clocks = get!(BitSet, disc_param_callbacks, sym)
+                push!(clocks, i + offset)
+            elseif is_variable_floatingpoint(sym)
+                insert_by_type!(constant_buffers, sym, symtype(sym))
+            else
+                stype = symtype(sym)
+                if stype <: FnType
+                    stype = fntype_to_function_type(stype)::TypeT
+                end
+                insert_by_type!(nonnumeric_buffers, sym, stype)
+            end
+        end
+    end
+end
+
+function get_buffer_sizes_and_idxs(::Type{BufT}, sys::AbstractSystem, buffers::Dict) where {BufT}
+    idxs = BufT()
+    buffer_sizes = BufferTemplate[]
+    for (i, (T, buf)) in enumerate(buffers)
+        for (j, p) in enumerate(buf)
+            ttp = default_toterm(p)
+            rp = renamespace(sys, p)
+            rttp = renamespace(sys, ttp)
+            idxs[p] = (i, j)
+            idxs[ttp] = (i, j)
+            idxs[rp] = (i, j)
+            idxs[rttp] = (i, j)
+        end
+        if T <: Symbolics.FnType
+            T = Any
+        end
+        push!(buffer_sizes, BufferTemplate(T, length(buf)))
+    end
+    return idxs, buffer_sizes
 end
 
 function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
