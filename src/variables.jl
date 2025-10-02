@@ -245,19 +245,30 @@ chosen as a state in `mtkcompile`.
 """
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
-normalize_to_differential(x) = x
-
-function default_toterm(x)
-    if iscall(x) && (op = operation(x)) isa Operator
-        if !(op isa Differential)
-            if op isa Shift && op.steps < 0
-                return shift2term(x)
-            end
-            x = normalize_to_differential(op)(arguments(x)...)
-        end
-        Symbolics.diff2term(x)
+function normalize_to_differential(@nospecialize(op))
+    if op isa Shift && op.t isa SymbolicT
+        return Differential(op.t) ^ op.steps
     else
-        x
+        return op
+    end
+end
+
+default_toterm(x) = x
+function default_toterm(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args, shape, type, metadata) && if f isa Operator end => begin
+            if f isa Shift && f.steps < 0
+                return shift2term(x)
+            elseif f isa Differential
+                return Symbolics.diff2term(x)
+            else
+                newf = normalize_to_differential(f)
+                f === newf && return x
+                x = BSImpl.Term{VartypeT}(newf, args; type, shape, metadata)
+                return Symbolics.diff2term(x)
+            end
+        end
+        _ => return x
     end
 end
 
