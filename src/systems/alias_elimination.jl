@@ -411,7 +411,7 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, unknowns; check = true)
+function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
     graph, assigns = observed2graph(eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
@@ -460,22 +460,25 @@ function topsort_equations(eqs, unknowns; check = true)
     return ordered_eqs
 end
 
-function observed2graph(eqs, unknowns)
+function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
     graph = BipartiteGraph(length(eqs), length(unknowns))
-    v2j = Dict(unknowns .=> 1:length(unknowns))
+    v2j = Dict{SymbolicT, Int}(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
-
+    vars = Set{SymbolicT}()
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
             throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in unknowns."))
         assigns[i] = lhs_j
-        vs = vars(eq.rhs; op = Symbolics.Operator)
-        for v in vs
+        empty!(vars)
+        SU.search_variables!(vars, eq.rhs; is_atomic = OperatorIsAtomic{SU.Operator}())
+        for v in vars
             j = get(v2j, v, nothing)
-            j !== nothing && add_edge!(graph, i, j)
+            if j isa Int
+                add_edge!(graph, i, j)
+            end
         end
     end
 
