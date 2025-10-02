@@ -445,7 +445,14 @@ PrecompileTools.@compile_workload begin
     @variables x(ModelingToolkit.t_nounits)
     isequal(ModelingToolkit.D_nounits.x, ModelingToolkit.t_nounits)
     sys = System([ModelingToolkit.D_nounits(x) ~ x], ModelingToolkit.t_nounits, [x], Num[]; name = :sys)
-    sys = System([ModelingToolkit.D_nounits(x) ~ x], ModelingToolkit.t_nounits, [x], Num[]; name = :sys)
+    complete(sys)
+    @syms p[1:2]
+    ndims(p)
+    size(p)
+    axes(p)
+    length(p)
+    v = [p]
+    isempty(v)
     # mtkcompile(sys)
     @mtkmodel __testmod__ begin
         @constants begin
@@ -488,5 +495,6 @@ precompile(Tuple{Type{NamedTuple{(:name, :defaults), T} where T<:Tuple}, Tuple{S
 precompile(Tuple{typeof(SymbolicUtils.isequal_somescalar), Float64, Float64})
 precompile(Tuple{Type{NamedTuple{(:name, :defaults, :guesses), T} where T<:Tuple}, Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}, Base.Dict{Symbolics.Num, Float64}}})
 precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:name, :defaults, :guesses), Tuple{Symbol, Base.Dict{Symbolics.Num, Float64}, Base.Dict{Symbolics.Num, Float64}}}, Type{ModelingToolkit.System}, Array{Symbolics.Equation, 1}, Symbolics.Num, Array{Symbolics.Num, 1}, Array{Symbolics.Num, 1}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:type, :shape), Tuple{DataType, SymbolicUtils.SmallVec{Base.UnitRange{Int64}, Array{Base.UnitRange{Int64}, 1}}}}, typeof(SymbolicUtils.term), Any, SymbolicUtils.BasicSymbolicImpl.var"typeof(BasicSymbolicImpl)"{SymbolicUtils.SymReal}})
 
 end # module

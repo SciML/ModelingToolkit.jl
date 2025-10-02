@@ -631,34 +631,36 @@ This namespacing functionality can also be toggled independently of `complete`
 using [`toggle_namespacing`](@ref).
 """
 function complete(
-        sys::AbstractSystem; split = true, flatten = true, add_initial_parameters = true)
+        sys::T; split = true, flatten = true, add_initial_parameters = true) where {T <: AbstractSystem}
     sys = discover_globalscoped(sys)
 
     if flatten
-        eqs = equations(sys)
-        if eqs isa AbstractArray && eltype(eqs) <: Equation
-            newsys = expand_connections(sys)
-        else
-            newsys = sys
-        end
+        newsys = expand_connections(sys)
         newsys = ModelingToolkit.flatten(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
-            @set! newsys.parent = complete(sys; split = false, flatten = false)
+            @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
         sys = newsys
-        sys = process_parameter_equations(sys)
+        sys = process_parameter_equations(sys)::T
         if add_initial_parameters
-            sys = add_initialization_parameters(sys; split)
+            sys = add_initialization_parameters(sys; split)::T
         end
+        cb_alg_eqs = Equation[alg_equations(sys); observed(sys)]
         if has_continuous_events(sys) && is_time_dependent(sys)
-            @set! sys.continuous_events = complete.(
-                get_continuous_events(sys); iv = get_iv(sys),
-                alg_eqs = [alg_equations(sys); observed(sys)])
+            cevts = SymbolicContinuousCallback[]
+            for ev in get_continuous_events(sys)
+                ev = complete(ev; iv = get_iv(sys)::SymbolicT, alg_eqs = cb_alg_eqs)
+                push!(cevts, ev)
+            end
+            @set! sys.continuous_events = cevts
         end
         if has_discrete_events(sys) && is_time_dependent(sys)
-            @set! sys.discrete_events = complete.(
-                get_discrete_events(sys); iv = get_iv(sys),
-                alg_eqs = [alg_equations(sys); observed(sys)])
+            devts = SymbolicDiscreteCallback[]
+            for ev in get_discrete_events(sys)
+                ev = complete(ev; iv = get_iv(sys)::SymbolicT, alg_eqs = cb_alg_eqs)
+                push!(devts, ev)
+            end
+            @set! sys.discrete_events = devts
         end
     end
     if split && has_index_cache(sys)
@@ -666,39 +668,48 @@ function complete(
         # Ideally we'd do `get_ps` but if `flatten = false`
         # we don't get all of them. So we call `parameters`.
         all_ps = parameters(sys; initial_parameters = true)
+        all_ps_set = Set{SymbolicT}(all_ps)
         # inputs have to be maintained in a specific order
         input_vars = inputs(sys)
         if !isempty(all_ps)
             # reorder parameters by portions
-            ps_split = reorder_parameters(sys, all_ps)
+            ps_split = Vector{Vector{SymbolicT}}(reorder_parameters(sys, all_ps))
             # if there are tunables, they will all be in `ps_split[1]`
             # and the arrays will have been scalarized
-            ordered_ps = eltype(all_ps)[]
+            ordered_ps = SymbolicT[]
+            offset = 0
             # if there are no tunables, vcat them
             if !isempty(get_index_cache(sys).tunable_idx)
-                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
-                ps_split = Base.tail(ps_split)
+                unflatten_parameters!(ordered_ps, ps_split[1], all_ps_set)
+                offset += 1
             end
             # unflatten initial parameters
             if !isempty(get_index_cache(sys).initials_idx)
-                unflatten_parameters!(ordered_ps, ps_split[1], all_ps)
-                ps_split = Base.tail(ps_split)
+                unflatten_parameters!(ordered_ps, ps_split[2], all_ps_set)
+                offset += 1
             end
-            ordered_ps = vcat(
-                ordered_ps, reduce(vcat, ps_split; init = eltype(ordered_ps)[]))
+            for i in (offset+1):length(ps_split)
+                append!(ordered_ps, ps_split[i]::Vector{SymbolicT})
+            end
             if isscheduled(sys)
                 # ensure inputs are sorted
-                input_idxs = findfirst.(isequal.(input_vars), (ordered_ps,))
-                @assert all(!isnothing, input_idxs)
-                @assert issorted(input_idxs)
+                last_idx = 0
+                for p in input_vars
+                    idx = findfirst(isequal(p), ordered_ps)::Int
+                    @assert last_idx < idx
+                    last_idx = idx
+                end
             end
             @set! sys.ps = ordered_ps
         end
     elseif has_index_cache(sys)
         @set! sys.index_cache = nothing
     end
-    if isdefined(sys, :initializesystem) && get_initializesystem(sys) !== nothing
-        @set! sys.initializesystem = complete(get_initializesystem(sys); split)
+    if has_initializesystem(sys)
+        isys = get_initializesystem(sys)
+        if isys isa T
+            @set! sys.initializesystem = complete(isys::T; split)
+        end
     end
     sys = toggle_namespacing(sys, false; safe = true)
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
@@ -727,26 +738,28 @@ parameters in the system `all_ps`, unscalarize the elements in `params` and appe
 to `buffer` in the same order as they are present in `params`. Effectively, if
 `params = [p[1], p[2], p[3], q]` then this is equivalent to `push!(buffer, p, q)`.
 """
-function unflatten_parameters!(buffer, params, all_ps)
+function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{SymbolicT}, all_ps::Set{SymbolicT})
     i = 1
     # go through all the tunables
     while i <= length(params)
         sym = params[i]
         # if the sym is not a scalarized array symbolic OR it was already scalarized,
         # just push it as-is
-        if !iscall(sym) || operation(sym) != getindex ||
-           any(isequal(sym), all_ps)
+        if !iscall(sym) || operation(sym) !== getindex || sym in all_ps
             push!(buffer, sym)
             i += 1
             continue
         end
+
+        arrsym = first(arguments(sym))
         # the next `length(sym)` symbols should be scalarized versions of the same
         # array symbolic
-        if !allequal(first(arguments(x))
-        for x in view(params, i:(i + length(sym) - 1)))
-            error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+        for j in (i+1):(i+length(sym)-1)
+            p = params[j]
+            if !(iscall(p) && operation(p) === getindex && isequal(arguments(p)[1], arrsym))
+                error("This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE and stacktrace.")
+            end
         end
-        arrsym = first(arguments(sym))
         push!(buffer, arrsym)
         i += length(arrsym)
     end
@@ -1099,6 +1112,8 @@ function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
     end
 end
 
+const AllScopes = Union{LocalScope, ParentScope, GlobalScope}
+
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
@@ -1112,8 +1127,9 @@ renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL,
 Namespace `x` with the name of `sys`.
 """
 function renamespace(sys, x::SymbolicT)
+    isequal(x, SU.idxs_for_arrayop(VartypeT)) && return x
     Moshi.Match.@match x begin
-        BSImpl.Sym(; name) => let scope = getmetadata(x, SymScope, LocalScope())::Union{LocalScope, ParentScope, GlobalScope}
+        BSImpl.Sym(; name) => let scope = getmetadata(x, SymScope, LocalScope())::AllScopes
             if scope isa LocalScope
                 return rename(x, renamespace(getname(sys), name))::SymbolicT
             elseif scope isa ParentScope
@@ -1172,8 +1188,14 @@ Return `equations(sys)`, namespaced by the name of `sys`.
 """
 function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
-    isempty(eqs) && return Equation[]
-    map(eq -> namespace_equation(eq, sys; ivs), eqs)
+    isempty(eqs) && return eqs
+    if eqs === get_eqs(sys)
+        eqs = copy(eqs)
+    end
+    for i in eachindex(eqs)
+        eqs[i] = namespace_equation(eqs[i], sys; ivs)
+    end
+    return eqs
 end
 
 function namespace_initialization_equations(
@@ -1220,7 +1242,15 @@ function namespace_jump(j::MassActionJump, sys)
 end
 
 function namespace_jumps(sys::AbstractSystem)
-    return [namespace_jump(j, sys) for j in get_jumps(sys)]
+    js = jumps(sys)
+    isempty(js) && return js
+    if js === get_jumps(sys)
+        js = copy(js)
+    end
+    for i in eachindex(js)
+        js[i] = namespace_jump(js[i], sys)
+    end
+    return js
 end
 
 function namespace_brownians(sys::AbstractSystem)
@@ -1240,47 +1270,62 @@ function is_array_of_symbolics(x)
         any(y -> symbolic_type(y) != NotSymbolic() || is_array_of_symbolics(y), x)
 end
 
-function namespace_expr(
-        O, sys, n = (sys === nothing ? nothing : nameof(sys));
-        ivs = sys === nothing ? nothing : independent_variables(sys))
-    sys === nothing && return O
-    O = unwrap(O)
-    # Exceptions for arrays of symbolic and Ref of a symbolic, the latter
-    # of which shows up in broadcasts
-    if symbolic_type(O) == NotSymbolic() && !(O isa AbstractArray) && !(O isa Ref)
-        return O
+function namespace_expr(O, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+    return O
+end
+function namespace_expr(O::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap}, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+    namespace_expr(O, args...; kw...)
+end
+function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
+    is_array_of_symbolics(O) || return O
+    O = copy(O)
+    for i in eachindex(O)
+        O[i] = namespace_expr(O[i], sys, n; ivs)
     end
-    if any(isequal(O), ivs)
-        return O
-    elseif iscall(O)
-        T = typeof(O)
-        renamed = let sys = sys, n = n, T = T
-            map(a -> namespace_expr(a, sys, n; ivs)::Any, arguments(O))
+    return O
+end
+function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
+    any(isequal(O), ivs) && return O
+    isvar = isvariable(O)
+    Moshi.Match.@match O begin
+        BSImpl.Const(;) => return O
+        BSImpl.Sym(;) => return isvar ? renamespace(n, O) : O
+        BSImpl.Term(; f, args, metadata, type, shape) => begin
+            newargs = copy(parent(args))
+            for i in eachindex(args)
+                newargs[i] = namespace_expr(newargs[i], sys, n; ivs)
+            end
+            if isvar
+                rescoped = renamespace(n, O)
+                f = Moshi.Data.variant_getfield(rescoped, BSImpl.Term{VartypeT}, :f)
+                meta = Moshi.Data.variant_getfield(rescoped, BSImpl.Term{VartypeT}, :metadata)
+            elseif f isa SymbolicT
+                f = renamespace(n, f)
+                meta = metadata
+            end
+            return BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata = meta)
         end
-        if isvariable(O)
-            # Use renamespace so the scope is correct, and make sure to use the
-            # metadata from the rescoped variable
-            rescoped = renamespace(n, O)
-            maketerm(typeof(rescoped), operation(rescoped), renamed,
-                metadata(rescoped))
-        elseif Symbolics.isarraysymbolic(O)
-            # promote_symtype doesn't work for array symbolics
-            maketerm(typeof(O), operation(O), renamed, metadata(O))
-        else
-            maketerm(typeof(O), operation(O), renamed, metadata(O))
+        BSImpl.AddMul(; coeff, dict, variant, type, shape, metadata) => begin
+            newdict = copy(dict)
+            for (k, v) in newdict
+                newdict[namespace_expr(k, sys, n; ivs)] = v
+            end
+            return BSImpl.AddMul{VartypeT}(coeff, newdict, variant; type, shape, metadata)
         end
-    elseif isvariable(O)
-        renamespace(n, O)
-    elseif O isa AbstractArray && is_array_of_symbolics(O)
-        let sys = sys, n = n
-            map(o -> namespace_expr(o, sys, n; ivs), O)
+        BSImpl.Div(; num, den, type, shape, metadata) => begin
+            num = namespace_expr(num, sys, n; ivs)
+            den = namespace_expr(den, sys, n; ivs)
+            return BSImpl.Div{VartypeT}(num, den, false; type, shape, metadata)
         end
-    else
-        O
+        BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, type, shape, metadata) => begin
+            if term isa SymbolicT
+                term = namespace_expr(term, sys, n; ivs)
+            end
+            expr = namespace_expr(expr, sys, n; ivs)
+            return BSImpl.ArrayOp{VartypeT}(output_idx, expr, reduce, term, ranges; type, shape, metadata)
+        end
     end
 end
-
-_nonum(@nospecialize x) = x isa Num ? x.val : x
 
 """
 $(TYPEDSIGNATURES)
@@ -1293,21 +1338,14 @@ See also [`ModelingToolkit.get_unknowns`](@ref).
 function unknowns(sys::AbstractSystem)
     sts = get_unknowns(sys)
     systems = get_systems(sys)
-    nonunique_unknowns = if isempty(systems)
-        sts
-    else
-        system_unknowns = reduce(vcat, namespace_variables.(systems))
-        isempty(sts) ? system_unknowns : [sts; system_unknowns]
+    if isempty(systems)
+        return sts
     end
-    isempty(nonunique_unknowns) && return nonunique_unknowns
-    # `Vector{Any}` is incompatible with the `SymbolicIndexingInterface`, which uses
-    # `elsymtype = symbolic_type(eltype(_arg))`
-    # which inappropriately returns `NotSymbolic()`
-    if nonunique_unknowns isa Vector{Any}
-        nonunique_unknowns = _nonum.(nonunique_unknowns)
+    result = copy(sts)
+    for subsys in systems
+        append!(result, namespace_variables(subsys))
     end
-    @assert typeof(nonunique_unknowns) !== Vector{Any}
-    unique(nonunique_unknowns)
+    return result
 end
 
 """
@@ -1331,19 +1369,24 @@ See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 """
 function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
-    if ps == SciMLBase.NullParameters()
+    if ps === SciMLBase.NullParameters()
         return []
     end
     if eltype(ps) <: Pair
         ps = first.(ps)
     end
     systems = get_systems(sys)
-    result = unique(isempty(systems) ? ps :
-                    [ps; reduce(vcat, namespace_parameters.(systems))])
+    if isempty(systems)
+        return ps
+    end
+    result = copy(ps)
+    for subsys in systems
+        append!(result, namespace_parameters(subsys))
+    end
     if !initial_parameters && !is_initializesystem(sys)
         filter!(result) do sym
             return !(isoperator(sym, Initial) ||
-                     iscall(sym) && operation(sym) == getindex &&
+                     iscall(sym) && operation(sym) === getindex &&
                      isoperator(arguments(sym)[1], Initial))
         end
     end
@@ -1539,15 +1582,12 @@ See also [`full_equations`](@ref) and [`ModelingToolkit.get_eqs`](@ref).
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
     systems = get_systems(sys)
-    if isempty(systems)
-        return eqs
-    else
-        eqs = Equation[eqs;
-                       reduce(vcat,
-                           namespace_equations.(get_systems(sys));
-                           init = Equation[])]
-        return eqs
+    isempty(systems) && return eqs
+    eqs = copy(eqs)
+    for subsys in systems
+        append!(eqs, namespace_equations(subsys))
     end
+    return eqs
 end
 
 """
@@ -1627,10 +1667,12 @@ all the subsystems of `sys` (appropriately namespaced).
 function jumps(sys::AbstractSystem)
     js = get_jumps(sys)
     systems = get_systems(sys)
-    if isempty(systems)
-        return js
+    isempty(systems) && return js
+    js = copy(js)
+    for subsys in systems
+        append!(js, namespace_jumps(subsys))
     end
-    return [js; reduce(vcat, namespace_jumps.(systems); init = [])]
+    return js
 end
 
 """
@@ -1679,8 +1721,14 @@ end
 
 function namespace_constraints(sys)
     cstrs = constraints(sys)
-    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef, 0)
-    map(cstr -> namespace_constraint(cstr, sys), cstrs)
+    isempty(cstrs) && return cstrs
+    if cstrs === get_constraints(sys)
+        cstrs = copy(cstrs)
+    end
+    for i in eachindex(cstrs)
+        cstrs[i] = namespace_constraint(cstrs[i], sys)
+    end
+    return cstrs
 end
 
 """
@@ -1691,7 +1739,12 @@ Get all constraints in the system `sys` and all of its subsystems, appropriately
 function constraints(sys::AbstractSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
-    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
+    isempty(systems) && return cs
+    cs = copy(sys)
+    for subsys in systems
+        append!(cs, namespace_constraints(subsys))
+    end
+    return cs
 end
 
 """
@@ -2788,12 +2841,12 @@ function process_parameter_equations(sys::AbstractSystem)
     if !isempty(get_systems(sys))
         throw(ArgumentError("Expected flattened system"))
     end
-    varsbuf = Set()
+    varsbuf = Set{SymbolicT}()
     pareq_idxs = Int[]
     eqs = equations(sys)
     for (i, eq) in enumerate(eqs)
         empty!(varsbuf)
-        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
+        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{Union{Differential, Initial, Pre}}())
         # singular equations
         isempty(varsbuf) && continue
         if all(varsbuf) do sym
@@ -2816,8 +2869,11 @@ function process_parameter_equations(sys::AbstractSystem)
         end
     end
 
-    pareqs = [get_parameter_dependencies(sys); eqs[pareq_idxs]]
-    explicitpars = [eq.lhs for eq in pareqs]
+    pareqs = Equation[get_parameter_dependencies(sys); eqs[pareq_idxs]]
+    explicitpars = SymbolicT[]
+    for eq in pareqs
+        push!(explicitpars, eq.lhs)
+    end
     pareqs = topsort_equations(pareqs, explicitpars)
 
     eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
