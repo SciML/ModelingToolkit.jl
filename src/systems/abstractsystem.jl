@@ -608,9 +608,9 @@ end
 Find [`GlobalScope`](@ref)d variables in `sys` and add them to the unknowns/parameters.
 """
 function discover_globalscoped(sys::AbstractSystem)
-    newunknowns = OrderedSet()
-    newparams = OrderedSet()
-    iv = has_iv(sys) ? get_iv(sys) : nothing
+    newunknowns = OrderedSet{SymbolicT}()
+    newparams = OrderedSet{SymbolicT}()
+    iv::Union{SymbolicT, Nothing} = has_iv(sys) ? get_iv(sys) : nothing
     collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
     setdiff!(newunknowns, observables(sys))
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
