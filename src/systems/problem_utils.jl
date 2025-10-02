@@ -493,7 +493,7 @@ function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
         v === nothing && continue
         symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
         haskey(varmap, k) || continue
-        varmap[k] = fixpoint_sub(v, varmap; maxiters = limit)
+        varmap[k] = value(fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true)))
     end
 end
 
