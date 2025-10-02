@@ -170,16 +170,19 @@ function SymbolicIndexingInterface.variable_symbols(sys::AbstractSystem)
     return unknowns(sys)
 end
 
-function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym)
-    sym = unwrap(sym)
+function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
+    is_parameter(sys, unwrap(sym))
+end
+
+function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Int)
+    !is_split(sys) && sym in 1:length(parameter_symbols(sys))
+end
+
+function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::SymbolicT)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return sym isa ParameterIndex || is_parameter(ic, sym) ||
-               iscall(sym) &&
-               operation(sym) === getindex &&
+               iscall(sym) && operation(sym) === getindex &&
                is_parameter(ic, first(arguments(sym)))
-    end
-    if unwrap(sym) isa Int
-        return unwrap(sym) in 1:length(parameter_symbols(sys))
     end
     return any(isequal(sym), parameter_symbols(sys)) ||
            hasname(sym) && !(iscall(sym) && operation(sym) == getindex) &&
@@ -191,7 +194,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
         return is_parameter(ic, sym)
     end
 
-    named_parameters = [getname(x)
+    named_parameters = Symbol[getname(x)
                         for x in parameter_symbols(sys)
                         if hasname(x) && !(iscall(x) && operation(x) == getindex)]
     return any(isequal(sym), named_parameters) ||
@@ -199,6 +202,8 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
            count(isequal(sym),
         Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, named_parameters)) == 1
 end
+
+SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym) = false
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     sym = unwrap(sym)
@@ -312,7 +317,8 @@ for traitT in [
     ArraySymbolic
 ]
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
-        allsyms = vars(sym; op = Symbolics.Operator)
+        allsyms = Set{SymbolicT}()
+        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{Symbolics.Operator}())
         for s in allsyms
             s = unwrap(s)
             if is_variable(sys, s) || is_independent_variable(sys, s)
