@@ -11,14 +11,16 @@ end
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      isadd, ismul, ispow, issym, FnType,
+                      isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
                       @rule, Rewriters, substitute, metadata, BasicSymbolic
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 using DocStringExtensions
 using SpecialFunctions, NaNMath
-using DiffEqCallbacks
+@recompile_invalidations begin
+    using DiffEqCallbacks
+end
 using Graphs
 import ExprTools: splitdef, combinedef
 import OrderedCollections
@@ -337,6 +339,8 @@ export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptPr
 export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
        CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
+
+const set_scalar_metadata = setmetadata
 
 @public apply_to_variables, equations_toplevel, unknowns_toplevel, parameters_toplevel
 @public continuous_events_toplevel, discrete_events_toplevel, assertions, is_alg_equation
