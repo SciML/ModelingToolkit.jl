@@ -218,13 +218,13 @@ setio(x, i::Bool, o::Bool) = setoutput(setinput(x, i), o)
 
 Check if variable `x` is marked as an input.
 """
-isinput(x) = isvarkind(VariableInput, x)
+isinput(x) = isvarkind(VariableInput, x)::Bool
 """
     $(TYPEDSIGNATURES)
 
 Check if variable `x` is marked as an output.
 """
-isoutput(x) = isvarkind(VariableOutput, x)
+isoutput(x) = isvarkind(VariableOutput, x)::Bool
 
 # Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
@@ -234,7 +234,7 @@ isoutput(x) = isvarkind(VariableOutput, x)
 Check if `x` is marked as irreducible. This prevents it from being eliminated as an
 observed variable in `mtkcompile`.
 """
-isirreducible(x) = isvarkind(VariableIrreducible, x)
+isirreducible(x) = isvarkind(VariableIrreducible, x)::Bool
 setirreducible(x, v::Bool) = setmetadata(x, VariableIrreducible, v)
 state_priority(x::Union{Num, Symbolics.Arr}) = state_priority(unwrap(x))
 """
@@ -339,7 +339,7 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
-    isvarkind(VariableDisturbance, x)
+    isvarkind(VariableDisturbance, x)::Bool
 end
 
 setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
@@ -370,7 +370,7 @@ Create a tunable parameter by
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = true)
-    isvarkind(VariableTunable, x, default)
+    isvarkind(VariableTunable, x, default)::Bool
 end
 
 ## Dist ========================================================================
@@ -607,10 +607,10 @@ Check if the variable `x` has a unit.
 hasunit(x) = getunit(x) !== nothing
 
 getunshifted(x::Num) = getunshifted(unwrap(x))
-getunshifted(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnshifted, nothing)
+getunshifted(x::SymbolicT) = Symbolics.getmetadata(x, VariableUnshifted, nothing)::Union{SymbolicT, Nothing}
 
 getshift(x::Num) = getshift(unwrap(x))
-getshift(x::SymbolicT) = Symbolics.getmetadata(x, VariableShift, 0)
+getshift(x::SymbolicT) = Symbolics.getmetadata(x, VariableShift, 0)::Int
 
 ###################
 ### Evaluate at ###
