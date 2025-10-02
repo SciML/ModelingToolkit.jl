@@ -530,22 +530,24 @@ function check_index_map(idxmap::Dict{SymbolicT, V}, sym::SymbolicT)::Union{V, N
     return nothing
 end
 
+const ReorderedParametersT = Vector{Union{Vector{SymbolicT}, Vector{Vector{SymbolicT}}}}
+
 function reorder_parameters(
         sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         return reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
     elseif ps isa Tuple
-        ps
+        return ReorderedParametersT(collect(ps))
     else
-        (ps,)
+        return eltype(ReorderedParametersT)[ps]
     end
 end
 
 const COMMON_DEFAULT_VAR = unwrap(only(@variables __DEF__))
 
 function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing = false, flatten = true)
-    isempty(ps) && return ()
-    result = Vector{Union{Vector{SymbolicT}, Vector{Vector{SymbolicT}}}}()
+    result = ReorderedParametersT()
+    isempty(ps) && return result
     param_buf = fill(COMMON_DEFAULT_VAR, ic.tunable_buffer_size.length)
     if !isempty(param_buf) || !flatten
         push!(result, param_buf)
