@@ -836,33 +836,43 @@ function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = 
     if neqs === nothing
         throw(ArgumentError("Expected a system with `noise_eqs`."))
     end
+    neqs = neqs::Union{Vector{SymbolicT}, Matrix{SymbolicT}}
     if !isempty(get_systems(sys))
         throw(ArgumentError("The system must be flattened."))
     end
     # vector means diagonal noise
-    nbrownians = ndims(neqs) == 1 ? length(neqs) : size(neqs, 2)
-    if names isa Symbol
-        names = [Symbol(names, :_, i) for i in 1:nbrownians]
+    nbrownians = if neqs isa Vector{SymbolicT}
+        length(neqs)
+    elseif neqs isa Matrix{SymbolicT}
+        size(neqs, 2)
     end
-    if length(names) != nbrownians
+    if names isa Symbol
+        _names = Symbol[]
+        for i in 1:nbrownians
+            push!(_names, Symbol(names, :_, i))
+        end
+        names = _names
+    elseif names isa Vector{Symbol} && length(names) != nbrownians
         throw(ArgumentError("""
         The system has $nbrownians brownian variables. Received $(length(names)) names \
         for the brownian variables. Provide $nbrownians names or a single `Symbol` to use \
         an array variable of the appropriately length.
         """))
     end
-    brownvars = map(names) do name
-        unwrap(only(@brownians $name))
+    names = names::Vector{Symbol}
+    brownvars = SymbolicT[]
+    for name in names
+        push!(brownvars, unwrap(only(@brownians $name)))
     end
-
-    terms = if ndims(neqs) == 1
+    terms = if neqs isa Vector{SymbolicT}
         neqs .* brownvars
-    else
+    elseif neqs isa Matrix{SymbolicT}
         neqs * brownvars
     end
 
-    eqs = map(get_eqs(sys), terms) do eq, term
-        eq.lhs ~ eq.rhs + term
+    eqs = Equation[]
+    for (eq, term) in zip(get_eqs(sys), terms)
+        push!(eqs, eq.lhs ~ eq.rhs + term)
     end
 
     @set! sys.eqs = eqs
