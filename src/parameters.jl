@@ -15,34 +15,19 @@ The symbolic metadata key for storing the `VariableType`.
 """
 struct MTKVariableTypeCtx end
 
-getvariabletype(x, def = VARIABLE) = getmetadata(unwrap(x), MTKVariableTypeCtx, def)
+getvariabletype(x, def = VARIABLE) = safe_getmetadata(MTKVariableTypeCtx, unwrap(x), def)::Union{typeof(def), VariableType}
 
 """
     $TYPEDEF
 
 Check if the variable contains the metadata identifying it as a parameter.
 """
-function isparameter(x)
-    x = unwrap(x)
-
-    if x isa SymbolicT && (varT = getvariabletype(x, nothing)) !== nothing
-        return varT === PARAMETER
-        #TODO: Delete this branch
-    elseif x isa SymbolicT && iscall(x) && operation(x) === getindex
-        p = arguments(x)[1]
-        isparameter(p) ||
-            (hasmetadata(p, Symbolics.VariableSource) &&
-             getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
-    elseif iscall(x) && operation(x) isa SymbolicT
-        varT === PARAMETER || isparameter(operation(x))
-    elseif iscall(x) && operation(x) == (getindex)
-        isparameter(arguments(x)[1])
-    elseif x isa SymbolicT
-        varT === PARAMETER
-    else
-        false
-    end
+isparameter(x::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap}) = isparameter(unwrap(x))
+function isparameter(x::SymbolicT)
+    varT = getvariabletype(x, nothing)
+    return varT === PARAMETER
 end
+isparameter(x) = false
 
 function iscalledparameter(x)
     x = unwrap(x)
