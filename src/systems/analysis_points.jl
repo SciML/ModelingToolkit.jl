@@ -161,7 +161,17 @@ end
 Convert an `AnalysisPoint` to a standard connection.
 """
 function to_connection(ap::AnalysisPoint)
-    return connect(ap.input, ap.outputs...)
+    if ap.input isa System
+        vs = System[ap.input]
+        append!(vs, ap.outputs::Vector{System})
+        return Connection() ~ Connection(vs)
+    elseif ap.input isa SymbolicT
+        vs = SymbolicT[ap.input]
+        append!(vs, ap.outputs::Vector{SymbolicT})
+        return Connection() ~ Connection(vs)
+    else
+        error("Unreachable!")
+    end
 end
 
 """
@@ -179,7 +189,7 @@ end
 
 # create analysis points via `connect`
 function connect(in, ap::AnalysisPoint, outs...; verbose = true)
-    return AnalysisPoint() ~ AnalysisPoint(in, ap.name, collect(outs); verbose)
+    return AnalysisPoint() ~ AnalysisPoint(unwrap(in), ap.name, collect(unwrap.(outs)); verbose)
 end
 
 """
@@ -249,8 +259,13 @@ end
 Remove all `AnalysisPoint`s in `sys` and any of its subsystems, replacing them by equivalent connections.
 """
 function remove_analysis_points(sys::AbstractSystem)
-    eqs = map(get_eqs(sys)) do eq
-        value(eq.lhs) isa AnalysisPoint ? to_connection(value(eq.rhs)) : eq
+    eqs = Equation[]
+    for eq in get_eqs(sys)
+        if unwrap_const(eq.lhs) isa AnalysisPoint
+            push!(eqs, to_connection(unwrap_const(eq.rhs)::AnalysisPoint))
+        else
+            push!(eqs, eq)
+        end
     end
     @set! sys.eqs = eqs
     @set! sys.systems = map(remove_analysis_points, get_systems(sys))

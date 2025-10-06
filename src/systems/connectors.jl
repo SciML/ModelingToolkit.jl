@@ -23,8 +23,18 @@ Connect multiple connectors created via `@connector`. All connected connectors
 must be unique.
 """
 function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
-    syss = (sys1, sys2, syss...)
-    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
+    _syss = System[]
+    push!(_syss, sys1)
+    push!(_syss, sys2)
+    for sys in syss
+        push!(_syss, sys)
+    end
+    syss = _syss
+    sysnames = Symbol[]
+    for sys in syss
+        push!(sysnames, nameof(sys))
+    end
+    allunique(sysnames) || error("connect takes distinct systems!")
     Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
 
@@ -73,11 +83,7 @@ Get the connection type of symbolic variable `s` from the `VariableConnectType` 
 Defaults to `Equality` if not present.
 """
 function get_connection_type(s::SymbolicT)
-    s = unwrap(s)
-    if iscall(s) && operation(s) === getindex
-        s = arguments(s)[1]
-    end
-    getmetadata(s, VariableConnectType, Equality)
+    safe_getmetadata(VariableConnectType, s, Equality)::DataType
 end
 
 """
@@ -171,8 +177,12 @@ get_systems(c::Connection) = c.systems
 Refer to the [Connection semantics](@ref connect_semantics) section of the docs for more
 information.
 """
-instream(a) = term(instream, unwrap(a), type = symtype(a))
-SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
+function instream(a::SymbolicT)
+    BSImpl.Term{VartypeT}(instream, SArgsT((unwrap(a),)); type = symtype(a), shape = SU.shape(a))
+end
+instream(a::Num) = Num(instream(unwrap(a)))
+instream(a::Symbolics.Arr{T, N}) where {T, N} = Symbolics.Arr{T, N}(instream(unwrap(a)))
+SymbolicUtils.promote_symtype(::typeof(instream), ::Type{T}) where {T} = T
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 
@@ -183,7 +193,7 @@ Utility struct which wraps a symbolic variable used in a `Connection` to enable 
 to work.
 """
 struct SymbolicWithNameof
-    var::Any
+    var::SymbolicT
 end
 
 function Base.nameof(x::SymbolicWithNameof)
@@ -192,7 +202,7 @@ end
 
 is_causal_variable_connection(c) = false
 function is_causal_variable_connection(c::Connection)
-    all(x -> x isa SymbolicWithNameof, get_systems(c))
+    all(Base.Fix2(isa, SymbolicWithNameof), get_systems(c))
 end
 
 const ConnectableSymbolicT = Union{BasicSymbolic, Num, Symbolics.Arr}
@@ -214,24 +224,36 @@ end
 
 Perform validation for a connect statement involving causal variables.
 """
-function validate_causal_variables_connection(allvars)
-    var1 = allvars[1]
-    var2 = allvars[2]
-    vars = Base.tail(Base.tail(allvars))
+function validate_causal_variables_connection(allvars::Vector{SymbolicT})
     for var in allvars
         vtype = getvariabletype(var)
         vtype === VARIABLE ||
             throw(ArgumentError("Expected $var to be of kind `$VARIABLE`. Got `$vtype`."))
     end
-    if length(unique(allvars)) !== length(allvars)
+    if !allunique(allvars)
         throw(ArgumentError("Expected all connection variables to be unique. Got variables $allvars which contains duplicate entries."))
     end
-    allsizes = map(size, allvars)
-    if !allequal(allsizes)
-        throw(ArgumentError("Expected all connection variables to have the same size. Got variables $allvars with sizes $allsizes respectively."))
+    sh1 = SU.shape(allvars[1])::SU.ShapeVecT
+    sz1 = SU.SmallV{Int}()
+    for x in sh1
+        push!(sz1, length(x))
     end
-    non_causal_variables = filter(allvars) do var
-        !isinput(var) && !isoutput(var)
+    sz2 = SU.SmallV{Int}()
+    for v in allvars
+        sh = SU.shape(v)::SU.ShapeVecT
+        empty!(sz2)
+        for x in sh
+            push!(sz2, length(x))
+        end
+        if !isequal(sz1, sz2)
+            throw(ArgumentError("Expected all connection variables to have the same size. Got variables $(allvars[1]) and $v with sizes $sz1 and $sz2 respectively."))
+
+        end
+    end
+    non_causal_variables = SymbolicT[]
+    for x in allvars
+        (isinput(x) || isoutput(x)) && continue
+        push!(non_causal_variables, x)
     end
     isempty(non_causal_variables) || throw(NonCausalVariableError(non_causal_variables))
 end
@@ -250,9 +272,14 @@ var1 ~ var3
 """
 function connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
         vars::ConnectableSymbolicT...)
-    allvars = (var1, var2, vars...)
+    allvars = SymbolicT[]
+    push!(allvars, unwrap(var1))
+    push!(allvars, unwrap(var2))
+    for var in vars
+        push!(allvars, unwrap(var))
+    end
     validate_causal_variables_connection(allvars)
-    return Equation(Connection(), Connection(map(SymbolicWithNameof, unwrap.(allvars))))
+    return Equation(Connection(), Connection(map(SymbolicWithNameof, allvars)))
 end
 
 """
@@ -302,6 +329,27 @@ mydiv(num, den) =
     end
 @register_symbolic mydiv(n, d)
 
+struct IsOuter
+    outer_connectors::Set{Symbol}
+end
+
+function (io::IsOuter)(name::Symbol)
+    name in io.outer_connectors
+end
+
+function (io::IsOuter)(sys)
+    nm = nameof(sys)
+    isconnector(sys) || error("$nm is not a connector!")
+    s = string(nm)
+    idx = findfirst(NAMESPACE_SEPARATOR, s)
+    parent_name = if idx === nothing
+        nm
+    else
+        Symbol(@view(s[1:prevind(s, idx)]))
+    end
+    return io(parent_name)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -309,23 +357,12 @@ Return a function which checks whether the connector (system) passed to it is an
 connector of `sys`. The function can also be given the name of a system as a `Symbol`.
 """
 function generate_isouter(sys::AbstractSystem)
-    outer_connectors = Symbol[]
+    outer_connectors = Set{Symbol}()
     for s in get_systems(sys)
         n = nameof(s)
         isconnector(s) && push!(outer_connectors, n)
     end
-    let outer_connectors = outer_connectors
-        function isouter(sys)::Bool
-            s = string(nameof(sys))
-            isconnector(sys) || error("$s is not a connector!")
-            idx = findfirst(isequal(NAMESPACE_SEPARATOR), s)
-            parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
-            isouter(parent_name)
-        end
-        function isouter(name::Symbol)::Bool
-            return name in outer_connectors
-        end
-    end
+    return IsOuter(outer_connectors)
 end
 
 @noinline function connection_error(ss)
@@ -336,14 +373,24 @@ abstract type IsFrame end
 
 "Return true if the system is a 3D multibody frame, otherwise return false."
 function isframe(sys)
-    getmetadata(sys, IsFrame, false)
+    getmetadata(sys, IsFrame, false)::Bool
 end
 
 abstract type FrameOrientation end
 
+struct RotationMatrix
+    R::Matrix{SymbolicT}
+    w::Vector{SymbolicT}
+
+    function RotationMatrix(R::AbstractMatrix, w::AbstractVector)
+        new(unwrap_vars(R), unwrap_vars(w))
+    end
+
+end
+
 "Return orientation object of a multibody frame."
 function ori(sys)
-    getmetadata(sys, FrameOrientation, nothing)
+    getmetadata(sys, FrameOrientation, nothing)::Union{RotationMatrix, Nothing}
 end
 
 """
@@ -373,13 +420,13 @@ index_from_type(::Type{OutputVar{I}}) where {I} = I
 Chain `getproperty` calls on sys in the order given by `names` and return the unwrapped
 result.
 """
-function iterative_getproperty(sys::AbstractSystem, names::AbstractVector{Symbol})
+function iterative_getproperty(sys::AbstractSystem, names::Vector{Symbol})
     # we don't want to namespace the first time
-    result = toggle_namespacing(sys, false)
+    result::Union{SymbolicT, System} = toggle_namespacing(sys, false)
     for name in names
-        result = getproperty(result, name)
+        result = getvar(result, name)::Union{SymbolicT, System}
     end
-    return unwrap(result)
+    return result
 end
 
 """
@@ -389,10 +436,13 @@ Return the variable/subsystem of `sys` referred to by vertex `vert`.
 """
 function variable_from_vertex(sys::AbstractSystem, vert::ConnectionVertex)
     value = iterative_getproperty(sys, vert.name)
-    value isa AbstractSystem && return value
+    value isa System && return value
+    value = value::SymbolicT
     vert.type <: Union{InputVar, OutputVar} || return value
+    vert.type === InputVar{CartesianIndex()} && return value
+    vert.type === OutputVar{CartesianIndex()} && return value
     # index possibly array causal variable
-    unwrap(wrap(value)[index_from_type(vert.type)])
+    value[index_from_type(vert.type)]::SymbolicT
 end
 
 """
@@ -408,7 +458,7 @@ function returned from [`generate_isouter`](@ref) for the system referred to by
 `namespace` must not contain the name of the root system.
 """
 function generate_connectionsets!(connection_state::AbstractConnectionState,
-        namespace::Vector{Symbol}, connected, isouter)
+        namespace::Vector{Symbol}, connected, isouter::IsOuter)
     initial_len = length(namespace)
     _generate_connectionsets!(connection_state, namespace, connected, isouter)
     # Enforce postcondition as a sanity check that the namespacing is implemented correctly
@@ -418,51 +468,57 @@ end
 
 function _generate_connectionsets!(connection_state::AbstractConnectionState,
         namespace::Vector{Symbol},
-        connected_vars::Union{
-            AbstractVector{SymbolicWithNameof}, Tuple{Vararg{SymbolicWithNameof}}},
-        isouter)
+        connected_vars::Vector{SymbolicWithNameof},
+        isouter::IsOuter)
     # unwrap the `SymbolicWithNameof` into the contained symbolic variables.
-    connected_vars = map(x -> x.var, connected_vars)
-    _generate_connectionsets!(connection_state, namespace, connected_vars, isouter)
+    _connected_vars = SymbolicT[]
+    for x in connected_vars
+        push!(_connected_vars, x.var)
+    end
+    _generate_connectionsets!(connection_state, namespace, _connected_vars, isouter)
 end
 
-function _generate_connectionsets!(connection_state::AbstractConnectionState,
-        namespace::Vector{Symbol},
-        connected_vars::Union{
-            AbstractVector{<:BasicSymbolic}, Tuple{Vararg{BasicSymbolic}}},
-        isouter)
-    # NOTE: variable connections don't populate the domain network
+@noinline function throw_both_input_output(var::SymbolicT, connected_vars::Vector{SymbolicT})
+    names = join(string.(connected_vars), ", ")
+    throw(ArgumentError("""
+    Variable $var in connection `connect($names)` is both input and output.
+    """))
+end
+@noinline function throw_not_input_output(var::SymbolicT, connected_vars::Vector{SymbolicT})
+    names = join(string.(connected_vars), ", ")
+    throw(ArgumentError("""
+    Variable $var in connection `connect($names)` is neither input nor output.
+    """))
+end
 
-    # wrap to be able to call `eachindex` on a non-array variable
-    representative = wrap(first(connected_vars))
+function _generate_connectionsets_with_idxs!(connection_state::AbstractConnectionState,
+    namespace::Vector{Symbol}, connected_vars::Vector{SymbolicT}, isouter::IsOuter,
+    idxs::CartesianIndices{N, NTuple{N, UnitRange{Int}}}) where {N}
     # all of them have the same size, but may have different axes/shape
     # so we iterate over `eachindex(eachindex(..))` since that is identical for all
-    for sz_i in eachindex(eachindex(representative))
-        hyperedge = map(connected_vars) do var
-            var = unwrap(var)
+    for sz_i in eachindex(idxs)
+        hyperedge = ConnectionVertex[]
+        for var in connected_vars
             var_ns = namespace_hierarchy(getname(var))
-            i = eachindex(wrap(var))[sz_i]
-
+            if N === 0
+                i = sz_i
+            else
+                i = (eachindex(var)::CartesianIndices{N, NTuple{N, UnitRange{Int}}})[sz_i]::CartesianIndex{N}
+            end
             is_input = isinput(var)
             is_output = isoutput(var)
             if is_input && is_output
-                names = join(string.(connected_vars), ", ")
-                throw(ArgumentError("""
-                Variable $var in connection `connect($names)` is both input and output.
-                """))
+                throw_both_input_output(var, connected_vars)
             elseif is_input
                 type = InputVar{i}
             elseif is_output
                 type = OutputVar{i}
             else
-                names = join(string.(connected_vars), ", ")
-                throw(ArgumentError("""
-                Variable $var in connection `connect($names)` is neither input nor output.
-                """))
+                throw_not_input_output(var, connected_vars)
             end
-
-            return ConnectionVertex(
+            vert = ConnectionVertex(
                 [namespace; var_ns], length(var_ns) == 1 || isouter(var_ns[1]), type)
+            push!(hyperedge, vert)
         end
         add_connection_edge!(connection_state, hyperedge)
 
@@ -480,10 +536,36 @@ end
 
 function _generate_connectionsets!(connection_state::AbstractConnectionState,
         namespace::Vector{Symbol},
-        systems::Union{AbstractVector{<:AbstractSystem}, Tuple{Vararg{AbstractSystem}}},
-        isouter)
+        connected_vars::Vector{SymbolicT},
+        isouter::IsOuter)
+    # NOTE: variable connections don't populate the domain network
+
+    representative = first(connected_vars)
+    idxs = eachindex(representative)
+    # Manual dispatch for common cases
+    if idxs isa CartesianIndices{0, Tuple{}}
+        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
+                                            isouter, idxs)
+    elseif idxs isa CartesianIndices{1, Tuple{UnitRange{Int}}}
+        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
+                                            isouter, idxs)
+    elseif idxs isa CartesianIndices{2, NTuple{2, UnitRange{Int}}}
+        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
+                                            isouter, idxs)
+    else
+        # Dynamic dispatch
+        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
+                                            isouter, idxs)
+    end
+end
+
+function _generate_connectionsets!(connection_state::AbstractConnectionState,
+        namespace::Vector{Symbol},
+        systems::Vector{T},
+        isouter::IsOuter) where {T <: AbstractSystem}
+    systems = systems::Vector{System}
     regular_systems = System[]
-    domain_system = nothing
+    domain_system::Union{Nothing, System} = nothing
     for s in systems
         if is_domain_connector(s)
             if domain_system === nothing
@@ -518,7 +600,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         push!(domain_hyperedge, domain_vertex)
         push!(hyperedge, dv_vertex)
 
-        for (i, sys) in enumerate(systems)
+        for sys in systems
             sts = unknowns(sys)
             sys_is_outer = isouter(sys)
 
@@ -526,6 +608,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
             # are properly namespaced
             sysname = nameof(sys)
             sys_ns = namespace_hierarchy(sysname)
+            N = length(namespace)
             append!(namespace, sys_ns)
             for v in sts
                 vtype = get_connection_type(v)
@@ -539,7 +622,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
                 push!(domain_hyperedge, sys_vertex)
             end
             # remember to remove the added namespace!
-            foreach(_ -> pop!(namespace), sys_ns)
+            resize!(namespace, N)
         end
         @assert length(hyperedge) > 1
         @assert length(domain_hyperedge) == length(hyperedge)
@@ -553,10 +636,10 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
     # Add 9 orientation variables if connection is between multibody frames
     if isframe(sys1) # Multibody
         O = ori(sys1)
-        orientation_vars = Symbolics.unwrap.(collect(vec(O.R)))
-        sys1_dvs = [sys1_dvs; orientation_vars]
+        orientation_vars = vec(O.R)
+        sys1_dvs = SymbolicT[sys1_dvs; orientation_vars]
     end
-    sys1_dvs_set = Set(sys1_dvs)
+    sys1_dvs_set = Set{SymbolicT}(sys1_dvs)
     num_unknowns = length(sys1_dvs)
 
     # We first build sets of all vertices that are connected together
@@ -567,8 +650,8 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         # Add 9 orientation variables if connection is between multibody frames
         if isframe(sys) # Multibody
             O = ori(sys)
-            orientation_vars = Symbolics.unwrap.(vec(O.R))
-            unknown_vars = [unknown_vars; orientation_vars]
+            orientation_vars = vec(O.R)
+            unknown_vars = SymbolicT[unknown_vars; orientation_vars]
         end
         # Error if any subsequent systems do not have the same number of unknowns
         # or have unknowns not in the others.
@@ -580,6 +663,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         # are properly namespaced
         sysname = nameof(sys)
         sys_ns = namespace_hierarchy(sysname)
+        N = length(namespace)
         append!(namespace, sys_ns)
         sys_is_outer = isouter(sys)
         for (j, v) in enumerate(unknown_vars)
@@ -588,7 +672,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         domain_vertex = ConnectionVertex(namespace)
         push!(domain_hyperedge, domain_vertex)
         # remember to remove the added namespace!
-        foreach(_ -> pop!(namespace), sys_ns)
+        resize!(namespace, N)
     end
     for var_set in var_sets
         # all connected variables should have the same type
@@ -630,35 +714,39 @@ can be pushed, unmodified. Connection equations update the given `state`. The eq
 present at the path in the hierarchical system given by `namespace`. `isouter` is the
 function returned from `generate_isouter`.
 """
-function handle_maybe_connect_equation!(eqs, state::AbstractConnectionState,
-        eq::Equation, namespace::Vector{Symbol}, isouter)
+function handle_maybe_connect_equation!(eqs::Vector{Equation}, state::AbstractConnectionState,
+        eq::Equation, namespace::Vector{Symbol}, isouter::IsOuter)
     lhs = value(eq.lhs)
     rhs = value(eq.rhs)
 
     if !(lhs isa Connection)
         # split connections and equations
-        if eq.lhs isa AbstractArray || eq.rhs isa AbstractArray
-            append!(eqs, Symbolics.scalarize(eq))
-        else
-            push!(eqs, eq)
-        end
+        push!(eqs, eq)
         return
     end
+    lhs = lhs::Connection
+    rhs = rhs::Connection
+    handle_maybe_connect_equation!(state, lhs, rhs, namespace, isouter)
+end
 
+function handle_maybe_connect_equation!(state::AbstractConnectionState,
+        lhs::Connection, rhs::Connection, namespace::Vector{Symbol}, isouter::IsOuter)
     if get_systems(lhs) === :domain
         # This is a domain connection, so we only update the domain connection graph
-        hyperedge = map(get_systems(rhs)) do sys
-            sys isa AbstractSystem || error("Domain connections can only connect systems!")
+        syss = get_systems(rhs)::Vector{System}
+        hyperedge = ConnectionVertex[]
+        for sys in syss
             sysname = nameof(sys)
             sys_ns = namespace_hierarchy(sysname)
+            N = length(namespace)
             append!(namespace, sys_ns)
             vertex = ConnectionVertex(namespace)
-            foreach(_ -> pop!(namespace), sys_ns)
-            return vertex
+            resize!(namespace, N)
+            push!(hyperedge, vertex)
         end
         add_domain_connection_edge!(state, hyperedge)
     else
-        connected_systems = get_systems(rhs)
+        connected_systems = get_systems(rhs)::Union{Vector{System}, Vector{SymbolicWithNameof}}
         generate_connectionsets!(state, namespace, connected_systems, isouter)
     end
     return nothing
@@ -712,12 +800,13 @@ function _generate_connection_set!(connection_state::ConnectionState,
     end
 
     # go through the removed connections and update the negative graph
-    for conn in something(get_ignored_connections(sys), ())
-        eq = Equation(Connection(), conn)
-        # there won't be any standard equations, so we can pass `nothing` instead of
-        # `eqs`.
-        handle_maybe_connect_equation!(
-            nothing, negative_connection_state, eq, namespace, isouter)
+    ignored = get_ignored_connections(sys)
+    if ignored isa Vector{Connection}
+        for conn in ignored
+            # there won't be any standard equations, so we can pass `nothing` instead of
+            # `eqs`.
+            handle_maybe_connect_equation!(negative_connection_state, Connection(), conn, namespace, isouter)
+        end
     end
 
     # all connectors are eventually inside connectors, and all flow variables
@@ -732,15 +821,33 @@ function _generate_connection_set!(connection_state::ConnectionState,
         end
         pop!(namespace)
     end
-
-    # recurse down the hierarchy
-    @set! sys.systems = map(subsys) do s
-        generate_connection_set!(connection_state, negative_connection_state, s, namespace)
+    new_systems = System[]
+    for s in subsys
+        news = generate_connection_set!(connection_state, negative_connection_state, s, namespace)
+        push!(new_systems, news)
     end
+    # recurse down the hierarchy
+    @set! sys.systems = new_systems
     @set! sys.eqs = eqs
     # Remember to pop the name at the end!
     does_namespacing(sys) && pop!(namespace)
     return sys
+end
+
+function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, len::Int)
+    add_buffer = SymbolicT[]
+    # each variable can have different axes, but they all have the same size
+    for sz_i in 1:len
+        empty!(add_buffer)
+        for cvert in cset
+            v = variable_from_vertex(sys, cvert)::SymbolicT
+            vidxs = SU.stable_eachindex(v)
+            v = v[vidxs[sz_i]]
+            push!(add_buffer, cvert.isouter ? -v : v)
+        end
+        rhs = SU.add_worker(VartypeT, add_buffer)
+        push!(eqs, Symbolics.COMMON_ZERO ~ rhs)
+    end
 end
 
 """
@@ -756,7 +863,7 @@ function generate_connection_equations_and_stream_connections(
 
     for cset in csets
         cvert = cset[1]
-        var = variable_from_vertex(sys, cvert)::BasicSymbolic
+        var = variable_from_vertex(sys, cvert)::SymbolicT
         vtype = cvert.type
         if vtype <: Union{InputVar, OutputVar}
             length(cset) > 1 || continue
@@ -782,10 +889,10 @@ function generate_connection_equations_and_stream_connections(
                 end
             end
             root_vert = something(inner_output, outer_input)
-            root_var = variable_from_vertex(sys, root_vert)
+            root_var = variable_from_vertex(sys, root_vert)::SymbolicT
             for cvert in cset
                 isequal(cvert, root_vert) && continue
-                push!(eqs, variable_from_vertex(sys, cvert) ~ root_var)
+                push!(eqs, variable_from_vertex(sys, cvert)::SymbolicT ~ root_var)
             end
         elseif vtype === Stream
             push!(stream_connections, cset)
@@ -793,48 +900,39 @@ function generate_connection_equations_and_stream_connections(
             # arrays have to be broadcasted to be added/subtracted/negated which leads
             # to bad-looking equations. Just generate scalar equations instead since
             # mtkcompile will scalarize anyway.
-            representative = variable_from_vertex(sys, cset[1])
-            # each variable can have different axes, but they all have the same size
-            for sz_i in eachindex(eachindex(wrap(representative)))
-                rhs = 0
-                for cvert in cset
-                    # all of this wrapping/unwrapping is necessary because the relevant
-                    # methods are defined on `Arr/Num` and not `BasicSymbolic`.
-                    v = variable_from_vertex(sys, cvert)::BasicSymbolic
-                    idxs = eachindex(wrap(v))
-                    v = unwrap(wrap(v)[idxs[sz_i]])
-                    rhs += cvert.isouter ? unwrap(-wrap(v)) : v
-                end
-                push!(eqs, 0 ~ rhs)
-            end
+            representative = variable_from_vertex(sys, cset[1])::SymbolicT
+            _flow_equations_from_idxs!(sys, eqs, cset, length(representative)::Int)
         else # Equality
-            vars = map(Base.Fix1(variable_from_vertex, sys), cset)
-            outer_input = inner_output = nothing
+            vars = SymbolicT[]
+            for cvar in cset
+                push!(vars, variable_from_vertex(sys, cvar)::SymbolicT)
+            end
+            outer_input = inner_output = 0
             all_io = true
             # attempt to interpret the equality as a causal connectionset if
             # possible
-            for (cvert, vert) in zip(cset, vars)
+            for (i, vert) in enumerate(vars)
                 is_i = isinput(vert)
                 is_o = isoutput(vert)
                 all_io &= is_i || is_o
                 all_io || break
                 if cvert.isouter && is_i && outer_input === nothing
-                    outer_input = cvert
+                    outer_input = i
                 elseif !cvert.isouter && is_o && inner_output === nothing
-                    inner_output = cvert
+                    inner_output = i
                 end
             end
             # this doesn't necessarily mean this is a well-structured causal connection,
             # but it is sufficient and we're generating equalities anyway.
-            if all_io && xor(outer_input !== nothing, inner_output !== nothing)
-                root_vert = something(inner_output, outer_input)
-                root_var = variable_from_vertex(sys, root_vert)
-                for (cvert, var) in zip(cset, vars)
-                    isequal(cvert, root_vert) && continue
+            if all_io && xor(!iszero(outer_input), !iszero(inner_output))
+                root_vert_i = iszero(outer_input) ? inner_output : outer_input
+                root_var = vars[root_vert_i]
+                for (i, var) in enumerate(vars)
+                    i == root_vert_i && continue
                     push!(eqs, var ~ root_var)
                 end
             else
-                base = variable_from_vertex(sys, cset[1])
+                base = vars[1]
                 for i in 2:length(cset)
                     v = vars[i]
                     push!(eqs, base ~ v)
@@ -852,12 +950,15 @@ Generate the defaults for parameters in the domain sets given by `domain_csets`.
 """
 function domain_defaults(
         sys::AbstractSystem, domain_csets::Vector{Vector{ConnectionVertex}})
-    defs = Dict()
+    defs = Dict{SymbolicT, SymbolicT}()
     for cset in domain_csets
-        systems = map(Base.Fix1(variable_from_vertex, sys), cset)
-        @assert all(x -> x isa AbstractSystem, systems)
+        systems = System[]
+        for cvar in cset
+            push!(systems, variable_from_vertex(sys, cvar)::System)
+        end
         idx = findfirst(is_domain_connector, systems)
         idx === nothing && continue
+        idx = idx::Int
         domain_sys = systems[idx]
         # note that these will not be namespaced with `domain_sys`.
         domain_defs = defaults(domain_sys)
@@ -871,7 +972,7 @@ function domain_defaults(
             for par in parameters(csys)
                 defval = get(domain_defs, par, nothing)
                 defval === nothing && continue
-                defs[parameters(csys, par)] = parameters(domain_sys, par)
+                defs[renamespace(csys, par)] = renamespace(domain_sys, par)
             end
         end
     end
@@ -917,14 +1018,22 @@ Given a connection vertex `cvert` referring to a variable in a connector in `sys
 the flow variable in that connector.
 """
 function get_flowvar(sys::AbstractSystem, cvert::ConnectionVertex)
-    parent_names = @view cvert.name[1:(end - 1)]
-    parent_sys = iterative_getproperty(sys, parent_names)
+    tmp = pop!(cvert.name)
+    parent_sys = iterative_getproperty(sys, cvert.name)::System
+    push!(cvert.name, tmp)
     for var in unknowns(parent_sys)
         type = get_connection_type(var)
-        type == Flow || continue
-        return unwrap(unknowns(parent_sys, var))
+        type === Flow || continue
+        return renamespace(parent_sys, var)
     end
     throw(ArgumentError("There is no flow variable in system `$(nameof(parent_sys))`"))
+end
+
+function instream_is_atomic(ex::SymbolicT)
+    Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f === instream end => true
+        _ => false
+    end
 end
 
 """
@@ -939,42 +1048,54 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
         tol = 1e-8)
     eqs = equations(sys)
     # collect all `instream` terms in the equations
-    instream_exprs = Set{BasicSymbolic}()
+    instream_exprs = Set{SymbolicT}()
     for eq in eqs
-        collect_instream!(instream_exprs, eq)
+        SU.search_variables!(instream_exprs, eq; is_atomic = instream_is_atomic)
     end
 
     # specifically substitute `instream(x[i]) => instream(x)[i]`
-    instream_subs = Dict{BasicSymbolic, BasicSymbolic}()
+    instream_subs = Dict{SymbolicT, SymbolicT}()
     for expr in instream_exprs
-        stream_var = only(arguments(expr))
-        iscall(stream_var) && operation(stream_var) === getindex || continue
-        args = arguments(stream_var)
-        new_expr = term(instream, args[1]; type = symtype(args[1]), shape = SU.shape(args[1]))[args[2:end]...]
-        instream_subs[expr] = new_expr
+        exargs = Moshi.Data.variant_getfield(expr, BSImpl.Term{VartypeT}, :args)
+        stream_var = only(exargs)
+        Moshi.Match.@match stream_var begin
+            BSImpl.Term(; f, args, type, shape) && if f === getindex end => begin
+                newargs = copy(parent(args))
+                arg = newargs[1]
+                sharg = SU.shape(arg)
+                starg = SU.symtype(arg)
+                newargs[1] = BSImpl.Term{VartypeT}(instream, SArgsT((arg,)); type = starg, shape = sharg)
+                new_expr = BSImpl.Term{VartypeT}(getindex, newargs; type, shape)
+                instream_subs[expr] = new_expr
+            end
+            _ => nothing
+        end
     end
 
     # for all the newly added `instream(x)[i]`, add `instream(x)` to `instream_exprs`
     # also remove all `instream(x[i])`
     for (k, v) in instream_subs
-        push!(instream_exprs, arguments(v)[1])
+        push!(instream_exprs, Moshi.Match.@match v begin
+                BSImpl.Term(; args) => args[1]
+            end)
         delete!(instream_exprs, k)
     end
 
     # This is an implementation of the modelica spec
     # https://specification.modelica.org/maint/3.6/stream-connectors.html
     additional_eqs = Equation[]
+    add_buffer = SymbolicT[]
     for cset in csets
         n_outer = count(cvert -> cvert.isouter, cset)
         n_inner = length(cset) - n_outer
         if n_inner == 1 && n_outer == 0
             cvert = only(cset)
-            stream_var = variable_from_vertex(sys, cvert)::BasicSymbolic
+            stream_var = variable_from_vertex(sys, cvert)::SymbolicT
             instream_subs[instream(stream_var)] = stream_var
         elseif n_inner == 2 && n_outer == 0
             cvert1, cvert2 = cset
-            stream_var1 = variable_from_vertex(sys, cvert1)::BasicSymbolic
-            stream_var2 = variable_from_vertex(sys, cvert2)::BasicSymbolic
+            stream_var1 = variable_from_vertex(sys, cvert1)::SymbolicT
+            stream_var2 = variable_from_vertex(sys, cvert2)::SymbolicT
             instream_subs[instream(stream_var1)] = stream_var2
             instream_subs[instream(stream_var2)] = stream_var1
         elseif n_inner == 1 && n_outer == 1
@@ -982,14 +1103,14 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
             if cvert_inner.isouter
                 cvert_inner, cvert_outer = cvert_outer, cvert_inner
             end
-            streamvar_inner = variable_from_vertex(sys, cvert_inner)::BasicSymbolic
-            streamvar_outer = variable_from_vertex(sys, cvert_outer)::BasicSymbolic
+            streamvar_inner = variable_from_vertex(sys, cvert_inner)::SymbolicT
+            streamvar_outer = variable_from_vertex(sys, cvert_outer)::SymbolicT
             instream_subs[instream(streamvar_inner)] = instream(streamvar_outer)
             push!(additional_eqs, (streamvar_outer ~ streamvar_inner))
         elseif n_inner == 0 && n_outer == 2
             cvert1, cvert2 = cset
-            stream_var1 = variable_from_vertex(sys, cvert1)::BasicSymbolic
-            stream_var2 = variable_from_vertex(sys, cvert2)::BasicSymbolic
+            stream_var1 = variable_from_vertex(sys, cvert1)::SymbolicT
+            stream_var2 = variable_from_vertex(sys, cvert2)::SymbolicT
             push!(additional_eqs, (stream_var1 ~ instream(stream_var2)),
                 (stream_var2 ~ instream(stream_var1)))
         else
@@ -998,55 +1119,70 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
             # https://specification.modelica.org/maint/3.6/stream-connectors.html#instream-and-connection-equations
             # We could implement the "if" case using variable bounds? It would be nice to
             # move that metadata to the system (storing it similar to `defaults`).
-            outer_cverts = filter(cvert -> cvert.isouter, cset)
-            inner_cverts = filter(cvert -> !cvert.isouter, cset)
+            outer_cverts = ConnectionVertex[]
+            inner_cverts = ConnectionVertex[]
+            outer_streamvars = SymbolicT[]
+            inner_streamvars = SymbolicT[]
+            outer_flowvars = SymbolicT[]
+            inner_flowvars = SymbolicT[]
+            for cvert in cset
+                svar = variable_from_vertex(sys, cvert)::SymbolicT
+                fvar = get_flowvar(sys, cvert)::SymbolicT
+                push!(cvert.isouter ? outer_cverts : inner_cverts, cvert)
+                push!(cvert.isouter ? outer_streamvars : inner_streamvars, svar)
+                push!(cvert.isouter ? outer_flowvars : inner_flowvars, fvar)
+            end
 
-            outer_streamvars = map(Base.Fix1(variable_from_vertex, sys), outer_cverts)
-            inner_streamvars = map(Base.Fix1(variable_from_vertex, sys), inner_cverts)
-
-            outer_flowvars = map(Base.Fix1(get_flowvar, sys), outer_cverts)
-            inner_flowvars = map(Base.Fix1(get_flowvar, sys), inner_cverts)
-
-            mask = trues(length(inner_cverts))
             for inner_i in eachindex(inner_cverts)
-                # mask out the current variable
-                mask[inner_i] = false
                 svar = inner_streamvars[inner_i]
-                instream_subs[instream(svar)] = term(
-                    instream_rt, Val(n_inner - 1), Val(n_outer), inner_flowvars[mask]...,
-                    inner_streamvars[mask]..., outer_flowvars..., outer_streamvars...)
-                # make sure to reset the mask
-                mask[inner_i] = true
+                args = SArgsT()
+                push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
+                push!(args, SU.Const{VartypeT}(Val(n_outer)))
+                for i in eachindex(inner_cverts)
+                     i == inner_i && continue
+                     push!(args, inner_flowvars[i])
+                end
+                for i in eachindex(inner_cverts)
+                     i == inner_i && continue
+                     push!(args, inner_streamvars[i])
+                end
+                append!(args, outer_flowvars)
+                append!(args, outer_streamvars)
+                expr = BSImpl.Term{VartypeT}(instream_rt, args;
+                                             type = Real, shape = SU.ShapeVecT())
+                instream_subs[instream(svar)] = expr
             end
 
             for q in 1:n_outer
-                sq = mapreduce(+, inner_flowvars) do fvar
-                    max(-fvar, 0)
+                empty!(add_buffer)
+                for fvar in inner_flowvars
+                    push!(add_buffer, max(-fvar, 0))
                 end
-                sq += mapreduce(+, enumerate(outer_flowvars)) do (outer_i, fvar)
-                    outer_i == q && return 0
-                    max(fvar, 0)
+                for (i, fvar) in enumerate(outer_flowvars)
+                    i == q && continue
+                    push!(add_buffer, max(fvar, 0))
                 end
-                # sanity check to make sure it isn't going to codegen a `mapreduce`
-                @assert operation(sq) == (+)
+                sq = SU.add_worker(VartypeT, add_buffer)
 
-                num = mapreduce(+, inner_flowvars, inner_streamvars) do fvar, svar
-                    positivemax(-fvar, sq; tol) * svar
+                empty!(add_buffer)
+                for (fvar, svar) in zip(inner_flowvars, inner_streamvars)
+                    push!(add_buffer, positivemax(-fvar, sq; tol) * svar)
                 end
-                num += mapreduce(
-                    +, enumerate(outer_flowvars), outer_streamvars) do (outer_i, fvar), svar
-                    outer_i == q && return 0
-                    positivemax(fvar, sq; tol) * instream(svar)
+                for (i, (fvar, svar)) in enumerate(zip(outer_flowvars, outer_streamvars))
+                    i == q && continue
+                    push!(add_buffer, positivemax(fvar, sq; tol) * instream(svar))
                 end
-                @assert operation(num) == (+)
+                num = SU.add_worker(VartypeT, add_buffer)
 
-                den = mapreduce(+, inner_flowvars) do fvar
-                    positivemax(-fvar, sq; tol)
+                empty!(add_buffer)
+                for fvar in inner_flowvars
+                    push!(add_buffer, positivemax(-fvar, sq; tol))
                 end
-                den += mapreduce(+, enumerate(outer_flowvars)) do (outer_i, fvar)
-                    outer_i == q && return 0
-                    positivemax(fvar, sq; tol)
+                for (i, fvar) in enumerate(outer_flowvars)
+                    i == q && continue
+                    push!(add_buffer, positivemax(fvar, sq; tol))
                 end
+                den = SU.add_worker(VartypeT, add_buffer)
 
                 push!(additional_eqs, (outer_streamvars[q] ~ num / den))
             end
