@@ -325,6 +325,8 @@ end
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
 Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 
+const InputTimeDomainElT = Union{TimeDomain, InferredTimeDomain, IntegerSequence}
+
 """
     input_timedomain(op::Operator)
 
@@ -333,9 +335,9 @@ Should return a tuple containing the time domain type for each argument to the o
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
-        return get_time_domain(arg)
+        return InputTimeDomainElT[get_time_domain(arg)]
     end
-    (InferredDiscrete(),)
+    InputTimeDomainElT[InferredDiscrete()]
 end
 
 """
@@ -350,14 +352,14 @@ function output_timedomain(s::Shift, arg = nothing)
     InferredDiscrete()
 end
 
-input_timedomain(::Sample, _ = nothing) = (ContinuousClock(),)
+input_timedomain(::Sample, _ = nothing) = InputTimeDomainElT[ContinuousClock()]
 output_timedomain(s::Sample, _ = nothing) = s.clock
 
-function input_timedomain(h::Hold, arg = nothing)
+function input_timedomain(::Hold, arg = nothing)
     if has_time_domain(arg)
-        return get_time_domain(arg)
+        return InputTimeDomainElT[get_time_domain(arg)]
     end
-    (InferredDiscrete(),) # the Hold accepts any discrete
+    InputTimeDomainElT[InferredDiscrete()] # the Hold accepts any discrete
 end
 output_timedomain(::Hold, _ = nothing) = ContinuousClock()
 
