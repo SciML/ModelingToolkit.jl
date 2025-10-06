@@ -387,8 +387,13 @@ function check_operator_variables(eqs, op::T) where {T}
     end
 end
 
-isoperator(expr, op) = iscall(expr) && operation(expr) isa op
-isoperator(op) = expr -> isoperator(expr, op)
+function isoperator(expr::SymbolicT, ::Type{op}) where {op <: SU.Operator}
+    Moshi.Match.@match expr begin
+        BSImpl.Term(; f) => f isa op
+        _ => false
+    end
+end
+isoperator(::Type{op}) where {op <: SU.Operator} = Base.Fix2(isoperator, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
