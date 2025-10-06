@@ -291,8 +291,8 @@ Create parameters with bounds like this
 @parameters p [bounds=(-1, 1)]
 ```
 """
-function getbounds(x::Union{Num, Symbolics.Arr, SymbolicT})
-    x = unwrap(x)
+getbounds(x::Union{Num, Symbolics.Arr}) = getbounds(unwrap(x))
+function getbounds(x::SymbolicT)
     if operation(p) === getindex
         p = arguments(p)[1]
         bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
@@ -329,8 +329,8 @@ Determine whether symbolic variable `x` has bounds associated with it.
 See also [`getbounds`](@ref).
 """
 function hasbounds(x)
-    b = getbounds(x)
-    any(isfinite.(b[1]) .|| isfinite.(b[2]))
+    b = getbounds(x)::NTuple{2}
+    any(isfinite.(b[1]) .|| isfinite.(b[2]))::Bool
 end
 
 function setbounds(x::Num, bounds)
