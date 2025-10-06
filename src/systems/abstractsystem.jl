@@ -1263,7 +1263,14 @@ function namespace_jumps(sys::AbstractSystem)
 end
 
 function namespace_brownians(sys::AbstractSystem)
-    return [renamespace(sys, b) for b in brownians(sys)]
+    bs = brownians(sys)
+    if bs === get_brownians(sys)
+        bs = copy(bs)
+    end
+    for i in eachindex(bs)
+        bs[i] = renamespace(sys, bs[i])
+    end
+    return bs
 end
 
 function namespace_assignment(eq::Assignment, sys)
@@ -1528,10 +1535,15 @@ See also [`observables`](@ref) and [`ModelingToolkit.get_observed()`](@ref).
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
-    [obs;
-     reduce(vcat,
-         (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
-         init = Equation[])]
+    isempty(systems) && return obs
+    obs = copy(obs)
+    for subsys in systems
+        _obs = observed(subsys)
+        for eq in _obs
+            push!(obs, namespace_equation(eq, subsys))
+        end
+    end
+    return obs
 end
 
 """
@@ -1700,7 +1712,11 @@ function brownians(sys::AbstractSystem)
     if isempty(systems)
         return bs
     end
-    return [bs; reduce(vcat, namespace_brownians.(systems); init = [])]
+    bs = copy(bs)
+    for subsys in systems
+        append!(bs, namespace_brownians(subsys))
+    end
+    return bs
 end
 
 """
@@ -1714,10 +1730,13 @@ function cost(sys::AbstractSystem)
     consolidate = get_consolidate(sys)
     systems = get_systems(sys)
     if isempty(systems)
-        return consolidate(cs, Float64[])
+        return consolidate(cs, Float64[])::SymbolicT
     end
-    subcosts = [namespace_expr(cost(subsys), subsys) for subsys in systems]
-    return consolidate(cs, subcosts)
+    subcosts = SymbolicT[]
+    for subsys in systems
+        push!(subcosts, namespace_expr(cost(subsys), subsys))
+    end
+    return consolidate(cs, subcosts)::SymbolicT
 end
 
 namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
@@ -2875,13 +2894,15 @@ function process_parameter_equations(sys::AbstractSystem)
         SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{Union{Differential, Initial, Pre, Hold, Sample}}())
         # singular equations
         isempty(varsbuf) && continue
-        if all(varsbuf) do sym
+        if let sys = sys
+            all(varsbuf) do sym
             is_parameter(sys, sym) ||
                 symbolic_type(sym) == ArraySymbolic() &&
                 symbolic_has_known_size(sym) &&
                 all(Base.Fix1(is_parameter, sys), collect(sym)) ||
                 iscall(sym) &&
                 operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
+        end
         end
             # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
             # check.
