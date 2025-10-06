@@ -1175,7 +1175,6 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; p_constructor)
     end
 
-    reqd_syms = parameter_symbols(initializeprob)
     # we still want the `initialization_data` because it helps with `remake`
     if initializeprobmap === nothing && initializeprobpmap === nothing
         update_initializeprob! = nothing
@@ -1186,7 +1185,9 @@ function maybe_build_initialization_problem(
     filter!(punknowns) do p
         is_parameter_solvable(p, op, defs, guesses) && get(op, p, missing) === missing
     end
-    pvals = getu(initializeprob, punknowns)(initializeprob)
+    # See comment below for why `getu` is not used here.
+    _pgetter = build_explicit_observed_function(initializeprob.f.sys, punknowns)
+    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
     for (p, pval) in zip(punknowns, pvals)
         p = unwrap(p)
         op[p] = pval
@@ -1198,7 +1199,13 @@ function maybe_build_initialization_problem(
     end
 
     if time_dependent_init
-        uvals = getu(initializeprob, collect(missing_unknowns))(initializeprob)
+        # We can't use `getu` here because that goes to `SII.observed`, which goes to
+        # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
+        # `eval_expression == true`, this then runs into world-age issues. Building an
+        # RGF here is fine since it is always discarded. We can't use `eval_module` for
+        # the RGF since the user may not have run RGF's init.
+        _ugetter = build_explicit_observed_function(initializeprob.f.sys, collect(missing_unknowns))
+        uvals = _ugetter(state_values(initializeprob), parameter_values(initializeprob))
         for (v, val) in zip(missing_unknowns, uvals)
             op[v] = val
         end
