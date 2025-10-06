@@ -1181,25 +1181,19 @@ Given a list of equations where some may be array equations, flatten the array e
 without scalarizing occurrences of array variables and return the new list of equations.
 """
 function flatten_equations(eqs::Vector{Equation})
-    mapreduce(vcat, eqs; init = Equation[]) do eq
-        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
-        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
-        if islhsarr || isrhsarr
-            islhsarr && isrhsarr ||
-                error("""
-                LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions \
-                or both scalar
-                """)
-            size(eq.lhs) == size(eq.rhs) ||
-                error("""
-                Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got \
-                $(size(eq.lhs)) and $(size(eq.rhs))
-                """)
-            return vec(collect(eq.lhs) .~ collect(eq.rhs))
-        else
-            eq
+    _eqs = Equation[]
+    for eq in eqs
+        if !SU.is_array_shape(SU.shape(eq.lhs))
+            push!(_eqs, eq)
+            continue
+        end
+        lhs = vec(collect(eq.lhs)::Array{SymbolicT})::Vector{SymbolicT}
+        rhs = vec(collect(eq.rhs)::Array{SymbolicT})::Vector{SymbolicT}
+        for (l, r) in zip(lhs, rhs)
+            push!(_eqs, l ~ r)
         end
     end
+    return _eqs
 end
 
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
