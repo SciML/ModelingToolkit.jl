@@ -45,8 +45,8 @@ Create a `ConnectionVertex` given
 use for this connection.
 """
 function ConnectionVertex(
-        namespace::Vector{Symbol}, var::Union{BasicSymbolic, AbstractSystem}, isouter::Bool)
-    if var isa BasicSymbolic
+        namespace::Vector{Symbol}, var::Union{SymbolicT, AbstractSystem}, isouter::Bool)
+    if var isa SymbolicT
         name = getname(var)
     else
         name = nameof(var)
