@@ -178,42 +178,62 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     sys = flatten(sys)
     cons = constraints(sys)
     econs = Equation[]
-    icons = similar(cons, 0)
+    icons = Inequality[]
     for e in cons
         if e isa Equation
             push!(econs, e)
-        else
+        elseif e isa Inequality
             push!(icons, e)
         end
     end
-    irreducible_subs = Dict()
-    dvs = mapreduce(Symbolics.scalarize, vcat, unknowns(sys))
-    if !(dvs isa Array)
-        dvs = [dvs]
+    irreducible_subs = Dict{SymbolicT, SymbolicT}()
+    dvs = SymbolicT[]
+    for var in unknowns(sys)
+        sh = SU.shape(var)::SU.ShapeVecT
+        if isempty(sh)
+            push!(dvs, var)
+        else
+            append!(dvs, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
+        end
     end
     for i in eachindex(dvs)
         var = dvs[i]
         if hasbounds(var)
-            irreducible_subs[var] = irrvar = setirreducible(var, true)
+            irreducible_subs[var] = irrvar = setirreducible(var, true)::SymbolicT
             dvs[i] = irrvar
         end
     end
-    econs = substitute.(econs, (irreducible_subs,))
+    subst = SU.Substituter{false}(irreducible_subs, SU.default_substitute_filter)
+    for i in eachindex(econs)
+        econs[i] = subst(econs[i])
+    end
     nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
-    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)
+    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
     obs = observed(snlsys)
     seqs = equations(snlsys)
     trueobs, _ = unhack_observed(obs, seqs)
-    subs = Dict(eq.lhs => eq.rhs for eq in trueobs)
-    cons_simplified = similar(cons, length(icons) + length(seqs))
-    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
-        cons_simplified[i] = fixpoint_sub(eq, subs)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for eq in trueobs
+        subs[eq.lhs] = eq.rhs
     end
-    newsts = setdiff(dvs, keys(subs))
+    cons_simplified = Union{Equation, Inequality}[]
+    for eq in seqs
+        push!(cons_simplified, fixpoint_sub(eq, subs))
+    end
+    for eq in icons
+        push!(cons_simplified, fixpoint_sub(eq, subs))
+    end
+    setdiff!(dvs, keys(subs))
+    newsts = dvs
     @set! sys.constraints = cons_simplified
-    @set! sys.observed = [observed(sys); obs]
-    newcost = fixpoint_sub.(get_costs(sys), (subs,))
-    @set! sys.costs = newcost
+    newobs = copy(observed(sys))
+    append!(newobs, obs)
+    @set! sys.observed = newobs
+    newcosts = copy(get_costs(sys))
+    for i in eachindex(newcosts)
+        newcosts[i] = fixpoint_sub(newcosts[i], subs)
+    end
+    @set! sys.costs = newcosts
     @set! sys.unknowns = newsts
     return sys
 end
