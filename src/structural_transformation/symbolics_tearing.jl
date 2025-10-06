@@ -889,6 +889,8 @@ function reorder_vars!(state::TearingState, var_eq_matching, var_sccs, eq_orderi
     # the new reality of the system we've just created.
     new_graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
         nsolved_eq, nsolved_var)
+    new_solvable_graph = contract_variables(solvable_graph, var_eq_matching, varsperm, eqsperm,
+        nsolved_eq, nsolved_var)
 
     new_var_to_diff = complete(DiffGraph(length(var_ordering)))
     for (v, d) in enumerate(var_to_diff)
@@ -919,6 +921,7 @@ function reorder_vars!(state::TearingState, var_eq_matching, var_sccs, eq_orderi
 
     # Update system structure
     @set! state.structure.graph = complete(new_graph)
+    @set! state.structure.solvable_graph = complete(new_solvable_graph)
     @set! state.structure.var_to_diff = new_var_to_diff
     @set! state.structure.eq_to_diff = new_eq_to_diff
     @set! state.fullvars = new_fullvars
