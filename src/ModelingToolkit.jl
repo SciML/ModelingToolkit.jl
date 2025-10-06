@@ -166,6 +166,7 @@ include("constants.jl")
 
 const SymmapT = Dict{SymbolicT, SymbolicT}
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
+const COMMON_MISSING = SU.Const{VartypeT}(missing)
 
 include("utils.jl")
 

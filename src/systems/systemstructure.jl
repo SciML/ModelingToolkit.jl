@@ -153,7 +153,7 @@ Base.@kwdef mutable struct SystemStructure
     """Graph that connects equations to the variable they will be solved for during simplification."""
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
     """Variable types (brownian, variable, parameter) in the system."""
-    var_types::Union{Vector{VariableType}, Nothing}
+    var_types::Vector{VariableType}
     """Whether the system is discrete."""
     only_discrete::Bool
 end
@@ -205,10 +205,10 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
     """The set of variables of the system."""
-    fullvars::Vector{BasicSymbolic}
+    fullvars::Vector{SymbolicT}
     structure::SystemStructure
-    extra_eqs::Vector
-    param_derivative_map::Dict{BasicSymbolic, Any}
+    extra_eqs::Vector{Equation}
+    param_derivative_map::Dict{SymbolicT, SymbolicT}
     original_eqs::Vector{Equation}
     """
     Additional user-provided observed equations. The variables calculated here
@@ -278,7 +278,7 @@ function Base.show(io::IO, state::TearingState)
     print(io, "TearingState of ", typeof(state.sys))
 end
 
-struct EquationsView{T} <: AbstractVector{Any}
+struct EquationsView{T} <: AbstractVector{Equation}
     ts::TearingState{T}
 end
 equations(ts::TearingState) = EquationsView(ts)
@@ -301,11 +301,11 @@ function is_time_dependent_parameter(p, allps, iv)
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 
-function symbolic_contains(var, set)
-    var in set ||
-        symbolic_type(var) == ArraySymbolic() &&
-        symbolic_has_known_size(var) &&
-        all(x -> x in set, Symbolics.scalarize(var))
+function symbolic_contains(var::SymbolicT, set::Set{SymbolicT})
+    var in set # ||
+        # symbolic_type(var) == ArraySymbolic() &&
+        # symbolic_has_known_size(var) &&
+        # all(x -> x in set, Symbolics.scalarize(var))
 end
 
 """
@@ -315,21 +315,21 @@ Descend through the system hierarchy and look for statemachines. Remove equation
 the inner statemachine systems. Return the new `sys` and an array of top-level
 statemachines.
 """
-function extract_top_level_statemachines(sys::AbstractSystem)
+function extract_top_level_statemachines(sys::System)
     eqs = get_eqs(sys)
-
-    if !isempty(eqs) && all(eq -> eq.lhs isa StateMachineOperator, eqs)
+    predicate = Base.Fix2(isa, StateMachineOperator) ∘ SU.unwrap_const
+    if !isempty(eqs) && all(predicate, eqs)
         # top-level statemachine
         with_removed = @set sys.systems = map(remove_child_equations, get_systems(sys))
         return with_removed, [sys]
-    elseif !isempty(eqs) && any(eq -> eq.lhs isa StateMachineOperator, eqs)
+    elseif !isempty(eqs) && any(predicate, eqs)
         # error: can't mix
         error("Mixing statemachine equations and standard equations in a top-level statemachine is not allowed.")
     else
         # descend
         subsystems = get_systems(sys)
-        newsubsystems = eltype(subsystems)[]
-        statemachines = eltype(subsystems)[]
+        newsubsystems = System[]
+        statemachines = System[]
         for subsys in subsystems
             newsubsys, sub_statemachines = extract_top_level_statemachines(subsys)
             push!(newsubsystems, newsubsys)
@@ -346,12 +346,12 @@ end
 Return `sys` with all equations (including those in subsystems) removed.
 """
 function remove_child_equations(sys::AbstractSystem)
-    @set! sys.eqs = eltype(get_eqs(sys))[]
+    @set! sys.eqs = Equation[]
     @set! sys.systems = map(remove_child_equations, get_systems(sys))
     return sys
 end
 
-function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
+function TearingState(sys; check = true, sort_eqs = true)
     # flatten system
     sys = flatten(sys)
     sys = process_parameter_equations(sys)
@@ -361,76 +361,29 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     eqs = flatten_equations(equations(sys))
     original_eqs = copy(eqs)
     neqs = length(eqs)
-    param_derivative_map = Dict{BasicSymbolic, Any}()
+    param_derivative_map = Dict{SymbolicT, SymbolicT}()
+    fullvars = SymbolicT[]
     # * Scalarize unknowns
-    dvs = Set{BasicSymbolic}()
-    fullvars = BasicSymbolic[]
-    for x in unknowns(sys)
-        push!(dvs, x)
-        xx = Symbolics.scalarize(x)
-        if xx isa AbstractArray
-            union!(dvs, xx)
-        end
-    end
+    dvs = Set{SymbolicT}()
+    collect_vars_to_set!(dvs, unknowns(sys))
     ps = Set{SymbolicT}()
-    for x in full_parameters(sys)
-        push!(ps, x)
-        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
-            xx = Symbolics.scalarize(x)
-            union!(ps, xx)
-        end
-    end
-    browns = Set{BasicSymbolic}()
-    for x in brownians(sys)
-        push!(browns, x)
-        xx = Symbolics.scalarize(x)
-        if xx isa AbstractArray
-            union!(browns, xx)
-        end
-    end
-    var2idx = Dict{BasicSymbolic, Int}()
+    collect_vars_to_set!(ps, full_parameters(sys))
+    browns = Set{SymbolicT}()
+    collect_vars_to_set!(browns, brownians(sys))
+    var2idx = Dict{SymbolicT, Int}()
     var_types = VariableType[]
-    addvar! = let fullvars = fullvars, dvs = dvs, var2idx = var2idx, var_types = var_types
-        (var, vtype) -> get!(var2idx, var) do
-            push!(dvs, var)
-            push!(fullvars, var)
-            push!(var_types, vtype)
-            return length(fullvars)
-        end
-    end
+
+    addvar! = AddVar!(var2idx, dvs, fullvars, var_types)
 
     # build symbolic incidence
-    symbolic_incidence = Vector{BasicSymbolic}[]
-    varsbuf = Set()
+    symbolic_incidence = Vector{SymbolicT}[]
+    varsbuf = Set{SymbolicT}()
     eqs_to_retain = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
-        _eq = eq
-        if iscall(eq.lhs) && (op = operation(eq.lhs)) isa Differential &&
-           isequal(op.x, iv) && is_time_dependent_parameter(only(arguments(eq.lhs)), ps, iv)
-            # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
-            # we want to store `nothing` in the map because that means `substitute`
-            # will ignore the rule. We will this identify the presence of `eq′.lhs` in
-            # the differentiated expression and error.
-            param_derivative_map[eq.lhs] = coalesce(eq.rhs, nothing)
-            eqs_to_retain[i] = false
-            # change the equation if the RHS is `missing` so the rest of this loop works
-            eq = 0.0 ~ coalesce(eq.rhs, 0.0)
-        end
-        is_statemachine_equation = false
-        if eq.lhs isa StateMachineOperator
-            is_statemachine_equation = true
-            eq = eq
-            rhs = eq.rhs
-        elseif _iszero(eq.lhs)
-            rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
-        else
-            lhs = quick_cancel ? quick_cancel_expr(eq.lhs) : eq.lhs
-            rhs = quick_cancel ? quick_cancel_expr(eq.rhs) : eq.rhs
-            eq = 0 ~ rhs - lhs
-        end
+        eq, is_statemachine_equation = canonicalize_eq!(param_derivative_map, eqs_to_retain, ps, iv, i, eq)
         empty!(varsbuf)
-        vars!(varsbuf, eq; op = Symbolics.Operator)
-        incidence = Set{BasicSymbolic}()
+        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{SU.Operator}())
+        incidence = Set{SymbolicT}()
         isalgeq = true
         for v in varsbuf
             # additionally track brownians in fullvars
@@ -446,7 +399,7 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
                    !haskey(param_derivative_map, Differential(iv)(v))
                     # Parameter derivatives default to zero - they stay constant
                     # between callbacks
-                    param_derivative_map[Differential(iv)(v)] = 0.0
+                    param_derivative_map[Differential(iv)(v)] = Symbolics.COMMON_ZERO
                 end
                 continue
             end
@@ -458,12 +411,27 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
                 isvalid = iscall(v) &&
                           (operation(v) isa Shift || isempty(arguments(v)) ||
                            is_transparent_operator(operation(v)))
+                isvalid = Moshi.Match.@match v begin
+                    BSImpl.Term(; f, args) => f isa Shift || isempty(args) || f isa Operator && is_transparent_operator(f)::Bool
+                    _ => false
+                end
                 v′ = v
-                while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
-                    v′ = arguments(v′)[1]
-                    if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
-                        isvalid = true
-                        break
+                while !isvalid
+                    Moshi.Match.@match v′ begin
+                        BSImpl.Term(; f, args) => begin
+                            if f isa Differential
+                                v′ = args[1]
+                            elseif f isa Shift
+                                v′ = args[1]
+                            else
+                                break
+                            end
+                            if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
+                                isvalid = true
+                                break
+                            end
+                        end
+                        _ => break
                     end
                 end
                 if !isvalid
@@ -471,43 +439,50 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
                 end
 
                 addvar!(v, VARIABLE)
-                if iscall(v) && operation(v) isa Symbolics.Operator && !isdifferential(v) &&
-                   (it = input_timedomain(v)) !== nothing
-                    for v′ in arguments(v)
-                        addvar!(setmetadata(v′, VariableTimeDomain, it), VARIABLE)
+                Moshi.Match.@match v begin
+                    BSImpl.Term(; f, args) && if f isa SU.Operator &&
+                            !(f isa Differential) && (it = input_timedomain(v)::Vector{InputTimeDomainElT}) !== nothing
+                        end => begin
+                            for (v′, td) in zip(args, it)
+                                addvar!(setmetadata(v′, VariableTimeDomain, td), VARIABLE)
+                            end
                     end
+                    _ => nothing
                 end
             end
 
             isalgeq &= !isdifferential(v)
 
-            if symbolic_type(v) == ArraySymbolic()
-                vv = collect(v)
+            sh = SU.shape(v)::SU.ShapeVecT
+            if isempty(sh)
+                push!(incidence, v)
+                addvar!(v, VARIABLE)
+            elseif length(sh) == 1
+                vv = collect(v)::Vector{SymbolicT}
                 union!(incidence, vv)
-                map(vv) do vi
+                for vi in vv
+                    addvar!(vi, VARIABLE)
+                end
+            elseif length(sh) == 2
+                vv = collect(v)::Matrix{SymbolicT}
+                union!(incidence, vv)
+                for vi in vv
                     addvar!(vi, VARIABLE)
                 end
             else
-                push!(incidence, v)
-                addvar!(v, VARIABLE)
+                vv = collect(v)
+                union!(incidence, vv)::Array{SymbolicT}
+                for vi in vv
+                    addvar!(vi, VARIABLE)
+                end
             end
         end
         if isalgeq || is_statemachine_equation
             eqs[i] = eq
-        else
-            eqs[i] = eqs[i].lhs ~ rhs
         end
         push!(symbolic_incidence, collect(incidence))
     end
 
-    dervaridxs = OrderedSet{Int}()
-    for (i, v) in enumerate(fullvars)
-        while isdifferential(v)
-            push!(dervaridxs, i)
-            v = arguments(v)[1]
-            i = addvar!(v, VARIABLE)
-        end
-    end
     eqs = eqs[eqs_to_retain]
     original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
@@ -522,51 +497,42 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
 
+    dervaridxs = OrderedSet{Int}()
+    add_intermediate_derivatives!(fullvars, dervaridxs, addvar!)
     # Handle shifts - find lowest shift and add intermediates with derivative edges
     ### Handle discrete variables
-    lowest_shift = Dict()
-    for var in fullvars
-        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
-            steps = operation(var).steps
-            if steps > 0
-                error("Only non-positive shifts allowed. Found $var with a shift of $steps")
-            end
-            v = arguments(var)[1]
-            lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
-        end
-    end
-    for var in fullvars
-        if ModelingToolkit.isoperator(var, ModelingToolkit.Shift)
-            op = operation(var)
-            steps = op.steps
-            v = arguments(var)[1]
-            lshift = lowest_shift[v]
-            tt = op.t
-        elseif haskey(lowest_shift, var)
-            lshift = lowest_shift[var]
-            steps = 0
-            tt = iv
-            v = var
-        else
-            continue
-        end
-        if lshift < steps
-            push!(dervaridxs, var2idx[var])
-        end
-        for s in (steps - 1):-1:(lshift + 1)
-            sf = Shift(tt, s)
-            dvar = sf(v)
-            idx = addvar!(dvar, VARIABLE)
-            if !(idx in dervaridxs)
-                push!(dervaridxs, idx)
-            end
-        end
-    end
-
+    add_intermediate_shifts!(fullvars, dervaridxs, var2idx, addvar!, iv)
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
-    sorted_fullvars = OrderedSet(fullvars[dervaridxs])
-    var_to_old_var = Dict(zip(fullvars, fullvars))
+    fullvars, var_types = sort_fullvars(fullvars, dervaridxs, var_types, iv)
+    var2idx = Dict{SymbolicT, Int}(fullvars .=> eachindex(fullvars))
+    ndervars = length(dervaridxs)
+    # invalidate `dervaridxs`, it is just `1:ndervars`
+    dervaridxs = nothing
+
+    # build `var_to_diff`
+    var_to_diff = build_var_to_diff(fullvars, ndervars, var2idx, iv)
+
+    # build incidence graph
+    graph = build_incidence_graph(length(fullvars), symbolic_incidence, var2idx)
+
+    @set! sys.eqs = eqs
+
+    eq_to_diff = DiffGraph(nsrcs(graph))
+
+    return TearingState{typeof(sys)}(sys, fullvars,
+        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
+            complete(graph), nothing, var_types, false),
+        Equation[], param_derivative_map, original_eqs, Equation[], typeof(sys)[])
+end
+
+function sort_fullvars(fullvars::Vector{SymbolicT}, dervaridxs::Vector{Int}, var_types::Vector{VariableType}, @nospecialize(iv::Union{SymbolicT, Nothing}))
+    if iv === nothing
+        return fullvars, var_types
+    end
+    iv = iv::SymbolicT
+    sorted_fullvars = OrderedSet{SymbolicT}(fullvars[dervaridxs])
+    var_to_old_var = Dict{SymbolicT, SymbolicT}(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
         diffvar = var_to_old_var[lower_order_var(dervar, iv)]
@@ -583,38 +549,164 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
     sortperm = indexin(new_fullvars, fullvars)
     fullvars = new_fullvars
     var_types = var_types[sortperm]
-    var2idx = Dict(fullvars .=> eachindex(fullvars))
-    dervaridxs = 1:length(dervaridxs)
+    return fullvars, var_types
+end
 
-    # build `var_to_diff`
+function build_var_to_diff(fullvars::Vector{SymbolicT}, ndervars::Int, var2idx::Dict{SymbolicT, Int}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     nvars = length(fullvars)
-    diffvars = []
     var_to_diff = DiffGraph(nvars, true)
-    for dervaridx in dervaridxs
+    if iv === nothing
+        return var_to_diff
+    end
+    iv = iv::SymbolicT
+    for dervaridx in 1:ndervars
         dervar = fullvars[dervaridx]
         diffvar = lower_order_var(dervar, iv)
         diffvaridx = var2idx[diffvar]
-        push!(diffvars, diffvar)
         var_to_diff[diffvaridx] = dervaridx
     end
+    return var_to_diff
+end
 
-    # build incidence graph
+function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{SymbolicT}}, var2idx::Dict{SymbolicT, Int})
+    neqs = length(symbolic_incidence)
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
-
         jv = var2idx[v]
         add_edge!(graph, ie, jv)
     end
 
-    @set! sys.eqs = eqs
+    return graph
+end
 
-    eq_to_diff = DiffGraph(nsrcs(graph))
+function collect_vars_to_set!(buffer::Set{SymbolicT}, vars::Vector{SymbolicT})
+    for x in vars
+        push!(buffer, x)
+        Moshi.Match.@match x begin
+            BSImpl.Term(; f, args) && if f === getindex end => push!(buffer, args[1])
+            _ => nothing
+        end
+        sh = SU.shape(x)
+        sh isa SU.Unknown && continue
+        sh = sh::SU.ShapeVecT
+        isempty(sh) && continue
+        idxs = SU.stable_eachindex(x)
+        for i in idxs
+            push!(buffer, x[i])
+        end
+    end
+end
 
-    ts = TearingState(sys, fullvars,
-        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-            complete(graph), nothing, var_types, false),
-        Any[], param_derivative_map, original_eqs, Equation[], typeof(sys)[])
-    return ts
+function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, eqs_to_retain::BitVector, ps::Set{SymbolicT}, @nospecialize(iv::Union{Nothing, SymbolicT}), i::Int, eq::Equation)
+    is_statemachine_equation = false
+    lhs = eq.lhs
+    rhs = eq.rhs
+    Moshi.Match.@match lhs begin
+        BSImpl.Term(; f, args) && if f isa Differential && iv isa SymbolicT && isequal(f.x, iv) &&
+                                     is_time_dependent_parameter(args[1], ps, iv)
+                                 end => begin
+            # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
+            # we want to store `nothing` in the map because that means `substitute`
+            # will ignore the rule. We will this identify the presence of `eq′.lhs` in
+            # the differentiated expression and error.
+            if eq.rhs !== COMMON_MISSING
+                param_derivative_map[lhs] = rhs
+                eq = Symbolics.COMMON_ZERO ~ rhs
+            else
+                # change the equation if the RHS is `missing` so the rest of this loop works
+                eq = Symbolics.COMMON_ZERO ~ Symbolics.COMMON_ZERO
+            end
+            eqs_to_retain[i] = false
+        end
+        BSImpl.Const(; val) && if val isa StateMachineOperator end => begin
+            is_statemachine_equation = true
+        end
+        BSImpl.Const(;) && if _iszero(lhs) end => nothing
+        _ => begin
+            eq = Symbolics.COMMON_ZERO ~ (rhs - lhs)
+        end
+    end
+    return eq, is_statemachine_equation
+end
+
+struct AddVar!
+    var2idx::Dict{SymbolicT, Int}
+    dvs::Set{SymbolicT}
+    fullvars::Vector{SymbolicT}
+    var_types::Vector{VariableType}
+end
+
+function (avc::AddVar!)(var::SymbolicT, vtype::VariableType)
+    idx = get(avc.var2idx, var, nothing)
+    idx === nothing || return idx::Int
+    push!(avc.dvs, var)
+    push!(avc.fullvars, var)
+    push!(avc.var_types, vtype)
+    return avc.var2idx[var] = length(avc.fullvars)
+end
+
+function add_intermediate_derivatives!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, addvar!::AddVar!)
+    for (i, v) in enumerate(fullvars)
+        while true
+            Moshi.Match.@match v begin
+                BSImpl.Term(; f, args) && if f isa Differential end => begin
+                    push!(dervaridxs, i)
+                    v = args[1]
+                    addvar!(v, VARIABLE)
+                end
+                _ => break
+            end
+        end
+    end
+end
+
+function add_intermediate_shifts!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, var2idx::Dict{SymbolicT, Int}, addvar!::AddVar!, iv::Union{SymbolicT, Nothing})
+    lowest_shift = Dict{SymbolicT, Int}()
+    for var in fullvars
+        Moshi.Match.@match var begin
+            BSImpl.Term(; f, args) && if f isa Shift end => begin
+                steps = f.steps
+                if steps > 0
+                    error("Only non-positive shifts allowed. Found $var with a shift of $steps")
+                end
+                v = args[1]
+                lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
+            end
+            _ => nothing
+        end
+    end
+    for var in fullvars
+        lshift = typemax(Int)
+        steps = typemax(Int)
+        tt = iv
+        v = var
+        Moshi.Match.@match var begin
+            BSImpl.Term(; f, args) && if f isa Shift end => begin
+                steps = f.steps
+                v = args[1]
+                lshift = lowest_shift[v]
+                tt = f.t
+            end
+            if haskey(lowest_shift, var) end => begin
+                lshift = lowest_shift[var]
+                steps = 0
+                tt = iv
+                v = var
+            end
+            _ => continue
+        end
+        if lshift < steps
+            push!(dervaridxs, var2idx[var])
+        end
+        for s in (steps - 1):-1:(lshift + 1)
+            sf = Shift(tt, s)
+            dvar = sf(v)
+            idx = addvar!(dvar, VARIABLE)
+            if !(idx in dervaridxs)
+                push!(dervaridxs, idx)
+            end
+        end
+    end
 end
 
 """
@@ -729,36 +821,38 @@ function trivial_tearing!(ts::TearingState)
     return ts
 end
 
-function lower_order_var(dervar, t)
-    if isdifferential(dervar)
-        diffvar = arguments(dervar)[1]
-    elseif ModelingToolkit.isoperator(dervar, ModelingToolkit.Shift)
-        s = operation(dervar)
-        step = s.steps - 1
-        vv = arguments(dervar)[1]
-        if step != 0
-            diffvar = Shift(s.t, step)(vv)
-        else
-            diffvar = vv
+function lower_order_var(dervar::SymbolicT, t::SymbolicT)
+    Moshi.Match.@match dervar begin
+        BSImpl.Term(; f, args) && if f isa Differential end => return args[1]
+        BSImpl.Term(; f, args) && if f isa Shift end => begin
+            step = f.steps - 1
+            vv = args[1]
+            if step != 0
+                diffvar = Shift(f.t, step)(vv)
+            else
+                diffvar = vv
+            end
+            return diffvar
         end
-    else
-        return Shift(t, -1)(dervar)
+        _ => return Shift(t, -1)(dervar)
     end
-    diffvar
 end
 
 function shift_discrete_system(ts::TearingState)
     @unpack fullvars, sys = ts
-    discvars = OrderedSet()
+    fullvars_set = Set{SymbolicT}(fullvars)
+    discvars = OrderedSet{SymbolicT}()
     eqs = equations(sys)
     for eq in eqs
-        vars!(discvars, eq; op = Union{Sample, Hold, Pre})
+        SU.search_variables!(discvars, eq; is_atomic = OperatorIsAtomic{Union{Sample, Hold, Pre}}())
     end
-    iv = get_iv(sys)
-
-    discmap = Dict(k => StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    iv = get_iv(sys)::SymbolicT
+    discmap = Dict{SymbolicT, SymbolicT}()
     for k in discvars
-    if any(isequal(k), fullvars) && !isa(operation(k), Union{Sample, Hold, Pre}))
+        k in fullvars_set || continue
+        isoperator(k, Union{Sample, Hold, Pre}) && continue
+        discmap[k] = StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
+    end
 
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
