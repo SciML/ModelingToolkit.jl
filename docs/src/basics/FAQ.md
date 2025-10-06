@@ -192,6 +192,8 @@ p, replace, alias = SciMLStructures.canonicalize(Tunable(), prob.p)
 # changes to the array will be reflected in parameter values
 ```
 
+See the [basic example on optimizing](https://docs.sciml.ai/ModelingToolkit/dev/examples/remake/#Optimizing-through-an-ODE-solve-and-re-creating-MTK-Problems) for combining these steps to optimizing parameters and use ForwardDiff.jl as the backend for Automatic Differentiation.
+
 # ERROR: ArgumentError: SymbolicUtils.BasicSymbolic{Real}[xˍt(t)] are missing from the variable map.
 
 This error can come up after running `mtkcompile` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
