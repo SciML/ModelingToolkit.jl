@@ -1148,25 +1148,34 @@ Given a list of equations where some may be array equations, flatten the array e
 without scalarizing occurrences of array variables and return the new list of equations.
 """
 function flatten_equations(eqs::Vector{Equation})
-    mapreduce(vcat, eqs; init = Equation[]) do eq
-        islhsarr = eq.lhs isa AbstractArray || Symbolics.isarraysymbolic(eq.lhs)
-        isrhsarr = eq.rhs isa AbstractArray || Symbolics.isarraysymbolic(eq.rhs)
-        if islhsarr || isrhsarr
-            islhsarr && isrhsarr ||
-                error("""
-                LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must either both be array expressions \
-                or both scalar
-                """)
-            size(eq.lhs) == size(eq.rhs) ||
-                error("""
-                Size of LHS ($(eq.lhs)) and RHS ($(eq.rhs)) must match: got \
-                $(size(eq.lhs)) and $(size(eq.rhs))
-                """)
-            return vec(collect(eq.lhs) .~ collect(eq.rhs))
+    _eqs = Equation[]
+    for eq in eqs
+        shlhs = SU.shape(eq.lhs)
+        if isempty(shlhs)
+            push!(_eqs, eq)
+            continue
+        end
+        if length(shlhs) == 1
+            lhs = collect(eq.lhs)::Vector{SymbolicT}
+            rhs = collect(eq.rhs)::Vector{SymbolicT}
+            for (l, r) in zip(lhs, rhs)
+                push!(_eqs, l ~ r)
+            end
+        elseif length(shlhs) == 2
+            lhs = collect(eq.lhs)::Matrix{SymbolicT}
+            rhs = collect(eq.rhs)::Matrix{SymbolicT}
+            for (l, r) in zip(lhs, rhs)
+                push!(_eqs, l ~ r)
+            end
         else
-            eq
+            lhs = collect(eq.lhs)::Matrix{SymbolicT}
+            rhs = collect(eq.rhs)::Matrix{SymbolicT}
+            for (l, r) in zip(lhs, rhs)
+                push!(_eqs, l ~ r)
+            end
         end
     end
+    return _eqs
 end
 
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
