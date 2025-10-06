@@ -322,10 +322,14 @@ struct System <: IntermediateDeprecationSystem
     end
 end
 
+_sum_costs(costs::Vector{SymbolicT}) = SU.add_worker(VartypeT, costs)
+_sum_costs(costs::Vector{Num}) = SU.add_worker(VartypeT, costs)
+# `reduce` instead of `sum` because the rrule for `sum` doesn't
+# handle the `init` kwarg.
+_sum_costs(costs::Vector) = reduce(+, costs; init = 0.0)
+
 function default_consolidate(costs, subcosts)
-    # `reduce` instead of `sum` because the rrule for `sum` doesn't
-    # handle the `init` kwarg.
-    return reduce(+, costs; init = 0.0) + reduce(+, subcosts; init = 0.0)
+    return _sum_costs(costs) + _sum_costs(subcosts)
 end
 
 unwrap_vars(x) = unwrap_vars(collect(x))
@@ -794,9 +798,9 @@ function flatten(sys::System, noeqs = false)
     isempty(systems) && return sys
     costs = cost(sys)
     if _iszero(costs)
-        costs = Union{Real, BasicSymbolic}[]
+        costs = SymbolicT[]
     else
-        costs = [costs]
+        costs = SymbolicT[costs]
     end
     # We don't include `ignored_connections` in the flattened system, because
     # connection expansion inherently requires the hierarchy structure. If the system
