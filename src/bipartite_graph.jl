@@ -375,7 +375,8 @@ end
 function 𝑑neighbors(g::BipartiteGraph, j::Integer,
         with_metadata::Val{M} = Val(false)) where {M}
     require_complete(g)
-    M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
+    backj = g.badjlist[j]::Vector{Int}
+    M ? zip(backj, (g.metadata[i][j] for i in backj)) : backj
 end
 Graphs.ne(g::BipartiteGraph) = g.ne
 Graphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
