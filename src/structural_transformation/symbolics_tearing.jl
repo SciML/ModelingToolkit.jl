@@ -204,7 +204,7 @@ State selection is done. All non-differentiated variables are algebraic
 variables, and all variables that appear differentiated are differential variables.
 """
 function substitute_derivatives_algevars!(
-        ts::TearingState, neweqs, var_eq_matching, dummy_sub; iv = nothing, D = nothing)
+        ts::TearingState, neweqs::Vector{Equation}, var_eq_matching::Matching, dummy_sub::Dict{SymbolicT, SymbolicT}, iv::Union{Nothing, SymbolicT}, D::Union{Nothing, Differential, Shift})
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
@@ -214,7 +214,7 @@ function substitute_derivatives_algevars!(
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            v_t = setio(diff2term_with_unit(unwrap(dd), unwrap(iv)), false, false)
+            v_t = setio(diff2term_with_unit(dd, iv), false, false)
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
                 neweqs[eq] = substitute(neweqs[eq], dd => v_t)
@@ -326,17 +326,22 @@ Effects on the system structure:
 """
 function generate_derivative_variables!(
         ts::TearingState, neweqs, var_eq_matching, full_var_eq_matching,
-        var_sccs; mm, iv = nothing, D = nothing)
+        var_sccs, mm::Union{Nothing, SparseMatrixCLIL}, iv::Union{SymbolicT, Nothing})
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     is_discrete = is_only_discrete(structure)
-    linear_eqs = mm === nothing ? Dict{Int, Int}() :
-                 Dict(reverse(en) for en in enumerate(mm.nzrows))
+    linear_eqs = Dict{Int, Int}()
+    if mm !== nothing
+        for (i, e) in enumerate(mm.nzrows)
+            linear_eqs[e] = i
+        end
+    end
 
     # We need the inverse mapping of `var_sccs` to update it efficiently later.
-    v_to_scc = Vector{NTuple{2, Int}}(undef, ndsts(graph))
+    v_to_scc = NTuple{2, Int}[]
+    resize!(v_to_scc, ndsts(graph))
     for (i, scc) in enumerate(var_sccs), (j, v) in enumerate(scc)
 
         v_to_scc[v] = (i, j)
@@ -539,26 +544,28 @@ Reorder the equations and unknowns to be in the BLT sorted form.
 Return the new equations, the solved equations,
 the new orderings, and the number of solved variables and equations.
 """
-function generate_system_equations!(state::TearingState, neweqs, var_eq_matching,
-        full_var_eq_matching, var_sccs, extra_eqs_vars;
-        simplify = false, iv = nothing, D = nothing)
+function generate_system_equations!(state::TearingState, neweqs::Vector{Equation},
+        var_eq_matching::Matching, full_var_eq_matching::Matching,
+        var_sccs::Vector{Vector{Int}}, extra_eqs_vars::NTuple{2, Vector{Int}},
+        iv::Union{SymbolicT, Nothing}, D::Union{Differential, Shift, Nothing};
+        simplify::Bool = false)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
-    full_eq_var_matching = invview(full_var_eq_matching)
     diff_to_var = invview(var_to_diff)
     extra_eqs, extra_vars = extra_eqs_vars
 
-    total_sub = Dict()
+    total_sub = Dict{SymbolicT, SymbolicT}()
     if is_only_discrete(structure)
         for (i, v) in enumerate(fullvars)
-            op = operation(v)
-            op isa Shift && (op.steps < 0) &&
-                begin
+            Moshi.Match.@match v begin
+                BSImpl.Term(; f) && if f isa Shift && f.steps < 0 end => begin
                     lowered = lower_shift_varname_with_unit(v, iv)
                     total_sub[v] = lowered
                     fullvars[i] = lowered
                 end
+                _ => nothing
+            end
         end
     end
 
@@ -579,13 +586,11 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     end
 
     digraph = DiCMOBiGraph{false}(graph, var_eq_matching)
-    idep = iv
     for (i, scc) in enumerate(var_sccs)
         # note that the `vscc <-> escc` relation is a set-to-set mapping, and not
         # point-to-point.
         vscc, escc = get_sorted_scc(digraph, full_var_eq_matching, var_eq_matching, scc)
         var_sccs[i] = vscc
-
         if length(escc) != length(vscc)
             isempty(escc) && continue
             escc = setdiff(escc, extra_eqs)
@@ -594,11 +599,10 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
             isempty(vscc) && continue
         end
 
-        offset = 1
         for ieq in escc
             iv = eq_var_matching[ieq]
-            eq = neweqs[ieq]
-            codegen_equation!(eq_generator, neweqs[ieq], ieq, iv; simplify)
+            neq = neweqs[ieq]
+            codegen_equation!(eq_generator, neq, ieq, iv; simplify)
         end
     end
 
@@ -620,14 +624,16 @@ function generate_system_equations!(state::TearingState, neweqs, var_eq_matching
     solved_vars_set = BitSet(solved_vars)
     # We filled zeros for algebraic variables, so fill them properly here
     offset = 1
+    findnextfn = let diff_vars_set = diff_vars_set, solved_vars_set = solved_vars_set,
+        diff_to_var = diff_to_var, ispresent = ispresent
+        j -> !(j in diff_vars_set || j in solved_vars_set) && diff_to_var[j] === nothing &&
+            ispresent(j)
+    end
     for (i, v) in enumerate(var_ordering)
         v == 0 || continue
         # find the next variable which is not differential or solved, is not the
         # derivative of another variable and is present in the equations
-        index = findnext(1:ndsts(graph), offset) do j
-            !(j in diff_vars_set || j in solved_vars_set) && diff_to_var[j] === nothing &&
-                ispresent(j)
-        end
+        index = findnext(findnextfn, 1:ndsts(graph), offset)
         # in case of overdetermined systems, this may not be present
         index === nothing && break
         var_ordering[i] = index
@@ -649,11 +655,20 @@ Sort the provided SCC `scc`, given the `digraph` of the system constructed using
 function get_sorted_scc(
         digraph::DiCMOBiGraph, full_var_eq_matching::Matching, var_eq_matching::Matching, scc::Vector{Int})
     eq_var_matching = invview(var_eq_matching)
-    full_eq_var_matching = invview(full_var_eq_matching)
     # obtain the matched equations in the SCC
-    scc_eqs = Int[full_var_eq_matching[v] for v in scc if full_var_eq_matching[v] isa Int]
+    scc_eqs = Int[]
     # obtain the equations in the SCC that are linearly solvable
-    scc_solved_eqs = Int[var_eq_matching[v] for v in scc if var_eq_matching[v] isa Int]
+    scc_solved_eqs = Int[]
+    for v in scc
+        e = full_var_eq_matching[v]
+        if e isa Int
+            push!(scc_eqs, e)
+        end
+        e = var_eq_matching[v]
+        if e isa Int
+            push!(scc_solved_eqs, e)
+        end
+    end
     # obtain the subgraph of the contracted graph involving the solved equations
     subgraph, varmap = Graphs.induced_subgraph(digraph, scc_solved_eqs)
     # topologically sort the solved equations and append the remainder
@@ -661,7 +676,13 @@ function get_sorted_scc(
                setdiff(scc_eqs, scc_solved_eqs)]
     # the variables of the SCC are obtained by inverse mapping the sorted equations
     # and appending the rest
-    scc_vars = [eq_var_matching[e] for e in scc_eqs if eq_var_matching[e] isa Int]
+    scc_vars = Int[]
+    for e in scc_eqs
+        v = eq_var_matching[e]
+        if v isa Int
+            push!(scc_vars, v)
+        end
+    end
     append!(scc_vars, setdiff(scc, scc_vars))
     return scc_vars, scc_eqs
 end
@@ -672,7 +693,7 @@ end
 Struct containing the information required to generate equations of a system, as well as
 the generated equations and associated metadata.
 """
-struct EquationGenerator{S, D, I}
+struct EquationGenerator{S}
     """
     `TearingState` of the system.
     """
@@ -681,15 +702,15 @@ struct EquationGenerator{S, D, I}
     Substitutions to perform in all subsequent equations. For each differential equation
     `D(x) ~ f(..)`, the substitution `D(x) => f(..)` is added to the rules.
     """
-    total_sub::Dict{Any, Any}
+    total_sub::Dict{SymbolicT, SymbolicT}
     """
     The differential operator, or `nothing` if not applicable.
     """
-    D::D
+    D::Union{Differential, Shift, Nothing}
     """
     The independent variable, or `nothing` if not applicable.
     """
-    idep::I
+    idep::Union{SymbolicT, Nothing}
     """
     The new generated equations of the system.
     """
@@ -835,19 +856,17 @@ Generate a first-order differential equation whose LHS is `dx`.
 `var` and `dx` represent the same variable, but `var` may be a higher-order differential and `dx` is always first-order. For example, if `var` is D(D(x)), then `dx` would be `D(x_t)`. Solve `eq` for `var`, substitute previously solved variables, and return the differential equation.
 """
 function make_differential_equation(var, dx, eq, total_sub)
-    dx ~ simplify_shifts(Symbolics.fixpoint_sub(
-        Symbolics.symbolic_linear_solve(eq, var),
-        total_sub; operator = ModelingToolkit.Shift))
+    v1 = Symbolics.symbolic_linear_solve(eq, var)::SymbolicT
+    v2 = Symbolics.fixpoint_sub(v1, total_sub; operator = ModelingToolkit.Shift)
+    v3 = simplify_shifts(v2)
+    dx ~ v3
 end
 
 """
 Generate an algebraic equation. Substitute solved variables into `eq` and return the equation.
 """
 function make_algebraic_equation(eq, total_sub)
-    rhs = eq.rhs
-    if !(eq.lhs isa Number && eq.lhs == 0)
-        rhs = eq.rhs - eq.lhs
-    end
+    rhs = eq.rhs - eq.lhs
     0 ~ simplify_shifts(Symbolics.fixpoint_sub(rhs, total_sub))
 end
 
@@ -918,7 +937,7 @@ function reorder_vars!(state::TearingState, var_eq_matching, var_sccs, eq_orderi
     var_ordering_set = BitSet(var_ordering)
     for scc in var_sccs
         # Map variables to their new indices
-        map!(v -> varsperm[v], scc, scc)
+        map!(Base.Fix1(getindex, varsperm), scc, scc)
         # Remove variables not in the reduced set
         filter!(!iszero, scc)
     end
@@ -938,16 +957,20 @@ end
 Update the system equations, unknowns, and observables after simplification.
 """
 function update_simplified_system!(
-        state::TearingState, neweqs, solved_eqs, dummy_sub, var_sccs, extra_unknowns;
-        array_hack = true, D = nothing, iv = nothing)
+        state::TearingState, neweqs::Vector{Equation}, solved_eqs::Vector{Equation},
+        dummy_sub::Dict{SymbolicT, SymbolicT}, var_sccs::Vector{Vector{Int}},
+        extra_unknowns::Vector{SymbolicT}, iv::Union{SymbolicT, Nothing},
+        D::Union{Differential, Shift, Nothing}; array_hack = true)
     @unpack fullvars, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     diff_to_var = invview(var_to_diff)
     # Since we solved the highest order derivative variable in discrete systems,
     # we make a list of the solved variables and avoid including them in the
     # unknowns.
-    solved_vars = Set()
+    solved_vars = Set{SymbolicT}()
     if is_only_discrete(structure)
+        iv = iv::SymbolicT
+        D = D::Shift
         for eq in solved_eqs
             var = eq.lhs
             if isequal(eq.lhs, eq.rhs)
@@ -973,22 +996,25 @@ function update_simplified_system!(
     obs = [substitute(observed(sys), obs_sub); solved_eqs;
            substitute(state.additional_observed, obs_sub)]
 
-    unknown_idxs = filter(
-        i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars), eachindex(state.fullvars))
+    filterer = let diff_to_var = diff_to_var, ispresent = ispresent, fullvars = fullvars,
+        solved_vars = solved_vars
+        i -> diff_to_var[i] === nothing && ispresent(i) && !(fullvars[i] in solved_vars)
+    end
+    unknown_idxs = filter(filterer, eachindex(state.fullvars))
     unknowns = state.fullvars[unknown_idxs]
     unknowns = [unknowns; extra_unknowns]
     if is_only_discrete(structure)
         # Algebraic variables are shifted forward by one, so we backshift them.
-        unknowns = map(enumerate(unknowns)) do (i, var)
-            if iscall(var) && operation(var) isa Shift && operation(var).steps == 1
-                # We might have shifted a variable with io metadata. That is irrelevant now
-                # because we handled io variables earlier in `_mtkcompile!` so just ignore
-                # it here.
-                setio(backshift_expr(var, iv), false, false)
-            else
-                var
+        _unknowns = SymbolicT[]
+        for var in unknowns
+            Moshi.Match.@match var begin
+                BSImpl.Term(; f, args, type, shape, metadata) && if f isa Shift && f.steps == 1 end => begin
+                    push!(_unknowns, setio(args[1], false, false))
+                end
+                _ => push!(_unknowns, var)
             end
         end
+        unknowns = _unknowns
     end
     @set! sys.unknowns = unknowns
 
@@ -1059,7 +1085,7 @@ function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::
     extra_eqs_vars = get_extra_eqs_vars(
         state, var_eq_matching, full_var_eq_matching, fully_determined)
     neweqs = collect(equations(state))
-    dummy_sub = Dict()
+    dummy_sub = Dict{SymbolicT, SymbolicT}()
 
     if ModelingToolkit.has_iv(state.sys)
         iv = get_iv(state.sys)
@@ -1075,29 +1101,28 @@ function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::
     extra_unknowns = state.fullvars[extra_eqs_vars[2]]
     if is_only_discrete(state.structure)
         var_sccs = add_additional_history!(
-            state, neweqs, var_eq_matching, full_var_eq_matching, var_sccs; iv, D)
+            state, var_eq_matching, full_var_eq_matching, var_sccs, iv)
     end
 
     # Structural simplification
-    substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub; iv, D)
+    substitute_derivatives_algevars!(state, neweqs, var_eq_matching, dummy_sub, iv, D)
 
     var_sccs = generate_derivative_variables!(
-        state, neweqs, var_eq_matching, full_var_eq_matching, var_sccs; mm, iv, D)
-
+        state, neweqs, var_eq_matching, full_var_eq_matching, var_sccs, mm, iv)
     neweqs, solved_eqs,
     eq_ordering,
     var_ordering,
     nelim_eq,
     nelim_var = generate_system_equations!(
         state, neweqs, var_eq_matching, full_var_eq_matching,
-        var_sccs, extra_eqs_vars; simplify, iv, D)
+        var_sccs, extra_eqs_vars, iv, D; simplify)
 
     state = reorder_vars!(
         state, var_eq_matching, var_sccs, eq_ordering, var_ordering, nelim_eq, nelim_var)
     # var_eq_matching and full_var_eq_matching are now invalidated
 
     sys = update_simplified_system!(state, neweqs, solved_eqs, dummy_sub, var_sccs,
-        extra_unknowns; array_hack, iv, D)
+        extra_unknowns, iv, D; array_hack)
 
     @set! state.sys = sys
     @set! sys.tearing_state = state
@@ -1135,24 +1160,23 @@ x(k) ~ x(k-1) + x(k-2)
 Where the last equation is the observed equation.
 """
 function add_additional_history!(
-        state::TearingState, neweqs::Vector, var_eq_matching::Matching,
-        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}; iv, D)
+        state::TearingState, var_eq_matching::Matching,
+        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}, iv::Union{SymbolicT, Nothing})
+    iv === nothing && return var_sccs
+    iv = iv::SymbolicT
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
-    eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
-    is_discrete = is_only_discrete(structure)
-    digraph = DiCMOBiGraph{false}(graph, var_eq_matching)
 
     # We need the inverse mapping of `var_sccs` to update it efficiently later.
-    v_to_scc = Vector{NTuple{2, Int}}(undef, ndsts(graph))
+    v_to_scc = NTuple{2, Int}[]
+    resize!(v_to_scc, ndsts(graph))
     for (i, scc) in enumerate(var_sccs), (j, v) in enumerate(scc)
 
         v_to_scc[v] = (i, j)
     end
 
     vars_to_backshift = BitSet()
-    eqs_to_backshift = BitSet()
     # add history for differential variables
     for ivar in 1:length(fullvars)
         ieq = var_eq_matching[ivar]
@@ -1258,7 +1282,7 @@ occurs in observed equations (and unknowns if it's split).
 function tearing_hacks(sys, obs, unknowns, neweqs; array = true)
     # map of array observed variable (unscalarized) to number of its
     # scalarized terms that appear in observed equations
-    arr_obs_occurrences = Dict()
+    arr_obs_occurrences = Dict{SymbolicT, Int}()
     for (i, eq) in enumerate(obs)
         lhs = eq.lhs
         rhs = eq.rhs
