@@ -243,24 +243,36 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
+    __indexed_fullvar_is_var = let fullvars = fullvars
+        function indexed_fullvar_is_var(x::SymbolicT)
+            for v in fullvars
+                Moshi.Match.@match v begin
+                    BSImpl.Term(; f, args) && if f === getindex && isequal(args[1], x) end => return true
+                    _ => nothing
+                end
+            end
+            return false
+        end
+    end
+    __allow_sym_par_cond = let fullvars = fullvars, is_atomic = ModelingToolkit.OperatorIsAtomic{Union{Differential, Shift, Pre, Sample, Hold, Initial}}(), __indexed_fullvar_is_var = __indexed_fullvar_is_var
+        function allow_sym_par_cond(v)
+            is_atomic(v) && any(isequal(v), fullvars) ||
+                symbolic_type(v) == ArraySymbolic() && (SU.shape(v) isa SU.Unknown ||
+                __indexed_fullvar_is_var(v))
+         end
+    end
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
         isirreducible(var) && (all_int_vars = false; continue)
         a, b, islinear = linear_expansion(term, var)
-        a, b = unwrap(a), unwrap(b)
+
         islinear || (all_int_vars = false; continue)
         if a isa SymbolicT
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
                     # if any of the variables in `a` are present in fullvars (taking into account arrays)
-                    if any(
-                        v -> any(isequal(v), fullvars) ||
-                             symbolic_type(v) == ArraySymbolic() &&
-                             SU.shape(v) isa SU.Unknown ||
-                             any(x -> any(isequal(x), fullvars), collect(v)),
-                        vars(
-                            a; op = Union{Differential, Shift, Pre, Sample, Hold, Initial}))
+                    if SU.query(__allow_sym_par_cond, a)
                         continue
                     end
                 else
@@ -559,27 +571,35 @@ function isdoubleshift(var)
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
 end
 
+simplify_shifts(eq::Equation) = simplify_shifts(eq.lhs) ~ simplify_shifts(eq.rhs)
+
+function _simplify_shifts(var::SymbolicT)
+    Moshi.Match.@match var begin
+        BSImpl.Term(; f, args) && if f isa Shift && f.steps == 0 end => return args[1]
+        BSImpl.Term(; f = op1, args) && if op1 isa Shift end => begin
+            vv1 = args[1]
+            Moshi.Match.@match vv1 begin
+                BSImpl.Term(; f = op2, args = a2) && if op2 isa Shift end => begin
+                    vv2 = a2[1]
+                    s1 = op1.steps
+                    s2 = op2.steps
+                    t1 = op1.t
+                    t2 = op2.t
+                    return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
+                end
+                _ => return var
+            end
+        end
+        _ => var
+    end
+end
+
 """
 Simplify multiple shifts: Shift(t, k1)(Shift(t, k2)(x)) becomes Shift(t, k1+k2)(x).
 """
-function simplify_shifts(var)
+function simplify_shifts(var::SymbolicT)
     ModelingToolkit.hasshift(var) || return var
-    var isa Equation && return simplify_shifts(var.lhs) ~ simplify_shifts(var.rhs)
-    (op = operation(var)) isa Shift && op.steps == 0 && return first(arguments(var))
-    if isdoubleshift(var)
-        op1 = operation(var)
-        vv1 = arguments(var)[1]
-        op2 = operation(vv1)
-        vv2 = arguments(vv1)[1]
-        s1 = op1.steps
-        s2 = op2.steps
-        t1 = op1.t
-        t2 = op2.t
-        return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
-    else
-        return maketerm(typeof(var), operation(var), simplify_shifts.(arguments(var)),
-            unwrap(var).metadata)
-    end
+    return SU.Rewriters.Postwalk(_simplify_shifts)(var)
 end
 
 """
