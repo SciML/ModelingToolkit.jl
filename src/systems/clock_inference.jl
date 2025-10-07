@@ -58,46 +58,29 @@ struct NotInferredTimeDomain end
 function error_sample_time(eq)
     error("$eq\ncontains `SampleTime` but it is not an Inferred discrete equation.")
 end
-function substitute_sample_time(ci::ClockInference, ts::TearingState)
+function substitute_sample_time(ci::ClockInference{T}, ts::T) where {T <: TearingState}
     @unpack eq_domain = ci
     eqs = copy(equations(ts))
     @assert length(eqs) == length(eq_domain)
+    subrules = Dict{SymbolicT, SymbolicT}()
+    st = SampleTime()
     for i in eachindex(eqs)
         eq = eqs[i]
         domain = eq_domain[i]
-        dt = sampletime(domain)
-        neweq = substitute_sample_time(eq, dt)
-        if neweq isa NotInferredTimeDomain
-            error_sample_time(eq)
+        dt = SU.Const{VartypeT}(sampletime(domain))
+        if dt === COMMON_NOTHING
+            if SU.query(isequal(st), eq.lhs) || SU.query(isequal(st), eq.rhs)
+                error_sample_time(eq)
+            end
+            neweq = eq
+        else
+            subrules[st] = dt
+            neweq = substitute(eq, subrules)
         end
         eqs[i] = neweq
     end
     @set! ts.sys.eqs = eqs
     @set! ci.ts = ts
-end
-
-function substitute_sample_time(eq::Equation, dt)
-    substitute_sample_time(eq.lhs, dt) ~ substitute_sample_time(eq.rhs, dt)
-end
-
-function substitute_sample_time(ex, dt)
-    iscall(ex) || return ex
-    op = operation(ex)
-    args = arguments(ex)
-    if op == SampleTime
-        dt === nothing && return NotInferredTimeDomain()
-        return dt
-    else
-        new_args = similar(args)
-        for (i, arg) in enumerate(args)
-            ex_arg = substitute_sample_time(arg, dt)
-            if ex_arg isa NotInferredTimeDomain
-                return ex_arg
-            end
-            new_args[i] = ex_arg
-        end
-        maketerm(typeof(ex), op, new_args, metadata(ex))
-    end
 end
 
 """
@@ -109,7 +92,7 @@ function infer_clocks!(ci::ClockInference)
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
 
-    var_to_idx = Dict(fullvars .=> eachindex(fullvars))
+    var_to_idx = Dict{SymbolicT, Int}(fullvars .=> eachindex(fullvars))
 
     # all shifted variables have the same clock as the unshifted variant
     for (i, v) in enumerate(fullvars)
@@ -122,9 +105,9 @@ function infer_clocks!(ci::ClockInference)
 
     # preallocated buffers:
     # variables in each equation
-    varsbuf = Set()
+    varsbuf = Set{SymbolicT}()
     # variables in each argument to an operator
-    arg_varsbuf = Set()
+    arg_varsbuf = Set{SymbolicT}()
     # hyperedge for each equation
     hyperedge = Set{ClockVertex.Type}()
     # hyperedge for each argument to an operator
@@ -136,7 +119,7 @@ function infer_clocks!(ci::ClockInference)
         empty!(varsbuf)
         empty!(hyperedge)
         # get variables in equation
-        vars!(varsbuf, eq; op = Symbolics.Operator)
+        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{Symbolics.Operator}())
         # add the equation to the hyperedge
         eq_node = if is_initialization_equation
             ClockVertex.InitEquation(ieq)
@@ -155,14 +138,17 @@ function infer_clocks!(ci::ClockInference)
             # now we only care about synchronous operators
             iscall(var) || continue
             op = operation(var)
-            is_timevarying_operator(op) || continue
+            is_timevarying_operator(op)::Bool || continue
 
             # arguments and corresponding time domains
             args = arguments(var)
             tdomains = input_timedomain(op)
-            if !(tdomains isa AbstractArray || tdomains isa Tuple)
-                tdomains = [tdomains]
+            if tdomains isa Tuple
+                tdomains = Vector{InputTimeDomainElT}(collect(tdomains))
+            elseif !(tdomains isa Vector{InputTimeDomainElT})
+                tdomains = InputTimeDomainElT[tdomains]
             end
+            tdomains = tdomains::Vector{InputTimeDomainElT}
             nargs = length(args)
             ndoms = length(tdomains)
             if nargs != ndoms
@@ -178,7 +164,7 @@ function infer_clocks!(ci::ClockInference)
                 empty!(arg_varsbuf)
                 empty!(arg_hyperedge)
                 # get variables in argument
-                vars!(arg_varsbuf, arg; op = Union{Differential, Shift})
+                SU.search_variables!(arg_varsbuf, arg; is_atomic = OperatorIsAtomic{Union{Differential, Shift}}())
                 # get hyperedge for involved variables
                 for v in arg_varsbuf
                     vidx = get(var_to_idx, v, nothing)
@@ -200,7 +186,7 @@ function infer_clocks!(ci::ClockInference)
                     # All `InferredDiscrete` with the same `i` have the same clock (including output domain) so we don't
                     # add the edge, and instead add this to the `relative_hyperedges` mapping.
                     InferredClock.InferredDiscrete(i) => begin
-                        relative_edge = get!(() -> Set{ClockVertex.Type}(), relative_hyperedges, i)
+                        relative_edge = get!(Set{ClockVertex.Type}, relative_hyperedges, i)
                         union!(relative_edge, arg_hyperedge)
                     end
                 end
@@ -237,7 +223,7 @@ function infer_clocks!(ci::ClockInference)
 
     clock_partitions = connectionsets(inference_graph)
     for partition in clock_partitions
-        clockidxs = findall(vert -> Moshi.Data.isa_variant(vert, ClockVertex.Clock), partition)
+        clockidxs = findall(Base.Fix2(Moshi.Data.isa_variant, ClockVertex.Clock), partition)
         if isempty(clockidxs)
             push!(partition, ClockVertex.Clock(ContinuousClock()))
             push!(clockidxs, length(partition))
