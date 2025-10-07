@@ -611,13 +611,24 @@ end
 """
 Modify the variable metadata of system variables to indicate which ones are inputs, outputs, and disturbances. Needed for `inputs`, `outputs`, `disturbances`, `unbound_inputs`, `unbound_outputs` to return the proper subsets.
 """
-function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true)
+function markio!(state, orig_inputs::Set{SymbolicT},
+                 inputs::Vector{SymbolicT}, outputs::Vector{SymbolicT},
+                 disturbances::Vector{SymbolicT}; check = true)
     fullvars = get_fullvars(state)
-    inputset = Dict{Any, Bool}(i => false for i in inputs)
-    outputset = Dict{Any, Bool}(o => false for o in outputs)
-    disturbanceset = Dict{Any, Bool}(d => false for d in disturbances)
+    inputset = Dict{SymbolicT, Bool}()
+    for i in inputs
+        inputset[i] = false
+    end
+    outputset = Dict{SymbolicT, Bool}()
+    for o in outputs
+        outputset[o] = false
+    end
+    disturbanceset = Dict{SymbolicT, Bool}()
+    for d in disturbances
+        disturbanceset[d] = false
+    end
     for (i, v) in enumerate(fullvars)
-        if v in keys(inputset)
+        if haskey(inputset, v)
             if v in keys(outputset)
                 v = setio(v, true, true)
                 outputset[v] = true
@@ -626,7 +637,7 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
             end
             inputset[v] = true
             fullvars[i] = v
-        elseif v in keys(outputset)
+        elseif haskey(outputset, v)
             v = setio(v, false, true)
             outputset[v] = true
             fullvars[i] = v
@@ -638,7 +649,7 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
             fullvars[i] = v
         end
 
-        if v in keys(disturbanceset)
+        if haskey(disturbanceset, v)
             v = setio(v, true, false)
             v = setdisturbance(v, true)
             disturbanceset[v] = true
