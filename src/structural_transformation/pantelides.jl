@@ -8,11 +8,11 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     sys = state.sys
     # Step 1: write derivative equations
     in_eqs = equations(sys)
-    out_eqs = Vector{Any}(undef, nv(eq_to_diff))
+    out_eqs = Vector{Equation}(undef, nv(eq_to_diff))
     fill!(out_eqs, nothing)
     out_eqs[1:length(in_eqs)] .= in_eqs
 
-    out_vars = Vector{Any}(undef, nv(var_to_diff))
+    out_vars = Vector{SymbolicT}(undef, nv(var_to_diff))
     fill!(out_vars, nothing)
     out_vars[1:length(fullvars)] .= fullvars
 
@@ -31,8 +31,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         out_vars[diff] = D(vi)
     end
 
-    d_dict = Dict(zip(fullvars, 1:length(fullvars)))
-    lhss = Set{Any}([x.lhs for x in in_eqs if isdiffeq(x)])
+    d_dict = Dict{SymbolicT, Int}(zip(fullvars, 1:length(fullvars)))
     for (eqidx, diff) in edges(eq_to_diff)
         # LHS variable is looked up from var_to_diff
         # the var_to_diff[i]-th variable is the differentiated version of var at i
