@@ -69,7 +69,8 @@ function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
         ModelingToolkit.derivative(
             eq.rhs - eq.lhs, get_iv(sys); throw_no_derivative = true), ts.param_derivative_map)
 
-    vs = ModelingToolkit.vars(eq.rhs)
+    vs = Set{SymbolicT}()
+    SU.search_variables!(vs, eq.rhs)
     for v in vs
         # parameters with unknown derivatives have a value of `nothing` in the map,
         # so use `missing` as the default.

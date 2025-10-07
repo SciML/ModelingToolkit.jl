@@ -10,10 +10,12 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
     @unpack graph, var_to_diff, solvable_graph = state.structure
     mm = alias_eliminate_graph!(state, mm; kwargs...)
     s = state.structure
-    for g in (s.graph, s.solvable_graph)
-        g === nothing && continue
+    for (ei, e) in enumerate(mm.nzrows)
+        set_neighbors!(s.graph, e, mm.row_cols[ei])
+    end
+    if s.solvable_graph isa BipartiteGraph{Int, Nothing}
         for (ei, e) in enumerate(mm.nzrows)
-            set_neighbors!(g, e, mm.row_cols[ei])
+            set_neighbors!(s.solvable_graph, e, mm.row_cols[ei])
         end
     end
 
@@ -46,14 +48,12 @@ alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
 function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
-    graph_orig = copy(state.structure.graph)
     mm = alias_eliminate_graph!(state; kwargs...)
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
 
-    subs = Dict()
-    obs = Equation[]
+    subs = Dict{SymbolicT, SymbolicT}()
     # If we encounter y = -D(x), then we need to expand the derivative when
     # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
@@ -62,17 +62,21 @@ function alias_elimination!(state::TearingState; kwargs...)
     dels = Int[]
     eqs = collect(equations(state))
     resize!(eqs, nsrcs(graph))
+
+    __trivial_eq_rhs = let fullvars = fullvars
+        function trivial_eq_rhs(var, coeff)
+            iszero(coeff) && return Symbolics.COMMON_ZERO
+            return coeff * fullvars[var]
+        end
+    end
     for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
             # remove empty equations
             push!(dels, e)
         else
-            rhs = mapfoldl(+, pairs(nonzerosmap(@view mm[ei, :]))) do (var, coeff)
-                iszero(coeff) && return 0
-                return coeff * fullvars[var]
-            end
-            eqs[e] = 0 ~ rhs
+            rhs = mapfoldl(__trivial_eq_rhs, +, pairs(nonzerosmap(@view mm[ei, :])))
+            eqs[e] = Symbolics.COMMON_ZERO ~ rhs
         end
     end
     deleteat!(eqs, sort!(dels))
@@ -92,21 +96,22 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     n_new_eqs = idx
 
-    lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
-    nvs_orig = ndsts(graph_orig)
     for ieq in eqs_to_update
         eq = eqs[ieq]
         eqs[ieq] = substitute(eq, subs)
     end
-    @set! mm.nparentrows = nsrcs(graph)
-    @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
-                                            for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
-    @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
-                                            for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
-    @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
+    new_nparentrows = nsrcs(graph)
+    new_row_cols = eltype(mm.row_cols)[]
+    new_row_vals = eltype(mm.row_vals)[]
+    new_nzrows = Int[]
+    for (i, eq) in enumerate(mm.nzrows)
+        old_to_new_eq[eq] > 0 || continue
+        push!(new_row_cols, mm.row_cols[i])
+        push!(new_row_vals, mm.row_vals[i])
+        push!(new_nzrows, old_to_new_eq[eq])
+    end
+    mm = typeof(mm)(new_nparentrows, mm.ncols, new_nzrows, new_row_cols, new_row_vals)
 
     for old_ieq in to_expand
         ieq = old_to_new_eq[old_ieq]
@@ -138,7 +143,13 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     @set! sys.eqs = eqs
     state.sys = sys
-    return invalidate_cache!(sys), mm
+    # This phrasing infers the return type as `Union{Tuple{...}}` instead of
+    # `Tuple{Union{...}, ...}`
+    if mm isa SparseMatrixCLIL{BigInt, Int}
+        return invalidate_cache!(sys), mm
+    else
+        return invalidate_cache!(sys), mm
+    end
 end
 
 """
@@ -301,7 +312,13 @@ function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
         bar = do_bareiss!(mm, mm_orig, is_linear_variables, is_highest_diff)
     end
 
-    return mm, solvable_variables, bar
+    # This phrasing infers the return type as `Union{Tuple{...}}` instead of
+    # `Tuple{Union{...}, ...}`
+    if mm isa SparseMatrixCLIL{BigInt, Ti}
+        return mm, solvable_variables, bar
+    else
+        return mm, solvable_variables, bar
+    end
 end
 
 function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
