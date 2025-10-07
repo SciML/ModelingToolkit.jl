@@ -299,7 +299,7 @@ end
 """
 Turn input variables into parameters of the system.
 """
-function inputs_to_parameters!(state::TransformationState, inputsyms)
+function inputs_to_parameters!(state::TransformationState, inputsyms::Vector{SymbolicT})
     check_bound = inputsyms === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
@@ -309,9 +309,9 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     var_reidx = zeros(Int, length(fullvars))
     ninputs = 0
     nvar = 0
-    new_parameters = []
-    input_to_parameters = Dict()
-    new_fullvars = []
+    new_parameters = SymbolicT[]
+    input_to_parameters = Dict{SymbolicT, SymbolicT}()
+    new_fullvars = SymbolicT[]
     for (i, v) in enumerate(fullvars)
         if isinput(v) && !(check_bound && is_bound(sys, v))
             if var_to_diff[i] !== nothing
@@ -330,8 +330,8 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
         end
     end
     if ninputs == 0
-        @set! sys.inputs = OrderedSet{BasicSymbolic}()
-        @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
+        @set! sys.inputs = OrderedSet{SymbolicT}()
+        @set! sys.outputs = OrderedSet{SymbolicT}(filter(isoutput, fullvars))
         state.sys = sys
         return state
     end
@@ -364,10 +364,10 @@ function inputs_to_parameters!(state::TransformationState, inputsyms)
     ps = parameters(sys)
 
     @set! sys.ps = [ps; new_parameters]
-    @set! sys.inputs = OrderedSet{BasicSymbolic}(new_parameters)
-    @set! sys.outputs = OrderedSet{BasicSymbolic}(filter(isoutput, fullvars))
+    @set! sys.inputs = OrderedSet{SymbolicT}(new_parameters)
+    @set! sys.outputs = OrderedSet{SymbolicT}(filter(isoutput, fullvars))
     @set! state.sys = sys
-    @set! state.fullvars = Vector{BasicSymbolic}(new_fullvars)
+    @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
     @set! state.structure = structure
     return state
 end
