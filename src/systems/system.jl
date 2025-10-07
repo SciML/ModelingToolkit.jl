@@ -3,7 +3,7 @@ struct Schedule
     """
     Mapping of `Differential`s of variables to corresponding derivative expressions.
     """
-    dummy_sub::Dict{Any, Any}
+    dummy_sub::Dict{SymbolicT, SymbolicT}
 end
 
 const MetadataT = Base.ImmutableDict{DataType, Any}
