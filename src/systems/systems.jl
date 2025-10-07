@@ -28,42 +28,31 @@ present in the equations of the system will be removed in this process.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """
 function mtkcompile(
-        sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
+        sys::System; additional_passes = (), simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[], array_hack = true,
+        inputs = SymbolicT[], outputs = SymbolicT[],
+        disturbance_inputs = SymbolicT[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    reassemble_alg = get(kwargs, :reassemble_alg,
-        StructuralTransformations.DefaultReassembleAlgorithm(; simplify, array_hack))
-    newsys′ = __mtkcompile(sys;
+    # Canonicalize types of arguments to prevent repeated compilation of inner methods
+    inputs = unwrap_vars(inputs)
+    outputs = unwrap_vars(outputs)
+    disturbance_inputs = unwrap_vars(disturbance_inputs)
+    newsys = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs, additional_passes, reassemble_alg,
+        inputs, outputs, disturbance_inputs, additional_passes,
         kwargs...)
-    if newsys′ isa Tuple
-        @assert length(newsys′) == 2
-        newsys = newsys′[1]
-    else
-        newsys = newsys′
-    end
     for pass in additional_passes
         newsys = pass(newsys)
     end
-    if has_parent(newsys)
-        @set! newsys.parent = complete(sys; split = false, flatten = false)
-    end
+    @set! newsys.parent = complete(sys; split = false, flatten = false)
     newsys = complete(newsys; split)
-    if newsys′ isa Tuple
-        idxs = [parameter_index(newsys, i) for i in io[1]]
-        return newsys, idxs
-    else
-        return newsys
-    end
+    return newsys
 end
 
-function __mtkcompile(sys::AbstractSystem;
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[],
+function __mtkcompile(sys::AbstractSystem; simplify = false,
+        inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
+        disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
         sort_eqs = true,
         kwargs...)
     # TODO: convert noise_eqs to brownians for simplification
@@ -74,7 +63,7 @@ function __mtkcompile(sys::AbstractSystem;
         return sys
     end
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
-        return simplify_optimization_system(sys; kwargs..., sort_eqs)
+        return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)::System
     end
 
     sys, statemachines = extract_top_level_statemachines(sys)

@@ -1015,9 +1015,9 @@ function make_eqs_zero_equals!(ts::TearingState)
 end
 
 function mtkcompile!(state::TearingState;
-        check_consistency = true, fully_determined = true, warn_initialize_determined = true,
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[],
+        check_consistency = true, fully_determined = true,
+        inputs = SymbolicT[], outputs = SymbolicT[],
+        disturbance_inputs = SymbolicT[],
         kwargs...)
     if !is_time_dependent(state.sys)
         return _mtkcompile!(state; check_consistency,
@@ -1029,8 +1029,6 @@ function mtkcompile!(state::TearingState;
     # if it's continuous keep going, if not then error unless given trait impl in additional passes
     ci = ModelingToolkit.ClockInference(state)
     ci = ModelingToolkit.infer_clocks!(ci)
-    time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
-        Dict(default_toterm.(state.fullvars) .=> ci.var_domain))
     tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
     if !isempty(tss) && continuous_id == 0
         # do a trait check here - handle fully discrete system
@@ -1087,21 +1085,20 @@ function mtkcompile!(state::TearingState;
 end
 
 function _mtkcompile!(state::TearingState;
-        check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true, discrete_inputs = Any[],
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[],
+        check_consistency = true, fully_determined = true,
+        dummy_derivative = true, discrete_inputs::Vector{SymbolicT} = SymbolicT[],
+        inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
+        disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
     else
         check_consistency = true
     end
-    orig_inputs = Set()
-
-    ModelingToolkit.markio!(state, orig_inputs, discrete_inputs, [], [])
+    orig_inputs = Set{SymbolicT}()
+    ModelingToolkit.markio!(state, orig_inputs, discrete_inputs, SymbolicT[], SymbolicT[])
     state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs)
-    ModelingToolkit.markio!(state, Set(), inputs, outputs, disturbance_inputs)
+    ModelingToolkit.markio!(state, Set{SymbolicT}(), inputs, outputs, disturbance_inputs)
     state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
@@ -1109,6 +1106,22 @@ function _mtkcompile!(state::TearingState;
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
+    # This phrasing avoids making the `kwcall` dynamic dispatch due to the type of a
+    # keyword (`mm`) being non-concrete
+    if mm isa SparseMatrixCLIL{BigInt, Int}
+        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
+    else
+        sys =_mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
+    end
+    fullunknowns = [observables(sys); unknowns(sys)]
+    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
+
+    ModelingToolkit.invalidate_cache!(sys)
+end
+
+function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
+                             fully_determined::Bool, dummy_derivative::Bool,
+                             kwargs...) where {S, T}
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
             sys, state; mm, check_consistency, kwargs...)
@@ -1116,17 +1129,14 @@ function _mtkcompile!(state::TearingState;
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm::SparseMatrixCLIL{T, Int} = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
             sys, state; mm, check_consistency, fully_determined, kwargs...)
     else
         sys = ModelingToolkit.tearing(
             sys, state; mm, check_consistency, fully_determined, kwargs...)
     end
-    fullunknowns = [observables(sys); unknowns(sys)]
-    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
-
-    ModelingToolkit.invalidate_cache!(sys)
+    return sys
 end
 
 struct DifferentiatedVariableNotUnknownError <: Exception
