@@ -29,6 +29,12 @@ using LinearAlgebra, SparseArrays
 using InteractiveUtils
 using JumpProcesses
 using DataStructures
+@static if pkgversion(DataStructures) >= v"0.19"
+    import DataStructures: IntDisjointSet
+else
+    import DataStructures: IntDisjointSets
+    const IntDisjointSet = IntDisjointSets
+end
 using Base.Threads
 using Latexify, Unitful, ArrayInterface
 using Setfield, ConstructionBase
