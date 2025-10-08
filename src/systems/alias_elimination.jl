@@ -426,20 +426,32 @@ function topsort_equations(eqs, unknowns; check = true)
 
     q = Queue{Int}(neqs)
     for (i, d) in enumerate(degrees)
-        d == 0 && enqueue!(q, i)
+        @static if pkgversion(DataStructures) >= v"0.19"
+            d == 0 && push!(q, i)
+        else
+            d == 0 && enqueue!(q, i)
+        end
     end
 
     idx = 0
     ordered_eqs = similar(eqs, 0)
     sizehint!(ordered_eqs, neqs)
     while !isempty(q)
-        𝑠eq = dequeue!(q)
+        @static if pkgversion(DataStructures) >= v"0.19"
+            𝑠eq = popfirst!(q)
+        else
+            𝑠eq = dequeue!(q)
+        end
         idx += 1
         push!(ordered_eqs, eqs[𝑠eq])
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
-            degree == 0 && enqueue!(q, 𝑑eq)
+            @static if pkgversion(DataStructures) >= v"0.19"
+                degree == 0 && push!(q, 𝑑eq)
+            else
+                degree == 0 && enqueue!(q, 𝑑eq)
+            end
         end
     end
 
