@@ -50,5 +50,5 @@ ModelingToolkit.calculate_A_b
 All code generation eventually calls `build_function_wrapper`.
 
 ```@docs
-build_function_wrapper
+ModelingToolkit.build_function_wrapper
 ```
