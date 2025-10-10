@@ -1768,7 +1768,7 @@ function constraints(sys::AbstractSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
     isempty(systems) && return cs
-    cs = copy(sys)
+    cs = copy(cs)
     for subsys in systems
         append!(cs, namespace_constraints(subsys))
     end
