@@ -317,7 +317,8 @@ for traitT in [
     ArraySymbolic
 ]
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
-        allsyms = vars(sym; op = Symbolics.Operator)
+        allsyms = Set{SymbolicT}()
+        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{Symbolics.Operator}())
         for s in allsyms
             s = unwrap(s)
             if is_variable(sys, s) || is_independent_variable(sys, s)
