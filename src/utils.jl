@@ -531,7 +531,7 @@ ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
 
 The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
 """
-function collect_applied_operators(x::SymbolicT, ::Type{op}) where {op}
+function collect_applied_operators(x, ::Type{op}) where {op}
     v = Set{SymbolicT}()
     SU.search_variables!(v, x; is_atomic = OnlyOperatorIsAtomic{op}())
     return v
