@@ -532,9 +532,13 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
     result = ReorderedParametersT()
     isempty(ps) && return result
     param_buf = fill(COMMON_DEFAULT_VAR, ic.tunable_buffer_size.length)
-    push!(result, param_buf)
+    if !isempty(param_buf) || !flatten
+        push!(result, param_buf)
+    end
     initials_buf = fill(COMMON_DEFAULT_VAR, ic.initials_buffer_size.length)
-    push!(result, initials_buf)
+    if !isempty(initials_buf) || !flatten
+        push!(result, initials_buf)
+    end
 
     disc_buf = Vector{SymbolicT}[]
     for bufszs in ic.discrete_buffer_sizes
