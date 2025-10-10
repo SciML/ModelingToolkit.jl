@@ -692,7 +692,7 @@ eqtype_supports_collect_vars(eq::Equation) = true
 eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv;
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing};
         depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
     collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
@@ -700,9 +700,14 @@ function collect_vars!(unknowns, parameters, eq::Union{Equation, Inequality}, iv
 end
 
 function collect_vars!(
-        unknowns, parameters, p::Pair, iv; depth = 0, op = Symbolics.Operator)
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, p[1], iv; depth, op)
     collect_vars!(unknowns, parameters, p[2], iv; depth, op)
+    return nothing
+end
+
+function collect_vars!(
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
     return nothing
 end
 
@@ -713,7 +718,7 @@ Identify whether `var` belongs to the current system using `depth` and scoping i
 Add `var` to `unknowns` or `parameters` appropriately, and search through any expressions
 in known metadata of `var` using `collect_vars!`.
 """
-function collect_var!(unknowns, parameters, var, iv; depth = 0)
+function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, var::SymbolicT, iv::Union{SymbolicT, Nothing}; depth = 0)
     isequal(var, iv) && return nothing
     if Symbolics.iswrapped(var)
         error("""
