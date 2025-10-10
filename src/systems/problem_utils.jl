@@ -242,7 +242,7 @@ symbolic values, all of which need to be unwrapped. Specializes when `x isa Abst
 to unwrap keys and values, returning an `AnyDict`.
 """
 function recursive_unwrap(x::AbstractArray)
-    symbolic_type(x) == ArraySymbolic() ? unwrap(x) : recursive_unwrap.(x)
+    symbolic_type(x) == ArraySymbolic() ? value(x) : recursive_unwrap.(x)
 end
 
 function recursive_unwrap(x::SparseMatrixCSC)
@@ -252,7 +252,7 @@ function recursive_unwrap(x::SparseMatrixCSC)
     return sparse(I, J, V, m, n)
 end
 
-recursive_unwrap(x) = unwrap(x)
+recursive_unwrap(x) = value(x)
 
 function recursive_unwrap(x::AbstractDict)
     return anydict(unwrap(k) => recursive_unwrap(v) for (k, v) in x)
@@ -268,7 +268,7 @@ entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 function add_observed_equations!(varmap::AbstractDict, eqs)
     for eq in eqs
         if var_in_varlist(eq.lhs, keys(varmap), nothing)
-            eq.rhs isa Number && continue
+            SU.isconst(eq.rhs) && continue
             var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
             !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
             varmap[eq.rhs] = eq.lhs
