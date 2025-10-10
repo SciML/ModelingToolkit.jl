@@ -485,3 +485,16 @@ end
     @test issetequal(ModelingToolkit.inputs(ss2), [z])
     @test issetequal(ModelingToolkit.outputs(ss2), [y])
 end
+
+@testset "Retain inputs when composing systems" begin
+    @variables x(t) y(t) [input=true]
+    @named sys = System([D(x) ~ y * x], t)
+    csys = compose(System(Equation[], t; name = :outer), sys)
+    @test issetequal(ModelingToolkit.inputs(csys), [sys.y])
+
+    # More complex hierarchy
+    @variables z(t) [input = true] w(t)
+    @named sys2 = System([D(w) ~ z - w], t)
+    cosys = compose(System(Equation[], t; name = :outermost), [csys, sys2])
+    @test issetequal(ModelingToolkit.inputs(cosys), [csys.sys.y, sys2.z])
+end
