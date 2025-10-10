@@ -211,8 +211,8 @@ Assert that equations are well-formed when building ODE, i.e., only containing a
 function check_equations(eqs::Vector{Equation}, iv::SymbolicT)
     icp = IndepvarCheckPredicate(iv)
     for eq in eqs
-        SU.query!(icp, eq.lhs)
-        SU.query!(icp, eq.rhs)
+        SU.query(icp, eq.lhs)
+        SU.query(icp, eq.rhs)
     end
 end
 
