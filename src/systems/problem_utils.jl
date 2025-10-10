@@ -812,12 +812,12 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         # tuple of `BlockedArray`s
         Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
         Base.Fix1(broadcast, p_constructor) ∘
-        concrete_getu(srcsys, syms[3]; eval_expression, eval_module)
+        concrete_getu(srcsys, Tuple(syms[3]); eval_expression, eval_module)
     end
     const_getter = if syms[4] == ()
         Returns(())
     else
-        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, syms[4])
+        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, Tuple(syms[4]))
     end
     nonnumeric_getter = if syms[5] == ()
         Returns(())
@@ -829,7 +829,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
         Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
-        concrete_getu(srcsys, syms[5]; eval_expression, eval_module)
+        concrete_getu(srcsys, Tuple(syms[5]); eval_expression, eval_module)
     end
     getters = (
         tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter)
