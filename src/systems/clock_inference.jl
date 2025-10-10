@@ -328,7 +328,7 @@ function split_system(ci::ClockInference{S}) where {S}
     continuous_id = continuous_id[]
     # for each clock partition what are the input (indexes/vars)
     input_idxs = map(_ -> Int[], 1:cid_counter[])
-    inputs = map(_ -> Any[], 1:cid_counter[])
+    inputs = map(_ -> SymbolicT[], 1:cid_counter[])
     # var_domain corresponds to fullvars/all variables in the system
     nvv = length(var_domain)
     # put variables into the right clock partition
