@@ -1126,6 +1126,9 @@ renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
 
 renamespace(sys, tgt::AbstractSystem) = rename(tgt, renamespace(sys, nameof(tgt)))
 renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL, tgt)
+renamespace(sys, x::Num) = Num(renamespace(sys, unwrap(x)))
+renamespace(sys, x::Arr{T, N}) where {T, N} = Arr{T, N}(renamespace(sys, unwrap(x)))
+renamespace(sys, x::CallAndWrap{T}) where {T} = CallAndWrap{T}(renamespace(sys, unwrap(x)))
 
 """
     $(TYPEDSIGNATURES)
