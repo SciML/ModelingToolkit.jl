@@ -382,11 +382,11 @@ end
 Check if all the LHS are unique
 """
 function check_operator_variables(eqs, op::T) where {T}
-    ops = Set()
-    tmp = Set()
+    ops = Set{SymbolicT}()
+    tmp = Set{SymbolicT}()
     for eq in eqs
         _check_operator_variables(eq, op)
-        vars!(tmp, eq.lhs)
+        SU.search_variables!(tmp, eq.lhs; is_atomic = OperatorIsAtomic{Differential}())
         if length(tmp) == 1
             x = only(tmp)
             if op === Differential
@@ -521,16 +521,16 @@ function collect_operator_variables(eq::Equation, args...)
 end
 
 """
-    collect_operator_variables(eqs::AbstractVector{Equation}, op)
+    collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op}
 
 Return a `Set` containing all variables that have Operator `op` applied to them.
 See also [`collect_differential_variables`](@ref).
 """
-function collect_operator_variables(eqs::AbstractVector{Equation}, op)
-    vars = Set()
-    diffvars = Set()
+function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op}
+    vars = Set{SymbolicT}()
+    diffvars = Set{SymbolicT}()
     for eq in eqs
-        vars!(vars, eq; op = op)
+        SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             isoperator(v, op) || continue
             push!(diffvars, arguments(v)[1])
