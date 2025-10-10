@@ -260,9 +260,9 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     if !isempty(all_disturbances)
         inputs = [inputs; all_disturbances]
     end
-
+    inputs = vec(unwrap_vars(inputs))
     dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
+    ps::Vector{SymbolicT} = parameters(sys; initial_parameters = true)
     ps = setdiff(ps, inputs)
 
     # Remove unknown disturbances from inputs (we don't want them as actual inputs to the dynamics)
