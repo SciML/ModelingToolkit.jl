@@ -424,11 +424,15 @@ function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
     variable_index(ic, sym) !== nothing
 end
 
-function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return nothing
-    end
+function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
+    variable_index(ic, unwrap(sym))
+end
+function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym::Symbol)
+    sym = get(ic.symbol_to_variable, sym, nothing)
+    sym === nothing && return nothing
+    variable_index(ic, sym)
+end
+function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym::SymbolicT)
     idx = check_index_map(ic.unknown_idx, sym)
     idx === nothing || return idx
     iscall(sym) && operation(sym) == getindex || return nothing
@@ -437,6 +441,7 @@ function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym)
     idx === nothing && return nothing
     return idx[args[2:end]...]
 end
+SymbolicIndexingInterface.variable_index(ic::IndexCache, sym) = false
 
 function SymbolicIndexingInterface.is_parameter(ic::IndexCache, sym)
     parameter_index(ic, sym) !== nothing
