@@ -340,11 +340,12 @@ foofn(x) = 4
 
 @testset "`respecialize`" begin
     @parameters p::AbstractFoo p2(t)::AbstractFoo = p q[1:2]::AbstractFoo r
-    rp,
-    rp2 = let
-        only(@parameters p::Bar),
-        SymbolicUtils.term(operation(p2), arguments(p2)...; type = Baz)
-    end
+    rp = only(let p = nothing
+        @parameters p::Bar
+    end)
+    rp2 = only(let p2 = nothing
+        @parameters p2(t)::Baz
+    end)
     @variables x(t) = 1.0
     @named sys1 = System([D(x) ~ foofn(p) + foofn(p2) + x], t, [x], [p, p2, q, r])
 

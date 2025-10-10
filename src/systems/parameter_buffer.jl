@@ -763,8 +763,14 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
         oldbuf.discrete, newbuf.discrete)
     @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
         oldbuf.constant, newbuf.constant)
-    @set! newbuf.nonnumeric = narrow_buffer_type_and_fallback_undefs.(
-        oldbuf.nonnumeric, newbuf.nonnumeric)
+    for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric)
+        for i in eachindex(oldv)
+            isassigned(newv, i) && continue
+            newv[i] = oldv[i]
+        end
+    end
+    @set! newbuf.nonnumeric = Tuple(
+        typeof(oldv)(newv) for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric))
     if !ArrayInterface.ismutable(oldbuf)
         @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
         @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)

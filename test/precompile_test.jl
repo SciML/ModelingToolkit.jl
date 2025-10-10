@@ -1,5 +1,6 @@
 using Test
 using ModelingToolkit
+using OrdinaryDiffEqDefault
 
 using Distributed
 
@@ -38,3 +39,5 @@ ODEPrecompileTest.f_eval_bad(u, p, 0.1)
 @test parentmodule(typeof(ODEPrecompileTest.f_eval_good.f.f_oop)) ==
       ODEPrecompileTest
 @test ODEPrecompileTest.f_eval_good(u, p, 0.1) == [4, 0, -16]
+
+@test_nowarn solve(ODEPrecompileTest.prob_eval)
