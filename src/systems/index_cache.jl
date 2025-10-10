@@ -522,7 +522,7 @@ function reorder_parameters(
     elseif ps isa Tuple
         return ReorderedParametersT(collect(ps))
     else
-        eltype(ReorderedParametersT)[ps]
+        return eltype(ReorderedParametersT)[ps]
     end
 end
 
