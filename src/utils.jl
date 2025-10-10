@@ -942,7 +942,16 @@ Keyword arguments:
   `available_vars` will not be searched for in the observed equations.
 """
 function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = vars(exprs; op = Union{Shift, Differential, Initial}), obs = observed(sys), available_vars = [])
+        involved_vars = nothing, obs = observed(sys), available_vars = Set{SymbolicT}())
+    if involved_vars === nothing
+        involved_vars = Set{SymbolicT}()
+        SU.search_variables!(involved_vars, exprs; is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial}}())
+    elseif !(involved_vars isa Set{SymbolicT})
+        involved_vars = Set{SymbolicT}(involved_vars)
+    end
+    if !(available_vars isa Set)
+        available_vars = Set(available_vars)
+    end
     if iscomplete(sys) && obs == observed(sys)
         cache = getmetadata(sys, MutableCacheKey, nothing)
         obs_graph_cache = get!(cache, ObservedGraphCacheKey) do
@@ -954,10 +963,6 @@ function observed_equations_used_by(sys::AbstractSystem, exprs;
     else
         obsvar_to_idx = Dict([eq.lhs => i for (i, eq) in enumerate(obs)])
         graph = observed_dependency_graph(obs)
-    end
-
-    if !(available_vars isa Set)
-        available_vars = Set(available_vars)
     end
 
     obsidxs = BitSet()
