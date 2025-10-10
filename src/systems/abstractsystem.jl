@@ -2752,8 +2752,8 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     if has_is_dde(sys)
         @set! sys.is_dde = _check_if_dde(equations(sys), get_iv(sys), get_systems(sys))
     end
-    newunknowns = OrderedSet()
-    newparams = OrderedSet()
+    newunknowns = OrderedSet{SymbolicT}()
+    newparams = OrderedSet{SymbolicT}()
     iv = has_iv(sys) ? get_iv(sys) : nothing
     for ssys in systems
         collect_scoped_vars!(newunknowns, newparams, ssys, iv)
