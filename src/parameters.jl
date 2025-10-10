@@ -27,6 +27,7 @@ function isparameter(x::SymbolicT)
     varT = getvariabletype(x, nothing)
     return varT === PARAMETER
 end
+isparameter(x) = false
 
 function iscalledparameter(x)
     x = unwrap(x)
