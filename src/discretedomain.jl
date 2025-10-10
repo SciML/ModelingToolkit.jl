@@ -335,7 +335,7 @@ Should return a tuple containing the time domain type for each argument to the o
 """
 function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
-        return get_time_domain(arg)
+        return InputTimeDomainElT[get_time_domain(arg)]
     end
     InputTimeDomainElT[InferredDiscrete()]
 end
@@ -357,7 +357,7 @@ output_timedomain(s::Sample, _ = nothing) = s.clock
 
 function input_timedomain(::Hold, arg = nothing)
     if has_time_domain(arg)
-        return get_time_domain(arg)
+        return InputTimeDomainElT[get_time_domain(arg)]
     end
     InputTimeDomainElT[InferredDiscrete()] # the Hold accepts any discrete
 end
