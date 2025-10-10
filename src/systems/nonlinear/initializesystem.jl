@@ -823,20 +823,12 @@ Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works w
 initialization.
 """
 function unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
-    subs = Dict{SymbolicT, SymbolicT}()
     mask = trues(length(obseqs))
     for (i, eq) in enumerate(obseqs)
         mask[i] = !iscall(eq.rhs) || operation(eq.rhs) !== StructuralTransformations.change_origin
     end
 
     obseqs = obseqs[mask]
-    for i in eachindex(obseqs)
-        obseqs[i] = fixpoint_sub(obseqs[i].lhs, subs) ~ fixpoint_sub(obseqs[i], subs)
-    end
-    eqs = copy(eqs)
-    for i in eachindex(eqs)
-        eqs[i] = fixpoint_sub(eqs[i].lhs, subs) ~ fixpoint_sub(eqs[i], subs)
-    end
     return obseqs, eqs
 end
 
