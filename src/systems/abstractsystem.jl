@@ -583,7 +583,8 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             defs[ivar] = false
         else
             defs[ivar] = collect(ivar)
-            for scal_ivar in defs[ivar]
+            for idx in SU.stable_eachindex(ivar)
+                scal_ivar = ivar[idx]
                 defs[scal_ivar] = false
             end
         end
