@@ -1290,7 +1290,7 @@ function namespace_expr(O, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
     return O
 end
 function namespace_expr(O::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap}, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
-    namespace_expr(O, args...; kw...)
+    typeof(O)(namespace_expr(unwrap(O), sys, n; kw...))
 end
 function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
     is_array_of_symbolics(O) || return O
@@ -1318,12 +1318,15 @@ function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sy
             elseif f isa SymbolicT
                 f = renamespace(n, f)
                 meta = metadata
+            else
+                meta = metadata
             end
             return BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata = meta)
         end
         BSImpl.AddMul(; coeff, dict, variant, type, shape, metadata) => begin
             newdict = copy(dict)
-            for (k, v) in newdict
+            empty!(newdict)
+            for (k, v) in dict
                 newdict[namespace_expr(k, sys, n; ivs)] = v
             end
             return BSImpl.AddMul{VartypeT}(coeff, newdict, variant; type, shape, metadata)
