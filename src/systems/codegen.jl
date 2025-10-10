@@ -1024,6 +1024,17 @@ function build_explicit_observed_function(sys, ts;
         cse = true,
         mkarray = nothing,
         wrap_delays = is_dde(sys))
+    if inputs === nothing
+        inputs = ()
+    else
+        inputs = vec(unwrap_vars(inputs))
+    end
+    if disturbance_inputs === nothing
+        disturbance_inputs = ()
+    else
+        disturbance_inputs = vec(unwrap_vars(disturbance_inputs))
+    end
+    ps::Vector{SymbolicT} = vec(unwrap_vars(ps))
     # TODO: cleanup
     is_tuple = ts isa Tuple
     if is_tuple
@@ -1038,7 +1049,8 @@ function build_explicit_observed_function(sys, ts;
         ts = symbol_to_symbolic(sys, ts; allsyms)
     end
 
-    vs = ModelingToolkit.vars(ts; op)
+    vs = Set{SymbolicT}()
+    SU.search_variables!(vs, ts; is_atomic = OperatorIsAtomic{op}())
     namespace_subs = Dict()
     ns_map = Dict{Any, Any}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
     for sym in unknowns(sys)
@@ -1084,13 +1096,11 @@ function build_explicit_observed_function(sys, ts;
     else
         (unknowns(sys),)
     end
-    if inputs === nothing
-        inputs = ()
-    else
+    if inputs isa Vector{SymbolicT}
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
         inputs = (inputs,)
     end
-    if disturbance_inputs !== nothing
+    if disturbance_inputs isa Vector{SymbolicT}
         # Disturbance inputs may or may not be included as inputs, depending on disturbance_argument
         ps = setdiff(ps, disturbance_inputs)
     end
@@ -1099,15 +1109,15 @@ function build_explicit_observed_function(sys, ts;
     else
         disturbance_inputs = ()
     end
-    ps = reorder_parameters(sys, ps)
+    rps::ReorderedParametersT = reorder_parameters(sys, ps)
     iv = if is_time_dependent(sys)
         (get_iv(sys),)
     else
         ()
     end
-    args = (dvs..., inputs..., ps..., iv..., disturbance_inputs...)
+    args = (dvs..., inputs..., rps..., iv..., disturbance_inputs...)
     p_start = length(dvs) + length(inputs) + 1
-    p_end = length(dvs) + length(inputs) + length(ps)
+    p_end = length(dvs) + length(inputs) + length(rps)
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
@@ -1118,7 +1128,7 @@ function build_explicit_observed_function(sys, ts;
         end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys))}(
             oop, iip)
         return return_inplace ? (f, f) : f
     else
@@ -1127,7 +1137,7 @@ function build_explicit_observed_function(sys, ts;
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
         f = GeneratedFunctionWrapper{(
-            p_start + wrap_delays, length(args) - length(ps) + 1 + wrap_delays, is_split(sys))}(
+            p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys))}(
             f, nothing)
         return f
     end
