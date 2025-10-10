@@ -380,6 +380,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = [];
 
     defaults = anydict(defaults)
     guesses = anydict(guesses)
+
+    inputs = unwrap.(inputs)
+    outputs = unwrap.(outputs)
     inputs = OrderedSet{BasicSymbolic}(inputs)
     outputs = OrderedSet{BasicSymbolic}(outputs)
     for subsys in systems
