@@ -1389,15 +1389,12 @@ See also [`@parameters`](@ref) and [`ModelingToolkit.get_ps`](@ref).
 function parameters(sys::AbstractSystem; initial_parameters = false)
     ps = get_ps(sys)
     if ps === SciMLBase.NullParameters()
-        return []
+        return SymbolicT[]
     end
     if eltype(ps) <: Pair
-        ps = first.(ps)
+        ps = Vector{SymbolicT}(unwrap.(first.(ps)))
     end
     systems = get_systems(sys)
-    if isempty(systems)
-        return ps
-    end
     result = copy(ps)
     for subsys in systems
         append!(result, namespace_parameters(subsys))
