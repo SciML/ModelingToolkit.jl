@@ -194,17 +194,17 @@ function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump, Variable
 end
 
 ### Functions to determine which unknowns a jump depends on
-function get_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}, variables)
-    jr = value(jump.rate)
-    (jr isa SymbolicT) && get_variables!(dep, jr, variables)
+function SU.search_variables!(dep, jump::Union{ConstantRateJump, VariableRateJump}; kw...)
+    jr = unwrap(jump.rate)
+    (jr isa SymbolicT) && SU.search_variables!(dep, jr; kw...)
     dep
 end
 
-function get_variables!(dep, jump::MassActionJump, variables)
-    sr = value(jump.scaled_rates)
-    (sr isa SymbolicT) && get_variables!(dep, sr, variables)
+function SU.search_variables!(dep, jump::MassActionJump; is_atomic = SU.default_is_atomic, kw...)
+    sr = unwrap(jump.scaled_rates)
+    (sr isa SymbolicT) && SU.search_variables!(dep, sr; kw...)
     for varasop in jump.reactant_stoch
-        any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
+        is_atomic(varasop[1]) && push!(dep, varasop[1])
     end
     dep
 end
