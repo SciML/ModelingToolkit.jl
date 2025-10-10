@@ -674,7 +674,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray{SymbolicT}, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
     for var in expr
         collect_vars!(unknowns, parameters, var, iv; depth, op)
     end
