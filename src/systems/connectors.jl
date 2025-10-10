@@ -834,21 +834,15 @@ function _generate_connection_set!(connection_state::ConnectionState,
     return sys
 end
 
-function _flow_equations_from_idxs!(eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, idxs::CartesianIndices{N, NTuple{N, UnitRange{Int}}}) where {N}
+function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, cset::Vector{ConnectionVertex}, len::Int)
     add_buffer = SymbolicT[]
     # each variable can have different axes, but they all have the same size
-    for sz_i in eachindex(idxs)
+    for sz_i in 1:len
         empty!(add_buffer)
         for cvert in cset
-            # all of this wrapping/unwrapping is necessary because the relevant
-            # methods are defined on `Arr/Num` and not `BasicSymbolic`.
             v = variable_from_vertex(sys, cvert)::SymbolicT
-            if N === 0
-                v = v
-            else
-                vidxs = eachindex(v)::CartesianIndices{N, NTuple{N, UnitRange{Int}}}
-                v = v[vidxs[sz_i]]
-            end
+            vidxs = SU.stable_eachindex(v)
+            v = v[vidxs[sz_i]]
             push!(add_buffer, cvert.isouter ? -v : v)
         end
         rhs = SU.add_worker(VartypeT, add_buffer)
@@ -907,16 +901,7 @@ function generate_connection_equations_and_stream_connections(
             # to bad-looking equations. Just generate scalar equations instead since
             # mtkcompile will scalarize anyway.
             representative = variable_from_vertex(sys, cset[1])::SymbolicT
-            idxs = eachindex(representative)
-            if idxs isa CartesianIndices{0, Tuple{}}
-                _flow_equations_from_idxs!(eqs, cset, idxs)
-            elseif idxs isa CartesianIndices{1, Tuple{UnitRange{Int}}}
-                _flow_equations_from_idxs!(eqs, cset, idxs)
-            elseif idxs isa CartesianIndices{2, NTuple{2, UnitRange{Int}}}
-                _flow_equations_from_idxs!(eqs, cset, idxs)
-            else
-                _flow_equations_from_idxs!(eqs, cset, idxs)
-            end
+            _flow_equations_from_idxs!(sys, eqs, cset, length(representative)::Int)
         else # Equality
             vars = SymbolicT[]
             for cvar in cset
