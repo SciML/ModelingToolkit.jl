@@ -529,11 +529,12 @@ other symbolic expressions passed to the system.
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
 
-    diffvars = OrderedSet()
-    othervars = OrderedSet()
-    ps = Set()
+    diffvars = OrderedSet{SymbolicT}()
+    othervars = OrderedSet{SymbolicT}()
+    ps = OrderedSet{SymbolicT}()
     diffeqs = Equation[]
     othereqs = Equation[]
+    iv = unwrap(iv)
     for eq in eqs
         if !(eq.lhs isa Union{SymbolicT, Number, AbstractArray})
             push!(othereqs, eq)
@@ -562,7 +563,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     allunknowns = union(diffvars, othervars)
     eqs = [diffeqs; othereqs]
 
-    brownians = Set()
+    brownians = Set{SymbolicT}()
     for x in allunknowns
         x = unwrap(x)
         if getvariabletype(x) == BROWNIAN
@@ -601,8 +602,8 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     noiseeqs = get(kwargs, :noise_eqs, nothing)
     if noiseeqs !== nothing
         # validate noise equations
-        noisedvs = OrderedSet()
-        noiseps = OrderedSet()
+        noisedvs = OrderedSet{SymbolicT}()
+        noiseps = OrderedSet{SymbolicT}()
         collect_vars!(noisedvs, noiseps, noiseeqs, iv)
         for dv in noisedvs
             dv ∈ allunknowns ||
