@@ -682,12 +682,12 @@ function complete(
             offset = 0
             # if there are no tunables, vcat them
             if !isempty(get_index_cache(sys).tunable_idx)
-                unflatten_parameters!(ordered_ps, ps_split[1], all_ps_set)
+                unflatten_parameters!(ordered_ps, ps_split[offset + 1], all_ps_set)
                 offset += 1
             end
             # unflatten initial parameters
             if !isempty(get_index_cache(sys).initials_idx)
-                unflatten_parameters!(ordered_ps, ps_split[2], all_ps_set)
+                unflatten_parameters!(ordered_ps, ps_split[offset + 1], all_ps_set)
                 offset += 1
             end
             for i in (offset+1):length(ps_split)
