@@ -1791,7 +1791,8 @@ Construct SciMLProblem `T` with positional arguments `args` and keywords `kwargs
 """
 function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
     # Call `remake` so it runs initialization if it is trivial
-    remake(T(args...; kwargs...))
+    # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
+    @invokelatest remake(T(args...; kwargs...))
 end
 
 """
