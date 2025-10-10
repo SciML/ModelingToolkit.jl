@@ -2665,6 +2665,15 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     end
     @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
+
+    newinputs = map(systems) do sys
+        map(x -> namespace_expr(x, sys), inputs(sys))
+    end
+    newoutputs = map(systems) do sys
+        map(x -> namespace_expr(x, sys), outputs(sys))
+    end
+    @set! sys.inputs = OrderedSet(reduce(union, [inputs(sys); newinputs]))
+    @set! sys.outputs = OrderedSet(reduce(union, [outputs(sys); newoutputs]))
     return sys
 end
 """
