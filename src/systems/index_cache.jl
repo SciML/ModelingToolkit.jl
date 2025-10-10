@@ -518,7 +518,7 @@ const ReorderedParametersT = Vector{Union{Vector{SymbolicT}, Vector{Vector{Symbo
 function reorder_parameters(
         sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
-        reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
+        return reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
     elseif ps isa Tuple
         return ReorderedParametersT(collect(ps))
     else
