@@ -193,7 +193,7 @@ end
 ### Input, Output, Irreducible
 isvarkind(m, x, def = false) = safe_getmetadata(m, x, def)
 safe_getmetadata(m, x::Union{Num, Symbolics.Arr}, def) = safe_getmetadata(m, value(x), def)
-function safe_getmetadata(m, x, default)
+function safe_getmetadata(m::DataType, x::SymbolicT, default)
     hasmetadata(x, m) && return getmetadata(x, m)
     iscall(x) && operation(x) === getindex && return safe_getmetadata(m, arguments(x)[1], default)
     return default
