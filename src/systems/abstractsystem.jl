@@ -2672,8 +2672,12 @@ function compose(sys::AbstractSystem, systems::AbstractArray; name = nameof(sys)
     newoutputs = map(systems) do sys
         map(x -> namespace_expr(x, sys), outputs(sys))
     end
-    @set! sys.inputs = OrderedSet(reduce(union, [inputs(sys); newinputs]))
-    @set! sys.outputs = OrderedSet(reduce(union, [outputs(sys); newoutputs]))
+
+    newinputs = reduce(vcat, newinputs)
+    newoutputs = reduce(vcat, newoutputs)
+
+    @set! sys.inputs = OrderedSet(vcat(inputs(sys), newinputs))
+    @set! sys.outputs = OrderedSet(vcat(outputs(sys), newoutputs))
     return sys
 end
 """
