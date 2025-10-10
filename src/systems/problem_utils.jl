@@ -446,14 +446,14 @@ function check_substitution_cycles(
     for (k, v) in varmap
         kidx = var_to_idx[k]
         if symbolic_type(v) != NotSymbolic()
-            vars!(buffer, v)
+            SU.search_variables!(buffer, v)
             for var in buffer
                 haskey(var_to_idx, var) || continue
                 add_edge!(graph, kidx, var_to_idx[var])
             end
         elseif v isa AbstractArray
             for val in v
-                vars!(buffer, val)
+                SU.search_variables!(buffer, val)
             end
             for var in buffer
                 haskey(var_to_idx, var) || continue
