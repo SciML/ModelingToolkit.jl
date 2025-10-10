@@ -265,9 +265,10 @@ end
 
 function (xn::Num)(k::ShiftIndex)
     @unpack clock, steps = k
-    x = value(xn)
+    x = unwrap(xn)
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
-    vars = ModelingToolkit.vars(x)
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, x)
     if length(vars) != 1
         error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
