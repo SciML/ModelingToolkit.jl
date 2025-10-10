@@ -56,17 +56,31 @@ function _is_atomic_inside_operator(ex::SymbolicT)
     end
 end
 
-"""
-    is_bound(sys, u)
+struct IsBoundValidator
+    eqs_vars::Vector{Set{SymbolicT}}
+    obs_vars::Vector{Set{SymbolicT}}
+    stack::OrderedSet{SymbolicT}
+end
 
-Determine whether input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
-A variable/signal is considered bound if it appears in an equation together with variables from other subsystems.
-The typical usecase for this function is to determine whether the input to an IO component is connected to another component,
-or if it remains an external input that the user has to supply before simulating the system.
+function IsBoundValidator(sys::System)
+    eqs_vars = Set{SymbolicT}[]
+    for eq in equations(sys)
+        vars = Set{SymbolicT}()
+        SU.search_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
+        SU.search_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
+        push!(eqs_vars, vars)
+    end
+    obs_vars = Set{SymbolicT}[]
+    for eq in observed(sys)
+        vars = Set{SymbolicT}()
+        SU.search_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
+        SU.search_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
+        push!(obs_vars, vars)
+    end
+    return IsBoundValidator(eqs_vars, obs_vars, OrderedSet{SymbolicT}())
+end
 
-See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
-"""
-function is_bound(sys, u, stack = [])
+function (ibv::IsBoundValidator)(u::SymbolicT)
     #=
     For observed quantities, we check if a variable is connected to something that is bound to something further out.
     In the following scenario
@@ -78,40 +92,42 @@ function is_bound(sys, u, stack = [])
     When asking is_bound(sys₊y(t)), we know that we are looking through observed equations and can thus ask
     if var is bound, if it is, then sys₊y(t) is also bound. This can lead to an infinite recursion, so we maintain a stack of variables we have previously asked about to be able to break cycles
     =#
-    u ∈ Set(stack) && return false # Cycle detected
-    eqs = equations(sys)
-    eqs = filter(eq -> has_var(eq, u), eqs) # Only look at equations that contain u
-    # isout = isoutput(u)
-    vars = Set{SymbolicT}()
-    for eq in eqs
-        empty!(vars)
-        get_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
-        get_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
+    u in ibv.stack && return false # Cycle detected
+    for vars in ibv.eqs_vars
+        u in vars || continue
         for var in vars
             var === u && continue
-            if !same_or_inner_namespace(u, var)
-                return true
-            end
+            same_or_inner_namespace(u, var) || return true
         end
     end
-    # Look through observed equations as well
-    oeqs = observed(sys)
-    oeqs = filter(eq -> has_var(eq, u), oeqs) # Only look at equations that contain u
-    for eq in oeqs
-        empty!(vars)
-        get_variables!(vars, eq.rhs; is_atomic = _is_atomic_inside_operator)
-        get_variables!(vars, eq.lhs; is_atomic = _is_atomic_inside_operator)
+    for vars in ibv.obs_vars
+        u in vars || continue
         for var in vars
             var === u && continue
-            if !same_or_inner_namespace(u, var)
-                return true
-            end
-            if is_bound(sys, var, [stack; u]) && !inner_namespace(u, var) # The variable we are comparing to can not come from an inner namespace, binding only counts outwards
-                return true
-            end
+            same_or_inner_namespace(u, var) || return true
+            push!(ibv.stack, u)
+            isbound = ibv(var)
+            pop!(ibv.stack)
+             # The variable we are comparing to can not come from an inner namespace,
+             # binding only counts outwards
+            isbound && !inner_namespace(u, var) && return true
         end
     end
-    false
+    return false
+end
+
+"""
+    is_bound(sys, u)
+
+Determine whether input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
+A variable/signal is considered bound if it appears in an equation together with variables from other subsystems.
+The typical usecase for this function is to determine whether the input to an IO component is connected to another component,
+or if it remains an external input that the user has to supply before simulating the system.
+
+See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
+"""
+function is_bound(sys, u)
+    return IsBoundValidator(sys)(unwrap(u))
 end
 
 """
