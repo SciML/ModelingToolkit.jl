@@ -92,7 +92,7 @@ function IndexCache(sys::AbstractSystem)
             push!(found_array_syms, arrsym)
             valid_arrsym || break
             if idxs == idxs[begin]:idxs[end]
-                idxs = reshape(idxs[begin]:idxs[end], size(idxs))::AbstractArray{Int}
+                idxs = reshape(idxs[begin]:idxs[end], size(arrsym))::AbstractArray{Int}
             else
                 idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
             end
