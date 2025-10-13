@@ -13,8 +13,6 @@ ModelingToolkit.t_nounits
 ModelingToolkit.D_nounits
 ModelingToolkit.t
 ModelingToolkit.D
-ModelingToolkit.t_unitful
-ModelingToolkit.D_unitful
 ```
 
 Users are recommended to use the appropriate common definition in their models. The required

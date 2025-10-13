@@ -23,8 +23,6 @@ function __get_scalar_unit_type(v)
     u = __get_literal_unit(v)
     if u isa DQ.AbstractQuantity
         return Val(:DynamicQuantities)
-    elseif u isa Unitful.Unitlike
-        return Val(:Unitful)
     end
     return nothing
 end
