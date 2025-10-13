@@ -63,7 +63,6 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
-Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
@@ -170,7 +169,6 @@ SymbolicUtils = "3.30.0"
 Symbolics = "6.40"
 URIs = "1"
 UnPack = "0.1, 1.0"
-Unitful = "1.1"
 julia = "1.9"
 
 [extras]

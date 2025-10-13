@@ -38,7 +38,7 @@ else
     const IntDisjointSet = IntDisjointSets
 end
 using Base.Threads
-using Latexify, Unitful, ArrayInterface
+using Latexify, ArrayInterface
 using Setfield, ConstructionBase
 import Libdl
 using DocStringExtensions
@@ -96,7 +96,7 @@ export independent_variables, unknowns, observables, parameters, full_parameters
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import DynamicQuantities, Unitful
+import DynamicQuantities
 const DQ = DynamicQuantities
 
 import DifferentiationInterface as DI
@@ -220,7 +220,6 @@ include("systems/pde/pdesystem.jl")
 include("systems/sparsematrixclil.jl")
 
 include("systems/unit_check.jl")
-include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
 include("clock.jl")
 include("discretedomain.jl")
@@ -241,15 +240,11 @@ include("deprecations.jl")
 const t_nounits = let
     only(@independent_variables t)
 end
-const t_unitful = let
-    only(@independent_variables t [unit = Unitful.u"s"])
-end
 const t = let
     only(@independent_variables t [unit = DQ.u"s"])
 end
 
 const D_nounits = Differential(t_nounits)
-const D_unitful = Differential(t_unitful)
 const D = Differential(t)
 
 export ODEFunction, convert_system_indepvar,
@@ -353,7 +348,7 @@ const set_scalar_metadata = setmetadata
 @public similarity_transform, inputs, outputs, bound_inputs, unbound_inputs, bound_outputs
 @public unbound_outputs, is_bound
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
-@public t, D, t_nounits, D_nounits, t_unitful, D_unitful
+@public t, D, t_nounits, D_nounits
 @public SymbolicContinuousCallback, SymbolicDiscreteCallback
 @public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc

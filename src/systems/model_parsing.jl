@@ -573,7 +573,7 @@ function get_t(mod, t)
         get_var(mod, t)
     catch e
         if e isa UndefVarError
-            @warn("Could not find a predefined `t` in `$mod`; generating a new one within this model.\nConsider defining it or importing `t` (or `t_nounits`, `t_unitful` as `t`) from ModelingToolkit.")
+            @warn("Could not find a predefined `t` in `$mod`; generating a new one within this model.\nConsider defining it or importing `t` (or `t_nounits as t`) from ModelingToolkit.")
             variable(:t)
         else
             throw(e)
@@ -901,18 +901,6 @@ function convert_units(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
-function convert_units(varunits::Unitful.FreeUnits, value)
-    Unitful.ustrip(varunits, value)
-end
-
-convert_units(::Unitful.FreeUnits, value::NoValue) = NO_VALUE
-
-function convert_units(varunits::Unitful.FreeUnits, value::AbstractArray{T}) where {T}
-    Unitful.ustrip.(varunits, value)
-end
-
-convert_units(::Unitful.FreeUnits, value::Num) = value
-
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
@@ -930,8 +918,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
                     try
                         $setdefault($vv, $convert_units($unit, $name))
                     catch e
-                        if isa(e, $(DynamicQuantities.DimensionError)) ||
-                           isa(e, $(Unitful.DimensionError))
+                        if isa(e, $(DynamicQuantities.DimensionError))
                             error("Unable to convert units for \'" * string(:($$vv)) * "\'")
                         elseif isa(e, MethodError)
                             error("No or invalid units provided for \'" * string(:($$vv)) *
