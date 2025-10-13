@@ -409,12 +409,12 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
 
     defaults = defsdict(defaults)
     guesses = defsdict(guesses)
-    inputs = unwrap_vars(inputs)
-    outputs = unwrap_vars(outputs)
     if !(inputs isa OrderedSet{SymbolicT})
+        inputs = unwrap.(inputs)
         inputs = OrderedSet{SymbolicT}(inputs)
     end
     if !(outputs isa OrderedSet{SymbolicT})
+        outputs = unwrap.(outputs)
         outputs = OrderedSet{SymbolicT}(outputs)
     end
     for subsys in systems
