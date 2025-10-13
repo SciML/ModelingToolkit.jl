@@ -357,7 +357,7 @@ ps = MTKParameters(
     (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
         BlockedArray(falses(1), [1, 0])),
     (), (), ())
-@test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, Vector{Bool}}
+@test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, BitVector}
 tsidx1 = 1
 tsidx2 = 2
 @test length(ps.discrete[1][Block(tsidx1)]) == 3
@@ -368,3 +368,14 @@ with_updated_parameter_timeseries_values(
     sys, ps, tsidx1 => ModelingToolkit.NestedGetIndex(([10.0, 11.0, 12.0], [false])))
 @test ps.discrete[1][Block(tsidx1)] == [10.0, 11.0, 12.0]
 @test ps.discrete[2][Block(tsidx1)][] == false
+
+@testset "Avoid specialization of nonnumeric parameters on `remake_buffer`" begin
+    @variables x(t)
+    @parameters p::Any
+    @named sys = System(D(x) ~ x, t, [x], [p])
+    sys = complete(sys)
+    ps = MTKParameters(sys, [p => 1.0])
+    @test ps.nonnumeric isa Tuple{Vector{Any}}
+    ps2 = remake_buffer(sys, ps, [p], [:a])
+    @test ps2.nonnumeric isa Tuple{Vector{Any}}
+end

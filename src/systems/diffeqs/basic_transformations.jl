@@ -1037,9 +1037,11 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         """
 
         if iscall(k)
-            op = operation(k)
+            op = operation(k)::BasicSymbolic
+            @assert !iscall(op)
+            op = SymbolicUtils.Sym{SymbolicUtils.FnType{Tuple{Any}, T}}(nameof(op))
             args = arguments(k)
-            new_p = SymbolicUtils.term(op, args...; type = T)
+            new_p = op(args...)
         else
             new_p = SymbolicUtils.Sym{T}(getname(k))
         end
