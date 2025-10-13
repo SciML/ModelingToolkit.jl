@@ -826,7 +826,7 @@ function SciMLBase.create_parameter_timeseries_collection(
     isempty(ps.discrete) && return nothing
     num_discretes = only(blocksize(ps.discrete[1]))
     buffers = []
-    partition_type = Tuple{(Vector{eltype(buf)} for buf in ps.discrete)...}
+    partition_type = Tuple{(typeof(parent(buf)) for buf in ps.discrete)...}
     for i in 1:num_discretes
         ts = eltype(tspan)[]
         us = NestedGetIndex{partition_type}[]
