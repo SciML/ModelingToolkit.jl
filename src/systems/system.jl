@@ -687,10 +687,10 @@ Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
-    isempty(constraints) && return Set(), Set()
+    isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
-    constraintsts = OrderedSet()
-    constraintps = OrderedSet()
+    constraintsts = OrderedSet{SymbolicT}()
+    constraintps = OrderedSet{SymbolicT}()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
@@ -708,8 +708,8 @@ end
 Process the costs for the constraint system.
 """
 function process_costs(costs::Vector, sts, ps, iv)
-    coststs = OrderedSet()
-    costps = OrderedSet()
+    coststs = OrderedSet{SymbolicT}()
+    costps = OrderedSet{SymbolicT}()
     for cost in costs
         collect_vars!(coststs, costps, cost, iv)
     end
@@ -744,8 +744,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
             operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the System. Called variables must be variables of the System."))
 
-            isequal(arg, iv) || isparameter(arg) || arg isa Integer ||
-                arg isa AbstractFloat ||
+            isequal(arg, iv) || isparameter(arg) || isconst(arg) && symtype(arg) <: Real ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
