@@ -439,7 +439,7 @@ function SymbolicIndexingInterface.variable_index(ic::IndexCache, sym::SymbolicT
     args = arguments(sym)
     idx = variable_index(ic, args[1])
     idx === nothing && return nothing
-    return idx[args[2:end]...]
+    return idx[unwrap_const.(args[2:end])...]
 end
 SymbolicIndexingInterface.variable_index(ic::IndexCache, sym) = false
 
