@@ -3,6 +3,7 @@ module MTKChainRulesCoreExt
 import ChainRulesCore
 import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
 using ModelingToolkit: MTKParameters, NONNUMERIC_PORTION, AbstractSystem
+import ModelingToolkit
 import ModelingToolkit as MTK
 import SciMLStructures
 import SymbolicIndexingInterface: remake_buffer
