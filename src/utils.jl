@@ -20,7 +20,7 @@ function detime_dvs(op)
     if !iscall(op)
         op
     elseif issym(operation(op))
-        SSym(nameof(operation(op)); type = Real, shape = SU.ShapeVecT())
+        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
     else
         maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
             metadata(op))
