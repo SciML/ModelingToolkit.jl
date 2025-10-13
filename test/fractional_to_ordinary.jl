@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, ODEInterfaceDiffEq, SpecialFunctions, LinearAlgebra
+using ModelingToolkit, OrdinaryDiffEq, SpecialFunctions, LinearAlgebra
 using Test
 
 # Testing for α < 1
@@ -19,7 +19,7 @@ eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
 sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
+sol = solve(prob, RadauIIA5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
 for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
@@ -32,7 +32,7 @@ eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
 sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1; matrix=true)
 
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
+sol = solve(prob, RadauIIA5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
 for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
@@ -44,7 +44,7 @@ eqs += (gamma(9)*t^(8 - α)/gamma(9 - α)) + (3/2*t^(α/2)-t^4)^3 - x^(3/2)
 sys = fractional_to_ordinary(eqs, x, α, 10^-7, 1)
 
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
+sol = solve(prob, RadauIIA5(), saveat=timepoint, abstol = 1e-10, reltol = 1e-10)
 
 for time in 0:0.1:1
     @test isapprox(expect(time, α), sol(time, idxs=x), atol=1e-7)
@@ -58,7 +58,7 @@ tspan = (0., 220.)
 
 sys = fractional_to_ordinary([1 - 4*x + x^2 * y, 3*x - x^2 * y], [x, y], [1.3, 0.8], 10^-8, 220; initials=[[1.2, 1], 2.8], matrix=true)
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), abstol = 1e-8, reltol = 1e-8)
+sol = solve(prob, RadauIIA5(), abstol = 1e-8, reltol = 1e-8)
 
 @test isapprox(1.0097684171, sol(220, idxs=x), atol=1e-5)
 @test isapprox(2.1581264031, sol(220, idxs=y), atol=1e-5)
@@ -75,12 +75,12 @@ end
 
 sys = linear_fractional_to_ordinary([3, 2.5, 2, 1, .5, 0], [1, 1, 1, 4, 1, 4], 6*cos(t), 10^-5, 5000; initials=[1, 1, -1])
 prob = ODEProblem(sys, [], tspan)
-sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
+sol = solve(prob, RadauIIA5(), abstol = 1e-5, reltol = 1e-5)
 
 @test isapprox(expect(5000), sol(5000, idxs=x_0), atol=1e-5)
 
 msys = linear_fractional_to_ordinary([3, 2.5, 2, 1, .5, 0], [1, 1, 1, 4, 1, 4], 6*cos(t), 10^-5, 5000; initials=[1, 1, -1], matrix=true)
 mprob = ODEProblem(sys, [], tspan)
-msol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
+msol = solve(prob, RadauIIA5(), abstol = 1e-5, reltol = 1e-5)
 
 @test isapprox(expect(5000), msol(5000, idxs=x_0), atol=1e-5)
