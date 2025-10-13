@@ -564,7 +564,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     # add derivatives of all variables for steady-state initial conditions
     if is_time_dependent(sys) && !is_discrete_system(sys)
         D = Differential(get_iv(sys)::SymbolicT)
-        for v in all_initialvars
+        for v in collect(all_initialvars)
             iscall(v) && push!(all_initialvars, D(v))
         end
     end
