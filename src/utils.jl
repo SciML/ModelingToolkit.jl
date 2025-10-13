@@ -301,10 +301,21 @@ end
 function collect_defaults!(defs::SymmapT, vars::Vector{SymbolicT})
     for v in vars
         isconst(v) && continue
-        if haskey(defs, v) || (def = Symbolics.getdefaultval(v, nothing)) === nothing
+        haskey(defs, v) && continue
+        def = Symbolics.getdefaultval(v, nothing)
+        if def !== nothing
+            defs[v] = SU.Const{VartypeT}(def)
             continue
         end
-        defs[v] = SU.Const{VartypeT}(def)
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) && if f === getindex end => begin
+                haskey(defs, args[1]) && continue
+                def = Symbolics.getdefaultval(args[1], nothing)
+                def === nothing && continue
+                defs[args[1]] = def
+            end
+            _ => nothing
+        end
     end
     return defs
 end
@@ -313,10 +324,21 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     for v in vars
         isconst(v) && continue
         symbolic_type(v) == NotSymbolic() && continue
-        if haskey(guesses, v) || (def = getguess(v)) === nothing
+        haskey(guesses, v) && continue
+        def = getguess(v)
+        if def !== nothing
+            guesses[v] = SU.Const{VartypeT}(def)
             continue
         end
-        guesses[v] = SU.Const{VartypeT}(def)
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) && if f === getindex end => begin
+                haskey(guesses, args[1]) && continue
+                def = Symbolics.getdefaultval(args[1], nothing)
+                def === nothing && continue
+                guesses[args[1]] = def
+            end
+            _ => nothing
+        end
     end
     return guesses
 end
