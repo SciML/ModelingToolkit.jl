@@ -332,6 +332,7 @@ function default_consolidate(costs, subcosts)
     return _sum_costs(costs) + _sum_costs(subcosts)
 end
 
+unwrap_vars(x) = unwrap_vars(collect(x))
 unwrap_vars(vars::AbstractArray{SymbolicT}) = vars
 function unwrap_vars(vars::AbstractArray)
     result = similar(vars, SymbolicT)
