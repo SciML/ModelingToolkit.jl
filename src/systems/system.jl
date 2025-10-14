@@ -298,18 +298,18 @@ struct System <: IntermediateDeprecationSystem
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
         end
-        # if checks == true || (checks & CheckUnits) > 0
-        #     u = __get_unit_type(unknowns, ps, iv)
-        #     if noise_eqs === nothing
-        #         check_units(u, eqs)
-        #     else
-        #         check_units(u, eqs, noise_eqs)
-        #     end
-        #     if iv !== nothing
-        #         check_units(u, jumps, iv)
-        #     end
-        #     isempty(constraints) || check_units(u, constraints)
-        # end
+        if checks == true || (checks & CheckUnits) > 0
+            u = __get_unit_type(unknowns, ps, iv)
+            if noise_eqs === nothing
+                check_units(u, eqs)
+            else
+                check_units(u, eqs, noise_eqs)
+            end
+            if iv !== nothing
+                check_units(u, jumps, iv)
+            end
+            isempty(constraints) || check_units(u, constraints)
+        end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
             observed, parameter_dependencies, var_to_name, name, description, defaults,
