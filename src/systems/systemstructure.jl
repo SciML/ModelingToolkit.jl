@@ -209,6 +209,7 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     structure::SystemStructure
     extra_eqs::Vector{Equation}
     param_derivative_map::Dict{SymbolicT, SymbolicT}
+    no_deriv_params::Set{SymbolicT}
     original_eqs::Vector{Equation}
     """
     Additional user-provided observed equations. The variables calculated here
@@ -362,6 +363,7 @@ function TearingState(sys; check = true, sort_eqs = true)
     original_eqs = copy(eqs)
     neqs = length(eqs)
     param_derivative_map = Dict{SymbolicT, SymbolicT}()
+    no_deriv_params = Set{SymbolicT}()
     fullvars = SymbolicT[]
     # * Scalarize unknowns
     dvs = Set{SymbolicT}()
@@ -380,7 +382,7 @@ function TearingState(sys; check = true, sort_eqs = true)
     varsbuf = Set{SymbolicT}()
     eqs_to_retain = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
-        eq, is_statemachine_equation = canonicalize_eq!(param_derivative_map, eqs_to_retain, ps, iv, i, eq)
+        eq, is_statemachine_equation = canonicalize_eq!(param_derivative_map, no_deriv_params, eqs_to_retain, ps, iv, i, eq)
         empty!(varsbuf)
         SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{SU.Operator}())
         incidence = Set{SymbolicT}()
@@ -396,7 +398,7 @@ function TearingState(sys; check = true, sort_eqs = true)
             if symbolic_contains(v, ps) ||
                getmetadata(v, SymScope, LocalScope()) isa GlobalScope && isparameter(v)
                 if is_time_dependent_parameter(v, ps, iv) &&
-                   !haskey(param_derivative_map, Differential(iv)(v))
+                   !haskey(param_derivative_map, Differential(iv)(v)) && !(Differential(iv)(v) in no_deriv_params)
                     # Parameter derivatives default to zero - they stay constant
                     # between callbacks
                     param_derivative_map[Differential(iv)(v)] = Symbolics.COMMON_ZERO
@@ -483,6 +485,8 @@ function TearingState(sys; check = true, sort_eqs = true)
         push!(symbolic_incidence, collect(incidence))
     end
 
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, param_derivative_map)
+
     eqs = eqs[eqs_to_retain]
     original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
@@ -523,7 +527,7 @@ function TearingState(sys; check = true, sort_eqs = true)
     return TearingState{typeof(sys)}(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
-        Equation[], param_derivative_map, original_eqs, Equation[], typeof(sys)[])
+        Equation[], param_derivative_map, no_deriv_params, original_eqs, Equation[], typeof(sys)[])
 end
 
 function sort_fullvars(fullvars::Vector{SymbolicT}, dervaridxs::Vector{Int}, var_types::Vector{VariableType}, @nospecialize(iv::Union{SymbolicT, Nothing}))
@@ -597,7 +601,7 @@ function collect_vars_to_set!(buffer::Set{SymbolicT}, vars::Vector{SymbolicT})
     end
 end
 
-function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, eqs_to_retain::BitVector, ps::Set{SymbolicT}, @nospecialize(iv::Union{Nothing, SymbolicT}), i::Int, eq::Equation)
+function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, no_deriv_params::Set{SymbolicT}, eqs_to_retain::BitVector, ps::Set{SymbolicT}, @nospecialize(iv::Union{Nothing, SymbolicT}), i::Int, eq::Equation)
     is_statemachine_equation = false
     lhs = eq.lhs
     rhs = eq.rhs
@@ -615,6 +619,8 @@ function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, eqs_
             else
                 # change the equation if the RHS is `missing` so the rest of this loop works
                 eq = Symbolics.COMMON_ZERO ~ Symbolics.COMMON_ZERO
+                push!(no_deriv_params, lhs)
+                delete!(param_derivative_map, lhs)
             end
             eqs_to_retain[i] = false
         end
