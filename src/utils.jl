@@ -1182,8 +1182,14 @@ without scalarizing occurrences of array variables and return the new list of eq
 function flatten_equations(eqs::Vector{Equation})
     _eqs = Equation[]
     for eq in eqs
-        for (i1, i2) in zip(SU.stable_eachindex(eq.lhs), SU.stable_eachindex(eq.rhs))
-            push!(_eqs, eq.lhs[i1] ~ eq.rhs[i2])
+        if !SU.is_array_shape(SU.shape(eq.lhs))
+            push!(_eqs, eq)
+            continue
+        end
+        lhs = vec(collect(eq.lhs)::Array{SymbolicT})::Vector{SymbolicT}
+        rhs = vec(collect(eq.rhs)::Array{SymbolicT})::Vector{SymbolicT}
+        for (l, r) in zip(lhs, rhs)
+            push!(_eqs, l ~ r)
         end
     end
     return _eqs
