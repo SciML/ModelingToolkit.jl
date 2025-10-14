@@ -428,7 +428,7 @@ Search for the analysis point with the given `name` in `get_eqs(sys)`.
 function analysis_point_index(sys::AbstractSystem, name::Symbol)
     name = namespace_hierarchy(name)[end]
     findfirst(get_eqs(sys)) do eq
-        eq.lhs isa AnalysisPoint && nameof(eq.rhs) == name
+        value(eq.lhs) isa AnalysisPoint && nameof(value(eq.rhs)::AnalysisPoint) == name
     end
 end
 
@@ -540,7 +540,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
         breaksys_eqs = copy(get_eqs(breaksys))
         @set! breaksys.eqs = breaksys_eqs
 
-        ap = breaksys_eqs[ap_idx].rhs
+        ap = value(breaksys_eqs[ap_idx].rhs)::AnalysisPoint
         deleteat!(breaksys_eqs, ap_idx)
 
         breaksys = with_analysis_point_ignored(breaksys, ap)
@@ -598,7 +598,7 @@ function apply_transformation(tf::GetInput, sys::AbstractSystem)
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
         # get the analysis point
         ap_sys_eqs = get_eqs(ap_sys)
-        ap = ap_sys_eqs[ap_idx].rhs
+        ap = value(ap_sys_eqs[ap_idx].rhs)::AnalysisPoint
 
         # input variable
         ap_ivar = ap_var(ap.input)
@@ -653,7 +653,7 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         # modified equations
         ap_sys_eqs = copy(get_eqs(ap_sys))
         @set! ap_sys.eqs = ap_sys_eqs
-        ap = ap_sys_eqs[ap_idx].rhs
+        ap = value(ap_sys_eqs[ap_idx].rhs)::AnalysisPoint
         # remove analysis point
         deleteat!(ap_sys_eqs, ap_idx)
         ap_sys = with_analysis_point_ignored(ap_sys, ap)
@@ -723,7 +723,7 @@ function apply_transformation(tf::AddVariable, sys::AbstractSystem)
         ap_idx === nothing &&
             error("Analysis point $(nameof(tf.ap)) not found in system $(nameof(sys)).")
         ap_sys_eqs = get_eqs(ap_sys)
-        ap = ap_sys_eqs[ap_idx].rhs
+        ap = value(ap_sys_eqs[ap_idx].rhs)::AnalysisPoint
 
         # add equations involving new variable
         ap_ivar = ap_var(ap.input)

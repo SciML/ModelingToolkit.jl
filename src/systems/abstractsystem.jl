@@ -980,7 +980,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = does_namespacing(
             eq isa Equation || continue
             lhs = value(eq.lhs)
             rhs = value(eq.rhs)
-            if lhs isa AnalysisPoint
+            if value(lhs) isa AnalysisPoint
                 rhs = rhs::AnalysisPoint
                 nameof(rhs) == name || continue
                 return namespace ? renamespace(sys, rhs) : rhs
