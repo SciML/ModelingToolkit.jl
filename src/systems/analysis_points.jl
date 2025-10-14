@@ -71,7 +71,7 @@ struct AnalysisPoint
     The outputs of the connection. In the context of ModelingToolkitStandardLibrary.jl,
     these are all `RealInput` connectors.
     """
-    outputs::Union{Nothing, Vector{Any}}
+    outputs::Union{Nothing, Vector{System}, Vector{SymbolicT}}
 
     function AnalysisPoint(input, name::Symbol, outputs; verbose = true)
         # input to analysis point should be an output variable
@@ -230,7 +230,7 @@ typically is not (unless the model is an inverse model).
   warning if you are analyzing an inverse model.
 """
 function connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
-    return AnalysisPoint() ~ AnalysisPoint(in, name, [out; collect(outs)]; verbose)
+    return AnalysisPoint() ~ AnalysisPoint(in, name, System[out; collect(outs)]; verbose)
 end
 
 function connect(
