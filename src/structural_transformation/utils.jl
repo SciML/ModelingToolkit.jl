@@ -239,7 +239,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
-    term = value(eq.rhs - eq.lhs)
+    term = unwrap(eq.rhs - eq.lhs)
     all_int_vars = true
     coeffs === nothing || empty!(coeffs)
     empty!(to_rm)
@@ -289,7 +289,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         # When the expression is linear with numeric `a`, then we can safely
         # only consider `b` for the following iterations.
         term = b
-        if SU._isone(abs(a))
+        if SU._isone(abs(unwrap_const(a)))
             coeffs === nothing || push!(coeffs, convert(Int, unwrap_const(a)))
         else
             all_int_vars = false
