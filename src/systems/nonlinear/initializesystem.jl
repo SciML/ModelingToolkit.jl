@@ -77,7 +77,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     # PREPROCESSING
     op = anydict(op)
     if isempty(op)
-        op = copy(defs)
+        op = anydict(copy(defs))
     end
     scalarize_vars_in_varmap!(op, arrvars)
     u0map = anydict()
