@@ -70,6 +70,9 @@ normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
 
+function (D::Shift)(x::Equation, allow_zero = false)
+    D(x.lhs, allow_zero) ~ D(x.rhs, allow_zero)
+end
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
     term(D, x; type = symtype(x), shape = SU.shape(x))
