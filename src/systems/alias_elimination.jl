@@ -64,7 +64,8 @@ function alias_elimination!(state::TearingState; kwargs...)
     resize!(eqs, nsrcs(graph))
 
     __trivial_eq_rhs = let fullvars = fullvars
-        function trivial_eq_rhs(var, coeff)
+        function trivial_eq_rhs(pair)
+            var, coeff = pair
             iszero(coeff) && return Symbolics.COMMON_ZERO
             return coeff * fullvars[var]
         end
