@@ -268,7 +268,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     vs = Set()
     initialization_eqs = filter(initialization_eqs) do eq
         empty!(vs)
-        vars!(vs, eq; op = Initial)
+        SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
         allpars = full_parameters(sys)
         for p in allpars
             if symbolic_type(p) == ArraySymbolic() && SU.shape(p) isa SU.Unknown
