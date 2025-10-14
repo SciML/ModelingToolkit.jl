@@ -252,7 +252,7 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
     end
     non_causal_variables = SymbolicT[]
     for x in allvars
-        isinput(x) || isoutput(x) || continue
+        (isinput(x) || isoutput(x)) && continue
         push!(non_causal_variables, x)
     end
     isempty(non_causal_variables) || throw(NonCausalVariableError(non_causal_variables))
