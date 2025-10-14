@@ -76,10 +76,12 @@ function dummy_derivative_graph!(
             # only accept small integers to avoid overflow
             is_all_small_int = all(_J) do x′
                 x = unwrap(x′)
+                SU.isconst(x) || return false
                 x isa Number || return false
-                isinteger(x) && typemin(Int8) <= x <= typemax(Int8)
+                x = value(x)
+                isinteger(x) && typemin(Int8) <= Int(x) <= typemax(Int8)
             end
-            J = is_all_small_int ? Int.(unwrap.(_J)) : nothing
+            J = is_all_small_int ? Int.(value.(_J)) : nothing
         end
         while true
             nrows = length(eqs)
