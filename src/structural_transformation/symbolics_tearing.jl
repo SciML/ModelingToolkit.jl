@@ -72,9 +72,7 @@ function eq_derivative!(ts::TearingState, ieq::Int; kwargs...)
     vs = Set{SymbolicT}()
     SU.search_variables!(vs, eq.rhs)
     for v in vs
-        # parameters with unknown derivatives have a value of `nothing` in the map,
-        # so use `missing` as the default.
-        get(ts.param_derivative_map, v, missing) === nothing || continue
+        v in ts.no_deriv_params || continue
         _original_eq = equations(ts)[ieq]
         error("""
         Encountered derivative of discrete variable `$(only(arguments(v)))` when \
