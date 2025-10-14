@@ -1171,7 +1171,7 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        copy(op), copy(guesses), Vector{Equation}(initialization_eqs),
+        copy(op), anydict(copy(guesses)), Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
