@@ -363,6 +363,13 @@ for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     @eval @public $getter, $hasfn
 end
 
+function __init__()
+    SU.hashcons(unwrap(t_nounits), true)
+    SU.hashcons(unwrap(t), true)
+    SU.hashcons(COMMON_NOTHING, true)
+    SU.hashcons(COMMON_MISSING, true)
+end
+
 PrecompileTools.@compile_workload begin
         fold1 = Val{false}()
         using SymbolicUtils
