@@ -1060,9 +1060,8 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     # OR
     # none of `vars` are involved in `expr`
     if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
-       (vs = ModelingToolkit.vars(expr); intersect!(vs, vars); isempty(vs))
+       (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
         sym = gensym(:subexpr)
-        stype = symtype(expr)
         var = similar_variable(expr, sym)
         state[expr] = var
         return var
@@ -1072,7 +1071,7 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
         indep_args = []
         dep_args = []
         for arg in args
-            _vs = ModelingToolkit.vars(arg)
+            _vs = SU.search_variables(arg)
             intersect!(_vs, vars)
             if !isempty(_vs)
                 push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
