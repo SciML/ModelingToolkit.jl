@@ -175,7 +175,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Union{
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Int)
-    sym in 1:length(parameter_symbols(sys))
+    !is_split(sys) && sym in 1:length(parameter_symbols(sys))
 end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::SymbolicT)
