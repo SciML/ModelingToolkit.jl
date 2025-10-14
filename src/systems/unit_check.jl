@@ -127,7 +127,9 @@ function get_unit(op::Comparison, args)
 end
 
 function get_unit(x::SymbolicT)
-    if (u = __get_literal_unit(x)) !== nothing
+    if isconst(x)
+        return get_unit(value(x))
+    elseif (u = __get_literal_unit(x)) !== nothing
         screen_unit(u)
     elseif issym(x)
         get_literal_unit(x)
@@ -147,7 +149,7 @@ function get_unit(x::SymbolicT)
         if base == unitless
             unitless
         else
-            pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]
+            isconst(pargs[2]) ? base^unwrap_const(pargs[2]) : (1 * base)^pargs[2]
         end
     elseif iscall(x)
         op = operation(x)
@@ -193,7 +195,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
         equnit = safe_get_unit(term, info * label)
         if equnit === nothing
             valid = false
-        elseif !isequal(term, 0)
+        elseif !SU._iszero(term)
             if first_unit === nothing
                 first_unit = equnit
                 first_label = label
@@ -285,8 +287,9 @@ function validate(jumps::Vector{JumpType}, t::SymbolicT)
 end
 
 function validate(eq::Union{Inequality, Equation}; info::String = "")
-    if typeof(eq.lhs) <: Union{Connection, AnalysisPoint}
-        _validate(eq.rhs; info)
+    if isconst(eq.lhs) && value(eq.lhs) isa Union{Connection, AnalysisPoint}
+        tmp = value(eq.lhs)::Union{Connection, AnalysisPoint}
+        _validate(tmp; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
