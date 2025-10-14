@@ -259,6 +259,9 @@ function unit_handled_variable_value(meta, varname)
     return varval
 end
 
+no_value_default_to_nothing(::NoValue) = nothing
+no_value_default_to_nothing(x) = x
+
 # This function parses various variable/parameter definitions.
 #
 # The comments indicate the syntax matched by a block; either when parsed directly
@@ -336,17 +339,17 @@ Base.@nospecializeinfer function parse_variable_def!(
                      unit_handled_variable_value(meta, varname)
             if varclass == :parameters
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $varval),
+                var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
                 $meta_val))
             elseif varclass == :constants
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@constants ($a[$(indices...)]::$type = $varval),
+                var = :($varname = $first(@constants ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
                 $meta_val))
             else
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
                 assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@variables ($a[$(indices)]::$type = $varval),
+                var = :($varname = $first(@variables ($a[$(indices)]::$type = $no_value_default_to_nothing($varval)),
                 $meta_val))
             end
             update_array_kwargs_and_metadata!(
