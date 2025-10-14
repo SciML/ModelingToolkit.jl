@@ -383,6 +383,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         preface = [], checks = true)
     name === nothing && throw(NoNameError())
 
+    if !(systems isa Vector{System})
+        systems = Vector{System}(systems)
+    end
     if !(eqs isa Vector{Equation})
         eqs = Equation[eqs]
     end
@@ -627,8 +630,8 @@ the system.
 function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
 
-    allunknowns = OrderedSet()
-    ps = OrderedSet()
+    allunknowns = OrderedSet{SymbolicT}()
+    ps = OrderedSet{SymbolicT}()
     for eq in eqs
         collect_vars!(allunknowns, ps, eq, nothing)
     end
