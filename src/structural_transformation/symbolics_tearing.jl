@@ -325,15 +325,17 @@ Effects on the system structure:
 """
 function generate_derivative_variables!(
         ts::TearingState, neweqs, var_eq_matching, full_var_eq_matching,
-        var_sccs, mm::SparseMatrixCLIL{T, Int}, iv::Union{SymbolicT, Nothing}) where {T}
+        var_sccs, mm::Union{Nothing, SparseMatrixCLIL}, iv::Union{SymbolicT, Nothing})
     @unpack fullvars, sys, structure = ts
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
     diff_to_var = invview(var_to_diff)
     is_discrete = is_only_discrete(structure)
     linear_eqs = Dict{Int, Int}()
-    for (i, e) in enumerate(mm.nzrows)
-        linear_eqs[e] = i
+    if mm !== nothing
+        for (i, e) in enumerate(mm.nzrows)
+            linear_eqs[e] = i
+        end
     end
 
     # We need the inverse mapping of `var_sccs` to update it efficiently later.
