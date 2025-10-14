@@ -6,6 +6,10 @@ using PrecompileTools, Reexport
 @recompile_invalidations begin
     using StaticArrays
     using Symbolics
+    using ImplicitDiscreteSolve
+    using JumpProcesses
+    # ONLY here for the invalidations
+    import REPL
 end
 
 import SymbolicUtils
@@ -20,16 +24,16 @@ using DocStringExtensions
 using SpecialFunctions, NaNMath
 @recompile_invalidations begin
     using DiffEqCallbacks
+using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
+using DiffEqBase, SciMLBase, ForwardDiff
 end
 using Graphs
 import ExprTools: splitdef, combinedef
 import OrderedCollections
-using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
 
 using SymbolicIndexingInterface
 using LinearAlgebra, SparseArrays
 using InteractiveUtils
-using JumpProcesses
 using DataStructures
 @static if pkgversion(DataStructures) >= v"0.19"
     import DataStructures: IntDisjointSet
@@ -51,7 +55,6 @@ using URIs: URI
 using SciMLStructures
 using Compat
 using AbstractTrees
-using DiffEqBase, SciMLBase, ForwardDiff
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
                  PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
                  NoInit
@@ -60,7 +63,6 @@ using MLStyle
 import Moshi
 using Moshi.Data: @data
 import SCCNonlinearSolve
-using ImplicitDiscreteSolve
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
@@ -77,7 +79,7 @@ using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
                  VariableSource, getname, variable,
-                 NAMESPACE_SEPARATOR, setdefaultval,
+                 NAMESPACE_SEPARATOR, setdefaultval, Arr,
                  hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
