@@ -267,7 +267,7 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         a, b, islinear = linear_expansion(term, var)
 
         islinear || (all_int_vars = false; continue)
-        if a isa SymbolicT
+        if !SU.isconst(a)
             all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
@@ -282,20 +282,20 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
             add_edge!(solvable_graph, ieq, j)
             continue
         end
-        if !(a isa Number)
+        if !(symtype(a) <: Number)
             all_int_vars = false
             continue
         end
         # When the expression is linear with numeric `a`, then we can safely
         # only consider `b` for the following iterations.
         term = b
-        if isone(abs(a))
-            coeffs === nothing || push!(coeffs, convert(Int, a))
+        if SU._isone(abs(a))
+            coeffs === nothing || push!(coeffs, convert(Int, unwrap_const(a)))
         else
             all_int_vars = false
             conservative && continue
         end
-        if a != 0
+        if !SU._iszero(a)
             add_edge!(solvable_graph, ieq, j)
         else
             if may_be_zero
