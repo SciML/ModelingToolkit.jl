@@ -904,6 +904,8 @@ function convert_units(
         DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
 end
 
+convert_units(::DynamicQuantities.Quantity, value::AbstractArray{Num}) = value
+
 convert_units(::DynamicQuantities.Quantity, value::Num) = value
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
