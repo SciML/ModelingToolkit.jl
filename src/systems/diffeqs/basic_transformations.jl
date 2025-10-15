@@ -424,7 +424,7 @@ end
 """
     change_independent_variable(
         sys::System, iv, eqs = [];
-        add_old_diff = false, simplify = true, fold = false
+        add_old_diff = false, simplify = true, fold = Val(false)
     )
 
 Transform the independent variable (e.g. ``t``) of the ODE system `sys` to a dependent variable `iv` (e.g. ``u(t)``).
@@ -478,7 +478,7 @@ julia> unknowns(M)
 """
 function change_independent_variable(
         sys::System, iv, eqs = [];
-        add_old_diff = false, simplify = true, fold = false
+        add_old_diff = false, simplify = true, fold = Val(false)
 )
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
     iv1 = get_iv(sys) # e.g. t
@@ -538,11 +538,11 @@ function change_independent_variable(
     # e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
     function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
-        for var in vars(ex; op = Nothing) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
+        for var in SU.search_variables(ex; is_atomic = OperatorIsAtomic{Nothing}()) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
             if is_function_of(var, iv1) && !isequal(var, iv2_of_iv1) # of the form f(t)? but prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
-                var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1) # e.g. f(u(t))
-                ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold)
+                var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1; filterer = Returns(true)) # e.g. f(u(t))
+                ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold, filterer = Returns(true))
             end
         end
         # 2) Repeatedly expand chain rule until nothing changes anymore
@@ -550,10 +550,10 @@ function change_independent_variable(
         while !isequal(ex, orgex)
             orgex = ex # save original
             ex = expand_derivatives(ex, simplify) # expand chain rule, e.g. (d/dt)(f(u(t)))) -> df(u(t))/du(t) * du(t)/dt
-            ex = substitute(ex, D1(iv2_of_iv1) => div2_of_iv2_of_iv1; fold) # e.g. du(t)/dt -> uˍt(u(t))
+            ex = substitute(ex, D1(iv2_of_iv1) => div2_of_iv2_of_iv1; fold, filterer = Returns(true)) # e.g. du(t)/dt -> uˍt(u(t))
         end
         # 3) Set new independent variable
-        ex = substitute(ex, iv2_of_iv1 => iv2; fold) # set e.g. u(t) -> u everywhere
+        ex = substitute(ex, iv2_of_iv1 => iv2; fold, filterer = Returns(true)) # set e.g. u(t) -> u everywhere
         ex = substitute(ex, iv1 => iv1_of_iv2; fold) # set e.g. t -> t(u) everywhere
         return ex::T
     end
