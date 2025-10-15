@@ -428,7 +428,9 @@ function generate_derivative_variables!(
     end
     new_sccs = insert_sccs(var_sccs, sccs_to_insert)
 
-    @set! mm.ncols = ndsts(graph)
+    if mm !== nothing
+        @set! mm.ncols = ndsts(graph)
+    end
 
     return new_sccs
 end
