@@ -978,8 +978,8 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     end
 
     if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
-        indep_args = []
-        dep_args = []
+        indep_args = SymbolicT[]
+        dep_args = SymbolicT[]
         for arg in args
             _vs = SU.search_variables(arg)
             intersect!(_vs, vars)
