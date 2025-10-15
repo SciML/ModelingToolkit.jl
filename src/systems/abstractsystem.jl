@@ -576,7 +576,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     for (i, v) in enumerate(initials)
         initials[i] = Initial()(v)
     end
-    @set! sys.ps = unique!([get_ps(sys); initials])
+    @set! sys.ps = unique!([filter(!isinitial, get_ps(sys)); initials])
     defs = copy(get_defaults(sys))
     for ivar in initials
         if symbolic_type(ivar) == ScalarSymbolic()
