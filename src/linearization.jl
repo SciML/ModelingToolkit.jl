@@ -3,10 +3,8 @@ struct IONotFoundError <: Exception
     sysname::Symbol
     not_found::Any
 end
-
 function Base.showerror(io::IO, err::IONotFoundError)
 end
-
 function markio!(state, orig_inputs::Set{SymbolicT},
                  inputs::Vector{SymbolicT}, outputs::Vector{SymbolicT},
                  disturbances::Vector{SymbolicT}; check = true)
@@ -44,7 +42,6 @@ function markio!(state, orig_inputs::Set{SymbolicT},
             v = setio(v, false, false)
             fullvars[i] = v
         end
-
         if haskey(disturbanceset, v)
             v = setio(v, true, false)
             v = setdisturbance(v, true)

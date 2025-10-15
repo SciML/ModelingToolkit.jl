@@ -1,12 +1,10 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
-
 function alias_eliminate_graph!(state::TransformationState; kwargs...)
     mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
-        return mm # No linear subsystems
+        return mm
     end
-
     @unpack graph, var_to_diff, solvable_graph = state.structure
     mm = alias_eliminate_graph!(state, mm; kwargs...)
     s = state.structure
@@ -18,18 +16,14 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
             set_neighbors!(s.solvable_graph, e, mm.row_cols[ei])
         end
     end
-
     return mm
 end
-
-# For debug purposes
 function aag_bareiss(sys::AbstractSystem)
     state = TearingState(sys)
     complete!(state.structure)
     mm = linear_subsys_adjmat!(state)
     return aag_bareiss!(state.structure.graph, state.structure.var_to_diff, mm)
 end
-
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
         callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
@@ -43,26 +37,19 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     end
     level === nothing ? v : (v => level)
 end
-
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
 function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     mm = alias_eliminate_graph!(state; kwargs...)
-
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
-
     subs = Dict{SymbolicT, SymbolicT}()
-    # If we encounter y = -D(x), then we need to expand the derivative when
-    # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
     diff_to_var = invview(var_to_diff)
-
     dels = Int[]
     eqs = collect(equations(state))
     resize!(eqs, nsrcs(graph))
-
     __trivial_eq_rhs = let fullvars = fullvars
         function trivial_eq_rhs(pair)
             var, coeff = pair
@@ -73,7 +60,6 @@ function alias_elimination!(state::TearingState; kwargs...)
     for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
-            # remove empty equations
             push!(dels, e)
         else
             rhs = mapfoldl(__trivial_eq_rhs, +, pairs(nonzerosmap(@view mm[ei, :])))
@@ -94,9 +80,7 @@ function alias_elimination!(state::TearingState; kwargs...)
         idx += 1
         old_to_new_eq[i] = idx
     end
-
     n_new_eqs = idx
-
     eqs_to_update = BitSet()
     for ieq in eqs_to_update
         eq = eqs[ieq]
@@ -113,12 +97,10 @@ function alias_elimination!(state::TearingState; kwargs...)
         push!(new_nzrows, old_to_new_eq[eq])
     end
     mm = typeof(mm)(new_nparentrows, mm.ncols, new_nzrows, new_row_cols, new_row_vals)
-
     for old_ieq in to_expand
         ieq = old_to_new_eq[old_ieq]
         eqs[ieq] = expand_derivatives(eqs[ieq])
     end
-
     diff_to_var = invview(var_to_diff)
     new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
@@ -130,8 +112,6 @@ function alias_elimination!(state::TearingState; kwargs...)
         set_neighbors!(new_solvable_graph, ieq, 𝑠neighbors(solvable_graph, i))
         new_eq_to_diff[ieq] = eq_to_diff[i]
     end
-
-    # update DiffGraph
     new_var_to_diff = DiffGraph(length(var_to_diff))
     for v in 1:length(var_to_diff)
         new_var_to_diff[v] = var_to_diff[v]
@@ -140,25 +120,16 @@ function alias_elimination!(state::TearingState; kwargs...)
     state.structure.solvable_graph = new_solvable_graph
     state.structure.eq_to_diff = new_eq_to_diff
     state.structure.var_to_diff = new_var_to_diff
-
     sys = state.sys
     @set! sys.eqs = eqs
     state.sys = sys
-    # This phrasing infers the return type as `Union{Tuple{...}}` instead of
-    # `Tuple{Union{...}, ...}`
     if mm isa SparseMatrixCLIL{BigInt, Int}
         return invalidate_cache!(sys), mm
     else
         return invalidate_cache!(sys), mm
     end
 end
-
-"""
-$(SIGNATURES)
-
-Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true given
-the `constraint`.
-"""
+""""""
 @inline function find_first_linear_variable(M::SparseMatrixCLIL,
         range,
         mask,
@@ -176,7 +147,6 @@ the `constraint`.
     end
     return nothing
 end
-
 @inline function find_first_linear_variable(M::AbstractMatrix,
         range,
         mask,
@@ -193,7 +163,6 @@ end
     end
     return nothing
 end
-
 function find_masked_pivot(variables, M, k)
     r = find_first_linear_variable(M, k:size(M, 1), variables, isequal(1))
     r !== nothing && return r
@@ -202,23 +171,14 @@ function find_masked_pivot(variables, M, k)
     r = find_first_linear_variable(M, k:size(M, 1), variables, _ -> true)
     return r
 end
-
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
-
-# N.B.: Ordinarily sparse vectors allow zero stored elements.
-# Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::CLILVector) = nnz(a)
-
-# Linear variables are highest order differentiated variables that only appear
-# in linear equations with only linear variables. Also, if a variable's any
-# derivatives is nonlinear, then all of them are not linear variables.
 function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
     stack = Int[]
     linear_variables = falses(length(var_to_diff))
     var_to_lineq = Dict{Int, BitSet}()
     mark_not_linear! = let linear_variables = linear_variables, stack = stack,
         var_to_lineq = var_to_lineq
-
         v -> begin
             linear_variables[v] = false
             push!(stack, v)
@@ -227,7 +187,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
                 eqs = get(var_to_lineq, v, nothing)
                 eqs === nothing && continue
                 for eq in eqs, v′ in 𝑠neighbors(graph, eq)
-
                     if linear_variables[v′]
                         linear_variables[v′] = false
                         push!(stack, v′)
@@ -237,7 +196,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
         end
     end
     for eq in linear_equations, v in 𝑠neighbors(graph, eq)
-
         linear_variables[v] = true
         vlineqs = get!(() -> BitSet(), var_to_lineq, v)
         push!(vlineqs, eq)
@@ -250,7 +208,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
             lv === nothing && break
         end
     end
-
     linear_equations_set = BitSet(linear_equations)
     for (v, islinear) in enumerate(linear_variables)
         islinear || continue
@@ -273,29 +230,18 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
             lv === nothing && break
         end
     end
-
     return linear_variables
 end
-
 function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
     @unpack graph, var_to_diff = structure
     mm = copy(mm_orig)
     linear_equations_set = BitSet(mm_orig.nzrows)
-
-    # All unassigned (not a pivot) algebraic variables that only appears in
-    # linear algebraic equations can be set to 0.
-    #
-    # For all the other variables, we can update the original system with
-    # Bareiss'ed coefficients as Gaussian elimination is nullspace preserving
-    # and we are only working on linear homogeneous subsystem.
-
     is_algebraic = let var_to_diff = var_to_diff
         v -> var_to_diff[v] === nothing === invview(var_to_diff)[v]
     end
     is_linear_variables = is_algebraic.(1:length(var_to_diff))
     is_highest_diff = computed_highest_diff_variables(structure)
     for i in 𝑠vertices(graph)
-        # only consider linear algebraic equations
         (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) &&
             continue
         for j in 𝑠neighbors(graph, i)
@@ -303,7 +249,6 @@ function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
         end
     end
     solvable_variables = findall(is_linear_variables)
-
     local bar
     try
         bar = do_bareiss!(mm, mm_orig, is_linear_variables, is_highest_diff)
@@ -312,16 +257,12 @@ function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
         mm = convert(SparseMatrixCLIL{BigInt, Ti}, mm_orig)
         bar = do_bareiss!(mm, mm_orig, is_linear_variables, is_highest_diff)
     end
-
-    # This phrasing infers the return type as `Union{Tuple{...}}` instead of
-    # `Tuple{Union{...}, ...}`
     if mm isa SparseMatrixCLIL{BigInt, Ti}
         return mm, solvable_variables, bar
     else
         return mm, solvable_variables, bar
     end
 end
-
 function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     rank1r = Ref{Union{Nothing, Int}}(nothing)
     rank2r = Ref{Union{Nothing, Int}}(nothing)
@@ -337,9 +278,6 @@ function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
                 r !== nothing && return r
                 rank2r[] = k - 1
             end
-            # TODO: It would be better to sort the variables by
-            # derivative order here to enable more elimination
-            # opportunities.
             return find_masked_pivot(nothing, M, k)
         end
     end
@@ -360,24 +298,17 @@ function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
         bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-
     rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
     rank2 = something(rank2r[], rank3)
     rank1 = something(rank1r[], rank2)
     (rank1, rank2, rank3, pivots)
 end
-
 function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL;
         fully_determined = true, kwargs...)
     @unpack structure = state
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
-    # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
-    #         subsystem of the system we're interested in.
-    #
     ils, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(structure, ils)
-
     if fully_determined == true
-        ## Step 2: Simplify the system using the Bareiss factorization
         rk1vars = BitSet(@view pivots[1:rank1])
         for v in solvable_variables
             v in rk1vars && continue
@@ -392,56 +323,25 @@ function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLI
             add_vertex!(eq_to_diff)
         end
     end
-
     return ils
 end
-
 function exactdiv(a::Integer, b)
     d, r = divrem(a, b)
     @assert r == 0
     return d
 end
-
 swap!(v, i, j) = v[i], v[j] = v[j], v[i]
-
-"""
-$(SIGNATURES)
-
-Use Kahn's algorithm to topologically sort observed equations.
-
-Example:
-```julia
-julia> t = ModelingToolkit.t_nounits
-
-julia> @variables x(t) y(t) z(t) k(t)
-(x(t), y(t), z(t), k(t))
-
-julia> eqs = [
-           x ~ y + z
-           z ~ 2
-           y ~ 2z + k
-       ];
-
-julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
-3-element Vector{Equation}:
- Equation(z(t), 2)
- Equation(y(t), k(t) + 2z(t))
- Equation(x(t), y(t) + z(t))
-```
-"""
+""""""
 function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
     graph, assigns = observed2graph(eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
-
     for 𝑠eq in 1:length(eqs)
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
-            # 𝑠eq => 𝑑eq
             degrees[𝑑eq] += 1
         end
     end
-
     q = Queue{Int}(neqs)
     for (i, d) in enumerate(degrees)
         @static if pkgversion(DataStructures) >= v"0.19"
@@ -450,7 +350,6 @@ function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; c
             d == 0 && enqueue!(q, i)
         end
     end
-
     idx = 0
     ordered_eqs = similar(eqs, 0)
     sizehint!(ordered_eqs, neqs)
@@ -472,17 +371,12 @@ function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; c
             end
         end
     end
-
     (check && idx != neqs) && throw(ArgumentError("The equations have at least one cycle."))
-
     return ordered_eqs
 end
-
 function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
     graph = BipartiteGraph(length(eqs), length(unknowns))
     v2j = Dict{SymbolicT, Int}(unknowns .=> 1:length(unknowns))
-
-    # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
     vars = Set{SymbolicT}()
     for (i, eq) in enumerate(eqs)
@@ -499,6 +393,5 @@ function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tup
             end
         end
     end
-
     return graph, assigns
 end

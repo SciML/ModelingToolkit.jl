@@ -1,14 +1,10 @@
-# Keeps compatibility with bariess code moved to Base/stdlib on older releases
 
 using LinearAlgebra
 using SparseArrays
 using SparseArrays: AbstractSparseMatrixCSC, getcolptr
-
 macro swap(a, b)
     esc(:(($a, $b) = ($b, $a)))
 end
-
-# https://github.com/JuliaLang/julia/pull/42678
 @static if VERSION > v"1.8.0-DEV.762"
     import Base: swaprows!
 else
@@ -33,14 +29,10 @@ else
     end
     function Base.swapcols!(A::AbstractSparseMatrixCSC, i, j)
         i == j && return
-
-        # For simplicity, let i denote the smaller of the two columns
         j < i && @swap(i, j)
-
         colptr = getcolptr(A)
         irow = colptr[i]:(colptr[i + 1] - 1)
         jrow = colptr[j]:(colptr[j + 1] - 1)
-
         function rangeexchange!(arr, irow, jrow)
             if length(irow) == length(jrow)
                 for (a, b) in zip(irow, jrow)
@@ -48,16 +40,6 @@ else
                 end
                 return
             end
-            # This is similar to the triple-reverse tricks for
-            # circshift!, except that we have three ranges here,
-            # so it ends up being 4 reverse calls (but still
-            # 2 overall reversals for the memory range). Like
-            # circshift!, there's also a cycle chasing algorithm
-            # with optimal memory complexity, but the performance
-            # tradeoffs against this implementation are non-trivial,
-            # so let's just do this simple thing for now.
-            # See https://github.com/JuliaLang/julia/pull/42676 for
-            # discussion of circshift!-like algorithms.
             reverse!(@view arr[irow])
             reverse!(@view arr[jrow])
             reverse!(@view arr[(last(irow) + 1):(first(jrow) - 1)])
@@ -65,43 +47,33 @@ else
         end
         rangeexchange!(rowvals(A), irow, jrow)
         rangeexchange!(nonzeros(A), irow, jrow)
-
         if length(irow) != length(jrow)
             @inbounds colptr[(i + 1):j] .+= length(jrow) - length(irow)
         end
         return nothing
     end
     function swaprows!(A::AbstractSparseMatrixCSC, i, j)
-        # For simplicity, let i denote the smaller of the two rows
         j < i && @swap(i, j)
-
         rows = rowvals(A)
         vals = nonzeros(A)
         for col in 1:size(A, 2)
             rr = nzrange(A, col)
             iidx = searchsortedfirst(@view(rows[rr]), i)
             has_i = iidx <= length(rr) && rows[rr[iidx]] == i
-
             jrange = has_i ? (iidx:last(rr)) : rr
             jidx = searchsortedlast(@view(rows[jrange]), j)
             has_j = jidx != 0 && rows[jrange[jidx]] == j
-
             if !has_j && !has_i
-                # Has neither row - nothing to do
                 continue
             elseif has_i && has_j
-                # This column had both i and j rows - swap them
                 @swap(vals[rr[iidx]], vals[jrange[jidx]])
             elseif has_i
-                # Update the rowval and then rotate both nonzeros
-                # and the remaining rowvals into the correct place
                 rows[rr[iidx]] = j
                 jidx == 0 && continue
                 rotate_range = rr[iidx]:jrange[jidx]
                 circshift!(@view(vals[rotate_range]), -1)
                 circshift!(@view(rows[rotate_range]), -1)
             else
-                # Same as i, but in the opposite direction
                 @assert has_j
                 rows[jrange[jidx]] = i
                 iidx > length(rr) && continue
@@ -113,7 +85,6 @@ else
         return nothing
     end
 end
-
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
         prev_pivot::Base.BitInteger)
     flag = zero(prev_pivot)
@@ -128,15 +99,12 @@ function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
     iszero(flag) || error("Overflow occurred")
     zero!(M, (k + 1):size(M, 1), k)
 end
-
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot)
     @inbounds for i in (k + 1):size(M, 2), j in (k + 1):size(M, 1)
-
         M[j, i] = exactdiv(M[j, i] * pivot - M[j, k] * M[k, i], prev_pivot)
     end
     zero!(M, (k + 1):size(M, 1), k)
 end
-
 @views function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
     if prev_pivot isa Base.BitInteger
         prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
@@ -148,7 +116,6 @@ end
         dropzeros!(M)
     end
 end
-
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot,
         prev_pivot)
     if prev_pivot isa Base.BitInteger
@@ -158,37 +125,23 @@ function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pi
     V .= @views exactdiv.(V .* pivot .- M[(k + 1):end, swapto[2]] * M[k, :]', prev_pivot)
     zero!(M, (k + 1):size(M, 1), swapto[2])
 end
-
 bareiss_zero!(M, i, j) = M[i, j] .= zero(eltype(M))
-
 function find_pivot_col(M, i)
     p = findfirst(!iszero, @view M[i, i:end])
     p === nothing && return nothing
     idx = CartesianIndex(i, p + i - 1)
     (idx, M[idx])
 end
-
 function find_pivot_any(M, i)
     p = findfirst(!iszero, @view M[i:end, i:end])
     p === nothing && return nothing
     idx = p + CartesianIndex(i - 1, i - 1)
     (idx, M[idx])
 end
-
 const bareiss_colswap = (Base.swapcols!, swaprows!, bareiss_update!, bareiss_zero!)
 const bareiss_virtcolswap = ((M, i, j) -> nothing, swaprows!,
     bareiss_update_virtual_colswap!, bareiss_zero!)
-
-"""
-    bareiss!(M, [swap_strategy])
-
-Perform Bareiss's fraction-free row-reduction algorithm on the matrix `M`.
-Optionally, a specific pivoting method may be specified.
-
-swap_strategy is an optional argument that determines how the swapping of rows and columns is performed.
-bareiss_colswap (the default) swaps the columns and rows normally.
-bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
-"""
+""""""
 function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
         find_pivot = find_pivot_any, column_pivots = nothing) where {T}
     swapcols!, swaprows!, update!, zero! = swap_strategy
@@ -213,7 +166,6 @@ function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
     end
     return (n, pivot, column_permuted)
 end
-
 function nullspace(A; col_order = nothing)
     n = size(A, 2)
     workspace = zeros(Int, 2 * n)
@@ -225,9 +177,6 @@ function nullspace(A; col_order = nothing)
     B = copy(A)
     (rank, d, column_permuted) = bareiss!(B; column_pivots)
     reduce_echelon!(B, rank, d, pivots_cache)
-
-    # The first rank entries in col_order are columns that give a basis
-    # for the column space. The remainder give the free variables.
     if col_order !== nothing
         resize!(col_order, size(A, 2))
         col_order .= 1:size(A, 2)
@@ -235,23 +184,16 @@ function nullspace(A; col_order = nothing)
             @swap(col_order[i], col_order[cp])
         end
     end
-
     fill!(pivots_cache, 0)
     N = ModelingToolkit.reduced_echelon_nullspace(rank, B, pivots_cache)
     apply_inv_pivot_rows!(N, column_pivots)
 end
-
 function apply_inv_pivot_rows!(M, ipiv)
     for i in size(M, 1):-1:1
         swaprows!(M, i, ipiv[i])
     end
     M
 end
-
-###
-### Modified from AbstractAlgebra.jl
-###
-### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
 function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
         pivots_cache = zeros(Int, size(A, 2))) where {T}
     m, n = size(A)
@@ -270,11 +212,9 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
     end
     @label out
     @inbounds for i in (rank + 1):m, j in 1:n
-
         A[i, j] = zero(T)
     end
     isreduced && return A
-
     @inbounds if rank > 1
         t = zero(T)
         q = zero(T)
@@ -318,7 +258,6 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
     end
     return A
 end
-
 function reduced_echelon_nullspace(rank, A::AbstractMatrix{T},
         pivots_cache = zeros(Int, size(A, 2))) where {T}
     n = size(A, 2)

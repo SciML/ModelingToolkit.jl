@@ -1,39 +1,4 @@
-"""
-$(TYPEDEF)
-
-A system of partial differential equations.
-
-# Fields
-$(FIELDS)
-
-# Example
-
-```julia
-using ModelingToolkit
-
-@parameters x t
-@variables u(..)
-Dxx = Differential(x)^2
-Dtt = Differential(t)^2
-Dt = Differential(t)
-
-#2D PDE
-C=1
-eq  = Dtt(u(t,x)) ~ C^2*Dxx(u(t,x))
-
-# Initial and boundary conditions
-bcs = [u(t,0) ~ 0.,# for all t > 0
-       u(t,1) ~ 0.,# for all t > 0
-       u(0,x) ~ x*(1. - x), #for all 0 < x < 1
-       Dt(u(0,x)) ~ 0. ] #for all  0 < x < 1]
-
-# Space and time domains
-domains = [t ∈ (0.0,1.0),
-           x ∈ (0.0,1.0)]
-
-@named pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
-```
-"""
+""""""
 struct PDESystem <: AbstractSystem
     "The equations which define the PDE."
     eqs::Any
@@ -106,15 +71,12 @@ struct PDESystem <: AbstractSystem
             u = __get_unit_type(dvs, ivs, ps)
             check_units(u, eqs)
         end
-
         eqs = eqs isa Vector ? eqs : [eqs]
-
         if !isnothing(analytic)
             analytic = analytic isa Vector ? analytic : [analytic]
             if length(analytic) != length(dvs)
                 throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
             end
-
             if isnothing(analytic_func)
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
@@ -126,34 +88,28 @@ struct PDESystem <: AbstractSystem
                 end
             end
         end
-
         if !isnothing(analytic_func)
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
-
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
             analytic_func, name, description, metadata, gui_metadata)
     end
 end
-
 function Base.getproperty(x::PDESystem, sym::Symbol)
     if sym == :indvars
         return getfield(x, :ivs)
         Base.depwarn(
             "`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
             force = true)
-
     elseif sym == :depvars
         return getfield(x, :dvs)
         Base.depwarn(
             "`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
             force = true)
-
     else
         return getfield(x, sym)
     end
 end
-
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
 function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
     println(io, summary(sys))

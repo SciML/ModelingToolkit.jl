@@ -16,7 +16,6 @@ using Graphs
 using UnPack
 using Setfield
 using SparseArrays
-
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
         similarterm = (x, f, args;
@@ -24,34 +23,28 @@ function quick_cancel_expr(expr)
             SymbolicUtils.metadata(x),
             kws...))(expr)
 end
-
 export SystemStructure, TransformationState, TearingState, mtkcompile!
 export isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
 export get_fullvars, system_subset
-
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
-
 DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
 function DiffGraph(n::Integer, with_badj::Bool = false)
     DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
         with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
 end
-
 function Base.copy(dg::DiffGraph)
     DiffGraph(copy(dg.primal_to_diff),
         dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
 end
-
 @noinline function require_complete(dg::DiffGraph)
     dg.diff_to_primal === nothing &&
         error("Not complete. Run `complete` first.")
 end
-
 Graphs.is_directed(dg::DiffGraph) = true
 function Graphs.edges(dg::DiffGraph)
     (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
@@ -75,12 +68,9 @@ function Graphs.add_vertex!(dg::DiffGraph)
     end
     return length(dg.primal_to_diff)
 end
-
 function Graphs.add_edge!(dg::DiffGraph, var::Integer, diff::Integer)
     dg[var] = diff
 end
-
-# Also pass through the array interface for ease of use
 Base.:(==)(dg::DiffGraph, v::AbstractVector) = dg.primal_to_diff == v
 Base.:(==)(dg::AbstractVector, v::DiffGraph) = v == dg.primal_to_diff
 Base.eltype(::DiffGraph) = Union{Int, Nothing}
@@ -88,7 +78,6 @@ Base.size(dg::DiffGraph) = size(dg.primal_to_diff)
 Base.length(dg::DiffGraph) = length(dg.primal_to_diff)
 Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
 Base.getindex(dg::DiffGraph, a::AbstractArray) = [dg[x] for x in a]
-
 function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
     if dg.diff_to_primal !== nothing
         old_pd = dg.primal_to_diff[var]
@@ -96,15 +85,12 @@ function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Intege
             dg.diff_to_primal[old_pd] = nothing
         end
         if val !== nothing
-            #old_dp = dg.diff_to_primal[val]
-            #old_dp === nothing || error("Variable already assigned.")
             dg.diff_to_primal[val] = var
         end
     end
     return dg.primal_to_diff[var] = val
 end
 Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
-
 function complete(dg::DiffGraph)
     dg.diff_to_primal !== nothing && return dg
     diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
@@ -113,17 +99,14 @@ function complete(dg::DiffGraph)
     end
     return DiffGraph(dg.primal_to_diff, diff_to_primal)
 end
-
 function invview(dg::DiffGraph)
     require_complete(dg)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
-
 struct DiffChainIterator{Descend}
     var_to_diff::DiffGraph
     v::Int
 end
-
 function Base.iterate(di::DiffChainIterator{Descend}, v = nothing) where {Descend}
     if v === nothing
         vv = di.v
@@ -133,21 +116,15 @@ function Base.iterate(di::DiffChainIterator{Descend}, v = nothing) where {Descen
     v′ = g[v]
     v′ === nothing ? nothing : (v′, v′)
 end
-
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
-
 get_fullvars(ts::TransformationState) = ts.fullvars
 has_equations(::TransformationState) = true
-
 Base.@kwdef mutable struct SystemStructure
     """Maps the index of variable x to the index of variable D(x)."""
     var_to_diff::DiffGraph
     """Maps the index of an algebraic equation to the index of the equation it is differentiated into."""
     eq_to_diff::DiffGraph
-    # Can be access as
-    # `graph` to automatically look at the bipartite graph
-    # or as `torn` to assert that tearing has run.
     """Graph that connects equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
     """Graph that connects equations to the variable they will be solved for during simplification."""
@@ -157,14 +134,12 @@ Base.@kwdef mutable struct SystemStructure
     """Whether the system is discrete."""
     only_discrete::Bool
 end
-
 function Base.copy(structure::SystemStructure)
     var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
         copy(structure.graph), copy(structure.solvable_graph),
         var_types, structure.only_discrete)
 end
-
 is_only_discrete(s::SystemStructure) = s.only_discrete
 isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
@@ -174,7 +149,6 @@ end
 function isdiffvar(s::SystemStructure, i)
     s.var_to_diff[i] !== nothing && invview(s.var_to_diff)[i] === nothing
 end
-
 function dervars_range(s::SystemStructure)
     Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
 end
@@ -184,13 +158,11 @@ end
 function algvars_range(s::SystemStructure)
     Iterators.filter(Base.Fix1(isalgvar, s), Base.OneTo(ndsts(s.graph)))
 end
-
 function algeqs(s::SystemStructure)
     BitSet(findall(map(1:nsrcs(s.graph)) do eq
         all(v -> !isdervar(s, v), 𝑠neighbors(s.graph, eq))
     end))
 end
-
 function complete!(s::SystemStructure)
     s.var_to_diff = complete(s.var_to_diff)
     s.eq_to_diff = complete(s.eq_to_diff)
@@ -200,7 +172,6 @@ function complete!(s::SystemStructure)
     end
     s
 end
-
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     """The system of equations."""
     sys::T
@@ -218,7 +189,6 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     additional_observed::Vector{Equation}
     statemachines::Vector{T}
 end
-
 TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, ivars::Vector{Int})
     eqs = equations(ts)
@@ -246,13 +216,11 @@ function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, 
     @set! ts.fullvars = ts.fullvars[ivars]
     ts
 end
-
 function system_subset(structure::SystemStructure, ieqs::Vector{Int}, ivars::Vector{Int})
     @unpack graph = structure
     fadj = Vector{Int}[]
     eq_to_diff = DiffGraph(length(ieqs))
     var_to_diff = DiffGraph(length(ivars))
-
     ne = 0
     old_to_new_var = zeros(Int, ndsts(graph))
     for (i, iv) in enumerate(ivars)
@@ -274,11 +242,9 @@ function system_subset(structure::SystemStructure, ieqs::Vector{Int}, ivars::Vec
     @set! structure.var_to_diff = complete(var_to_diff)
     structure
 end
-
 function Base.show(io::IO, state::TearingState)
     print(io, "TearingState of ", typeof(state.sys))
 end
-
 struct EquationsView{T} <: AbstractVector{Equation}
     ts::TearingState{T}
 end
@@ -294,50 +260,35 @@ end
 function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
-
 function is_time_dependent_parameter(p, allps, iv)
     return iv !== nothing && p in allps && iscall(p) &&
            (operation(p) === getindex &&
             is_time_dependent_parameter(arguments(p)[1], allps, iv) ||
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
-
 function symbolic_contains(var::SymbolicT, set::Set{SymbolicT})
-    var in set # ||
-        # symbolic_type(var) == ArraySymbolic() &&
-        # symbolic_has_known_size(var) &&
-        # all(x -> x in set, Symbolics.scalarize(var))
+    var in set
 end
-
 function extract_top_level_statemachines(sys::System)
     return sys, System[]
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return `sys` with all equations (including those in subsystems) removed.
-"""
+""""""
 function remove_child_equations(sys::AbstractSystem)
     @set! sys.eqs = Equation[]
     @set! sys.systems = map(remove_child_equations, get_systems(sys))
     return sys
 end
-
 function TearingState(sys; check = true, sort_eqs = true)
-    # flatten system
     sys = flatten(sys)
     sys = process_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
-    # flatten array equations
     eqs = flatten_equations(equations(sys))
     original_eqs = copy(eqs)
     neqs = length(eqs)
     param_derivative_map = Dict{SymbolicT, SymbolicT}()
     no_deriv_params = Set{SymbolicT}()
     fullvars = SymbolicT[]
-    # * Scalarize unknowns
     dvs = Set{SymbolicT}()
     collect_vars_to_set!(dvs, unknowns(sys))
     ps = Set{SymbolicT}()
@@ -346,10 +297,7 @@ function TearingState(sys; check = true, sort_eqs = true)
     collect_vars_to_set!(browns, brownians(sys))
     var2idx = Dict{SymbolicT, Int}()
     var_types = VariableType[]
-
     addvar! = AddVar!(var2idx, dvs, fullvars, var_types)
-
-    # build symbolic incidence
     symbolic_incidence = Vector{SymbolicT}[]
     varsbuf = Set{SymbolicT}()
     eqs_to_retain = trues(length(eqs))
@@ -360,27 +308,20 @@ function TearingState(sys; check = true, sort_eqs = true)
         incidence = Set{SymbolicT}()
         isalgeq = true
         for v in varsbuf
-            # additionally track brownians in fullvars
             if v in browns
                 addvar!(v, BROWNIAN)
                 push!(incidence, v)
             end
-
-            # TODO: Can we handle this without `isparameter`?
             if symbolic_contains(v, ps) ||
                getmetadata(v, SymScope, LocalScope()) isa GlobalScope && isparameter(v)
                 if is_time_dependent_parameter(v, ps, iv) &&
                    !haskey(param_derivative_map, Differential(iv)(v)) && !(Differential(iv)(v) in no_deriv_params)
-                    # Parameter derivatives default to zero - they stay constant
-                    # between callbacks
                     param_derivative_map[Differential(iv)(v)] = Symbolics.COMMON_ZERO
                 end
                 continue
             end
-
             isequal(v, iv) && continue
             isdelay(v, iv) && continue
-
             if !symbolic_contains(v, dvs)
                 isvalid = Moshi.Match.@match v begin
                     BSImpl.Term(; f) => f isa Shift || f isa Operator && is_transparent_operator(f)::Bool
@@ -408,7 +349,6 @@ function TearingState(sys; check = true, sort_eqs = true)
                 if !isvalid
                     throw(ArgumentError("$v is present in the system but $v′ is not an unknown."))
                 end
-
                 addvar!(v, VARIABLE)
                 Moshi.Match.@match v begin
                     BSImpl.Term(; f, args) && if f isa SU.Operator &&
@@ -421,9 +361,7 @@ function TearingState(sys; check = true, sort_eqs = true)
                     _ => nothing
                 end
             end
-
             isalgeq &= !isdifferential(v)
-
             sh = SU.shape(v)::SU.ShapeVecT
             if isempty(sh)
                 push!(incidence, v)
@@ -453,52 +391,34 @@ function TearingState(sys; check = true, sort_eqs = true)
         end
         push!(symbolic_incidence, collect(incidence))
     end
-
     filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, param_derivative_map)
-
     eqs = eqs[eqs_to_retain]
     original_eqs = original_eqs[eqs_to_retain]
     neqs = length(eqs)
     symbolic_incidence = symbolic_incidence[eqs_to_retain]
-
     if sort_eqs
-        # sort equations lexicographically to reduce simplification issues
-        # depending on order due to NP-completeness of tearing.
-        sortidxs = Base.sortperm(string.(eqs)) # "by = string" creates more strings
+        sortidxs = Base.sortperm(string.(eqs))
         eqs = eqs[sortidxs]
         original_eqs = original_eqs[sortidxs]
         symbolic_incidence = symbolic_incidence[sortidxs]
     end
-
     dervaridxs = OrderedSet{Int}()
     add_intermediate_derivatives!(fullvars, dervaridxs, addvar!)
-    # Handle shifts - find lowest shift and add intermediates with derivative edges
-    ### Handle discrete variables
     add_intermediate_shifts!(fullvars, dervaridxs, var2idx, addvar!, iv)
-    # sort `fullvars` such that the mass matrix is as diagonal as possible.
     dervaridxs = collect(dervaridxs)
     fullvars, var_types = sort_fullvars(fullvars, dervaridxs, var_types, iv)
     var2idx = Dict{SymbolicT, Int}(fullvars .=> eachindex(fullvars))
     ndervars = length(dervaridxs)
-    # invalidate `dervaridxs`, it is just `1:ndervars`
     dervaridxs = nothing
-
-    # build `var_to_diff`
     var_to_diff = build_var_to_diff(fullvars, ndervars, var2idx, iv)
-
-    # build incidence graph
     graph = build_incidence_graph(length(fullvars), symbolic_incidence, var2idx)
-
     @set! sys.eqs = eqs
-
     eq_to_diff = DiffGraph(nsrcs(graph))
-
     return TearingState{typeof(sys)}(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
         Equation[], param_derivative_map, no_deriv_params, original_eqs, Equation[], typeof(sys)[])
 end
-
 function sort_fullvars(fullvars::Vector{SymbolicT}, dervaridxs::Vector{Int}, var_types::Vector{VariableType}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     if iv === nothing
         return fullvars, var_types
@@ -524,7 +444,6 @@ function sort_fullvars(fullvars::Vector{SymbolicT}, dervaridxs::Vector{Int}, var
     var_types = var_types[sortperm]
     return fullvars, var_types
 end
-
 function build_var_to_diff(fullvars::Vector{SymbolicT}, ndervars::Int, var2idx::Dict{SymbolicT, Int}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     nvars = length(fullvars)
     var_to_diff = DiffGraph(nvars, true)
@@ -540,7 +459,6 @@ function build_var_to_diff(fullvars::Vector{SymbolicT}, ndervars::Int, var2idx::
     end
     return var_to_diff
 end
-
 function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{SymbolicT}}, var2idx::Dict{SymbolicT, Int})
     neqs = length(symbolic_incidence)
     graph = BipartiteGraph(neqs, nvars, Val(false))
@@ -548,10 +466,8 @@ function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{Sym
         jv = var2idx[v]
         add_edge!(graph, ie, jv)
     end
-
     return graph
 end
-
 function collect_vars_to_set!(buffer::Set{SymbolicT}, vars::Vector{SymbolicT})
     for x in vars
         push!(buffer, x)
@@ -569,7 +485,6 @@ function collect_vars_to_set!(buffer::Set{SymbolicT}, vars::Vector{SymbolicT})
         end
     end
 end
-
 function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, no_deriv_params::Set{SymbolicT}, eqs_to_retain::BitVector, ps::Set{SymbolicT}, @nospecialize(iv::Union{Nothing, SymbolicT}), i::Int, eq::Equation)
     is_statemachine_equation = false
     lhs = eq.lhs
@@ -578,15 +493,10 @@ function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, no_d
         BSImpl.Term(; f, args) && if f isa Differential && iv isa SymbolicT && isequal(f.x, iv) &&
                                      is_time_dependent_parameter(args[1], ps, iv)
                                  end => begin
-            # parameter derivatives are opted out by specifying `D(p) ~ missing`, but
-            # we want to store `nothing` in the map because that means `substitute`
-            # will ignore the rule. We will this identify the presence of `eq′.lhs` in
-            # the differentiated expression and error.
             if eq.rhs !== COMMON_MISSING
                 param_derivative_map[lhs] = rhs
                 eq = Symbolics.COMMON_ZERO ~ rhs
             else
-                # change the equation if the RHS is `missing` so the rest of this loop works
                 eq = Symbolics.COMMON_ZERO ~ Symbolics.COMMON_ZERO
                 push!(no_deriv_params, lhs)
                 delete!(param_derivative_map, lhs)
@@ -603,14 +513,12 @@ function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, no_d
     end
     return eq, is_statemachine_equation
 end
-
 struct AddVar!
     var2idx::Dict{SymbolicT, Int}
     dvs::Set{SymbolicT}
     fullvars::Vector{SymbolicT}
     var_types::Vector{VariableType}
 end
-
 function (avc::AddVar!)(var::SymbolicT, vtype::VariableType)
     idx = get(avc.var2idx, var, nothing)
     idx === nothing || return idx::Int
@@ -619,7 +527,6 @@ function (avc::AddVar!)(var::SymbolicT, vtype::VariableType)
     push!(avc.var_types, vtype)
     return avc.var2idx[var] = length(avc.fullvars)
 end
-
 function add_intermediate_derivatives!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, addvar!::AddVar!)
     for (i, v) in enumerate(fullvars)
         while true
@@ -634,7 +541,6 @@ function add_intermediate_derivatives!(fullvars::Vector{SymbolicT}, dervaridxs::
         end
     end
 end
-
 function add_intermediate_shifts!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, var2idx::Dict{SymbolicT, Int}, addvar!::AddVar!, iv::Union{SymbolicT, Nothing})
     lowest_shift = Dict{SymbolicT, Int}()
     for var in fullvars
@@ -683,86 +589,54 @@ function add_intermediate_shifts!(fullvars::Vector{SymbolicT}, dervaridxs::Order
         end
     end
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Preemptively identify observed equations in the system and tear them. This happens before
-any simplification. The equations torn by this process are ones that are already given in
-an explicit form in the system and where the LHS is not present in any other equation of
-the system except for other such preempitvely torn equations.
-"""
+""""""
 function trivial_tearing!(ts::TearingState)
     @assert length(ts.original_eqs) == length(equations(ts))
-    # equations that can be trivially torn an observed equations
     trivial_idxs = BitSet()
-    # equations to never check
     blacklist = BitSet()
     torn_eqs = Equation[]
-    # variables that have been matched to trivially torn equations
     matched_vars = BitSet()
-    # variable to index in fullvars
     var_to_idx = Dict{Any, Int}(ts.fullvars .=> eachindex(ts.fullvars))
-
     complete!(ts.structure)
     var_to_diff = ts.structure.var_to_diff
     graph = ts.structure.graph
     while true
-        # track whether we added an equation to the trivial list this iteration
         added_equation = false
         for (i, eq) in enumerate(ts.original_eqs)
-            # don't check already torn equations
             i in trivial_idxs && continue
             i in blacklist && continue
-            # ensure it is an observed equation matched to a variable in fullvars
             vari = get(var_to_idx, eq.lhs, 0)
             iszero(vari) && continue
-            # don't tear irreducible variables
             if isirreducible(eq.lhs)
                 push!(blacklist, i)
                 continue
             end
-            # if a variable was the LHS of two trivial observed equations, we wouldn't have
-            # included it in the list. Error if somehow it made it through.
             @assert !(vari in matched_vars)
-            # don't tear differential/shift equations (or differentiated/shifted variables)
             var_to_diff[vari] === nothing || continue
             invview(var_to_diff)[vari] === nothing || continue
-            # get the equations that the candidate matched variable is present in, except
-            # those equations which have already been torn as observed
             eqidxs = setdiff(𝑑neighbors(graph, vari), trivial_idxs)
-            # it should only be present in this equation
             length(eqidxs) == 1 || continue
             eqi = only(eqidxs)
             @assert eqi == i
-
-            # for every variable present in this equation, make sure it isn't _only_
-            # present in trivial equations
             isvalid = true
             for v in 𝑠neighbors(graph, eqi)
                 v == vari && continue
                 v in matched_vars && continue
-                # `> 1` and not `0` because one entry will be this equation (`eqi`)
                 isvalid &= count(!in(trivial_idxs), 𝑑neighbors(graph, v)) > 1
                 isvalid || break
             end
             isvalid || continue
-            # skip if the LHS is present in the RHS, since then this isn't explicit
             if SU.query(isequal(eq.lhs), eq.rhs)
                 push!(blacklist, i)
                 continue
             end
-
             added_equation = true
             push!(trivial_idxs, eqi)
             push!(torn_eqs, eq)
             push!(matched_vars, vari)
         end
-
-        # if we didn't add an equation this iteration, we won't add one next iteration
         added_equation || break
     end
-
     deleteat!(var_to_diff.primal_to_diff, matched_vars)
     deleteat!(var_to_diff.diff_to_primal, matched_vars)
     deleteat!(ts.structure.eq_to_diff.primal_to_diff, trivial_idxs)
@@ -786,7 +660,6 @@ function trivial_tearing!(ts::TearingState)
     ts.sys = sys
     return ts
 end
-
 function lower_order_var(dervar::SymbolicT, t::SymbolicT)
     Moshi.Match.@match dervar begin
         BSImpl.Term(; f, args) && if f isa Differential end => return args[1]
@@ -803,7 +676,6 @@ function lower_order_var(dervar::SymbolicT, t::SymbolicT)
         _ => return Shift(t, -1)(dervar)
     end
 end
-
 function shift_discrete_system(ts::TearingState)
     @unpack fullvars, sys = ts
     fullvars_set = Set{SymbolicT}(fullvars)
@@ -819,7 +691,6 @@ function shift_discrete_system(ts::TearingState)
         isoperator(k, Union{Sample, Hold, Pre}) && continue
         discmap[k] = StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
     end
-
     for i in eachindex(fullvars)
         fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
             fullvars[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
@@ -832,7 +703,6 @@ function shift_discrete_system(ts::TearingState)
     @set! ts.fullvars = fullvars
     return ts
 end
-
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
        AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
@@ -842,11 +712,7 @@ struct SystemStructurePrintMatrix <:
     eq_to_diff::DiffGraph
     var_eq_matching::Union{Matching, Nothing}
 end
-
-"""
-Create a SystemStructurePrintMatrix to display the contents
-of the provided SystemStructure.
-"""
+""""""
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
         s.solvable_graph === nothing ? nothing :
@@ -894,7 +760,7 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
             match = bgpm.var_eq_matching[i - 1]
-            isa(match, Union{Int, Unassigned}) || (match = true) # Selected Unknown
+            isa(match, Union{Int, Unassigned}) || (match = true)
         end
         return BipartiteAdjacencyList(
             i - 1 <= ndsts(bgpm.bpg) ?
@@ -907,7 +773,6 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
         @assert false
     end
 end
-
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
     if !get(io, :limit, true) || !get(io, :mtk_limit, true)
@@ -921,16 +786,11 @@ function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
         show(io, mime, S)
     end
 end
-
 struct MatchedSystemStructure
     structure::SystemStructure
     var_eq_matching::Matching
 end
-
-"""
-Create a SystemStructurePrintMatrix to display the contents
-of the provided MatchedSystemStructure.
-"""
+""""""
 function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
     return SystemStructurePrintMatrix(complete(ms.structure.graph),
         complete(ms.structure.solvable_graph),
@@ -939,11 +799,9 @@ function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
         complete(ms.var_eq_matching,
             nsrcs(ms.structure.graph)))
 end
-
 function Base.copy(ms::MatchedSystemStructure)
     MatchedSystemStructure(Base.copy(ms.structure), Base.copy(ms.var_eq_matching))
 end
-
 function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     s = ms.structure
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
@@ -963,7 +821,6 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, " ∫", color = :cyan)
     printstyled(io, " SelectedState")
 end
-
 function make_eqs_zero_equals!(ts::TearingState)
     neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
         i, eq = kvp
@@ -979,7 +836,6 @@ function make_eqs_zero_equals!(ts::TearingState)
     end
     copyto!(get_eqs(ts.sys), neweqs)
 end
-
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true,
         inputs = SymbolicT[], outputs = SymbolicT[],
@@ -989,7 +845,6 @@ function mtkcompile!(state::TearingState; simplify = false,
         inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
 end
-
 function _mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true,
         dummy_derivative = true,
@@ -1010,8 +865,6 @@ function _mtkcompile!(state::TearingState; simplify = false,
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
-    # This phrasing avoids making the `kwcall` dynamic dispatch due to the type of a
-    # keyword (`mm`) being non-concrete
     if mm isa SparseMatrixCLIL{BigInt, Int}
         sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, simplify, kwargs...)
     else
@@ -1019,10 +872,8 @@ function _mtkcompile!(state::TearingState; simplify = false,
     end
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
-
     ModelingToolkit.invalidate_cache!(sys)
 end
-
 function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
                              fully_determined::Bool, dummy_derivative::Bool, simplify::Bool,
                              kwargs...) where {S, T}
@@ -1042,12 +893,10 @@ function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLI
     end
     return sys
 end
-
 struct DifferentiatedVariableNotUnknownError <: Exception
     differentiated::Any
     undifferentiated::Any
 end
-
 function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
     undiff = err.undifferentiated
     diff = err.differentiated

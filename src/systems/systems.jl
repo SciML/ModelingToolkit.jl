@@ -1,32 +1,9 @@
 const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
-
 struct RepeatedStructuralSimplificationError <: Exception end
-
 function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
     print(io, REPEATED_SIMPLIFICATION_MESSAGE)
 end
-
-"""
-$(SIGNATURES)
-
-Compile the given system into a form that ModelingToolkit can generate code for. Also
-performs a variety of symbolic-numeric enhancements. For ODEs, this includes processes
-such as order reduction, index reduction, alias elimination and tearing. A subset of the
-unknowns of the system may be eliminated as observables, eliminating the need for the
-numerical solver to solve for these variables.
-
-Does not rely on metadata to identify variables/parameters/brownians. Instead, queries
-the system for which symbolic quantites belong to which category. Any variables not
-present in the equations of the system will be removed in this process.
-
-# Keyword Arguments
-
-+ When `simplify=true`, the `simplify` function will be applied during the tearing process.
-+ `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
-+ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
-+ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
-+ `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
-"""
+""""""
 function mtkcompile(
         sys::System; additional_passes = (), simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
@@ -34,7 +11,6 @@ function mtkcompile(
         disturbance_inputs = SymbolicT[],
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    # Canonicalize types of arguments to prevent repeated compilation of inner methods
     inputs = unwrap_vars(inputs)
     outputs = unwrap_vars(outputs)
     disturbance_inputs = unwrap_vars(disturbance_inputs)
@@ -49,13 +25,11 @@ function mtkcompile(
     newsys = complete(newsys; split)
     return newsys
 end
-
 function __mtkcompile(sys::AbstractSystem; simplify = false,
         inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
         disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
         sort_eqs = true,
         kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
     if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
@@ -65,12 +39,10 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
         return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)::System
     end
-
     sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
     state = TearingState(sys)
     append!(state.statemachines, statemachines)
-
     @unpack structure, fullvars = state
     @unpack graph, var_to_diff, var_types = structure
     brown_vars = Int[]
@@ -102,7 +74,6 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
             dvar2eq[fullvars[dv]] = only(deqs)
         end
         for (j, bj) in enumerate(brown_vars), i in 𝑑neighbors(graph, bj)
-
             push!(Is, i)
             push!(Js, j)
             eq = new_eqs[i]
@@ -125,30 +96,22 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
             dvar = eq.lhs
-            # differential equations always precede algebraic equations
             _iszero(dvar) && break
             g_row = get(dvar2eq, dvar, 0)
             iszero(g_row) && error("$dvar isn't handled.")
             g_row > size(g, 1) && continue
             @views copyto!(sorted_g_rows[i, :], g[g_row, :])
         end
-        # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
         if sorted_g_rows isa AbstractMatrix && size(sorted_g_rows, 2) == 1
-            # If there's only one brownian variable referenced across all the equations,
-            # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
             noise_eqs = reshape(sorted_g_rows[:, 1], (:, 1))
             is_scalar_noise = true
         elseif __num_isdiag_noise(sorted_g_rows)
-            # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
-            # In this case, the solver just takes a vector column of equations and it interprets that to
-            # mean that each noise process is independent
             noise_eqs = __get_num_diag_noise(sorted_g_rows)
             is_scalar_noise = false
         else
             noise_eqs = sorted_g_rows
             is_scalar_noise = false
         end
-
         noise_eqs = substitute_observed(ode_sys, noise_eqs)
         ssys = System(Vector{Equation}(full_equations(ode_sys)),
             get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
@@ -161,7 +124,6 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         return ssys
     end
 end
-
 function simplify_optimization_system(sys::System; split = true, kwargs...)
     sys = flatten(sys)
     cons = constraints(sys)
@@ -225,7 +187,6 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     @set! sys.unknowns = newsts
     return sys
 end
-
 function __num_isdiag_noise(mat)
     for i in axes(mat, 1)
         nnz = 0
@@ -240,7 +201,6 @@ function __num_isdiag_noise(mat)
     end
     true
 end
-
 function __get_num_diag_noise(mat)
     map(axes(mat, 1)) do i
         for j in axes(mat, 2)
@@ -252,20 +212,7 @@ function __get_num_diag_noise(mat)
         0
     end
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Given a system that has been simplified via `mtkcompile`, return a `Dict` mapping
-variables of the system to equations that are used to solve for them. This includes
-observed variables.
-
-# Keyword Arguments
-
-- `rename_dummy_derivatives`: Whether to rename dummy derivative variable keys into their
-  `Differential` forms. For example, this would turn the key `yˍt(t)` into
-  `Differential(t)(y(t))`.
-"""
+""""""
 function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivatives = true)
     if !has_tearing_state(sys)
         throw(ArgumentError("$(typeof(sys)) is not supported."))
@@ -274,12 +221,10 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     if ts === nothing
         throw(ArgumentError("`map_variables_to_equations` requires a simplified system. Call `mtkcompile` on the system before calling this function."))
     end
-
     dummy_sub = Dict()
     if rename_dummy_derivatives && has_schedule(sys) && (sc = get_schedule(sys)) !== nothing
         dummy_sub = Dict(v => k for (k, v) in sc.dummy_sub if isequal(default_toterm(k), v))
     end
-
     mapping = Dict{Union{Num, BasicSymbolic}, Equation}()
     eqs = equations(sys)
     for eq in eqs
@@ -288,7 +233,6 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
         var = get(dummy_sub, var, var)
         mapping[var] = eq
     end
-
     graph = ts.structure.graph
     algvars = BitSet(findall(
         Base.Fix1(StructuralTransformations.isalgvar, ts.structure), 1:ndsts(graph)))
@@ -303,11 +247,7 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     for eq in observed(sys)
         mapping[get(dummy_sub, eq.lhs, eq.lhs)] = eq
     end
-
     return mapping
 end
-
-"""
-Mark whether an extra pass `p` can support compiling discrete systems.
-"""
+""""""
 discrete_compile_pass(p) = false

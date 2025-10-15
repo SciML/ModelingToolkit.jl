@@ -5,25 +5,10 @@ struct Schedule
     """
     dummy_sub::Dict{SymbolicT, SymbolicT}
 end
-
 const MetadataT = Base.ImmutableDict{DataType, Any}
-
 abstract type MutableCacheKey end
-
 const MutableCacheT = Dict{DataType, Any}
-
-"""
-    $(TYPEDEF)
-
-A symbolic representation of a numerical system to be solved. This is a recursive
-tree-like data structure - each system can contain additional subsystems. As such,
-it implements the `AbstractTrees.jl` interface to enable exploring the hierarchical
-structure.
-
-# Fields
-
-$(TYPEDFIELDS)
-"""
+""""""
 struct System <: IntermediateDeprecationSystem
     """
     $INTERNAL_FIELD_WARNING
@@ -34,10 +19,6 @@ struct System <: IntermediateDeprecationSystem
     The equations of the system.
     """
     eqs::Vector{Equation}
-    # nothing - no noise
-    # vector - diagonal noise
-    # matrix - generic form
-    # column matrix - scalar noise
     """
     The noise terms for each equation of the system. This field is only used for flattened
     systems. To represent noise in a hierarchical system, use brownians. In a system with
@@ -178,7 +159,7 @@ struct System <: IntermediateDeprecationSystem
     $INTERNAL_FIELD_WARNING
     Metadata added by the `@mtkmodel` macro.
     """
-    gui_metadata::Any # ?
+    gui_metadata::Any
     """
     Whether the system contains delay terms. This is inferred from the equations, but
     can also be provided explicitly.
@@ -259,7 +240,6 @@ struct System <: IntermediateDeprecationSystem
     The `Schedule` containing additional information about the simplified system.
     """
     schedule::Union{Schedule, Nothing}
-
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
             brownians, iv, observed, parameter_dependencies, var_to_name, name, description,
@@ -309,17 +289,12 @@ struct System <: IntermediateDeprecationSystem
             isscheduled, schedule)
     end
 end
-
 _sum_costs(costs::Vector{SymbolicT}) = SU.add_worker(VartypeT, costs)
 _sum_costs(costs::Vector{Num}) = SU.add_worker(VartypeT, costs)
-# `reduce` instead of `sum` because the rrule for `sum` doesn't
-# handle the `init` kwarg.
 _sum_costs(costs::Vector) = reduce(+, costs; init = 0.0)
-
 function default_consolidate(costs, subcosts)
     return _sum_costs(costs) + _sum_costs(subcosts)
 end
-
 unwrap_vars(x) = unwrap_vars(collect(x))
 unwrap_vars(vars::AbstractArray{SymbolicT}) = vars
 function unwrap_vars(vars::AbstractArray)
@@ -329,7 +304,6 @@ function unwrap_vars(vars::AbstractArray)
     end
     return result
 end
-
 defsdict(x::SymmapT) = x
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
@@ -338,23 +312,7 @@ function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     end
     return result
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Construct a system using the given equations `eqs`, independent variable `iv` (`nothing`)
-for time-independent systems, unknowns `dvs`, parameters `ps` and brownian variables
-`brownians`.
-
-## Keyword Arguments
-
-- `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
-  system to obtain defaults and/or guesses.
-- `checks`: Whether to perform sanity checks on the passed values.
-
-All other keyword arguments are named identically to the corresponding fields in
-[`System`](@ref).
-"""
+""""""
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
@@ -370,7 +328,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         preface = [], checks = true)
     name === nothing && throw(NoNameError())
-
     if !(systems isa Vector{System})
         systems = Vector{System}(systems)
     end
@@ -378,12 +335,10 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         eqs = Equation[eqs]
     end
     eqs = eqs::Vector{Equation}
-
     if !isempty(parameter_dependencies)
         @invokelatest warn_pdeps()
         append!(eqs, parameter_dependencies)
     end
-
     iv = unwrap(iv)
     ps = vec(unwrap_vars(ps))
     dvs = vec(unwrap_vars(dvs))
@@ -391,13 +346,10 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         filter!(!Base.Fix2(isdelay, iv), dvs)
     end
     brownians = unwrap_vars(brownians)
-
     if noise_eqs !== nothing
         noise_eqs = unwrap_vars(noise_eqs)
     end
-
     costs = vec(unwrap_vars(costs))
-
     defaults = defsdict(defaults)
     guesses = defsdict(guesses)
     if !(inputs isa OrderedSet{SymbolicT})
@@ -417,12 +369,10 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         end
     end
     var_to_name = Dict{Symbol, SymbolicT}()
-
     let defaults = discover_from_metadata ? defaults : SymmapT(),
         guesses = discover_from_metadata ? guesses : SymmapT(),
         inputs = discover_from_metadata ? inputs : OrderedSet{SymbolicT}(),
         outputs = discover_from_metadata ? outputs : OrderedSet{SymbolicT}()
-
         process_variables!(var_to_name, defaults, guesses, dvs)
         process_variables!(var_to_name, defaults, guesses, ps)
         buffer = SymbolicT[]
@@ -431,7 +381,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
             push!(buffer, eq.rhs)
         end
         process_variables!(var_to_name, defaults, guesses, buffer)
-
         for var in dvs
             if isinput(var)
                 push!(inputs, var)
@@ -442,28 +391,22 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     end
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), defaults)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
-
-
     if !allunique(map(nameof, systems))
         nonunique_subsystems(systems)
     end
     continuous_events,
     discrete_events = create_symbolic_events(
         continuous_events, discrete_events)
-
     if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))
         throw(EventsInTimeIndependentSystemError(continuous_events, discrete_events))
     end
-
     if is_dde === nothing
         is_dde = _check_if_dde(eqs, iv, systems)
     end
-
     _assertions = Dict{SymbolicT, String}
     for (k, v) in assertions
         _assertions[unwrap(k)::SymbolicT] = v
     end
-
     if isempty(metadata)
         metadata = MetadataT()
     elseif metadata isa MetadataT
@@ -485,42 +428,25 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
 end
-
 @noinline function nonunique_subsystems(systems)
     sysnames = nameof.(systems)
     unique_sysnames = Set(sysnames)
     throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
 end
-
 @noinline function warn_pdeps()
     @warn """
     The `parameter_dependencies` keyword argument is deprecated. Please provide all
     such equations as part of the normal equations of the system.
     """
 end
-
 SymbolicIndexingInterface.getname(x::System) = nameof(x)
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a time-independent [`System`](@ref) with the given equations `eqs`, unknowns `dvs`
-and parameters `ps`.
-"""
+""""""
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     System(eqs, nothing, dvs, ps; kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a time-dependent system with the given equations `eqs` and independent variable `iv`.
-Discover variables, parameters and brownians in the system by parsing the equations and
-other symbolic expressions passed to the system.
-"""
+""""""
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
-
     diffvars = OrderedSet{SymbolicT}()
     othervars = OrderedSet{SymbolicT}()
     ps = OrderedSet{SymbolicT}()
@@ -541,8 +467,6 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
                     equations.
                 """))
             end
-            # this check ensures var is correctly scoped, since `collect_vars!` won't pick
-            # it up if it belongs to an ancestor system.
             if var in othervars
                 push!(diffvars, var)
             end
@@ -551,10 +475,8 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
             push!(othereqs, eq)
         end
     end
-
     allunknowns = union(diffvars, othervars)
     eqs = [diffeqs; othereqs]
-
     brownians = Set{SymbolicT}()
     for x in allunknowns
         x = unwrap(x)
@@ -563,37 +485,29 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         end
     end
     setdiff!(allunknowns, brownians)
-
     for eq in get(kwargs, :parameter_dependencies, Equation[])
         collect_vars!(allunknowns, ps, eq, iv)
     end
-
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
     union!(allunknowns, cstrunknowns)
     union!(ps, cstrps)
-
     for ssys in get(kwargs, :systems, System[])
         collect_scoped_vars!(allunknowns, ps, ssys, iv)
     end
-
     costs = get(kwargs, :costs, nothing)
     if costs !== nothing
         costunknowns, costps = process_costs(costs, allunknowns, ps, iv)
         union!(allunknowns, costunknowns)
         union!(ps, costps)
     end
-
     for v in allunknowns
         isdelay(v, iv) || continue
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
-
     new_ps = gather_array_params(ps)
-
     noiseeqs = get(kwargs, :noise_eqs, nothing)
     if noiseeqs !== nothing
-        # validate noise equations
         noisedvs = OrderedSet{SymbolicT}()
         noiseps = OrderedSet{SymbolicT}()
         collect_vars!(noisedvs, noiseps, noiseeqs, iv)
@@ -602,21 +516,12 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
                 throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
         end
     end
-
     return System(
         eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a time-independent system with the given equations `eqs`. Discover variables and
-parameters in the system by parsing the equations and other symbolic expressions passed to
-the system.
-"""
+""""""
 function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
-
     allunknowns = OrderedSet{SymbolicT}()
     ps = OrderedSet{SymbolicT}()
     for eq in eqs
@@ -632,24 +537,15 @@ function System(eqs::Vector{Equation}; kwargs...)
     for val in costs
         collect_vars!(allunknowns, ps, val, nothing)
     end
-
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     for eq in cstrs
         collect_vars!(allunknowns, ps, eq, nothing)
     end
-
     new_ps = gather_array_params(ps)
-
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Create a `System` with a single equation `eq`.
-"""
+""""""
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
-
 function gather_array_params(ps)
     new_ps = OrderedSet()
     for p in ps
@@ -671,55 +567,34 @@ function gather_array_params(ps)
     end
     return new_ps
 end
-
-"""
-Process variables in constraints of the (ODE) System.
-"""
+""""""
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
-
     constraintsts = OrderedSet{SymbolicT}()
     constraintps = OrderedSet{SymbolicT}()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
     end
-
-    # Validate the states.
     if validate
         validate_vars_and_find_ps!(constraintsts, constraintps, sts, iv)
     end
-
     return constraintsts, constraintps
 end
-
-"""
-Process the costs for the constraint system.
-"""
+""""""
 function process_costs(costs::Vector, sts, ps, iv)
     coststs = OrderedSet{SymbolicT}()
     costps = OrderedSet{SymbolicT}()
     for cost in costs
         collect_vars!(coststs, costps, cost, iv)
     end
-
     validate_vars_and_find_ps!(coststs, costps, sts, iv)
     coststs, costps
 end
-
-"""
-Validate that all the variables in an auxiliary system of the (ODE) System (constraint or costs) are
-well-formed states or parameters.
- - Callable/delay variables (e.g. of the form x(0.6) should be unknowns of the system (and have one arg, etc.)
- - Callable/delay parameters should be parameters of the system
-
-Return the set of additional parameters found in the system, e.g. in x(p) ~ 3 then p should be added as a
-parameter of the system.
-"""
+""""""
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
     sts = sysvars
-
     for var in auxvars
         if !iscall(var)
             SU.query(isequal(iv), var) && (var ∈ sts ||
@@ -733,10 +608,8 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
                 throw(ArgumentError("Variable $var is not a variable of the System. Called variables must be variables of the System."))
-
             isequal(arg, iv) || isparameter(arg) || isconst(arg) && symtype(arg) <: Real ||
                 throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
-
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
         else
             var ∈ sts &&
@@ -744,28 +617,13 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         end
     end
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Check if a system is a (possibly implicit) discrete system. Hybrid systems are turned into
-callbacks, so checking if any LHS is shifted is sufficient. If a variable is shifted in
-the input equations there _will_ be a `Shift` equation in the simplified system.
-"""
+""""""
 function is_discrete_system(sys::System)
     get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
-
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
-
-"""
-    is_dde(sys::AbstractSystem)
-
-Return a boolean indicating whether a system represents a set of delay
-differential equations.
-"""
+""""""
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
-
 _check_if_dde(eqs::Vector{Equation}, iv::Nothing, subsystems::Vector{System}) = false
 function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{System})
     any(ModelingToolkit.is_dde, subsystems) && return true
@@ -776,13 +634,7 @@ function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{
     end
     return false
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Flatten the hierarchical structure of a system, collecting all equations, unknowns, etc.
-into one top-level system after namespacing appropriately.
-"""
+""""""
 function flatten(sys::System, noeqs = false)
     systems = get_systems(sys)
     isempty(systems) && return sys
@@ -792,10 +644,6 @@ function flatten(sys::System, noeqs = false)
     else
         costs = SymbolicT[costs]
     end
-    # We don't include `ignored_connections` in the flattened system, because
-    # connection expansion inherently requires the hierarchy structure. If the system
-    # is being flattened, then we no longer want to expand connections (or have already
-    # done so) and thus don't care about `ignored_connections`.
     return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
@@ -806,19 +654,13 @@ function flatten(sys::System, noeqs = false)
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
-        # without this, any defaults/guesses obtained from metadata that were
-        # later removed by the user will be re-added. Right now, we just want to
-        # retain `defaults(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
         description = description(sys), name = nameof(sys))
 end
-
 has_massactionjumps(js::System) = any(x -> x isa MassActionJump, jumps(js))
 has_constantratejumps(js::System) = any(x -> x isa ConstantRateJump, jumps(js))
 has_variableratejumps(js::System) = any(x -> x isa VariableRateJump, jumps(js))
-# TODO: do we need this? it's kind of weird to keep
 has_equations(js::System) = !isempty(equations(js))
-
 function noise_equations_equal(sys1::System, sys2::System)
     neqs1 = get_noise_eqs(sys1)
     neqs2 = get_noise_eqs(sys2)
@@ -828,30 +670,21 @@ function noise_equations_equal(sys1::System, sys2::System)
         return false
     end
     ndims(neqs1) == ndims(neqs2) || return false
-
     eqs1 = get_eqs(sys1)
     eqs2 = get_eqs(sys2)
-
-    # get the permutation vector of `eqs2` in terms of `eqs1`
-    # eqs1_used tracks the elements of `eqs1` already used in the permutation
     eqs1_used = falses(length(eqs1))
-    # the permutation of `eqs1` that gives `eqs2`
     eqs2_perm = Int[]
     for eq in eqs2
-        # find the first unused element of `eqs1` equal to `eq`
         idx = findfirst(i -> isequal(eq, eqs1[i]) && !eqs1_used[i], eachindex(eqs1))
-        # none found, so noise equations are not equal
         idx === nothing && return false
         push!(eqs2_perm, idx)
     end
-
     if neqs1 isa Vector
         return isequal(@view(neqs1[eqs2_perm]), neqs2)
     else
         return isequal(@view(neqs1[eqs2_perm, :]), neqs2)
     end
 end
-
 function ignored_connections_equal(sys1::System, sys2::System)
     ic1 = get_ignored_connections(sys1)
     ic2 = get_ignored_connections(sys2)
@@ -862,69 +695,28 @@ function ignored_connections_equal(sys1::System, sys2::System)
     end
     return _eq_unordered(ic1[1], ic2[1]) && _eq_unordered(ic1[2], ic2[2])
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the metadata associated with key `k` in system `sys` or `default` if it does not exist.
-"""
+""""""
 function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Set the metadata associated with key `k` in system `sys` to value `v`. This is an
-out-of-place operation, and will return a shallow copy of `sys` with the appropriate
-metadata values.
-"""
+""""""
 function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
     @set sys.metadata = meta
 end
-
 function SymbolicUtils.hasmetadata(sys::AbstractSystem, k::DataType)
     meta = get_metadata(sys)
     haskey(meta, k)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Metadata key for systems containing the `problem_type` to be passed to the problem
-constructor, where applicable. For example, if `getmetadata(sys, ProblemTypeCtx, nothing)`
-is `CustomType()` then `ODEProblem(sys, ...).problem_type` will be `CustomType()` instead
-of `StandardODEProblem`.
-"""
+""""""
 struct ProblemTypeCtx end
-
-"""
-    $(TYPEDSIGNATURES)
-"""
+""""""
 function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
-nonlinear equations that solve for the steady-state of the unknowns. This is done by
-replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
-does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as defaults, guesses, observed and initialization equations
-are retained. The independent variable of `sys` becomes a parameter of the returned system.
-
-If `sys` is hierarchical (it contains subsystems) this transformation will be applied
-recursively to all subsystems. The output system will be marked as `complete` if and only
-if the input system is also `complete`. This also retains the `split` flag passed to
-`complete`.
-
-See also: [`complete`](@ref).
-"""
+""""""
 function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
@@ -948,119 +740,37 @@ function NonlinearSystem(sys::System)
     end
     return nsys
 end
-
-########
-# Utility constructors
-########
-
-"""
-    $(TYPEDSIGNATURES)
-
-Construct a time-independent [`System`](@ref) for optimizing the specified scalar `cost`.
-The system will have no equations.
-
-Unknowns and parameters of the system are inferred from the cost and other values (such as
-defaults) passed to it.
-
-All keyword arguments are the same as those of the [`System`](@ref) constructor.
-"""
+""""""
 function OptimizationSystem(cost; kwargs...)
     return System(Equation[]; costs = [cost], kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Identical to the corresponding single-argument `OptimizationSystem` constructor, except
-the unknowns and parameters are specified by passing arrays of symbolic variables to `dvs`
-and `ps` respectively.
-"""
+""""""
 function OptimizationSystem(cost, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Construct a time-independent [`System`](@ref) for optimizing the specified multi-objective
-`cost`. The cost will be reduced to a scalar using the `consolidate` function. This
-defaults to summing the specified cost and that of all subsystems. The system will have no
-equations.
-
-Unknowns and parameters of the system are inferred from the cost and other values (such as
-defaults) passed to it.
-
-All keyword arguments are the same as those of the [`System`](@ref) constructor.
-"""
+""""""
 function OptimizationSystem(cost::Array; kwargs...)
     return System(Equation[]; costs = vec(cost), kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Identical to the corresponding single-argument `OptimizationSystem` constructor, except
-the unknowns and parameters are specified by passing arrays of symbolic variables to `dvs`
-and `ps` respectively.
-"""
+""""""
 function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Construct a [`System`](@ref) to solve a system of jump equations. `jumps` is an array of
-jumps, expressed using `JumpProcesses.MassActionJump`, `JumpProcesses.ConstantRateJump`
-and `JumpProcesses.VariableRateJump`. It can also include standard equations to simulate
-jump-diffusion processes. `iv` should be the independent variable of the system.
-
-All keyword arguments are the same as those of the [`System`](@ref) constructor.
-"""
+""""""
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv; jumps, kwargs...)
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Identical to the 2-argument `JumpSystem` constructor, but uses the explicitly provided
-`dvs` and `ps` for unknowns and parameters of the system.
-"""
+""""""
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
-
-# explicitly write the docstring to avoid mentioning `parameter_dependencies`.
-"""
-    SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
-
-Construct a system of equations with associated noise terms. Instead of specifying noise
-using [`@brownians`](@ref) variables, it is specified using a noise matrix `noise`. `iv` is
-the independent variable of the system.
-
-In the general case, `noise` should be a `N x M` matrix where `N` is the number of
-equations (`length(eqs)`) and `M` is the number of independent random variables.
-`noise[i, j]` is the diffusion term for equation `i` and random variable `j`. If the noise
-is diagonal (`N == M` and `noise[i, j] == 0` for all `i != j`) it can be specified as a
-`Vector` of length `N` corresponding to the diagonal of the noise matrix. As a special
-case, if all equations have the same noise then all rows of `noise` are identical. This
-is known as "scalar noise". In this case, `noise` can be a `Vector` corresponding to the
-repeated row and `is_scalar_noise` must be `true`.
-
-Note that systems created in this manner cannot be used hierarchically. This should only
-be used to construct flattened systems. To use such a system hierarchically, it must be
-converted to use brownian variables using [`noise_to_brownians`](@ref). [`mtkcompile`](@ref)
-will automatically perform this conversion.
-
-All keyword arguments are the same as those of the [`System`](@ref) constructor.
-"""
+""""""
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
@@ -1072,14 +782,7 @@ function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
     sys = System(eqs, iv; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-
-"""
-    SDESystem(eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false, kwargs...)
-
-
-Identical to the 3-argument `SDESystem` constructor, but uses the explicitly provided
-`dvs` and `ps` for unknowns and parameters of the system.
-"""
+""""""
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
@@ -1092,32 +795,23 @@ function SDESystem(
     sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Attach the given noise matrix `noise` to the system `sys`.
-"""
+""""""
 function SDESystem(sys::System, noise; kwargs...)
     SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
 end
-
 struct SystemNotCompleteError <: Exception
     obj::Any
 end
-
 function Base.showerror(io::IO, err::SystemNotCompleteError)
     print(io, """
     A completed system is required. Call `complete` or `mtkcompile` on the \
     system before creating a `$(err.obj)`.
     """)
 end
-
 struct IllFormedNoiseEquationsError <: Exception
     noise_eqs_rows::Int
     eqs_length::Int
 end
-
 function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
     print(io, """
     Noise equations are ill-formed. The number of rows must match the number of drift \
@@ -1125,18 +819,15 @@ function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
     $(err.eqs_length)`.
     """)
 end
-
 function NoNameError()
     ArgumentError("""
     The `name` keyword must be provided. Please consider using the `@named` macro.
     """)
 end
-
 struct NonUniqueSubsystemsError <: Exception
     names::Vector{Symbol}
     uniques::Set{Symbol}
 end
-
 function Base.showerror(io::IO, err::NonUniqueSubsystemsError)
     dupes = Set{Symbol}()
     for n in err.names
@@ -1150,12 +841,10 @@ function Base.showerror(io::IO, err::NonUniqueSubsystemsError)
         println(io, "  ", n)
     end
 end
-
 struct EventsInTimeIndependentSystemError <: Exception
     cevents::Vector
     devents::Vector
 end
-
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
     println(
         io, """
@@ -1169,28 +858,17 @@ The following discrete events were provided:
 $(err.devents)
 """)
 end
-
 function supports_initialization(sys::System)
     return isempty(jumps(sys)) && _iszero(cost(sys)) &&
            isempty(constraints(sys))
 end
-
 safe_eachrow(::Nothing) = nothing
 safe_eachrow(x::AbstractArray) = eachrow(x)
-
 safe_issetequal(::Nothing, ::Nothing) = true
 safe_issetequal(::Nothing, x) = false
 safe_issetequal(x, ::Nothing) = false
 safe_issetequal(x, y) = issetequal(x, y)
-
-"""
-    $(TYPEDSIGNATURES)
-
-Check if two systems are about equal, to the extent that ModelingToolkit.jl supports. Note
-that if this returns `true`, the systems are not guaranteed to be exactly equivalent
-(unless `sysa === sysb`) but are highly likely to represent a similar mathematical problem.
-If this returns `false`, the systems are very likely to be different.
-"""
+""""""
 function Base.isapprox(sysa::System, sysb::System)
     sysa === sysb && return true
     return nameof(sysa) == nameof(sysb) &&
