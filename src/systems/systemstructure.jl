@@ -309,36 +309,8 @@ function symbolic_contains(var::SymbolicT, set::Set{SymbolicT})
         # all(x -> x in set, Symbolics.scalarize(var))
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Descend through the system hierarchy and look for statemachines. Remove equations from
-the inner statemachine systems. Return the new `sys` and an array of top-level
-statemachines.
-"""
 function extract_top_level_statemachines(sys::System)
-    eqs = get_eqs(sys)
-    predicate = Base.Fix2(isa, StateMachineOperator) ∘ SU.unwrap_const
-    if !isempty(eqs) && all(predicate, eqs)
-        # top-level statemachine
-        with_removed = @set sys.systems = map(remove_child_equations, get_systems(sys))
-        return with_removed, [sys]
-    elseif !isempty(eqs) && any(predicate, eqs)
-        # error: can't mix
-        error("Mixing statemachine equations and standard equations in a top-level statemachine is not allowed.")
-    else
-        # descend
-        subsystems = get_systems(sys)
-        newsubsystems = System[]
-        statemachines = System[]
-        for subsys in subsystems
-            newsubsys, sub_statemachines = extract_top_level_statemachines(subsys)
-            push!(newsubsystems, newsubsys)
-            append!(statemachines, sub_statemachines)
-        end
-        @set! sys.systems = newsubsystems
-        return sys, statemachines
-    end
+    return sys, System[]
 end
 
 """
@@ -1013,69 +985,9 @@ function mtkcompile!(state::TearingState; simplify = false,
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
         kwargs...)
-    if !is_time_dependent(state.sys)
-        return _mtkcompile!(state; simplify, check_consistency,
-            inputs, outputs, disturbance_inputs,
-            fully_determined, kwargs...)
-    end
-    # split_system returns one or two systems and the inputs for each
-    # mod clock inference to be binary
-    # if it's continous keep going, if not then error unless given trait impl in additional passes
-    ci = ModelingToolkit.ClockInference(state)
-    ci = ModelingToolkit.infer_clocks!(ci)
-    tss, clocked_inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
-    if !isempty(tss) && continuous_id == 0
-        # do a trait check here - handle fully discrete system
-        additional_passes = get(kwargs, :additional_passes, nothing)
-        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
-            # take the first discrete compilation pass given for now
-            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
-            discrete_compile = additional_passes[discrete_pass_idx]
-            deleteat!(additional_passes, discrete_pass_idx)
-            return discrete_compile(tss, clocked_inputs, ci)
-        end
-        throw(HybridSystemNotSupportedException("""
-        Discrete systems with multiple clocks are not supported with the standard \
-        MTK compiler.
-        """))
-    end
-    if length(tss) > 1
-        make_eqs_zero_equals!(tss[continuous_id])
-        # simplify as normal
-        sys = _mtkcompile!(tss[continuous_id]; simplify,
-            inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
-            check_consistency, fully_determined,
-            kwargs...)
-        additional_passes = get(kwargs, :additional_passes, nothing)
-        if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
-            discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
-            discrete_compile = additional_passes[discrete_pass_idx]
-            deleteat!(additional_passes, discrete_pass_idx)
-            # in the case of a hybrid system, the discrete_compile pass should take the currents of sys.discrete_subsystems
-            # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
-            return discrete_compile(
-                sys, tss[[i for i in eachindex(tss) if i != continuous_id]],
-                clocked_inputs, ci, id_to_clock)
-        end
-        throw(HybridSystemNotSupportedException("""
-        Hybrid continuous-discrete systems are currently not supported with \
-        the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-        see https://help.juliahub.com/juliasimcompiler/stable/
-        """))
-    end
-    if get_is_discrete(state.sys) ||
-       continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
-        state.structure.only_discrete = true
-        state = shift_discrete_system(state)
-        sys = state.sys
-        @set! sys.is_discrete = true
-        state.sys = sys
-    end
-
-    sys = _mtkcompile!(state; simplify, check_consistency,
+    return _mtkcompile!(state; simplify, check_consistency,
         inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
-    return sys
 end
 
 function _mtkcompile!(state::TearingState; simplify = false,

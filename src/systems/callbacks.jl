@@ -1,7 +1,7 @@
 abstract type AbstractCallback end
 
 function has_functional_affect(cb)
-    affects(cb) isa ImperativeAffect
+    false
 end
 
 struct SymbolicAffect
@@ -220,7 +220,7 @@ end
 ###############################
 ###### Continuous events ######
 ###############################
-const Affect = Union{AffectSystem, ImperativeAffect}
+const Affect = Union{AffectSystem}
 
 """
     SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
@@ -295,12 +295,7 @@ function SymbolicContinuousCallback(
     conditions = (conditions isa AbstractVector) ? conditions : [conditions]
 
     if isnothing(reinitializealg)
-        if any(a -> a isa ImperativeAffect,
-            [affect, affect_neg, initialize, finalize])
-            reinitializealg = SciMLBase.CheckInit()
-        else
-            reinitializealg = SciMLBase.NoInit()
-        end
+        reinitializealg = SciMLBase.NoInit()
     end
 
     SymbolicContinuousCallback(conditions, SymbolicAffect(affect; kwargs...),
@@ -331,8 +326,6 @@ end
 
 make_affect(affect::SymbolicAffect; kwargs...) = AffectSystem(affect; kwargs...)
 make_affect(affect::Nothing; kwargs...) = nothing
-make_affect(affect::Tuple; kwargs...) = ImperativeAffect(affect...)
-make_affect(affect::NamedTuple; kwargs...) = ImperativeAffect(; affect...)
 make_affect(affect::Affect; kwargs...) = affect
 make_affect(affect::Vector{Equation}; kwargs...) = AffectSystem(affect; kwargs...)
 
@@ -451,12 +444,7 @@ function SymbolicDiscreteCallback(
     c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
     if isnothing(reinitializealg)
-        if any(a -> a isa ImperativeAffect,
-            [affect, initialize, finalize])
-            reinitializealg = SciMLBase.CheckInit()
-        else
-            reinitializealg = SciMLBase.NoInit()
-        end
+        reinitializealg = SciMLBase.NoInit()
     end
     SymbolicDiscreteCallback(c, SymbolicAffect(affect; kwargs...),
         SymbolicAffect(initialize; kwargs...),
@@ -848,8 +836,6 @@ function compile_affect(
         default
     elseif aff isa AffectSystem
         compile_equational_affect(aff, sys; kwargs...)
-    elseif aff isa ImperativeAffect
-        compile_functional_affect(aff, sys; kwargs...)
     end
 end
 
