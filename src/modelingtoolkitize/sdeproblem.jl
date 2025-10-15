@@ -48,7 +48,7 @@ function modelingtoolkitize(
         end
     end
 
-    @set! sys.noise_eqs = neqs
+    @set! sys.noise_eqs = unwrap_vars(neqs)
 
     return sys
 end
