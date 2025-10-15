@@ -2,6 +2,8 @@
 ### Reassemble: structural information -> system
 ###
 
+const NOTHING_EQ = nothing ~ nothing
+
 function pantelides_reassemble(state::TearingState, var_eq_matching)
     fullvars = state.fullvars
     @unpack var_to_diff, eq_to_diff = state.structure
@@ -9,11 +11,11 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     # Step 1: write derivative equations
     in_eqs = equations(sys)
     out_eqs = Vector{Equation}(undef, nv(eq_to_diff))
-    fill!(out_eqs, nothing)
+    fill!(out_eqs, NOTHING_EQ)
     out_eqs[1:length(in_eqs)] .= in_eqs
 
     out_vars = Vector{SymbolicT}(undef, nv(var_to_diff))
-    fill!(out_vars, nothing)
+    fill!(out_vars, ModelingToolkit.COMMON_NOTHING)
     out_vars[1:length(fullvars)] .= fullvars
 
     iv = get_iv(sys)
@@ -22,7 +24,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
         vi = out_vars[varidx]
-        @assert vi!==nothing "Something went wrong on reconstructing unknowns from variable association list"
+        @assert vi!==ModelingToolkit.COMMON_NOTHING "Something went wrong on reconstructing unknowns from variable association list"
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
@@ -36,8 +38,8 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         # LHS variable is looked up from var_to_diff
         # the var_to_diff[i]-th variable is the differentiated version of var at i
         eq = out_eqs[eqidx]
-        lhs = if !(eq.lhs isa SymbolicT)
-            0
+        lhs = if SU.isconst(eq.lhs)
+            Symbolics.COMMON_ZERO
         elseif isdiffeq(eq)
             # look up the variable that represents D(lhs)
             lhsarg1 = arguments(eq.lhs)[1]
@@ -47,7 +49,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
                 D(eq.lhs)
             else
                 # remove clashing equations
-                lhs = Num(nothing)
+                lhs = ModelingToolkit.COMMON_NOTHING
             end
         else
             D(eq.lhs)
@@ -55,14 +57,14 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
         rhs = substitute(rhs, state.param_derivative_map)
         substitution_dict = Dict(x.lhs => x.rhs
-        for x in out_eqs if x !== nothing && x.lhs isa SymbolicT)
+        for x in out_eqs if x !== NOTHING_EQ && !SU.isconst(x.lhs))
         sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[diff] = lhs ~ sub_rhs
     end
 
     final_vars = unique(filter(x -> !(operation(x) isa Differential), fullvars))
     final_eqs = map(identity,
-        filter(x -> value(x.lhs) !== nothing,
+        filter(x -> x.lhs !== ModelingToolkit.COMMON_NOTHING,
             out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
 
     @set! sys.eqs = final_eqs
