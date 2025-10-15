@@ -1,3 +1,0 @@
-  - This repository follows the [SciMLStyle](https://github.com/SciML/SciMLStyle) and the SciML [ColPrac](https://github.com/SciML/ColPrac).
-  - Please run `using JuliaFormatter, ModelingToolkit; format(joinpath(dirname(pathof(ModelingToolkit)), ".."))` before committing.
-  - Add tests for any new features.
