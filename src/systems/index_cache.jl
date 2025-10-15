@@ -111,8 +111,8 @@ function IndexCache(sys::AbstractSystem)
     cevs = continuous_events(sys)
     devs = discrete_events(sys)
     events = Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}[cevs; devs]
-    parse_callbacks_for_discretes!(cevs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, 0)
-    parse_callbacks_for_discretes!(devs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, length(cevs))
+    parse_callbacks_for_discretes!(sys, cevs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, 0)
+    parse_callbacks_for_discretes!(sys, devs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, length(cevs))
     clock_partitions = unique(collect(values(disc_param_callbacks)))::Vector{BitSet}
     disc_symtypes = Set{TypeT}()
     for x in keys(disc_param_callbacks)
@@ -367,7 +367,7 @@ function insert_by_type!(buffers::Vector{SymbolicT}, sym::SymbolicT, ::TypeT)
     push!(buffers, sym)
 end
 
-function parse_callbacks_for_discretes!(events::Vector, disc_param_callbacks::Dict{SymbolicT, BitSet}, constant_buffers::Dict{TypeT, Set{SymbolicT}}, nonnumeric_buffers::Dict{TypeT, Set{SymbolicT}}, offset::Int)
+function parse_callbacks_for_discretes!(sys::AbstractSystem, events::Vector, disc_param_callbacks::Dict{SymbolicT, BitSet}, constant_buffers::Dict{TypeT, Set{SymbolicT}}, nonnumeric_buffers::Dict{TypeT, Set{SymbolicT}}, offset::Int)
     for (i, event) in enumerate(events)
         discs = Set{SymbolicParam}()
         affect = event.affect::Union{AffectSystem, ImperativeAffect, Nothing}
