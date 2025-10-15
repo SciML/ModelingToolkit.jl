@@ -71,8 +71,18 @@ isconnection(_::Connection) = true
 Adds a domain only connection equation, through and across state equations are not generated.
 """
 function domain_connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
-    syss = (sys1, sys2, syss...)
-    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
+    _syss = System[]
+    push!(_syss, sys1)
+    push!(_syss, sys2)
+    for sys in syss
+        push!(_syss, sys)
+    end
+    syss = _syss
+    sysnames = Symbol[]
+    for sys in syss
+        push!(sysnames, nameof(sys))
+    end
+    allunique(sysnames) || error("connect takes distinct systems!")
     Equation(Connection(:domain), Connection(syss)) # the RHS are connected systems
 end
 
