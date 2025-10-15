@@ -138,7 +138,7 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
+    return SU.get_variables(expr, Set{SymbolicT}(all_symbols(sys)))
 end
 
 function unassignable_variables(sys, expr)
