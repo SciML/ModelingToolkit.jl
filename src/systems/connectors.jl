@@ -1135,7 +1135,7 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
                 svar = inner_streamvars[inner_i]
                 args = SArgsT()
                 push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
-                push!(args, SU.Const{VartypeT}(Val(n_outer - 1)))
+                push!(args, SU.Const{VartypeT}(Val(n_outer)))
                 for i in eachindex(inner_cverts)
                      i == inner_i && continue
                      push!(args, inner_flowvars[i])
