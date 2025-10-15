@@ -172,7 +172,7 @@ end
 
 ##### MTK dispatches for Symbolic jumps #####
 eqtype_supports_collect_vars(j::MassActionJump) = true
-function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, j::MassActionJump, iv::Union{SymbolicT, Nothing}; depth = 0,
         op = Differential)
     collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
     for field in (j.reactant_stoch, j.net_stoch)
@@ -184,8 +184,8 @@ function collect_vars!(unknowns, parameters, j::MassActionJump, iv; depth = 0,
 end
 
 eqtype_supports_collect_vars(j::Union{ConstantRateJump, VariableRateJump}) = true
-function collect_vars!(unknowns, parameters, j::Union{ConstantRateJump, VariableRateJump},
-        iv; depth = 0, op = Differential)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, j::Union{ConstantRateJump, VariableRateJump},
+        iv::Union{SymbolicT, Nothing}; depth = 0, op = Differential)
     collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
     for eq in j.affect!
         (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv; depth, op)
@@ -202,9 +202,11 @@ end
 
 function SU.search_variables!(dep, jump::MassActionJump; is_atomic = SU.default_is_atomic, kw...)
     sr = unwrap(jump.scaled_rates)
-    (sr isa SymbolicT) && SU.search_variables!(dep, sr; kw...)
+    (sr isa SymbolicT) && SU.search_variables!(dep, sr; is_atomic, kw...)
     for varasop in jump.reactant_stoch
-        is_atomic(varasop[1]) && push!(dep, varasop[1])
+        var = unwrap(varasop[1])
+        var isa SymbolicT || continue
+        is_atomic(var) && push!(dep, var)
     end
     dep
 end
