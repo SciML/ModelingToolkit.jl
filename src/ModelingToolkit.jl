@@ -451,10 +451,12 @@ PrecompileTools.@compile_workload begin
         q[1]
         q'q
      using ModelingToolkit
-    @variables x(ModelingToolkit.t_nounits)
+    @variables x(ModelingToolkit.t_nounits) y(ModelingToolkit.t_nounits)
     isequal(ModelingToolkit.D_nounits.x, ModelingToolkit.t_nounits)
-    sys = System([ModelingToolkit.D_nounits(x) ~ x], ModelingToolkit.t_nounits, [x], Num[]; name = :sys)
+    sys = System([ModelingToolkit.D_nounits(x) ~ x * y, y ~ 3x + 4 * D(y)], ModelingToolkit.t_nounits, [x, y], Num[]; name = :sys)
+    TearingState(sys)
     complete(sys)
+    mtkcompile(sys)
     @syms p[1:2]
     ndims(p)
     size(p)
