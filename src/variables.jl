@@ -293,16 +293,8 @@ Create parameters with bounds like this
 """
 getbounds(x::Union{Num, Symbolics.Arr}) = getbounds(unwrap(x))
 function getbounds(x::SymbolicT)
-    if operation(p) === getindex
-        p = arguments(p)[1]
-        bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
-        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
-            bounds = map(bounds) do b
-                b isa AbstractArray && return b
-                return fill(b, size(x))
-            end
-        end
-    else
+    if iscall(x) && operation(x) === getindex
+        p = arguments(x)[1]
         # if we reached here, `x` is the result of calling `getindex`
         bounds = @something Symbolics.getmetadata(x, VariableBounds, nothing) getbounds(p)
         idxs = arguments(x)[2:end]
@@ -316,6 +308,14 @@ function getbounds(x::SymbolicT)
                 return fill(b, size(x))
             else
                 return b
+            end
+        end
+    else
+        bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
+        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
+            bounds = map(bounds) do b
+                b isa AbstractArray && return b
+                return fill(b, size(x))
             end
         end
     end
