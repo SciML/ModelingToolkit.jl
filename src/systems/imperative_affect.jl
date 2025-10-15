@@ -138,7 +138,7 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    filter(x -> !any(isequal(x), all_symbols(sys)), reduce(vcat, vars(expr); init = []))
+    setdiff!(SU.search_variables(expr), all_symbols(sys))
 end
 
 function unassignable_variables(sys, expr)
@@ -146,7 +146,7 @@ function unassignable_variables(sys, expr)
         vcat, Symbolics.scalarize.(vcat(
             unknowns(sys), parameters(sys; initial_parameters = true)));
         init = [])
-    written = reduce(vcat, Symbolics.scalarize.(vars(expr)); init = [])
+    written = reduce(vcat, Symbolics.scalarize.(collect(SU.search_variables(expr))); init = [])
     return filter(
         x -> !any(isequal(x), assignable_syms), written)
 end
