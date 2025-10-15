@@ -1019,7 +1019,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             k, v = element
         else
             k = element
-            v = get(final_defs, k, nothing)
+            v = value(get(final_defs, k, nothing))
             @assert v !== nothing """
             Parameter $k needs an associated value to be respecialized.
             """
