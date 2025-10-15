@@ -1,244 +1,89 @@
 struct Schedule
     var_sccs::Vector{Vector{Int}}
-    """
-    Mapping of `Differential`s of variables to corresponding derivative expressions.
-    """
+    
     dummy_sub::Dict{SymbolicT, SymbolicT}
 end
 const MetadataT = Base.ImmutableDict{DataType, Any}
 abstract type MutableCacheKey end
 const MutableCacheT = Dict{DataType, Any}
-""""""
+
 struct System <: IntermediateDeprecationSystem
-    """
-    $INTERNAL_FIELD_WARNING
-    A unique integer tag for the system.
-    """
     tag::UInt
-    """
-    The equations of the system.
-    """
     eqs::Vector{Equation}
-    """
-    The noise terms for each equation of the system. This field is only used for flattened
-    systems. To represent noise in a hierarchical system, use brownians. In a system with
-    `N` equations and `K` independent brownian variables, this should be an `N x K`
-    matrix. In the special case where `N == K` and each equation has independent noise,
-    this noise matrix is diagonal. Diagonal noise can be specified by providing an `N`
-    length vector. If this field is `nothing`, the system does not have noise.
-    """
     noise_eqs::Union{Nothing, Vector{SymbolicT}, Matrix{SymbolicT}}
-    """
-    Jumps associated with the system. Each jump can be a `VariableRateJump`,
-    `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
-    """
     jumps::Vector{JumpType}
-    """
-    The constraints of the system. This can be used to represent the constraints in an
-    optimal-control problem or boundary-value differential equation, or the constraints
-    in a constrained optimization.
-    """
     constraints::Vector{Union{Equation, Inequality}}
-    """
-    The costs of the system. This can be the cost in an optimal-control problem, or the
-    loss of an optimization problem. Scalar loss values must also be provided as a single-
-    element vector.
-    """
     costs::Vector{SymbolicT}
-    """
-    A function which combines costs into a scalar value. This should take two arguments,
-    the `costs` of this system and the consolidated costs of all subsystems in the order
-    they are present in the `systems` field. It should return a scalar cost that combines
-    all of the individual values. This defaults to a function that simply sums all cost
-    values.
-    """
+    
     consolidate::Any
-    """
-    The variables being solved for by this system. For example, in a differential equation
-    system, this contains the dependent variables.
-    """
+    
     unknowns::Vector{SymbolicT}
-    """
-    The parameters of the system. Parameters can either be variables that parameterize the
-    problem being solved for (e.g. the spring constant of a mass-spring system) or
-    additional unknowns not part of the main dynamics of the system (e.g. discrete/clocked
-    variables in a hybrid ODE).
-    """
+    
     ps::Vector{SymbolicT}
-    """
-    The brownian variables of the system, created via `@brownians`. Each brownian variable
-    represents an independent noise. A system with brownians cannot be simulated directly.
-    It needs to be compiled using `mtkcompile` into `noise_eqs`.
-    """
+    
     brownians::Vector{SymbolicT}
-    """
-    The independent variable for a time-dependent system, or `nothing` for a time-independent
-    system.
-    """
+    
     iv::Union{Nothing, SymbolicT}
-    """
-    Equations that compute variables of a system that have been eliminated from the set of
-    unknowns by `mtkcompile`. More generally, this contains all variables that can be
-    computed from the unknowns and parameters and do not need to be solved for. Such
-    variables are termed as "observables". Each equation must be of the form
-    `observable ~ expression` and observables cannot appear on the LHS of multiple
-    equations. Equations must be sorted such that every observable appears on
-    the left hand side of an equation before it appears on the right hand side of any other
-    equation.
-    """
+    
     observed::Vector{Equation}
-    """
-    $INTERNAL_FIELD_WARNING
-    All the explicit equations relating parameters. Equations here only contain parameters
-    and are in the same format as `observed`.
-    """
+    
     parameter_dependencies::Vector{Equation}
-    """
-    $INTERNAL_FIELD_WARNING
-    A mapping from the name of a variable to the actual symbolic variable in the system.
-    This is used to enable `getproperty` syntax to access variables of a system.
-    """
+    
     var_to_name::Dict{Symbol, SymbolicT}
-    """
-    The name of the system.
-    """
+    
     name::Symbol
-    """
-    An optional description for the system.
-    """
+    
     description::String
-    """
-    Default values that variables (unknowns/observables/parameters) should take when
-    constructing a numerical problem from the system. These values can be overridden
-    by initial values provided to the problem constructor. Defaults of parent systems
-    take priority over those in child systems.
-    """
+    
     defaults::SymmapT
-    """
-    Guess values for variables of a system that are solved for during initialization.
-    """
+    
     guesses::SymmapT
-    """
-    A list of subsystems of this system. Used for hierarchically building models.
-    """
+    
     systems::Vector{System}
-    """
-    Equations that must be satisfied during initialization of the numerical problem created
-    from this system. For time-dependent systems, these equations are not valid after the
-    initial time.
-    """
+    
     initialization_eqs::Vector{Equation}
-    """
-    Symbolic representation of continuous events in a dynamical system. See
-    [`SymbolicContinuousCallback`](@ref).
-    """
+    
     continuous_events::Vector{SymbolicContinuousCallback}
-    """
-    Symbolic representation of discrete events in a dynamica system. See
-    [`SymbolicDiscreteCallback`](@ref).
-    """
+    
     discrete_events::Vector{SymbolicDiscreteCallback}
-    """
-    $INTERNAL_FIELD_WARNING
-    If this system is a connector, the type of connector it is.
-    """
+    
     connector_type::Any
-    """
-    A map from expressions that must be through throughout the solution process to an
-    associated error message. By default these assertions cause the generated code to
-    output `NaN`s if violated, but can be made to error using `debug_system`.
-    """
+    
     assertions::Dict{SymbolicT, String}
-    """
-    The metadata associated with this system, as a `Base.ImmutableDict`. This follows
-    the same interface as SymbolicUtils.jl. Metadata can be queried and updated using
-    `SymbolicUtils.getmetadata` and `SymbolicUtils.setmetadata` respectively.
-    """
+    
     metadata::MetadataT
-    """
-    $INTERNAL_FIELD_WARNING
-    Metadata added by the `@mtkmodel` macro.
-    """
+    
     gui_metadata::Any
-    """
-    Whether the system contains delay terms. This is inferred from the equations, but
-    can also be provided explicitly.
-    """
+    
     is_dde::Bool
-    """
-    Extra time points for the integrator to stop at. These can be numeric values,
-    or expressions of parameters and time.
-    """
+    
     tstops::Vector{Any}
-    """
-    $INTERNAL_FIELD_WARNING
-    The list of input variables of the system.
-    """
+    
     inputs::OrderedSet{SymbolicT}
-    """
-    $INTERNAL_FIELD_WARNING
-    The list of output variables of the system.
-    """
+    
     outputs::OrderedSet{SymbolicT}
-    """
-    The `TearingState` of the system post-simplification with `mtkcompile`.
-    """
+    
     tearing_state::Any
-    """
-    Whether the system namespaces variables accessed via `getproperty`. `complete`d systems
-    do not namespace, but this flag can be toggled independently of `complete` using
-    `toggle_namespacing`.
-    """
+    
     namespacing::Bool
-    """
-    Whether the system is marked as "complete". Completed systems cannot be used as
-    subsystems.
-    """
+    
     complete::Bool
-    """
-    $INTERNAL_FIELD_WARNING
-    For systems simplified or completed with `split = true` (the default) this contains an
-    `IndexCache` which aids in symbolic indexing. If this field is `nothing`, the system is
-    either not completed, or completed with `split = false`.
-    """
+    
     index_cache::Union{Nothing, IndexCache}
-    """
-    $INTERNAL_FIELD_WARNING
-    Connections that should be ignored because they were removed by an analysis point
-    transformation. The first element of the tuple contains all such "standard" connections
-    (ones between connector systems) and the second contains all such causal variable
-    connections.
-    """
+    
     ignored_connections::Union{Nothing, Vector{Connection}}
-    """
-    `SymbolicUtils.Code.Assignment`s to prepend to all code generated from this system.
-    """
+    
     preface::Any
-    """
-    After simplification with `mtkcompile`, this field contains the unsimplified system
-    with the hierarchical structure. There may be multiple levels of `parent`s. The root
-    parent is used for accessing variables via `getproperty` syntax.
-    """
+    
     parent::Union{Nothing, System}
-    """
-    A custom initialization system to use if no initial conditions are provided for the
-    unknowns or observables of this system.
-    """
+    
     initializesystem::Union{Nothing, System}
-    """
-    Whether the current system is an initialization system.
-    """
+    
     is_initializesystem::Bool
     is_discrete::Bool
-    """
-    $INTERNAL_FIELD_WARNING
-    Whether the system has been simplified by `mtkcompile`.
-    """
+    
     isscheduled::Bool
-    """
-    $INTERNAL_FIELD_WARNING
-    The `Schedule` containing additional information about the simplified system.
-    """
+    
     schedule::Union{Schedule, Nothing}
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -253,31 +98,9 @@ struct System <: IntermediateDeprecationSystem
             is_initializesystem = false, is_discrete = false, isscheduled = false,
             schedule = nothing; checks::Union{Bool, Int} = true)
         if is_initializesystem && iv !== nothing
-            throw(ArgumentError("""
-            Expected initialization system to be time-independent. Found independent
-            variable $iv.
-            """))
+            throw(ArgumentError())
         end
         @assert iv === nothing || symtype(iv) === Real
-        if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
-            check_independent_variables((iv,))
-            check_variables(unknowns, iv)
-            check_parameters(ps, iv)
-            check_equations(eqs, iv)
-            Neq = length(eqs)
-            if noise_eqs isa Matrix{SymbolicT}
-                N1 = size(noise_eqs, 1)
-            elseif noise_eqs isa Vector{SymbolicT}
-                N1 = length(noise_eqs)
-            elseif noise_eqs === nothing
-                N1 = Neq
-            else
-                error()
-            end
-            N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
-            check_equations(equations(continuous_events), iv)
-            check_subsystems(systems)
-        end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
             observed, parameter_dependencies, var_to_name, name, description, defaults,
@@ -312,7 +135,7 @@ function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     end
     return result
 end
-""""""
+
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
@@ -434,17 +257,13 @@ end
     throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
 end
 @noinline function warn_pdeps()
-    @warn """
-    The `parameter_dependencies` keyword argument is deprecated. Please provide all
-    such equations as part of the normal equations of the system.
-    """
 end
 SymbolicIndexingInterface.getname(x::System) = nameof(x)
-""""""
+
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     System(eqs, nothing, dvs, ps; kwargs...)
 end
-""""""
+
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
     diffvars = OrderedSet{SymbolicT}()
@@ -462,10 +281,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             var, _ = var_from_nested_derivative(eq.lhs)
             if var in diffvars
-                throw(ArgumentError("""
-                    The differential variable $var is not unique in the system of \
-                    equations.
-                """))
+                throw(ArgumentError())
             end
             if var in othervars
                 push!(diffvars, var)
@@ -519,7 +335,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     return System(
         eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
-""""""
+
 function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
     allunknowns = OrderedSet{SymbolicT}()
@@ -544,7 +360,7 @@ function System(eqs::Vector{Equation}; kwargs...)
     new_ps = gather_array_params(ps)
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
 end
-""""""
+
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 function gather_array_params(ps)
     new_ps = OrderedSet()
@@ -567,7 +383,7 @@ function gather_array_params(ps)
     end
     return new_ps
 end
-""""""
+
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
@@ -582,7 +398,7 @@ function process_constraint_system(
     end
     return constraintsts, constraintps
 end
-""""""
+
 function process_costs(costs::Vector, sts, ps, iv)
     coststs = OrderedSet{SymbolicT}()
     costps = OrderedSet{SymbolicT}()
@@ -592,7 +408,7 @@ function process_costs(costs::Vector, sts, ps, iv)
     validate_vars_and_find_ps!(coststs, costps, sts, iv)
     coststs, costps
 end
-""""""
+
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
     sts = sysvars
     for var in auxvars
@@ -617,12 +433,12 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         end
     end
 end
-""""""
+
 function is_discrete_system(sys::System)
     get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
-""""""
+
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 _check_if_dde(eqs::Vector{Equation}, iv::Nothing, subsystems::Vector{System}) = false
 function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{System})
@@ -634,7 +450,7 @@ function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{
     end
     return false
 end
-""""""
+
 function flatten(sys::System, noeqs = false)
     systems = get_systems(sys)
     isempty(systems) && return sys
@@ -695,12 +511,12 @@ function ignored_connections_equal(sys1::System, sys2::System)
     end
     return _eq_unordered(ic1[1], ic2[1]) && _eq_unordered(ic1[2], ic2[2])
 end
-""""""
+
 function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
-""""""
+
 function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
@@ -710,13 +526,13 @@ function SymbolicUtils.hasmetadata(sys::AbstractSystem, k::DataType)
     meta = get_metadata(sys)
     haskey(meta, k)
 end
-""""""
+
 struct ProblemTypeCtx end
-""""""
+
 function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
-""""""
+
 function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
@@ -740,37 +556,37 @@ function NonlinearSystem(sys::System)
     end
     return nsys
 end
-""""""
+
 function OptimizationSystem(cost; kwargs...)
     return System(Equation[]; costs = [cost], kwargs...)
 end
-""""""
+
 function OptimizationSystem(cost, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
 end
-""""""
+
 function OptimizationSystem(cost::Array; kwargs...)
     return System(Equation[]; costs = vec(cost), kwargs...)
 end
-""""""
+
 function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
 end
-""""""
+
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv; jumps, kwargs...)
 end
-""""""
+
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
-""""""
+
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
@@ -782,7 +598,7 @@ function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
     sys = System(eqs, iv; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-""""""
+
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
@@ -795,7 +611,7 @@ function SDESystem(
     sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-""""""
+
 function SDESystem(sys::System, noise; kwargs...)
     SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
 end
@@ -803,26 +619,17 @@ struct SystemNotCompleteError <: Exception
     obj::Any
 end
 function Base.showerror(io::IO, err::SystemNotCompleteError)
-    print(io, """
-    A completed system is required. Call `complete` or `mtkcompile` on the \
-    system before creating a `$(err.obj)`.
-    """)
+    print(io, )
 end
 struct IllFormedNoiseEquationsError <: Exception
     noise_eqs_rows::Int
     eqs_length::Int
 end
 function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
-    print(io, """
-    Noise equations are ill-formed. The number of rows must match the number of drift \
-    equations. `size(neqs, 1) == $(err.noise_eqs_rows) != length(eqs) == \
-    $(err.eqs_length)`.
-    """)
+    print(io, )
 end
 function NoNameError()
-    ArgumentError("""
-    The `name` keyword must be provided. Please consider using the `@named` macro.
-    """)
+    ArgumentError()
 end
 struct NonUniqueSubsystemsError <: Exception
     names::Vector{Symbol}
@@ -847,16 +654,7 @@ struct EventsInTimeIndependentSystemError <: Exception
 end
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
     println(
-        io, """
-Events are not supported in time-independent systems. Provide an independent variable to \
-make the system time-dependent or remove the events.
-
-The following continuous events were provided:
-$(err.cevents)
-
-The following discrete events were provided:
-$(err.devents)
-""")
+        io, )
 end
 function supports_initialization(sys::System)
     return isempty(jumps(sys)) && _iszero(cost(sys)) &&
@@ -868,7 +666,7 @@ safe_issetequal(::Nothing, ::Nothing) = true
 safe_issetequal(::Nothing, x) = false
 safe_issetequal(x, ::Nothing) = false
 safe_issetequal(x, y) = issetequal(x, y)
-""""""
+
 function Base.isapprox(sysa::System, sysb::System)
     sysa === sysb && return true
     return nameof(sysa) == nameof(sysb) &&

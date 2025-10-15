@@ -1,59 +1,3 @@
-
-const NOTHING_EQ = nothing ~ nothing
-function pantelides_reassemble(state::TearingState, var_eq_matching)
-    fullvars = state.fullvars
-    @unpack var_to_diff, eq_to_diff = state.structure
-    sys = state.sys
-    in_eqs = equations(sys)
-    out_eqs = Vector{Equation}(undef, nv(eq_to_diff))
-    fill!(out_eqs, NOTHING_EQ)
-    out_eqs[1:length(in_eqs)] .= in_eqs
-    out_vars = Vector{SymbolicT}(undef, nv(var_to_diff))
-    fill!(out_vars, ModelingToolkit.COMMON_NOTHING)
-    out_vars[1:length(fullvars)] .= fullvars
-    iv = get_iv(sys)
-    D = Differential(iv)
-    for (varidx, diff) in edges(var_to_diff)
-        vi = out_vars[varidx]
-        @assert vi!==ModelingToolkit.COMMON_NOTHING "Something went wrong on reconstructing unknowns from variable association list"
-        if isdifferential(vi)
-            vi = out_vars[varidx] = diff2term_with_unit(vi, iv)
-        end
-        out_vars[diff] = D(vi)
-    end
-    d_dict = Dict{SymbolicT, Int}(zip(fullvars, 1:length(fullvars)))
-    for (eqidx, diff) in edges(eq_to_diff)
-        eq = out_eqs[eqidx]
-        lhs = if SU.isconst(eq.lhs)
-            Symbolics.COMMON_ZERO
-        elseif isdiffeq(eq)
-            lhsarg1 = arguments(eq.lhs)[1]
-            @assert !(lhsarg1 isa Differential) "The equation $eq is not first order"
-            i = get(d_dict, lhsarg1, nothing)
-            if i === nothing
-                D(eq.lhs)
-            else
-                lhs = ModelingToolkit.COMMON_NOTHING
-            end
-        else
-            D(eq.lhs)
-        end
-        rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
-        rhs = substitute(rhs, state.param_derivative_map)
-        substitution_dict = Dict(x.lhs => x.rhs
-        for x in out_eqs if x !== NOTHING_EQ && !SU.isconst(eq.lhs))
-        sub_rhs = substitute(rhs, substitution_dict)
-        out_eqs[diff] = lhs ~ sub_rhs
-    end
-    final_vars = unique(filter(x -> !(operation(x) isa Differential), fullvars))
-    final_eqs = map(identity,
-        filter(x -> x.lhs !== ModelingToolkit.COMMON_NOTHING,
-            out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
-    @set! sys.eqs = final_eqs
-    @set! sys.unknowns = final_vars
-    return sys
-end
-""""""
 function computed_highest_diff_variables(structure)
     @unpack graph, var_to_diff = structure
     nvars = length(var_to_diff)
@@ -144,10 +88,4 @@ function pantelides!(
         var_eq_matching[var] = unassigned
     end
     return var_eq_matching
-end
-""""""
-function dae_index_lowering(sys::System; kwargs...)
-    state = TearingState(sys)
-    var_eq_matching = pantelides!(state; finalize = false, kwargs...)
-    return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))
 end

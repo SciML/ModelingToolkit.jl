@@ -100,9 +100,9 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
     affect = substitute(affect, subs)
     alg_eqs = substitute(alg_eqs, subs)
-    @named affectsys = System(
+    affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
-        collect(union(pre_params, sys_params)); is_discrete = true)
+        collect(union(pre_params, sys_params)); is_discrete = true, name = :affectsys)
     affectsys = mtkcompile(affectsys; fully_determined = nothing)
     accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)

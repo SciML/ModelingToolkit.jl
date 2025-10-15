@@ -803,23 +803,6 @@ function Base.copy(ms::MatchedSystemStructure)
     MatchedSystemStructure(Base.copy(ms.structure), Base.copy(ms.var_eq_matching))
 end
 function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
-    s = ms.structure
-    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
-    print(io, "Matched SystemStructure with ", length(graph.fadjlist), " equations and ",
-        isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
-        " variables\n")
-    Base.print_matrix(io, SystemStructurePrintMatrix(ms))
-    printstyled(io, "\n\nLegend: ")
-    printstyled(io, "Solvable")
-    print(io, " | ")
-    printstyled(io, "(Solvable + Matched)", color = :light_yellow)
-    print(io, " | ")
-    printstyled(io, "Unsolvable", color = :light_black)
-    print(io, " | ")
-    printstyled(io, "(Unsolvable + Matched)", color = :magenta)
-    print(io, " | ")
-    printstyled(io, " ∫", color = :cyan)
-    printstyled(io, " SelectedState")
 end
 function make_eqs_zero_equals!(ts::TearingState)
     neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
@@ -865,11 +848,7 @@ function _mtkcompile!(state::TearingState; simplify = false,
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
-    if mm isa SparseMatrixCLIL{BigInt, Int}
-        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, simplify, kwargs...)
-    else
-        sys =_mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, simplify, kwargs...)
-    end
+    sys =_mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, simplify, kwargs...)
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
     ModelingToolkit.invalidate_cache!(sys)
@@ -877,35 +856,7 @@ end
 function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
                              fully_determined::Bool, dummy_derivative::Bool, simplify::Bool,
                              kwargs...) where {S, T}
-    if fully_determined && dummy_derivative
-        sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
-    elseif fully_determined
-        var_eq_matching = pantelides!(state; finalize = false, kwargs...)
-        sys = pantelides_reassemble(state, var_eq_matching)
-        state = TearingState(sys)
-        sys, mm::SparseMatrixCLIL{T, Int} = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
-        sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
-    else
-        sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
-    end
+    sys = ModelingToolkit.dummy_derivative(
+        sys, state; simplify, mm, check_consistency, kwargs...)
     return sys
-end
-struct DifferentiatedVariableNotUnknownError <: Exception
-    differentiated::Any
-    undifferentiated::Any
-end
-function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
-    undiff = err.undifferentiated
-    diff = err.differentiated
-    print(io,
-        "Variable $undiff occurs differentiated as $diff but is not an unknown of the system.")
-    scope = getmetadata(undiff, SymScope, LocalScope())
-    depth = expected_scope_depth(scope)
-    if depth > 0
-        print(io,
-            "\nVariable $undiff expects $depth more levels in the hierarchy to be an unknown.")
-    end
 end

@@ -552,33 +552,6 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
     end
     return result
 end
-function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
-    idx = 0
-    if ind.portion isa SciMLStructures.Tunable
-        return idx + 1
-    elseif ic.tunable_buffer_size.length > 0
-        idx += 1
-    end
-    if ind.portion isa SciMLStructures.Initials
-        return idx + 1
-    elseif ic.initials_buffer_size.length > 0
-        idx += 1
-    end
-    if ind.portion isa SciMLStructures.Discrete
-        return idx + ind.idx[1]
-    elseif !isempty(ic.discrete_buffer_sizes)
-        idx += length(ic.discrete_buffer_sizes)
-    end
-    if ind.portion isa SciMLStructures.Constants
-        return idx + ind.idx[1]
-    elseif !isempty(ic.constant_buffer_sizes)
-        idx += length(ic.constant_buffer_sizes)
-    end
-    if ind.portion == NONNUMERIC_PORTION
-        return idx + ind.idx[1]
-    end
-    error("Unhandled portion $(ind.portion)")
-end
 function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
     (; portion, idx) = pidx
     if portion isa SciMLStructures.Tunable
@@ -598,62 +571,3 @@ end
 fntype_to_function_type(::Type{FnType{A, R, T}}) where {A, R, T} = T
 fntype_to_function_type(::Type{FnType{A, R, Nothing}}) where {A, R} = FunctionWrapper{R, A}
 fntype_to_function_type(::Type{FnType{A, R}}) where {A, R} = FunctionWrapper{R, A}
-""""""
-function reorder_dimension_by_tunables!(
-        dest::AbstractArray, sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
-    if !iscomplete(sys)
-        throw(ArgumentError("A completed system is required. Call `complete` or `mtkcompile` on the system."))
-    end
-    if !has_index_cache(sys) || (ic = get_index_cache(sys)) === nothing
-        throw(ArgumentError("The system does not have an index cache. Call `complete` or `mtkcompile` on the system with `split = true`."))
-    end
-    if size(dest) != size(arr)
-        throw(ArgumentError("Source and destination arrays must have the same size. Got source array with size $(size(arr)) and destination with size $(size(dest))."))
-    end
-    dsti = 1
-    for sym in syms
-        idx = parameter_index(ic, sym)
-        if !(idx.portion isa SciMLStructures.Tunable)
-            throw(ArgumentError("`syms` must be a permutation of `tunable_parameters(sys)`. Found $sym which is not a tunable parameter."))
-        end
-        dstidx = ntuple(
-            i -> i == dim ? (dsti:(dsti + length(sym) - 1)) : (:), Val(ndims(arr)))
-        destv = @view dest[dstidx...]
-        dsti += length(sym)
-        arridx = ntuple(i -> i == dim ? (idx.idx) : (:), Val(ndims(arr)))
-        srcv = @view arr[arridx...]
-        copyto!(destv, srcv)
-    end
-    return dest
-end
-""""""
-function reorder_dimension_by_tunables(
-        sys::AbstractSystem, arr::AbstractArray, syms; dim = 1)
-    buffer = similar(arr)
-    reorder_dimension_by_tunables!(buffer, sys, arr, syms; dim)
-    return buffer
-end
-function subset_unknowns_observed(
-        ic::IndexCache, sys::AbstractSystem, newunknowns, newobsvars)
-    unknown_idx = copy(ic.unknown_idx)
-    empty!(unknown_idx)
-    for (i, sym) in enumerate(newunknowns)
-        ttsym = default_toterm(sym)
-        rsym = renamespace(sys, sym)
-        rttsym = renamespace(sys, ttsym)
-        unknown_idx[sym] = unknown_idx[ttsym] = unknown_idx[rsym] = unknown_idx[rttsym] = i
-    end
-    observed_syms_to_timeseries = copy(ic.observed_syms_to_timeseries)
-    empty!(observed_syms_to_timeseries)
-    for sym in newobsvars
-        ttsym = default_toterm(sym)
-        rsym = renamespace(sys, sym)
-        rttsym = renamespace(sys, ttsym)
-        for s in (sym, ttsym, rsym, rttsym)
-            observed_syms_to_timeseries[s] = ic.observed_syms_to_timeseries[sym]
-        end
-    end
-    ic = @set ic.unknown_idx = unknown_idx
-    @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
-    return ic
-end

@@ -1,72 +1,4 @@
-""""""
-function union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-    isnothing(x) && return y
-    isnothing(y) && return x
-    return union(x, y)
-end
 get_iv(D::Differential) = D.x
-""""""
-function detime_dvs(op)
-    if !iscall(op)
-        op
-    elseif issym(operation(op))
-        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
-    else
-        maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
-            metadata(op))
-    end
-end
-""""""
-function retime_dvs(op, dvs, iv)
-    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
-    iscall(op) ?
-    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
-        metadata(op)) :
-    op
-end
-function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
-    get_variables!(munknowns, e.lhs, unknownlist)
-end
-function todict(d)
-    eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
-    d isa Dict ? d : Dict(d)
-end
-function _readable_code(ex)
-    ex isa Expr || return ex
-    if ex.head === :call
-        f, args = ex.args[1], ex.args[2:end]
-        if f isa Function && (nf = nameof(f); Base.isoperator(nf))
-            expr = Expr(:call, nf)
-            for a in args
-                push!(expr.args, _readable_code(a))
-            end
-            return expr
-        end
-    end
-    expr = Expr(ex.head)
-    for a in ex.args
-        push!(expr.args, _readable_code(a))
-    end
-    expr
-end
-function rec_remove_macro_linenums!(expr)
-    if expr isa Expr
-        if expr.head === :macrocall
-            expr.args[2] = nothing
-            rec_remove_macro_linenums!(expr.args[3])
-        else
-            for ex in expr.args
-                rec_remove_macro_linenums!(ex)
-            end
-        end
-    end
-    expr
-end
-function readable_code(expr)
-    expr = Base.remove_linenums!(_readable_code(expr))
-    rec_remove_macro_linenums!(expr)
-    return string(expr)
-end
 """"""
 const CheckNone = 0
 """"""
@@ -396,11 +328,6 @@ struct ContinuousOperatorDiscreteArgumentError <: Exception
     context::Any
 end
 function Base.showerror(io::IO, err::ContinuousOperatorDiscreteArgumentError)
-    print(io, """
-    Operator $(err.op) expects continuous arguments, with a `symtype` such as `Number`,
-    `Real`, `Complex` or a subtype of `AbstractFloat`. Found $(err.arg) with a symtype of
-    $(symtype(err.arg))$(err.context === nothing ? "." : "in $(err.context).")
-    """)
 end
 struct OperatorIndepvarMismatchError <: Exception
     op::Any
@@ -408,14 +335,6 @@ struct OperatorIndepvarMismatchError <: Exception
     context::Any
 end
 function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
-    print(io, """
-    Encountered operator `$(err.op)` which has different independent variable than the \
-    one used in the system `$(err.iv)`.
-    """)
-    if err.context !== nothing
-        println(io)
-        print(io, "Context:\n$(err.context)")
-    end
 end
 struct OnlyOperatorIsAtomic{O} end
 function (::OnlyOperatorIsAtomic{O})(ex::SymbolicT) where {O}
@@ -529,48 +448,6 @@ end
 @noinline function throw_missingvars_in_sys(vars)
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
-function promote_to_concrete(vs; tofloat = true, use_union = true)
-    if isempty(vs)
-        return vs
-    end
-    if vs isa Tuple
-        tofloat = false
-        use_union = true
-        vs = Any[vs...]
-    end
-    T = eltype(vs)
-    Base.isconcretetype(T) && !tofloat && return vs
-    sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.iscall(x), vs)
-    isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
-    C = nothing
-    for v in vs
-        E = typeof(v)
-        if E <: Number
-            if tofloat
-                E = float(E)
-            end
-        end
-        if C === nothing
-            C = E
-        end
-        if use_union
-            C = Union{C, E}
-        else
-            C2 = promote_type(C, E)
-            @assert C2 == E||C2 == C "`promote_to_concrete` can't make type $E uniform with $C"
-            C = C2
-        end
-    end
-    y = similar(vs, C)
-    for i in eachindex(vs)
-        if (vs[i] isa Number) & tofloat
-            y[i] = float(vs[i])
-        else
-            y[i] = vs[i]
-        end
-    end
-    return y
-end
 function _with_unit(f, x, t, args...)
     x = f(x, args...)
     if hasmetadata(x, VariableUnit) && (t isa SymbolicT && hasmetadata(t, VariableUnit))
@@ -595,131 +472,12 @@ function is_floatingpoint_symtype(T)
     return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
            T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
-""""""
-function is_variable_numeric(sym)
-    sym = unwrap(sym)
-    T = symtype(sym)
-    is_numeric_symtype(T)
-end
-""""""
-function is_numeric_symtype(T::Type)
-    return T <: Number || T <: AbstractArray && is_numeric_symtype(eltype(T))
-end
-""""""
-function observed_dependency_graph(eqs::Vector{Equation})
-    for eq in eqs
-        if symbolic_type(eq.lhs) == NotSymbolic()
-            error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
-        end
-    end
-    graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
-    matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
-    return DiCMOBiGraph{false}(graph, matching)
-end
 abstract type ObservedGraphCacheKey end
 struct ObservedGraphCache
     graph::DiCMOBiGraph{false, Int, BipartiteGraph{Int, Nothing},
         Matching{Unassigned, Vector{Union{Unassigned, Int}}}}
     obsvar_to_idx::Dict{Any, Int}
 end
-""""""
-function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = nothing, obs = observed(sys), available_vars = Set{SymbolicT}())
-    if involved_vars === nothing
-        involved_vars = Set{SymbolicT}()
-        SU.search_variables!(involved_vars, exprs; is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial}}())
-    elseif !(involved_vars isa Set{SymbolicT})
-        involved_vars = Set{SymbolicT}(involved_vars)
-    end
-    if !(available_vars isa Set)
-        available_vars = Set(available_vars)
-    end
-    if iscomplete(sys) && obs == observed(sys)
-        cache = getmetadata(sys, MutableCacheKey, nothing)
-        obs_graph_cache = get!(cache, ObservedGraphCacheKey) do
-            obsvar_to_idx = Dict{Any, Int}([eq.lhs => i for (i, eq) in enumerate(obs)])
-            graph = observed_dependency_graph(obs)
-            return ObservedGraphCache(graph, obsvar_to_idx)
-        end
-        @unpack obsvar_to_idx, graph = obs_graph_cache
-    else
-        obsvar_to_idx = Dict([eq.lhs => i for (i, eq) in enumerate(obs)])
-        graph = observed_dependency_graph(obs)
-    end
-    obsidxs = BitSet()
-    for sym in involved_vars
-        sym in available_vars && continue
-        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
-        idx = @something(get(obsvar_to_idx, sym, nothing),
-            get(obsvar_to_idx, arrsym, nothing),
-            Some(nothing))
-        idx === nothing && continue
-        idx in obsidxs && continue
-        parents = dfs_parents(graph, idx)
-        for i in eachindex(parents)
-            parents[i] == 0 && continue
-            push!(obsidxs, i)
-        end
-    end
-    obsidxs = collect(obsidxs)
-    sort!(obsidxs)
-    return obsidxs
-end
-""""""
-function subexpressions_not_involving_vars(expr, vars)
-    expr = unwrap(expr)
-    vars = map(unwrap, vars)
-    state = Dict()
-    newexpr = subexpressions_not_involving_vars!(expr, vars, state)
-    return state, newexpr
-end
-""""""
-function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
-    expr = unwrap(expr)
-    if symbolic_type(expr) == NotSymbolic()
-        if is_array_of_symbolics(expr)
-            return map(expr) do el
-                subexpressions_not_involving_vars!(el, vars, state)
-            end
-        end
-        return expr
-    end
-    any(isequal(expr), vars) && return expr
-    iscall(expr) || return expr
-    symbolic_has_known_size(expr) || return expr
-    haskey(state, expr) && return state[expr]
-    op = operation(expr)
-    args = arguments(expr)
-    if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
-       (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
-        sym = gensym(:subexpr)
-        var = similar_variable(expr, sym)
-        state[expr] = var
-        return var
-    end
-    if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
-        indep_args = SymbolicT[]
-        dep_args = SymbolicT[]
-        for arg in args
-            _vs = SU.search_variables(arg)
-            intersect!(_vs, vars)
-            if !isempty(_vs)
-                push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
-            else
-                push!(indep_args, arg)
-            end
-        end
-        indep_term = reduce(op, indep_args; init = Int(op == (*)))
-        indep_term = subexpressions_not_involving_vars!(indep_term, vars, state)
-        dep_term = reduce(op, dep_args; init = Int(op == (*)))
-        return op(indep_term, dep_term)
-    end
-    newargs = map(args) do arg
-        subexpressions_not_involving_vars!(arg, vars, state)
-    end
-    return maketerm(typeof(expr), op, newargs, metadata(expr))
-end
-""""""
 function similar_variable(var::BasicSymbolic, name = :anon; use_gensym = true)
     if use_gensym
         name = gensym(name)
@@ -730,26 +488,6 @@ function similar_variable(var::BasicSymbolic, name = :anon; use_gensym = true)
         sym = setmetadata(sym, Symbolics.ArrayShapeCtx, map(Base.OneTo, size(var)))
     end
     return sym
-end
-""""""
-function symbol_to_symbolic(sys::AbstractSystem, sym; allsyms = all_symbols(sys))
-    sym isa Symbol || return sym
-    idx = findfirst(x -> (hasname(x) ? getname(x) : Symbol(x)) == sym, allsyms)
-    idx === nothing && return sym
-    sym = allsyms[idx]
-    if iscall(sym) && operation(sym) == getindex
-        sym = arguments(sym)[1]
-    end
-    return sym
-end
-""""""
-function var_in_varlist(var, varlist::AbstractSet, iv)
-    var = unwrap(var)
-    return var in varlist ||
-           (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
-           (symbolic_type(var) == ArraySymbolic() && symbolic_has_known_size(var) &&
-            all(x -> x in varlist, collect(var))) ||
-           (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end
 """"""
 function _eq_unordered(a::AbstractArray, b::AbstractArray)
@@ -791,37 +529,4 @@ function Base.showerror(io::IO, ::NotPossibleError)
     print(io, """
     This should not be possible. Please open an issue in ModelingToolkit.jl with an MWE.
     """)
-end
-""""""
-function underscore_to_D(v::AbstractVector, sys)
-    maps = isscheduled(sys) ? get_schedule(sys).dummy_sub : Dict()
-    inv_maps = Dict{valtype(maps), Vector{Base.keytype(maps)}}()
-    for (k, v) in maps
-        push!(get!(() -> valtype(inv_maps)[], inv_maps, v), k)
-    end
-    iv = get_iv(sys)
-    map(x -> underscore_to_D(x, iv, inv_maps), v)
-end
-function underscore_to_D(v, iv, inv_map)
-    if haskey(inv_map, v)
-        only(get(inv_map, v, [v]))
-    else
-        v = ModelingToolkit.detime_dvs(v)
-        s = split(string(getname(v)), 'ˍ')
-        if length(s) > 1
-            n, suffix = s
-        else
-            n, suffix = first(s), ""
-        end
-        repeats = length(suffix) ÷ length(string(iv))
-        D = Differential(iv)
-        wrap_with_D(v, D, repeats)
-    end
-end
-function wrap_with_D(n, D, repeats)
-    if repeats <= 0
-        return n
-    else
-        wrap_with_D(D(n), D, repeats - 1)
-    end
 end
