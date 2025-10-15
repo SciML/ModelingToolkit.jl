@@ -1181,8 +1181,12 @@ function maybe_build_initialization_problem(
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        initializeprobmap = u0_constructor ∘ safe_float ∘
-                            getu(initializeprob, solved_unknowns)
+        if isempty(solved_unknowns)
+            initializeprobmap = Returns(nothing)
+        else
+            initializeprobmap = u0_constructor ∘ safe_float ∘
+                                getu(initializeprob, solved_unknowns)
+        end
     else
         initializeprobmap = nothing
     end
