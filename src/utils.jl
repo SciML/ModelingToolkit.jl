@@ -401,7 +401,6 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
     if Symbolics.iswrapped(var)
         error("""
         Internal Error. Please open an issue with an MWE.
-
         Encountered a wrapped value in `collect_var!`. This function should only ever \
         receive unwrapped symbolic variables. This is likely a bug in the code generating \
         an expression passed to `collect_vars!` or `collect_scoped_vars!`. A common cause \

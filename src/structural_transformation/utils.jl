@@ -1,4 +1,3 @@
-
 """"""
 function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
         varfilter = v -> true)

@@ -1,181 +1,66 @@
-using DataStructures
-using Symbolics: linear_expansion, unwrap
-using SymbolicUtils: iscall, operation, arguments
-using SymbolicUtils: quick_cancel, maketerm
-using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-                          value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, Connection, SymbolicT
-                          independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible, input_timedomain, TimeDomain,
-                          InferredTimeDomain,
-                          VariableType, getvariabletype, has_equations, System
-using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete
-using Graphs
-using UnPack
-using Setfield
-using SparseArrays
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
         similarterm = (x, f, args;
             kws...) -> maketerm(typeof(x), f, args,
-            SymbolicUtils.metadata(x),
             kws...))(expr)
 end
-export SystemStructure, TransformationState, TearingState, mtkcompile!
-export isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete
-export dervars_range, diffvars_range, algvars_range
-export DiffGraph, complete!
-export get_fullvars, system_subset
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
-DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
 function DiffGraph(n::Integer, with_badj::Bool = false)
     DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
         with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
 end
-function Base.copy(dg::DiffGraph)
-    DiffGraph(copy(dg.primal_to_diff),
-        dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
-end
-@noinline function require_complete(dg::DiffGraph)
-    dg.diff_to_primal === nothing &&
-        error("Not complete. Run `complete` first.")
-end
-Graphs.is_directed(dg::DiffGraph) = true
 function Graphs.edges(dg::DiffGraph)
     (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
 end
 Graphs.nv(dg::DiffGraph) = length(dg.primal_to_diff)
-Graphs.ne(dg::DiffGraph) = count(x -> x !== nothing, dg.primal_to_diff)
-Graphs.vertices(dg::DiffGraph) = Base.OneTo(nv(dg))
 function Graphs.outneighbors(dg::DiffGraph, var::Integer)
-    diff = dg.primal_to_diff[var]
-    return diff === nothing ? () : (diff,)
 end
-function Graphs.inneighbors(dg::DiffGraph, var::Integer)
-    require_complete(dg)
-    diff = dg.diff_to_primal[var]
-    return diff === nothing ? () : (diff,)
-end
-function Graphs.add_vertex!(dg::DiffGraph)
-    push!(dg.primal_to_diff, nothing)
-    if dg.diff_to_primal !== nothing
-        push!(dg.diff_to_primal, nothing)
-    end
-    return length(dg.primal_to_diff)
-end
-function Graphs.add_edge!(dg::DiffGraph, var::Integer, diff::Integer)
-    dg[var] = diff
-end
-Base.:(==)(dg::DiffGraph, v::AbstractVector) = dg.primal_to_diff == v
-Base.:(==)(dg::AbstractVector, v::DiffGraph) = v == dg.primal_to_diff
-Base.eltype(::DiffGraph) = Union{Int, Nothing}
-Base.size(dg::DiffGraph) = size(dg.primal_to_diff)
-Base.length(dg::DiffGraph) = length(dg.primal_to_diff)
 Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
-Base.getindex(dg::DiffGraph, a::AbstractArray) = [dg[x] for x in a]
 function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
     if dg.diff_to_primal !== nothing
-        old_pd = dg.primal_to_diff[var]
         if old_pd !== nothing
-            dg.diff_to_primal[old_pd] = nothing
-        end
-        if val !== nothing
-            dg.diff_to_primal[val] = var
         end
     end
-    return dg.primal_to_diff[var] = val
 end
-Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
 function complete(dg::DiffGraph)
-    dg.diff_to_primal !== nothing && return dg
     diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
     for (var, diff) in edges(dg)
-        diff_to_primal[diff] = var
     end
     return DiffGraph(dg.primal_to_diff, diff_to_primal)
 end
 function invview(dg::DiffGraph)
-    require_complete(dg)
-    return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
 struct DiffChainIterator{Descend}
-    var_to_diff::DiffGraph
-    v::Int
 end
 function Base.iterate(di::DiffChainIterator{Descend}, v = nothing) where {Descend}
     if v === nothing
-        vv = di.v
-        return (vv, vv)
     end
-    g = Descend ? invview(di.var_to_diff) : di.var_to_diff
-    v′ = g[v]
-    v′ === nothing ? nothing : (v′, v′)
 end
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 get_fullvars(ts::TransformationState) = ts.fullvars
-has_equations(::TransformationState) = true
 Base.@kwdef mutable struct SystemStructure
-    """Maps the index of variable x to the index of variable D(x)."""
     var_to_diff::DiffGraph
-    """Maps the index of an algebraic equation to the index of the equation it is differentiated into."""
     eq_to_diff::DiffGraph
-    """Graph that connects equations to variables that appear in them."""
     graph::BipartiteGraph{Int, Nothing}
-    """Graph that connects equations to the variable they will be solved for during simplification."""
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
-    """Variable types (brownian, variable, parameter) in the system."""
     var_types::Vector{VariableType}
-    """Whether the system is discrete."""
     only_discrete::Bool
 end
 function Base.copy(structure::SystemStructure)
-    var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
-        copy(structure.graph), copy(structure.solvable_graph),
         var_types, structure.only_discrete)
 end
-is_only_discrete(s::SystemStructure) = s.only_discrete
-isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
-function isalgvar(s::SystemStructure, i)
-    s.var_to_diff[i] === nothing &&
-        invview(s.var_to_diff)[i] === nothing
-end
-function isdiffvar(s::SystemStructure, i)
-    s.var_to_diff[i] !== nothing && invview(s.var_to_diff)[i] === nothing
-end
-function dervars_range(s::SystemStructure)
-    Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
-end
-function diffvars_range(s::SystemStructure)
-    Iterators.filter(Base.Fix1(isdiffvar, s), Base.OneTo(ndsts(s.graph)))
-end
-function algvars_range(s::SystemStructure)
-    Iterators.filter(Base.Fix1(isalgvar, s), Base.OneTo(ndsts(s.graph)))
-end
-function algeqs(s::SystemStructure)
-    BitSet(findall(map(1:nsrcs(s.graph)) do eq
-        all(v -> !isdervar(s, v), 𝑠neighbors(s.graph, eq))
-    end))
-end
 function complete!(s::SystemStructure)
-    s.var_to_diff = complete(s.var_to_diff)
-    s.eq_to_diff = complete(s.eq_to_diff)
-    s.graph = complete(s.graph)
     if s.solvable_graph !== nothing
-        s.solvable_graph = complete(s.solvable_graph)
     end
     s
 end
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
-    """The system of equations."""
     sys::T
-    """The set of variables of the system."""
     fullvars::Vector{SymbolicT}
     structure::SystemStructure
     extra_eqs::Vector{Equation}
@@ -183,67 +68,15 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     no_deriv_params::Set{SymbolicT}
     original_eqs::Vector{Equation}
     """
-    Additional user-provided observed equations. The variables calculated here
-    are not used in the rest of the system.
     """
     additional_observed::Vector{Equation}
     statemachines::Vector{T}
 end
-TransformationState(sys::AbstractSystem) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, ivars::Vector{Int})
-    eqs = equations(ts)
-    initeqs = initialization_equations(ts.sys)
-    @set! ts.sys.eqs = eqs[ieqs]
-    @set! ts.sys.initialization_eqs = initeqs[iieqs]
-    @set! ts.original_eqs = ts.original_eqs[ieqs]
-    @set! ts.structure = system_subset(ts.structure, ieqs, ivars)
-    if all(eq -> eq.rhs isa StateMachineOperator, get_eqs(ts.sys))
-        names = Symbol[]
-        for eq in get_eqs(ts.sys)
-            if eq.lhs isa Transition
-                push!(names, first(namespace_hierarchy(nameof(eq.rhs.from))))
-                push!(names, first(namespace_hierarchy(nameof(eq.rhs.to))))
-            elseif eq.lhs isa InitialState
-                push!(names, first(namespace_hierarchy(nameof(eq.rhs.s))))
-            else
-                error("Unhandled state machine operator")
-            end
-        end
-        @set! ts.statemachines = filter(x -> nameof(x) in names, ts.statemachines)
-    else
-        @set! ts.statemachines = eltype(ts.statemachines)[]
-    end
-    @set! ts.fullvars = ts.fullvars[ivars]
-    ts
 end
 function system_subset(structure::SystemStructure, ieqs::Vector{Int}, ivars::Vector{Int})
-    @unpack graph = structure
-    fadj = Vector{Int}[]
-    eq_to_diff = DiffGraph(length(ieqs))
-    var_to_diff = DiffGraph(length(ivars))
-    ne = 0
-    old_to_new_var = zeros(Int, ndsts(graph))
     for (i, iv) in enumerate(ivars)
-        old_to_new_var[iv] = i
     end
-    for (i, iv) in enumerate(ivars)
-        structure.var_to_diff[iv] === nothing && continue
-        var_to_diff[i] = old_to_new_var[structure.var_to_diff[iv]]
-    end
-    for (j, eq_i) in enumerate(ieqs)
-        var_adj = [old_to_new_var[i] for i in graph.fadjlist[eq_i]]
-        @assert all(!iszero, var_adj)
-        ne += length(var_adj)
-        push!(fadj, var_adj)
-        eq_to_diff[j] = structure.eq_to_diff[eq_i]
-    end
-    @set! structure.graph = complete(BipartiteGraph(ne, fadj, length(ivars)))
-    @set! structure.eq_to_diff = eq_to_diff
-    @set! structure.var_to_diff = complete(var_to_diff)
-    structure
-end
-function Base.show(io::IO, state::TearingState)
-    print(io, "TearingState of ", typeof(state.sys))
 end
 struct EquationsView{T} <: AbstractVector{Equation}
     ts::TearingState{T}
@@ -253,79 +86,40 @@ Base.size(ev::EquationsView) = (length(equations(ev.ts.sys)) + length(ev.ts.extr
 function Base.getindex(ev::EquationsView, i::Integer)
     eqs = equations(ev.ts.sys)
     if i > length(eqs)
-        return ev.ts.extra_eqs[i - length(eqs)]
     end
     return eqs[i]
 end
-function Base.push!(ev::EquationsView, eq)
-    push!(ev.ts.extra_eqs, eq)
-end
 function is_time_dependent_parameter(p, allps, iv)
-    return iv !== nothing && p in allps && iscall(p) &&
            (operation(p) === getindex &&
-            is_time_dependent_parameter(arguments(p)[1], allps, iv) ||
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
 end
 function symbolic_contains(var::SymbolicT, set::Set{SymbolicT})
-    var in set
 end
 function extract_top_level_statemachines(sys::System)
     return sys, System[]
 end
-""""""
 function remove_child_equations(sys::AbstractSystem)
-    @set! sys.eqs = Equation[]
-    @set! sys.systems = map(remove_child_equations, get_systems(sys))
-    return sys
 end
 function TearingState(sys; check = true, sort_eqs = true)
     sys = flatten(sys)
-    sys = process_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
     eqs = flatten_equations(equations(sys))
     original_eqs = copy(eqs)
-    neqs = length(eqs)
     param_derivative_map = Dict{SymbolicT, SymbolicT}()
     no_deriv_params = Set{SymbolicT}()
     fullvars = SymbolicT[]
-    dvs = Set{SymbolicT}()
-    collect_vars_to_set!(dvs, unknowns(sys))
-    ps = Set{SymbolicT}()
-    collect_vars_to_set!(ps, full_parameters(sys))
-    browns = Set{SymbolicT}()
-    collect_vars_to_set!(browns, brownians(sys))
     var2idx = Dict{SymbolicT, Int}()
     var_types = VariableType[]
-    addvar! = AddVar!(var2idx, dvs, fullvars, var_types)
     symbolic_incidence = Vector{SymbolicT}[]
     varsbuf = Set{SymbolicT}()
-    eqs_to_retain = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
-        eq, is_statemachine_equation = canonicalize_eq!(param_derivative_map, no_deriv_params, eqs_to_retain, ps, iv, i, eq)
-        empty!(varsbuf)
-        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{SU.Operator}())
         incidence = Set{SymbolicT}()
         isalgeq = true
         for v in varsbuf
-            if v in browns
-                addvar!(v, BROWNIAN)
-                push!(incidence, v)
-            end
-            if symbolic_contains(v, ps) ||
-               getmetadata(v, SymScope, LocalScope()) isa GlobalScope && isparameter(v)
-                if is_time_dependent_parameter(v, ps, iv) &&
-                   !haskey(param_derivative_map, Differential(iv)(v)) && !(Differential(iv)(v) in no_deriv_params)
-                    param_derivative_map[Differential(iv)(v)] = Symbolics.COMMON_ZERO
-                end
-                continue
-            end
-            isequal(v, iv) && continue
-            isdelay(v, iv) && continue
             if !symbolic_contains(v, dvs)
                 isvalid = Moshi.Match.@match v begin
                     BSImpl.Term(; f) => f isa Shift || f isa Operator && is_transparent_operator(f)::Bool
-                    _ => false
                 end
                 v′ = v
                 while !isvalid
@@ -333,86 +127,25 @@ function TearingState(sys; check = true, sort_eqs = true)
                         BSImpl.Term(; f, args) => begin
                             if f isa Differential
                                 v′ = args[1]
-                            elseif f isa Shift
-                                v′ = args[1]
-                            else
-                                break
                             end
                             if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
                                 isvalid = true
-                                break
                             end
                         end
-                        _ => break
                     end
                 end
                 if !isvalid
-                    throw(ArgumentError("$v is present in the system but $v′ is not an unknown."))
-                end
-                addvar!(v, VARIABLE)
-                Moshi.Match.@match v begin
-                    BSImpl.Term(; f, args) && if f isa SU.Operator &&
-                            !(f isa Differential) && (it = input_timedomain(v)::Vector{InputTimeDomainElT}) !== nothing
-                        end => begin
-                            for (v′, td) in zip(args, it)
-                                addvar!(setmetadata(v′, VariableTimeDomain, td), VARIABLE)
-                            end
-                    end
-                    _ => nothing
-                end
-            end
-            isalgeq &= !isdifferential(v)
-            sh = SU.shape(v)::SU.ShapeVecT
-            if isempty(sh)
-                push!(incidence, v)
-                addvar!(v, VARIABLE)
-            elseif length(sh) == 1
-                vv = collect(v)::Vector{SymbolicT}
-                union!(incidence, vv)
-                for vi in vv
-                    addvar!(vi, VARIABLE)
-                end
-            elseif length(sh) == 2
-                vv = collect(v)::Matrix{SymbolicT}
-                union!(incidence, vv)
-                for vi in vv
-                    addvar!(vi, VARIABLE)
-                end
-            else
-                vv = collect(v)
-                union!(incidence, vv)::Array{SymbolicT}
-                for vi in vv
-                    addvar!(vi, VARIABLE)
                 end
             end
         end
         if isalgeq || is_statemachine_equation
-            eqs[i] = eq
         end
         push!(symbolic_incidence, collect(incidence))
     end
-    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, param_derivative_map)
-    eqs = eqs[eqs_to_retain]
-    original_eqs = original_eqs[eqs_to_retain]
-    neqs = length(eqs)
-    symbolic_incidence = symbolic_incidence[eqs_to_retain]
-    if sort_eqs
-        sortidxs = Base.sortperm(string.(eqs))
-        eqs = eqs[sortidxs]
-        original_eqs = original_eqs[sortidxs]
-        symbolic_incidence = symbolic_incidence[sortidxs]
-    end
     dervaridxs = OrderedSet{Int}()
-    add_intermediate_derivatives!(fullvars, dervaridxs, addvar!)
-    add_intermediate_shifts!(fullvars, dervaridxs, var2idx, addvar!, iv)
-    dervaridxs = collect(dervaridxs)
-    fullvars, var_types = sort_fullvars(fullvars, dervaridxs, var_types, iv)
-    var2idx = Dict{SymbolicT, Int}(fullvars .=> eachindex(fullvars))
     ndervars = length(dervaridxs)
-    dervaridxs = nothing
     var_to_diff = build_var_to_diff(fullvars, ndervars, var2idx, iv)
     graph = build_incidence_graph(length(fullvars), symbolic_incidence, var2idx)
-    @set! sys.eqs = eqs
     eq_to_diff = DiffGraph(nsrcs(graph))
     return TearingState{typeof(sys)}(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
@@ -421,97 +154,46 @@ function TearingState(sys; check = true, sort_eqs = true)
 end
 function sort_fullvars(fullvars::Vector{SymbolicT}, dervaridxs::Vector{Int}, var_types::Vector{VariableType}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     if iv === nothing
-        return fullvars, var_types
     end
-    iv = iv::SymbolicT
-    sorted_fullvars = OrderedSet{SymbolicT}(fullvars[dervaridxs])
-    var_to_old_var = Dict{SymbolicT, SymbolicT}(zip(fullvars, fullvars))
     for dervaridx in dervaridxs
-        dervar = fullvars[dervaridx]
-        diffvar = var_to_old_var[lower_order_var(dervar, iv)]
         if !(diffvar in sorted_fullvars)
-            push!(sorted_fullvars, diffvar)
         end
-    end
-    for v in fullvars
         if !(v in sorted_fullvars)
-            push!(sorted_fullvars, v)
         end
     end
-    new_fullvars = collect(sorted_fullvars)
-    sortperm = indexin(new_fullvars, fullvars)
-    fullvars = new_fullvars
-    var_types = var_types[sortperm]
-    return fullvars, var_types
 end
 function build_var_to_diff(fullvars::Vector{SymbolicT}, ndervars::Int, var2idx::Dict{SymbolicT, Int}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     nvars = length(fullvars)
     var_to_diff = DiffGraph(nvars, true)
     if iv === nothing
-        return var_to_diff
     end
-    iv = iv::SymbolicT
     for dervaridx in 1:ndervars
-        dervar = fullvars[dervaridx]
-        diffvar = lower_order_var(dervar, iv)
-        diffvaridx = var2idx[diffvar]
-        var_to_diff[diffvaridx] = dervaridx
     end
     return var_to_diff
 end
 function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{SymbolicT}}, var2idx::Dict{SymbolicT, Int})
     neqs = length(symbolic_incidence)
     graph = BipartiteGraph(neqs, nvars, Val(false))
-    for (ie, vars) in enumerate(symbolic_incidence), v in vars
-        jv = var2idx[v]
-        add_edge!(graph, ie, jv)
-    end
-    return graph
 end
 function collect_vars_to_set!(buffer::Set{SymbolicT}, vars::Vector{SymbolicT})
     for x in vars
         push!(buffer, x)
         Moshi.Match.@match x begin
-            BSImpl.Term(; f, args) && if f === getindex end => push!(buffer, args[1])
             _ => nothing
-        end
-        sh = SU.shape(x)
-        sh isa SU.Unknown && continue
-        sh = sh::SU.ShapeVecT
-        isempty(sh) && continue
-        idxs = SU.stable_eachindex(x)
-        for i in idxs
-            push!(buffer, x[i])
         end
     end
 end
 function canonicalize_eq!(param_derivative_map::Dict{SymbolicT, SymbolicT}, no_deriv_params::Set{SymbolicT}, eqs_to_retain::BitVector, ps::Set{SymbolicT}, @nospecialize(iv::Union{Nothing, SymbolicT}), i::Int, eq::Equation)
-    is_statemachine_equation = false
-    lhs = eq.lhs
-    rhs = eq.rhs
     Moshi.Match.@match lhs begin
         BSImpl.Term(; f, args) && if f isa Differential && iv isa SymbolicT && isequal(f.x, iv) &&
                                      is_time_dependent_parameter(args[1], ps, iv)
                                  end => begin
             if eq.rhs !== COMMON_MISSING
-                param_derivative_map[lhs] = rhs
-                eq = Symbolics.COMMON_ZERO ~ rhs
-            else
-                eq = Symbolics.COMMON_ZERO ~ Symbolics.COMMON_ZERO
-                push!(no_deriv_params, lhs)
-                delete!(param_derivative_map, lhs)
             end
-            eqs_to_retain[i] = false
         end
-        BSImpl.Const(; val) && if val isa StateMachineOperator end => begin
-            is_statemachine_equation = true
-        end
-        BSImpl.Const(;) && if _iszero(lhs) end => nothing
         _ => begin
-            eq = Symbolics.COMMON_ZERO ~ (rhs - lhs)
         end
     end
-    return eq, is_statemachine_equation
 end
 struct AddVar!
     var2idx::Dict{SymbolicT, Int}
@@ -520,343 +202,101 @@ struct AddVar!
     var_types::Vector{VariableType}
 end
 function (avc::AddVar!)(var::SymbolicT, vtype::VariableType)
-    idx = get(avc.var2idx, var, nothing)
-    idx === nothing || return idx::Int
-    push!(avc.dvs, var)
-    push!(avc.fullvars, var)
-    push!(avc.var_types, vtype)
-    return avc.var2idx[var] = length(avc.fullvars)
 end
 function add_intermediate_derivatives!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, addvar!::AddVar!)
     for (i, v) in enumerate(fullvars)
         while true
             Moshi.Match.@match v begin
                 BSImpl.Term(; f, args) && if f isa Differential end => begin
-                    push!(dervaridxs, i)
-                    v = args[1]
-                    addvar!(v, VARIABLE)
                 end
-                _ => break
             end
         end
     end
 end
 function add_intermediate_shifts!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, var2idx::Dict{SymbolicT, Int}, addvar!::AddVar!, iv::Union{SymbolicT, Nothing})
-    lowest_shift = Dict{SymbolicT, Int}()
     for var in fullvars
         Moshi.Match.@match var begin
             BSImpl.Term(; f, args) && if f isa Shift end => begin
-                steps = f.steps
-                if steps > 0
-                    error("Only non-positive shifts allowed. Found $var with a shift of $steps")
-                end
-                v = args[1]
-                lowest_shift[v] = min(get(lowest_shift, v, 0), steps)
             end
-            _ => nothing
         end
     end
     for var in fullvars
-        lshift = typemax(Int)
-        steps = typemax(Int)
-        tt = iv
-        v = var
         Moshi.Match.@match var begin
             BSImpl.Term(; f, args) && if f isa Shift end => begin
-                steps = f.steps
-                v = args[1]
-                lshift = lowest_shift[v]
-                tt = f.t
             end
-            if haskey(lowest_shift, var) end => begin
-                lshift = lowest_shift[var]
-                steps = 0
-                tt = iv
-                v = var
-            end
-            _ => continue
         end
         if lshift < steps
-            push!(dervaridxs, var2idx[var])
-        end
-        for s in (steps - 1):-1:(lshift + 1)
-            sf = Shift(tt, s)
-            dvar = sf(v)
-            idx = addvar!(dvar, VARIABLE)
-            if !(idx in dervaridxs)
-                push!(dervaridxs, idx)
-            end
         end
     end
 end
-""""""
 function trivial_tearing!(ts::TearingState)
-    @assert length(ts.original_eqs) == length(equations(ts))
-    trivial_idxs = BitSet()
-    blacklist = BitSet()
-    torn_eqs = Equation[]
-    matched_vars = BitSet()
-    var_to_idx = Dict{Any, Int}(ts.fullvars .=> eachindex(ts.fullvars))
-    complete!(ts.structure)
-    var_to_diff = ts.structure.var_to_diff
-    graph = ts.structure.graph
     while true
-        added_equation = false
         for (i, eq) in enumerate(ts.original_eqs)
-            i in trivial_idxs && continue
-            i in blacklist && continue
-            vari = get(var_to_idx, eq.lhs, 0)
-            iszero(vari) && continue
             if isirreducible(eq.lhs)
-                push!(blacklist, i)
-                continue
             end
-            @assert !(vari in matched_vars)
-            var_to_diff[vari] === nothing || continue
-            invview(var_to_diff)[vari] === nothing || continue
-            eqidxs = setdiff(𝑑neighbors(graph, vari), trivial_idxs)
-            length(eqidxs) == 1 || continue
-            eqi = only(eqidxs)
-            @assert eqi == i
-            isvalid = true
-            for v in 𝑠neighbors(graph, eqi)
-                v == vari && continue
-                v in matched_vars && continue
-                isvalid &= count(!in(trivial_idxs), 𝑑neighbors(graph, v)) > 1
-                isvalid || break
-            end
-            isvalid || continue
-            if SU.query(isequal(eq.lhs), eq.rhs)
-                push!(blacklist, i)
-                continue
-            end
-            added_equation = true
-            push!(trivial_idxs, eqi)
-            push!(torn_eqs, eq)
-            push!(matched_vars, vari)
         end
-        added_equation || break
     end
-    deleteat!(var_to_diff.primal_to_diff, matched_vars)
-    deleteat!(var_to_diff.diff_to_primal, matched_vars)
-    deleteat!(ts.structure.eq_to_diff.primal_to_diff, trivial_idxs)
-    deleteat!(ts.structure.eq_to_diff.diff_to_primal, trivial_idxs)
-    delete_srcs!(ts.structure.graph, trivial_idxs; rm_verts = true)
-    delete_dsts!(ts.structure.graph, matched_vars; rm_verts = true)
-    if ts.structure.solvable_graph !== nothing
-        delete_srcs!(ts.structure.solvable_graph, trivial_idxs; rm_verts = true)
-        delete_dsts!(ts.structure.solvable_graph, matched_vars; rm_verts = true)
-    end
-    if ts.structure.var_types !== nothing
-        deleteat!(ts.structure.var_types, matched_vars)
-    end
-    deleteat!(ts.fullvars, matched_vars)
-    deleteat!(ts.original_eqs, trivial_idxs)
-    ts.additional_observed = torn_eqs
-    sys = ts.sys
-    eqs = copy(get_eqs(sys))
-    deleteat!(eqs, trivial_idxs)
-    @set! sys.eqs = eqs
-    ts.sys = sys
-    return ts
 end
 function lower_order_var(dervar::SymbolicT, t::SymbolicT)
     Moshi.Match.@match dervar begin
-        BSImpl.Term(; f, args) && if f isa Differential end => return args[1]
         BSImpl.Term(; f, args) && if f isa Shift end => begin
-            step = f.steps - 1
-            vv = args[1]
             if step != 0
-                diffvar = Shift(f.t, step)(vv)
-            else
-                diffvar = vv
             end
-            return diffvar
         end
-        _ => return Shift(t, -1)(dervar)
     end
-end
-function shift_discrete_system(ts::TearingState)
-    @unpack fullvars, sys = ts
-    fullvars_set = Set{SymbolicT}(fullvars)
-    discvars = OrderedSet{SymbolicT}()
-    eqs = equations(sys)
-    for eq in eqs
-        SU.search_variables!(discvars, eq; is_atomic = OperatorIsAtomic{Union{Sample, Hold, Pre}}())
-    end
-    iv = get_iv(sys)::SymbolicT
-    discmap = Dict{SymbolicT, SymbolicT}()
-    for k in discvars
-        k in fullvars_set || continue
-        isoperator(k, Union{Sample, Hold, Pre}) && continue
-        discmap[k] = StructuralTransformations.simplify_shifts(Shift(iv, 1)(k))
-    end
-    for i in eachindex(fullvars)
-        fullvars[i] = StructuralTransformations.simplify_shifts(substitute(
-            fullvars[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
-    end
-    for i in eachindex(eqs)
-        eqs[i] = StructuralTransformations.simplify_shifts(substitute(
-            eqs[i], discmap; filterer = Symbolics.FPSubFilterer{Union{Sample, Hold, Pre}}()))
-    end
-    @set! ts.sys.eqs = eqs
-    @set! ts.fullvars = fullvars
-    return ts
 end
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
        AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
-    bpg::BipartiteGraph
-    highlight_graph::Union{Nothing, BipartiteGraph}
-    var_to_diff::DiffGraph
-    eq_to_diff::DiffGraph
-    var_eq_matching::Union{Matching, Nothing}
 end
-""""""
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
-        s.solvable_graph === nothing ? nothing :
-        complete(s.solvable_graph),
-        complete(s.var_to_diff),
-        complete(s.eq_to_diff),
         nothing)
 end
-Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 9)
 function compute_diff_label(diff_graph, i, symbol)
-    di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
-    return di === nothing ? Label("") : Label(string(di, symbol))
-end
-function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
-    checkbounds(bgpm, i, j)
     if i <= 1
-        return (Label.(("#", "∂ₜ", " ", "  eq", "", "#", "∂ₜ", " ", "  v")))[j]
-    elseif j == 5
-        colors = Base.text_colors
-        return Label("|", :light_black)
-    elseif j == 2
-        return compute_diff_label(bgpm.eq_to_diff, i, '↑')
-    elseif j == 3
-        return compute_diff_label(invview(bgpm.eq_to_diff), i, '↓')
-    elseif j == 7
-        return compute_diff_label(bgpm.var_to_diff, i, '↑')
-    elseif j == 8
-        return compute_diff_label(invview(bgpm.var_to_diff), i, '↓')
-    elseif j == 1
-        return Label((i - 1 <= length(bgpm.eq_to_diff)) ? string(i - 1) : "")
-    elseif j == 6
-        return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
-    elseif j == 4
-        return BipartiteAdjacencyList(
-            i - 1 <= nsrcs(bgpm.bpg) ?
-            𝑠neighbors(bgpm.bpg, i - 1) : nothing,
-            bgpm.highlight_graph !== nothing &&
-            i - 1 <= nsrcs(bgpm.highlight_graph) ?
-            Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
-            nothing,
-            bgpm.var_eq_matching !== nothing &&
-            (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
-            invview(bgpm.var_eq_matching)[i - 1] : unassigned)
-    elseif j == 9
-        match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
-            match = bgpm.var_eq_matching[i - 1]
-            isa(match, Union{Int, Unassigned}) || (match = true)
         end
         return BipartiteAdjacencyList(
-            i - 1 <= ndsts(bgpm.bpg) ?
-            𝑑neighbors(bgpm.bpg, i - 1) : nothing,
-            bgpm.highlight_graph !== nothing &&
-            i - 1 <= ndsts(bgpm.highlight_graph) ?
-            Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
             nothing, match)
-    else
-        @assert false
     end
-end
-function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
-    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
     if !get(io, :limit, true) || !get(io, :mtk_limit, true)
-        print(io, "SystemStructure with ", length(s.graph.fadjlist), " equations and ",
-            isa(s.graph.badjlist, Int) ? s.graph.badjlist : length(s.graph.badjlist),
-            " variables\n")
-        Base.print_matrix(io, SystemStructurePrintMatrix(s))
-    else
-        S = incidence_matrix(s.graph, Num(SSym(:×; type = Real, shape = SU.ShapeVecT())))
-        print(io, "Incidence matrix:")
-        show(io, mime, S)
     end
 end
 struct MatchedSystemStructure
-    structure::SystemStructure
-    var_eq_matching::Matching
 end
-""""""
 function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
     return SystemStructurePrintMatrix(complete(ms.structure.graph),
-        complete(ms.structure.solvable_graph),
-        complete(ms.structure.var_to_diff),
-        complete(ms.structure.eq_to_diff),
         complete(ms.var_eq_matching,
             nsrcs(ms.structure.graph)))
 end
-function Base.copy(ms::MatchedSystemStructure)
-    MatchedSystemStructure(Base.copy(ms.structure), Base.copy(ms.var_eq_matching))
-end
-function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
-end
 function make_eqs_zero_equals!(ts::TearingState)
     neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
-        i, eq = kvp
-        isalgeq = true
         for j in 𝑠neighbors(ts.structure.graph, i)
-            isalgeq &= invview(ts.structure.var_to_diff)[j] === nothing
-        end
-        if isalgeq
-            return 0 ~ eq.rhs - eq.lhs
-        else
-            return eq
         end
     end
-    copyto!(get_eqs(ts.sys), neweqs)
 end
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true,
-        inputs = SymbolicT[], outputs = SymbolicT[],
-        disturbance_inputs = SymbolicT[],
         kwargs...)
     return _mtkcompile!(state; simplify, check_consistency,
-        inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
 end
 function _mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true,
-        dummy_derivative = true,
-        inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
-        disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
         kwargs...)
     if fully_determined isa Bool
-        check_consistency &= fully_determined
-    else
-        check_consistency = true
     end
     orig_inputs = Set{SymbolicT}()
-    ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
-    state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
-    trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
-    sys =_mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, simplify, kwargs...)
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
-    ModelingToolkit.invalidate_cache!(sys)
 end
 function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
-                             fully_determined::Bool, dummy_derivative::Bool, simplify::Bool,
                              kwargs...) where {S, T}
-    sys = ModelingToolkit.dummy_derivative(
-        sys, state; simplify, mm, check_consistency, kwargs...)
     return sys
 end

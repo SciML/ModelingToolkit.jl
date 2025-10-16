@@ -1,12 +1,10 @@
 struct Schedule
     var_sccs::Vector{Vector{Int}}
-    
     dummy_sub::Dict{SymbolicT, SymbolicT}
 end
 const MetadataT = Base.ImmutableDict{DataType, Any}
 abstract type MutableCacheKey end
 const MutableCacheT = Dict{DataType, Any}
-
 struct System <: IntermediateDeprecationSystem
     tag::UInt
     eqs::Vector{Equation}
@@ -14,76 +12,41 @@ struct System <: IntermediateDeprecationSystem
     jumps::Vector{JumpType}
     constraints::Vector{Union{Equation, Inequality}}
     costs::Vector{SymbolicT}
-    
     consolidate::Any
-    
     unknowns::Vector{SymbolicT}
-    
     ps::Vector{SymbolicT}
-    
     brownians::Vector{SymbolicT}
-    
     iv::Union{Nothing, SymbolicT}
-    
     observed::Vector{Equation}
-    
     parameter_dependencies::Vector{Equation}
-    
     var_to_name::Dict{Symbol, SymbolicT}
-    
     name::Symbol
-    
     description::String
-    
     defaults::SymmapT
-    
     guesses::SymmapT
-    
     systems::Vector{System}
-    
     initialization_eqs::Vector{Equation}
-    
     continuous_events::Vector{SymbolicContinuousCallback}
-    
     discrete_events::Vector{SymbolicDiscreteCallback}
-    
     connector_type::Any
-    
     assertions::Dict{SymbolicT, String}
-    
     metadata::MetadataT
-    
     gui_metadata::Any
-    
     is_dde::Bool
-    
     tstops::Vector{Any}
-    
     inputs::OrderedSet{SymbolicT}
-    
     outputs::OrderedSet{SymbolicT}
-    
     tearing_state::Any
-    
     namespacing::Bool
-    
     complete::Bool
-    
     index_cache::Union{Nothing, IndexCache}
-    
     ignored_connections::Union{Nothing, Vector{Connection}}
-    
     preface::Any
-    
     parent::Union{Nothing, System}
-    
     initializesystem::Union{Nothing, System}
-    
     is_initializesystem::Bool
     is_discrete::Bool
-    
     isscheduled::Bool
-    
     schedule::Union{Schedule, Nothing}
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -135,7 +98,6 @@ function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     end
     return result
 end
-
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
@@ -259,11 +221,9 @@ end
 @noinline function warn_pdeps()
 end
 SymbolicIndexingInterface.getname(x::System) = nameof(x)
-
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     System(eqs, nothing, dvs, ps; kwargs...)
 end
-
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
     diffvars = OrderedSet{SymbolicT}()
@@ -335,7 +295,6 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     return System(
         eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
-
 function System(eqs::Vector{Equation}; kwargs...)
     eqs = collect(eqs)
     allunknowns = OrderedSet{SymbolicT}()
@@ -360,7 +319,6 @@ function System(eqs::Vector{Equation}; kwargs...)
     new_ps = gather_array_params(ps)
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
 end
-
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 function gather_array_params(ps)
     new_ps = OrderedSet()
@@ -383,7 +341,6 @@ function gather_array_params(ps)
     end
     return new_ps
 end
-
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
@@ -398,7 +355,6 @@ function process_constraint_system(
     end
     return constraintsts, constraintps
 end
-
 function process_costs(costs::Vector, sts, ps, iv)
     coststs = OrderedSet{SymbolicT}()
     costps = OrderedSet{SymbolicT}()
@@ -408,7 +364,6 @@ function process_costs(costs::Vector, sts, ps, iv)
     validate_vars_and_find_ps!(coststs, costps, sts, iv)
     coststs, costps
 end
-
 function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
     sts = sysvars
     for var in auxvars
@@ -433,12 +388,10 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         end
     end
 end
-
 function is_discrete_system(sys::System)
     get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
-
 is_dde(sys::AbstractSystem) = has_is_dde(sys) && get_is_dde(sys)
 _check_if_dde(eqs::Vector{Equation}, iv::Nothing, subsystems::Vector{System}) = false
 function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{System})
@@ -450,7 +403,6 @@ function _check_if_dde(eqs::Vector{Equation}, iv::SymbolicT, subsystems::Vector{
     end
     return false
 end
-
 function flatten(sys::System, noeqs = false)
     systems = get_systems(sys)
     isempty(systems) && return sys
@@ -511,12 +463,10 @@ function ignored_connections_equal(sys1::System, sys2::System)
     end
     return _eq_unordered(ic1[1], ic2[1]) && _eq_unordered(ic1[2], ic2[2])
 end
-
 function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
-
 function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
@@ -526,13 +476,10 @@ function SymbolicUtils.hasmetadata(sys::AbstractSystem, k::DataType)
     meta = get_metadata(sys)
     haskey(meta, k)
 end
-
 struct ProblemTypeCtx end
-
 function check_complete(sys::System, obj)
     iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
-
 function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
@@ -556,37 +503,30 @@ function NonlinearSystem(sys::System)
     end
     return nsys
 end
-
 function OptimizationSystem(cost; kwargs...)
     return System(Equation[]; costs = [cost], kwargs...)
 end
-
 function OptimizationSystem(cost, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = [cost], kwargs...)
 end
-
 function OptimizationSystem(cost::Array; kwargs...)
     return System(Equation[]; costs = vec(cost), kwargs...)
 end
-
 function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
     return System(Equation[], nothing, dvs, ps; costs = vec(cost), kwargs...)
 end
-
 function JumpSystem(jumps, iv; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv; jumps, kwargs...)
 end
-
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)
     eqs = Vector{Equation}(jumps[mask])
     jumps = jumps[.!mask]
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
-
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
     if is_scalar_noise
@@ -598,7 +538,6 @@ function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
     sys = System(eqs, iv; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
         parameter_dependencies = Equation[], kwargs...)
@@ -611,7 +550,6 @@ function SDESystem(
     sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
     @set sys.parameter_dependencies = parameter_dependencies
 end
-
 function SDESystem(sys::System, noise; kwargs...)
     SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
 end
@@ -666,7 +604,6 @@ safe_issetequal(::Nothing, ::Nothing) = true
 safe_issetequal(::Nothing, x) = false
 safe_issetequal(x, ::Nothing) = false
 safe_issetequal(x, y) = issetequal(x, y)
-
 function Base.isapprox(sysa::System, sysb::System)
     sysa === sysb && return true
     return nameof(sysa) == nameof(sysb) &&

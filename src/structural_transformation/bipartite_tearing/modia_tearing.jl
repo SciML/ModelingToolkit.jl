@@ -1,4 +1,3 @@
-
 function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
     G = ict.graph
     add_edge_checked!(ict, Iterators.filter(!=(vj), 𝑠neighbors(G.graph, eq)), vj) do G
