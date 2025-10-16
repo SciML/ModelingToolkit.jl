@@ -120,7 +120,9 @@ lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 @test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
+lsyss_ns, ssys_ns = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x], split=false)
 lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+@test isequal(lsyss.A, lsyss_ns.A)
 
 lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
 @test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
