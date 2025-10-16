@@ -89,11 +89,6 @@ function check_equations(eqs::Vector{Equation}, iv::SymbolicT)
         SU.query(icp, eq.rhs)
     end
 end
-""""""
-function check_subsystems(systems)
-    idxs = findall(!does_namespacing, systems)
-    isempty(idxs) || throw_bad_namespacing(systems, idxs)
-end
 @noinline function throw_bad_namespacing(systems, idxs)
     names = join("  " .* string.(nameof.(systems[idxs])), "\n")
     throw(ArgumentError("All subsystems must have namespacing enabled. The following subsystems do not perform namespacing:\n$(names)"))

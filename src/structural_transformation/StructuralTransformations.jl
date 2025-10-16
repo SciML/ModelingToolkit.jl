@@ -55,7 +55,6 @@ export dummy_derivative
 export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
        linear_subsys_adjmat!
-export tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
