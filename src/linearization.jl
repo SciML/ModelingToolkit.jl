@@ -501,9 +501,9 @@ where `x` are differential unknown variables, `z` algebraic variables, `u` input
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
-        eval_expression = false, eval_module = @__MODULE__,
+        eval_expression = false, eval_module = @__MODULE__, split = true,
         kwargs...)
-    sys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    sys = mtkcompile(sys; inputs, outputs, simplify, split, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)
@@ -512,10 +512,15 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
 
     fun_expr = generate_rhs(sys; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
-    dx = fun(sts, p, t)
-
+    
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
-    y = h(sts, p, t)
+    if split
+        dx = fun(sts, p, t)
+        y = h(sts, p, t)
+    else
+        dx = fun(sts, p..., t)
+        y = h(sts, p..., t)
+    end
 
     fg_xz = Symbolics.jacobian(dx, sts)
     fg_u = Symbolics.jacobian(dx, inputs)
