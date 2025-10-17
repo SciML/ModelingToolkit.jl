@@ -106,7 +106,7 @@ function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false
     elseif size(noiseeqs, 2) == 1
         # scalar noise
         noise_rate_prototype = nothing
-        noise = WienerProcess(0.0, 0.0, 0.0)
+        noise = nothing
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
