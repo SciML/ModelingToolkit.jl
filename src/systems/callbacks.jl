@@ -85,14 +85,6 @@ end
 make_affect(affect::SymbolicAffect; kwargs...) = AffectSystem(affect; kwargs...)
 function make_affect(affect; kwargs...)
 end
-struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Union{Number, Vector{<:Number}, SymbolicT}
-end
-function SymbolicDiscreteCallback(
-        reinitializealg = nothing, kwargs...)
-    SymbolicDiscreteCallback(c, SymbolicAffect(affect; kwargs...),
-        SymbolicAffect(finalize; kwargs...), reinitializealg)
-end
 to_cb_vector(cbs::Vector{<:AbstractCallback}; kwargs...) = cbs
 function to_cb_vector(cbs; CB_TYPE = SymbolicContinuousCallback, kwargs...)
     if cbs isa Pair
@@ -111,10 +103,6 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
         affect_neg = namespace_affects(affect_negs(cb), s),
         expr.body)
 end
-has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
-function get_discrete_events(sys::AbstractSystem)
-    has_discrete_events(sys) || return SymbolicDiscreteCallback[]
-end
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
     systems = get_systems(sys)
@@ -127,8 +115,6 @@ has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 function get_continuous_events(sys::AbstractSystem)
     getfield(sys, :continuous_events)
 end
-function create_symbolic_events(cont_events, disc_events)
+function create_symbolic_events(cont_events)
     cont_callbacks = to_cb_vector(cont_events; CB_TYPE = SymbolicContinuousCallback)
-    disc_callbacks = to_cb_vector(disc_events; CB_TYPE = SymbolicDiscreteCallback)
-    cont_callbacks, disc_callbacks
 end

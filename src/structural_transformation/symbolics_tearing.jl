@@ -1,5 +1,5 @@
 function substitute_derivatives_algevars!(
-        ts::TearingState, neweqs::Vector{Equation}, var_eq_matching::Matching, dummy_sub::Dict{SymbolicT, SymbolicT}, iv::Union{Nothing, SymbolicT}, D::Union{Nothing, Differential, Shift})
+        ts::TearingState, neweqs::Vector{Equation}, var_eq_matching::Matching, dummy_sub::Dict{SymbolicT, SymbolicT}, iv::Union{Nothing, SymbolicT}, D::Union{Nothing, Differential})
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue

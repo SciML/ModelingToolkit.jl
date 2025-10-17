@@ -18,7 +18,6 @@ struct System <: IntermediateDeprecationSystem
     guesses::SymmapT
     systems::Vector{System}
     continuous_events::Vector{SymbolicContinuousCallback}
-    discrete_events::Vector{SymbolicDiscreteCallback}
     metadata::MetadataT
     is_dde::Bool
     tstops::Vector{Any}
@@ -49,7 +48,6 @@ struct System <: IntermediateDeprecationSystem
              guesses,
              systems,
              continuous_events,
-             discrete_events,
             metadata = MetadataT(),
              is_dde = false,
              tstops = [],
@@ -82,7 +80,6 @@ struct System <: IntermediateDeprecationSystem
             guesses,
              systems,
              continuous_events,
-             discrete_events,
             metadata,
              is_dde,
             tstops,
@@ -118,7 +115,6 @@ function System(
         guesses = SymmapT(),
          systems = System[],
         continuous_events = SymbolicContinuousCallback[],
-         discrete_events = SymbolicDiscreteCallback[],
         metadata = MetadataT(),
         is_dde = nothing,
          tstops = [],
@@ -134,9 +130,8 @@ function System(
         checks = true
         )
     iv = unwrap(iv)
-    continuous_events,
-    discrete_events = create_symbolic_events(
-        continuous_events, discrete_events)
+    continuous_events = create_symbolic_events(
+        continuous_events)
     if is_dde === nothing
         is_dde = false
     end
@@ -156,7 +151,6 @@ function System(
          guesses,
          systems,
         continuous_events,
-         discrete_events,
          metadata,
          is_dde,
         tstops,
