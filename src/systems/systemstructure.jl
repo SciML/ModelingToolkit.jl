@@ -43,7 +43,7 @@ function TearingState(sys; check = true, sort_eqs = true)
         SystemStructure(
         complete(var_to_diff),
          complete(eq_to_diff),
-            complete(graph),
+            graph,
              nothing,
              VariableType[],
              false
