@@ -1,29 +1,29 @@
 abstract type AbstractCallback end
 struct SymbolicAffect
-    affect::Vector{Equation}
+    affect::Vector
     alg_eqs::Vector{Equation}
     discrete_parameters::Vector{SymbolicT}
 end
-function SymbolicAffect(affect::Vector{Equation}; alg_eqs = Equation[],
+function SymbolicAffect(affect::Vector; alg_eqs = Equation[],
         discrete_parameters = SymbolicT[], kwargs...)
     SymbolicAffect(affect, alg_eqs, discrete_parameters)
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
 struct AffectSystem
     system::AbstractSystem
-    unknowns::Vector{SymbolicT}
-    parameters::Vector{SymbolicT}
-    discretes::Vector{SymbolicT}
+    unknowns::Vector
+    parameters::Vector
+    discretes::Vector
 end
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
     AffectSystem(spec.affect; alg_eqs = vcat(spec.alg_eqs, alg_eqs), iv,
         discrete_parameters = spec.discrete_parameters, kwargs...)
 end
 function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[],
-        iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
+        iv = nothing, alg_eqs::Vector = Equation[], warn_no_algebraic = true, kwargs...)
     isempty(affect) && return nothing
-    dvs = OrderedSet{SymbolicT}()
-    params = OrderedSet{SymbolicT}()
+    dvs = OrderedSet()
+    params = OrderedSet()
     for eq in affect
     end
     pre_params = filter(haspre, params)
@@ -35,7 +35,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)); is_discrete = true, name = :affectsys)
     affectsys = mtkcompile(affectsys; fully_determined = nothing)
-    accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
+    accessed_params = Vector(filter(isparameter, map(unPre, collect(pre_params))))
     AffectSystem(affectsys, _dvs, accessed_params, discrete_parameters)
 end
 struct Pre <: Symbolics.Operator end
@@ -45,9 +45,9 @@ function (p::Pre)(x)
     iw = Symbolics.iswrapped(x)
 end
 haspre(O) = recursive_hasoperator(Pre, O)
-const Affect = Union{AffectSystem}
+const Affect = Union
 struct SymbolicContinuousCallback <: AbstractCallback
-    conditions::Vector{Equation}
+    conditions::Vector
     affect::Union{Affect, SymbolicAffect, Nothing}
     affect_neg::Union{Affect, SymbolicAffect, Nothing}
     initialize::Union{Affect, SymbolicAffect, Nothing}
@@ -57,7 +57,7 @@ struct SymbolicContinuousCallback <: AbstractCallback
     zero_crossing_id::Symbol
 end
 function SymbolicContinuousCallback(
-        conditions::Union{Equation, Vector{Equation}},
+        conditions::Union{Equation, Vector},
         affect = nothing;
         affect_neg = affect,
         initialize = nothing,
@@ -84,7 +84,7 @@ end
 make_affect(affect::SymbolicAffect; kwargs...) = AffectSystem(affect; kwargs...)
 function make_affect(affect; kwargs...)
 end
-to_cb_vector(cbs::Vector{<:AbstractCallback}; kwargs...) = cbs
+to_cb_vector(cbs::Vector; kwargs...) = cbs
 function to_cb_vector(cbs; CB_TYPE = SymbolicContinuousCallback, kwargs...)
     if cbs isa Pair
         [CB_TYPE(cbs; kwargs...)]

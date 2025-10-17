@@ -1,14 +1,14 @@
 struct System <: IntermediateDeprecationSystem
     tag::UInt
-    eqs::Vector{Equation}
-    constraints::Vector{Union{Equation, Inequality}}
-    unknowns::Vector{SymbolicT}
-    ps::Vector{SymbolicT}
+    eqs::Vector
+    constraints::Vector
+    unknowns::Vector
+    ps::Vector
     iv::Union{Nothing, SymbolicT}
-    observed::Vector{Equation}
+    observed::Vector
     name::Symbol
     systems::Vector{System}
-    continuous_events::Vector{SymbolicContinuousCallback}
+    continuous_events::Vector
     namespacing::Bool
     complete::Bool
     parent::Union{Nothing, System}
@@ -52,12 +52,11 @@ struct System <: IntermediateDeprecationSystem
     end
 end
 function System(
-    eqs::Vector{Equation},
+    eqs::Vector,
      iv,
      dvs,
      ps;
-        constraints = Union{Equation,
-         Inequality}[],
+        constraints = Union[],
         observed = Equation[],
          systems = System[],
         continuous_events = SymbolicContinuousCallback[],
@@ -80,10 +79,7 @@ function System(
         continuous_events,
          )
 end
-function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
-    System(eqs, nothing, dvs, ps; kwargs...)
-end
-function System(eqs::Vector{Equation}, iv; kwargs...)
+function System(eqs::Vector, iv; kwargs...)
     return System(
         eqs, iv, SymbolicT[], SymbolicT[]; kwargs...)
 end

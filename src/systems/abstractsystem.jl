@@ -1,9 +1,4 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
-function independent_variables(sys::AbstractSystem)
-    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
-        return SymbolicT[getfield(sys, :iv)]
-    end
-end
 function complete(
         sys::T; split = true, flatten = true, add_initial_parameters = true) where {T <: AbstractSystem}
     if flatten
@@ -28,11 +23,9 @@ function complete(
 end
 const SYS_PROPS = [:eqs
                    :iv
-                   :unknowns
                    :observed
                    :systems
                    :initializesystem
-                   :schedule
                    :parent
                    :consolidate]
 for prop in SYS_PROPS
@@ -62,27 +55,17 @@ function _apply_to_variables(f::F, ex) where {F}
     return f(ex)
 end
 abstract type SymScope end
-function LocalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
-end
 struct GlobalScope <: SymScope end
-function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
+function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) == getindex
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                metadata(sym))
         else
             setmetadata(sym, SymScope, GlobalScope())
         end
     end
 end
-function unknowns(sys::AbstractSystem)
-    sts = get_unknowns(sys)
-end
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
-end
-function observables(sys::AbstractSystem)
-    return map(eq -> eq.lhs, observed(sys))
 end
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
