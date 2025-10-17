@@ -1,7 +1,6 @@
 struct SelectedState end
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
         state_priority = nothing, log = Val(false), kwargs...)
-    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state; kwargs...))
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)

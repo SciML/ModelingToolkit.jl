@@ -60,12 +60,10 @@ function toggle_namespacing(sys::AbstractSystem, value::Bool; safe = false)
     @set sys.namespacing = value
 end
 const SYS_PROPS = [:eqs
-                   :noise_eqs
                    :iv
                    :unknowns
                    :ps
                    :brownians
-                   :jumps
                    :observed
                    :systems
                    :initializesystem
@@ -188,9 +186,6 @@ function observables(sys::AbstractSystem)
 end
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
-end
-function jumps(sys::AbstractSystem)
-    js = get_jumps(sys)
 end
 function brownians(sys::AbstractSystem)
     bs = get_brownians(sys)

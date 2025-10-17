@@ -1,9 +1,3 @@
-function quick_cancel_expr(expr)
-    Rewriters.Postwalk(quick_cancel,
-        similarterm = (x, f, args;
-            kws...) -> maketerm(typeof(x), f, args,
-            kws...))(expr)
-end
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
@@ -16,11 +10,7 @@ function Graphs.edges(dg::DiffGraph)
     (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
 end
 Graphs.nv(dg::DiffGraph) = length(dg.primal_to_diff)
-function Graphs.outneighbors(dg::DiffGraph, var::Integer)
-end
 Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
-function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
-end
 function complete(dg::DiffGraph)
     diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
     return DiffGraph(dg.primal_to_diff, diff_to_primal)
@@ -53,14 +43,8 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     param_derivative_map::Dict{SymbolicT, SymbolicT}
     no_deriv_params::Set{SymbolicT}
     original_eqs::Vector{Equation}
-    """
-    """
     additional_observed::Vector{Equation}
     statemachines::Vector{T}
-end
-function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, ivars::Vector{Int})
-end
-function system_subset(structure::SystemStructure, ieqs::Vector{Int}, ivars::Vector{Int})
 end
 struct EquationsView{T} <: AbstractVector{Equation}
     ts::TearingState{T}
@@ -74,8 +58,6 @@ end
 function is_time_dependent_parameter(p, allps, iv)
            (operation(p) === getindex &&
             (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
-end
-function symbolic_contains(var::SymbolicT, set::Set{SymbolicT})
 end
 function extract_top_level_statemachines(sys::System)
     return sys, System[]
@@ -92,30 +74,9 @@ function TearingState(sys; check = true, sort_eqs = true)
     var2idx = Dict{SymbolicT, Int}()
     var_types = VariableType[]
     symbolic_incidence = Vector{SymbolicT}[]
-    varsbuf = Set{SymbolicT}()
     for (i, eq) in enumerate(eqs)
         incidence = Set{SymbolicT}()
         isalgeq = true
-        for v in varsbuf
-            if !symbolic_contains(v, dvs)
-                isvalid = Moshi.Match.@match v begin
-                    BSImpl.Term(; f) => f isa Shift || f isa Operator && is_transparent_operator(f)::Bool
-                end
-                v′ = v
-                while !isvalid
-                    Moshi.Match.@match v′ begin
-                        BSImpl.Term(; f, args) => begin
-                            if f isa Differential
-                                v′ = args[1]
-                            end
-                            if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
-                                isvalid = true
-                            end
-                        end
-                    end
-                end
-            end
-        end
         push!(symbolic_incidence, collect(incidence))
     end
     dervaridxs = OrderedSet{Int}()
@@ -136,42 +97,10 @@ function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{Sym
     neqs = length(symbolic_incidence)
     graph = BipartiteGraph(neqs, nvars, Val(false))
 end
-using .BipartiteGraphs: Label, BipartiteAdjacencyList
-struct SystemStructurePrintMatrix <:
-       AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
-end
-function SystemStructurePrintMatrix(s::SystemStructure)
-    return SystemStructurePrintMatrix(complete(s.graph),
-        nothing)
-end
-struct MatchedSystemStructure
-end
-function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
-    return SystemStructurePrintMatrix(complete(ms.structure.graph),
-        complete(ms.var_eq_matching,
-            nsrcs(ms.structure.graph)))
-end
-function make_eqs_zero_equals!(ts::TearingState)
-    neweqs = map(enumerate(get_eqs(ts.sys))) do kvp
-    end
-end
 function mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true, fully_determined = true,
         kwargs...)
-    return _mtkcompile!(state; simplify, check_consistency,
-        fully_determined, kwargs...)
-end
-function _mtkcompile!(state::TearingState; simplify = false,
-        check_consistency = true, fully_determined = true,
-        kwargs...)
-    if fully_determined isa Bool
-    end
-    orig_inputs = Set{SymbolicT}()
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
-    if check_consistency
-        fully_determined = ModelingToolkit.check_consistency(
-            state, orig_inputs; nothrow = fully_determined === nothing)
-    end
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)
 end
