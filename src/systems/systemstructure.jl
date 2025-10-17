@@ -2,14 +2,8 @@ struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector
     diff_to_primal::Union{Nothing, Vector}
 end
-function DiffGraph(n::Integer, with_badj::Bool = false)
-    DiffGraph(Union[nothing for _ in 1:n],
-        with_badj ? Union[nothing for _ in 1:n] : nothing)
-end
-function complete(dg::DiffGraph)
-    diff_to_primal = Union[nothing for _ in 1:length(dg.primal_to_diff)]
-    return DiffGraph(dg.primal_to_diff, diff_to_primal)
-end
+function foobar2 end
+function foobar3 end
 Base.@kwdef mutable struct SystemStructure
     var_to_diff::DiffGraph
     eq_to_diff::DiffGraph
@@ -34,15 +28,15 @@ end
 function TearingState(sys; check = true, sort_eqs = true)
     sys = flatten(sys)
     eqs = equations(sys)
-    var_to_diff = DiffGraph(0, true)
+    var_to_diff = DiffGraph([], [])
     graph = BipartiteGraph(0, 0, Val(false))
-    eq_to_diff = DiffGraph(0)
+    eq_to_diff = DiffGraph([], [])
     return TearingState(
     sys,
      SymbolicT[],
         SystemStructure(
-        complete(var_to_diff),
-         complete(eq_to_diff),
+        (var_to_diff),
+         (eq_to_diff),
             graph,
              nothing,
              VariableType[],
