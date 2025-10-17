@@ -25,7 +25,6 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     dvs = OrderedSet{SymbolicT}()
     params = OrderedSet{SymbolicT}()
     for eq in affect
-        collect_vars!(dvs, params, eq, iv)
     end
     pre_params = filter(haspre, params)
     sys_params = SymbolicT[]

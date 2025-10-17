@@ -98,9 +98,6 @@ struct System <: IntermediateDeprecationSystem
              )
     end
 end
-unwrap_vars(vars::AbstractArray{SymbolicT}) = vars
-function unwrap_vars(vars::AbstractArray)
-end
 function System(
     eqs::Vector{Equation},
      iv,
@@ -110,30 +107,17 @@ function System(
         constraints = Union{Equation,
          Inequality}[],
         observed = Equation[],
-         parameter_dependencies = Equation[],
          defaults = SymmapT(),
         guesses = SymmapT(),
          systems = System[],
         continuous_events = SymbolicContinuousCallback[],
-        metadata = MetadataT(),
         is_dde = nothing,
-         tstops = [],
-         inputs = OrderedSet{SymbolicT}(),
-        outputs = OrderedSet{SymbolicT}(),
-         tearing_state = nothing,
-        parent = nothing,
         name = nothing,
-         discover_from_metadata = true,
-        initializesystem = nothing,
-         is_initializesystem = false,
          is_discrete = false,
-        checks = true
         )
-    iv = unwrap(iv)
     continuous_events = create_symbolic_events(
         continuous_events)
     if is_dde === nothing
-        is_dde = false
     end
     System(
     Threads.atomic_add!(SYSTEM_COUNT,
@@ -151,20 +135,6 @@ function System(
          guesses,
          systems,
         continuous_events,
-         metadata,
-         is_dde,
-        tstops,
-         inputs,
-         outputs,
-         tearing_state,
-         true,
-         false,
-        nothing,
-         parent,
-        initializesystem,
-         is_initializesystem,
-         is_discrete;
-         checks
          )
 end
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
@@ -180,16 +150,11 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     return System(
         eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
 end
-function System(eqs::Vector{Equation}; kwargs...)
-    return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
-end
 function gather_array_params(ps)
     new_ps = OrderedSet()
-    return new_ps
 end
 function process_constraint_system(
         constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
-    isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 end
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
 function flatten(sys::System, noeqs = false)

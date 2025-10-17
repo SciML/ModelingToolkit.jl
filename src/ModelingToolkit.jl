@@ -7,11 +7,6 @@ using PrecompileTools, Reexport
     import REPL
 end
 import SymbolicUtils
-import SymbolicUtils as SU
-import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
-                      @rule, Rewriters, substitute, metadata, BasicSymbolic
-using SpecialFunctions, NaNMath
 @recompile_invalidations begin
 using DiffEqBase, SciMLBase, ForwardDiff
 end
@@ -28,43 +23,18 @@ using Base.Threads
 using Latexify, ArrayInterface
 using Setfield, ConstructionBase
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
                  NoInit
-using Distributed
-using MLStyle
-import Moshi
-using Moshi.Data: @data
-import SCCNonlinearSolve
-import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
                     undef_blocks, blocks
-using OffsetArrays: Origin
-using RuntimeGeneratedFunctions
-using RuntimeGeneratedFunctions: drop_expr
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-                 VariableSource, getname, variable,
-                 NAMESPACE_SEPARATOR, setdefaultval, Arr,
                  hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
-const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
-import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-                  scalarize, hasderiv
-import DiffEqBase: @add_kwonly
-export independent_variables, unknowns, observables, parameters, full_parameters,
-       continuous_events, discrete_events
 @reexport using Symbolics
 @reexport using UnPack
-RuntimeGeneratedFunctions.init(@__MODULE__)
-import DynamicQuantities
-const DQ = DynamicQuantities
 for fun in [:toexpr]
     @eval begin
         function $fun(eq::Equation; kw...)
-            Expr(:call, :(==), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
             if ineq.relational_op == Symbolics.leq
-                Expr(:call, :(<=), $fun(ineq.lhs; kw...), $fun(ineq.rhs; kw...))
             end
         end
     end
@@ -85,14 +55,12 @@ include("systems/connectors.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/sparsematrixclil.jl")
-include("clock.jl")
 include("systems/systemstructure.jl")
 include("systems/systems.jl")
 include("systems/alias_elimination.jl")
 function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     graph = state.structure.graph
     if state.structure.solvable_graph === nothing
-        state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
     end
     linear_equations = Int[]
     eadj = Vector{Int}[]

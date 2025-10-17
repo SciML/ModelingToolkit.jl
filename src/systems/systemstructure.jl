@@ -7,10 +7,7 @@ function DiffGraph(n::Integer, with_badj::Bool = false)
         with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
 end
 function Graphs.edges(dg::DiffGraph)
-    (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
 end
-Graphs.nv(dg::DiffGraph) = length(dg.primal_to_diff)
-Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
 function complete(dg::DiffGraph)
     diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
     return DiffGraph(dg.primal_to_diff, diff_to_primal)
@@ -19,7 +16,6 @@ function invview(dg::DiffGraph)
 end
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
-get_fullvars(ts::TransformationState) = ts.fullvars
 Base.@kwdef mutable struct SystemStructure
     var_to_diff::DiffGraph
     eq_to_diff::DiffGraph
@@ -33,7 +29,6 @@ function Base.copy(structure::SystemStructure)
         var_types, structure.only_discrete)
 end
 function complete!(s::SystemStructure)
-    s
 end
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     sys::T
@@ -55,10 +50,6 @@ function Base.getindex(ev::EquationsView, i::Integer)
     eqs = equations(ev.ts.sys)
     return eqs[i]
 end
-function is_time_dependent_parameter(p, allps, iv)
-           (operation(p) === getindex &&
-            (args = arguments(p); length(args)) == 1 && isequal(only(args), iv))
-end
 function extract_top_level_statemachines(sys::System)
     return sys, System[]
 end
@@ -75,9 +66,6 @@ function TearingState(sys; check = true, sort_eqs = true)
     var_types = VariableType[]
     symbolic_incidence = Vector{SymbolicT}[]
     for (i, eq) in enumerate(eqs)
-        incidence = Set{SymbolicT}()
-        isalgeq = true
-        push!(symbolic_incidence, collect(incidence))
     end
     dervaridxs = OrderedSet{Int}()
     ndervars = length(dervaridxs)
@@ -91,7 +79,6 @@ function TearingState(sys; check = true, sort_eqs = true)
 end
 function build_var_to_diff(fullvars::Vector{SymbolicT}, ndervars::Int, var2idx::Dict{SymbolicT, Int}, @nospecialize(iv::Union{SymbolicT, Nothing}))
     var_to_diff = DiffGraph(length(fullvars), true)
-    return var_to_diff
 end
 function build_incidence_graph(nvars::Int, symbolic_incidence::Vector{Vector{SymbolicT}}, var2idx::Dict{SymbolicT, Int})
     neqs = length(symbolic_incidence)
@@ -106,5 +93,4 @@ function mtkcompile!(state::TearingState; simplify = false,
 end
 function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
                              kwargs...) where {S, T}
-    return sys
 end

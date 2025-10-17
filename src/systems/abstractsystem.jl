@@ -1,13 +1,10 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 struct GUIMetadata
 end
-Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 function independent_variables(sys::AbstractSystem)
     if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return SymbolicT[getfield(sys, :iv)]
     end
-end
-function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol)
     named_parameters = Symbol[getname(x)
                         for x in parameter_symbols(sys)
                         if hasname(x) && !(iscall(x) && operation(x) == getindex)]
@@ -18,8 +15,6 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return if sym isa ParameterIndex
             if idx.portion isa SciMLStructures.Tunable
-                return ParameterIndex(
-                    idx.portion, (idx.idx..., arguments(sym)[(begin + 1):end]...))
             end
         end
     end
@@ -29,7 +24,6 @@ function isscheduled(sys::AbstractSystem)
         get_schedule(sys) !== nothing
     end
 end
-struct Initial <: Symbolics.Operator end
 function isinitial(p)
     return iscall(p) && (operation(p) isa Initial ||
             operation(p) === getindex && isinitial(arguments(p)[1]))
@@ -62,17 +56,11 @@ end
 const SYS_PROPS = [:eqs
                    :iv
                    :unknowns
-                   :ps
-                   :brownians
                    :observed
                    :systems
                    :initializesystem
                    :schedule
-                   :is_initializesystem
-                   :parameter_dependencies
                    :parent
-                   :index_cache
-                   :isscheduled
                    :consolidate]
 for prop in SYS_PROPS
     fname_get = Symbol(:get_, prop)
@@ -90,7 +78,6 @@ function refreshed_metadata(meta::Base.ImmutableDict)
     if !haskey(newmeta, MutableCacheKey)
         newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => MutableCacheT())
     end
-    return newmeta
 end
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
@@ -108,7 +95,6 @@ end
             Expr(:call, :(constructorof($obj)), args..., kwarg))
     end
 end
-Symbolics.rename(x::AbstractSystem, name) = @set x.name = name
 apply_to_variables(f, ex) = _apply_to_variables(f, ex)
 function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
@@ -116,24 +102,9 @@ function _apply_to_variables(f::F, ex) where {F}
     end
 end
 abstract type SymScope end
-struct LocalScope <: SymScope end
 function LocalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
     apply_to_variables(sym) do sym
         if iscall(sym) && operation(sym) === getindex
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                metadata(sym))
-        end
-    end
-end
-struct ParentScope <: SymScope
-end
-function ParentScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
-    apply_to_variables(sym) do sym
-        if iscall(sym) && operation(sym) === getindex
-            a1 = setmetadata(args[1], SymScope,
-                ParentScope(getmetadata(value(args[1]), SymScope, LocalScope())))
-            maketerm(typeof(sym), operation(sym), [a1, args[2:end]...],
-                ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
         end
     end
 end
@@ -148,8 +119,6 @@ function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
         end
     end
 end
-const AllScopes = Union{LocalScope, ParentScope, GlobalScope}
-renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL, tgt)
 function namespace_defaults(sys)
     Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
     for (k, v) in pairs(defs))
@@ -160,38 +129,19 @@ function unknowns(sys::AbstractSystem)
     if isempty(systems)
         return sts
     end
-end
-function parameters(sys::AbstractSystem; initial_parameters = false)
-    ps = get_ps(sys)
-    result = copy(ps)
     if !initial_parameters && !is_initializesystem(sys)
         filter!(result) do sym
-            return !(isoperator(sym, Initial) ||
-                     isoperator(arguments(sym)[1], Initial))
         end
     end
-    return result
-end
-function full_parameters(sys::AbstractSystem)
-    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
-    vcat(parameters(sys; initial_parameters = true), dep_ps)
 end
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
-    systems = get_systems(sys)
-    isempty(systems) && return obs
 end
 function observables(sys::AbstractSystem)
     return map(eq -> eq.lhs, observed(sys))
 end
 function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
-end
-function brownians(sys::AbstractSystem)
-    bs = get_brownians(sys)
-end
-function constraints(sys::AbstractSystem)
-    cs = get_constraints(sys)
 end
 function is_diff_equation(eq)
     (eq isa Equation) || (return false)
