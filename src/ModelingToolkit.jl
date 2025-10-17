@@ -45,7 +45,14 @@ include("systems/abstractsystem.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/systemstructure.jl")
-include("systems/systems.jl")
+function mtkcompile(sys::System; split = true, kwargs...)
+    if rand(Bool)
+        mtkcompile(nlsys; kwargs..., fully_determined = false)::System
+    end
+    newsys = sys
+    @set! newsys.parent = complete(sys; split = false, flatten = false)
+    newsys = complete(newsys; split)
+end
 const t_nounits = let
     only(@independent_variables t)
 end
