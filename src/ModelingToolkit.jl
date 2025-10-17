@@ -31,44 +31,56 @@ using Symbolics: parse_vars, value, @derivatives, get_variables,
                  hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 @reexport using Symbolics
 @reexport using UnPack
-for fun in [:toexpr]
-    @eval begin
-        function $fun(eq::Equation; kw...)
-            if ineq.relational_op == Symbolics.leq
-            end
-        end
-    end
-end
 abstract type AbstractSystem end
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 function complete end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
-include("variables.jl")
-include("parameters.jl")
-include("independent_variables.jl")
+function default_toterm(x::SymbolicT)
+end
+import SymbolicUtils: symtype, term, hasmetadata, issym
+@enum VariableType VARIABLE PARAMETER BROWNIAN
+struct MTKVariableTypeCtx end
+getvariabletype(x, def = VARIABLE) = safe_getmetadata(MTKVariableTypeCtx, unwrap(x), def)::Union{typeof(def), VariableType}
+isparameter(x::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap}) = isparameter(unwrap(x))
+function isparameter(x::SymbolicT)
+    varT = getvariabletype(x, nothing)
+    return varT === PARAMETER
+end
+isparameter(x) = false
+function toparam(s)
+    if s isa Symbolics.Arr
+        Symbolics.wrap(toparam(Symbolics.unwrap(s)))
+    elseif s isa AbstractArray
+        map(toparam, s)
+    else
+        setmetadata(s, MTKVariableTypeCtx, PARAMETER)
+    end
+end
+toparam(s::Num) = wrap(toparam(value(s)))
+tovar(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
+tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
+macro parameters(xs...)
+    Symbolics.parse_vars(:parameters,
+        Real,
+        xs,
+        toparam)
+end
+macro independent_variables(ts...)
+    Symbolics.parse_vars(:independent_variables,
+        Real,
+        ts,
+        toiv)
+end
+toiv(s::SymbolicT) = GlobalScope(setmetadata(s, MTKVariableTypeCtx, PARAMETER))
+toiv(s::Symbolics.Arr) = wrap(toiv(value(s)))
+toiv(s::Num) = Num(toiv(value(s)))
 const SymmapT = Dict{SymbolicT, SymbolicT}
-include("utils.jl")
-include("systems/index_cache.jl")
 include("systems/abstractsystem.jl")
-include("systems/connectors.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
-include("systems/sparsematrixclil.jl")
 include("systems/systemstructure.jl")
 include("systems/systems.jl")
-include("systems/alias_elimination.jl")
-function linear_subsys_adjmat!(state::TransformationState; kwargs...)
-    graph = state.structure.graph
-    if state.structure.solvable_graph === nothing
-    end
-    linear_equations = Int[]
-    eadj = Vector{Int}[]
-    cadj = Vector{Int}[]
-    mm = SparseMatrixCLIL(nsrcs(graph),
-        ndsts(graph),
-        linear_equations, eadj, cadj)
-end
 const t_nounits = let
     only(@independent_variables t)
 end

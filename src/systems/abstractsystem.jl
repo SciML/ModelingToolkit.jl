@@ -1,37 +1,13 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
-struct GUIMetadata
-end
 function independent_variables(sys::AbstractSystem)
     if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
         return SymbolicT[getfield(sys, :iv)]
     end
-    named_parameters = Symbol[getname(x)
-                        for x in parameter_symbols(sys)
-                        if hasname(x) && !(iscall(x) && operation(x) == getindex)]
-           count(isequal(sym),
-        Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, named_parameters)) == 1
-end
-function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return if sym isa ParameterIndex
-            if idx.portion isa SciMLStructures.Tunable
-            end
-        end
-    end
-end
-function isscheduled(sys::AbstractSystem)
-    if has_schedule(sys)
-        get_schedule(sys) !== nothing
-    end
-end
-function isinitial(p)
-    return iscall(p) && (operation(p) isa Initial ||
-            operation(p) === getindex && isinitial(arguments(p)[1]))
 end
 function complete(
         sys::T; split = true, flatten = true, add_initial_parameters = true) where {T <: AbstractSystem}
     if flatten
-        newsys = expand_connections(sys)
+        newsys = ModelingToolkit.flatten(sys)
         if has_parent(newsys) && get_parent(sys) === nothing
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
@@ -48,10 +24,7 @@ function complete(
             @set! sys.initializesystem = complete(isys::T; split)
         end
     end
-    sys = toggle_namespacing(sys, false; safe = true)
-end
-function toggle_namespacing(sys::AbstractSystem, value::Bool; safe = false)
-    @set sys.namespacing = value
+    @set sys.namespacing = false
 end
 const SYS_PROPS = [:eqs
                    :iv
@@ -70,22 +43,11 @@ $fname_get(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
 $fname_has(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
     end
 end
-function invalidate_cache!(sys::AbstractSystem)
-    return sys
-end
-function refreshed_metadata(meta::Base.ImmutableDict)
-    newmeta = MetadataT()
-    if !haskey(newmeta, MutableCacheKey)
-        newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => MutableCacheT())
-    end
-end
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn
             if fn in fieldnames(patch)
                 :(patch.$fn)
-            elseif fn == :metadata
-                :($refreshed_metadata(getfield(obj, $(Meta.quot(fn)))))
             else
                 :(getfield(obj, $(Meta.quot(fn))))
             end
@@ -97,16 +59,10 @@ end
 end
 apply_to_variables(f, ex) = _apply_to_variables(f, ex)
 function _apply_to_variables(f::F, ex) where {F}
-    if isvariable(ex)
-        return f(ex)
-    end
+    return f(ex)
 end
 abstract type SymScope end
 function LocalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
-    apply_to_variables(sym) do sym
-        if iscall(sym) && operation(sym) === getindex
-        end
-    end
 end
 struct GlobalScope <: SymScope end
 function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
@@ -119,20 +75,8 @@ function GlobalScope(sym::Union{Num, SymbolicT, Symbolics.Arr{Num}})
         end
     end
 end
-function namespace_defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
-    for (k, v) in pairs(defs))
-end
 function unknowns(sys::AbstractSystem)
     sts = get_unknowns(sys)
-    systems = get_systems(sys)
-    if isempty(systems)
-        return sts
-    end
-    if !initial_parameters && !is_initializesystem(sys)
-        filter!(result) do sym
-        end
-    end
 end
 function observed(sys::AbstractSystem)
     obs = get_observed(sys)
