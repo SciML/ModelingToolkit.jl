@@ -69,8 +69,6 @@ for fun in [:toexpr]
         end
     end
 end
-const INTERNAL_FIELD_WARNING = """
-"""
 abstract type AbstractSystem end
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 function complete end
@@ -91,26 +89,26 @@ include("clock.jl")
 include("systems/systemstructure.jl")
 include("systems/systems.jl")
 include("systems/alias_elimination.jl")
-include("structural_transformation/StructuralTransformations.jl")
-@reexport using .StructuralTransformations
+function linear_subsys_adjmat!(state::TransformationState; kwargs...)
+    graph = state.structure.graph
+    if state.structure.solvable_graph === nothing
+        state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    end
+    linear_equations = Int[]
+    eadj = Vector{Int}[]
+    cadj = Vector{Int}[]
+    mm = SparseMatrixCLIL(nsrcs(graph),
+        ndsts(graph),
+        linear_equations, eadj, cadj)
+end
 const t_nounits = let
     only(@independent_variables t)
 end
-const t = let
-end
 const D_nounits = Differential(t_nounits)
-const D = Differential(t)
-export ODEFunction, convert_system_indepvar,
-       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
-export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
-       fractional_to_ordinary, linear_fractional_to_ordinary
-export Pre
-export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
-function __init__()
-end
+export System, Pre, complete
 PrecompileTools.@compile_workload begin
     @variables x(ModelingToolkit.t_nounits) y(ModelingToolkit.t_nounits)
-    sys = System([ModelingToolkit.D_nounits(x) ~ x * y, y ~ 3x + 4 * D(y)], ModelingToolkit.t_nounits, [x, y], Num[]; name = :sys)
+    sys = System([ModelingToolkit.D_nounits(x) ~ x * y, y ~ 3x + 4 * ModelingToolkit.D_nounits(y)], ModelingToolkit.t_nounits, [x, y], Num[]; name = :sys)
     TearingState(sys)
 end
 end
