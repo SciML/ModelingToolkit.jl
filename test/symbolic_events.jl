@@ -874,10 +874,9 @@ end
 
     # Test Simulation
     @mtkcompile sys = TestSystem()
-
-    # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
     sol = solve(prob)
+
     # This is singular at the second event, but the derivatives are zero so it's
     # constant after that point anyway. Just make sure it hits the last event and
     # had the correct `u`.
@@ -1374,7 +1373,7 @@ end
     @parameters p2(t) = 1.0
     @variables x(t) = 0.0
     @variables x2(t)
-    event = [0.5] => [p2 ~ Pre(t)]
+    event = SymbolicDiscreteCallback([0.5] => [p2 ~ Pre(t)], discrete_parameters = p2)
 
     eq = [
         D(x) ~ p2,
