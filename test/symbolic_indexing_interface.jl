@@ -236,3 +236,14 @@ end
     @test timeseries_parameter_index(sys, p[1, 1]) ===
           ParameterTimeseriesIndex(1, (1, 1, 1, 1))
 end
+
+@testset "Indexing with symbols work for discrete parameters" begin
+    t = ModelingToolkit.t_nounits; D = ModelingToolkit.D_nounits
+    @variables x(t) = 1.
+    @parameters p(t) = 1.
+    ev = ModelingToolkit.SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p)*2], discrete_parameters = p)
+    @mtkcompile sys = System([D(x) ~ p], t; discrete_events = ev)
+    prob = ODEProblem(sys, [], (0., 2.))
+    sol = solve(prob, Tsit5())
+    @test sol[p] == sol[:p] == sol.ps[p] == sol.ps[:p]
+end
