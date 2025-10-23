@@ -179,11 +179,10 @@ end
                               0 ~ func(x[1], x[2]) * exp(x[3]) - x[4]^3 - 5
                               0 ~ func(x[1], x[2]) * exp(x[4]) - x[3]^3 - 4])
     sccprob = SCCNonlinearProblem(sys, [])
-    # since explicitfuns are called during problem construction
-    @test val[] == 1
+    @test val[] == 0
     sccsol = solve(sccprob, NewtonRaphson())
     @test SciMLBase.successful_retcode(sccsol)
-    @test val[] == 2
+    @test val[] == 1
 end
 
 import ModelingToolkitStandardLibrary.Blocks as B
