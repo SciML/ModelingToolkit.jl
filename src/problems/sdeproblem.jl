@@ -77,7 +77,7 @@ end
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, sparse, expression, kwargs...)
 
-    noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
+    noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise, iip)
     kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
         op, kwargs...)
 
@@ -97,7 +97,7 @@ function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, 
     check_is_continuous(sys, T)
 end
 
-function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false)
+function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false, iip = false)
     noiseeqs = get_noise_eqs(sys)
     if noiseeqs isa AbstractVector
         # diagonal noise
@@ -106,7 +106,7 @@ function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false
     elseif size(noiseeqs, 2) == 1
         # scalar noise
         noise_rate_prototype = nothing
-        noise = nothing
+        noise = iip ? WienerProcess!(0., 0., 0.) : WienerProcess(0., 0., 0.)
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
