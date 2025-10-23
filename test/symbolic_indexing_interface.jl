@@ -2,6 +2,7 @@ using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex,
                        SymbolicContinuousCallback
 using SciMLStructures: Tunable
+using OrdinaryDiffEqTsit5
 
 @testset "System" begin
     @parameters a b
