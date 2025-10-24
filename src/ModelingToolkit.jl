@@ -24,8 +24,7 @@ using DocStringExtensions
 using SpecialFunctions, NaNMath
 @recompile_invalidations begin
     using DiffEqCallbacks
-using DiffEqNoiseProcess: DiffEqNoiseProcess, WienerProcess
-using DiffEqBase, SciMLBase, ForwardDiff
+    using DiffEqBase, SciMLBase, ForwardDiff
 end
 using Graphs
 import ExprTools: splitdef, combinedef

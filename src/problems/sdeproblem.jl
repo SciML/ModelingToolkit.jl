@@ -119,7 +119,7 @@ function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false
     elseif size(noiseeqs, 2) == 1
         # scalar noise
         noise_rate_prototype = nothing
-        noise = WienerProcess(0.0, 0.0, 0.0)
+        noise = __default_wiener_process()
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
@@ -129,4 +129,13 @@ function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false
         noise = nothing
     end
     return noise, noise_rate_prototype
+end
+
+__default_wiener_process() = __default_wiener_process(nothing)
+
+function __default_wiener_process(_)
+    error("""
+    Generating code for this problem requires loading DiffEqNoiseProcess.jl. Please run
+    `import DiffEqNoiseProcess` to proceed.
+    """)
 end
