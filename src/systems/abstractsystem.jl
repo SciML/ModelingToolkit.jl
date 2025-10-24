@@ -2084,6 +2084,7 @@ Base.show(io::IO, sys::AbstractSystem; kws...) = show(io, MIME"text/plain"(), sy
 
 function Base.show(
         io::IO, mime::MIME"text/plain", sys::AbstractSystem; hint = true, bold = true)
+    Symbolics.warn_load_latexify()
     limit = get(io, :limit, false) # if output should be limited,
     rows = first(displaysize(io)) ÷ 5 # then allocate ≈1/5 of display height to each list
 
@@ -2540,14 +2541,6 @@ function debug_system(
         sys = complete(sys; split = is_split(sys))
     end
     return sys
-end
-
-@latexrecipe function f(sys::AbstractSystem)
-    return latexify(equations(sys))
-end
-
-function Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem)
-    print(io, "\$\$ " * latexify(x) * " \$\$")
 end
 
 struct InvalidSystemException <: Exception

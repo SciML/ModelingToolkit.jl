@@ -116,6 +116,7 @@ Base.nameof(ap::AnalysisPoint) = ap.name
 
 Base.show(io::IO, ap::AnalysisPoint) = show(io, MIME"text/plain"(), ap)
 function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
+    Symbolics.warn_load_latexify()
     if ap.input === nothing
         print(io, "0")
         return
@@ -141,19 +142,6 @@ function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
 end
 
 Symbolics.hide_lhs(::AnalysisPoint) = true
-
-@latexrecipe function f(ap::AnalysisPoint)
-    index --> :subscript
-    snakecase --> true
-    ap.input === nothing && return 0
-    outs = Expr(:vect)
-    append!(outs.args, ap_var.(ap.outputs))
-    return Expr(:call, :AnalysisPoint, ap_var(ap.input), ap.name, outs)
-end
-
-function Base.show(io::IO, ::MIME"text/latex", ap::AnalysisPoint)
-    print(io, latexify(ap))
-end
 
 """
     $(TYPEDSIGNATURES)

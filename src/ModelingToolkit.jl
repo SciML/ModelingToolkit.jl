@@ -42,7 +42,7 @@ else
     const IntDisjointSet = IntDisjointSets
 end
 using Base.Threads
-using Latexify, ArrayInterface
+using ArrayInterface
 using Setfield, ConstructionBase
 import Libdl
 using DocStringExtensions
@@ -87,7 +87,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
                   BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
-                  rhss, lhss, prettify_expr, gradient,
+                  rhss, lhss, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
                   scalarize, hasderiv
 

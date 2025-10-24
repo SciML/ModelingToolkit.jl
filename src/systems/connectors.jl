@@ -41,25 +41,17 @@ end
 const _debug_mode = Base.JLOptions().check_bounds == 1
 
 function Base.show(io::IO, c::Connection)
+    Symbolics.warn_load_latexify()
     print(io, "connect(")
     if c.systems isa AbstractArray || c.systems isa Tuple
         n = length(c.systems)
         for (i, s) in enumerate(c.systems)
-            str = join(split(string(nameof(s)), NAMESPACE_SEPARATOR), '.')
+            str = join(split(string(Symbol(s)), NAMESPACE_SEPARATOR), '.')
             print(io, str)
             i != n && print(io, ", ")
         end
     end
     print(io, ")")
-end
-
-@latexrecipe function f(c::Connection)
-    index --> :subscript
-    return Expr(:call, :connect, map(nameof, c.systems)...)
-end
-
-function Base.show(io::IO, ::MIME"text/latex", ap::Connection)
-    print(io, latexify(ap))
 end
 
 isconnection(_) = false
