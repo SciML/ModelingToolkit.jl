@@ -891,22 +891,8 @@ function parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs, where_
     push!(exprs, ex)
 end
 
-function convert_units(varunits::DynamicQuantities.Quantity, value)
-    DynamicQuantities.ustrip(DynamicQuantities.uconvert(
-        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
-end
-
-convert_units(::DynamicQuantities.Quantity, value::NoValue) = NO_VALUE
-
-function convert_units(
-        varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
-    DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
-        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
-end
-
-convert_units(::DynamicQuantities.Quantity, value::AbstractArray{Num}) = value
-
-convert_units(::DynamicQuantities.Quantity, value::Num) = value
+function convert_units end
+function __generate_variable_with_unit end
 
 function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     vv, def,
@@ -915,25 +901,7 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
     if !(vv isa Tuple)
         name = getname(vv)
         varexpr = if haskey(metadata_with_exprs, VariableUnit)
-            unit = metadata_with_exprs[VariableUnit]
-            quote
-                $name = if $name === $NO_VALUE
-                    $setdefault($vv, $def)
-                else
-                    try
-                        $setdefault($vv, $convert_units($unit, $name))
-                    catch e
-                        if isa(e, $(DynamicQuantities.DimensionError))
-                            error("Unable to convert units for \'" * string(:($$vv)) * "\'")
-                        elseif isa(e, MethodError)
-                            error("No or invalid units provided for \'" * string(:($$vv)) *
-                                  "\'")
-                        else
-                            rethrow(e)
-                        end
-                    end
-                end
-            end
+            __generate_variable_with_unit(metadata_with_exprs, name, vv, def)
         else
             quote
                 $name = if $name === $NO_VALUE

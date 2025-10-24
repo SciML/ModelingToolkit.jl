@@ -95,9 +95,6 @@ export independent_variables, unknowns, observables, parameters, full_parameters
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-import DynamicQuantities
-const DQ = DynamicQuantities
-
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 import SciMLPublic: @public
@@ -240,12 +237,7 @@ include("deprecations.jl")
 const t_nounits = let
     only(@independent_variables t)
 end
-const t = let
-    only(@independent_variables t [unit = DQ.u"s"])
-end
-
 const D_nounits = Differential(t_nounits)
-const D = Differential(t)
 
 export ODEFunction, convert_system_indepvar,
        System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
@@ -365,7 +357,6 @@ end
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)
-    SU.hashcons(unwrap(t), true)
     SU.hashcons(COMMON_NOTHING, true)
     SU.hashcons(COMMON_MISSING, true)
 end
@@ -455,7 +446,7 @@ PrecompileTools.@compile_workload begin
      using ModelingToolkit
     @variables x(ModelingToolkit.t_nounits) y(ModelingToolkit.t_nounits)
     isequal(ModelingToolkit.D_nounits.x, ModelingToolkit.t_nounits)
-    sys = System([ModelingToolkit.D_nounits(x) ~ x * y, y ~ 3x + 4 * D(y)], ModelingToolkit.t_nounits, [x, y], Num[]; name = :sys)
+    sys = System([ModelingToolkit.D_nounits(x) ~ x * y, y ~ 3x + 4 * ModelingToolkit.D_nounits(y)], ModelingToolkit.t_nounits, [x, y], Num[]; name = :sys)
     TearingState(sys)
     complete(sys)
     mtkcompile(sys)
