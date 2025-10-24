@@ -171,11 +171,11 @@ end
 
 Get all the independent variables with respect to which differentials (`op`) are taken.
 """
-function collect_ivs(eqs, op = Differential)
-    vars = Set()
-    ivs = Set()
+function collect_ivs(eqs, ::Type{op} = Differential) where {op}
+    vars = Set{SymbolicT}()
+    ivs = Set{SymbolicT}()
     for eq in eqs
-        vars!(vars, eq; op = op)
+        SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             if isoperator(v, op)
                 collect_ivs_from_nested_operator!(ivs, v, op)
@@ -335,7 +335,7 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
         Moshi.Match.@match v begin
             BSImpl.Term(; f, args) && if f === getindex end => begin
                 haskey(guesses, args[1]) && continue
-                def = Symbolics.getdefaultval(args[1], nothing)
+                def = getguess(args[1])
                 def === nothing && continue
                 guesses[args[1]] = def
             end
