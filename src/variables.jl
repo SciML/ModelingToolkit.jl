@@ -674,15 +674,8 @@ struct EvalAt <: Symbolics.Operator
 end
 
 function (A::EvalAt)(x::SymbolicT)
-    if symbolic_type(x) == NotSymbolic() || !iscall(x)
-        if x isa CallAndWrap
-            return x(A.t)
-        else
-            return x
-        end
-    end
-
-    if iscall(x) && operation(x) == getindex
+    iscall(x) || return x
+    if operation(x) === getindex
         arr = arguments(x)[1]
         term(getindex, A(arr), arguments(x)[2:end]...)
     elseif operation(x) isa Differential
@@ -691,7 +684,7 @@ function (A::EvalAt)(x::SymbolicT)
     else
         length(arguments(x)) !== 1 &&
             error("Variable $x has too many arguments. EvalAt can only be applied to one-argument variables.")
-        (symbolic_type(only(arguments(x))) !== ScalarSymbolic()) && return x
+        SU.isconst(only(arguments(x))) && return x
         return operation(x)(A.t)
     end
 end
@@ -699,6 +692,11 @@ end
 function (A::EvalAt)(x::Union{Num, Symbolics.Arr})
     wrap(A(unwrap(x)))
 end
+
+function (A::EvalAt)(x::CallAndWrap)
+    x(A.t)
+end
+
 SymbolicUtils.isbinop(::EvalAt) = false
 
 Base.nameof(::EvalAt) = :EvalAt
