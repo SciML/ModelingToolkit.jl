@@ -92,7 +92,7 @@ function array_variable_assignments(args...; argument_name = generated_argument_
         else
             elems = map(idxs) do idx
                 i, j = idx
-                term(getindex, argument_name(i), j)
+                term(getindex, argument_name(i), j; type = Real, shape = SU.ShapeVecT())
             end
             # use `MakeArray` syntax and generate a stack-allocated array
             expr = term(SymbolicUtils.Code.create_array, SArray, nothing,
