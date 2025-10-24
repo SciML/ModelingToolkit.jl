@@ -97,10 +97,10 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     eqs_diff = eqs[idxs_diff]
     D = Differential(get_iv(sys))
-    diffmap = merge(
+    diffmap = DerivativeDict(merge(
         Dict(eq.lhs => eq.rhs for eq in eqs_diff),
         Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
-    )
+    ))
 
     if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
         # 2) process dummy derivatives and u0map into initialization system
