@@ -20,14 +20,14 @@ Define a subscripted time-dependent variable with name `x` and subscript `i`. Eq
 to `@variables \$name(..)`. `T` is the desired symtype of the variable when called with
 the independent variable.
 """
-_defvaridx(x, i; T = Real) = variable(x, i, T = SymbolicUtils.FnType{Tuple, T})
+_defvaridx(x, i; T = Real) = variable(x, i, T = SymbolicUtils.FnType{Tuple, T, Nothing})
 """
     $(TYPEDSIGNATURES)
 
 Define a time-dependent variable with name `x`. Equivalent to `@variables \$x(..)`.
 `T` is the desired symtype of the variable when called with the independent variable.
 """
-_defvar(x; T = Real) = variable(x, T = SymbolicUtils.FnType{Tuple, T})
+_defvar(x; T = Real) = variable(x, T = SymbolicUtils.FnType{Tuple, T, Nothing})
 
 """
     $(TYPEDSIGNATURES)
