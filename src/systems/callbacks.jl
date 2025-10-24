@@ -120,7 +120,10 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     @named affectsys = System(
         vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)); is_discrete = true)
-    affectsys = mtkcompile(affectsys; fully_determined = nothing)
+    # This `@invokelatest` should not be necessary, but it works around the inference bug
+    # in https://github.com/JuliaLang/julia/issues/59943. Remove it at your own risk, the
+    # bug took weeks to reduce to an MWE.
+    affectsys = @invokelatest mtkcompile(affectsys; fully_determined = nothing)
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)
