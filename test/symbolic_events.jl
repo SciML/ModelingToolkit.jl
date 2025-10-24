@@ -1481,5 +1481,5 @@ end
     first_ev_idx = findfirst(i -> sol.t[i] == sol.t[i+1], 1:length(sol.t))
     t_e = sol.t[first_ev_idx]
     @test sol(t_e + eps(), idxs = qif.V) ≈ -sol(t_e + eps(), idxs = qif.jcn)
-    @test sol(t_e + eps(), idxs = [lif1.V, lif2.V]) ≈ sol(t_e + eps(), idxs = [lif1.V, lif2.V])
+    @test sol(t_e - eps(), idxs = [lif1.V, lif2.V]) ≈ sol(t_e + eps(), idxs = [lif1.V, lif2.V])
 end
