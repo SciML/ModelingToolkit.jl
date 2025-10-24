@@ -180,7 +180,7 @@ end
 
 function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::SymbolicT)
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return sym isa ParameterIndex || is_parameter(ic, sym) ||
+        return is_parameter(ic, sym) ||
                iscall(sym) && operation(sym) === getindex &&
                is_parameter(ic, first(arguments(sym)))
     end
@@ -203,6 +203,7 @@ function SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym::Symbol
         Symbol.(nameof(sys), NAMESPACE_SEPARATOR_SYMBOL, named_parameters)) == 1
 end
 
+SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, ::ParameterIndex) = is_split(sys)
 SymbolicIndexingInterface.is_parameter(sys::AbstractSystem, sym) = false
 
 function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym)
