@@ -541,7 +541,7 @@ Create variables with a guess like this
 ```
 """
 function getguess(x)
-    Symbolics.getmetadata(x, VariableGuess, nothing)
+    Symbolics.getmetadata_maybe_indexed(x, VariableGuess, nothing)
 end
 
 """
