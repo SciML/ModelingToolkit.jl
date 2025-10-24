@@ -350,7 +350,7 @@ function setup_parameter_initialization!(
             _val1 = get_possibly_array_fallback_singletons(pmap, p)
             _val2 = get_possibly_array_fallback_singletons(defs, p)
             _val3 = get_possibly_array_fallback_singletons(guesses, p)
-            varp = tovar(p)
+            varp = p
             push!(solved_params, p)
             # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
             if _val2 === missing
@@ -408,11 +408,10 @@ function solve_parameter_dependencies!(sys::AbstractSystem, solved_params::Abstr
             push!(new_parameter_deps, eq)
             continue
         end
-        varp = tovar(eq.lhs)
         push!(solved_params, eq.lhs)
         push!(eqs_ics, eq)
         guessval = get(guesses, eq.lhs, eq.rhs)
-        push!(defs, varp => guessval)
+        push!(defs, eq.lhs => guessval)
     end
 
     return new_parameter_deps
@@ -490,7 +489,7 @@ function _has_delays(sys::AbstractSystem, ex, banned)
         return any(x -> _has_delays(sys, x, banned), args)
     end
     if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
-       iscall(args[1]) && get_iv(sys) in vars(args[1])
+       iscall(args[1]) && get_iv(sys) in SU.search_variables(args[1])
         return true
     end
     return any(x -> _has_delays(sys, x, banned), args)
