@@ -243,7 +243,7 @@ end
     D = M.D_nounits
 
     @parameters h_c m₀ h₀ g₀ D_c c Tₘ m_c
-    @variables h(..) v(..) m(..) [bounds = (m_c, 1)] T(..) [input = true, bounds = (0, Tₘ)]
+    @variables h(..) v(..) m(..) = m₀ [bounds = (m_c, 1)] T(..) [input = true, bounds = (0, Tₘ)]
     drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
     gravity(h) = g₀ * (h₀ / h)
 
