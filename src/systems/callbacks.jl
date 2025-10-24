@@ -61,7 +61,7 @@ function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], 
 end
 
 function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
-        iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
+        iv = nothing, alg_eqs::Vector{Equation} = Equation[], obs_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...)
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
@@ -70,6 +70,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
 
     discrete_parameters isa AbstractVector || (discrete_parameters = [discrete_parameters])
     discrete_parameters = unwrap.(discrete_parameters)
+    obs_vars = [unwrap(eq.lhs) for eq in obs_eqs]
 
     for p in discrete_parameters
         occursin(unwrap(iv), unwrap(p)) ||
@@ -79,6 +80,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
     dvs = OrderedSet()
     params = OrderedSet()
     _varsbuf = Set()
+    eqs_contain_obs = false
     for eq in affect
         if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
              symbolic_type(eq.lhs) === NotSymbolic())
@@ -91,6 +93,16 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
         union!(params, _varsbuf)
         diffvs = collect_applied_operators(eq, Differential)
         union!(dvs, diffvs)
+
+        for var in obs_vars
+            if occursin(var, unwrap(eq.rhs))
+                eqs_contain_obs = true
+            end
+        end
+    end
+
+    if eqs_contain_obs
+        alg_eqs = [alg_eqs; obs_eqs]
     end
     for eq in alg_eqs
         collect_vars!(dvs, params, eq, iv)
