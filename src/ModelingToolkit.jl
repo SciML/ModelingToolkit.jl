@@ -48,7 +48,6 @@ import Libdl
 using DocStringExtensions
 using Base: RefValue
 using Combinatorics
-import Distributions
 import FunctionWrappersWrappers
 import FunctionWrappers: FunctionWrapper
 using URIs: URI
@@ -58,7 +57,6 @@ using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
                  PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
                  NoInit
-using Distributed
 using MLStyle
 import Moshi
 using Moshi.Data: @data
