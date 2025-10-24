@@ -89,6 +89,7 @@ function MTKParameters(
     filter!(p) do kvp
         kvp[1] in all_ps
     end
+    p = recursive_unwrap(p)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length)
