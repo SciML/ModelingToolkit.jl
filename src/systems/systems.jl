@@ -35,9 +35,9 @@ function mtkcompile(
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
-    inputs = unwrap_vars(inputs)
-    outputs = unwrap_vars(outputs)
-    disturbance_inputs = unwrap_vars(disturbance_inputs)
+    inputs = OrderedSet{SymbolicT}(unwrap_vars(inputs))
+    outputs = OrderedSet{SymbolicT}(unwrap_vars(outputs))
+    disturbance_inputs = OrderedSet{SymbolicT}(unwrap_vars(disturbance_inputs))
     newsys = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs, additional_passes,
@@ -51,8 +51,9 @@ function mtkcompile(
 end
 
 function __mtkcompile(sys::AbstractSystem; simplify = false,
-        inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
-        disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
+        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
+        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
+        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
         sort_eqs = true,
         kwargs...)
     # TODO: convert noise_eqs to brownians for simplification

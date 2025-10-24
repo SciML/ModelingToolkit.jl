@@ -1029,8 +1029,9 @@ end
 
 function mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true,
-        inputs = SymbolicT[], outputs = SymbolicT[],
-        disturbance_inputs = SymbolicT[],
+        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         kwargs...)
     if !is_time_dependent(state.sys)
         return _mtkcompile!(state; check_consistency,
@@ -1061,8 +1062,9 @@ function mtkcompile!(state::TearingState;
     if length(tss) > 1
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
-        sys = _mtkcompile!(tss[continuous_id];
-            inputs = inputs, discrete_inputs = clocked_inputs[continuous_id], outputs, disturbance_inputs,
+        sys = _mtkcompile!(tss[continuous_id]; simplify,
+            inputs, outputs, disturbance_inputs,
+            discrete_inputs = OrderedSet{SymbolicT}(clocked_inputs[continuous_id]),
             check_consistency, fully_determined,
             kwargs...)
         additional_passes = get(kwargs, :additional_passes, nothing)
@@ -1099,9 +1101,11 @@ end
 
 function _mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true,
-        dummy_derivative = true, discrete_inputs::Vector{SymbolicT} = SymbolicT[],
-        inputs::Vector{SymbolicT} = SymbolicT[], outputs::Vector{SymbolicT} = SymbolicT[],
-        disturbance_inputs::Vector{SymbolicT} = SymbolicT[],
+        dummy_derivative = true,
+        discrete_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         kwargs...)
     if fully_determined isa Bool
         check_consistency &= fully_determined
@@ -1109,10 +1113,11 @@ function _mtkcompile!(state::TearingState;
         check_consistency = true
     end
     orig_inputs = Set{SymbolicT}()
-    ModelingToolkit.markio!(state, orig_inputs, discrete_inputs, SymbolicT[], SymbolicT[])
-    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs)
-    ModelingToolkit.markio!(state, Set{SymbolicT}(), inputs, outputs, disturbance_inputs)
-    state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
+    validate_io!(state, orig_inputs, inputs, discrete_inputs, outputs, disturbance_inputs)
+    # ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
+    union!(inputs, disturbance_inputs)
+    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
+    state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
     trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
@@ -1150,6 +1155,33 @@ function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLI
             sys, state; mm, check_consistency, fully_determined, kwargs...)
     end
     return sys
+end
+
+function validate_io!(state::TearingState, orig_inputs::Set{SymbolicT}, inputs::OrderedSet{SymbolicT},
+                      discrete_inputs::OrderedSet{SymbolicT}, outputs::OrderedSet{SymbolicT},
+                      disturbance_inputs::OrderedSet{SymbolicT})
+    for v in state.fullvars
+        isinput(v) && push!(orig_inputs, v)
+    end
+    fullvars_set = OrderedSet{SymbolicT}(state.fullvars)
+    missings = OrderedSet{SymbolicT}()
+    union!(missings, inputs)
+    setdiff!(missings, fullvars_set)
+    isempty(missings) || throw(IONotFoundError("inputs", nameof(state.sys), missings))
+
+    union!(missings, discrete_inputs)
+    setdiff!(missings, fullvars_set)
+    isempty(missings) || throw(IONotFoundError("discrete inputs", nameof(state.sys), missings))
+
+    union!(missings, outputs)
+    setdiff!(missings, fullvars_set)
+    isempty(missings) || throw(IONotFoundError("outputs", nameof(state.sys), missings))
+
+    union!(missings, disturbance_inputs)
+    setdiff!(missings, fullvars_set)
+    isempty(missings) || throw(IONotFoundError("disturbance inputs", nameof(state.sys), missings))
+
+    return nothing
 end
 
 struct DifferentiatedVariableNotUnknownError <: Exception
