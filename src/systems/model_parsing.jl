@@ -73,7 +73,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
     # We build `System` by default
-    push!(exprs.args, :(systems = ModelingToolkit.AbstractSystem[]))
+    push!(exprs.args, :(systems = ModelingToolkit.System[]))
     push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
     push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
 
@@ -293,7 +293,7 @@ Base.@nospecializeinfer function parse_variable_def!(
         Expr(:(::),
             a,
             type) => begin
-            type = getfield(mod, type)
+            type = Core.eval(mod, type)
             parse_variable_def!(
                 dict, mod, a, varclass, kwargs, where_types; def, type, meta)
         end
