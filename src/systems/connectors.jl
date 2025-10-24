@@ -196,23 +196,9 @@ SymbolicUtils.promote_symtype(::typeof(instream), ::Type{T}) where {T} = T
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 
-"""
-    $(TYPEDEF)
-
-Utility struct which wraps a symbolic variable used in a `Connection` to enable `Base.show`
-to work.
-"""
-struct SymbolicWithNameof
-    var::SymbolicT
-end
-
-function Base.nameof(x::SymbolicWithNameof)
-    return Symbol(x.var)
-end
-
 is_causal_variable_connection(c) = false
 function is_causal_variable_connection(c::Connection)
-    all(Base.Fix2(isa, SymbolicWithNameof), get_systems(c))
+    get_systems(c) isa Vector{SymbolicT}
 end
 
 const ConnectableSymbolicT = Union{BasicSymbolic, Num, Symbolics.Arr}
@@ -289,7 +275,7 @@ function connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
         push!(allvars, unwrap(var))
     end
     validate_causal_variables_connection(allvars)
-    return Equation(Connection(), Connection(map(SymbolicWithNameof, allvars)))
+    return Equation(Connection(), Connection(allvars))
 end
 
 """
@@ -474,18 +460,6 @@ function generate_connectionsets!(connection_state::AbstractConnectionState,
     # Enforce postcondition as a sanity check that the namespacing is implemented correctly
     length(namespace) == initial_len || throw(NotPossibleError())
     return nothing
-end
-
-function _generate_connectionsets!(connection_state::AbstractConnectionState,
-        namespace::Vector{Symbol},
-        connected_vars::Vector{SymbolicWithNameof},
-        isouter::IsOuter)
-    # unwrap the `SymbolicWithNameof` into the contained symbolic variables.
-    _connected_vars = SymbolicT[]
-    for x in connected_vars
-        push!(_connected_vars, x.var)
-    end
-    _generate_connectionsets!(connection_state, namespace, _connected_vars, isouter)
 end
 
 @noinline function throw_both_input_output(var::SymbolicT, connected_vars::Vector{SymbolicT})
@@ -756,7 +730,7 @@ function handle_maybe_connect_equation!(state::AbstractConnectionState,
         end
         add_domain_connection_edge!(state, hyperedge)
     else
-        connected_systems = get_systems(rhs)::Union{Vector{System}, Vector{SymbolicWithNameof}}
+        connected_systems = get_systems(rhs)::Union{Vector{System}, Vector{SymbolicT}}
         generate_connectionsets!(state, namespace, connected_systems, isouter)
     end
     return nothing

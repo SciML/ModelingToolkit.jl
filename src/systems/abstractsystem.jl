@@ -3459,17 +3459,10 @@ function recreate_connections(sys::AbstractSystem)
             ap::AnalysisPoint = eq.rhs
             oldargs = [ap.input; ap.outputs]
         end
-        newargs = map(get_systems(eq.rhs)) do arg
-            rewrap_nameof = arg isa SymbolicWithNameof
-            if rewrap_nameof
-                arg = arg.var
-            end
+        newargs = map(get_systems(eq.rhs)::Union{Vector{System}, Vector{SymbolicT}}) do arg
             name = arg isa AbstractSystem ? nameof(arg) : getname(arg)
             hierarchy = namespace_hierarchy(name)
             newarg = recursive_getproperty(sys, hierarchy)
-            if rewrap_nameof
-                newarg = SymbolicWithNameof(newarg)
-            end
             return newarg
         end
         if eq.lhs isa Connection
