@@ -285,7 +285,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         for (k, v) in p
             if is_parameter(linfun, k)
                 v = fixpoint_sub(v, p)
-                setp(linfun, k)(newps, v)
+                setp(linfun, k)(newps, value(v))
             end
         end
         p = newps
@@ -508,7 +508,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     sts = unknowns(sys)
     t = get_iv(sys)
     ps = parameters(sys; initial_parameters = true)
-    p = reorder_parameters(sys, ps)
+    p = Tuple(reorder_parameters(sys, ps))
 
     fun_expr = generate_rhs(sys; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
