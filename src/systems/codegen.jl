@@ -1060,6 +1060,11 @@ function build_explicit_observed_function(sys, ts;
         output_type = Tuple
     end
 
+    ts = unwrap(ts)
+    if !(ts isa Union{SymbolicT, Symbol})
+        ts = unwrap_vars(ts)
+    end
+
     allsyms = all_symbols(sys)
     if symbolic_type(ts) == NotSymbolic() && ts isa AbstractArray
         ts = map(x -> symbol_to_symbolic(sys, x; allsyms), ts)
