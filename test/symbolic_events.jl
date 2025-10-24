@@ -1440,3 +1440,46 @@ end
     @mtkcompile sys = MWE()
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
 end
+
+@testset "Test explicit updates correctly handle observed variables." begin
+    t = ModelingToolkit.t_nounits; D = ModelingToolkit.D_nounits
+    @variables V(t)=-70.0 G(t)=0.0 jcn(t) [input = true] z(t)= 0.0
+    @parameters Eₘ=-70.0 θ=-50.0
+    
+    ev = (V ≥ θ) => [V ~ Eₘ]
+    
+    @named lif1 = System([D(V) ~ jcn], t, [V, jcn], [Eₘ, θ]; discrete_events = [ev])
+    @named lif2 = System([D(V) ~ jcn], t, [V, jcn], [Eₘ, θ]; discrete_events = [ev])
+    @named qif = System([D(G) ~ G + z, D(z) ~ z, D(V) ~ jcn], t, [V, G, z, jcn], [Eₘ, θ]; discrete_events = [ev])
+    
+    sys2 = compose(System([lif1.jcn ~ -lif2.V - qif.G, lif2.jcn ~ -lif1.V - qif.G, qif.jcn ~ -lif1.V - lif2.V], t; name = :outer), [lif1, lif2, qif])
+    sys2 = mtkcompile(sys2)
+    
+    ev = discrete_events(sys2)[1]
+    @test length(observed(ev.affect.system)) == 1
+    prob = ODEProblem(sys2, [], (0., 2.))
+    sol = solve(prob)
+
+    first_ev_idx = findfirst(i -> sol.t[i] == sol.t[i+1], 1:length(sol.t))
+    t_e = sol.t[first_ev_idx]
+    @test sol(t_e - eps(), idxs = [lif2.V, lif1.V]) ≈ sol(t_e + eps(), idxs = [lif2.V, lif1.V])
+
+    # Add observed equations if explicit observed
+    ev = (V ≥ θ) => [V ~ -jcn]
+    @named lif1 = System([D(V) ~ jcn], t, [V, jcn], [Eₘ, θ]; discrete_events = [ev])
+    @named lif2 = System([D(V) ~ jcn], t, [V, jcn], [Eₘ, θ]; discrete_events = [ev])
+    @named qif = System([D(G) ~ G + z, D(z) ~ z, D(V) ~ jcn], t, [V, G, z, jcn], [Eₘ, θ]; discrete_events = [ev])
+
+    sys3 = compose(System([lif1.jcn ~ -lif2.V - qif.G, lif2.jcn ~ -lif1.V - qif.G, qif.jcn ~ -lif1.V - lif2.V], t; name = :outer), [lif1, lif2, qif])
+    sys3 = mtkcompile(sys3)
+
+    ev = discrete_events(sys3)[1]
+    @test length(observed(ev.affect.system)) == 4
+    prob = ODEProblem(sys3, [], (0., 2.))
+    sol = solve(prob)
+
+    first_ev_idx = findfirst(i -> sol.t[i] == sol.t[i+1], 1:length(sol.t))
+    t_e = sol.t[first_ev_idx]
+    @test sol(t_e + eps(), idxs = qif.V) ≈ -sol(t_e + eps(), idxs = qif.jcn)
+    @test sol(t_e + eps(), idxs = [lif1.V, lif2.V]) ≈ sol(t_e + eps(), idxs = [lif1.V, lif2.V])
+end
