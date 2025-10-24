@@ -653,15 +653,18 @@ end
 
 function add_intermediate_derivatives!(fullvars::Vector{SymbolicT}, dervaridxs::OrderedSet{Int}, addvar!::AddVar!)
     for (i, v) in enumerate(fullvars)
-        while true
-            Moshi.Match.@match v begin
-                BSImpl.Term(; f, args) && if f isa Differential end => begin
-                    push!(dervaridxs, i)
-                    v = args[1]
-                    addvar!(v, VARIABLE)
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) && if f isa Differential end => begin
+                @assert f.order isa Int "Only integer derivative order allowed"
+                order = f.order::Int
+                push!(dervaridxs, i)
+                inner = args[1]
+                addvar!(inner, VARIABLE)
+                for j in 1:(order-1)
+                    addvar!(Differential(f.x, j)(inner), VARIABLE)
                 end
-                _ => break
             end
+            _ => nothing
         end
     end
 end
@@ -829,7 +832,11 @@ end
 
 function lower_order_var(dervar::SymbolicT, t::SymbolicT)
     Moshi.Match.@match dervar begin
-        BSImpl.Term(; f, args) && if f isa Differential end => return args[1]
+        BSImpl.Term(; f, args) && if f isa Differential end => begin
+            order = f.order::Int
+            isone(order) && return args[1]
+            return Differential(f.x, order - 1)(args[1])
+        end
         BSImpl.Term(; f, args) && if f isa Shift end => begin
             step = f.steps - 1
             vv = args[1]
