@@ -645,6 +645,11 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
 end
 
 function collect_vars!(
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+    collect_vars!(unknowns, parameters, unwrap(ex), iv; depth, op)
+end
+
+function collect_vars!(
         unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
     collect_vars!(unknowns, parameters, p[1], iv; depth, op)
     collect_vars!(unknowns, parameters, p[2], iv; depth, op)
