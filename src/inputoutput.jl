@@ -315,39 +315,30 @@ end
 """
 Turn input variables into parameters of the system.
 """
-function inputs_to_parameters!(state::TransformationState, inputsyms::Vector{SymbolicT})
-    check_bound = inputsyms === nothing
+function inputs_to_parameters!(state::TransformationState, inputsyms::OrderedSet{SymbolicT}, outputsyms::OrderedSet{SymbolicT})
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
     @assert solvable_graph === nothing
 
-    inputs = BitSet()
     var_reidx = zeros(Int, length(fullvars))
-    ninputs = 0
     nvar = 0
-    new_parameters = SymbolicT[]
-    input_to_parameters = Dict{SymbolicT, SymbolicT}()
     new_fullvars = SymbolicT[]
     for (i, v) in enumerate(fullvars)
-        if isinput(v) && !(check_bound && is_bound(sys, v))
+        if v in inputsyms
             if var_to_diff[i] !== nothing
                 error("Input $(fullvars[i]) is differentiated!")
             end
-            push!(inputs, i)
-            ninputs += 1
             var_reidx[i] = -1
-            p = toparam(v)
-            push!(new_parameters, p)
-            input_to_parameters[v] = p
         else
             nvar += 1
             var_reidx[i] = nvar
             push!(new_fullvars, v)
         end
     end
+    ninputs = length(inputsyms)
+    @set! sys.inputs = inputsyms
+    @set! sys.outputs = outputsyms
     if ninputs == 0
-        @set! sys.inputs = OrderedSet{SymbolicT}()
-        @set! sys.outputs = OrderedSet{SymbolicT}(filter(isoutput, fullvars))
         state.sys = sys
         return state
     end
@@ -374,14 +365,10 @@ function inputs_to_parameters!(state::TransformationState, inputsyms::Vector{Sym
     @set! structure.var_to_diff = complete(new_var_to_diff)
     @set! structure.graph = complete(new_graph)
 
-    @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
-                    substitute(equations(sys), input_to_parameters)
-    @set! sys.unknowns = setdiff(unknowns(sys), keys(input_to_parameters))
-    ps = parameters(sys)
-
-    @set! sys.ps = [ps; new_parameters]
-    @set! sys.inputs = OrderedSet{SymbolicT}(new_parameters)
-    @set! sys.outputs = OrderedSet{SymbolicT}(filter(isoutput, fullvars))
+    @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
+    ps = copy(parameters(sys))
+    append!(ps, inputsyms)
+    @set! sys.ps = ps
     @set! state.sys = sys
     @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
     @set! state.structure = structure
