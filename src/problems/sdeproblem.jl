@@ -77,7 +77,20 @@ end
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, sparse, expression, kwargs...)
 
-    noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
+    # Only calculate noise and noise_rate_prototype if not provided by user
+    if !haskey(kwargs, :noise) && !haskey(kwargs, :noise_rate_prototype)
+        noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
+    elseif !haskey(kwargs, :noise)
+        noise, _ = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
+        noise_rate_prototype = kwargs[:noise_rate_prototype]
+    elseif !haskey(kwargs, :noise_rate_prototype)
+        _, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
+        noise = kwargs[:noise]
+    else
+        noise = kwargs[:noise]
+        noise_rate_prototype = kwargs[:noise_rate_prototype]
+    end
+
     kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
         op, kwargs...)
 
