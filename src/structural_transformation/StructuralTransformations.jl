@@ -15,7 +15,7 @@ import Moshi
 
 using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
-                       unknowns, equations, vars, diff2term_with_unit,
+                       unknowns, equations, diff2term_with_unit,
                        shift2term_with_unit, value,
                        operation, arguments, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
@@ -31,7 +31,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
                        Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
-                       VariableShift
+                       VariableShift, DerivativeDict
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -51,6 +51,7 @@ using ModelingToolkit.StaticArrays
 using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction,
                                  RuntimeGeneratedFunctions,
                                  drop_expr
+import Symbolics: Num, Arr, CallAndWrap
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

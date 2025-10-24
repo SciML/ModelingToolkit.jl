@@ -213,7 +213,7 @@ function substitute_derivatives_algevars!(
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            v_t = setio(diff2term_with_unit(dd, iv), false, false)
+            v_t = diff2term_with_unit(dd, iv)
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
                 neweqs[eq] = substitute(neweqs[eq], dd => v_t)
@@ -554,7 +554,7 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
     diff_to_var = invview(var_to_diff)
     extra_eqs, extra_vars = extra_eqs_vars
 
-    total_sub = Dict{SymbolicT, SymbolicT}()
+    total_sub = DerivativeDict()
     if is_only_discrete(structure)
         for (i, v) in enumerate(fullvars)
             Moshi.Match.@match v begin
@@ -701,7 +701,7 @@ struct EquationGenerator{S}
     Substitutions to perform in all subsequent equations. For each differential equation
     `D(x) ~ f(..)`, the substitution `D(x) => f(..)` is added to the rules.
     """
-    total_sub::Dict{SymbolicT, SymbolicT}
+    total_sub::DerivativeDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
     """
     The differential operator, or `nothing` if not applicable.
     """
@@ -1008,7 +1008,7 @@ function update_simplified_system!(
         for var in unknowns
             Moshi.Match.@match var begin
                 BSImpl.Term(; f, args, type, shape, metadata) && if f isa Shift && f.steps == 1 end => begin
-                    push!(_unknowns, setio(args[1], false, false))
+                    push!(_unknowns, args[1])
                 end
                 _ => push!(_unknowns, var)
             end
@@ -1086,7 +1086,7 @@ function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::
     neweqs = collect(equations(state))
     dummy_sub = Dict{SymbolicT, SymbolicT}()
 
-    if ModelingToolkit.has_iv(state.sys)
+    if ModelingToolkit.has_iv(state.sys) && get_iv(state.sys) !== nothing
         iv = get_iv(state.sys)
         if !is_only_discrete(state.structure)
             D = Differential(iv)

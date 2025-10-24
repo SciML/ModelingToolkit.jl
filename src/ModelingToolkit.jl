@@ -165,6 +165,7 @@ include("variables.jl")
 include("parameters.jl")
 include("independent_variables.jl")
 include("constants.jl")
+include("derivative_dict.jl")
 
 const SymmapT = Dict{SymbolicT, SymbolicT}
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
