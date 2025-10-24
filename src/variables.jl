@@ -294,32 +294,22 @@ Create parameters with bounds like this
 getbounds(x::Union{Num, Symbolics.Arr}) = getbounds(unwrap(x))
 function getbounds(x::SymbolicT)
     if iscall(x) && operation(x) === getindex
+        bounds = getmetadata(x, VariableBounds, nothing)
+        bounds === nothing || return bounds
         p = arguments(x)[1]
-        # if we reached here, `x` is the result of calling `getindex`
-        bounds = @something Symbolics.getmetadata(x, VariableBounds, nothing) getbounds(p)
-        idxs = arguments(x)[2:end]
-        bounds = map(bounds) do b
-            if b isa AbstractArray
-                if symbolic_has_known_size(p) && size(p) != size(b)
-                    throw(DimensionMismatch("Expected array variable $p with shape $(size(p)) to have bounds of identical size. Found $bounds of size $(size(bounds))."))
-                end
-                return b[idxs...]
-            elseif symbolic_type(x) == ArraySymbolic()
-                return fill(b, size(x))
-            else
-                return b
-            end
+        bounds = getbounds(p)
+        idxs = @views unwrap_const.(arguments(x)[2:end])
+        return map(bounds) do b
+            @assert symbolic_has_known_size(p) && size(p) == size(b)
+            return b[idxs...]
         end
     else
-        bounds = Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
-        if symbolic_type(x) == ArraySymbolic() && symbolic_has_known_size(x)
-            bounds = map(bounds) do b
-                b isa AbstractArray && return b
-                return fill(b, size(x))
-            end
+        if symbolic_has_known_size(x) && SU.is_array_shape(SU.shape(x))
+            return getmetadata(x, VariableBounds, (fill(-Inf, size(x)), fill(Inf, size(x))))
+        else
+            return getmetadata(x, VariableBounds, (-Inf, Inf))
         end
     end
-    return bounds
 end
 
 """
@@ -329,7 +319,7 @@ Determine whether symbolic variable `x` has bounds associated with it.
 See also [`getbounds`](@ref).
 """
 function hasbounds(x)
-    b = getbounds(x)::NTuple{2}
+    b = getbounds(x)::NTuple{2, Any}
     any(isfinite.(b[1]) .|| isfinite.(b[2]))::Bool
 end
 
