@@ -1603,7 +1603,7 @@ function SymbolicTstops(
         if is_array_of_symbolics(val) || val isa AbstractArray
             collect(val)
         else
-            term(:, t0, unwrap(val), t1; type = AbstractArray{Real})
+            term(:, t0, unwrap(val), t1; type = Vector{Real})
         end
     end
     rps = reorder_parameters(sys)
