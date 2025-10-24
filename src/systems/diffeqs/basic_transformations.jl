@@ -260,7 +260,7 @@ function fractional_to_ordinary(
                 push!(def, new_z=>zeros(N-M))
             else
                 new_z = only(@variables $new_z(iv)[1:N-M, 1:m])
-                new_eq = D(new_z) ~ -γs*new_z + hcat(fill(sub_eq, N-M, 1), collect(new_z[:, 1:m-1]*diagm(1:m-1)))
+                new_eq = D(new_z) ~ -γs*new_z + BS{VartypeT}[fill(sub_eq, N-M, 1);; collect(new_z[:, 1:m-1]*diagm(1:m-1))]
                 rhs = coeff*sum(cs[i]*new_z[i, m] for i in 1:N-M)
                 for (index, value) in enumerate(initial)
                     rhs += value * iv^(index - 1) / gamma(index)
@@ -511,8 +511,8 @@ function change_independent_variable(
         div2_of_iv1 = GlobalScope(diff2term_with_unit(D1(iv2_of_iv1), iv1))
     end
 
-    div2_of_iv2 = substitute(div2_of_iv1, iv1 => iv2) # e.g. uˍt(u)
-    div2_of_iv2_of_iv1 = substitute(div2_of_iv2, iv2 => iv2_of_iv1) # e.g. uˍt(u(t))
+    div2_of_iv2 = substitute(div2_of_iv1, iv1 => iv2; filterer = Returns(true)) # e.g. uˍt(u)
+    div2_of_iv2_of_iv1 = substitute(div2_of_iv2, iv2 => iv2_of_iv1; filterer = Returns(true)) # e.g. uˍt(u(t))
 
     # If requested, add a differential equation for the old independent variable as a function of the old one
     if add_old_diff
@@ -538,19 +538,26 @@ function change_independent_variable(
     # e.g. (d/dt)(f(t)) -> (d/dt)(f(u(t))) -> df(u(t))/du(t) * du(t)/dt -> df(u)/du * uˍt(u)
     function transform(ex::T) where {T}
         # 1) Replace the argument of every function; e.g. f(t) -> f(u(t))
+        rules = DerivativeDict()
         for var in SU.search_variables(ex; is_atomic = OperatorIsAtomic{Nothing}()) # loop over all variables in expression (op = Nothing prevents interpreting "D(f(t))" as one big variable)
             if is_function_of(var, iv1) && !isequal(var, iv2_of_iv1) # of the form f(t)? but prevent e.g. u(t) -> u(u(t))
                 var_of_iv1 = var # e.g. f(t)
                 var_of_iv2_of_iv1 = substitute(var_of_iv1, iv1 => iv2_of_iv1; filterer = Returns(true)) # e.g. f(u(t))
-                ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold, filterer = Returns(true))
+                rules[var_of_iv1] = var_of_iv2_of_iv1
+                # ex = substitute(ex, var_of_iv1 => var_of_iv2_of_iv1; fold, filterer = Returns(true))
             end
         end
+        ex = substitute(ex, rules; fold, filterer = Returns(true))
+        empty!(rules)
         # 2) Repeatedly expand chain rule until nothing changes anymore
         orgex = nothing
         while !isequal(ex, orgex)
             orgex = ex # save original
             ex = expand_derivatives(ex, simplify) # expand chain rule, e.g. (d/dt)(f(u(t)))) -> df(u(t))/du(t) * du(t)/dt
-            ex = substitute(ex, D1(iv2_of_iv1) => div2_of_iv2_of_iv1; fold, filterer = Returns(true)) # e.g. du(t)/dt -> uˍt(u(t))
+            # e.g. du(t)/dt -> uˍt(u(t))
+            rules[D1(iv2_of_iv1)] = div2_of_iv2_of_iv1
+            ex = substitute(ex, rules; fold, filterer = Returns(true))
+            empty!(rules)
         end
         # 3) Set new independent variable
         ex = substitute(ex, iv2_of_iv1 => iv2; fold, filterer = Returns(true)) # set e.g. u(t) -> u everywhere
@@ -768,7 +775,7 @@ function Girsanov_transform(sys::System, u; θ0 = 1.0)
 
     # return modified SDE System
     @set! sys.eqs = deqs
-    @set! sys.noise_eqs = noiseeqs
+    @set! sys.noise_eqs = unwrap.(noiseeqs)
     @set! sys.unknowns = unknown_vars
     get_defaults(sys)[θ] = θ0
     obs = observed(sys)
@@ -921,7 +928,7 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
             newsts[i] = ns
             varmap[s] = ns
         else
-            ns = variable(getname(s); T = FnType)(t)
+            ns = variable(getname(s); T = FnType{Tuple, Real, Nothing})(t)
             newsts[i] = ns
             varmap[s] = ns
         end
