@@ -531,7 +531,7 @@ function get_bv_solution_symbol(ns)
 end
 
 function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, iv, sol)
-    vs = vars(cons)
+    vs = SU.search_variables(cons)
     for v in vs
         iscall(v) || continue
         op = operation(v)
