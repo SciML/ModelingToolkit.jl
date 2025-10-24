@@ -153,16 +153,18 @@ function check_variables(dvs, iv)
     end
 end
 
-function check_lhs(eq::Equation, op, dvs::Set)
+function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
-    (operation(v) isa op && only(arguments(v)) in dvs) && return
+    op = operation(v)
+    op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
     error("$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
-check_lhs(eqs, op, dvs::Set) =
+function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
     for eq in eqs
-        check_lhs(eq, op, dvs)
+        check_lhs(eq, Differential, dvs)
     end
+end
 
 """
     collect_ivs(eqs, op = Differential)
