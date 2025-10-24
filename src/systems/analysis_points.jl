@@ -236,10 +236,15 @@ end
 function connect(
         in::ConnectableSymbolicT, name::Symbol, out::ConnectableSymbolicT,
         outs::ConnectableSymbolicT...; verbose = true)
-    allvars = (in, out, outs...)
+    allvars = SymbolicT[]
+    push!(allvars, unwrap(in))
+    push!(allvars, unwrap(out))
+    for var in outs
+        push!(allvars, unwrap(var))
+    end
     validate_causal_variables_connection(allvars)
     return AnalysisPoint() ~ AnalysisPoint(
-        unwrap(in), name, unwrap.([out; collect(outs)]); verbose)
+        allvars[1], name, allvars[2:end]; verbose)
 end
 
 """
@@ -446,9 +451,8 @@ function get_analysis_variable(var, name, iv; perturb = true)
         name = Symbol(:d_, name)
     end
     if symbolic_type(var) == ArraySymbolic()
-        T = Array{eltype(symtype(var)), ndims(var)}
-        pvar = unwrap(only(@variables $name(iv)::T))
-        pvar = setmetadata(pvar, Symbolics.ArrayShapeCtx, Symbolics.shape(var))
+        T = eltype(symtype(var))
+        pvar = unwrap(only(@variables $name(iv)[SU.shape(var)...]::T))
         default = zeros(eltype(symtype(var)), size(var))
     else
         T = symtype(var)
