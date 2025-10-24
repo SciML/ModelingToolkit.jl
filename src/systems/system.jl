@@ -773,6 +773,7 @@ function flatten(sys::System, noeqs = false)
         # later removed by the user will be re-added. Right now, we just want to
         # retain `defaults(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
+        gui_metadata = get_gui_metadata(sys),
         description = description(sys), name = nameof(sys))
 end
 
