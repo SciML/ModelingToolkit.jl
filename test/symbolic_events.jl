@@ -1374,11 +1374,13 @@ end
     @variables x(t) = 0.0
     @variables x2(t)
     event = SymbolicDiscreteCallback([0.5] => [p2 ~ Pre(t)], discrete_parameters = p2)
+    event_broken = [0.5] => [p2 ~ Pre(t)]
 
     eq = [
         D(x) ~ p2,
         x2 ~ p_1(x)
     ]
+    @test_throws ErrorException @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event_broken])
     @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
