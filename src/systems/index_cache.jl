@@ -503,12 +503,15 @@ function SymbolicIndexingInterface.is_timeseries_parameter(ic::IndexCache, sym)
     timeseries_parameter_index(ic, sym) !== nothing
 end
 
+function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sym::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
+    timeseries_parameter_index(ic, unwrap(sym))
+end
+function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sym::Symbol)
+    sym = get(ic.symbol_to_variable, sym, nothing)
+    sym === nothing && return nothing
+    timeseries_parameter_index(ic, sym)
+end
 function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sym)
-    if sym isa Symbol
-        sym = get(ic.symbol_to_variable, sym, nothing)
-        sym === nothing && return nothing
-    end
-    sym = unwrap(sym)
     idx = check_index_map(ic.discrete_idx, sym)
     idx === nothing ||
         return ParameterTimeseriesIndex(idx.clock_idx, (idx.buffer_idx, idx.idx_in_clock))
@@ -517,7 +520,7 @@ function SymbolicIndexingInterface.timeseries_parameter_index(ic::IndexCache, sy
     idx = timeseries_parameter_index(ic, args[1])
     idx === nothing && return nothing
     return ParameterTimeseriesIndex(
-        idx.timeseries_idx, (idx.parameter_idx..., args[2:end]...))
+        idx.timeseries_idx, (idx.parameter_idx..., value.(args[2:end])...))
 end
 
 function check_index_map(idxmap::Dict{SymbolicT, V}, sym::SymbolicT)::Union{V, Nothing} where {V}
