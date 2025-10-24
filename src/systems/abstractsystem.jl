@@ -427,10 +427,10 @@ function SymbolicIndexingInterface.observed(
 end
 
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
-    return merge(
+    return recursive_unwrap(merge(
         Dict(eq.lhs => eq.rhs for eq in observed(sys)),
         defaults(sys)
-    )
+    ))
 end
 
 SymbolicIndexingInterface.is_markovian(sys::AbstractSystem) = !is_dde(sys)
