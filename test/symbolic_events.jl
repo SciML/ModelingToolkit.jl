@@ -1563,7 +1563,7 @@ end
         cevent = [t ~ 1.0] => (f = affect!, modified = (; d))
         @mtkcompile sys = System(eqs, t; continuous_events = [cevent])
 
-        # Simualtes the model and checks that values is correct.
+        # Simulates the model and checks that values is correct.
         sol = solve(ODEProblem(sys, [], (0.0, 100.0)), Rosenbrock23())
         @test sol[X][end]≈1.0 atol=1e-8 rtol=1e-8
         @test sol.ps[p] == 2.0
