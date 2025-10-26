@@ -36,30 +36,35 @@ lower it to a first order system, symbolically generate the Jacobian function
 for the numerical integrator, and solve it.
 
 ```julia
-using OrdinaryDiffEqDefault, ModelingToolkit
+using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+# Defines a ModelingToolkit `System` model.
 @parameters σ ρ β
 @variables x(t) y(t) z(t)
-
-eqs = [D(D(x)) ~ σ * (y - x),
+eqs = [
+    D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
-
+    D(z) ~ x * y - β * z
+]
 @mtkcompile sys = System(eqs, t)
 
-u0 = [D(x) => 2.0,
+# Simulate the model for a specific condition (initial condition and parameter values).
+using OrdinaryDiffEqDefault
+sim_cond = [
+    D(x) => 2.0,
     x => 1.0,
     y => 0.0,
-    z => 0.0]
-
-p = [σ => 28.0,
+    z => 0.0,
+    σ => 28.0,
     ρ => 10.0,
-    β => 8 / 3]
-
-tspan = (0.0, 100.0)
-prob = ODEProblem(sys, u0, tspan, p, jac = true)
+    β => 8 / 3
+]
+tend = 100.0
+prob = ODEProblem(sys, sim_cond, tend; jac = true)
 sol = solve(prob)
+
+# Plot the solution in phase-space.
 using Plots
 plot(sol, idxs = (x, y))
 ```
@@ -73,44 +78,46 @@ interacting Lorenz equations and simulate the resulting Differential-Algebraic
 Equation (DAE):
 
 ```julia
-using DifferentialEquations, ModelingToolkit
+using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@parameters σ ρ β
-@variables x(t) y(t) z(t)
-
-eqs = [D(x) ~ σ * (y - x),
+# Defines two lorenz system model.s
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
-
+    D(z) ~ x * y - β * z
+]
 @named lorenz1 = System(eqs, t)
 @named lorenz2 = System(eqs, t)
 
+# Connect the two models, creating a single model.
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a * γ]
 @mtkcompile connected = System(connections, t, systems = [lorenz1, lorenz2])
 
-u0 = [lorenz1.x => 1.0,
+# Simulate the model for a specific condition (initial condition and parameter values).
+using OrdinaryDiffEqDefault
+sim_cond = [
+    lorenz1.x => 1.0,
     lorenz1.y => 0.0,
     lorenz1.z => 0.0,
     lorenz2.x => 0.0,
-    lorenz2.y => 1.0,
     lorenz2.z => 0.0,
-    a => 2.0]
-
-p = [lorenz1.σ => 10.0,
+    a => 2.0,
+    lorenz1.σ => 10.0,
     lorenz1.ρ => 28.0,
     lorenz1.β => 8 / 3,
     lorenz2.σ => 10.0,
     lorenz2.ρ => 28.0,
     lorenz2.β => 8 / 3,
-    γ => 2.0]
-
-tspan = (0.0, 100.0)
-prob = ODEProblem(connected, u0, tspan, p)
+    γ => 2.0
+]
+tend = 100.0
+prob = ODEProblem(connected, sim_cond, tend)
 sol = solve(prob)
 
+# Plot the solution in phase-space.
 using Plots
 plot(sol, idxs = (a, lorenz1.x, lorenz2.z))
 ```
