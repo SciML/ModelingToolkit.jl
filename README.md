@@ -69,7 +69,7 @@ using Plots
 plot(sol, idxs = (x, y))
 ```
 
-![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
+![Lorenz2](https://github.com/user-attachments/assets/e82fb2ce-97b7-4f56-b272-85653c88bdb3)
 
 This will have automatically generated fast Jacobian functions, making
 it more optimized than directly building a function. In addition, we can then
@@ -122,7 +122,7 @@ using Plots
 plot(sol, idxs = (a, lorenz1.x, lorenz2.z))
 ```
 
-![](https://user-images.githubusercontent.com/17304743/187790221-528046c3-dbdb-4853-b977-799596c147f3.png)
+![LorenzConnected](https://github.com/user-attachments/assets/ef65d812-c10e-42c6-945d-e61515e3b6a1)
 
 ## Citation
 
