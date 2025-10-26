@@ -931,7 +931,7 @@ function mtkcompile!(state::TearingState; simplify = false,
     end
     # split_system returns one or two systems and the inputs for each
     # mod clock inference to be binary
-    # if it's continous keep going, if not then error unless given trait impl in additional passes
+    # if it's continuous keep going, if not then error unless given trait impl in additional passes
     ci = ModelingToolkit.ClockInference(state)
     ci = ModelingToolkit.infer_clocks!(ci)
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),

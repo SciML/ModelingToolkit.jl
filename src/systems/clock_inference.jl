@@ -359,7 +359,7 @@ function split_system(ci::ClockInference{S}) where {S}
         resize_or_push!(cid_to_var, i, cid)
     end
 
-    # breaks the system up into a continous and 0 or more discrete systems
+    # breaks the system up into a continuous and 0 or more discrete systems
     tss = similar(cid_to_eq, S)
     for (id, (ieqs, iieqs, ivars)) in enumerate(zip(cid_to_eq, cid_to_init_eq, cid_to_var))
         ts_i = system_subset(ts, ieqs, iieqs, ivars)
@@ -369,7 +369,7 @@ function split_system(ci::ClockInference{S}) where {S}
         end
         tss[id] = ts_i
     end
-    # put the continous system at the back
+    # put the continuous system at the back
     if continuous_id != 0
         tss[continuous_id], tss[end] = tss[end], tss[continuous_id]
         inputs[continuous_id], inputs[end] = inputs[end], inputs[continuous_id]
