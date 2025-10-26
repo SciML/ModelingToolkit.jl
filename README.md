@@ -94,7 +94,7 @@ eqs = [
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a * γ]
-@mtkcompile connected = System(connections, t, systems = [lorenz1, lorenz2])
+@mtkcompile connected_lorenz = System(connections, t; systems = [lorenz1, lorenz2])
 
 # Simulate the model for a specific condition (initial condition and parameter values).
 using OrdinaryDiffEqDefault
@@ -114,7 +114,7 @@ sim_cond = [
     γ => 2.0
 ]
 tend = 100.0
-prob = ODEProblem(connected, sim_cond, tend)
+prob = ODEProblem(connected_lorenz, sim_cond, tend)
 sol = solve(prob)
 
 # Plot the solution in phase-space.
