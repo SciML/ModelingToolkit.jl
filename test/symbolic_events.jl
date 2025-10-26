@@ -1441,9 +1441,7 @@ end
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
 end
 
-
 @testset "Automatic inference of `discrete_parameters`" begin
-
     # Basic case, checks for both types of events (in combination and isolation).
     let
         # Creates models with continuous, discrete, or both types of events
@@ -1518,5 +1516,53 @@ end
         @test sol.ps[p5][end] != 0.0
         @test sol.ps[k1] == sol.ps[k2] == sol.ps[k3] == sol.ps[k4] == sol.ps[k5] == 0.0
         @test sol.ps[d1] == sol.ps[d2] == sol.ps[d3] == sol.ps[d4] == sol.ps[d5] == 0.0
+    end
+
+    # Checks that everything works for vector-valued parameters and variables.
+    let
+        # Creates the model using the macro. 
+        @mtkmodel VectorParams begin
+            @parameters begin
+                k(t)[1:2] = [1, 1]
+                kup = 2.0
+            end
+            @variables begin
+                X(t)[1:2] = [4.0, 4.0]
+            end
+            @equations begin
+                D(X[1]) ~ -k[1]*X[1] + k[2]*X[2]
+                D(X[2]) ~ k[1]*X[1] - k[2]*X[2]
+            end
+            @continuous_events begin
+                (k[2] ~ t) => [k[1] ~ Pre(k[1] + kup)]
+            end
+        end
+        @mtkcompile model = VectorParams()
+
+        # Simulates the model. Checks that the correct values are achieved.
+        prob = ODEProblem(model, [], (0.0, 100.0))
+        sol = solve(prob, Rosenbrock23())
+        @test sol.ps[model.kup]  == 2.0
+        @test sol.ps[model.k[1]] == 3.0
+        @test sol.ps[model.k[2]] == 1.0
+        @test sol[model.X[1]][end] ≈ 2.0 atol = 1e-8 rtol = 1e-8
+        @test sol[model.X[2]][end] ≈ 6.0 atol = 1e-8 rtol = 1e-8
+    end
+
+    # Checks for a functional affect.
+    let
+        # Creates model.
+        @variables X(t) = 5.0
+        @parameters p = 2.0 d(t) = 1.0
+        eqs = [D(X) ~ p - d * X]
+        affect!(mod, obs, ctx, integ) = return (; d = 2.0)
+        cevent = [t ~ 1.0] => (f = affect!, modified = (; d))
+        @mtkcompile sys = System(eqs, t; continuous_events = [cevent])
+
+        # Simualtes the model and checks that values is correct.
+        sol = solve(ODEProblem(sys, [], (0.0, 100.0)), Rosenbrock23())
+        @test sol[X][end] ≈ 1.0 atol = 1e-8 rtol = 1e-8
+        @test sol.ps[p] == 2.0
+        @test sol.ps[d] == [1.0, 2.0]
     end
 end

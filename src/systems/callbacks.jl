@@ -36,8 +36,12 @@ end
 function infer_discrete_parameters(affects)
     discrete_parameters = Set()
     for affect in affects
-        infer_discrete_parameters!(discrete_parameters, affect.lhs)
-        infer_discrete_parameters!(discrete_parameters, affect.rhs)
+        if affect isa Equation
+            infer_discrete_parameters!(discrete_parameters, affect.lhs)
+            infer_discrete_parameters!(discrete_parameters, affect.rhs)
+        elseif affect isa NamedTuple
+            haskey(affect, :modified) && union!(discrete_parameters, affect.modified)
+        end
     end
     return collect(discrete_parameters)
 end
@@ -49,6 +53,12 @@ function infer_discrete_parameters!(discrete_parameters, expr)
     # Change this coming line to a Symbolic append type of thing.
     union!(discrete_parameters, filter(ModelingToolkit.isparameter, dynamic_symvars))
 end
+
+# When updating vector variables, the affect side can be a vector.
+function infer_discrete_parameters!(discrete_parameters, expr_vec::Vector)
+    foreach(expr -> infer_discrete_parameters!(discrete_parameters, expr), expr_vec)
+end
+
 # Functions for replacing a Pre-call with a `1.0` (removing its content from an expression).
 is_precall(expr) = iscall(expr) ? operation(expr) isa Pre : false
 precall_to_1(expr) = (is_precall(expr) ? 1.0 : expr)
