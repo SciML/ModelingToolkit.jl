@@ -1466,12 +1466,12 @@ end
         sol_c = solve(prob_c, Rosenbrock23())
         sol_d = solve(prob_d, Rosenbrock23())
         sol_cd = solve(prob_cd, Rosenbrock23())
-        @test sol_c[X][end] ≈ 2.0 atol = 1e-3 rtol = 1e-3
-        @test sol_c[Y][end] ≈ 1.0 atol = 1e-3 rtol = 1e-3
-        @test sol_d[X][end] ≈ 1.0 atol = 1e-3 rtol = 1e-3
-        @test sol_d[Y][end] ≈ 2.0 atol = 1e-3 rtol = 1e-3
-        @test sol_cd[Y][end] ≈ 2.0 atol = 1e-3 rtol = 1e-3
-        @test sol_cd[Y][end] ≈ 2.0 atol = 1e-3 rtol = 1e-3
+        @test sol_c[X][end]≈2.0 atol=1e-3 rtol=1e-3
+        @test sol_c[Y][end]≈1.0 atol=1e-3 rtol=1e-3
+        @test sol_d[X][end]≈1.0 atol=1e-3 rtol=1e-3
+        @test sol_d[Y][end]≈2.0 atol=1e-3 rtol=1e-3
+        @test sol_cd[Y][end]≈2.0 atol=1e-3 rtol=1e-3
+        @test sol_cd[Y][end]≈2.0 atol=1e-3 rtol=1e-3
     end
 
     # Complicated and multiple events.
@@ -1485,18 +1485,22 @@ end
             D(X2) ~ p2 + k2 - d2*X2,
             D(X3) ~ p3 + k3 - d3*X3,
             D(X4) ~ p4 + k4 - d4*X4,
-            D(X5) ~ p4 + k4 - d4*X5,
+            D(X5) ~ p4 + k4 - d4*X5
         ]
-        cevents = [[t + d1 + k1 ~ 0.5] => [Pre(X1)*(p1 + 5 + Pre(X2)) + Pre(k1) ~ Pre(3X2 + k2)]]
+        cevents = [[t + d1 + k1 ~
+                    0.5] => [Pre(X1)*(p1 + 5 + Pre(X2)) + Pre(k1) ~ Pre(3X2 + k2)]]
         devents = [
             2.0 => [exp(p2 + Pre(p2)) ~ 5.0],
-            [1.0] => [(4 + Pre(k2) + Pre(k4) + Pre(k3))^3 + exp(1 + Pre(k3)) ~ (3 + p3 + Pre(k2))^3],
-            (t == 1.5) => [
-                Pre(k2) + Pre(k3) ~ p4 * (2 + Pre(k1)) + 3, 
+            [1.0] => [(4 + Pre(k2) + Pre(k4) + Pre(k3))^3 + exp(1 + Pre(k3)) ~
+                      (3 + p3 + Pre(k2))^3],
+            (t ==
+             1.5) => [
+                Pre(k2) + Pre(k3) ~ p4 * (2 + Pre(k1)) + 3,
                 Pre(p5) + 2 + 3Pre(k4) + Pre(p5) ~ exp(p5)
             ]
         ]
-        @mtkcompile sys = System(eqs, t, us, ps; continuous_events = cevents, discrete_events = devents)
+        @mtkcompile sys = System(
+            eqs, t, us, ps; continuous_events = cevents, discrete_events = devents)
 
         # Simulates system so that all events trigger.
         sim_cond = [
@@ -1542,18 +1546,18 @@ end
         # Simulates the model. Checks that the correct values are achieved.
         prob = ODEProblem(model, [], (0.0, 100.0))
         sol = solve(prob, Rosenbrock23())
-        @test sol.ps[model.kup]  == 2.0
+        @test sol.ps[model.kup] == 2.0
         @test sol.ps[model.k[1]] == 3.0
         @test sol.ps[model.k[2]] == 1.0
-        @test sol[model.X[1]][end] ≈ 2.0 atol = 1e-8 rtol = 1e-8
-        @test sol[model.X[2]][end] ≈ 6.0 atol = 1e-8 rtol = 1e-8
+        @test sol[model.X[1]][end]≈2.0 atol=1e-8 rtol=1e-8
+        @test sol[model.X[2]][end]≈6.0 atol=1e-8 rtol=1e-8
     end
 
     # Checks for a functional affect.
     let
         # Creates model.
         @variables X(t) = 5.0
-        @parameters p = 2.0 d(t) = 1.0
+        @parameters p=2.0 d(t)=1.0
         eqs = [D(X) ~ p - d * X]
         affect!(mod, obs, ctx, integ) = return (; d = 2.0)
         cevent = [t ~ 1.0] => (f = affect!, modified = (; d))
@@ -1561,7 +1565,7 @@ end
 
         # Simualtes the model and checks that values is correct.
         sol = solve(ODEProblem(sys, [], (0.0, 100.0)), Rosenbrock23())
-        @test sol[X][end] ≈ 1.0 atol = 1e-8 rtol = 1e-8
+        @test sol[X][end]≈1.0 atol=1e-8 rtol=1e-8
         @test sol.ps[p] == 2.0
         @test sol.ps[d] == [1.0, 2.0]
     end
