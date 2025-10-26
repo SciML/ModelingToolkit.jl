@@ -1444,7 +1444,14 @@ end
 @testset "Test erroneously created events yields errors" begin
     @parameters p(t) d
     @variables X(t)
-    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X < 5.0] => [X ~ Pre(X) + 10.0])
-    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X < 5.0, X > 10.0] => [X ~ Pre(X) + 10.0])
-    @test_throws "MethodError: no method" SymbolicContinuousCallback((X < 5.0) => [X ~ Pre(X) + 10.0])
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X <
+                                                                                            5.0] => [X ~
+                                                                                                     Pre(X) +
+                                                                                                     10.0])
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([
+        X < 5.0, X > 10.0] => [X ~ Pre(X) + 10.0])
+    @test_throws "MethodError: no method" SymbolicContinuousCallback((X <
+                                                                      5.0) => [X ~
+                                                                               Pre(X) +
+                                                                               10.0])
 end
