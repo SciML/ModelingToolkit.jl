@@ -11,7 +11,7 @@
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
 
 ModelingToolkit.jl is a modeling framework for high-performance symbolic-numeric computation
-in scientific computing  and scientific machine learning.
+in scientific computing and scientific machine learning.
 It allows for users to give a high-level description of a model for
 symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
 automatically generate fast functions for model components like Jacobians
@@ -71,7 +71,7 @@ plot(sol, idxs = (x, y))
 
 ![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
 
-This automatically will have generated fast Jacobian functions, making
+This will have automatically generated fast Jacobian functions, making
 it more optimized than directly building a function. In addition, we can then
 use ModelingToolkit to compose multiple ODE subsystems. Now, let's define two
 interacting Lorenz equations and simulate the resulting Differential-Algebraic
@@ -81,7 +81,7 @@ Equation (DAE):
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-# Defines two lorenz system model.s
+# Defines two lorenz system models.
 eqs = [
     D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
@@ -124,7 +124,7 @@ plot(sol, idxs = (a, lorenz1.x, lorenz2.z))
 
 ![](https://user-images.githubusercontent.com/17304743/187790221-528046c3-dbdb-4853-b977-799596c147f3.png)
 
-# Citation
+## Citation
 
 If you use ModelingToolkit.jl in your research, please cite [this paper](https://arxiv.org/abs/2103.05244):
 
