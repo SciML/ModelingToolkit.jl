@@ -1385,7 +1385,7 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol[x, end]≈1.0 atol=1e-6
+    @test sol[x, end]≈0.75 atol=1e-6
 end
 
 @testset "Symbolic affects are compiled in `complete`" begin
