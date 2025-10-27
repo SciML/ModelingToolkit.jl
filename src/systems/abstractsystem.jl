@@ -645,15 +645,17 @@ function complete(
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)
         end
+        alg_eqs = alg_equations(sys)
+        obs_eqs = observed(sys)
         if has_continuous_events(sys) && is_time_dependent(sys)
             @set! sys.continuous_events = complete.(
                 get_continuous_events(sys); iv = get_iv(sys),
-                alg_eqs = [alg_equations(sys); observed(sys)])
+                alg_eqs, obs_eqs)
         end
         if has_discrete_events(sys) && is_time_dependent(sys)
             @set! sys.discrete_events = complete.(
                 get_discrete_events(sys); iv = get_iv(sys),
-                alg_eqs = [alg_equations(sys); observed(sys)])
+                alg_eqs, obs_eqs)
         end
     end
     if split && has_index_cache(sys)
