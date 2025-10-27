@@ -165,7 +165,8 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
             assertions = assertions(sys),
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
             continuous_events = continuous_events(sys),
-            discrete_events = discrete_events(sys))
+            discrete_events = discrete_events(sys),
+            gui_metadata = get_gui_metadata(sys))
         @set! ssys.parameter_dependencies = get_parameter_dependencies(sys)
         return ssys
     end
