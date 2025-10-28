@@ -112,7 +112,7 @@ using Plots
 eqs = [D(y) ~ x]
 
 # Compile with inputs specified
-@mtkcompile sys = System(eqs, t, [x, y], []) inputs=[x]
+@mtkcompile sys=System(eqs, t, [x, y], []) inputs=[x]
 
 prob = ODEProblem(sys, [], (0, 4))
 
@@ -122,7 +122,7 @@ input = Input(sys.x, [1, 2, 3, 4], [0, 1, 2, 3])
 # Solve with the input - solver handles callbacks automatically
 sol = solve(prob, [input], Tsit5())
 
-plot(sol; idxs=[x,y])
+plot(sol; idxs = [x, y])
 ```
 
 Multiple `Input` objects can be passed in a vector to handle multiple input variables simultaneously.
@@ -151,10 +151,11 @@ step!(integrator, 1.0, true)
 # IMPORTANT: Must call finalize! to save all input callbacks
 finalize!(integrator)
 
-plot(sol; idxs=[x,y])
+plot(sol; idxs = [x, y])
 ```
 
 !!! warning "Always call `finalize!`"
+    
     When using `set_input!`, you must call [`finalize!`](@ref) after integration is complete. This ensures that all discrete callbacks associated with input variables are properly saved in the solution. Without this call, input values may not be correctly recorded when querying the solution.
 
 ## Docstrings
