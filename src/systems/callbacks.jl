@@ -438,8 +438,11 @@ function SymbolicDiscreteCallback(
         condition::Union{Symbolic{Bool}, Number, Vector{<:Number}}, affect = nothing;
         initialize = nothing, finalize = nothing,
         reinitializealg = nothing, kwargs...)
-    c = is_timed_condition(condition) ? condition : value(scalarize(condition))
+    # Manual error check (to prevent events like `[X < 5.0] => [X ~ Pre(X) + 10.0]` from being created).
+    (condition isa Vector) && (eltype(condition) <: Num) &&
+        error("Vectors of symbolic conditions are not allowed for `SymbolicDiscreteCallback`.")
 
+    c = is_timed_condition(condition) ? condition : value(scalarize(condition))
     if isnothing(reinitializealg)
         if any(a -> a isa ImperativeAffect,
             [affect, initialize, finalize])
