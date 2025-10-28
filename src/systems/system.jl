@@ -259,6 +259,11 @@ struct System <: IntermediateDeprecationSystem
     The `Schedule` containing additional information about the simplified system.
     """
     schedule::Union{Schedule, Nothing}
+    """
+    $INTERNAL_FIELD_WARNING
+    Functions used to set input variables with `set_input!` and `finalize!` functions
+    """
+    input_functions::Union{InputFunctions, Nothing}
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -271,7 +276,7 @@ struct System <: IntermediateDeprecationSystem
             complete = false, index_cache = nothing, ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, isscheduled = false,
-            schedule = nothing; checks::Union{Bool, Int} = true)
+            schedule = nothing, input_functions = nothing; checks::Union{Bool, Int} = true)
         if is_initializesystem && iv !== nothing
             throw(ArgumentError("""
             Expected initialization system to be time-independent. Found independent
@@ -310,7 +315,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            isscheduled, schedule)
+            isscheduled, schedule, input_functions)
     end
 end
 

@@ -159,6 +159,7 @@ include("constants.jl")
 
 include("utils.jl")
 
+export set_input!, finalize!, Input
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
@@ -169,6 +170,7 @@ include("systems/state_machines.jl")
 include("systems/analysis_points.jl")
 include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
+include("systems/inputs.jl")
 include("systems/system.jl")
 include("systems/codegen_utils.jl")
 include("problems/docs.jl")
@@ -224,7 +226,6 @@ include("structural_transformation/StructuralTransformations.jl")
 
 @reexport using .StructuralTransformations
 include("inputoutput.jl")
-include("inputs.jl")
 
 include("adjoints.jl")
 include("deprecations.jl")
