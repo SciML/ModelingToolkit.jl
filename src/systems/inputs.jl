@@ -29,7 +29,7 @@ struct Input
     time::SVector
 end
 
-function Input(var, data::Vector{<:Real}, time::Vector{<:Real}) 
+function Input(var, data::Vector{<:Real}, time::Vector{<:Real})
     n = length(data)
     return Input(var, SVector{n}(data), SVector{n}(time))
 end
@@ -40,7 +40,9 @@ struct InputFunctions
     setters::Tuple{SymbolicIndexingInterface.ParameterHookWrapper}
 end
 
-InputFunctions(events::Vector, vars::Vector, setters::Vector) = InputFunctions(Tuple(events), Tuple(vars), Tuple(setters))
+function InputFunctions(events::Vector, vars::Vector, setters::Vector)
+    InputFunctions(Tuple(events), Tuple(vars), Tuple(setters))
+end
 
 """
     set_input!(integrator, var, value::Real)
@@ -95,7 +97,9 @@ function set_input!(input_funs::InputFunctions, integrator::OrdinaryDiffEqCore.O
     u_modified!(integrator, true)
     return nothing
 end
-set_input!(integrator, var, value::Real) = set_input!(get_input_functions(integrator.f.sys), integrator, var, value)
+function set_input!(integrator, var, value::Real)
+    set_input!(get_input_functions(integrator.f.sys), integrator, var, value)
+end
 
 """
     finalize!(integrator)
@@ -117,7 +121,6 @@ final solution object, leading to incorrect results when indexing the solution.
 See also [`set_input!`](@ref), [`Input`](@ref)
 """
 function finalize!(input_funs::InputFunctions, integrator)
-
     for i in eachindex(input_funs.vars)
         save_callback_discretes!(integrator, input_funs.events[i])
     end
@@ -126,21 +129,23 @@ function finalize!(input_funs::InputFunctions, integrator)
 end
 finalize!(integrator) = finalize!(get_input_functions(integrator.f.sys), integrator)
 
-(input_funs::InputFunctions)(integrator, var, value::Real) = set_input!(input_funs, integrator, var, value)
+function (input_funs::InputFunctions)(integrator, var, value::Real)
+    set_input!(input_funs, integrator, var, value)
+end
 (input_funs::InputFunctions)(integrator) = finalize!(input_funs, integrator)
 
 function build_input_functions(sys, inputs)
-    
+
     # Here we ensure the inputs have metadata marking the discrete variables as parameters.  In some
     # cases the inputs can be fed to this function before they are converted to parameters by mtkcompile.
-    vars = SymbolicUtils.BasicSymbolic[isparameter(x) ? x : toparam(x) for x in unwrap.(inputs)] 
+    vars = SymbolicUtils.BasicSymbolic[isparameter(x) ? x : toparam(x)
+                                       for x in unwrap.(inputs)]
     setters = []
     events = SymbolicDiscreteCallback[]
     defaults = get_defaults(sys)
     if !isempty(vars)
-        
         for x in vars
-            affect = ImperativeAffect((m, o, c, i)->m, modified=(;x))
+            affect = ImperativeAffect((m, o, c, i)->m, modified = (; x))
             sdc = SymbolicDiscreteCallback(Inf, affect)
 
             push!(events, sdc)
@@ -149,7 +154,6 @@ function build_input_functions(sys, inputs)
             if !haskey(defaults, x)
                 push!(defaults, x => 0.0)
             end
-
         end
 
         @set! sys.discrete_events = events
@@ -157,33 +161,26 @@ function build_input_functions(sys, inputs)
         @set! sys.defaults = defaults
 
         setters = [SymbolicIndexingInterface.setsym(sys, x) for x in vars]
-    
+
         @set! sys.input_functions = InputFunctions(events, vars, setters)
-
     end
-    
 
-    return sys 
+    return sys
 end
 
-
-
-
 function DiffEqBase.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Input}, args...; kwargs...)
-
     tstops = Float64[]
     callbacks = DiscreteCallback[]
 
     # set_input!
     for input::Input in inputs
-
         tstops = union(tstops, input.time)
-        condition = (u,t,integrator) -> any(t .== input.time)
-        affect! = function (integrator) 
+        condition = (u, t, integrator) -> any(t .== input.time)
+        affect! = function (integrator)
             @inbounds begin
                 i = findfirst(integrator.t .== input.time)
                 set_input!(integrator, input.var, input.data[i])
-            end 
+            end
         end
         push!(callbacks, DiscreteCallback(condition, affect!))
 
@@ -191,15 +188,14 @@ function DiffEqBase.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Inpu
         if input.time[1] == 0
             prob.ps[input.var] = input.data[1]
         end
-    
     end
 
     # finalize!
     t_end = prob.tspan[2]
-    condition = (u,t,integrator) -> (t == t_end)
+    condition = (u, t, integrator) -> (t == t_end)
     affect! = (integrator) -> finalize!(integrator)
     push!(callbacks, DiscreteCallback(condition, affect!))
     push!(tstops, t_end)
 
-    return solve(prob, args...; tstops, callback=CallbackSet(callbacks...), kwargs...)
+    return solve(prob, args...; tstops, callback = CallbackSet(callbacks...), kwargs...)
 end
