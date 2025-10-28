@@ -7,6 +7,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
 using Symbolics: unwrap
 using DataInterpolations
 using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
+import DiffEqNoiseProcess
+import SymbolicUtils as SU
 const ST = StructuralTransformations
 
 # Define some variables
@@ -39,8 +41,8 @@ end
 
 @testset "observed2graph handles unknowns inside callable parameters" begin
     @variables x(t) y(t)
-    @parameters p(..)
-    g, _ = ModelingToolkit.observed2graph([y ~ p(x), x ~ 0], [y, x])
+    @parameters p(::Real)
+    g, _ = ModelingToolkit.observed2graph([y ~ p(x), x ~ 0], unwrap.([y, x]))
     @test ModelingToolkit.𝑠neighbors(g, 1) == [2]
     @test ModelingToolkit.𝑑neighbors(g, 2) == [1]
 end
@@ -277,10 +279,10 @@ end
     @mtkcompile sys = FilteredInput()
     vs = Set()
     for eq in equations(sys)
-        ModelingToolkit.vars!(vs, eq)
+        SU.search_variables!(vs, eq)
     end
     for eq in observed(sys)
-        ModelingToolkit.vars!(vs, eq)
+        SU.search_variables!(vs, eq)
     end
 
     @test !(D(sys.k) in vs)
@@ -315,10 +317,10 @@ end
         @mtkcompile sys = FilteredInput2()
         vs = Set()
         for eq in equations(sys)
-            ModelingToolkit.vars!(vs, eq)
+            SU.search_variables!(vs, eq)
         end
         for eq in observed(sys)
-            ModelingToolkit.vars!(vs, eq)
+            SU.search_variables!(vs, eq)
         end
 
         @test D(sys.k(t)) in vs

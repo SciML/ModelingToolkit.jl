@@ -2,6 +2,8 @@ using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
                        unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
                        ExtraVariablesSystemException
+using NonlinearSolve
+using SymbolicIndexingInterface: is_parameter
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables xx(t) some_input(t) [input = true]
@@ -49,7 +51,7 @@ err = "In particular, the unset input(s) are:\n some_input(t)"
 
 # simplification turns input variables into parameters
 ssys = mtkcompile(sys, inputs = [u], outputs = [])
-@test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
+@test is_parameter(ssys, unbound_inputs(ssys)[])
 @test !is_bound(ssys, u)
 @test u ∈ Set(unbound_inputs(ssys))
 
@@ -388,7 +390,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 f, outersys, dvs, p, io_sys = ModelingToolkit.add_input_disturbance(model, dist)
 
 @unpack u, d = outersys
-matrices, ssys = linearize(outersys, [u, d], model_outputs)
+matrices, ssys = linearize(outersys, [u, d], model_outputs; guesses = [dmodel.x[1] => 0.0])
 
 def = ModelingToolkit.defaults(outersys)
 
@@ -406,7 +408,7 @@ xp1 = f[1](x1, u, pn, 0)
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
 
-@variables x(t)[1:3] = 0
+@variables x(t)[1:3] = zeros(3)
 @variables u(t)[1:2]
 y₁, y₂, y₃ = x
 u1, u2 = u
@@ -466,7 +468,8 @@ ssys = linearize(augmented_sys,
         augmented_sys.input.u[2],
         augmented_sys.d
     ], outs;
-    op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0])
+    op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0],
+    guesses = [augmented_sys.x[1] => 0.0])
 matrices = ModelingToolkit.reorder_unknowns(
     matrices, unknowns(ssys), [ssys.x[1], ssys.x[2], ssys.integrator.x[1]])
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]

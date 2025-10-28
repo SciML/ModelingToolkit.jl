@@ -1,12 +1,12 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
-using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D
+using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
 @variables x(t) y(t) z(t) k(t)
 eqs = [x ~ y + z
        z ~ 2
        y ~ 2z + k]
 
-sorted_eq = topsort_equations(eqs, [x, y, z, k])
+sorted_eq = topsort_equations(eqs, unwrap.([x, y, z, k]))
 
 ref_eq = [z ~ 2
           y ~ 2z + k
@@ -15,7 +15,7 @@ ref_eq = [z ~ 2
 
 @test_throws ArgumentError topsort_equations([x ~ y + z
                                               z ~ 2
-                                              y ~ 2z + x], [x, y, z, k])
+                                              y ~ 2z + x], unwrap.([x, y, z, k]))
 
 @parameters σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
@@ -277,9 +277,9 @@ eqs = [x ~ 0
 @named sys = System(eqs, t, [x, y], [])
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
-@test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
-                                      "xˍt(t) ~ 0.0"
-                                      "y(t) ~ xˍt(t) - x(t)"]
+@test sort(string.(observed(ss))) == ["x(t) ~ 0"
+                                      "xˍt(t) ~ 0"
+                                      "y(t) ~ -x(t) + xˍt(t)"]
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])

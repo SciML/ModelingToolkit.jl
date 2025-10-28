@@ -7,6 +7,7 @@ using LinearAlgebra
 using UnPack
 using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
+import SymbolicUtils as SU
 ###
 ### Nonlinear system
 ###
@@ -48,20 +49,22 @@ find_solvables!(state)
 @unpack graph, solvable_graph = state.structure
 int2var = Dict(eachindex(fullvars) .=> fullvars)
 graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
-@test graph2vars(graph) == [Set([u1, u5])
-       Set([u1, u2])
-       Set([u1, u3, u2])
-       Set([u4, u3, u2])
-       Set([u4, u1, u5])]
-@test graph2vars(solvable_graph) == [Set([u1])
+@test graph2vars(graph) == [
+        Set([u4, u3, u2])
+        Set([u1, u5])
+        Set([u1, u2])
+        Set([u1, u2, u3])
+        Set([u4, u1, u5])
+    ]
+@test graph2vars(solvable_graph) == [Set([u4])
+                                     Set([u1])
                                      Set([u2])
                                      Set([u3])
-                                     Set([u4])
                                      Set([u5])]
 
 newsys = tearing(sys)
 @test length(equations(newsys)) == 1
-@test issetequal(ModelingToolkit.vars(equations(newsys)), [u1, u4, u5])
+@test issetequal(SU.search_variables(equations(newsys)), [u1, u4, u5])
 
 # Before:
 #      u1  u2  u3  u4  u5

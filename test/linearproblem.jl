@@ -5,6 +5,7 @@ using StaticArrays
 using SparseArrays
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D, SystemCompatibilityError
+import SymbolicUtils as SU
 
 @testset "Rejects non-affine systems" begin
     @variables x y
@@ -15,7 +16,11 @@ end
 @variables x[1:3] [irreducible = true]
 @parameters p[1:3, 1:3] q[1:3]
 
-@mtkbuild sys = System([p * x ~ q])
+# Do not use `mtkcompile` to ensure a consistent variable/equation
+# ordering.
+eqs = SU.scalarize(zeros(3) ~ q - p * x)
+@named sys = System(eqs, collect(x), [p, q])
+sys = complete(sys)
 # sanity check
 @test length(unknowns(sys)) == length(equations(sys)) == 3
 A = Float64[1 2 3; 4 3.5 1.7; 5.2 1.8 9.7]

@@ -81,8 +81,8 @@ expr = value(foo(x, y))
 @test operation(expr) === foo
 @test arguments(expr)[1] === value(x)
 @test arguments(expr)[2] === value(y)
-ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
-ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
+@register_derivative foo(x, y) 1 cos(x) * cos(y)
+@register_derivative foo(x, y) 2 -sin(x) * sin(y)
 @test isequal(expand_derivatives(D(foo(x, y))), expand_derivatives(D(sin(x) * cos(y))))
 
 # TEST: Function registration run from inside a function.

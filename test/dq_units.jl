@@ -1,18 +1,20 @@
 using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
 using Symbolics
+import SymbolicUtils as SU
 using Test
 MT = ModelingToolkit
 using ModelingToolkit: t, D
 @parameters τ [unit = u"s"] γ
 @variables E(t) [unit = u"J"] P(t) [unit = u"W"]
 
+const unitless = MT.get_unit(0.5)
+
 # Basic access
 @test MT.get_unit(t) == u"s"
 @test MT.get_unit(E) == u"J"
 @test MT.get_unit(τ) == u"s"
-@test MT.get_unit(γ) == MT.unitless
-@test MT.get_unit(0.5) == MT.unitless
-@test MT.get_unit(MT.SciMLBase.NullParameters()) == MT.unitless
+@test MT.get_unit(γ) == unitless
+@test MT.get_unit(MT.SciMLBase.NullParameters()) == unitless
 
 eqs = [D(E) ~ P - E / τ
        0 ~ P]
@@ -233,7 +235,7 @@ end
     L(t), [unit = u"m"]
     L_out(t), [unit = u"1"]
 end
-@test to_m in ModelingToolkit.vars(Symbolics.unwrap(L_out * -to_m))
+@test to_m in SU.search_variables(Symbolics.unwrap(L_out * -to_m))
 
 # test units for registered functions
 let

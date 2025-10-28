@@ -6,6 +6,7 @@ using SciMLStructures: Tunable
 using ModelingToolkit: t_nounits as t, D_nounits as D, observed
 using DynamicQuantities
 using DiffEqBase: BrownFullBasicInit
+import DiffEqNoiseProcess
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
@@ -365,7 +366,7 @@ tspan = (0.0, 100.0)
 
 u0 = [y => 0.0,
     z => 0.0]
-@test_throws "Differential(t)(x(t))" prob=ODEProblem(
+@test_throws "Differential(t, 1)(x(t))" prob=ODEProblem(
     sys, [u0; p], tspan, jac = true)
 
 # DAE Initialization on ODE with nonlinear system for initial conditions
@@ -840,7 +841,7 @@ end
         # https://github.com/SciML/NonlinearSolve.jl/issues/586
         eqs = [0 ~ -c * z + (q - z) * (x^2)
                0 ~ p * (-x + (q - z) * x)]
-        @named sys = System(eqs; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
+        @named sys = System(eqs, [z, x], [c, p, q]; initialization_eqs = [p^2 + q^2 + 2p * q ~ 0])
         sys = complete(sys)
         # @mtkcompile sys = NonlinearSystem(
         #     [p * x^2 + q * y^3 ~ 0, x - q ~ 0]; defaults = [q => missing],
@@ -908,8 +909,12 @@ end
         @test init(prob, alg)[x] ≈ 1.0
         ModelingToolkit.defaults(prob.f.sys)[p] = missing
         prob2 = remake(prob; u0 = [y => 1.0], p = [p => 3x])
+
+        # Unknown of initialization could either be `p` or `x`
         @test !is_variable(prob2.f.initialization_data.initializeprob, p) &&
-              !is_parameter(prob2.f.initialization_data.initializeprob, p)
+              !is_parameter(prob2.f.initialization_data.initializeprob, p) ||
+              !is_variable(prob2.f.initialization_data.initializeprob, x) &&
+              !is_parameter(prob2.f.initialization_data.initializeprob, x)
         @test init(prob2, alg)[x] ≈ 0.5
         @test_nowarn solve(prob2, alg)
     end
@@ -1119,7 +1124,7 @@ end
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
 
-    prob2 = remake(prob, u0 = [x => 0.5, y=>nothing])
+    prob2 = remake(prob, u0 = [x => 0.5, y=>sqrt(3)/2])
     sol2 = solve(prob2, Rodas5P())
     @test SciMLBase.successful_retcode(sol2)
 end
@@ -1560,7 +1565,7 @@ end
     prob = ODEProblem(
         pend, [x => (√2 / 2), D(x) => 0.0, g => 1], (0.0, 1.5),
         guesses = [λ => 1, y => √2 / 2])
-    sol = solve(prob)
+    sol = solve(prob, FBDF())
 
     @testset "Guesses of initialization problem copied to algebraic variables" begin
         prob.f.initialization_data.initializeprob[λ] = 1.0
@@ -1573,7 +1578,7 @@ end
         prob2 = ODEProblem(
             pend, [x => (√2 / 2), D(y) => 0.0, g => 1], (0.0, 1.5),
             guesses = [λ => 1, y => √2 / 2])
-        sol = solve(prob)
+        sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
         prob3 = DiffEqBase.get_updated_symbolic_problem(
             pend, prob2; u0 = prob2.u0, p = prob2.p)

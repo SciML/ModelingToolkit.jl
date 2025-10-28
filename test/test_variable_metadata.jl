@@ -1,4 +1,5 @@
 using ModelingToolkit
+using Symbolics: value
 using DynamicQuantities
 
 # Bounds
@@ -21,7 +22,7 @@ for i in eachindex(y)
     @test b[1] == -Inf && b[2] == Inf
 end
 
-@variables y[1:3] [bounds = (-1, 1)]
+@variables y[1:3] [bounds = (-ones(3), ones(3))]
 @test hasbounds(y)
 @test getbounds(y)[1] == -ones(3)
 @test getbounds(y)[2] == ones(3)
@@ -33,7 +34,7 @@ end
 @test getbounds(y[1:2])[1] == -ones(2)
 @test getbounds(y[1:2])[2] == ones(2)
 
-@variables y[1:2, 1:2] [bounds = (-1, [1.0 Inf; 2.0 3.0])]
+@variables y[1:2, 1:2] [bounds = (-ones(2, 2), [1.0 Inf; 2.0 3.0])]
 @test hasbounds(y)
 @test getbounds(y)[1] == [-1 -1; -1 -1]
 @test getbounds(y)[2] == [1.0 Inf; 2.0 3.0]
@@ -43,7 +44,7 @@ for i in eachindex(y)
     @test b[1] == -1 && b[2] == [1.0 Inf; 2.0 3.0][i]
 end
 
-@variables y[1:2] [bounds = (-Inf, [1.0, Inf])]
+@variables y[1:2] [bounds = (-Inf * ones(2), [1.0, Inf])]
 @test hasbounds(y)
 @test getbounds(y)[1] == [-Inf, -Inf]
 @test getbounds(y)[2] == [1.0, Inf]
@@ -126,7 +127,7 @@ eqs = [Dₜ(x) ~ (-k2 * x + k * u) / T
 sys = System(eqs, t, name = :tunable_first_order)
 unk_meta = ModelingToolkit.dump_unknowns(sys)
 @test length(unk_meta) == 3
-@test all(iszero, meta.default for meta in unk_meta)
+@test all(iszero, value(meta.default) for meta in unk_meta)
 param_meta = ModelingToolkit.dump_parameters(sys)
 @test length(param_meta) == 3
 @test all(!haskey(meta, :default) for meta in param_meta)
@@ -181,11 +182,11 @@ sp = Set(p)
 sys = complete(sys)
 unks_meta = ModelingToolkit.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
-@test unks_meta[:x].default == 2.0
-@test unks_meta[:y].guess == 2.0
+@test value(unks_meta[:x].default) == 2.0
+@test value(unks_meta[:y].guess) == 2.0
 params_meta = ModelingToolkit.dump_parameters(sys)
 params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
-@test params_meta[:p].default == 3.0
+@test value(params_meta[:p].default) == 3.0
 @test isequal(params_meta[:q].dependency, 2p)
 
 # Connect

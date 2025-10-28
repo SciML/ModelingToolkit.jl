@@ -1,10 +1,12 @@
-using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+using ModelingToolkit , OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkit: SymbolicContinuousCallback,
                        SymbolicDiscreteCallback,
                        t_nounits as t,
                        D_nounits as D,
                        affects, affect_negs, system, observed, AffectSystem
+import DiffEqNoiseProcess
+
 using StableRNGs
 import SciMLBase
 using SymbolicIndexingInterface
@@ -1336,7 +1338,7 @@ end
             continuous_events = [[x ~ max_time] => reset])
     end
     shared_pars = @parameters begin
-        vals(t)[1:2] = 0.0
+        vals(t)[1:2] = zeros(2)
     end
 
     @named sys = System(Equation[], t, [], Symbolics.scalarize(vals);
@@ -1396,7 +1398,7 @@ end
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
-    cevts = [[x ~ 0.0] => [D(x) ~ Pre(D(x)) + 1sign(Pre(D(x)))]]
+    cevts = [[x ~ 0.0] => [D(x) ~ Pre(D(x)) + 0.1sign(Pre(D(x)))]]
     @named pend = System(eqs, t; continuous_events = cevts)
 
     scc = only(continuous_events(pend))

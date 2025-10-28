@@ -2,6 +2,7 @@ using OrdinaryDiffEq, ModelingToolkit, DataStructures, Test
 using Optimization, RecursiveArrayTools, OptimizationOptimJL
 using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: value
 using SciMLBase: parameterless_type
 
 N = 32
@@ -177,7 +178,7 @@ rv0 = ArrayPartition(r0, v0)
 f = function (dy, y, μ, t)
     r = sqrt(sum(y[1, :] .^ 2))
     dy[1, :] = y[2, :]
-    dy[2, :] = -μ .* y[1, :] / r^3
+    dy[2, :] .= -μ .* y[1, :] / r^3
 end
 
 prob = ODEProblem(f, rv0, (0.0, Δt), μ)
@@ -259,8 +260,8 @@ params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
-@test [ModelingToolkit.defaults(sys)[s] for s in unknowns(sys)] == u0
-@test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
+@test [value(ModelingToolkit.defaults(sys)[s]) for s in unknowns(sys)] == u0
+@test [value(ModelingToolkit.defaults(sys)[s]) for s in parameters(sys)] == [10, 20]
 
 @parameters sig=10 rho=28.0 beta=8/3
 @variables x(t)=100 y(t)=1.0 z(t)=1

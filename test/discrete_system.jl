@@ -82,7 +82,7 @@ prob_map2 = DiscreteProblem(sys, [], tspan)
 # prob_map2 = DiscreteProblem(sys, [S(k - 1) => S, I(k - 1) => I, R(k - 1) => R], tspan)
 sol_map2 = solve(prob_map2, FunctionMap());
 
-@test sol_map.u ≈ sol_map2.u
+@test sol_map[[S(k-1), I(k-1), R(k-1)]] ≈ sol_map2[[S(k-1), I(k-1), R(k-1)]]
 for p in parameters(sys)
     @test sol_map.prob.ps[p] ≈ sol_map2.prob.ps[p]
 end

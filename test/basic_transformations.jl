@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
-using SymbolicUtils: symtype
+using Symbolics: value
+using SymbolicUtils: symtype, _iszero
 
 @independent_variables t
 D = Differential(t)
@@ -160,8 +161,8 @@ end
     @variables x xˍt(x) xˍt(x) y(x) t(x)
     Dx = Differential(x)
     areequivalent(eq1,
-        eq2) = isequal(expand(eq1.lhs - eq2.lhs), 0) &&
-               isequal(expand(eq1.rhs - eq2.rhs), 0)
+        eq2) = _iszero(simplify(eq1.lhs - eq2.lhs; expand=true)) &&
+               _iszero(simplify(eq1.rhs - eq2.rhs; expand=true))
     eq1lhs = xˍt^3 * (Dx^3)(y) + xˍt^2 * Dx(y) * (Dx^2)(xˍt) +
              xˍt * Dx(y) * (Dx(xˍt))^2 +
              3 * xˍt^2 * (Dx^2)(y) * Dx(xˍt)
@@ -180,9 +181,10 @@ end
     @independent_variables t
     D = Differential(t)
     @variables x(t) y(t)
-    @parameters f::LinearInterpolation (fc::LinearInterpolation)(..) # non-callable and callable
-    callme(interp::LinearInterpolation, input) = interp(input)
-    @register_symbolic callme(interp::LinearInterpolation, input)
+    @parameters f::DataInterpolations.AbstractInterpolation{Float64}
+    @parameters (fc::DataInterpolations.AbstractInterpolation{Float64})(..) # non-callable and callable
+    callme(interp::DataInterpolations.AbstractInterpolation, input) = interp(input)
+    @register_symbolic callme(interp::DataInterpolations.AbstractInterpolation, input)
     eqs = [
         D(x) ~ 2t,
         D(y) ~ 1fc(t) + 2fc(x) + 3fc(y) + 1callme(f, t) + 2callme(f, x) + 3callme(f, y)
@@ -366,7 +368,7 @@ foofn(x) = 4
     @test ModelingToolkit.is_split(sys2)
     ps = ModelingToolkit.get_ps(sys2)
     idx = findfirst(isequal(rp), ps)
-    @test defaults(sys2)[rp] == Bar()
+    @test value(defaults(sys2)[rp]) == Bar()
     @test symtype(ps[idx]) <: Bar
     ic = ModelingToolkit.get_index_cache(sys2)
     @test any(x -> x.type == Bar && x.length == 1, ic.nonnumeric_buffer_sizes)
@@ -379,7 +381,7 @@ foofn(x) = 4
     @test ModelingToolkit.is_split(sys2)
     ps = ModelingToolkit.get_ps(sys2)
     idx = findfirst(isequal(rp2), ps)
-    @test defaults(sys2)[rp2] == Baz()
+    @test value(defaults(sys2)[rp2]) == Baz()
     @test symtype(ps[idx]) <: Baz
     ic = ModelingToolkit.get_index_cache(sys2)
     @test any(x -> x.type == Baz && x.length == 1, ic.nonnumeric_buffer_sizes)

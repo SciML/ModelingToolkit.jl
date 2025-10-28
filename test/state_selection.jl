@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+import SymbolicUtils as SU
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) x2(t) x3(t) x4(t)
@@ -12,7 +13,7 @@ eqs = [x1 + x2 + u1 ~ 0
 let dd = dummy_derivative(sys)
     has_dx1 = has_dx2 = false
     for eq in equations(dd)
-        vars = ModelingToolkit.vars(eq)
+        vars = SU.search_variables(eq)
         has_dx1 |= D(x1) in vars || D(D(x1)) in vars
         has_dx2 |= D(x2) in vars || D(D(x2)) in vars
     end

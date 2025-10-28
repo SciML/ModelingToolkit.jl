@@ -1,4 +1,5 @@
 using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase, BenchmarkTools
+import SymbolicUtils as SU
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -164,7 +165,7 @@ end
     ts = ModelingToolkit.get_tearing_state(sys)
     for ieq in 1:2
         vars1 = ts.fullvars[ModelingToolkit.BipartiteGraphs.𝑠neighbors(ts.structure.graph, ieq)]
-        vars2 = ModelingToolkit.vars(equations(sys)[ieq])
+        vars2 = SU.search_variables(equations(sys)[ieq])
         @test issetequal(vars1, vars2)
     end
 end

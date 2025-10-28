@@ -1,7 +1,9 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
+using OrderedCollections
 using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics, SymbolicUtils
+using Symbolics: SymbolicT, VartypeT
 
 function infer_clocks(sys)
     ts = TearingState(sys)
@@ -67,10 +69,10 @@ ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
+    deepcopy(tss[continuous_id]), inputs = OrderedSet{SymbolicT}(inputs[continuous_id]))
 @test equations(sss) == [D(x) ~ u - x]
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[1]), inputs = inputs[1], outputs = [])
+    deepcopy(tss[1]), inputs = OrderedSet{SymbolicT}(inputs[1]))
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
@@ -148,11 +150,11 @@ eqs = [yd ~ Sample(dt)(y)
 end
 
 struct ZeroArgOp <: Symbolics.Operator end
-(o::ZeroArgOp)() = Symbolics.Term{Bool}(o, Any[])
+(o::ZeroArgOp)() = SU.Term{VartypeT}(o, Any[]; type = Bool, shape = [])
 SymbolicUtils.promote_symtype(::ZeroArgOp, T) = Union{Bool, T}
 SymbolicUtils.isbinop(::ZeroArgOp) = false
 Base.nameof(::ZeroArgOp) = :ZeroArgOp
-ModelingToolkit.input_timedomain(::ZeroArgOp, _ = nothing) = ()
+ModelingToolkit.input_timedomain(::ZeroArgOp, _ = nothing) = ModelingToolkit.InputTimeDomainElT[]
 ModelingToolkit.output_timedomain(::ZeroArgOp, _ = nothing) = Clock(0.1)
 ModelingToolkit.validate_operator(::ZeroArgOp, args, iv; context = nothing) = nothing
 SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true

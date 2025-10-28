@@ -2,7 +2,7 @@ using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_connector_type, get_defaults, get_gui_metadata,
                        get_systems, get_ps, getdefault, getname, readable_code,
                        scalarize, symtype, VariableDescription, RegularConnector,
-                       get_unit
+                       get_unit, value
 using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
@@ -156,7 +156,7 @@ res__R = 100u"Ω"
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
-@test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
+@test sol[rc.capacitor.v, end] ≈ value(defs[rc.constant.k])
 resistor = getproperty(rc, :resistor; namespace = false)
 @test ModelingToolkit.description(rc) == "An RC circuit."
 @test getname(rc.resistor) === getname(resistor)
@@ -187,7 +187,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @testset "Constants" begin
     @mtkmodel PiModel begin
         @constants begin
-            _p::Irrational = π, [description = "Value of Pi.", unit = u"V"]
+            _p = π, [description = "Value of Pi.", unit = u"V"]
         end
         @parameters begin
             p = _p, [description = "Assign constant `_p` value."]
@@ -201,7 +201,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 
     @named pi_model = PiModel()
 
-    @test symtype(ModelingToolkit.getdefault(pi_model.p)) <: Irrational
+    @test symtype(ModelingToolkit.getdefault(pi_model.p)) <: Real
     @test getdefault(getdefault(pi_model.p)) == π
 end
 
@@ -217,7 +217,7 @@ end
             kval
             c(t) = cval + jval
             d = 2
-            d2[1:2] = 2
+            d2[1:2] = 2ones(2)
             e, [description = "e"]
             e2[1:2], [description = "e2"]
             f = 3, [description = "f"]
@@ -226,7 +226,7 @@ end
             i(t) = 4, [description = "i(t)"]
             j(t) = jval, [description = "j(t)"]
             k = kval, [description = "k"]
-            l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]
+            l(t)[1:2, 1:3] = 2ones(2, 3), [description = "l is more than 1D"]
             n # test defaults with Number input
             n2 # test defaults with Function input
         end
@@ -257,7 +257,7 @@ end
     @test hasmetadata(model.i, VariableDescription)
     @test hasmetadata(model.j, VariableDescription)
     @test hasmetadata(model.k, VariableDescription)
-    @test all(collect(hasmetadata.(model.l, ModelingToolkit.VariableDescription)))
+    @test hasmetadata(model.l, ModelingToolkit.VariableDescription)
 
     @test all(lastindex.([model.a2, model.b2, model.d2, model.e2, model.h2]) .== 2)
     @test size(model.l) == (2, 3)
@@ -274,8 +274,8 @@ end
     @test all(getdefault.(scalarize(model.l)) .== 2)
     @test isequal(getdefault(model.j), model.jval)
     @test isequal(getdefault(model.k), model.kval)
-    @test get_defaults(model)[model.n] == 1.0
-    @test get_defaults(model)[model.n2] == 5
+    @test value(get_defaults(model)[model.n]) == 1.0
+    @test value(get_defaults(model)[model.n2]) == 5
 
     @test MockModel.structure[:defaults] == Dict(:n => 1.0, :n2 => "g()")
 end
@@ -287,25 +287,25 @@ end
             M
         end
         @parameters begin
-            (l(t)[1:2, 1:3] = 1), [description = "l is more than 1D"]
-            (l2(t)[1:N, 1:M] = 2),
+            (l(t)[1:2, 1:3] = ones(2, 3)), [description = "l is more than 1D"]
+            (l2(t)[1:N, 1:M] = 2ones(N, M)),
             [description = "l is more than 1D, with arbitrary length"]
-            (l3(t)[1:3] = 3), [description = "l2 is 1D"]
-            (l4(t)[1:N] = 4), [description = "l2 is 1D, with arbitrary length"]
-            (l5(t)[1:3]::Int = 5), [description = "l3 is 1D and has a type"]
-            (l6(t)[1:N]::Int = 6),
+            (l3(t)[1:3] = 3ones(3)), [description = "l2 is 1D"]
+            (l4(t)[1:N] = 4ones(N)), [description = "l2 is 1D, with arbitrary length"]
+            (l5(t)[1:3]::Int = 5ones(Int, 3)), [description = "l3 is 1D and has a type"]
+            (l6(t)[1:N]::Int = 6ones(Int, N)),
             [description = "l3 is 1D and has a type, with arbitrary length"]
         end
     end
 
     N, M = 4, 5
     @named arr = TupleInArrayDef(; N, M)
-    @test getdefault(arr.l) == 1
-    @test getdefault(arr.l2) == 2
-    @test getdefault(arr.l3) == 3
-    @test getdefault(arr.l4) == 4
-    @test getdefault(arr.l5) == 5
-    @test getdefault(arr.l6) == 6
+    @test getdefault(arr.l) == ones(2, 3)
+    @test getdefault(arr.l2) == 2ones(N, M)
+    @test getdefault(arr.l3) == 3ones(3)
+    @test getdefault(arr.l4) == 4ones(N)
+    @test getdefault(arr.l5) == 5ones(Int, 3)
+    @test getdefault(arr.l6) == 6ones(Int, N)
 
     @test size(arr.l2) == (N, M)
     @test size(arr.l4) == (N,)
@@ -326,7 +326,7 @@ end
             par4(t)::Float64 = 1 # converts 1 to 1.0 of Float64 type
             par5[1:3]::BigFloat
             par6(t)[1:3]::BigFloat
-            par7(t)[1:3, 1:3]::BigFloat = 1.0, [description = "with description"]
+            par7(t)[1:3, 1:3]::BigFloat = ones(BigFloat, 3, 3), [description = "with description"]
         end
     end
 
@@ -501,7 +501,7 @@ end
 # `Expr` type and `unit` metadata can be precompiled.
 module PrecompilationTest
 push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
-using Unitful, Test, ModelParsingPrecompile, ModelingToolkit
+using DynamicQuantities, Test, ModelParsingPrecompile, ModelingToolkit
 using ModelingToolkit: getdefault, scalarize
 @testset "Precompile packages with MTKModels" begin
     using ModelParsingPrecompile: ModelWithComponentArray
@@ -820,7 +820,7 @@ end
 
     j_guess = getguess(guess_model.j)
     @test symbolic_type(j_guess) == ScalarSymbolic()
-    @test readable_code(j_guess) == "l(t) / i(t) + k(t)"
+    @test readable_code(j_guess) == "k(t) + l(t) / i(t)"
 
     i_guess = getguess(guess_model.i)
     @test symbolic_type(i_guess) == ScalarSymbolic()
@@ -845,14 +845,14 @@ end
     @named ordermodel = OrderModel()
     ordermodel = complete(ordermodel)
     defs = ModelingToolkit.defaults(ordermodel)
-    @test defs[ordermodel.c] == 1
-    @test defs[ordermodel.d] == 1
+    @test value(defs[ordermodel.c]) == 1
+    @test value(defs[ordermodel.d]) == 1
 
     @test_nowarn @named ordermodel = OrderModel(a = 2)
     ordermodel = complete(ordermodel)
     defs = ModelingToolkit.defaults(ordermodel)
-    @test defs[ordermodel.c] == 2
-    @test defs[ordermodel.d] == 1
+    @test value(defs[ordermodel.c]) == 2
+    @test value(defs[ordermodel.d]) == 1
 end
 
 @testset "Vector defaults" begin
@@ -989,7 +989,7 @@ struct CustomStruct end
         end
     end
     @named sys = MyModel(p = CustomStruct())
-    @test ModelingToolkit.defaults(sys)[@nonamespace sys.p] == CustomStruct()
+    @test value(ModelingToolkit.defaults(sys)[@nonamespace sys.p]) == CustomStruct()
 end
 
 @testset "Variables are not callable symbolics" begin
@@ -1046,6 +1046,9 @@ end
 end
 
 @testset "Model Level Metadata" begin
+    t = ModelingToolkit.t_nounits
+    D = ModelingToolkit.D_nounits
+    @show getmetadata(t.val, ModelingToolkit.VariableUnit, nothing)
     struct Author end
     struct MyVersion end
     struct License end

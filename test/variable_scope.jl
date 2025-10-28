@@ -95,7 +95,7 @@ bar = complete(bar)
 @test length(parameters(bar)) == 2
 @test sort(getname.(parameters(bar))) == [:foo₊p, :p]
 defs = ModelingToolkit.defaults(bar)
-@test defs[bar.p] == 2
+@test value(defs[bar.p]) == 2
 @test isequal(defs[bar.foo.p], bar.p)
 
 @testset "Issue#3101" begin

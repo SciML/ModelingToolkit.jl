@@ -6,6 +6,9 @@ using Setfield
 using Statistics
 # imported as tt because `t` is used extensively below
 using ModelingToolkit: t_nounits as tt, D_nounits as D, MTKParameters
+using Symbolics: value
+import SymbolicUtils as SU
+import DiffEqNoiseProcess
 
 # Define some variables
 @parameters σ ρ β
@@ -802,7 +805,7 @@ end
 
     sys = System(eqs, t, sts, ps, browns; name = :name)
     sys = mtkcompile(sys)
-    @test ModelingToolkit.get_noise_eqs(sys) ≈ [1.0]
+    @test value.(ModelingToolkit.get_noise_eqs(sys)) ≈ [1.0]
     prob = SDEProblem(sys, [], (0.0, 1.0))
     @test_nowarn solve(prob, RKMil())
 end
@@ -822,7 +825,7 @@ end
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 3],
             t, [x, y, z], [], is_scalar_noise = true)
         odesys = noise_to_brownians(sys)
-        vs = ModelingToolkit.vars(equations(odesys))
+        vs = SU.search_variables(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
         @test length(brownians(odesys)) == 3
@@ -837,7 +840,7 @@ end
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x; y; 0;;],
             t, [x, y, z], []; is_scalar_noise = false)
         odesys = noise_to_brownians(sys)
-        vs = ModelingToolkit.vars(equations(odesys))
+        vs = SU.search_variables(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
         @test nbrownian == 1
@@ -853,7 +856,7 @@ end
                     z+1 x+1 y+1]
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, D(z) ~ z], noiseeqs, t, [x, y, z], [])
         odesys = noise_to_brownians(sys)
-        vs = ModelingToolkit.vars(equations(odesys))
+        vs = SU.search_variables(equations(odesys))
         nbrownian = count(
             v -> ModelingToolkit.getvariabletype(v) == ModelingToolkit.BROWNIAN, vs)
         @test nbrownian == 3

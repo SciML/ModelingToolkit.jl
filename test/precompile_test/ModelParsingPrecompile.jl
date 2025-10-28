@@ -1,6 +1,6 @@
 module ModelParsingPrecompile
 
-using ModelingToolkit, Unitful
+using ModelingToolkit, DynamicQuantities
 using ModelingToolkit: t
 
 @mtkmodel ModelWithComponentArray begin
@@ -8,7 +8,7 @@ using ModelingToolkit: t
         k = 1, [description = "Default val of R"]
     end
     @parameters begin
-        r(t)[1:3] = k, [description = "Parameter array", unit = u"Ω"]
+        r(t)[1:3] = [k, k, k], [description = "Parameter array", unit = u"Ω"]
     end
 end
 

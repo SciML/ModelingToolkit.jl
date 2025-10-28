@@ -6,7 +6,7 @@ using Test
     @variables begin
         x(t)
         y(t)
-        z(t)::Complex
+        z(t)::Complex{Real}
     end
     @equations begin
         z ~ x + im * y

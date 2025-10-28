@@ -9,6 +9,7 @@ using StableRNGs
 using SciMLStructures: canonicalize, Tunable, replace, replace!
 using SymbolicIndexingInterface
 using NonlinearSolve
+import DiffEqNoiseProcess
 
 @testset "ODESystem with callbacks" begin
     @parameters p1(t)=1.0 p2

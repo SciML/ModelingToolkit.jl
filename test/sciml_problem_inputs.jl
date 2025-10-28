@@ -3,6 +3,7 @@
 # Fetch packages
 using ModelingToolkit, JumpProcesses, NonlinearSolve, OrdinaryDiffEq, StaticArrays,
       SteadyStateDiffEq, StochasticDiffEq, SciMLBase, Test, SymbolicUtils
+import DiffEqNoiseProcess
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Sets rnd number.

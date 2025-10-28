@@ -1,5 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq
 using Test, LinearAlgebra
+import DiffEqNoiseProcess
 
 # Change of variables: z = log(x)
 # (this implies that x = exp(z) is automatically non-negative)
@@ -132,12 +133,12 @@ new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ μ - 1/2*σ^2)
 @test equations(new_sys)[2] == (D(w) ~ α^2)
 @test equations(new_sys)[3] == (D(v) ~ μ - 1/2*(α^2 + σ^2))
-@test noise_eqs(new_sys)[1, 1] === value(σ)
-@test noise_eqs(new_sys)[1, 2] === value(0)
-@test noise_eqs(new_sys)[2, 1] === value(0)
-@test noise_eqs(new_sys)[2, 2] === value(simplify(substitute(2*α*y, backward_subs[2])))
-@test noise_eqs(new_sys)[3, 1] === value(σ)
-@test noise_eqs(new_sys)[3, 2] === value(α)
+@test value(noise_eqs(new_sys)[1, 1]) === value(σ)
+@test value(noise_eqs(new_sys)[1, 2]) === value(0)
+@test value(noise_eqs(new_sys)[2, 1]) === value(0)
+@test isequal(noise_eqs(new_sys)[2, 2], simplify(substitute(2*α*y, backward_subs[2])))
+@test value(noise_eqs(new_sys)[3, 1]) === value(σ)
+@test value(noise_eqs(new_sys)[3, 2]) === value(α)
 
 # Test for  Brownian instead of noise
 @named sys = System(eqs, t; defaults = def)

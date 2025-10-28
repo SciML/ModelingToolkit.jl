@@ -6,6 +6,8 @@ using ForwardDiff
 using SymbolicIndexingInterface
 using ModelingToolkit: value
 using ModelingToolkit: get_default_or_guess, MTKParameters
+import SymbolicUtils as SU
+using Symbolics: VartypeT
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -51,9 +53,9 @@ jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
     @test canonequal(jac[1, 1], σ * -1)
     @test canonequal(jac[1, 2], σ)
-    @test canonequal(jac[1, 3], 0)
+    @test canonequal(jac[1, 3], SU.Const{VartypeT}(0))
     @test canonequal(jac[2, 1], ρ - z)
-    @test canonequal(jac[2, 2], -1)
+    @test canonequal(jac[2, 2], SU.Const{VartypeT}(-1))
     @test canonequal(jac[2, 3], x * -1)
     @test canonequal(jac[3, 1], y)
     @test canonequal(jac[3, 2], x)
@@ -72,8 +74,8 @@ nlsys_func = generate_rhs(ns)
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 
-@test ModelingToolkit.jacobian_sparsity(ns).colptr == sparse(jac).colptr
-@test ModelingToolkit.jacobian_sparsity(ns).rowval == sparse(jac).rowval
+@test ModelingToolkit.jacobian_sparsity(ns).colptr == sparse(Num.(jac)).colptr
+@test ModelingToolkit.jacobian_sparsity(ns).rowval == sparse(Num.(jac)).rowval
 
 jac = generate_jacobian(ns)
 
@@ -244,7 +246,7 @@ alg_eqs = [0 ~ p - d * X]
 
 sys = @test_nowarn System(alg_eqs; name = :name)
 @test isequal(only(unknowns(sys)), X)
-@test all(isequal.(parameters(sys), [p, d]))
+@test issetequal(parameters(sys), [p, d])
 
 # Over-determined sys
 @variables u1 u2
@@ -378,15 +380,15 @@ end
     nlsys = complete(nlsys)
     defs = defaults(nlsys)
     @test length(defs) == 6
-    @test defs[x] == 1.0
-    @test defs[p] === missing
-    @test isinf(defs[t])
+    @test value(defs[x]) == 1.0
+    @test value(defs[p]) === missing
+    @test isinf(value(defs[t]))
     @test length(guesses(nlsys)) == 1
-    @test guesses(nlsys)[p] == 1.0
+    @test value(guesses(nlsys)[p]) == 1.0
     @test length(initialization_equations(nlsys)) == 1
     @test length(parameter_dependencies(nlsys)) == 1
     @test length(equations(nlsys)) == 2
-    @test all(iszero, [eq.lhs for eq in equations(nlsys)])
+    @test all(iszero, [value(eq.lhs) for eq in equations(nlsys)])
     @test nameof(nlsys) == nameof(sys)
     @test ModelingToolkit.iscomplete(nlsys)
 
@@ -413,7 +415,7 @@ end
     @testset "Differential inside expression also substituted" begin
         @named sys = System([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
         nlsys = NonlinearSystem(sys)
-        vs = ModelingToolkit.vars(equations(nlsys))
+        vs = SU.search_variables(equations(nlsys))
         @test !in(D(x), vs)
         @test !in(D(y), vs)
     end

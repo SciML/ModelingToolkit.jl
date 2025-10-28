@@ -1,13 +1,14 @@
 using ModelingToolkit, Test
-using ModelingToolkit: value, vars, parse_variable
+using ModelingToolkit: value, parse_variable
 using SymbolicUtils: <ₑ
+import SymbolicUtils as SU
 
 @parameters α β δ
 expr = (((1 / β - 1) + δ) / α)^(1 / (α - 1))
 ref = sort([β, δ, α], lt = <ₑ)
 sol = sort(Num.(ModelingToolkit.get_variables(expr)), lt = <ₑ)
 @test all(x -> x isa Num, sol[i] == ref[i] for i in 1:3)
-@test all(simplify ∘ value, sol[i] == ref[i] for i in 1:3)
+@test all(isequal(sol[i], ref[i]) for i in 1:3)
 
 @parameters γ
 s = α => γ
@@ -17,13 +18,13 @@ new = (((1 / β - 1) + δ) / γ)^(1 / (γ - 1))
 @test iszero(sol - new)
 
 # Continuous
-using ModelingToolkit: isdifferential, vars, collect_differential_variables,
+using ModelingToolkit: isdifferential, collect_differential_variables,
                        collect_ivs
 @independent_variables t
 @variables u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
-v = vars(eq)
+v = SU.search_variables(eq)
 @test v == Set([D(y), u])
 
 ov = collect_differential_variables(eq)
@@ -34,14 +35,6 @@ aov = ModelingToolkit.collect_applied_operators(eq, Differential)
 
 ts = collect_ivs([eq])
 @test ts == Set([t])
-
-@testset "vars searching through array of symbolics" begin
-    fn(x, y) = sum(x) + y
-    @register_symbolic fn(x::AbstractArray, y)
-    @variables x y z
-    res = vars(fn([x, y], z))
-    @test length(res) == 3
-end
 
 @testset "parse_variable with iv: $iv" for iv in [t, only(@independent_variables tt)]
     D = Differential(iv)
@@ -181,6 +174,6 @@ end
 
     _x = ModelingToolkit.unwrap(x)
     @test EvalAt(1)(_x) isa Symbolics.BasicSymbolic
-    @test only(arguments(EvalAt(1)(_x))) == 1
+    @test value(only(arguments(EvalAt(1)(_x)))) == 1
     @test EvalAt(1)(D(x)) isa Num
 end

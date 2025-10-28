@@ -3,10 +3,11 @@ using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
 using DataInterpolations
 using BlockArrays: BlockedArray
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: t_nounits as t, D_nounits as D, value
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants, Initials
 using SymbolicIndexingInterface: is_parameter, getp
+using Symbolics
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -51,7 +52,7 @@ end
 get_value(interp::Interpolator, t) = interp(t)
 @register_symbolic get_value(interp::Interpolator, t)
 
-Symbolics.derivative(::typeof(get_value), args::NTuple{2, Any}, ::Val{2}) = 0
+@register_derivative get_value(interp, t) 2 Symbolics.COMMON_ZERO
 
 function Sampled(; name, interp = Interpolator(Float64[], 0.0))
     pars = @parameters begin
@@ -237,7 +238,7 @@ end
         @parameters fn(::Real) = _f1
         @mtkcompile sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
-        @test ModelingToolkit.defaults(sys)[fn] == _f1
+        @test value(ModelingToolkit.defaults(sys)[fn]) == _f1
 
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))

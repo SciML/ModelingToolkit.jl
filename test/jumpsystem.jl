@@ -1,9 +1,10 @@
 using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
-using SymbolicIndexingInterface
+using SymbolicIndexingInterface, OrderedCollections
 using Random, StableRNGs, NonlinearSolve
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using BenchmarkTools
+using Symbolics: SymbolicT, unwrap
 MT = ModelingToolkit
 
 rng = StableRNG(12345)
@@ -359,9 +360,9 @@ end
     j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
     j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
-    us = Set()
-    ps = Set()
-    iv = t
+    us = OrderedSet{SymbolicT}()
+    ps = OrderedSet{SymbolicT}()
+    iv = unwrap(t)
 
     MT.collect_vars!(us, ps, j1, iv)
     @test issetequal(us, [x1])
@@ -403,9 +404,9 @@ end
     j4 = MassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
     @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4], [p1, p2, p3, p4])
 
-    us = Set()
-    ps = Set()
-    iv = t
+    us = OrderedSet{SymbolicT}()
+    ps = OrderedSet{SymbolicT}()
+    iv = unwrap(t)
     MT.collect_scoped_vars!(us, ps, js, iv)
     @test issetequal(us, [x2])
     @test issetequal(ps, [p2])

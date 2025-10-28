@@ -3,12 +3,13 @@ using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: get_component_type
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: t_nounits as t, D_nounits as D, value
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks
 using LinearAlgebra
 using ModelingToolkitStandardLibrary.Thermal
 using SymbolicUtils: getmetadata
+import SymbolicUtils as SU
 include("common/rc_model.jl")
 
 @testset "Basics" begin
@@ -21,7 +22,7 @@ include("common/rc_model.jl")
 
         eqs = equations(sys)
         for (i, eq) in enumerate(eqs)
-            actual = union(ModelingToolkit.vars(eq.lhs), ModelingToolkit.vars(eq.rhs))
+            actual = union(SU.search_variables(eq.lhs), SU.search_variables(eq.rhs))
             actual = filter(!ModelingToolkit.isparameter, collect(actual))
             current = Set(fullvars[𝑠neighbors(graph, i)])
             @test isempty(setdiff(actual, current))
@@ -129,8 +130,8 @@ include("common/serial_inductor.jl")
 
     sys2 = mtkcompile(ll2_model)
     @test length(equations(sys2)) == 3
-    u0 = [sys.inductor2.i => 0]
-    prob = ODEProblem(sys, u0, (0, 10.0))
+    u0 = [sys2.inductor2.i => 0]
+    prob = ODEProblem(sys2, u0, (0, 10.0))
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
 end
@@ -160,8 +161,8 @@ end
     end
     @named goo = first_model()
     @unpack foo = goo
-    @test ModelingToolkit.defaults(goo)[foo.a] == 3
-    @test ModelingToolkit.defaults(goo)[foo.b] == 300
+    @test value(ModelingToolkit.defaults(goo)[foo.a]) == 3
+    @test value(ModelingToolkit.defaults(goo)[foo.b]) == 300
 end
 
 function Load(; name)
@@ -349,7 +350,7 @@ end
     @named sys = System([connect(comp2.output, comp1.input)], t; systems = [comp1, comp2])
     eq = only(equations(expand_connections(sys)))
     # as opposed to `output.u ~ input.u`
-    @test isequal(eq, comp1.input.u ~ comp2.output.u)
+    @test isequal(eq, comp2.output.u ~ comp1.input.u)
 
     # test causal ordering of true causal cset
     @named input = RealInput()

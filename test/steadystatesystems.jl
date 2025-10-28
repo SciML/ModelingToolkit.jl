@@ -1,4 +1,5 @@
 using ModelingToolkit
+using NonlinearSolve
 using SteadyStateDiffEq
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D

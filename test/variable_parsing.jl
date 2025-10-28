@@ -9,9 +9,9 @@ using SymbolicUtils: FnType, ShapeVecT
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
-x1 = Num(SSym(:x; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
-y1 = Num(SSym(:y; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
-z1 = Num(SSym(:z; type = FnType{Tuple{Any}, Real}, shape = ShapeVecT())(value(t)))
+x1 = Num(SSym(:x; type = FnType{Tuple, Real, Nothing}, shape = ShapeVecT())(value(t)))
+y1 = Num(SSym(:y; type = FnType{Tuple, Real, Nothing}, shape = ShapeVecT())(value(t)))
+z1 = Num(SSym(:z; type = FnType{Tuple, Real, Nothing}, shape = ShapeVecT())(value(t)))
 
 @test isequal(x1, x)
 @test isequal(y1, y)
@@ -25,7 +25,7 @@ end
 
 t1 = Num(SSym(:t; type = Real, shape = ShapeVecT()))
 s1 = Num(SSym(:s; type = Real, shape = ShapeVecT()))
-σ1 = Num(SSym(:σ; type = FnType{Tuple, Real}, shape = ShapeVecT()))
+σ1 = SSym(:σ; type = FnType{Tuple, Real, Nothing}, shape = ShapeVecT())
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1(t), σ(t))
@@ -67,16 +67,16 @@ end
 @variables a[1:11, 1:2]
 @variables a()
 
-using Symbolics: value, VariableDefaultValue
+using Symbolics: value, VariableDefaultValue, getdefaultval
 using ModelingToolkit: VariableConnectType, VariableUnit, rename
-using Unitful
+using DynamicQuantities
 
 vals = [1, 2, 3, 4]
-@variables x=1 xs[1:4]=vals ys[1:5]=1
+@variables x=1 xs[1:4]=vals ys[1:5]=ones(5)
 
 @test getmetadata(x, VariableDefaultValue) === 1
-@test getmetadata.(collect(xs), (VariableDefaultValue,)) == vals
-@test getmetadata.(collect(ys), (VariableDefaultValue,)) == ones(Int, 5)
+@test getdefaultval(xs) == vals
+@test getdefaultval(ys) == ones(Int, 5)
 
 u = u"m^3/s"
 @variables begin

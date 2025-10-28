@@ -1,5 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq
-using ModelingToolkit: D, t_nounits as t
+using ModelingToolkit: D_nounits as D, t_nounits as t
 using Test
 
 # Standard case

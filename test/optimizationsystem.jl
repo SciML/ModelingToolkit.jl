@@ -1,6 +1,7 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
       OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll, SymbolicIndexingInterface,
       LinearAlgebra
+using Symbolics: value
 
 @testset "basic" begin
     @variables x y
@@ -231,7 +232,7 @@ end
 end
 
 @testset "non-convex problem with inequalities" begin
-    @variables x[1:2] [bounds = (0.0, Inf)]
+    @variables x[1:2] [bounds = (zeros(2), fill(Inf, 2))]
     @named sys = OptimizationSystem(x[1] + x[2], [x...], [];
         constraints = [
             1.0 ≲ x[1]^2 + x[2]^2,
@@ -399,7 +400,7 @@ end
     prob = OptimizationProblem(sys, [x => [42.0, 12.37]]; hess = true, sparse = true)
 
     symbolic_hess = Symbolics.hessian(cost(sys), unknowns(sys))
-    symbolic_hess_value = substitute(symbolic_hess, Dict(x[1] => prob[x[1]], x[2] => prob[x[2]]))
+    symbolic_hess_value = value.(substitute(symbolic_hess, Dict(x[1] => prob[x[1]], x[2] => prob[x[2]]); fold = Val(true)))
 
     oop_hess = prob.f.hess(prob.u0, prob.p)
     @test oop_hess ≈ symbolic_hess_value

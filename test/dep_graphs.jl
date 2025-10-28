@@ -2,6 +2,7 @@ using Test
 using ModelingToolkit, Graphs, JumpProcesses, RecursiveArrayTools
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit: value
+using Symbolics: SymbolicT
 
 #################################
 #  testing for Jumps / all dgs
@@ -26,7 +27,7 @@ import ModelingToolkit: value
     test_case_1 = (;
         eqs = jumps(js),
         # eq to vars they depend on
-        eq_sdeps = [Variable[], [S], [S, I], [S, R], [I], [S]],
+        eq_sdeps = [SymbolicT[], [S], [S, I], [S, R], [I], [S]],
         eq_sidepsf = [Int[], [1], [1, 2], [1, 3], [2], [1]],
         eq_sidepsb = [[2, 3, 4, 6], [3, 5], [4]],
         # eq to params they depend on
@@ -49,7 +50,7 @@ import ModelingToolkit: value
         # filter out vrjs in making graphs
         eqs = filter(x -> !(x isa VariableRateJump), jumps(js)),
         # eq to vars they depend on
-        eq_sdeps = [Variable[], [S], [S, I], [S, R], [I]],
+        eq_sdeps = [SymbolicT[], [S], [S, I], [S, R], [I]],
         eq_sidepsf = [Int[], [1], [1, 2], [1, 3], [2]],
         eq_sidepsb = [[2, 3, 4], [3, 5], [4]],
         # eq to params they depend on

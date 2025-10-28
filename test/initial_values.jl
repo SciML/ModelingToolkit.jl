@@ -54,7 +54,7 @@ vals = ModelingToolkit.varmap_to_vars(merge(defaults, Dict(var_vals)), desired_v
 # Issue#2565
 # Create ODESystem.
 @variables X1(t) X2(t)
-@parameters k1 k2 Γ[1:1]=X1 + X2
+@parameters k1 k2 Γ[1:1]=[X1 + X2]
 eq = D(X1) ~ -k1 * X1 + k2 * (-X1 + Γ[1])
 obs = X2 ~ Γ[1] - X1
 @mtkcompile osys_m = System([eq], t, [X1], [k1, k2, Γ[1]]; observed = [X2 ~ Γ[1] - X1])
@@ -63,9 +63,8 @@ obs = X2 ~ Γ[1] - X1
 u0 = [X1 => 1.0, X2 => 2.0]
 tspan = (0.0, 1.0)
 ps = [k1 => 1.0, k2 => 5.0]
-# Broken since we need both X1 and X2 to initialize Γ but this makes the initialization system
-# overdetermined because parameter initialization isn't in yet
-@test_warn "overdetermined" oprob=ODEProblem(osys_m, [u0; ps], tspan)
+oprob=ODEProblem(osys_m, [u0; ps], tspan; guesses = [Γ[1] => 1.0])
+@test SciMLBase.successful_retcode(solve(oprob))
 
 # Initialization of ODEProblem with dummy derivatives of multidimensional arrays
 # Issue#1283

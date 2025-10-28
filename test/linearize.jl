@@ -1,4 +1,6 @@
 using ModelingToolkit, ADTypes, Test
+using NonlinearSolve
+using Symbolics: value
 using CommonSolve: solve
 
 # Test reorder_unknowns
@@ -125,10 +127,10 @@ lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @test isequal(lsyss.A, lsyss_ns.A)
 
 lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
-@test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
-@test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
-@test ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
-@test ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.defaults(cl)) == lsys.D
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl))) == lsys.A
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl))) == lsys.B
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl))) == lsys.C
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.defaults(cl))) == lsys.D
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -155,14 +157,14 @@ ssys2 = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
     [ctr_output.u])
 lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
 
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.A, ModelingToolkit.defaults_and_guesses(pid)) == lsys.A
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.B, ModelingToolkit.defaults_and_guesses(pid)) == lsys.B
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.C, ModelingToolkit.defaults_and_guesses(pid)) == lsys.C
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.D, ModelingToolkit.defaults_and_guesses(pid)) == lsys.D
+@test value.(ModelingToolkit.fixpoint_sub(
+    lsyss.A, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.A
+@test value.(ModelingToolkit.fixpoint_sub(
+    lsyss.B, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.B
+@test value.(ModelingToolkit.fixpoint_sub(
+    lsyss.C, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.C
+@test value.(ModelingToolkit.fixpoint_sub(
+    lsyss.D, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_order))

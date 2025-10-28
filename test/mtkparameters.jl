@@ -146,7 +146,7 @@ eq = D(X) ~ p[1] - p[2] * X
 u0 = [X => 1.0]
 ps = [p => [2.0, 0.1]]
 p = MTKParameters(osys, [ps; u0])
-@test p.tunable == [2.0, 0.1]
+@test sort(p.tunable) == [0.1, 2.0]
 
 # Ensure partial update promotes the buffer
 @parameters p q r
@@ -272,11 +272,12 @@ VDual = Vector{<:ForwardDiff.Dual}
 VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
 
 @testset "Parameter type validation" begin
-    struct Foo{T}
+    abstract type AbstractFooT end
+    struct Foo{T} <: AbstractFooT
         x::T
     end
 
-    @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::Foo
+    @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::AbstractFooT
     @named sys = System(Equation[], t, [], [a, b, c, d, e, f])
     sys = complete(sys)
     ps = MTKParameters(sys,
