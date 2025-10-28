@@ -103,6 +103,7 @@ When all input values are known beforehand, you can use the [`Input`](@ref) type
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using OrdinaryDiffEq
+using Plots
 
 # Define system with an input variable
 @variables x(t) [input=true]
@@ -121,7 +122,7 @@ input = Input(sys.x, [1, 2, 3, 4], [0, 1, 2, 3])
 # Solve with the input - solver handles callbacks automatically
 sol = solve(prob, [input], Tsit5())
 
-plot(sol)
+plot(sol; idxs=[x,y])
 ```
 
 Multiple `Input` objects can be passed in a vector to handle multiple input variables simultaneously.
@@ -150,7 +151,7 @@ step!(integrator, 1.0, true)
 # IMPORTANT: Must call finalize! to save all input callbacks
 finalize!(integrator)
 
-plot(sol)
+plot(sol; idxs=[x,y])
 ```
 
 !!! warning "Always call `finalize!`"

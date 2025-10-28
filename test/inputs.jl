@@ -1,7 +1,6 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using OrdinaryDiffEq
-using Plots
 using Test
 
 
@@ -10,7 +9,7 @@ using Test
 # -----------------------------------------
 
 vars = @variables begin
-    x(t)=1, [input=true]
+    x(t), [input=true]
 
     # states
     y(t) = 0
