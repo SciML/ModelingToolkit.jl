@@ -1,0 +1,14 @@
+[default.extend-words]
+Nd = "Nd"
+nin = "nin"
+coul = "coul"
+isconnection = "isconnection"
+# Additional SciML terms
+setp = "setp"
+getp = "getp"
+indexin = "indexin"
+ists = "ists"
+ispcs = "ispcs"
+eqs = "eqs"
+rhs = "rhs"
+MTK = "MTK"
