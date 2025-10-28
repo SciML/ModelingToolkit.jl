@@ -773,8 +773,14 @@ function codegen_equation!(eg::EquationGenerator,
         dx = D(simplify_shifts(fullvars[lv]))
 
         neweq = make_differential_equation(var, dx, eq, total_sub)
+        # We will add `neweq.lhs` to `total_sub`, so any equation involving it won't be
+        # incident on it. Remove the edges incident on `iv` from the graph, and add
+        # the replacement vertices from `ieq` so that the incidence is still correct.
         for e in 𝑑neighbors(graph, iv)
             e == ieq && continue
+            for v in 𝑠neighbors(graph, ieq)
+                add_edge!(graph, e, v)
+            end
             rem_edge!(graph, e, iv)
         end
 
