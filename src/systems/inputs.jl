@@ -131,9 +131,12 @@ finalize!(integrator) = finalize!(get_input_functions(integrator.f.sys), integra
 
 function build_input_functions(sys, inputs)
     
-    vars = SymbolicUtils.BasicSymbolic[isparameter(x) ? x : toparam(x) for x in unwrap.(inputs)]
+    # Here we ensure the inputs have metadata marking the discrete variables as parameters.  In some
+    # cases the inputs can be fed to this function before they are converted to parameters by mtkcompile.
+    vars = SymbolicUtils.BasicSymbolic[isparameter(x) ? x : toparam(x) for x in unwrap.(inputs)] 
     setters = []
     events = SymbolicDiscreteCallback[]
+    defaults = get_defaults(sys)
     if !isempty(vars)
         
         for x in vars
@@ -141,16 +144,24 @@ function build_input_functions(sys, inputs)
             sdc = SymbolicDiscreteCallback(Inf, affect)
 
             push!(events, sdc)
+
+            # ensure that the ODEProblem does not complain about missing parameter map
+            if !haskey(defaults, x)
+                push!(defaults, x => 0.0)
+            end
+
         end
 
         @set! sys.discrete_events = events
         @set! sys.index_cache = ModelingToolkit.IndexCache(sys)
+        @set! sys.defaults = defaults
 
         setters = [SymbolicIndexingInterface.setsym(sys, x) for x in vars]
-        
-    end
+    
+        @set! sys.input_functions = InputFunctions(events, vars, setters)
 
-    @set! sys.input_functions = InputFunctions(events, vars, setters)
+    end
+    
 
     return sys 
 end
@@ -163,6 +174,7 @@ function DiffEqBase.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Inpu
     tstops = Float64[]
     callbacks = DiscreteCallback[]
 
+    # set_input!
     for input::Input in inputs
 
         tstops = union(tstops, input.time)
@@ -174,6 +186,11 @@ function DiffEqBase.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Inpu
             end 
         end
         push!(callbacks, DiscreteCallback(condition, affect!))
+
+        # DiscreteCallback doesn't hit on t==0, workaround...
+        if input.time[1] == 0
+            prob.ps[input.var] = input.data[1]
+        end
     
     end
 
