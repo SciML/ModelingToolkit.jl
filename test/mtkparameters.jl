@@ -2,6 +2,7 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, MTKParameters
 using SymbolicIndexingInterface, StaticArrays
 using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constants
+using ModelingToolkitStandardLibrary.Electrical, ModelingToolkitStandardLibrary.Blocks
 using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
 using ForwardDiff
@@ -378,4 +379,53 @@ with_updated_parameter_timeseries_values(
     @test ps.nonnumeric isa Tuple{Vector{Any}}
     ps2 = remake_buffer(sys, ps, [p], [:a])
     @test ps2.nonnumeric isa Tuple{Vector{Any}}
+end
+
+@testset "Issue#3925: Autodiff after `subset_tunables`" begin
+    function circuit_model()
+        @named resistor1 = Resistor(R=5.0)
+        @named resistor2 = Resistor(R=2.0)
+        @named capacitor1 = Capacitor(C=2.4)
+        @named capacitor2 = Capacitor(C=60.0)
+        @named source = Voltage()
+        @named input_signal = Sine(frequency=1.0)
+        @named ground = Ground()
+        @named ampermeter = CurrentSensor()
+
+        eqs = [connect(input_signal.output, source.V)
+            connect(source.p, capacitor1.n, capacitor2.n)
+            connect(source.n, resistor1.p, resistor2.p, ground.g)
+            connect(resistor1.n, capacitor1.p, ampermeter.n)
+            connect(resistor2.n, capacitor2.p, ampermeter.p)]
+
+        @named circuit_model = System(eqs, t,
+            systems=[
+                resistor1, resistor2, capacitor1, capacitor2,
+                source, input_signal, ground, ampermeter
+            ])
+    end
+
+    model = circuit_model()
+    sys = mtkcompile(model)
+
+    tunable_parameters(sys)
+
+    sub_sys = subset_tunables(sys, [sys.capacitor2.C])
+
+    tunable_parameters(sub_sys)
+
+    prob = ODEProblem(sub_sys, [sys.capacitor2.v => 0.0], (0, 3.))
+
+    setter = setsym_oop(prob, [sys.capacitor2.C]);
+
+    function loss(x, ps)
+        setter, prob = ps
+        u0, p = setter(prob, x)
+        new_prob = remake(prob; u0, p)
+        sol = solve(new_prob, Rodas5P())
+        sum(sol)
+    end
+
+    grad = ForwardDiff.gradient(Base.Fix2(loss, (setter, prob)), [3.0])
+    @test grad ≈ [0.14882627068752538] atol=1e-10
 end

@@ -867,10 +867,10 @@ end
 @generated function Base.getindex(
         ps::MTKParameters{T, I, D, C, N, H}, idx::Int) where {T, I, D, C, N, H}
     paths = []
-    if !(T <: SizedVector{0, Float64})
+    if !(T <: SizedVector{0})
         push!(paths, :(ps.tunable))
     end
-    if !(I <: SizedVector{0, Float64})
+    if !(I <: SizedVector{0})
         push!(paths, :(ps.initials))
     end
     for i in 1:fieldcount(D)
@@ -897,10 +897,10 @@ end
 @generated function Base.length(ps::MTKParameters{
         T, I, D, C, N, H}) where {T, I, D, C, N, H}
     len = 0
-    if !(T <: SizedVector{0, Float64})
+    if !(T <: SizedVector{0})
         len += 1
     end
-    if !(I <: SizedVector{0, Float64})
+    if !(I <: SizedVector{0})
         len += 1
     end
     len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
