@@ -7,7 +7,7 @@ on:
       - 'release-'
     paths-ignore:
       - 'docs/**'
-      - 'lib/ModelingToolkitStandardLibrary/docs/**'
+      # - 'lib/ModelingToolkitStandardLibrary/docs/**'
   push:
     branches:
       - master
