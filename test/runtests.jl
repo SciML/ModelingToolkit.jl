@@ -34,6 +34,7 @@ end
             @safetestset "Direct Usage Test" include("direct.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
+            @safetestset "Inputs" include("inputs.jl")
             @safetestset "Clock Test" include("clock.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
@@ -103,7 +104,7 @@ end
             @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
         end
     end
-    
+
     if GROUP == "All" || GROUP == "SymbolicIndexingInterface"
         @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
         @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")

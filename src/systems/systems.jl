@@ -51,6 +51,11 @@ function mtkcompile(
         @set! newsys.parent = complete(sys; split = false, flatten = false)
     end
     newsys = complete(newsys; split)
+
+    if !isempty(inputs)
+        newsys = build_input_functions(newsys, inputs)
+    end
+
     if newsys′ isa Tuple
         idxs = [parameter_index(newsys, i) for i in io[1]]
         return newsys, idxs

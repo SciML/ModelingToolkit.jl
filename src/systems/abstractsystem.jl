@@ -789,7 +789,8 @@ const SYS_PROPS = [:eqs
                    :index_cache
                    :isscheduled
                    :costs
-                   :consolidate]
+                   :consolidate
+                   :input_functions]
 
 for prop in SYS_PROPS
     fname_get = Symbol(:get_, prop)
