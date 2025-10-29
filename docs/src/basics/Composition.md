@@ -57,7 +57,7 @@ p = [decay1.a => 0.1
      decay2.a => 0.2]
 
 using OrdinaryDiffEq
-prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
+prob = ODEProblem(simplified_sys, [x0; p], (0.0, 100.0))
 sol = solve(prob, Tsit5())
 sol[decay2.f]
 ```
