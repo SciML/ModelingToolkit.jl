@@ -34,10 +34,10 @@ function Input(var, data::Vector{<:Real}, time::Vector{<:Real})
     return Input(var, SVector{n}(data), SVector{n}(time))
 end
 
-struct InputFunctions
+struct InputFunctions{S, O}
     events::Tuple{SymbolicDiscreteCallback}
     vars::Tuple{SymbolicUtils.BasicSymbolic{Real}}
-    setters::Tuple{SymbolicIndexingInterface.ParameterHookWrapper}
+    setters::Tuple{SymbolicIndexingInterface.ParameterHookWrapper{S, O}}
 end
 
 function InputFunctions(events::Vector, vars::Vector, setters::Vector)

@@ -15,7 +15,6 @@ vars = @variables begin
 end
 
 eqs = [
-# equations
     D(y) ~ x
 ]
 
