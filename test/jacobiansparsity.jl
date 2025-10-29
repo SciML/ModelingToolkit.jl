@@ -153,4 +153,10 @@ end
     prob = ODEProblem(sys, [x => 1.0, y => 0.0], (0.0, 1.0); jac = true, sparse = true)
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
+    ts = ModelingToolkit.get_tearing_state(sys)
+    for ieq in 1:2
+        vars1 = ts.fullvars[ModelingToolkit.BipartiteGraphs.𝑠neighbors(ts.structure.graph, ieq)]
+        vars2 = ModelingToolkit.vars(equations(sys)[ieq])
+        @test issetequal(vars1, vars2)
+    end
 end
