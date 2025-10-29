@@ -5,14 +5,15 @@ on:
     branches:
       - master
       - 'release-'
-      - v10
     paths-ignore:
       - 'docs/**'
+      - 'lib/ModelingToolkitStandardLibrary/docs/**'
   push:
     branches:
       - master
     paths-ignore:
       - 'docs/**'
+      - 'lib/ModelingToolkitStandardLibrary/docs/**'
       - 'benchmark/**'
 
 concurrency:
@@ -32,21 +33,69 @@ jobs:
           - "lts"
           - "pre"
         group:
-          - InterfaceI
-          - InterfaceII
-          - Initialization
-          - SymbolicIndexingInterface
-          - Extended
-          - Extensions
-          - Downstream
-          - RegressionI
-          - FMI
-    uses: "SciML/.github/.github/workflows/tests.yml@master"
-    with:
-      julia-version: "${{ matrix.version }}"
-      group: "${{ matrix.group }}"
-      # Disable cache for self-hosted runners since they persist between runs
-      # Set USE_SELF_HOSTED repository variable to 'true' when using self-hosted runners
-      self-hosted: ${{ vars.USE_SELF_HOSTED == 'true' }}
-      cache: ${{ vars.USE_SELF_HOSTED != 'true' }}
+          - "ModelingToolkit - InterfaceI"
+          - "ModelingToolkit - InterfaceII"
+          - "ModelingToolkit - Initialization"
+          - "ModelingToolkit - SymbolicIndexingInterface"
+          - "ModelingToolkit - Extended"
+          - "ModelingToolkit - Extensions"
+          - "ModelingToolkit - Downstream"
+          - "ModelingToolkit - RegressionI"
+          - "ModelingToolkit - FMI"
+          - "ModelingToolkitStandardLibrary - QA"
+          - "ModelingToolkitStandardLibrary - Core"
     secrets: "inherit"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Julia ${{ matrix.version }}"
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "${{ matrix.version }}"
+          arch: "${{ runner.arch }}"
+
+      - uses: julia-actions/cache@v1
+        if: ${{ vars.USE_SELF_HOSTED != 'true' }}
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - name: "Run tests ${{ vars.USE_SELF_HOSTED == 'true' && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
+        shell: julia --color=yes --check-bounds=yes --depwarn=yes {0}
+        run: |
+          import Pkg
+          PKG_GROUP = ${{ matrix.group }}
+          NAMES = split(PKG_GROUP, " - ")
+          @assert length(NAMES) == 2 """
+          Invalid CI configuration. Test group must be of the form 'Package - Group'. \
+          Got "$PKG_GROUP".
+          """
+          PKG = NAMES[1]
+          GROUP = NAMES[2]
+          ENV["GROUP"] = GROUP
+          @info "Preparing Environment"
+          if PKG == "ModelingToolkit"
+            Pkg.activate(".")
+            Pkg.develop(; path = "lib/ModelingToolkitStandardLibrary")
+          else
+            @assert isdir("lib/$PKG") """
+            Package $PKG not found in subdirectory `lib/`.
+            """
+            Pkg.activate("lib/$PKG")
+            Pkg.develop(; path = ".")
+          end
+          
+          @info "Running tests"
+          Pkg.test(PKG; coverage = true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], force_latest_compatible_version=false, allow_reresolve=true)
+
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: "src,lib/ModelingToolkitStandardLibrary/src"
+
+      - name: "Report Coverage with Codecov"
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: "${{ secrets.CODECOV_TOKEN }}"
+          fail_ci_if_error: true
