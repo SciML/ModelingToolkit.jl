@@ -31,12 +31,14 @@ function mtkcompile(
         sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
         allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
         inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[],
+        disturbance_inputs = Any[], array_hack = true,
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    newsys′ = __mtkcompile(sys; simplify,
+    reassemble_alg = get(kwargs, :reassemble_alg,
+        StructuralTransformations.DefaultReassembleAlgorithm(; simplify, array_hack))
+    newsys′ = __mtkcompile(sys;
         allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs, additional_passes,
+        inputs, outputs, disturbance_inputs, additional_passes, reassemble_alg,
         kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -59,7 +61,7 @@ function mtkcompile(
     end
 end
 
-function __mtkcompile(sys::AbstractSystem; simplify = false,
+function __mtkcompile(sys::AbstractSystem;
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         sort_eqs = true,
@@ -72,7 +74,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         return sys
     end
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
-        return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)
+        return simplify_optimization_system(sys; kwargs..., sort_eqs)
     end
 
     sys, statemachines = extract_top_level_statemachines(sys)
@@ -94,7 +96,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
     end
     if isempty(brown_vars)
         return mtkcompile!(
-            state; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+            state; inputs, outputs, disturbance_inputs, kwargs...)
     else
         Is = Int[]
         Js = Int[]
@@ -129,7 +131,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
                               if !iszero(new_idxs[i]) &&
                                  invview(var_to_diff)[i] === nothing]
         ode_sys = mtkcompile(
-            sys; simplify, inputs, outputs, disturbance_inputs, kwargs...)
+            sys; inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
         sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)

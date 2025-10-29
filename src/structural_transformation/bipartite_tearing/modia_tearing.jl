@@ -62,19 +62,22 @@ function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars
     return nothing
 end
 
-function build_var_eq_matching(structure::SystemStructure, ::Type{U} = Unassigned;
-        varfilter::F2 = v -> true, eqfilter::F3 = eq -> true) where {U, F2, F3}
+function build_var_eq_matching(structure::SystemStructure;
+        varfilter::F2, eqfilter::F3) where {F2, F3}
     @unpack graph, solvable_graph = structure
-    var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
+    var_eq_matching = maximal_matching(graph, eqfilter, varfilter, MatchedVarT)
     matching_len = max(length(var_eq_matching),
         maximum(x -> x isa Int ? x : 0, var_eq_matching, init = 0))
     return complete(var_eq_matching, matching_len), matching_len
 end
 
-function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
-        ::Type{U} = Unassigned;
-        varfilter::F2 = v -> true,
-        eqfilter::F3 = eq -> true) where {F, U, F2, F3}
+@kwdef struct ModiaTearing{F, F2, F3}
+    isder::F = nothing
+    varfilter::F2 = Returns(true)
+    eqfilter::F3 = Returns(true)
+end
+
+function (alg::ModiaTearing)(structure::SystemStructure)
     # It would be possible here to simply iterate over all variables and attempt to
     # use tearEquations! to produce a matching that greedily selects the minimal
     # number of torn variables. However, we can do this process faster if we first
@@ -86,8 +89,11 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     # to have optimal solutions that cannot be found by this process. We will not
     # find them here [TODO: It would be good to have an explicit example of this.]
 
+    isder = alg.isder
+    varfilter = alg.varfilter
+    eqfilter = alg.eqfilter
     @unpack graph, solvable_graph = structure
-    var_eq_matching, matching_len = build_var_eq_matching(structure, U; varfilter, eqfilter)
+    var_eq_matching, matching_len = build_var_eq_matching(structure; varfilter, eqfilter)
     full_var_eq_matching = copy(var_eq_matching)
     var_sccs = find_var_sccs(graph, var_eq_matching)
     vargraph = DiCMOBiGraph{true}(graph, 0, Matching(matching_len))
@@ -126,5 +132,6 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
         tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, free_eqs,
             BitSet(free_vars), isder)
     end
-    return var_eq_matching, full_var_eq_matching, var_sccs
+
+    return TearingResult(var_eq_matching, full_var_eq_matching, var_sccs), (;)
 end

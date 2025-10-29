@@ -1,11 +1,9 @@
-struct SelectedState end
-
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
         state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state; kwargs...))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log; kwargs...)
 end
 
 struct DummyDerivativeSummary
@@ -15,7 +13,8 @@ end
 
 function dummy_derivative_graph!(
         structure::SystemStructure, var_eq_matching, jac = nothing,
-        state_priority = nothing, ::Val{log} = Val(false)) where {log}
+        state_priority = nothing, ::Val{log} = Val(false);
+        tearing_alg::TearingAlgorithm = DummyDerivativeTearing(), kwargs...) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -173,8 +172,9 @@ function dummy_derivative_graph!(
         @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
     end
 
-    ret = tearing_with_dummy_derivatives(structure, BitSet(dummy_derivatives))
-    (ret..., DummyDerivativeSummary(var_dummy_scc, var_state_priority))
+    tearing_result, extra = tearing_alg(structure, BitSet(dummy_derivatives))
+    extra = (; extra..., ddsummary = DummyDerivativeSummary(var_dummy_scc, var_state_priority))
+    return tearing_result, extra
 end
 
 function is_present(structure, v)::Bool
@@ -201,7 +201,9 @@ function isdiffed((structure, dummy_derivatives), v)::Bool
     diff_to_var[v] !== nothing && is_some_diff(structure, dummy_derivatives, v)
 end
 
-function tearing_with_dummy_derivatives(structure, dummy_derivatives)
+struct DummyDerivativeTearing <: TearingAlgorithm end
+
+function (::DummyDerivativeTearing)(structure::SystemStructure, dummy_derivatives::Union{BitSet, Tuple{}} = ())
     @unpack var_to_diff = structure
     # We can eliminate variables that are not selected (differential
     # variables). Selected unknowns are differentiated variables that are not
@@ -213,18 +215,18 @@ function tearing_with_dummy_derivatives(structure, dummy_derivatives)
             can_eliminate[v] = true
         end
     end
-    var_eq_matching, full_var_eq_matching,
-    var_sccs = tear_graph_modia(structure,
-        Base.Fix1(isdiffed, (structure, dummy_derivatives)),
-        Union{Unassigned, SelectedState};
-        varfilter = Base.Fix1(getindex, can_eliminate))
+    modia_tearing = ModiaTearing(;
+        isder = Base.Fix1(isdiffed, (structure, dummy_derivatives)),
+        varfilter = Base.Fix1(getindex, can_eliminate)
+    )
+    tearing_result, _ = modia_tearing(structure)
 
     for v in 𝑑vertices(structure.graph)
         is_present(structure, v) || continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(structure, dummy_derivatives, dv)) && continue
-        var_eq_matching[v] = SelectedState()
+        tearing_result.var_eq_matching[v] = SelectedState()
     end
 
-    return var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate
+    return tearing_result, (; can_eliminate)
 end
