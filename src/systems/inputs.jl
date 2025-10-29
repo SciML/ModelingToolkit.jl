@@ -163,7 +163,7 @@ function build_input_functions(sys, inputs)
     return sys
 end
 
-function DiffEqBase.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Input}, args...; kwargs...)
+function CommonSolve.solve(prob::SciMLBase.AbstractDEProblem, inputs::Vector{Input}, args...; kwargs...)
     tstops = Float64[]
     callbacks = DiscreteCallback[]
 
