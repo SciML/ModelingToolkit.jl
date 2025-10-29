@@ -418,7 +418,7 @@ ev = ModelingToolkit.SymbolicDiscreteCallback(
 @mtkcompile sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
-prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
+prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
 sol = solve(prob, Tsit5())
 sol[c]
 ```
@@ -439,7 +439,7 @@ will be saved. If we repeat the above example with `c` not a `discrete_parameter
 @mtkcompile sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
 
-prob = ODEProblem(sys, [x => 0.0], (0.0, 2pi), [c => 1.0])
+prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
 sol = solve(prob, Tsit5())
 sol.ps[c] # sol[c] will error, since `c` is not a timeseries value
 ```

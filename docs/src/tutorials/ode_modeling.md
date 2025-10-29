@@ -36,7 +36,7 @@ end
 
 using OrdinaryDiffEq
 @mtkcompile fol = FOL()
-prob = ODEProblem(fol, [], (0.0, 10.0), [])
+prob = ODEProblem(fol, [], (0.0, 10.0))
 sol = solve(prob)
 
 using Plots
