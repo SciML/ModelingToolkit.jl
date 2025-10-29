@@ -1,0 +1,20 @@
+[deps]
+ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+
+[compat]
+ControlSystemsBase = "1.1"
+DataFrames = "1.7"
+DataInterpolations = "6.4, 7, 8"
+Documenter = "1"
+IfElse = "0.1"
+ModelingToolkit = "10"
+OrdinaryDiffEq = "6.31"
+Plots = "1.36"
