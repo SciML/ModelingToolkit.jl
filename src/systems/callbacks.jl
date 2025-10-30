@@ -78,11 +78,15 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
 
     dvs = OrderedSet()
     params = OrderedSet()
+    dp_set = OrderedSet(discrete_parameters)
     _varsbuf = Set()
     for eq in affect
         if !haspre(eq) && !(symbolic_type(eq.rhs) === NotSymbolic() ||
              symbolic_type(eq.lhs) === NotSymbolic())
             @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
+        end
+        if ModelingToolkit.isparameter(eq.lhs) && (eq.lhs ∉ dp_set)
+            error("Detected explicit update to parameter $(eq.lhs), but it has not been passed in as a `discrete_parameters` to the callback constructor, for example: \n\n(SymbolicDiscreteCallback(cond => aff, discrete_parameters = [$(eq.lhs)])\n\nAs a result, the parameter update will fail.")
         end
         collect_vars!(dvs, params, eq, iv; op = Pre)
         empty!(_varsbuf)
