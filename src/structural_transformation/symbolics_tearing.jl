@@ -547,7 +547,7 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
         var_eq_matching::Matching, full_var_eq_matching::Matching,
         var_sccs::Vector{Vector{Int}}, extra_eqs_vars::NTuple{2, Vector{Int}},
         iv::Union{SymbolicT, Nothing}, D::Union{Differential, Shift, Nothing};
-        simplify::Bool = false, inline_linear_sccs = false)
+        simplify::Bool = false, inline_linear_sccs = false, analytical_linear_scc_limit = 2)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
@@ -622,7 +622,7 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
                 neq = neweqs[ieq]
                 codegen_equation!(eq_generator, neq, ieq, iv; simplify)
             end
-            linsol = get_linear_scc_linsol(alg_eqs, alg_vars, neweqs, eq_generator.solved_eqs_sub, total_sub, fullvars, simplify)
+            linsol = get_linear_scc_linsol(alg_eqs, alg_vars, neweqs, eq_generator.solved_eqs_sub, total_sub, fullvars, analytical_linear_scc_limit, simplify)
             # Generate the algebraic equations
             for (algevar_idx, _) in enumerate(alg_eqs)
                 iv = alg_vars[algevar_idx]
@@ -722,8 +722,25 @@ end
 
 Get a symbolic expression of the appropriate size representing the solution of the linear SCC.
 """
-function get_linear_scc_linsol(alg_eqs::BitSet, alg_vars::Vector{Int}, neweqs::Vector{Equation}, solved_eqs_sub::Dict{SymbolicT, SymbolicT}, total_sub::DerivativeDict{SymbolicT, Dict{SymbolicT, SymbolicT}}, fullvars::Vector{SymbolicT}, simplify::Bool)
+function get_linear_scc_linsol(alg_eqs::BitSet, alg_vars::Vector{Int}, neweqs::Vector{Equation}, solved_eqs_sub::Dict{SymbolicT, SymbolicT}, total_sub::DerivativeDict{SymbolicT, Dict{SymbolicT, SymbolicT}}, fullvars::Vector{SymbolicT}, analytical_linear_scc_limit::Int, simplify::Bool)
     N = length(alg_eqs)
+    if N <= analytical_linear_scc_limit
+        resids = SymbolicT[]
+        for ieq in alg_eqs
+            eq = neweqs[ieq]
+            resid = eq.rhs
+            if simplify
+                resid = SymbolicUtils.simplify(resid)
+            end
+            # Substitute solved differential equations
+            resid = Symbolics.fixpoint_sub(
+                resid, total_sub; operator = ModelingToolkit.Shift)
+            # Substitute solved equations
+            resid = SU.substitute(resid, solved_eqs_sub)
+            push!(resids, resid)
+        end
+        return @views Symbolics.symbolic_linear_solve(resids, fullvars[alg_vars])
+    end
     # Linear coefficients
     A = fill(Symbolics.COMMON_ZERO, N, N)
     b = fill(Symbolics.COMMON_ZERO, N)
