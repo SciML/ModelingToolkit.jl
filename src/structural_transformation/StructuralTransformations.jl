@@ -52,6 +52,7 @@ using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction,
                                  RuntimeGeneratedFunctions,
                                  drop_expr
 import Symbolics: Num, Arr, CallAndWrap
+import CommonSolve
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
