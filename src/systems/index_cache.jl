@@ -131,8 +131,14 @@ function IndexCache(sys::AbstractSystem)
         end
 
         for sym in discs
-            is_parameter(sys, sym) ||
-                error("Expected discrete variable $sym in callback to be a parameter")
+            if !is_parameter(sys, sym)
+                if iscall(sym) && operation(sym) === getindex &&
+                   is_parameter(sys, arguments(sym)[1])
+                    sym = arguments(sym)[1]
+                else
+                    error("Expected discrete variable $sym in callback to be a parameter")
+                end
+            end
 
             # Only `foo(t)`-esque parameters can be saved
             if iscall(sym) && length(arguments(sym)) == 1 &&
