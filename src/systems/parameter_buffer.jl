@@ -805,6 +805,10 @@ function Base.getindex(ngi::NestedGetIndex, idx::Tuple)
     i, j, k... = idx
     return ngi.x[i][j][k...]
 end
+function Base.getindex(ngi::NestedGetIndex, idx::NTuple{2})
+    i, j = idx
+    return ngi.x[i][j]
+end
 
 # Required for DiffEqArray constructor to work during interpolation
 Base.size(::NestedGetIndex) = ()
