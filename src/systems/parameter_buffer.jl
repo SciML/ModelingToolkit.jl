@@ -830,19 +830,27 @@ function SciMLBase.create_parameter_timeseries_collection(
     isempty(ps.discrete) && return nothing
     num_discretes = only(blocksize(ps.discrete[1]))
     buffers = []
-    partition_type = Tuple{(typeof(parent(buf)) for buf in ps.discrete)...}
+    partition_type = typeof(SciMLBase.get_saveable_values(sys, ps, 1))
     for i in 1:num_discretes
         ts = eltype(tspan)[]
-        us = NestedGetIndex{partition_type}[]
+        us = partition_type[]
         push!(buffers, DiffEqArray(us, ts, (1, 1)))
     end
 
     return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
 end
 
+@inline __get_blocks(tsidx::Int) = ()
+@inline function __get_blocks(tsidx::Int, buffer::BlockedArray, buffers...)
+    (buffer[Block(tsidx)], __get_blocks(tsidx, buffers...)...)
+end
+@inline function __get_blocks(tsidx::Int, buffer::BlockedArray{<:AbstractArray}, buffers...)
+    (copy.(buffer[Block(tsidx)]), __get_blocks(tsidx, buffers...)...)
+end
+
 function SciMLBase.get_saveable_values(
         sys::AbstractSystem, ps::MTKParameters, timeseries_idx)
-    return NestedGetIndex(Tuple(buffer[Block(timeseries_idx)] for buffer in ps.discrete))
+    return NestedGetIndex(__get_blocks(timeseries_idx, ps.discrete...))
 end
 
 function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)
