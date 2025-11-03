@@ -1,6 +1,7 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
 using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics, SymbolicUtils
 
 function infer_clocks(sys)
     ts = TearingState(sys)
@@ -144,6 +145,29 @@ eqs = [yd ~ Sample(dt)(y)
     @test varmap[x] == ContinuousClock()
     @test varmap[y] == clk
     @test varmap[z] == clk
+end
+
+struct ZeroArgOp <: Symbolics.Operator end
+(o::ZeroArgOp)() = Symbolics.Term{Bool}(o, Any[])
+SymbolicUtils.promote_symtype(::ZeroArgOp, T) = Union{Bool, T}
+SymbolicUtils.isbinop(::ZeroArgOp) = false
+Base.nameof(::ZeroArgOp) = :ZeroArgOp
+ModelingToolkit.input_timedomain(::ZeroArgOp, _ = nothing) = ()
+ModelingToolkit.output_timedomain(::ZeroArgOp, _ = nothing) = Clock(0.1)
+ModelingToolkit.validate_operator(::ZeroArgOp, args, iv; context = nothing) = nothing
+SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
+
+@testset "Zero-argument clock operators" begin
+    @variables x(t) y(t)
+    clk = Clock(0.1)
+    eqs = [D(x) ~ x
+           y ~ ZeroArgOp()()]
+    @named sys = System(eqs, t)
+    @test issetequal(unknowns(sys), [x, y])
+    ts = TearingState(sys)
+    @test issetequal(ts.fullvars, [D(x), x, y, ZeroArgOp()()])
+    ci, clkmap = infer_clocks(sys)
+    @test clkmap[ZeroArgOp()()] == clk
 end
 
 @test_skip begin

@@ -285,6 +285,7 @@ function is_time_domain_conversion(v)
     o isa Operator || return false
     itd = input_timedomain(o)
     allequal(itd) || return true
+    isempty(itd) && return true
     otd = output_timedomain(o)
     itd[1] == otd || return true
     return false
