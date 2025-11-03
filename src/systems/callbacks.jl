@@ -96,7 +96,9 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
         collect_vars!(dvs, params, eq, iv)
     end
     pre_params = filter(haspre ∘ value, params)
+    discrete_parameters = gather_array_params(OrderedSet(discrete_parameters))
     sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
+    discrete_parameters = collect(discrete_parameters)
     discretes = map(tovar, discrete_parameters)
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
