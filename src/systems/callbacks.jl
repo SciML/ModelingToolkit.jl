@@ -96,7 +96,9 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = Any[],
         collect_vars!(dvs, params, eq, iv)
     end
     pre_params = filter(haspre ∘ value, params)
+    discrete_parameters = gather_array_params(OrderedSet(discrete_parameters))
     sys_params = collect(setdiff(params, union(discrete_parameters, pre_params)))
+    discrete_parameters = collect(discrete_parameters)
     discretes = map(tovar, discrete_parameters)
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
@@ -904,7 +906,12 @@ function compile_equational_affect(
             obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))
         rhss = map(x -> x.rhs, update_eqs)
         lhss = map(x -> x.lhs, update_eqs)
-        is_p = [lhs in Set(ps_to_update) for lhs in lhss]
+        update_ps_set = Set(ps_to_update)
+        is_p = map(lhss) do lhs
+            lhs in update_ps_set ||
+                iscall(lhs) && operation(lhs) === getindex &&
+                arguments(lhs)[1] in update_ps_set
+        end
         is_u = [lhs in Set(dvs_to_update) for lhs in lhss]
         dvs = unknowns(sys)
         ps = parameters(sys)
