@@ -133,3 +133,9 @@ a = rename(value(x), :a)
 @test ModelingToolkit.isparameter(p)
 
 @test_throws Any (@macroexpand @parameters p=2 [unit = u"m", abc = 2])
+
+@testset "Parameters cannot be dependent" begin
+    @test_throws ["cannot create time-dependent"] @parameters p(t)
+    @test_throws ["cannot create time-independent"] @discretes p
+end
+
