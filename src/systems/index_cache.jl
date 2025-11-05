@@ -271,27 +271,6 @@ function IndexCache(sys::AbstractSystem)
 
     dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
     vs = Set{SymbolicT}()
-    for eq in get_parameter_dependencies(sys)
-        sym = eq.lhs
-        SU.search_variables!(vs, eq.rhs)
-        timeseries = TimeseriesSetType()
-        if is_time_dependent(sys)
-            for v in vs
-                if (idx = get(disc_idxs, v, nothing)) !== nothing
-                    push!(timeseries, idx.clock_idx)
-                end
-            end
-        end
-        ttsym = default_toterm(sym)
-        rsym = renamespace(sys, sym)
-        rttsym = renamespace(sys, ttsym)
-        for s in (sym, ttsym, rsym, rttsym)
-            dependent_pars_to_timeseries[s] = timeseries
-            if hasname(s) && (!iscall(s) || operation(s) !== getindex)
-                symbol_to_variable[getname(s)] = sym
-            end
-        end
-    end
 
     observed_syms_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
     for eq in observed(sys)

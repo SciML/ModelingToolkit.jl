@@ -291,20 +291,6 @@ function has_observed_with_lhs(sys::AbstractSystem, sym)
     end
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Check if the system `sys` contains a parameter dependency equation with LHS `sym`.
-"""
-function has_parameter_dependency_with_lhs(sys, sym)
-    has_parameter_dependencies(sys) || return false
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
-    else
-        return any(isequal(sym), [eq.lhs for eq in get_parameter_dependencies(sys)])
-    end
-end
-
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
     if is_variable(sys, sym) || is_independent_variable(sys, sym)
         push!(ts_idxs, ContinuousTimeseries())
@@ -569,10 +555,6 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             iscall(v) && push!(all_initialvars, D(v))
         end
     end
-    for eq in get_parameter_dependencies(sys)
-        is_variable_floatingpoint(eq.lhs) || continue
-        push!(all_initialvars, eq.lhs)
-    end
     initials = collect(all_initialvars)
     for (i, v) in enumerate(initials)
         initials[i] = Initial()(v)
@@ -799,7 +781,6 @@ const SYS_PROPS = [:eqs
                    :gui_metadata
                    :is_initializesystem
                    :is_discrete
-                   :parameter_dependencies
                    :assertions
                    :ignored_connections
                    :parent
@@ -1414,16 +1395,6 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
     return result
 end
 
-function dependent_parameters(sys::AbstractSystem)
-    if !iscomplete(sys)
-        throw(ArgumentError("""
-        `dependent_parameters` requires that the system is marked as complete. Call
-        `complete` or `mtkcompile` on the system.
-        """))
-    end
-    return map(eq -> eq.lhs, parameter_dependencies(sys))
-end
-
 """
     parameters_toplevel(sys::AbstractSystem)
 
@@ -1434,36 +1405,6 @@ function parameters_toplevel(sys::AbstractSystem)
         return parameters_toplevel(parent)
     end
     return get_ps(sys)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Get the parameter dependencies of the system `sys` and its subsystems. Requires that the
-system is `complete`d.
-"""
-function parameter_dependencies(sys::AbstractSystem)
-    if !iscomplete(sys)
-        throw(ArgumentError("""
-        `parameter_dependencies` requires that the system is marked as complete. Call \
-        `complete` or `mtkcompile` on the system.
-        """))
-    end
-    if !has_parameter_dependencies(sys)
-        return Equation[]
-    end
-    get_parameter_dependencies(sys)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return all of the parameters of the system, including hidden initial parameters and ones
-eliminated via `parameter_dependencies`.
-"""
-function full_parameters(sys::AbstractSystem)
-    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
-    vcat(parameters(sys; initial_parameters = true), dep_ps)
 end
 
 """
@@ -2162,11 +2103,6 @@ function Base.show(
         limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
 
-    # Print parameter dependencies
-    npdeps = has_parameter_dependencies(sys) ? length(get_parameter_dependencies(sys)) : 0
-    npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
-    npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
-
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
     nobs > 0 && printstyled(io, "\nObserved ($nobs):"; bold)
@@ -2665,7 +2601,6 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union(get_parameter_dependencies(basesys), get_parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
@@ -2696,7 +2631,6 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     end
 
     newsys = T(args...; kwargs...)
-    @set! newsys.parameter_dependencies = dep_ps
 
     return newsys
 end
@@ -2848,8 +2782,6 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         @set! newsys.ps = map(get_ps(sys)) do var
             get(rules, var, var)
         end
-        @set! newsys.parameter_dependencies = substitute(
-            get_parameter_dependencies(sys), rules)
         @set! newsys.defaults = Dict(substitute(k, rules) => substitute(v, rules)
         for (k, v) in get_defaults(sys))
         @set! newsys.guesses = Dict(substitute(k, rules) => substitute(v, rules)
@@ -2910,7 +2842,7 @@ function process_parameter_equations(sys::AbstractSystem)
         end
     end
 
-    pareqs = Equation[get_parameter_dependencies(sys); eqs[pareq_idxs]]
+    pareqs = eqs[pareq_idxs]
     explicitpars = SymbolicT[]
     for eq in pareqs
         push!(explicitpars, eq.lhs)
@@ -2920,7 +2852,6 @@ function process_parameter_equations(sys::AbstractSystem)
     eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
 
     @set! sys.eqs = eqs
-    @set! sys.parameter_dependencies = pareqs
     @set! sys.ps = setdiff(get_ps(sys), explicitpars)
     return sys
 end
@@ -2946,24 +2877,12 @@ See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.du
 """
 function dump_parameters(sys::AbstractSystem)
     defs = defaults(sys)
-    pdeps = get_parameter_dependencies(sys)
-    metas = map(dump_variable_metadata.(parameters(sys))) do meta
+    return map(dump_variable_metadata.(parameters(sys))) do meta
         if haskey(defs, meta.var)
             meta = merge(meta, (; default = defs[meta.var]))
         end
         meta
     end
-    pdep_metas = map(pdeps) do eq
-        sym = eq.lhs
-        val = eq.rhs
-        meta = dump_variable_metadata(sym)
-        defs[eq.lhs] = eq.rhs
-        meta = merge(meta,
-            (; dependency = val,
-                default = symbolic_evaluate(val, defs)))
-        return meta
-    end
-    return vcat(metas, pdep_metas)
 end
 
 """

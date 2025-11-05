@@ -108,12 +108,6 @@ struct System <: IntermediateDeprecationSystem
     observed::Vector{Equation}
     """
     $INTERNAL_FIELD_WARNING
-    All the explicit equations relating parameters. Equations here only contain parameters
-    and are in the same format as `observed`.
-    """
-    parameter_dependencies::Vector{Equation}
-    """
-    $INTERNAL_FIELD_WARNING
     A mapping from the name of a variable to the actual symbolic variable in the system.
     This is used to enable `getproperty` syntax to access variables of a system.
     """
@@ -262,7 +256,7 @@ struct System <: IntermediateDeprecationSystem
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
-            brownians, iv, observed, parameter_dependencies, var_to_name, name, description,
+            brownians, iv, observed, var_to_name, name, description,
             defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions = Dict{SymbolicT, String}(),
             metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
@@ -312,7 +306,7 @@ struct System <: IntermediateDeprecationSystem
         end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
-            observed, parameter_dependencies, var_to_name, name, description, defaults,
+            observed, var_to_name, name, description, defaults,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, inputs, outputs, tearing_state, namespacing,
@@ -370,7 +364,7 @@ All other keyword arguments are named identically to the corresponding fields in
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
-        observed = Equation[], parameter_dependencies = Equation[], defaults = SymmapT(),
+        observed = Equation[], defaults = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{SymbolicT, String}(),
@@ -390,11 +384,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         eqs = Equation[eqs]
     end
     eqs = eqs::Vector{Equation}
-
-    if !isempty(parameter_dependencies)
-        @invokelatest warn_pdeps()
-        append!(eqs, parameter_dependencies)
-    end
 
     iv = unwrap(iv)
     ps = vec(unwrap_vars(ps))
@@ -491,7 +480,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
-        costs, consolidate, dvs, ps, brownians, iv, observed, Equation[],
+        costs, consolidate, dvs, ps, brownians, iv, observed,
         var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
@@ -503,13 +492,6 @@ end
     sysnames = nameof.(systems)
     unique_sysnames = Set(sysnames)
     throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
-end
-
-@noinline function warn_pdeps()
-    @warn """
-    The `parameter_dependencies` keyword argument is deprecated. Please provide all
-    such equations as part of the normal equations of the system.
-    """
 end
 
 SymbolicIndexingInterface.getname(x::System) = nameof(x)
@@ -577,10 +559,6 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     end
     setdiff!(allunknowns, brownians)
 
-    for eq in get(kwargs, :parameter_dependencies, Equation[])
-        collect_vars!(allunknowns, ps, eq, iv)
-    end
-
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
     union!(allunknowns, cstrunknowns)
@@ -633,9 +611,6 @@ function System(eqs::Vector{Equation}; kwargs...)
     allunknowns = OrderedSet{SymbolicT}()
     ps = OrderedSet{SymbolicT}()
     for eq in eqs
-        collect_vars!(allunknowns, ps, eq, nothing)
-    end
-    for eq in get(kwargs, :parameter_dependencies, Equation[])
         collect_vars!(allunknowns, ps, eq, nothing)
     end
     for ssys in get(kwargs, :systems, System[])
@@ -958,7 +933,6 @@ function NonlinearSystem(sys::System)
         observed = obs, systems = map(NonlinearSystem, get_systems(sys)))
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
-        @set! nsys.parameter_dependencies = get_parameter_dependencies(sys)
     end
     return nsys
 end
@@ -1051,7 +1025,6 @@ function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     return System(eqs, iv, dvs, ps; jumps, kwargs...)
 end
 
-# explicitly write the docstring to avoid mentioning `parameter_dependencies`.
 """
     SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false, kwargs...)
 
@@ -1076,15 +1049,14 @@ will automatically perform this conversion.
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
 function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
-        parameter_dependencies = Equation[], kwargs...)
+        kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    sys = System(eqs, iv; noise_eqs = noise, kwargs...)
-    @set sys.parameter_dependencies = parameter_dependencies
+    return System(eqs, iv; noise_eqs = noise, kwargs...)
 end
 
 """
@@ -1096,15 +1068,14 @@ Identical to the 3-argument `SDESystem` constructor, but uses the explicitly pro
 """
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
-        parameter_dependencies = Equation[], kwargs...)
+        kwargs...)
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
         end
         noise = repeat(reshape(noise, (1, :)), length(eqs))
     end
-    sys = System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
-    @set sys.parameter_dependencies = parameter_dependencies
+    return System(eqs, iv, dvs, ps; noise_eqs = noise, kwargs...)
 end
 
 """
@@ -1220,7 +1191,6 @@ function Base.isapprox(sysa::System, sysb::System)
            issetequal(get_ps(sysa), get_ps(sysb)) &&
            issetequal(get_brownians(sysa), get_brownians(sysb)) &&
            issetequal(get_observed(sysa), get_observed(sysb)) &&
-           issetequal(get_parameter_dependencies(sysa), get_parameter_dependencies(sysb)) &&
            isequal(get_description(sysa), get_description(sysb)) &&
            isequal(get_defaults(sysa), get_defaults(sysb)) &&
            isequal(get_guesses(sysa), get_guesses(sysb)) &&
