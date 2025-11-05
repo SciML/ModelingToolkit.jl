@@ -727,6 +727,22 @@ end
 """
     $TYPEDSIGNATURES
 
+Identical to `get_all_discretes`, except it uses the `IndexCache` as a fast path if
+possible.
+"""
+function get_all_discretes_fast(sys::AbstractSystem)
+    is_split(sys) || return get_all_discretes(sys)
+    ic::IndexCache = get_index_cache(sys)
+    all_discretes = AtomicArraySet()
+    for k in keys(ic.discrete_idx)
+        push_as_atomic_array!(all_discretes, k)
+    end
+    return all_discretes
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Find discrete variables in `unknowns(sys)` and turn them into parameters.
 """
 function discrete_unknowns_to_parameters(sys::AbstractSystem)
