@@ -1,0 +1,36 @@
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+using Symbolics: SConst
+
+@testset "Simple metadata bindings" begin
+    @variables x(t) = 1 y(t) = x
+    @parameters p = 1 q = p
+    @named sys = System([D(x) ~ p * x, D(y) ~ q * y], t)
+    @test isequal(bindings(sys), Dict(y => x, q => p))
+    @test isequal(initial_conditions(sys), Dict(x => SConst(1), p => SConst(1)))
+end
+
+@testset "Array bindings" begin
+    @variables x(t)[1:2] = [1.0, 2.0] y(t)[1:2] = [x[1], 2.0]
+    @parameters p[1:2] = [2.0, 3.0] q[1:2] = [p[1], 4.0]
+    @named sys = System(Equation[], t, [x, y], [p, q])
+    @test isequal(bindings(sys), Dict(y => SConst([x[1], 2.0]), q => SConst([p[1], 4.0])))
+    @test isequal(initial_conditions(sys), Dict(x => SConst([1.0, 2.0]), p => SConst([2.0, 3.0])))
+end
+
+@testset "Prefer keyword over metadata" begin
+    @variables x(t) = 1 y(t) = x
+    @parameters p = 1 q = p
+    @named sys = System([D(x) ~ p * x, D(y) ~ q * y], t;
+                        bindings = [x => y, p => q, y => nothing, q => nothing],
+                        initial_conditions = [y => 2, q => 2, x => nothing, p => nothing])
+    @test isequal(bindings(sys), Dict(x => y, p => q))
+    @test isequal(initial_conditions(sys), Dict(y => SConst(2), q => SConst(2)))
+end
+
+@testset "Arrays are atomic" begin
+    @variables x(t)[1:2]
+    @test_throws ModelingToolkit.IndexedArrayKeyError System(D(x) ~ x, t; bindings = [x[1] => x[2]], name = :a)
+    @test_throws ModelingToolkit.IndexedArrayKeyError System(D(x) ~ x, t; initial_conditions = [x[1] => 1], name = :a)
+    @test_throws ModelingToolkit.IndexedArrayKeyError System(D(x) ~ x, t; guesses = [x[1] => 1], name = :a)
+end

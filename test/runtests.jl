@@ -33,6 +33,7 @@ end
             @safetestset "Simplify Test" include("simplify.jl")
             @safetestset "Direct Usage Test" include("direct.jl")
             @safetestset "System Linearity Test" include("linearity.jl")
+            @safetestset "Variable binding semantics" include("binding_semantics.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "Clock Test" include("clock.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
