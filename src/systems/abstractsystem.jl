@@ -415,7 +415,8 @@ end
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
     return recursive_unwrap(merge(
         Dict(eq.lhs => eq.rhs for eq in observed(sys)),
-        defaults(sys)
+        bindings(sys),
+        initial_conditions(sys),
     ))
 end
 
@@ -560,19 +561,6 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
         initials[i] = Initial()(v)
     end
     @set! sys.ps = unique!([filter(!isinitial, get_ps(sys)); initials])
-    defs = copy(get_defaults(sys))
-    for ivar in initials
-        if symbolic_type(ivar) == ScalarSymbolic()
-            defs[ivar] = false
-        else
-            defs[ivar] = collect(ivar)
-            for idx in SU.stable_eachindex(ivar)
-                scal_ivar = ivar[idx]
-                defs[scal_ivar] = false
-            end
-        end
-    end
-    @set! sys.defaults = defs
     return sys
 end
 
@@ -981,7 +969,7 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     easily using packages such as Setfield.jl.
 
     If you are looking for the old behavior of updating the default of a variable via \
-    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_defaults(sys)`.
+    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_initial_conditions(sys)`.
     """)
 end
 
@@ -1161,12 +1149,6 @@ end
 
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
-
-function namespace_defaults(sys)
-    defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
-    for (k, v) in pairs(defs))
-end
 
 namespace_guesses(sys::AbstractSystem) = namespace_expr(guesses(sys), sys)
 
@@ -1743,7 +1725,7 @@ $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`guesses`](@ref), [`defaults`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`initial_conditions`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
@@ -2096,7 +2078,7 @@ function Base.show(
         printstyled(io, "\n$header ($nvars):"; bold)
         hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
-        defs = has_defaults(sys) ? defaults(sys) : nothing
+        defs = has_bindings(sys) ? bindings(sys) : nothing
         for i in 1:nrows
             s = vars[i]
             print(io, "\n  ", s)
@@ -2485,7 +2467,7 @@ function debug_system(
         eqs = debug_sub.(equations(sys), Ref(functions); kw...)
         @set! sys.eqs = eqs
         @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
-        @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
+        @set! sys.initial_conditions = merge(get_initial_conditions(sys), Dict(ASSERTION_LOG_VARIABLE => true))
     end
     if has_observed(sys)
         @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
@@ -2590,7 +2572,7 @@ end
 $(TYPEDSIGNATURES)
 
 Extend `basesys` with `sys`. This can be thought of as the `merge` operation on systems.
-Values in `sys` take priority over duplicates in `basesys` (for example, defaults).
+Values in `sys` take priority over duplicates in `basesys` (for example, initial conditions).
 
 By default, the resulting system inherits `sys`'s name and description.
 
@@ -2621,7 +2603,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
-    defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
+    ics = merge(get_initial_conditions(basesys), get_initial_conditions(sys)) # prefer `sys`
+    binds = merge(get_bindings(basesys), get_bindings(sys)) # prefer `sys`
     meta = MetadataT()
     for kvp in get_metadata(basesys)
         kvp[1] == MutableCacheKey && continue
@@ -2634,7 +2617,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (observed = obs, continuous_events = cevs,
-        discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
+        discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
+        metadata = meta,
         name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
@@ -2799,8 +2783,10 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         @set! newsys.ps = map(get_ps(sys)) do var
             get(rules, var, var)
         end
-        @set! newsys.defaults = Dict(substitute(k, rules) => substitute(v, rules)
-        for (k, v) in get_defaults(sys))
+        @set! newsys.bindings = Dict(substitute(k, rules) => substitute(v, rules)
+        for (k, v) in get_bindings(sys))
+        @set! newsys.initial_conditions = Dict(substitute(k, rules) => substitute(v, rules)
+        for (k, v) in get_initial_conditions(sys))
         @set! newsys.guesses = Dict(substitute(k, rules) => substitute(v, rules)
         for (k, v) in get_guesses(sys))
         @set! newsys.noise_eqs = substitute(get_noise_eqs(sys), rules)
@@ -2893,10 +2879,14 @@ ModelingToolkit.dump_parameters(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_unknowns`](@ref)
 """
 function dump_parameters(sys::AbstractSystem)
-    defs = defaults(sys)
+    ics = initial_conditions(sys)
+    binds = bindings(sys)
     return map(dump_variable_metadata.(parameters(sys))) do meta
-        if haskey(defs, meta.var)
-            meta = merge(meta, (; default = defs[meta.var]))
+        if haskey(ics, meta.var)
+            meta = merge(meta, (; initial_condition = ics[meta.var]))
+        end
+        if haskey(binds, meta.var)
+            meta = merge(meta, (; binding = binds[meta.var]))
         end
         meta
     end
@@ -2922,11 +2912,15 @@ ModelingToolkit.dump_unknowns(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = add_toterms(defaults(sys))
+    binds = add_toterms(bindings(sys))
+    ics = add_toterms(initial_conditions(sys))
     gs = add_toterms(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
-        if haskey(defs, meta.var)
-            meta = merge(meta, (; default = defs[meta.var]))
+        if haskey(binds, meta.var)
+            meta = merge(meta, (; binding = binds[meta.var]))
+        end
+        if haskey(ics, meta.var)
+            meta = merge(meta, (; initial_condition = ics[meta.var]))
         end
         if haskey(gs, meta.var)
             meta = merge(meta, (; guess = gs[meta.var]))
