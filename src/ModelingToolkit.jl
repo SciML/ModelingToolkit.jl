@@ -158,6 +158,7 @@ using .BipartiteGraphs
 export EvalAt
 include("variables.jl")
 include("parameters.jl")
+include("discretes.jl")
 include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
@@ -309,7 +310,8 @@ export generate_initializesystem, Initial, isinitial, InitializationProblem
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
+       @discretes
 export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 

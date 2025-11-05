@@ -64,10 +64,24 @@ Maps the variable to an unknown.
 tovar(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, VARIABLE)
 tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 
+function toparam_validate(s::SymbolicT)
+    if iscall(s)
+        error("""
+        `@parameters` cannot create time-dependent parameters. Encountered $s. Use \
+        `@discretes` for this purpose.
+        """)
+    end
+    toparam(s)
+end
+function toparam_validate(s::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
+    typeof(s)(toparam_validate(unwrap(s)))
+end
+
 """
 $(SIGNATURES)
 
-Define one or more known parameters.
+Define one or more known parameters. A parameter is a non-time-dependent quantity
+in the model.
 
 See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
@@ -75,7 +89,7 @@ macro parameters(xs...)
     Symbolics.parse_vars(:parameters,
         Real,
         xs,
-        toparam)
+        toparam_validate)
 end
 
 function find_types(array)
