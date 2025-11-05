@@ -59,7 +59,7 @@ using DocStringExtensions
 export tearing, dae_index_lowering, check_consistency
 export dummy_derivative
 export sorted_incidence_matrix,
-       pantelides!, pantelides_reassemble, tearing_reassemble, find_solvables!,
+       pantelides!, pantelides_reassemble, find_solvables!,
        linear_subsys_adjmat!
 export tearing_substitution
 export torn_system_jacobian_sparsity
@@ -69,9 +69,9 @@ export computed_highest_diff_variables
 export shift2term, lower_shift_varname, simplify_shifts, distribute_shift
 
 include("utils.jl")
+include("tearing.jl")
 include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
-include("tearing.jl")
 include("symbolics_tearing.jl")
 include("partial_state_selection.jl")
 include("codegen.jl")
