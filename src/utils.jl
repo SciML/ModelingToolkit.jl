@@ -1173,3 +1173,37 @@ function wrap_with_D(n, D, repeats)
         wrap_with_D(D(n), D, repeats - 1)
     end
 end
+
+const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
+return the array and `true`. Otherwise, return `x, false`.
+"""
+function split_indexed_var(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => (args[1], true)
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            arr, isarr = split_indexed_var(args[1])
+            isarr || return x, false
+            return f(arr), isarr
+        end
+        _ => return x, false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, assume `split_indexed_var(x)[2]` is `true`. Return the
+corresponding `SymbolicUtils.StableIndex`.
+"""
+function get_stable_index(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
+        BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
+        _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
+    end
+end
