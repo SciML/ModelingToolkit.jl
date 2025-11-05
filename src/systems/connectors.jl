@@ -922,11 +922,11 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Generate the defaults for parameters in the domain sets given by `domain_csets`.
+Generate the bindings for parameters in the domain sets given by `domain_csets`.
 """
-function domain_defaults(
+function get_domain_bindings(
         sys::AbstractSystem, domain_csets::Vector{Vector{ConnectionVertex}})
-    defs = Dict{SymbolicT, SymbolicT}()
+    binds = SymmapT()
     for cset in domain_csets
         systems = System[]
         for cvar in cset
@@ -937,7 +937,8 @@ function domain_defaults(
         idx = idx::Int
         domain_sys = systems[idx]
         # note that these will not be namespaced with `domain_sys`.
-        domain_defs = defaults(domain_sys)
+        domain_binds = bindings(domain_sys)
+        domain_ics = initial_conditions(domain_sys)
         for (j, csys) in enumerate(systems)
             j == idx && continue
             if is_domain_connector(csys)
@@ -946,13 +947,15 @@ function domain_defaults(
                 """))
             end
             for par in parameters(csys)
-                defval = get(domain_defs, par, nothing)
+                defval = @something(get(domain_binds, par, nothing),
+                                    get(domain_ics, par, nothing), Some(nothing))
                 defval === nothing && continue
-                defs[renamespace(csys, par)] = renamespace(domain_sys, par)
+                binds[renamespace(csys, par)] = renamespace(domain_sys, par)
             end
         end
     end
-    return defs
+    binds = no_override_merge!(binds, bindings(sys))
+    return binds
 end
 
 """
@@ -979,12 +982,12 @@ function expand_connections(sys::AbstractSystem; tol = 1e-10)
                 eqs[i], instream_subs; maxiters = max(length(instream_subs), 10))
         end
     end
-    # get the defaults for domain networks
-    d_defs = domain_defaults(sys, domain_csets)
+    # set the bindingss for domain networks
+    newbinds = get_domain_bindings(sys, domain_csets)
     # build the new system
     sys = flatten(sys, true)
     @set! sys.eqs = eqs
-    @set! sys.defaults = merge(get_defaults(sys), d_defs)
+    @set sys.bindings = newbinds
 end
 
 """
@@ -1094,7 +1097,7 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
             # implementation of stream connectors in the Modelica spec v3.6 section 15.2.
             # https://specification.modelica.org/maint/3.6/stream-connectors.html#instream-and-connection-equations
             # We could implement the "if" case using variable bounds? It would be nice to
-            # move that metadata to the system (storing it similar to `defaults`).
+            # move that metadata to the system (storing it similar to `initial_conditions`).
             outer_cverts = ConnectionVertex[]
             inner_cverts = ConnectionVertex[]
             outer_streamvars = SymbolicT[]
