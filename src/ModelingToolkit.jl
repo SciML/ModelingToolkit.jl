@@ -68,6 +68,7 @@ import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, bloc
 using OffsetArrays: Origin
 import CommonSolve
 import EnumX
+import ReadOnlyDicts: ReadOnlyDict
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -162,7 +163,8 @@ include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
 
-const SymmapT = Dict{SymbolicT, SymbolicT}
+const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
+const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
 const COMMON_MISSING = SU.Const{VartypeT}(missing)
 
@@ -277,7 +279,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
        brownians
-export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
+export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export mtkcompile, expand_connections, linearize, linearization_function,
        LinearizationProblem, linearization_ap_transform, structural_simplify
 export solve

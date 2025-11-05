@@ -287,62 +287,69 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
-function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
-    collect_defaults!(defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
+    collect_defaults!(initial_conditions, bindings, vars)
     collect_guesses!(guesses, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, vars::Vector{SymbolicT})
-    collect_defaults!(defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, vars::Vector{SymbolicT})
+    collect_defaults!(initial_conditions, bindings, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function collect_defaults!(defs::SymmapT, vars::Vector{SymbolicT})
-    for v in vars
-        isconst(v) && continue
-        haskey(defs, v) && continue
-        def = Symbolics.getdefaultval(v, nothing)
-        if def !== nothing
-            defs[v] = SU.Const{VartypeT}(def)
-            continue
+function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::SymbolicT)
+    if hasname(v) && occursin(NAMESPACE_SEPARATOR, string(getname(v)))
+        return
+    end
+    Moshi.Match.@match v begin
+        BSImpl.Const(;) => return
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            collect_defaults!(initial_conditions, bindings, args[1])
         end
-        Moshi.Match.@match v begin
-            BSImpl.Term(; f, args) && if f === getindex end => begin
-                haskey(defs, args[1]) && continue
-                def = Symbolics.getdefaultval(args[1], nothing)
-                def === nothing && continue
-                defs[args[1]] = def
+        _ => begin
+            def = Symbolics.getdefaultval(v, nothing)
+            def === nothing && return
+            def = BSImpl.Const{VartypeT}(def)
+            Moshi.Match.@match def begin
+                # `get!` here is just shorthand for "if the key doesn't exist, add this
+                # value".
+                BSImpl.Const(;) => if def === COMMON_MISSING
+                    get!(bindings, v, def)
+                else
+                    get!(initial_conditions, v, def)
+                end
+                _ => get!(bindings, v, def)
             end
-            _ => nothing
         end
     end
-    return defs
 end
 
-function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
+function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, vars::Vector{SymbolicT})
     for v in vars
-        isconst(v) && continue
-        symbolic_type(v) == NotSymbolic() && continue
-        haskey(guesses, v) && continue
-        def = getguess(v)
-        if def !== nothing
-            guesses[v] = SU.Const{VartypeT}(def)
-            continue
+        collect_defaults!(initial_conditions, bindings, v)
+    end
+end
+
+function collect_guesses!(guesses::SymmapT, v::SymbolicT)
+    Moshi.Match.@match v begin
+        BSImpl.Const(;) => return
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            collect_guesses!(guesses, args[1])
         end
-        Moshi.Match.@match v begin
-            BSImpl.Term(; f, args) && if f === getindex end => begin
-                haskey(guesses, args[1]) && continue
-                def = getguess(args[1])
-                def === nothing && continue
-                guesses[args[1]] = def
-            end
-            _ => nothing
+        _ => begin
+            def = getguess(v)
+            def === nothing && return
+            get!(guesses, v, BSImpl.Const{VartypeT}(def))
         end
     end
-    return guesses
+end
+function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
+    for v in vars
+        collect_guesses!(guesses, v)
+    end
 end
 
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
@@ -1206,4 +1213,29 @@ function get_stable_index(x::SymbolicT)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
         _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
     end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Merge `b` into `a`, but error if `a` already contains that key. Return the modified `a`.
+"""
+function no_override_merge!(a::AbstractDict, b::AbstractDict)
+    for (k, v) in b
+        if haskey(a, k)
+            throw(ArgumentError("Cannot merge without overriding: common key $k."))
+        end
+        a[k] = v
+    end
+    return a
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Merge `b` into `a`, modifying `a`. For all keys common to `a` and `b`,
+prefer the value in `a`.
+"""
+function left_merge!(a::AbstractDict, b::AbstractDict)
+    mergewith!(first ∘ tuple, a, b)
 end

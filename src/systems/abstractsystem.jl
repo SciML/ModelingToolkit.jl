@@ -762,7 +762,8 @@ const SYS_PROPS = [:eqs
                    :name
                    :description
                    :var_to_name
-                   :defaults
+                   :bindings
+                   :initial_conditions
                    :guesses
                    :observed
                    :systems
@@ -1167,10 +1168,7 @@ function namespace_defaults(sys)
     for (k, v) in pairs(defs))
 end
 
-function namespace_guesses(sys)
-    guess = guesses(sys)
-    Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
-end
+namespace_guesses(sys::AbstractSystem) = namespace_expr(guesses(sys), sys)
 
 """
     $(TYPEDSIGNATURES)
@@ -1285,6 +1283,13 @@ function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameo
         O[i] = namespace_expr(O[i], sys, n; ivs)
     end
     return O
+end
+function namespace_expr(O::AbstractDict, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+    O2 = empty(O)
+    for (k, v) in O
+        O2[namespace_expr(k, sys, n; kw...)] = namespace_expr(v, sys, n; kw...)
+    end
+    return O2
 end
 function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
     any(isequal(O), ivs) && return O
@@ -1502,27 +1507,39 @@ function observables(sys::AbstractSystem)
 end
 
 """
-$(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Get the default values of the system sys and its subsystems.
-If they are not explicitly provided, variables and parameters are initialized to these values.
-
-See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+Get the bindings of a system `sys` and its subsystems.
 """
-function defaults(sys::AbstractSystem)
+function bindings(sys::AbstractSystem)
     systems = get_systems(sys)
-    defs = get_defaults(sys)
-    # `mapfoldr` is really important!!! We should prefer the base model for
-    # defaults, because people write:
-    #
-    # `compose(System(...; defaults=defs), ...)`
-    #
-    # Thus, right associativity is required and crucial for correctness.
-    isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
+    binds = get_bindings(sys)
+    isempty(systems) && return binds
+    binds = copy(parent(binds))
+    for s in systems
+        no_override_merge!(binds, namespace_expr(parent(bindings(s)), s))
+    end
+    return ROSymmapT(binds)
 end
 
-function defaults_and_guesses(sys::AbstractSystem)
-    merge(guesses(sys), defaults(sys))
+"""
+    $TYPEDSIGNATURES
+
+Get the initial conditions of a system `sys` and its subsystems.
+"""
+function initial_conditions(sys::AbstractSystem)
+    systems = get_systems(sys)
+    ics = get_initial_conditions(sys)
+    isempty(systems) && return ics
+    ics = copy(ics)
+    for s in systems
+        left_merge!(ics, namespace_expr(initial_conditions(s), s))
+    end
+    return ics
+end
+
+function initial_conditions_and_guesses(sys::AbstractSystem)
+    merge(guesses(sys), initial_conditions(sys))
 end
 
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)

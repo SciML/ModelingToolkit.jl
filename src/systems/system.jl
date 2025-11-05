@@ -121,12 +121,17 @@ struct System <: IntermediateDeprecationSystem
     """
     description::String
     """
-    Default values that variables (unknowns/observables/parameters) should take when
-    constructing a numerical problem from the system. These values can be overridden
-    by initial values provided to the problem constructor. Defaults of parent systems
-    take priority over those in child systems.
+    Binding relations for variables/parameters. The bound variable (key) is completely
+    determined by the binding (value). Providing an initial condition for a bound variable
+    is an error. Bindings for variables (ones created via `@variables` and `@discretes`)
+    are treated as initial conditions.
     """
-    defaults::SymmapT
+    bindings::ROSymmapT
+    """
+    Initial conditions for variables (unknowns/observables/parameters) which can be
+    changed/overridden. When constructing a numerical problem from the system.
+    """
+    initial_conditions::SymmapT
     """
     Guess values for variables of a system that are solved for during initialization.
     """
@@ -256,9 +261,9 @@ struct System <: IntermediateDeprecationSystem
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
-            brownians, iv, observed, var_to_name, name, description,
-            defaults, guesses, systems, initialization_eqs, continuous_events, discrete_events,
-            connector_type, assertions = Dict{SymbolicT, String}(),
+            brownians, iv, observed, var_to_name, name, description, bindings,
+            initial_conditions, guesses, systems, initialization_eqs, continuous_events,
+            discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
             metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
@@ -306,7 +311,7 @@ struct System <: IntermediateDeprecationSystem
         end
         new(tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
-            observed, var_to_name, name, description, defaults,
+            observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, inputs, outputs, tearing_state, namespacing,
@@ -355,7 +360,7 @@ for time-independent systems, unknowns `dvs`, parameters `ps` and brownian varia
 ## Keyword Arguments
 
 - `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
-  system to obtain defaults and/or guesses.
+  system to obtain bindings, initial conditions and/or guesses.
 - `checks`: Whether to perform sanity checks on the passed values.
 
 All other keyword arguments are named identically to the corresponding fields in
@@ -364,7 +369,7 @@ All other keyword arguments are named identically to the corresponding fields in
 function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
-        observed = Equation[], defaults = SymmapT(),
+        observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{SymbolicT, String}(),
@@ -399,8 +404,6 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
 
     costs = vec(unwrap_vars(costs))
 
-    defaults = defsdict(defaults)
-    guesses = defsdict(guesses)
     if !(inputs isa OrderedSet{SymbolicT})
         inputs = unwrap.(inputs)
         inputs = OrderedSet{SymbolicT}(inputs)
@@ -419,19 +422,23 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     end
     var_to_name = Dict{Symbol, SymbolicT}()
 
-    let defaults = discover_from_metadata ? defaults : SymmapT(),
+    bindings = defsdict(bindings)
+    initial_conditions = defsdict(initial_conditions)
+    guesses = defsdict(guesses)
+    let initial_conditions = discover_from_metadata ? initial_conditions : SymmapT(),
+        bindings = discover_from_metadata ? bindings : SymmapT(),
         guesses = discover_from_metadata ? guesses : SymmapT(),
         inputs = discover_from_metadata ? inputs : OrderedSet{SymbolicT}(),
         outputs = discover_from_metadata ? outputs : OrderedSet{SymbolicT}()
 
-        process_variables!(var_to_name, defaults, guesses, dvs)
-        process_variables!(var_to_name, defaults, guesses, ps)
+        process_variables!(var_to_name, initial_conditions, bindings, guesses, dvs)
+        process_variables!(var_to_name, initial_conditions, bindings, guesses, ps)
         buffer = SymbolicT[]
         for eq in observed
             push!(buffer, eq.lhs)
             push!(buffer, eq.rhs)
         end
-        process_variables!(var_to_name, defaults, guesses, buffer)
+        process_variables!(var_to_name, initial_conditions, bindings, guesses, buffer)
 
         for var in dvs
             if isinput(var)
@@ -441,9 +448,11 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
             end
         end
     end
-    filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), defaults)
+    filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
+    filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
+    bindings = ROSymmapT(bindings)
 
     if !allunique(map(nameof, systems))
         nonunique_subsystems(systems)
@@ -481,7 +490,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     jumps = Vector{JumpType}(jumps)
     System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed,
-        var_to_name, name, description, defaults, guesses, systems, initialization_eqs,
+        var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, ignored_connections, preface, parent,
@@ -523,10 +532,6 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     othereqs = Equation[]
     iv = unwrap(iv)
     for eq in eqs
-        if !(eq.lhs isa Union{SymbolicT, Number, AbstractArray})
-            push!(othereqs, eq)
-            continue
-        end
         collect_vars!(othervars, ps, eq, iv)
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             var, _ = var_from_nested_derivative(eq.lhs)
@@ -788,15 +793,16 @@ function flatten(sys::System, noeqs = false)
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
-        defaults = defaults(sys), guesses = guesses(sys),
+        bindings = bindings(sys), initial_conditions = initial_conditions(sys),
+        guesses = guesses(sys),
         continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
-        # without this, any defaults/guesses obtained from metadata that were
-        # later removed by the user will be re-added. Right now, we just want to
-        # retain `defaults(sys)` as-is.
+        # without this, any initial conditions/bindings/guesses obtained from metadata that
+        # were later removed by the user will be re-added. Right now, we just want to
+        # retain `initial_conditions(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
         gui_metadata = get_gui_metadata(sys),
         description = description(sys), name = nameof(sys))
@@ -904,8 +910,9 @@ Given a time-dependent system `sys` of ODEs, convert it to a time-independent sy
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
 replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
 does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as defaults, guesses, observed and initialization equations
-are retained. The independent variable of `sys` becomes a parameter of the returned system.
+All other information such as initial conditions, bindings, guesses, observed and
+initialization equations are retained. The independent variable of `sys` becomes a
+parameter of the returned system.
 
 If `sys` is hierarchical (it contains subsystems) this transformation will be applied
 recursively to all subsystems. The output system will be marked as `complete` if and only
@@ -928,7 +935,8 @@ function NonlinearSystem(sys::System)
         substitute(eq, subrules)
     end
     nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
-        defaults = merge(defaults(sys), Dict(get_iv(sys) => Inf)), guesses = guesses(sys),
+        bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
+        initial_conditions = initial_conditions(sys), guesses = guesses(sys),
         initialization_eqs = initialization_equations(sys), name = nameof(sys),
         observed = obs, systems = map(NonlinearSystem, get_systems(sys)))
     if iscomplete(sys)
@@ -948,7 +956,7 @@ Construct a time-independent [`System`](@ref) for optimizing the specified scala
 The system will have no equations.
 
 Unknowns and parameters of the system are inferred from the cost and other values (such as
-defaults) passed to it.
+initial conditions) passed to it.
 
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
@@ -976,7 +984,7 @@ defaults to summing the specified cost and that of all subsystems. The system wi
 equations.
 
 Unknowns and parameters of the system are inferred from the cost and other values (such as
-defaults) passed to it.
+initial conditions) passed to it.
 
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
@@ -1192,7 +1200,8 @@ function Base.isapprox(sysa::System, sysb::System)
            issetequal(get_brownians(sysa), get_brownians(sysb)) &&
            issetequal(get_observed(sysa), get_observed(sysb)) &&
            isequal(get_description(sysa), get_description(sysb)) &&
-           isequal(get_defaults(sysa), get_defaults(sysb)) &&
+           isequal(get_bindings(sysa), get_bindings(sysb)) &&
+           isequal(get_initial_conditions(sysa), get_initial_conditions(sysb)) &&
            isequal(get_guesses(sysa), get_guesses(sysb)) &&
            issetequal(get_initialization_eqs(sysa), get_initialization_eqs(sysb)) &&
            issetequal(get_continuous_events(sysa), get_continuous_events(sysb)) &&
