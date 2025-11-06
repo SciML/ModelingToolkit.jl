@@ -611,6 +611,8 @@ function complete(
         newsys = expand_connections(sys)
         newsys = ModelingToolkit.flatten(newsys)
         newsys = discrete_unknowns_to_parameters(newsys)
+        @set! newsys.parameter_bindings_graph = ParameterBindingsGraph(newsys)
+        newsys = remove_bound_parameters_from_ps(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
@@ -636,6 +638,9 @@ function complete(
             end
             @set! sys.discrete_events = devts
         end
+    else
+        # reduce the potential for outdated information
+        @set! sys.parameter_bindings_graph = nothing
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
@@ -746,6 +751,14 @@ function discrete_unknowns_to_parameters(sys::AbstractSystem)
     return sys
 end
 
+function remove_bound_parameters_from_ps(sys::AbstractSystem)
+    bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys)
+    ps = OrderedSet{SymbolicT}(get_ps(sys))
+    filterer = !in(bgraph.bound_ps) ∘ first ∘ split_indexed_var
+    filter!(filterer, ps)
+    @set! sys.ps = collect(ps)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -836,6 +849,7 @@ const SYS_PROPS = [:eqs
                    :inputs
                    :outputs
                    :index_cache
+                   :parameter_bindings_graph
                    :isscheduled
                    :costs
                    :consolidate]

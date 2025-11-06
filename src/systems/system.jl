@@ -222,6 +222,12 @@ struct System <: IntermediateDeprecationSystem
     index_cache::Union{Nothing, IndexCache}
     """
     $INTERNAL_FIELD_WARNING
+    Contains the dependency graph of bound parameters to avoid excessive duplicated work
+    during code generation.
+    """
+    parameter_bindings_graph::Union{Nothing, ParameterBindingsGraph}
+    """
+    $INTERNAL_FIELD_WARNING
     Connections that should be ignored because they were removed by an analysis point
     transformation. The first element of the tuple contains all such "standard" connections
     (ones between connector systems) and the second contains all such causal variable
@@ -267,7 +273,8 @@ struct System <: IntermediateDeprecationSystem
             metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
-            complete = false, index_cache = nothing, ignored_connections = nothing,
+            complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
+            ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, isscheduled = false,
             schedule = nothing; checks::Union{Bool, Int} = true)
@@ -315,7 +322,7 @@ struct System <: IntermediateDeprecationSystem
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
             tstops, inputs, outputs, tearing_state, namespacing,
-            complete, index_cache, ignored_connections,
+            complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             isscheduled, schedule)
     end
@@ -494,7 +501,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
-        nothing, ignored_connections, preface, parent,
+        nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete; checks)
 end
 
