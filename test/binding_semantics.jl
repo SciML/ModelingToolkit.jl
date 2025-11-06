@@ -57,3 +57,10 @@ end
     @test d1 in Set(parameters(ssys))
     @test d2 in Set(parameters(ssys))
 end
+
+@testset "`missing` bindings are bindings and not initial conditions" begin
+    @variables x(t)
+    @parameters p = missing
+    @named sys = System(D(x) ~ x * p, t)
+    @test bindings(sys)[p] === ModelingToolkit.COMMON_MISSING
+end
