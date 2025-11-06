@@ -34,3 +34,9 @@ end
     @test_throws ModelingToolkit.IndexedArrayKeyError System(D(x) ~ x, t; initial_conditions = [x[1] => 1], name = :a)
     @test_throws ModelingToolkit.IndexedArrayKeyError System(D(x) ~ x, t; guesses = [x[1] => 1], name = :a)
 end
+
+@testset "Parameter bindings cannot involve variables" begin
+    @variables x(t)
+    @parameters p = 2x + 1
+    @test_throws ["parameter p", "encountered binding", "non-parameter"] System(D(x) ~ x, t, [x], [p]; name = :a)
+end

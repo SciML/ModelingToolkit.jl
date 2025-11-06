@@ -452,6 +452,7 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
+    check_bindings(ps, bindings)
     bindings = ROSymmapT(bindings)
 
     if !allunique(map(nameof, systems))

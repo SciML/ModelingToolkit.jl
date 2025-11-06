@@ -267,6 +267,63 @@ function iv_from_nested_derivative(x, op = Differential)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Check the validity of `bindings` given the list of parameters `ps`. This method assumes
+that there are no discrete values in `ps`.
+"""
+function check_bindings(ps::Vector{SymbolicT}, bindings::SymmapT)
+    atomic_ps = AtomicArraySet()
+    for p in ps
+        push_as_atomic_array!(atomic_ps, p)
+    end
+    check_bindings(atomic_ps, bindings)
+end
+
+function check_bindings_is_atomic(x::SymbolicT)
+    SU.default_is_atomic(x) && Moshi.Match.@match x begin
+        BSImpl.Term(; f) && if f isa Operator end => f isa Initial
+        BSImpl.Term(; f) && if f === getindex end => false
+        _ => true
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if `bindings` are valid, given a list of parameters `atomic_ps`. Assumes no values in
+`atomic_ps` are discretes.
+"""
+function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bindings::SymmapT)
+    varsbuf = Set{SymbolicT}()
+    for p in atomic_ps
+        val = get(bindings, p, COMMON_NOTHING)
+        val === COMMON_NOTHING && continue
+        if val === COMMON_MISSING
+            if !is_variable_floatingpoint(p)
+                throw(ArgumentError("""
+                `missing` bindings are only valid for solvable parameters! Non-floating \
+                point parameters cannot be solved for, and thus do not accept a binding \
+                of `missing`. Found invalid parameter $p of symtype $(symtype(p)).
+                """))
+            end
+        end
+        empty!(varsbuf)
+        SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)
+        setdiff!(varsbuf, atomic_ps)
+        filter!(x -> getmetadata(x, SymScope, LocalScope()) isa LocalScope, varsbuf)
+        filter!(!isinitial, varsbuf)
+        isempty(varsbuf) && continue
+
+        throw(ArgumentError("""
+        Bindings for parameters can only be functions of other parameters. For parameter \
+        $p, encountered binding $val which contains non-parameter symbolics $varsbuf. If \
+        you intended $p to be a discrete variable, pass it as an unknown of the system.
+        """))
+    end
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Check if the symbolic variable `v` has a default value.
