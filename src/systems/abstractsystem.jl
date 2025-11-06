@@ -610,6 +610,7 @@ function complete(
     if flatten
         newsys = expand_connections(sys)
         newsys = ModelingToolkit.flatten(newsys)
+        newsys = discrete_unknowns_to_parameters(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
@@ -686,6 +687,63 @@ function complete(
     end
     sys = toggle_namespacing(sys, false; safe = true)
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Find all discretes from symbolic event affects.
+"""
+function get_all_discretes(sys::AbstractSystem)
+    all_discretes = AtomicArraySet()
+    is_time_dependent(sys) || return all_discretes
+    for cb::SymbolicContinuousCallback in continuous_events(sys)
+        for aff in (cb.affect, cb.affect_neg, cb.initialize, cb.finalize)
+            aff === nothing && continue
+            discs = discretes(aff)
+            for v in discs
+                push_as_atomic_array!(all_discretes, v)
+            end
+        end
+    end
+    for cb::SymbolicDiscreteCallback in discrete_events(sys)
+        for aff in (cb.affect, cb.initialize, cb.finalize)
+            aff === nothing && continue
+            discs = discretes(aff)
+            for v in discs
+                push_as_atomic_array!(all_discretes, v)
+            end
+        end
+    end
+
+    return all_discretes
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Find discrete variables in `unknowns(sys)` and turn them into parameters.
+"""
+function discrete_unknowns_to_parameters(sys::AbstractSystem)
+    all_discretes = get_all_discretes(sys)
+
+    all_dvs = AtomicArraySet()
+    for v in unknowns(sys)
+        push_as_atomic_array!(all_dvs, v)
+    end
+
+    intersect!(all_discretes, all_dvs)
+
+    new_dvs = SymbolicT[]
+    for v in unknowns(sys)
+        split_indexed_var(v)[1] in all_discretes && continue
+        push!(new_dvs, v)
+    end
+
+    @set! sys.unknowns = new_dvs
+    @set! sys.ps = [get_ps(sys); collect(all_discretes)]
+
+    return sys
 end
 
 """

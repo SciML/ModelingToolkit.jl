@@ -1,5 +1,5 @@
 using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicContinuousCallback, SymbolicDiscreteCallback
 using Symbolics: SConst
 
 @testset "Simple metadata bindings" begin
@@ -39,4 +39,21 @@ end
     @variables x(t)
     @parameters p = 2x + 1
     @test_throws ["parameter p", "encountered binding", "non-parameter"] System(D(x) ~ x, t, [x], [p]; name = :a)
+end
+
+@testset "Discrete unknowns eventually become parameters" begin
+    @variables x(t)
+    @discretes d1(t) = x d2(t) = d1
+    cev = SymbolicContinuousCallback([x ~ 1.0], [d1 ~ Pre(x)]; discrete_parameters = [d1])
+    dev = SymbolicDiscreteCallback(1.0, [d2 ~ Pre(x)]; discrete_parameters = [d2])
+    @named sys = System([D(x) ~ x], t, [x, d1, d2], []; continuous_events = [cev], discrete_events = [dev])
+    @test d1 in Set(unknowns(sys))
+    @test d2 in Set(unknowns(sys))
+    csys = ModelingToolkit.discrete_unknowns_to_parameters(sys)
+    @test d1 in Set(parameters(csys))
+    @test d2 in Set(parameters(csys))
+    ts = TearingState(sys)
+    ssys = ts.sys
+    @test d1 in Set(parameters(ssys))
+    @test d2 in Set(parameters(ssys))
 end

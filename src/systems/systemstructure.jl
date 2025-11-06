@@ -355,6 +355,7 @@ end
 function TearingState(sys; check = true, sort_eqs = true)
     # flatten system
     sys = flatten(sys)
+    sys = discrete_unknowns_to_parameters(sys)
     sys = process_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
