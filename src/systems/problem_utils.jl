@@ -487,13 +487,12 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
+function evaluate_varmap!(varmap::AtomicArrayDict, vars; limit = 100)
     for k in vars
-        v = get(varmap, k, nothing)
-        v === nothing && continue
-        symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-        haskey(varmap, k) || continue
-        varmap[k] = value(fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true)))
+        v = get(varmap, k, COMMON_NOTHING)
+        v === COMMON_NOTHING && continue
+        SU.isconst(v) && continue
+        varmap[k] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
     end
 end
 
