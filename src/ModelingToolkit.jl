@@ -163,6 +163,7 @@ include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
 include("atomic_array_dict.jl")
+include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
 const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
