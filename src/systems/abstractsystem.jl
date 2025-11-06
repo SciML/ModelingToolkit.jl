@@ -613,6 +613,7 @@ function complete(
         newsys = discrete_unknowns_to_parameters(newsys)
         @set! newsys.parameter_bindings_graph = ParameterBindingsGraph(newsys)
         newsys = remove_bound_parameters_from_ps(newsys)
+        check_no_bound_initial_conditions(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end

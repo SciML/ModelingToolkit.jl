@@ -356,6 +356,31 @@ function check_no_parameter_equations(sys::AbstractSystem)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Verify that bound parameters have not been provided initial conditions. Requires the \
+existence of an up-to-data `parameter_bindings_graph`.
+"""
+function check_no_bound_initial_conditions(sys::AbstractSystem)
+    bound_ps = (get_parameter_bindings_graph(sys)::ParameterBindingsGraph).bound_ps
+    ics = initial_conditions(sys)
+    bound_ics = intersect(bound_ps, keys(ics))
+    isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
+end
+
+struct BoundInitialConditionsError <: Exception
+    bound_pars::Vector{SymbolicT}
+end
+
+function Base.showerror(io::IO, err::BoundInitialConditionsError)
+    print(io, """
+    Bound parameters cannot have initial conditions. The following bound parameters \
+    were found to have initial conditions:
+    $(join(string.(collect(err.bound_pars)), "\n"))
+    """)
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Check if the symbolic variable `v` has a default value.
