@@ -323,6 +323,38 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
     end
 end
 
+function check_no_parameter_equations_recurse(ex::SymbolicT)
+    iscall(ex) && !check_bindings_is_atomic(ex)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Validate that all equations of the system involve the unknowns/observables.
+"""
+function check_no_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
+    end
+    varsbuf = Set{SymbolicT}()
+    pareqs = Equation[]
+    allowed_vars = as_atomic_array_set(unknowns(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
+    for eq in equations(sys)
+        empty!(varsbuf)
+        Symbolics.get_variables!(varsbuf, eq, allowed_vars; is_atomic = check_bindings_is_atomic, recurse = check_no_parameter_equations_recurse)
+        isempty(varsbuf) && push!(pareqs, eq)
+    end
+
+    if !isempty(pareqs)
+        error("""
+        The equations of a system must involve the unknowns/observables. The following \
+        equations were found to have no unknowns/observables:
+        $(join(string.(pareqs), "\n"))
+        """)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 

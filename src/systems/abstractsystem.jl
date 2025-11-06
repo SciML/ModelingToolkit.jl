@@ -617,7 +617,7 @@ function complete(
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
         sys = newsys
-        sys = process_parameter_equations(sys)::T
+        check_no_parameter_equations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)::T
         end
@@ -2888,63 +2888,6 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Find equations of `sys` involving only parameters and separate them out into the
-`parameter_dependencies` field. Relative ordering of equations is maintained.
-Parameter-only equations are validated to be explicit and sorted topologically. All such
-explicitly determined parameters are removed from the parameters of `sys`. Return the new
-system.
-"""
-function process_parameter_equations(sys::AbstractSystem)
-    if !isempty(get_systems(sys))
-        throw(ArgumentError("Expected flattened system"))
-    end
-    varsbuf = Set{SymbolicT}()
-    pareq_idxs = Int[]
-    eqs = equations(sys)
-    for (i, eq) in enumerate(eqs)
-        empty!(varsbuf)
-        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{Union{Differential, Initial, Pre, Hold, Sample}}())
-        # singular equations
-        isempty(varsbuf) && continue
-        if let sys = sys
-            all(varsbuf) do sym
-            is_parameter(sys, sym) ||
-                symbolic_type(sym) == ArraySymbolic() &&
-                symbolic_has_known_size(sym) &&
-                all(Base.Fix1(is_parameter, sys), collect(sym)) ||
-                iscall(sym) &&
-                operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
-        end
-        end
-            # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
-            # check.
-            if !(eq.lhs in varsbuf)
-                throw(ArgumentError("""
-                LHS of parameter dependency equation must be a single parameter. Found \
-                $(eq.lhs).
-                """))
-            end
-            push!(pareq_idxs, i)
-        end
-    end
-
-    pareqs = eqs[pareq_idxs]
-    explicitpars = SymbolicT[]
-    for eq in pareqs
-        push!(explicitpars, eq.lhs)
-    end
-    pareqs = topsort_equations(pareqs, explicitpars)
-
-    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
-
-    @set! sys.eqs = eqs
-    @set! sys.ps = setdiff(get_ps(sys), explicitpars)
-    return sys
 end
 
 """
