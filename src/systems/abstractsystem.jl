@@ -1484,6 +1484,17 @@ function parameters_toplevel(sys::AbstractSystem)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Return the bound parameters of a system. Currently requires that the system is
+marked complete.
+"""
+function bound_parameters(sys::AbstractSystem)
+    iscomplete(sys) || error("`bound_parameters` requires a completed system.")
+    (get_parameter_bindings_graph(sys)::ParameterBindingsGraph).bound_ps
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Get the assertions for a system `sys` and its subsystems.

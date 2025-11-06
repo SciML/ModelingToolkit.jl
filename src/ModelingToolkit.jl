@@ -90,7 +90,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   scalarize, hasderiv
 
 import DiffEqBase: @add_kwonly
-export independent_variables, unknowns, observables, parameters, full_parameters,
+export independent_variables, unknowns, observables, parameters, bound_parameters,
        continuous_events, discrete_events
 @reexport using Symbolics
 @reexport using UnPack
