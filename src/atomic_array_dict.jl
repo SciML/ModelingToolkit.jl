@@ -68,3 +68,39 @@ Base.sizehint!(dd::AtomicArrayDict, n; kw...) = sizehint!(dd.dict, n; kw...)
 Base.empty!(dd::AtomicArrayDict) = empty!(dd.dict)
 
 Base.delete!(dd::AtomicArrayDict, k) = delete!(dd.dict, k)
+
+struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
+    dd::AtomicArrayDict{Nothing, D}
+
+    function AtomicArraySet{D}(dd::AtomicArrayDict{Nothing, D}) where {D}
+        new{D}(dd)
+    end
+end
+
+AtomicArraySet() = AtomicArraySet{Dict{SymbolicT, Nothing}}()
+AtomicArraySet{D}() where {D} = AtomicArraySet{D}(D())
+AtomicArraySet{D}(x::D) where {D} = AtomicArraySet{D}(AtomicArrayDict(x))
+
+Base.isempty(x::AtomicArraySet) = isempty(x.dd)
+Base.length(x::AtomicArraySet) = length(x.dd)
+Base.sizehint!(x::AtomicArraySet, n::Integer) = (sizehint!(x.dd, n); x)
+Base.in(item, x::AtomicArraySet) = haskey(x.dd, item)
+Base.push!(x::AtomicArraySet, item) = (x.dd[item] = nothing; x)
+Base.delete!(x::AtomicArraySet, item) = (delete!(x.dd, item); x)
+Base.empty(::AtomicArraySet{D}) where {D} = AtomicArraySet{D}()
+Base.copy(x::AtomicArraySet{D}) where {D} = AtomicArraySet{D}(copy(x.dd))
+Base.iterate(x::AtomicArraySet, args...) = iterate(keys(x.dd), args...)
+
+function Base.filter!(f::F, x::AtomicArraySet) where {F}
+    filter!(f ∘ first, x.dd)
+    return x
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Add `item` to `x`. If `item` is an indexed array, add the array instead.
+"""
+function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
+    push!(x, split_indexed_var(item)[1])
+end
