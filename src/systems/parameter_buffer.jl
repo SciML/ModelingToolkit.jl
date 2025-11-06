@@ -54,42 +54,49 @@ function MTKParameters(
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
-    all_ps = Set(unwrap.(parameters(sys; initial_parameters = true)))
-    union!(all_ps, default_toterm.(unwrap.(parameters(sys; initial_parameters = true))))
-
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    op = to_varmap(op, ps)
-    symbols_to_symbolics!(sys, op)
-    defs = add_toterms(recursive_unwrap(defaults(sys)))
-
-    is_time_dependent(sys) && add_observed!(sys, op)
-    add_parameter_dependencies!(sys, op)
-
-    u0map = anydict()
-    pmap = anydict()
-    if fast_path
-        missing_pars = missingvars(op, ps)
-    else
-        _, missing_pars = build_operating_point!(sys, op,
-            u0map, pmap, defs, dvs, ps)
-    end
-    if t0 !== nothing
-        op[get_iv(sys)] = t0
+    if !fast_path
+        op = anydict(op)
+        symbols_to_symbolics!(sys, op)
+        op = AtomicArrayDict(Dict{SymbolicT, SymbolicT}(op))
+        if floatT === nothing
+            floatT = float(float_type_from_varmap(op))
+        end
+        bound_ps = bound_parameters(sys)
+        bound_ics = intersect(bound_ps, keys(op))
+        isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
+        # Ensure `op` is preferred
+        left_merge!(op, initial_conditions(sys))
+        # Error if a bound parameter
+        no_override_merge!(op, bindings(sys))
+        all_ps = Set(get_ps(sys))
+        missing_ps = setdiff(all_ps, keys(op))
+        to_rm = Set{SymbolicT}()
+        for p in missing_ps
+            Moshi.Match.@match p begin
+                BSImpl.Term(; f, args) && if f isa Initial end => begin
+                    op[p] = args[1]
+                    continue
+                end
+                _ => nothing
+            end
+            arr, isarr = split_indexed_var(p)
+            isarr || continue
+            haskey(op, arr) || continue
+            push!(to_rm, p)
+        end
+        setdiff!(missing_ps, keys(op), to_rm)
+        isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
     end
 
     if floatT === nothing
         floatT = float(float_type_from_varmap(op))
     end
 
-    isempty(missing_pars) || throw(MissingParametersError(collect(missing_pars)))
-    evaluate_varmap!(op, ps; limit = substitution_limit)
-
-    p = op
-    filter!(p) do kvp
-        kvp[1] in all_ps
+    if t0 !== nothing
+        op[get_iv(sys)] = t0
     end
-    p = recursive_unwrap(p)
+
+    evaluate_varmap!(op, all_ps; limit = substitution_limit)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length)
@@ -128,11 +135,24 @@ function MTKParameters(
         end
         return done
     end
-    for (sym, val) in p
-        sym = unwrap(sym)
-        val = unwrap(val)
+    for sym in all_ps
+        val = fixpoint_sub(sym, op; maxiters = max(div(substitution_limit, 2), 2))
         ctype = symtype(sym)
-        if symbolic_type(val) !== NotSymbolic()
+        if !SU.isconst(val)
+            Moshi.Match.@match sym begin
+                BSImpl.Term(; f, args) && if f isa Initial end => begin
+                    if isequal(val, args[1])
+                        if Symbolics.isarraysymbolic(sym)
+                            val = BSImpl.Const{VartypeT}(fill(false, size(val)))
+                        else
+                            val = BSImpl.Const{VartypeT}(false)
+                        end
+                    end
+                end
+                _ => nothing
+            end
+        end
+        if !SU.isconst(val)
             error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
@@ -141,20 +161,8 @@ function MTKParameters(
         if ctype == Real && floatT !== nothing
             ctype = floatT
         end
-        val = symconvert(ctype, val)
-        done = set_value(sym, val)
-        if !done && Symbolics.isarraysymbolic(sym)
-            if !symbolic_has_known_size(sym)
-                for i in eachindex(val)
-                    set_value(sym[i], val[i])
-                end
-            else
-                if size(sym) != size(val)
-                    error("Got value of size $(size(val)) for parameter $sym of size $(size(sym))")
-                end
-                set_value.(collect(sym), val)
-            end
-        end
+        val = symconvert(ctype, unwrap_const(val))
+        set_value(sym, val)
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)
     if isempty(tunable_buffer)
