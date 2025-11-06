@@ -250,7 +250,6 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_start += 1
         p_end += 1
     end
-    pdeps = get_parameter_dependencies(sys)
 
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)
@@ -259,14 +258,19 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         obsidxs = Int[]
     end
     # similarly for parameter dependency equations
-    pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
+    reqd_bound_pars = OrderedSet{SymbolicT}()
+    bound_parameters_used_by!(reqd_bound_pars, sys, expr)
     for i in obsidxs
-        union!(pdepidxs, observed_equations_used_by(sys, obs[i].rhs; obs = pdeps))
+        bound_parameters_used_by!(reqd_bound_pars, sys, obs[i].rhs)
     end
+    sort_bound_parameters!(reqd_bound_pars, sys)
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
-
-    for eq in Iterators.flatten((pdeps[pdepidxs], obs[obsidxs]))
+    binds = bindings(sys)
+    for p in reqd_bound_pars
+        push!(assignments, p ← binds[p])
+    end
+    for eq in obs[obsidxs]
         push!(assignments, eq.lhs ← eq.rhs)
     end
     append!(assignments, extra_assignments)
