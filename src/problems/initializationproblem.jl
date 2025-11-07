@@ -20,6 +20,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
         sys::AbstractSystem,
         t, op = Dict();
+        fast_path = false,
         guesses = [],
         check_length = true,
         warn_initialize_determined = true,
@@ -35,23 +36,21 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
     has_u0_ics = false
-    op = copy(anydict(op))
     for k in keys(op)
-        has_u0_ics |= is_variable(sys, k) || isdifferential(k) ||
-                      symbolic_type(k) == ArraySymbolic() &&
-                      symbolic_has_known_size(k) && is_variable(sys, unwrap(first(wrap(k))))
+        has_u0_ics |= is_variable(sys, k) || isdifferential(k)
     end
     if !has_u0_ics && get_initializesystem(sys) !== nothing
         isys = get_initializesystem(sys; initialization_eqs, check_units)
         simplify_system = false
     elseif !has_u0_ics && get_initializesystem(sys) === nothing
         isys = generate_initializesystem(
-            sys; initialization_eqs, check_units, op, guesses, algebraic_only)
+            sys; initialization_eqs, check_units, op, guesses, algebraic_only,
+            fast_path)
         simplify_system = true
     else
         isys = generate_initializesystem(
             sys; op, initialization_eqs, check_units, time_dependent_init,
-            guesses, algebraic_only)
+            guesses, algebraic_only, fast_path)
         simplify_system = true
     end
 
@@ -79,17 +78,18 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         @warn errmsg
     end
 
-    uninit = setdiff(unknowns(sys), unknowns(isys), observables(isys))
+    uninit = as_atomic_array_set(unknowns(sys))
+    setdiff!(uninit, as_atomic_array_set(unknowns(isys)))
+    setdiff!(uninit, as_atomic_array_set(observables(isys)))
 
-    # TODO: throw on uninitialized arrays
-    filter!(x -> !(x isa Symbolics.Arr), uninit)
     if time_dependent_init && !isempty(uninit)
         allow_incomplete || throw(IncompleteInitializationError(uninit, sys))
         # for incomplete initialization, we will add the missing variables as parameters.
         # they will be updated by `update_initializeprob!` and `initializeprobmap` will
         # use them to construct the new `u0`.
-        newparams = map(toparam, uninit)
-        append!(get_ps(isys), newparams)
+        new_ps = copy(get_ps(isys))
+        append!(new_ps, uninit)
+        @set! isys.ps = new_ps
         isys = complete(isys)
     end
 
@@ -112,15 +112,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     if t !== nothing
         op[get_iv(sys)] = t
     end
-    filter!(kvp -> kvp[2] !== missing, op)
-
-    if isempty(guesses)
-        guesses = Dict()
-    end
-
-    filter_missing_values!(op)
-    op = merge(ModelingToolkit.guesses(sys), todict(guesses), op)
-
+    filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
     TProb = if neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
             if is_split(isys)
