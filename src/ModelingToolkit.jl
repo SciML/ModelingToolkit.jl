@@ -169,6 +169,7 @@ const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
 const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
 const COMMON_MISSING = SU.Const{VartypeT}(missing)
+const COMMON_FALSE = SU.Const{VartypeT}(false)
 
 include("utils.jl")
 
@@ -365,6 +366,7 @@ function __init__()
     SU.hashcons(unwrap(t_nounits), true)
     SU.hashcons(COMMON_NOTHING, true)
     SU.hashcons(COMMON_MISSING, true)
+    SU.hashcons(COMMON_FALSE, true)
 end
 
 PrecompileTools.@compile_workload begin
