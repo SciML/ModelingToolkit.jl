@@ -69,6 +69,91 @@ Base.empty!(dd::AtomicArrayDict) = empty!(dd.dict)
 
 Base.delete!(dd::AtomicArrayDict, k) = delete!(dd.dict, k)
 
+"""
+    $TYPEDSIGNATURES
+
+Convert the symbolic mapping `dict` to an `AtomicArrayDict`. If `dict` contains keys which
+are elements of a symbolic array, the returned mappng will have a key for the array, and
+a value which is a symbolic array where entries specified in `dict` are present and `default`
+otherwise.
+"""
+function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, default::SymbolicT)
+    dd = AtomicArrayDict(empty(dict))
+    indexed_array_vals = empty(dict, SymbolicT, Array{SymbolicT})
+    for (k, v) in dict
+        arr, isarr = split_indexed_var(k)
+        if isarr
+            buffer = get!(() -> fill(default, size(arr)), indexed_array_vals, arr)
+            si = get_stable_index(k)
+            buffer[si] = v
+        else
+            dd[k] = v
+        end
+    end
+    for (k, v) in indexed_array_vals
+        if all(SU.isconst, v)
+            dd[k] = BSImpl.Const{VartypeT}(unwrap_const.(v))
+        else
+            dd[k] = BSImpl.Const{VartypeT}(v)
+        end
+    end
+    return dd
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Modify an atomic array mapping `dd` to map `k` to `v`. If `k` is an indexed array symbolic,
+update the array to have value `v` at the corresponding index. If the array is not a key,
+create the key and set all other entries to `default`.
+"""
+function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
+    arr, isarr = split_indexed_var(k)
+    if isarr
+        buffer::Array{SymbolicT} = if haskey(dd, arr)
+            collect(dd[arr])
+        else
+            fill(default, size(arr))
+        end
+        idx = get_stable_index(k)
+        buffer[idx] = v
+        if all(SU.isconst, buffer)
+            dd[arr] = BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+        else
+            dd[arr] = BSImpl.Const{VartypeT}(buffer)
+        end
+    else
+        dd[k] = v
+    end
+    return dd
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if `dd` has the key `k`. If `k` is indexed, check if `dd` has the array as a key.
+"""
+function has_possibly_indexed_key(dd::AtomicArrayDict, k::SymbolicT)
+    arr, _ = split_indexed_var(k)
+    return haskey(dd, arr)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Equivalent to `get(dd, k, default)`. If `k` is an indexed array, then return
+`dd[arr][idxs...]` for the corresponding array `arr` and indices, or `default`
+if `arr` does not exist.
+"""
+function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
+    arr, isarr = split_indexed_var(k)
+    res = get(dd, arr, default)
+    isarr || return res
+    res === default && return default
+    idx = get_stable_index(k)
+    return res[idx]
+end
+
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
     dd::AtomicArrayDict{Nothing, D}
 
@@ -103,4 +188,22 @@ Add `item` to `x`. If `item` is an indexed array, add the array instead.
 """
 function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
     push!(x, split_indexed_var(item)[1])
+end
+
+"""
+    $METHODLIST
+
+Convert an array of possibly scalarized variables into an `AtomicArraySet`.
+"""
+as_atomic_array_set(vars::Vector{SymbolicT}) = as_atomic_array_set(Dict{SymbolicT, Nothing}, vars)
+function as_atomic_array_set(::Type{D}, vars::Vector{SymbolicT}) where {D}
+    set = AtomicArraySet{D}()
+    for v in vars
+        push_as_atomic_array!(set, v)
+    end
+    return set
+end
+
+function contains_possibly_indexed_element(x::AtomicArraySet, k::SymbolicT)
+    has_possibly_indexed_key(x.dd, k)
 end
