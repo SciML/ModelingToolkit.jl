@@ -383,7 +383,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         is_initializeprob = false, substitution_limit = 100)
     isempty(vars) && return nothing
 
-    varmap = recursive_unwrap(varmap)
+    varmap = convert(SymmapT, varmap)
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
@@ -398,7 +398,25 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         end
     end
     evaluate_varmap!(varmap, vars; limit = substitution_limit)
-    vals = map(x -> get(varmap, x, x), vars)
+    vals = map(vars) do x
+        x = unwrap(x)
+        v = get_possibly_indexed(varmap, x, x)
+        Moshi.Match.@match v begin
+            BSImpl.Const(; val) => return val
+            _ => begin
+                Moshi.Match.@match x begin
+                    BSImpl.Term(; f, args) && if f isa Initial && isequal(v, args[1]) end => begin
+                        if Symbolics.isarraysymbolic(v)
+                            return fill(false, size(v))
+                        else
+                            return false
+                        end
+                    end
+                    _ => return v
+                end
+            end
+        end
+    end
     if !allow_symbolic
         missingsyms = Any[]
         missingvals = Any[]
@@ -586,76 +604,25 @@ function EmptySciMLFunction{iip}(args...; kwargs...) where {iip}
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Construct the operating point of the system from the user-provided `u0map` and `pmap`, system
-defaults `defs`, unknowns `dvs` and parameters `ps`. Return the operating point as a dictionary,
-the list of unknowns for which no values can be determined, and the list of parameters for which
-no values can be determined.
-
-Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
-by unknowns and parameters respectively.
+For every `Initial(x)` parameter in `sys`, add `Initial(x) => x` to `op` if it does not
+already contain that key.
 """
-function build_operating_point!(sys::AbstractSystem,
-        op::AbstractDict, u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
-    add_toterms!(op)
-    missing_unknowns = add_fallbacks!(op, dvs, defs)
-    for (k, v) in defs
-        haskey(op, k) && continue
-        op[k] = v
-    end
-    filter_missing_values!(op; missing_values = missing_unknowns)
-
-    merge!(op, pmap)
-    missing_pars = add_fallbacks!(op, ps, defs)
-    filter_missing_values!(op; missing_values = missing_pars)
-
-    filter!(kvp -> kvp[2] === nothing, u0map)
-    filter!(kvp -> kvp[2] === nothing, pmap)
-    neithermap = anydict()
-
-    for (k, v) in op
-        k = unwrap(k)
-        if is_parameter(sys, k)
-            pmap[k] = v
-        elseif has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k) &&
-               v !== nothing && !isequal(v, Initial(k))
-            op[Initial(k)] = v
-            pmap[Initial(k)] = v
-            op[k] = Initial(k)
-            pmap[k] = Initial(k)
-        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
-               iscall(k) &&
-               operation(k) isa Differential && is_variable(sys, arguments(k)[1])
-            if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) &&
-               v !== nothing
-                op[Initial(k)] = v
-                pmap[Initial(k)] = v
-                op[k] = Initial(k)
-                v = Initial(k)
+function add_initials!(sys::AbstractSystem, op::SymmapT)
+    for p in get_ps(sys)
+        haskey(op, p) && continue
+        Moshi.Match.@match p begin
+            BSImpl.Term(; f, args) && if f isa Initial end => begin
+                write_possibly_indexed_array!(op, p, if Symbolics.isarraysymbolic(p)
+                    BSImpl.Const{VartypeT}(fill(false, size(p)))
+                else
+                    COMMON_FALSE
+                end, COMMON_FALSE)
             end
-            u0map[k] = v
-        else
-            neithermap[k] = v
+            _ => nothing
         end
     end
-
-    if !isempty(neithermap)
-        for (k, v) in u0map
-            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
-            isequal(k, v) && continue
-            u0map[k] = v
-        end
-        for (k, v) in pmap
-            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
-            isequal(k, v) && continue
-            pmap[k] = v
-        end
-    end
-
-    return missing_unknowns, missing_pars
 end
 
 """
@@ -1126,8 +1093,7 @@ constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments 
 to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, t, defs,
-        guesses, missing_unknowns; implicit_dae = false,
+        sys::AbstractSystem, iip, op::AbstractDict, t, guesses;
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__, kwargs...)
@@ -1138,7 +1104,7 @@ function maybe_build_initialization_problem(
     end
 
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs,
+        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...)
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1174,7 +1140,7 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        copy(op), anydict(copy(guesses)), Vector{Equation}(initialization_eqs),
+        anydict(op), anydict(copy(guesses)), Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
@@ -1211,34 +1177,40 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
-    filter!(punknowns) do p
-        is_parameter_solvable(p, op, defs, guesses) && get(op, p, missing) === missing
+    missingvars = AtomicArraySet()
+    for (k, v) in op
+        v === COMMON_MISSING && push!(missingvars, k)
     end
-    # See comment below for why `getu` is not used here.
-    _pgetter = build_explicit_observed_function(initializeprob.f.sys, punknowns)
-    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
-    for (p, pval) in zip(punknowns, pvals)
-        p = unwrap(p)
-        op[p] = pval
-        if iscall(p) && operation(p) === getindex
-            arrp = arguments(p)[1]
-            get(op, arrp, nothing) !== missing && continue
-            op[arrp] = collect(arrp)
-        end
-    end
-
     if time_dependent_init
-        # We can't use `getu` here because that goes to `SII.observed`, which goes to
-        # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
-        # `eval_expression == true`, this then runs into world-age issues. Building an
-        # RGF here is fine since it is always discarded. We can't use `eval_module` for
-        # the RGF since the user may not have run RGF's init.
-        _ugetter = build_explicit_observed_function(initializeprob.f.sys, collect(missing_unknowns))
-        uvals = _ugetter(state_values(initializeprob), parameter_values(initializeprob))
-        for (v, val) in zip(missing_unknowns, uvals)
-            op[v] = val
+        binds = bindings(sys)
+        for v in unknowns(sys)
+            has_possibly_indexed_key(parent(binds), v) && continue
+            if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
+                push_as_atomic_array!(missingvars, v)
+            end
         end
-        empty!(missing_unknowns)
+    end
+    for v in get_all_discretes_fast(sys)
+            has_possibly_indexed_key(parent(binds), v) && continue
+        has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
+    end
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
+    end
+    for p in as_atomic_array_set(parameters(sys))
+        haskey(op, p) || push!(missingvars, p)
+    end
+    missingvars = collect(missingvars)
+
+    # We can't use `getu` here because that goes to `SII.observed`, which goes to
+    # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
+    # `eval_expression == true`, this then runs into world-age issues. Building an
+    # RGF here is fine since it is always discarded. We can't use `eval_module` for
+    # the RGF since the user may not have run RGF's init.
+    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars)
+    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
+    for (p, pval) in zip(missingvars, pvals)
+        op[p] = pval
     end
 
     return (;
@@ -1335,6 +1307,20 @@ end
 
 abstract type ProblemConstructionHook end
 
+function build_operating_point(sys::AbstractSystem, op)
+    if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
+        throw(ArgumentError("""
+        The operating point passed to the problem constructor must be a symbolic map.
+        """))
+    end
+    op = recursive_unwrap(anydict(op))
+    symbols_to_symbolics!(sys, op)
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+    ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
+    left_merge!(op, ics)
+    return op
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1382,27 +1368,17 @@ function process_SciMLProblem(
 
     u0Type = pType = typeof(op)
 
-    op = to_varmap(op, dvs)
-    symbols_to_symbolics!(sys, op)
+    op = build_operating_point(sys, op)
 
     check_inputmap_keys(sys, op)
 
     op = getmetadata(sys, ProblemConstructionHook, identity)(op)
 
-    defs = add_toterms(recursive_unwrap(defaults(sys)); replace = is_discrete_system(sys))
     kwargs = NamedTuple(kwargs)
 
-    if eltype(eqs) <: Equation
-        obs, eqs = unhack_observed(observed(sys), eqs)
-    else
-        obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
-    end
+    add_initials!(sys, op)
 
-    u0map = anydict()
-    pmap = anydict()
-    missing_unknowns,
-    missing_pars = build_operating_point!(sys, op,
-        u0map, pmap, defs, dvs, ps)
+    obs, eqs = unhack_observed(observed(sys), eqs)
 
     floatT = calculate_float_type(op, u0Type)
     u0_eltype = something(u0_eltype, floatT)
@@ -1417,8 +1393,8 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, defs, guesses, missing_unknowns;
-            implicit_dae, warn_initialize_determined, initialization_eqs,
+            op, t, guesses;
+            warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
@@ -1433,7 +1409,8 @@ function process_SciMLProblem(
     end
 
     add_observed_equations!(op, obs)
-    add_parameter_dependencies!(sys, op)
+    binds = bindings(sys)
+    no_override_merge!(op, binds)
 
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
