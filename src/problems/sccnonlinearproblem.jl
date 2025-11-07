@@ -41,11 +41,11 @@ function SCCNonlinearFunction{iip}(
         eval_module = @__MODULE__, cse = true, kwargs...) where {iip}
     ps = parameters(sys; initial_parameters = true)
     subsys = System(
-        _eqs, _dvs, ps; observed = _obs, name = nameof(sys), defaults = defaults(sys))
-    @set! subsys.parameter_dependencies = parameter_dependencies(sys)
+        _eqs, _dvs, ps; observed = _obs, name = nameof(sys), bindings = bindings(sys), initial_conditions = initial_conditions(sys))
     if get_index_cache(sys) !== nothing
         @set! subsys.index_cache = subset_unknowns_observed(
             get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,)))
+        @set! subsys.parameter_bindings_graph = ParameterBindingsGraph(subsys)
         @set! subsys.complete = true
     end
     # generate linear problem instead
