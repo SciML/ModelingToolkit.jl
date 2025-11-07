@@ -54,21 +54,16 @@ function MTKParameters(
     else
         error("Cannot create MTKParameters if system does not have index_cache")
     end
+    all_ps = Set(get_ps(sys))
     if !fast_path
-        op = anydict(op)
-        symbols_to_symbolics!(sys, op)
-        op = AtomicArrayDict(Dict{SymbolicT, SymbolicT}(op))
+        op = build_operating_point(sys, op)
         if floatT === nothing
             floatT = float(float_type_from_varmap(op))
         end
         bound_ps = bound_parameters(sys)
         bound_ics = intersect(bound_ps, keys(op))
         isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
-        # Ensure `op` is preferred
-        left_merge!(op, initial_conditions(sys))
-        # Error if a bound parameter
         no_override_merge!(op, bindings(sys))
-        all_ps = Set(get_ps(sys))
         missing_ps = setdiff(all_ps, keys(op))
         to_rm = Set{SymbolicT}()
         for p in missing_ps
