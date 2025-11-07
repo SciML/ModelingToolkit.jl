@@ -265,15 +265,19 @@ Add equations `eqs` to `varmap`. Assumes each element in `eqs` maps a single sym
 variable to an expression representing its value. In case `varmap` already contains an
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
-function add_observed_equations!(varmap::AbstractDict, eqs)
+function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs)
     for eq in eqs
-        if var_in_varlist(eq.lhs, keys(varmap), nothing)
+        if has_possibly_indexed_key(varmap, eq.lhs)
             SU.isconst(eq.rhs) && continue
-            var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
-            !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
-            varmap[eq.rhs] = eq.lhs
+            has_possibly_indexed_key(varmap, eq.rhs) && continue
+            Moshi.Match.@match eq.rhs begin
+                BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
+                BSImpl.Sym(;) => nothing
+                _ => continue
+            end
+            write_possibly_indexed_array!(varmap, eq.rhs, eq.lhs, COMMON_NOTHING)
         else
-            varmap[eq.lhs] = eq.rhs
+            write_possibly_indexed_array!(varmap, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
 end
