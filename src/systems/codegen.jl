@@ -1082,7 +1082,7 @@ function build_explicit_observed_function(sys, ts;
             ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
         end
     end
-    for sym in full_parameters(sys)
+    for sym in parameters(sys; initial_parameters = true)
         ns_map[renamespace(sys, sym)] = sym
         if iscall(sym) && operation(sym) === getindex
             ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
