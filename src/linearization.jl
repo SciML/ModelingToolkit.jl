@@ -657,7 +657,7 @@ function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true
         end
         dkeys = keys(filter(!last, disturbanceset))
         if !isempty(dkeys)
-            throw(IONotFoundError("disturbance inputs", nameof(state.sys), ikeys))
+            throw(IONotFoundError("disturbance inputs", nameof(state.sys), dkeys))
         end
         okeys = keys(filter(!last, outputset))
         if !isempty(okeys)
