@@ -371,7 +371,9 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         is_initializeprob = false, substitution_limit = 100)
     isempty(vars) && return nothing
 
-    varmap = convert(SymmapT, varmap)
+    if !(varmap isa SymmapT)
+        varmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(varmap), COMMON_NOTHING)
+    end
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
