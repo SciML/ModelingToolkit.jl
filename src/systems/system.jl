@@ -386,8 +386,16 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
-        preface = [], checks = true)
+        preface = [], checks = true, __legacy_defaults__ = nothing)
     name === nothing && throw(NoNameError())
+
+    if __legacy_defaults__ !== nothing
+        Base.depwarn("""
+            The `@mtkmodel` macro is deprecated. Please use the functional form with \
+            `@components` instead.
+            """, :mtkmodel)
+        initial_conditions = __legacy_defaults__
+    end
 
     if !(systems isa Vector{System})
         systems = Vector{System}(systems)
