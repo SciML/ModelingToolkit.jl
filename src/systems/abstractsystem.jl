@@ -534,19 +534,21 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     eqs = equations(sys)
     obs, eqs = unhack_observed(observed(sys), eqs)
     for x in unknowns(sys)
-        if iscall(x) && operation(x) == getindex && split
-            push!(all_initialvars, arguments(x)[1])
-        else
+        if !split
             push!(all_initialvars, x)
+            continue
         end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
     end
     for eq in obs
         x = eq.lhs
-        if iscall(x) && operation(x) == getindex && split
-            push!(all_initialvars, arguments(x)[1])
-        else
+        if !split
             push!(all_initialvars, x)
+            continue
         end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
     end
 
     # add derivatives of all variables for steady-state initial conditions
