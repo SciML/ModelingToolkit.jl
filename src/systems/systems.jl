@@ -6,6 +6,53 @@ function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
     print(io, REPEATED_SIMPLIFICATION_MESSAGE)
 end
 
+function canonicalize_io(iovars, type::String)
+    iobuffer = OrderedSet{SymbolicT}()
+    arrsyms = AtomicArrayDict{OrderedSet{SymbolicT}}()
+    for var in iovars
+        if Symbolics.isarraysymbolic(var)
+            if !symbolic_has_known_size(var)
+                throw(ArgumentError("""
+                All $(type)s must have known shape. Found $var with unknown shape.
+                """))
+            end
+            union!(iobuffer, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
+            continue
+        end
+        arr, isarr = split_indexed_var(var)
+        if isarr
+            tmp = get!(OrderedSet{SymbolicT}, arrsyms, arr)
+            push!(tmp, var)
+        end
+        push!(iobuffer, var)
+    end
+
+    for (k, v) in arrsyms
+        if !symbolic_has_known_size(k)
+            throw(ArgumentError("""
+            All $(type)s must have known shape. Found $k with unknown shape.
+            """))
+        end
+        if type != "output" && length(k) != length(v)
+            throw(ArgumentError("""
+            Part of an array variable cannot be made an $type. The entire array must be \
+            an $type. Found $k which has $(length(v)) elements out of $(length(k)) in \
+            the $(type)s. Either pass all scalarized elements in sorted order as $(type)s \
+            or simply pass $k as an $type.
+            """))
+        end
+        if type != "output" && !isequal(vec(collect(k))::Vector{SymbolicT}, collect(v))
+            throw(ArgumentError("""
+            Elements of scalarized array variables must be in sorted order in $(type)s. \
+            Either pass all scalarized elements in sorted order as $(type)s \
+            or simply pass $k as an $type.
+            """))
+        end
+    end
+
+    return iobuffer
+end
+
 """
 $(SIGNATURES)
 
@@ -35,9 +82,9 @@ function mtkcompile(
         kwargs...)
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
-    inputs = OrderedSet{SymbolicT}(unwrap_vars(inputs))
-    outputs = OrderedSet{SymbolicT}(unwrap_vars(outputs))
-    disturbance_inputs = OrderedSet{SymbolicT}(unwrap_vars(disturbance_inputs))
+    inputs = canonicalize_io(unwrap_vars(inputs), "input")
+    outputs = canonicalize_io(unwrap_vars(outputs), "output")
+    disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
     newsys = __mtkcompile(sys; simplify,
         allow_symbolic, allow_parameter, conservative, fully_determined,
         inputs, outputs, disturbance_inputs, additional_passes,
