@@ -809,13 +809,13 @@ function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{Symboli
         sym = params[i]
         # if the sym is not a scalarized array symbolic OR it was already scalarized,
         # just push it as-is
-        if !iscall(sym) || operation(sym) !== getindex || sym in all_ps
+        arrsym, isarr = split_indexed_var(sym)
+        if !isarr
             push!(buffer, sym)
             i += 1
             continue
         end
 
-        arrsym = first(arguments(sym))
         # the next `length(sym)` symbols should be scalarized versions of the same
         # array symbolic
         for j in (i+1):(i+length(sym)-1)
