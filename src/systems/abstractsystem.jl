@@ -677,8 +677,9 @@ function complete(
                 # ensure inputs are sorted
                 last_idx = 0
                 for p in input_vars
+                    p, _ = split_indexed_var(p)
                     idx = findfirst(isequal(p), ordered_ps)::Int
-                    @assert last_idx < idx
+                    @assert last_idx <= idx
                     last_idx = idx
                 end
             end
