@@ -1097,7 +1097,7 @@ function build_explicit_observed_function(sys, ts;
             namespace_subs[var] = newvar
             var = newvar
         end
-        if throw && !var_in_varlist(var, allsyms, iv)
+        if throw && !var_in_varlist(var, allsyms, iv) && !(var_in_varlist(split_indexed_var(var)[1], allsyms, iv))
             Base.throw(ArgumentError("Symbol $var is not present in the system."))
         end
     end
