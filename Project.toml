@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 version = "10.26.1"
+authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -120,7 +120,7 @@ FunctionWrappers = "1.1"
 FunctionWrappersWrappers = "0.1"
 Graphs = "1.5.2"
 ImplicitDiscreteSolve = "0.1.2, 1"
-InfiniteOpt = "0.5"
+InfiniteOpt = "0.5, 0.6"
 InteractiveUtils = "1"
 JuliaFormatter = "1.0.47, 2"
 JumpProcesses = "9.19"
