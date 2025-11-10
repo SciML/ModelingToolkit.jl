@@ -190,29 +190,17 @@ Return the list of variables in `varlist` not present in `varmap`. Uses the same
 for missing array variables and `toterm` forms as [`add_fallbacks!`](@ref).
 """
 function missingvars(
-        varmap::AbstractDict, varlist::Vector; toterm = default_toterm)
-    missingvars = Set()
+        varmap::AtomicArrayDict, varlist::Vector; toterm = default_toterm)
+    missings = Set{SymbolicT}()
     for var in varlist
+        var = unwrap(var)
+        has_possibly_indexed_key(varmap, var) && continue
         haskey(varmap, var) && continue
         ttsym = toterm(var)
-        haskey(varmap, ttsym) && continue
-
-        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
-            mask = map(eachindex(var)) do idx
-                !haskey(varmap, var[idx]) && !haskey(varmap, ttsym[idx])
-            end
-            if all(mask)
-                push!(missingvars, var)
-            else
-                for i in eachindex(var)
-                    mask[i] && push!(missingvars, var[i])
-                end
-            end
-        else
-            push!(missingvars, var)
-        end
+        has_possibly_indexed_key(varmap, ttsym) && continue
+        push!(missings, var)
     end
-    return missingvars
+    return missings
 end
 
 """
