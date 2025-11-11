@@ -143,5 +143,5 @@ end
 
 function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
-    println(io, underscore_to_D(e.uninit, e.sys))
+    println(io, underscore_to_D(collect(e.uninit), e.sys))
 end
