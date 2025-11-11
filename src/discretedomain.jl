@@ -276,15 +276,16 @@ function (xn::Num)(k::ShiftIndex)
         error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
     var = only(vars)
+    if operation(var) === getindex
+        var = arguments(var)[1]
+    end
     if !iscall(var)
         throw(ArgumentError("Cannot shift time-independent variable $var"))
-    end
-    if operation(var) == getindex
-        var = first(arguments(var))
     end
     if length(arguments(var)) != 1
         error("Cannot shift an expression with multiple independent variables $x.")
     end
+    t = only(arguments(var))
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
@@ -300,9 +301,10 @@ end
 
 function (xn::Symbolics.Arr)(k::ShiftIndex)
     @unpack clock, steps = k
-    x = value(xn)
+    x = unwrap(xn)
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
-    vars = SU.search_variables(x)
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, x)
     if length(vars) != 1
         error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
@@ -313,6 +315,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(arguments(var)) != 1
         error("Cannot shift an expression with multiple independent variables $x.")
     end
+    t = only(arguments(var))
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
