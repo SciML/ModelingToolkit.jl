@@ -1,4 +1,5 @@
 symconvert(::Type{T}, x::V) where {T, V} = convert(promote_type(T, V), x)
+symconvert(::Type{T}, x::V) where {T <: Real, V} = convert(T, x)
 symconvert(::Type{Real}, x::Integer) = convert(Float16, x)
 symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
 
@@ -56,10 +57,11 @@ function MTKParameters(
     end
     all_ps = Set(get_ps(sys))
     if !fast_path
-        op = build_operating_point(sys, op)
+        op = operating_point_preprocess(sys, op)
         if floatT === nothing
             floatT = float(float_type_from_varmap(op))
         end
+        op = build_operating_point(sys, op; fast_path = true)
         bound_ps = bound_parameters(sys)
         bound_ics = intersect(bound_ps, keys(op))
         isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
