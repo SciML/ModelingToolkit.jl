@@ -2852,7 +2852,8 @@ function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
     getproperty(sys, p; namespace = false)
 end
 
-keytype(::Type{<:Pair{T, V}}) where {T, V} = T
+_keytype(::Type{<:Pair{T, V}}) where {T, V} = T
+_keytype(::Type{T}) where {T} = keytype(T)
 function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
     if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing &&
        !isempty(get_continuous_events(sys)) ||
@@ -2860,7 +2861,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
        !isempty(get_discrete_events(sys))
         @warn "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated."
     end
-    if keytype(eltype(rules)) <: Symbol
+    if _keytype(eltype(rules)) <: Symbol
         dict = todict(rules)
         systems = get_systems(sys)
         # post-walk to avoid infinite recursion
