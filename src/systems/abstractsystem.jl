@@ -558,6 +558,21 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             iscall(v) && push!(all_initialvars, D(v))
         end
     end
+
+    # Do this after the previous block to avoid adding derivatives of discretes
+    for x in get_all_discretes(sys)
+        if !split
+            push!(all_initialvars, x)
+            continue
+        end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
+    end
+
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING && push!(all_initialvars, k)
+    end
+
     initials = collect(all_initialvars)
     for (i, v) in enumerate(initials)
         initials[i] = Initial()(v)
