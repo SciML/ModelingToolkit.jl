@@ -970,6 +970,36 @@ function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
     sort!(ns)
 end
 
+function is_atomic_inside_indexed(x::SymbolicT)
+    SU.default_is_atomic(x) && isequal(split_indexed_var(x)[1], x)
+end
+
+struct CheckInvalidAndTrackNamespaced
+    simplevars::AtomicArraySet{Dict{SymbolicT, Nothing}}
+    dervars::Set{SymbolicT}
+    ns_map::Dict{SymbolicT, SymbolicT}
+    namespace_subs::Dict{SymbolicT, SymbolicT}
+    throw::Bool
+end
+
+function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
+    isatomic1 = SU.default_is_atomic(x)
+    isatomic1 || return false
+
+    newx = get(pred.ns_map, x, nothing)
+    if newx !== nothing
+        pred.namespace_subs[x] = newx
+        x = newx
+    end
+    arrx, _ = split_indexed_var(x)
+    arrx in pred.simplevars && return true
+    x in pred.dervars && return true
+    if pred.throw
+        Base.throw(ArgumentError("Symbol $x is not present in the system."))
+    end
+    return false
+end
+
 """
     build_explicit_observed_function(sys, ts; kwargs...) -> Function(s)
 
@@ -989,7 +1019,6 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `disturbance_inputs = nothing` symbolic variables representing unknown disturbance inputs (removed from parameters, not added as function arguments)
 - `known_disturbance_inputs = nothing` symbolic variables representing known disturbance inputs (removed from parameters, added as function arguments)
 - `checkbounds = true` checks bounds if true when destructuring parameters
-- `op = Operator` sets the recursion terminator for the walk done by `vars` to identify the variables that appear in `ts`. See the documentation for `vars` for more detail.
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
 - `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 - `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
@@ -1032,7 +1061,6 @@ function build_explicit_observed_function(sys, ts;
         ps = parameters(sys; initial_parameters = true),
         return_inplace = false,
         param_only = false,
-        op = Operator,
         throw = true,
         cse = true,
         mkarray = nothing,
@@ -1072,10 +1100,8 @@ function build_explicit_observed_function(sys, ts;
         ts = symbol_to_symbolic(sys, ts; allsyms)
     end
 
-    vs = Set{SymbolicT}()
-    SU.search_variables!(vs, ts; is_atomic = OperatorIsAtomic{op}())
-    namespace_subs = Dict()
-    ns_map = Dict{Any, Any}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    namespace_subs = Dict{SymbolicT, SymbolicT}()
+    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
     for sym in unknowns(sys)
         ns_map[renamespace(sys, sym)] = sym
         if iscall(sym) && operation(sym) === getindex
@@ -1088,17 +1114,25 @@ function build_explicit_observed_function(sys, ts;
             ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
         end
     end
-    allsyms = Set(all_symbols(sys))
-    iv = has_iv(sys) ? get_iv(sys) : nothing
-    for var in vs
-        var = unwrap(var)
-        newvar = get(ns_map, var, nothing)
-        if newvar !== nothing
-            namespace_subs[var] = newvar
-            var = newvar
+    allsyms = as_atomic_array_set(unknowns(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allsyms), observables(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allsyms), parameters(sys; initial_parameters = true))
+    foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
+    union!(allsyms, independent_variables(sys))
+    dervars = Set{SymbolicT}()
+    if isscheduled(sys)
+        sched::Schedule = get_schedule(sys)
+        for k in keys(sched.dummy_sub)
+            push!(dervars, default_toterm(k))
         end
-        if throw && !var_in_varlist(var, allsyms, iv) && !(var_in_varlist(split_indexed_var(var)[1], allsyms, iv))
-            Base.throw(ArgumentError("Symbol $var is not present in the system."))
+    end
+    pred = CheckInvalidAndTrackNamespaced(allsyms, dervars, ns_map, namespace_subs, throw)
+    iv = has_iv(sys) ? get_iv(sys) : nothing
+    if ts isa SymbolicT
+        SU.query(pred, ts)
+    else
+        for x in ts
+            SU.query(pred, x)
         end
     end
     ts = substitute(ts, namespace_subs)
