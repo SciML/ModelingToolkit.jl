@@ -1407,7 +1407,7 @@ function process_SciMLProblem(
 
     add_observed_equations!(op, obs, bound_parameters(sys))
     binds = bindings(sys)
-    no_override_merge!(op, binds)
+    no_override_merge_except_missing!(op, binds)
 
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(

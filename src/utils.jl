@@ -1349,6 +1349,22 @@ end
 """
     $TYPEDSIGNATURES
 
+Identical to `no_override_merge!` but `COMMON_MISSING` values in `b` are ignored.
+"""
+function no_override_merge_except_missing!(a::AbstractDict, b::AbstractDict)
+    for (k, v) in b
+        v === COMMON_MISSING && continue
+        if haskey(a, k)
+            throw(ArgumentError("Cannot merge without overriding: common key $k."))
+        end
+        a[k] = v
+    end
+    return a
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Merge `b` into `a`, modifying `a`. For all keys common to `a` and `b`,
 prefer the value in `a`.
 """
