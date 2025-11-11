@@ -253,11 +253,12 @@ Add equations `eqs` to `varmap`. Assumes each element in `eqs` maps a single sym
 variable to an expression representing its value. In case `varmap` already contains an
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
-function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs)
+function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector{Equation}, bound_ps::Union{Nothing, ROSymmapT} = nothing)
     for eq in eqs
         if has_possibly_indexed_key(varmap, eq.lhs)
             SU.isconst(eq.rhs) && continue
             has_possibly_indexed_key(varmap, eq.rhs) && continue
+            bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
                 BSImpl.Sym(;) => nothing
@@ -277,17 +278,6 @@ Add all equations in `observed(sys)` to `varmap` using [`add_observed_equations!
 """
 function add_observed!(sys::AbstractSystem, varmap::AbstractDict)
     add_observed_equations!(varmap, observed(sys))
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Add all equations in `parameter_dependencies(sys)` to `varmap` using
-[`add_observed_equations!`](@ref).
-"""
-function add_parameter_dependencies!(sys::AbstractSystem, varmap::AbstractDict)
-    has_parameter_dependencies(sys) || return nothing
-    add_observed_equations!(varmap, parameter_dependencies(sys))
 end
 
 struct UnexpectedSymbolicValueInVarmap <: Exception
@@ -1374,7 +1364,7 @@ function process_SciMLProblem(
     u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
-        add_observed_equations!(op, obs)
+        add_observed_equations!(op, obs, bindings(sys))
     end
 
     u0_constructor = get_u0_constructor(u0_constructor, u0Type, u0_eltype, symbolic_u0)
@@ -1398,7 +1388,7 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    add_observed_equations!(op, obs)
+    add_observed_equations!(op, obs, bound_parameters(sys))
     binds = bindings(sys)
     no_override_merge!(op, binds)
 
