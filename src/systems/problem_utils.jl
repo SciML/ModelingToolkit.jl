@@ -491,10 +491,11 @@ in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AtomicArrayDict, vars; limit = 100)
     for k in vars
-        v = get(varmap, k, COMMON_NOTHING)
+        arr, _ = split_indexed_var(unwrap(k))
+        v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[k] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
+        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
     end
 end
 
