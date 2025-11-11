@@ -1475,10 +1475,11 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         ps = Vector{SymbolicT}(unwrap.(first.(ps)))
     end
     systems = get_systems(sys)
-    result = copy(ps)
+    result = OrderedSet{SymbolicT}(ps)
     for subsys in systems
-        append!(result, namespace_parameters(subsys))
+        union!(result, namespace_parameters(subsys))
     end
+    result = collect(result)
     if !initial_parameters && !is_initializesystem(sys)
         filter!(result) do sym
             return !(isoperator(sym, Initial) ||
