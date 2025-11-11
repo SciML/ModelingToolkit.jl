@@ -504,8 +504,8 @@ struct Break <: AnalysisPointTransformation
     """
     add_input::Bool
     """
-    Whether the default of the added input variable should be the input of `ap`. Only
-    applicable if `add_input == true`.
+    Whether the initial condition of the added input variable should be the input of `ap`.
+    Only applicable if `add_input == true`.
     """
     default_outputs_to_input::Bool
     """
@@ -544,13 +544,13 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
         for outsys in ap.outputs
             push!(breaksys_eqs, ap_var(outsys) ~ new_var)
         end
-        defs = copy(get_defaults(breaksys))
+        defs = copy(get_initial_conditions(breaksys))
         defs[new_var] = if tf.default_outputs_to_input
             ap_ivar
         else
             new_def
         end
-        @set! breaksys.defaults = defs
+        @set! breaksys.initial_conditions = defs
         if tf.added_input_is_param
             ps = copy(get_ps(breaksys))
             push!(ps, new_var)
@@ -661,9 +661,9 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
         push!(unks, new_var)
         @set! ap_sys.unknowns = unks
         # add default
-        defs = copy(get_defaults(ap_sys))
+        defs = copy(get_initial_conditions(ap_sys))
         defs[new_var] = new_def
-        @set! ap_sys.defaults = defs
+        @set! ap_sys.initial_conditions = defs
 
         tf.with_output || return ap_sys, (new_var,)
 
@@ -782,8 +782,8 @@ function apply_transformation(cst::ComplementarySensitivityTransform, sys::Abstr
     @set! sys.eqs = eqs
     push!(eqs, du ~ -wrap(_du))
 
-    defs = copy(get_defaults(sys))
-    @set! sys.defaults = defs
+    defs = copy(get_initial_conditions(sys))
+    @set! sys.initial_conditions = defs
     defs[du] = -wrap(_du)
     return sys, (du, u)
 end
