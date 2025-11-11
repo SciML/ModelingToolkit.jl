@@ -340,6 +340,7 @@ function check_no_parameter_equations(sys::AbstractSystem)
     pareqs = Equation[]
     allowed_vars = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
     for eq in equations(sys)
         empty!(varsbuf)
         Symbolics.get_variables!(varsbuf, eq, allowed_vars; is_atomic = check_bindings_is_atomic, recurse = check_no_parameter_equations_recurse)
