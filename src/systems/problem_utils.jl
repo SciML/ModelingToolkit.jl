@@ -1202,6 +1202,9 @@ function maybe_build_initialization_problem(
         initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
 
+rm_union(::Type{Union{T, Nothing}}) where {T} = T
+rm_union(::Type{T}) where {T} = T
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1211,13 +1214,14 @@ with a constant value.
 function float_type_from_varmap(varmap, floatT = Bool)
     for (k, v) in varmap
         is_variable_floatingpoint(k) || continue
-        symbolic_type(v) == NotSymbolic() || continue
+        SU.isconst(v) || symbolic_type(v) isa NotSymbolic || continue
         is_array_of_symbolics(v) && continue
-
+        v = unwrap_const(v)
         if v isa AbstractArray
-            floatT = promote_type(floatT, eltype(v))
+            # Remove union in case some elements of the array are `nothing`
+            floatT = promote_type(floatT, rm_union(eltype(unwrap_const(v))))
         elseif v isa Number
-            floatT = promote_type(floatT, typeof(v))
+            floatT = promote_type(floatT, typeof(unwrap_const(v)))
         end
     end
     return float(floatT)
