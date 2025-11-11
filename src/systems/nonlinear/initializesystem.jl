@@ -472,15 +472,12 @@ function SciMLBase.remake_initialization_data(
     # We _always_ build initialization now. So if we didn't build  it before, don't do
     # it now
     oldinitdata === nothing && return nothing
+    meta = oldinitdata.metadata
+    meta isa InitializationMetadata || return oldinitdata
 
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
-        oldinitdata === nothing && return nothing
-
         oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
-
-        meta = oldinitdata.metadata
-        meta isa InitializationMetadata || return oldinitdata
 
         reconstruct_fn = meta.oop_reconstruct_u0_p
         # the history function doesn't matter because `reconstruct_fn` is only going to
@@ -504,84 +501,54 @@ function SciMLBase.remake_initialization_data(
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    u0map = to_varmap(u0, dvs)
-    symbols_to_symbolics!(sys, u0map)
-    add_toterms!(u0map)
-    pmap = to_varmap(p, ps)
-    symbols_to_symbolics!(sys, pmap)
-    guesses = Dict()
-    defs = defaults(sys)
+    if eltype(u0) <: Pair
+        if u0 isa Array
+            u0 = Dict(u0)
+        end
+        if keytype(u0) === Any || keytype(u0) <: Symbol
+            u0 = anydict(u0)
+            symbols_to_symbolics!(sys, u0)
+        end
+    else
+        u0 = to_varmap(u0, dvs)
+        symbols_to_symbolics!(sys, u0)
+    end
+    u0map = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(u0), COMMON_NOTHING)
+    if eltype(p) <: Pair
+        if p isa Array
+            p = Dict(p)
+        end
+        if keytype(p) === Any || keytype(p) <: Symbol
+            p = anydict(p)
+            symbols_to_symbolics!(sys, p)
+        end
+    else
+        p = to_varmap(p, ps)
+        symbols_to_symbolics!(sys, p)
+    end
+    pmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(p), COMMON_NOTHING)
+    op = merge!(u0map, pmap)
+    guesses = SymmapT()
     use_scc = true
     initialization_eqs = Equation[]
-    op = anydict()
 
-    if oldinitdata !== nothing && oldinitdata.metadata isa InitializationMetadata
-        meta = oldinitdata.metadata
-        op = copy(meta.op)
-        merge!(guesses, meta.guesses)
-        use_scc = meta.use_scc
-        initialization_eqs = meta.additional_initialization_eqs
-        time_dependent_init = meta.time_dependent_init
-    else
-        # there is no initializeprob, so the original problem construction
-        # had no solvable parameters and had the differential variables
-        # specified in `u0map`.
-        if u0 === missing
-            # the user didn't pass `u0` to `remake`, so they want to retain
-            # existing values. Fill the differential variables in `u0map`,
-            # initialization will either be elided or solve for the algebraic
-            # variables
-            diff_idxs = isdiffeq.(equations(sys))
-            for i in eachindex(dvs)
-                diff_idxs[i] || continue
-                u0map[dvs[i]] = newu0[i]
-            end
-        end
-        # ensure all unknowns have guesses in case they weren't given one
-        # and become solvable
-        for i in eachindex(dvs)
-            haskey(guesses, dvs[i]) && continue
-            guesses[dvs[i]] = newu0[i]
-        end
-        if p === missing
-            # the user didn't pass `p` to `remake`, so they want to retain
-            # existing values. Fill all parameters in `pmap` so that none of
-            # them are solvable.
-            for p in ps
-                pmap[p] = getp(sys, p)(newp)
-            end
-        end
-        # all non-solvable parameters need values regardless
-        for p in ps
-            haskey(pmap, p) && continue
-            is_parameter_solvable(p, pmap, defs, guesses) && continue
-            pmap[p] = getp(sys, p)(newp)
-        end
-    end
+    left_merge!(op, meta.op)
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
+    merge!(guesses, meta.guesses)
+    use_scc = meta.use_scc
+    initialization_eqs = meta.additional_initialization_eqs
+    time_dependent_init = meta.time_dependent_init
+
     if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
-    merge!(op, u0map, pmap)
-    filter_missing_values!(op)
 
-    u0map = anydict()
-    pmap = anydict()
-    missing_unknowns,
-    missing_pars = build_operating_point!(sys, op,
-        u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
-    u0_constructor = p_constructor = identity
-    if newu0 isa StaticArray
-        u0_constructor = vals -> SymbolicUtils.Code.create_array(
-            typeof(newu0), floatT, Val(1), Val(length(vals)), vals...)
-    end
-    if newp isa StaticArray || newp isa MTKParameters && newp.initials isa StaticArray
-        p_constructor = vals -> SymbolicUtils.Code.create_array(
-            typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
-    end
+    u0_constructor = get_u0_constructor(identity, typeof(newu0), floatT, false)
+    p_constructor = get_p_constructor(identity, typeof(newu0), floatT)
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
-        missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
+        sys, SciMLBase.isinplace(odefn), op, t0, guesses;
+        time_dependent_init, use_scc, initialization_eqs, floatT, fast_path = true,
         u0_constructor, p_constructor, allow_incomplete = true, check_units = false)
 
     odefn = remake(odefn; kws...)
