@@ -948,11 +948,11 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     The operating point used to construct the initialization.
     """
-    op::Dict{Any, Any}
+    op::SymmapT
     """
     The `guesses` used to construct the initialization.
     """
-    guesses::Dict{Any, Any}
+    guesses::SymmapT
     """
     The `initialization_eqs` in addition to those of the system that were used to construct
     the initialization.
@@ -1083,6 +1083,7 @@ function maybe_build_initialization_problem(
         t = zero(floatT)
     end
 
+    orig_op = copy(op)
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
         sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...)
@@ -1120,7 +1121,9 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        anydict(op), anydict(copy(guesses)), Vector{Equation}(initialization_eqs),
+        orig_op,
+        as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING),
+        Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
