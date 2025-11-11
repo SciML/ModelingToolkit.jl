@@ -337,14 +337,25 @@ Base.@nospecializeinfer function parse_variable_def!(
             meta = parse_metadata(mod, meta_val)
             varval = (@isdefined default_val) ? default_val :
                      unit_handled_variable_value(meta, varname)
+            isdisc = Meta.isexpr(a, :call)
             if varclass == :parameters
-                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
-                $meta_val))
+                isdisc && assert_unique_independent_var(dict, a.args[end])
+                if isdisc
+                    var = :($varname = $first(@discretes ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                    $meta_val))
+                else
+                    var = :($varname = $first(@parameters ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                    $meta_val))
+                end
             elseif varclass == :constants
-                Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@constants ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
-                $meta_val))
+                isdisc && assert_unique_independent_var(dict, a.args[end])
+                if isdisc
+                    var = :($varname = $first(@discretes ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                    $meta_val))
+                else
+                    var = :($varname = $first(@constants ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                    $meta_val))
+                end
             else
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
@@ -368,22 +379,33 @@ Base.@nospecializeinfer function parse_variable_def!(
             def_n_meta) => begin
             (@isdefined type) || (type = Real)
             varname = Meta.isexpr(a, :call) ? a.args[1] : a
+            isdisc = Meta.isexpr(a, :call)
             if Meta.isexpr(def_n_meta, :tuple)
                 meta = parse_metadata(mod, def_n_meta)
                 varval = unit_handled_variable_value(meta, varname)
                 val, def_n_meta = (def_n_meta.args[1], def_n_meta.args[2:end])
                 if varclass == :parameters
-                    Meta.isexpr(a, :call) &&
-                        assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
-                    $varname = $first(@parameters ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
-                    $(def_n_meta...)))
+                    isdisc && assert_unique_independent_var(dict, a.args[end])
+                    if isdisc
+                        var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                        $varname = $first(@discretes ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                        $(def_n_meta...)))
+                    else
+                        var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                        $varname = $first(@parameters ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                        $(def_n_meta...)))
+                    end
                 elseif varclass == :constants
-                    Meta.isexpr(a, :call) &&
-                        assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === $NO_VALUE ? $val : $varname;
-                    $varname = $first(@constants ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
-                    $(def_n_meta...)))
+                    isdisc && assert_unique_independent_var(dict, a.args[end])
+                    if isdisc
+                        var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                        $varname = $first(@discretes ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                        $(def_n_meta...)))
+                    else
+                        var = :($varname = $varname === $NO_VALUE ? $val : $varname;
+                        $varname = $first(@constants ($a[$(indices...)]::$type = $no_value_default_to_nothing($varval)),
+                        $(def_n_meta...)))
+                    end
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -395,15 +417,23 @@ Base.@nospecializeinfer function parse_variable_def!(
                 end
             else
                 if varclass == :parameters
-                    Meta.isexpr(a, :call) &&
-                        assert_unique_independent_var(dict, a.args[end])
-                    var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
-                    $varname = $first(@parameters $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                    isdisc && assert_unique_independent_var(dict, a.args[end])
+                    if isdisc
+                        var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                        $varname = $first(@discretes $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                    else
+                        var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                        $varname = $first(@parameters $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                    end
                 elseif varclass == :constants
-                    Meta.isexpr(a, :call) &&
-                        assert_unique_independent_var(dict, a.args[end])
+                    isdisc && assert_unique_independent_var(dict, a.args[end])
+                    if isdisc
                     var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
-                    $varname = $first(@constants $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                        $varname = $first(@discretes $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                    else
+                        var = :($varname = $varname === $NO_VALUE ? $def_n_meta : $varname;
+                        $varname = $first(@constants $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                    end
                 else
                     Meta.isexpr(a, :call) ||
                         throw("$a is not a variable of the independent variable")
@@ -430,12 +460,21 @@ Base.@nospecializeinfer function parse_variable_def!(
             indices...) => begin
             (@isdefined type) || (type = Real)
             varname = a isa Expr && a.head == :call ? a.args[1] : a
+            isdisc = Meta.isexpr(a, :call)
             if varclass == :parameters
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@parameters $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                if isdisc
+                    var = :($varname = $first(@discretes $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                else
+                    var = :($varname = $first(@parameters $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                end
             elseif varclass == :constants
                 Meta.isexpr(a, :call) && assert_unique_independent_var(dict, a.args[end])
-                var = :($varname = $first(@constants $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                if isdisc
+                    var = :($varname = $first(@discretes $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                else
+                    var = :($varname = $first(@constants $a[$(indices...)]::$type = $no_value_default_to_nothing($varname)))
+                end
             elseif varclass == :variables
                 Meta.isexpr(a, :call) ||
                     throw("$a is not a variable of the independent variable")
