@@ -2055,7 +2055,7 @@ end
 ###
 ### System I/O
 ###
-function toexpr(sys::AbstractSystem)
+function SymbolicUtils.Code.toexpr(sys::AbstractSystem)
     sys = flatten(sys)
     expr = Expr(:block)
     stmt = expr.args
@@ -2085,11 +2085,14 @@ function toexpr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
-    filtered_defs = filter(
-        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    filtered_bindings = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
+    filtered_initial_conditions = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
     filtered_guesses = filter(
         kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
-    defs_name = push_defaults!(stmt, filtered_defs, var2name)
+    bindings_name = push_defaults!(stmt, filtered_bindings, var2name; name = :bindings)
+    initial_conditions_name = push_defaults!(stmt, filtered_bindings, var2name; name = :initial_conditions)
     guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
@@ -2101,8 +2104,8 @@ function toexpr(sys::AbstractSystem)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
     end
     push!(stmt,
-        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-            guesses = $guesses_name, observed = $obs_name,
+        :($System($eqs_name, $ivname, $stsname, $psname; bindings = $bindings_name,
+            initial_conditions = $initial_conditions_name, guesses = $guesses_name, observed = $obs_name,
             name = $name, checks = false)))
 
     expr = :(let
