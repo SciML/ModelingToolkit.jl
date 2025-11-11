@@ -372,6 +372,11 @@ function TearingState(sys; check = true, sort_eqs = true)
     collect_vars_to_set!(dvs, unknowns(sys))
     ps = Set{SymbolicT}()
     collect_vars_to_set!(ps, parameters(sys; initial_parameters = true))
+    # People sometimes pass completed systems to `mtkcompile`, which means the bound
+    # parameters are not in `parameters(sys)` above. So add them here.
+    if iscomplete(sys)
+        collect_vars_to_set!(ps, collect(bound_parameters(sys)))
+    end
     browns = Set{SymbolicT}()
     collect_vars_to_set!(browns, brownians(sys))
     var2idx = Dict{SymbolicT, Int}()
