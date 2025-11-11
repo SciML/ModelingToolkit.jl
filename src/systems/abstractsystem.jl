@@ -2852,35 +2852,6 @@ function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
     getproperty(sys, p; namespace = false)
 end
 
-"""
-    missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
-
-Returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
-"""
-function missing_variable_defaults(
-        sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
-    varmap = get_defaults(sys)
-    varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(subset, keys(varmap))
-    ds = Pair[]
-
-    n = length(missingvars)
-
-    if default isa Vector
-        @assert length(default)==n "`default` size ($(length(default))) should match the number of missing variables: $n"
-    end
-
-    for (i, missingvar) in enumerate(missingvars)
-        if default isa Vector
-            push!(ds, missingvar => default[i])
-        else
-            push!(ds, missingvar => default)
-        end
-    end
-
-    return ds
-end
-
 keytype(::Type{<:Pair{T, V}}) where {T, V} = T
 function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
     if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing &&
