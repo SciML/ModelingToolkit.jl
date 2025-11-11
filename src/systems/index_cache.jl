@@ -230,6 +230,31 @@ function IndexCache(sys::AbstractSystem)
             symbol_to_variable[getname(default_toterm(p))] = p
         end
     end
+    found_array_syms = Set{SymbolicT}()
+    for p in tunable_pars
+        arrsym, isarr = split_indexed_var(p)
+        isarr || continue
+        arrsym in found_array_syms && continue
+        idxs = Int[]
+        valid_arrsym = true
+        for i in eachindex(arrsym)
+            idxsym = arrsym[i]
+            idx = get(tunable_idxs, idxsym, nothing)::Union{Int, Nothing}
+            valid_arrsym = idx !== nothing
+            valid_arrsym || break
+            push!(idxs, idx::Int)
+        end
+        push!(found_array_syms, arrsym)
+        valid_arrsym || break
+        if idxs == idxs[begin]:idxs[end]
+            idxs = reshape(idxs[begin]:idxs[end], size(arrsym))::AbstractArray{Int}
+        else
+            idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
+        end
+        rsym = renamespace(sys, arrsym)
+        tunable_idxs[arrsym] = idxs
+        tunable_idxs[rsym] = idxs
+    end
 
     initials_idxs = TunableIndexMap()
     initials_buffer_size = 0
