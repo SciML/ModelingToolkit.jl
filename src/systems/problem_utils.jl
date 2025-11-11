@@ -1295,7 +1295,7 @@ end
 
 abstract type ProblemConstructionHook end
 
-function build_operating_point(sys::AbstractSystem, op)
+function operating_point_preprocess(sys::AbstractSystem, op)
     if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
         throw(ArgumentError("""
         The operating point passed to the problem constructor must be a symbolic map.
@@ -1303,6 +1303,13 @@ function build_operating_point(sys::AbstractSystem, op)
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
+    return op
+end
+
+function build_operating_point(sys::AbstractSystem, op; fast_path = false)
+    if !fast_path
+        op = operating_point_preprocess(sys, op)
+    end
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
@@ -1356,7 +1363,11 @@ function process_SciMLProblem(
 
     u0Type = pType = typeof(op)
 
-    op = build_operating_point(sys, op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(u0_eltype, floatT)
+
+    op = build_operating_point(sys, op; fast_path = true)
 
     check_inputmap_keys(sys, op)
 
@@ -1368,8 +1379,6 @@ function process_SciMLProblem(
 
     obs, eqs = unhack_observed(observed(sys), eqs)
 
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs, bindings(sys))
