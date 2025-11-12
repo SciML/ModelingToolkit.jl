@@ -35,7 +35,7 @@ mutable struct CasADiModel
 end
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractDynamicOptProblem{uType, tType, isinplace}
+       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
