@@ -18,7 +18,7 @@ end
 """
     JuMPDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
-Convert an System representing an optimal control system into a JuMP model
+Convert a System representing an optimal control system into a JuMP model
 for solving using optimization. Must provide either `dt`, the timestep between collocation
 points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
@@ -29,7 +29,7 @@ function JuMPDynamicOptProblem end
 """
     InfiniteOptDynamicOptProblem(sys::System, op, tspan; dt)
 
-Convert an System representing an optimal control system into a InfiniteOpt model
+Convert a System representing an optimal control system into a InfiniteOpt model
 for solving using optimization. Must provide `dt` for determining the length
 of the interpolation arrays.
 
@@ -42,7 +42,7 @@ function InfiniteOptDynamicOptProblem end
 """
     CasADiDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
-Convert an System representing an optimal control system into a CasADi model
+Convert a System representing an optimal control system into a CasADi model
 for solving using optimization. Must provide either `dt`, the timestep between collocation
 points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
@@ -53,7 +53,7 @@ function CasADiDynamicOptProblem end
 """
     PyomoDynamicOptProblem(sys::System, op, tspan; dt, steps)
 
-Convert an System representing an optimal control system into a Pyomo model
+Convert a System representing an optimal control system into a Pyomo model
 for solving using optimization. Must provide either `dt`, the timestep between collocation
 points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
