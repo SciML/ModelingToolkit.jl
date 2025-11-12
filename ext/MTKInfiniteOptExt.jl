@@ -2,6 +2,7 @@ module MTKInfiniteOptExt
 using ModelingToolkit
 using InfiniteOpt
 using DiffEqBase
+using SciMLStructures
 using LinearAlgebra
 using StaticArrays
 using UnPack
@@ -13,12 +14,13 @@ struct InfiniteOptModel
     model::InfiniteModel
     U::Vector{<:AbstractVariableRef}
     V::Vector{<:AbstractVariableRef}
+    P::Vector{<:AbstractVariableRef}
     tₛ::AbstractVariableRef
     is_free_final::Bool
 end
 
 struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractDynamicOptProblem{uType, tType, isinplace}
+       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -33,7 +35,7 @@ struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
 end
 
 struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractDynamicOptProblem{uType, tType, isinplace}
+       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -56,6 +58,9 @@ function MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts)
 end
 function MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts)
     @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
+end
+function MTK.generate_tunable_params!(m::InfiniteModel, p0, np)
+    @variable(m, P[i=1:np], start=p0[i])
 end
 
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
@@ -81,10 +86,11 @@ MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)
 function MTK.JuMPDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
+        tune_parameters = false,
         guesses = Dict(), kwargs...)
     prob,
     _ = MTK.process_DynamicOptProblem(JuMPDynamicOptProblem, InfiniteOptModel, sys,
-        op, tspan; dt, steps, guesses, kwargs...)
+        op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
     prob
 end
 
@@ -125,13 +131,24 @@ function MTK.lowered_var(m::InfiniteOptModel, uv, i, t)
     t isa Union{Num, Symbolics.Symbolic} ? X[i] : X[i](t)
 end
 
+function f_wrapper(f, Uₙ, Vₙ, p, P, t)
+    if SciMLStructures.isscimlstructure(p)
+        _, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+        p′ = repack(P)
+        f(Uₙ, Vₙ, p′, t)
+    else
+        f(Uₙ, Vₙ, P, t)
+    end
+end
+
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack wrapped_model, f, p = prob
-    @unpack tₛ, U, V, model = wrapped_model
+    @unpack tₛ, U, V, P, model = wrapped_model
     t = model[:t]
     tsteps = supports(t)
-    dt = tsteps[2] - tsteps[1]
+
+    dt = (tsteps[end] - tsteps[1]) / (length(tsteps) - 1)
 
     nᵤ = length(U)
     nᵥ = length(V)
@@ -142,7 +159,7 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
                 ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = zeros(nᵤ))
                 Uₙ = [U[i](τ) + ΔU[i] * dt for i in 1:nᵤ]
                 Vₙ = [V[i](τ) for i in 1:nᵥ]
-                Kₙ = tₛ * f(Uₙ, Vₙ, p, τ + h * dt)
+                Kₙ = tₛ * f_wrapper(f, Uₙ, Vₙ, p, P, τ + h * dt)
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
@@ -158,7 +175,7 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f(Uₙ, V, p, τ + h * dt)[j]),
+                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f_wrapper(f, Uₙ, V, p, P, τ + h * dt)[j]),
                     DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
             end
             @constraint(model,
@@ -233,6 +250,7 @@ function MTK.get_U_values(m::InfiniteModel)
     U_vals = value.(m[:U])
     U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
 end
+MTK.get_P_values(m::InfiniteModel) = value(m[:P])
 MTK.get_t_values(m::InfiniteModel) = value(m[:tₛ]) * supports(m[:t])
 MTK.objective_value(m::InfiniteModel) = InfiniteOpt.objective_value(m)
 
