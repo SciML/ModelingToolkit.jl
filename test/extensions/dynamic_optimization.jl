@@ -422,3 +422,33 @@ end
     psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
     @test psol.sol.u[end] ≈ [π, 0, 0, 0]
 end
+
+@testset "Parameter estimation - JuMP" begin
+    @parameters α = 1.5 β = 1.0 [tunable=false] γ = 3.0 δ = 1.0
+    @variables x(t) y(t)
+
+    eqs = [D(x) ~ α * x - β * x * y,
+        D(y) ~ -γ * y + δ * x * y]
+
+    @mtkcompile sys0 = System(eqs, t)
+    tspan = (0.0, 1.0)
+    u0map = [x => 4.0, y => 2.0]
+    parammap = [α => 1.8, β => 1.0, γ => 6.5, δ => 1.0]
+
+    oprob = ODEProblem(sys0, [u0map; parammap], tspan)
+    osol = solve(oprob, Tsit5())
+    ts = range(tspan..., length=51)
+    data = osol(ts, idxs=x).u
+
+    costs = [EvalAt(t)(x)-data[i] for (i, t) in enumerate(ts)]
+    consolidate(u, sub) = sum(abs2.(u))
+
+    @mtkcompile sys = System(eqs, t; costs, consolidate)
+
+    sys′ = subset_tunables(sys, [γ, α])
+    jprob = JuMPDynamicOptProblem(sys′, u0map, tspan; dt=1/50, tune_parameters=true)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
+
+    @test jsol.sol.ps[γ] ≈ 6.5 rtol=1e-4
+    @test jsol.sol.ps[α] ≈ 1.8 rtol=1e-4
+end
