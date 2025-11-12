@@ -1,4 +1,5 @@
 using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 import InfiniteOpt
 using DiffEqDevTools, DiffEqBase
 using SimpleDiffEq
@@ -133,8 +134,6 @@ end
 
 @testset "Linear systems" begin
     # Double integrator
-    t = M.t_nounits
-    D = M.D_nounits
     @variables x(..) v(..)
     @variables u(..) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
@@ -239,8 +238,6 @@ end
 end
 
 @testset "Rocket launch" begin
-    t = M.t_nounits
-    D = M.D_nounits
 
     @parameters h_c m₀ h₀ g₀ D_c c Tₘ m_c
     @variables h(..) v(..) m(..) = m₀ [bounds = (m_c, 1)] T(..) [input = true, bounds = (0, Tₘ)]
@@ -306,8 +303,6 @@ end
 end
 
 @testset "Free final time problems" begin
-    t = M.t_nounits
-    D = M.D_nounits
 
     @variables x(..) u(..) [input = true, bounds = (0, 1)]
     @parameters tf
