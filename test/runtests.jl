@@ -101,6 +101,7 @@ end
             @safetestset "Linearization Tests" include("linearize.jl")
             @safetestset "LinearProblem Tests" include("linearproblem.jl")
             @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
+            @safetestset "SemilinearODEProblem tests" include("semilinearodeproblem.jl")
         end
     end
     

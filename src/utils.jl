@@ -424,6 +424,7 @@ function vars(exprs; op = Differential)
         vars!(Set(), unwrap(exprs); op)
     end
 end
+vars(exprs::SparseMatrixCSC; op = Differential) = vars(nonzeros(exprs); op)
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
