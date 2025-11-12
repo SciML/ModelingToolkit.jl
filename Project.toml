@@ -88,6 +88,9 @@ MTKLabelledArraysExt = "LabelledArrays"
 MTKLatexifyExt = "Latexify"
 MTKPyomoDynamicOptExt = "Pyomo"
 
+[sources]
+ModelingToolkitStandardLibrary = { url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl", rev = "as/mtk-v11" }
+
 [compat]
 ADTypes = "1.14.0"
 AbstractTrees = "0.3, 0.4"
