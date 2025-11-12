@@ -1,6 +1,3 @@
-abstract type AbstractDynamicOptProblem{uType, tType, isinplace} <:
-              SciMLBase.AbstractODEProblem{uType, tType, isinplace} end
-
 abstract type AbstractCollocation end
 
 struct DynamicOptSolution
@@ -22,8 +19,8 @@ end
     JuMPDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
 Convert an System representing an optimal control system into a JuMP model
-for solving using optimization. Must provide either `dt`, the timestep between collocation 
-points (which, along with the timespan, determines the number of points), or directly 
+for solving using optimization. Must provide either `dt`, the timestep between collocation
+points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
 
 To construct the problem, please load InfiniteOpt along with ModelingToolkit.
@@ -33,7 +30,7 @@ function JuMPDynamicOptProblem end
     InfiniteOptDynamicOptProblem(sys::System, op, tspan; dt)
 
 Convert an System representing an optimal control system into a InfiniteOpt model
-for solving using optimization. Must provide `dt` for determining the length 
+for solving using optimization. Must provide `dt` for determining the length
 of the interpolation arrays.
 
 Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
@@ -46,8 +43,8 @@ function InfiniteOptDynamicOptProblem end
     CasADiDynamicOptProblem(sys::System, op, tspan; dt, steps, guesses, kwargs...)
 
 Convert an System representing an optimal control system into a CasADi model
-for solving using optimization. Must provide either `dt`, the timestep between collocation 
-points (which, along with the timespan, determines the number of points), or directly 
+for solving using optimization. Must provide either `dt`, the timestep between collocation
+points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
 
 To construct the problem, please load CasADi along with ModelingToolkit.
@@ -57,8 +54,8 @@ function CasADiDynamicOptProblem end
     PyomoDynamicOptProblem(sys::System, op, tspan; dt, steps)
 
 Convert an System representing an optimal control system into a Pyomo model
-for solving using optimization. Must provide either `dt`, the timestep between collocation 
-points (which, along with the timespan, determines the number of points), or directly 
+for solving using optimization. Must provide either `dt`, the timestep between collocation
+points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
 
 To construct the problem, please load Pyomo along with ModelingToolkit.
@@ -229,13 +226,15 @@ end
 ### MODEL CONSTRUCTION ###
 ##########################
 function process_DynamicOptProblem(
-        prob_type::Type{<:AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
+        prob_type::Type{<:SciMLBase.AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
+        tune_parameters = false,
         guesses = Dict(), kwargs...)
     warn_overdetermined(sys, op)
     ctrls = unbound_inputs(sys)
     states = unknowns(sys)
+    params = tune_parameters ? tunable_parameters(sys) : []
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
@@ -253,14 +252,16 @@ function process_DynamicOptProblem(
     pmap = recursive_unwrap(AnyDict(pmap))
     evaluate_varmap!(pmap, keys(pmap))
     c0 = value.([pmap[c] for c in ctrls])
+    p0, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
 
     tsteps = LinRange(model_tspan[1], model_tspan[2], steps)
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
+    P = generate_tunable_params!(model, p0, length(params))
     tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
-    fullmodel = model_type(model, U, V, tₛ, is_free_t)
+    fullmodel = model_type(model, U, V, P, tₛ, is_free_t)
 
     set_variable_bounds!(fullmodel, sys, pmap, tspan[2])
     add_cost_function!(fullmodel, sys, tspan, pmap)
@@ -274,6 +275,7 @@ function generate_time_variable! end
 function generate_internal_model end
 function generate_state_variable! end
 function generate_input_variable! end
+function generate_tunable_params! end
 function generate_timescale! end
 function add_initial_constraints! end
 function add_constraint! end
@@ -467,6 +469,7 @@ function prepare_and_optimize! end
 function get_t_values end
 function get_U_values end
 function get_V_values end
+function get_P_values end
 function successful_solve end
 
 """
@@ -474,17 +477,25 @@ function successful_solve end
 
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
-function DiffEqBase.solve(prob::AbstractDynamicOptProblem,
+function DiffEqBase.solve(prob::SciMLBase.AbstractDynamicOptProblem,
         solver::AbstractCollocation; verbose = false, kwargs...)
     solved_model = prepare_and_optimize!(prob, solver; verbose, kwargs...)
 
     ts = get_t_values(solved_model)
     Us = get_U_values(solved_model)
     Vs = get_V_values(solved_model)
+    Ps = get_P_values(solved_model)
     is_free_final(prob.wrapped_model) && (ts .+ prob.tspan[1])
 
-    ode_sol = DiffEqBase.build_solution(prob, solver, ts, Us)
-    input_sol = isnothing(Vs) ? nothing : DiffEqBase.build_solution(prob, solver, ts, Vs)
+    # update the parameters with the ones in the solved_model
+    if !isempty(Ps)
+        new_p = SciMLStructures.replace(SciMLStructures.Tunable(), prob.p, Ps)
+        new_prob = remake(prob, p=new_p)
+    else
+        new_prob = prob
+    end
+    ode_sol = SciMLBase.build_solution(new_prob, solver, ts, Us)
+    input_sol = isnothing(Vs) ? nothing : SciMLBase.build_solution(new_prob, solver, ts, Vs)
 
     if !successful_solve(solved_model)
         ode_sol = SciMLBase.solution_new_retcode(
