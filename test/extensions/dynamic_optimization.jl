@@ -8,6 +8,7 @@ using Ipopt
 using DataInterpolations
 using CasADi
 using Pyomo
+using Test
 
 import DiffEqBase: solve
 const M = ModelingToolkit
@@ -18,8 +19,6 @@ const ENABLE_CASADI = VERSION >= v"1.11"
     # Test solving without anything attached.
     @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
     @variables x(..) y(..)
-    t = M.t_nounits
-    D = M.D_nounits
 
     eqs = [D(x(t)) ~ α * x(t) - β * x(t) * y(t),
         D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t)]
@@ -418,7 +417,45 @@ end
     @test psol.sol.u[end] ≈ [π, 0, 0, 0]
 end
 
-@testset "Parameter estimation - JuMP" begin
+@testset "Parameter defaults usage" begin
+    # Test that parameter defaults are used when not explicitly provided in op
+    @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
+    @variables x(t) y(t)
+
+    eqs = [D(x) ~ α * x - β * x * y
+        D(y) ~ -γ * y + δ * x * y]
+
+    sys = mtkcompile(System(eqs, t, name=:sys))
+    tspan = (0.0, 1.0)
+    u0map = [x => 4.0, y => 2.0]
+
+    # Only provide initial conditions, rely on parameter defaults
+    jprob = JuMPDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRK4()))
+
+    # Compare with ODEProblem that also uses defaults
+    oprob = ODEProblem(sys, u0map, tspan)
+    osol = solve(oprob, SimpleRK4(), dt = 0.01)
+
+    @test jsol.sol.u ≈ osol.u
+
+    iprob = InfiniteOptDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+    @test isol.sol.u ≈ osol.u rtol=1e-4
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol.u ≈ osol.u
+    end
+
+    pprob = PyomoDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
+    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+
+    @test psol.sol.u ≈ osol.u rtol=1e-2
+end
+
+@testset "Parameter estimation" begin
     @parameters α = 1.5 β = 1.0 [tunable=false] γ = 3.0 δ = 1.0
     @variables x(t) y(t)
 
@@ -428,22 +465,72 @@ end
     @mtkcompile sys0 = System(eqs, t)
     tspan = (0.0, 1.0)
     u0map = [x => 4.0, y => 2.0]
-    parammap = [α => 1.8, β => 1.0, γ => 6.5, δ => 1.0]
+    parammap = [α => 2.5, β => 1.0, γ => 3.0, δ => 1.8]
 
     oprob = ODEProblem(sys0, [u0map; parammap], tspan)
     osol = solve(oprob, Tsit5())
     ts = range(tspan..., length=51)
     data = osol(ts, idxs=x).u
 
-    costs = [EvalAt(t)(x)-data[i] for (i, t) in enumerate(ts)]
-    consolidate(u, sub) = sum(abs2.(u))
+    costs = [abs2(EvalAt(t)(x)-data[i]) for (i, t) in enumerate(ts)]
+    consolidate(u, sub) = sum(u)
 
     @mtkcompile sys = System(eqs, t; costs, consolidate)
 
-    sys′ = subset_tunables(sys, [γ, α])
+    sys′ = subset_tunables(sys, [δ, α])
     jprob = JuMPDynamicOptProblem(sys′, u0map, tspan; dt=1/50, tune_parameters=true)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
 
-    @test jsol.sol.ps[γ] ≈ 6.5 rtol=1e-4
-    @test jsol.sol.ps[α] ≈ 1.8 rtol=1e-4
+    @test jsol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+    @test jsol.sol.ps[α] ≈ 2.5 rtol=1e-4
+
+    # test with different time stepping
+
+    jprob = JuMPDynamicOptProblem(sys′, u0map, tspan; dt=1/120, tune_parameters=true)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
+
+    @test jsol.sol.ps[δ] ≈ 1.8 rtol=1e-4 broken=true
+    @test jsol.sol.ps[α] ≈ 2.5 rtol=1e-4 broken=true
+
+    iprob = InfiniteOptDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+
+    @test isol.sol.ps[δ] ≈ 1.8 rtol=1e-3
+    @test isol.sol.ps[α] ≈ 2.5 rtol=1e-3
+
+    # test with different time stepping
+
+    iprob = InfiniteOptDynamicOptProblem(sys′, u0map, tspan, dt = 1/120, tune_parameters=true)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+
+    @test isol.sol.ps[δ] ≈ 1.8 rtol=1e-3
+    @test isol.sol.ps[α] ≈ 2.5 rtol=1e-3
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(sys′, u0map, tspan; dt = 1/50, tune_parameters=true)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+        @test csol.sol.ps[α] ≈ 2.5 rtol=1e-4
+
+        # test with different time stepping
+
+        cprob = CasADiDynamicOptProblem(sys′, u0map, tspan; dt = 1/120, tune_parameters=true)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol.ps[δ] ≈ 1.8 rtol=1e-4 broken=false
+        @test csol.sol.ps[α] ≈ 2.5 rtol=1e-4 broken=true
+    end
+
+    pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
+    psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
+
+    @test psol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+    @test psol.sol.ps[α] ≈ 2.5 rtol=1e-4
+
+    # test with different time stepping
+
+    # pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/120, tune_parameters=true)
+    # psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
+
+    # @test psol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+    # @test psol.sol.ps[α] ≈ 2.5 rtol=1e-4
 end
