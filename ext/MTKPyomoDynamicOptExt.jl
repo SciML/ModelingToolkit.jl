@@ -16,12 +16,14 @@ const SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
     log => Pyomo.py_log,
     sin => Pyomo.py_sin,
     sqrt => Pyomo.py_sqrt,
-    exp => Pyomo.py_exp])
+    exp => Pyomo.py_exp,
+    abs2 => (x -> x^2)])
 
 struct PyomoDynamicOptModel
     model::ConcreteModel
     U::PyomoVar
     V::PyomoVar
+    P::PyomoVar
     tₛ::PyomoVar
     is_free_final::Bool
     solver_model::Union{Nothing, ConcreteModel}
@@ -30,10 +32,10 @@ struct PyomoDynamicOptModel
     t_sym::Union{Num, Symbolics.BasicSymbolic}
     dummy_sym::Union{Num, Symbolics.BasicSymbolic}
 
-    function PyomoDynamicOptModel(model, U, V, tₛ, is_free_final)
+    function PyomoDynamicOptModel(model, U, V, P, tₛ, is_free_final)
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
-        new(model, U, V, tₛ, is_free_final, nothing,
+        new(model, U, V, P, tₛ, is_free_final, nothing,
             PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
 end
@@ -60,11 +62,11 @@ end
 _getproperty(s, name::Val{fieldname}) where {fieldname} = getproperty(s, fieldname)
 
 function MTK.PyomoDynamicOptProblem(sys::System, op, tspan;
-        dt = nothing, steps = nothing,
+        dt = nothing, steps = nothing, tune_parameters = false,
         guesses = Dict(), kwargs...)
     prob,
     pmap = MTK.process_DynamicOptProblem(PyomoDynamicOptProblem, PyomoDynamicOptModel,
-        sys, op, tspan; dt, steps, guesses, kwargs...)
+        sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
     conc_model = prob.wrapped_model.model
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob
@@ -92,6 +94,13 @@ function MTK.generate_input_variable!(m::ConcreteModel, c0, nc, ts)
     init_f = Pyomo.pyfunc((m, i, t) -> (c0[Pyomo.pyconvert(Int, i)]))
     m.V = pyomo.Var(m.v_idxs, m.t, initialize = init_f)
     PyomoVar(m.V)
+end
+
+function MTK.generate_tunable_params!(m::ConcreteModel, p0, np)
+    m.p_idxs = pyomo.RangeSet(1, np)
+    init_f = Pyomo.pyfunc((m, i) -> (p0[Pyomo.pyconvert(Int, i)]))
+    m.P = pyomo.Var(m.p_idxs, initialize = init_f)
+    PyomoVar(m.P)
 end
 
 function MTK.generate_timescale!(m::ConcreteModel, guess, is_free_t)
@@ -169,6 +178,16 @@ function MTK.lowered_var(m::PyomoDynamicOptModel, uv, i, t)
     Symbolics.unwrap(var)
 end
 
+function MTK.lowered_param(m::PyomoDynamicOptModel, i)
+    P = Symbolics.value(pysym_getproperty(m.model_sym, :P))
+    Symbolics.unwrap(P[i])
+end
+
+# For Pyomo, return symbolic accessors instead of raw PyomoVar
+function MTK.get_param_for_pmap(m::PyomoDynamicOptModel, P, i)
+    MTK.lowered_param(m, i)
+end
+
 struct PyomoCollocation <: AbstractCollocation
     solver::Union{String, Symbol}
     derivative_method::Pyomo.DiscretizationMethod
@@ -207,6 +226,10 @@ end
 function MTK.get_V_values(output::PyomoOutput)
     m = output.model
     [[Pyomo.pyconvert(Float64, pyomo.value(m.V[i, t])) for i in m.v_idxs] for t in m.t]
+end
+function MTK.get_P_values(output::PyomoOutput)
+    m = output.model
+    [Pyomo.pyconvert(Float64, pyomo.value(m.P[i])) for i in m.p_idxs]
 end
 function MTK.get_t_values(output::PyomoOutput)
     m = output.model
