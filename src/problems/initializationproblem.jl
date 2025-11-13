@@ -35,6 +35,9 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
+    if !fast_path
+        op = build_operating_point(sys, op)
+    end
     has_u0_ics = false
     for k in keys(op)
         has_u0_ics |= is_variable(sys, k) || isdifferential(k)
