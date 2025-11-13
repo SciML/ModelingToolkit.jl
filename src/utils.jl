@@ -1371,3 +1371,23 @@ prefer the value in `a`.
 function left_merge!(a::AbstractDict, b::AbstractDict)
     mergewith!(first ∘ tuple, a, b)
 end
+
+function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT})
+    for (k, v) in b
+        if !haskey(a, k)
+            a[k] = v
+            continue
+        end
+
+        v_a = a[k]
+        sh = SU.shape(k)
+        SU.is_array_shape(sh) || continue
+        any(Base.Fix2(===, COMMON_NOTHING) ∘ Base.Fix1(getindex, v_a), SU.stable_eachindex(v_a)) || continue
+
+        new_v = map(SU.stable_eachindex(v_a)) do i
+            v_a[i] === COMMON_NOTHING ? v[i] : v_a[i]
+        end
+        a[k] = BSImpl.Const{VartypeT}(reshape(new_v, size(v_a)))
+    end
+    mergewith!(first ∘ tuple, a, b)
+end
