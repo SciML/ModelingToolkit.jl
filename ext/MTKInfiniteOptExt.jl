@@ -97,10 +97,11 @@ end
 function MTK.InfiniteOptDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
+        tune_parameters = false,
         guesses = Dict(), kwargs...)
     prob,
     pmap = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel,
-        sys, op, tspan; dt, steps, guesses, kwargs...)
+        sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     prob
 end
@@ -131,16 +132,6 @@ function MTK.lowered_var(m::InfiniteOptModel, uv, i, t)
     t isa Union{Num, Symbolics.Symbolic} ? X[i] : X[i](t)
 end
 
-function f_wrapper(f, Uₙ, Vₙ, p, P, t)
-    if SciMLStructures.isscimlstructure(p)
-        _, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
-        p′ = repack(P)
-        f(Uₙ, Vₙ, p′, t)
-    else
-        f(Uₙ, Vₙ, P, t)
-    end
-end
-
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack wrapped_model, f, p = prob
@@ -159,7 +150,7 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
                 ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = zeros(nᵤ))
                 Uₙ = [U[i](τ) + ΔU[i] * dt for i in 1:nᵤ]
                 Vₙ = [V[i](τ) for i in 1:nᵥ]
-                Kₙ = tₛ * f_wrapper(f, Uₙ, Vₙ, p, P, τ + h * dt)
+                Kₙ = tₛ * MTK.f_wrapper(f, Uₙ, Vₙ, p, P, τ + h * dt)
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
@@ -175,12 +166,12 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * f_wrapper(f, Uₙ, V, p, P, τ + h * dt)[j]),
-                    DomainRestrictions(t => τ), base_name="solve_K$i($τ)")
+                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * MTK.f_wrapper(f, Uₙ, V, p, P, τ + h * dt)[j]),
+                    DomainRestriction(==(τ), t), base_name="solve_K$i($τ)")
             end
             @constraint(model,
                 [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tsteps[end])),
-                DomainRestrictions(t => τ), base_name="solve_U($τ)")
+                DomainRestriction(==(τ), t), base_name="solve_U($τ)")
         end
     end
 end
