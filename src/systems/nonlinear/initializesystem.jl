@@ -669,7 +669,7 @@ function SciMLBase.remake_initialization_data(
 end
 
 promote_type_with_nothing(::Type{T}, ::Nothing) where {T} = T
-promote_type_with_nothing(::Type{T}, ::SizedVector{0}) where {T} = T
+promote_type_with_nothing(::Type{T}, ::StaticVector{0}) where {T} = T
 function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
     promote_type(T, T2)
 end
@@ -678,7 +678,7 @@ function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
 end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
-promote_with_nothing(::Type, x::SizedVector{0}) = x
+promote_with_nothing(::Type, x::StaticVector{0}) = x
 promote_with_nothing(::Type{T}, x::AbstractArray{T}) where {T} = x
 function promote_with_nothing(::Type{T}, x::AbstractArray{T2}) where {T, T2}
     if ArrayInterface.ismutable(x)
