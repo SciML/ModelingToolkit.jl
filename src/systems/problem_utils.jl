@@ -1014,7 +1014,8 @@ function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinear
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
-        guessvars[i] = !isequal(get(op, var, nothing), Initial(var))
+        varval = get(op, var, COMMON_NOTHING)
+        guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
     get_guessvars = getu(initprob, dvs[guessvars])
     get_initial_unknowns = getu(sys, Initial.(dvs))
