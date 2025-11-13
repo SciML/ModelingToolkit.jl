@@ -199,7 +199,8 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
 
         noise_eqs = substitute_observed(ode_sys, noise_eqs)
         ssys = System(Vector{Equation}(full_equations(ode_sys)),
-            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
+            get_iv(ode_sys), unknowns(ode_sys),
+            [parameters(ode_sys); collect(bound_parameters(ode_sys))]; noise_eqs,
             name = nameof(ode_sys), observed = observed(ode_sys), bindings = bindings(sys),
             initial_conditions = initial_conditions(sys),
             assertions = assertions(sys),
