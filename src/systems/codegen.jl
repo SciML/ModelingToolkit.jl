@@ -1064,7 +1064,7 @@ function build_explicit_observed_function(sys, ts;
         throw = true,
         cse = true,
         mkarray = nothing,
-        wrap_delays = is_dde(sys))
+        wrap_delays = is_dde(sys) && !param_only)
     if inputs === nothing
         inputs = ()
     else
