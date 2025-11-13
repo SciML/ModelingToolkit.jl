@@ -1420,9 +1420,19 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
-    add_observed_equations!(op, obs, bound_parameters(sys))
     binds = bindings(sys)
-    no_override_merge_except_missing!(op, binds)
+    # If we aren't building an initialization problem, we aren't respecting non-parameter
+    # bindings anyway.
+    if build_initializeprob
+        no_override_merge_except_missing!(op, binds)
+    else
+        for p in bound_parameters(sys)
+            haskey(op, p) && throw(ArgumentError("Cannot provide initial value for bound parameter $p."))
+            op[p] = binds[p]
+        end
+        left_merge!(op, binds)
+    end
+    add_observed_equations!(op, obs)
 
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
