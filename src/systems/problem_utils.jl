@@ -1311,9 +1311,23 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     if !fast_path
         op = operating_point_preprocess(sys, op)
     end
+    # Replace `nothing`s with sentinels so that `left_merge!` thinks they're values
+    # and doesn't override them. This is because explicit `nothing` values in `op`
+    # should be considered as overrides for initial conditions in `ics`.
+    map!(x -> @something(x, CommonSentinel()), values(op))
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
+    map!(values(op)) do v
+        Symbolics.isarraysymbolic(v) || return v
+        any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
+
+        new_v = map(SU.stable_eachindex(v)) do i
+            v[i] === COMMON_SENTINEL ? COMMON_NOTHING : v[i]
+        end
+        return SU.Const{VartypeT}(new_v)
+    end
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
     return op
 end
 

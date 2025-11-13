@@ -167,6 +167,8 @@ include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
 const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
+struct CommonSentinel end
+const COMMON_SENTINEL = SU.Const{VartypeT}(CommonSentinel())
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
 const COMMON_MISSING = SU.Const{VartypeT}(missing)
 const COMMON_FALSE = SU.Const{VartypeT}(false)
@@ -367,6 +369,7 @@ function __init__()
     SU.hashcons(COMMON_NOTHING, true)
     SU.hashcons(COMMON_MISSING, true)
     SU.hashcons(COMMON_FALSE, true)
+    SU.hashcons(COMMON_SENTINEL, true)
 end
 
 PrecompileTools.@compile_workload begin
