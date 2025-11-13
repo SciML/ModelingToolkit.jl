@@ -138,11 +138,11 @@ function MTKParameters(
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)
     if isempty(tunable_buffer)
-        tunable_buffer = SizedVector{0, Float64}()
+        tunable_buffer = SVector{0, Float64}()
     end
     initials_buffer = narrow_buffer_type(initials_buffer; p_constructor)
     if isempty(initials_buffer)
-        initials_buffer = SizedVector{0, Float64}()
+        initials_buffer = SVector{0, Float64}()
     end
     disc_buffer = narrow_buffer_type.(disc_buffer; p_constructor)
     const_buffer = narrow_buffer_type.(const_buffer; p_constructor)
@@ -879,10 +879,10 @@ end
 @generated function Base.getindex(
         ps::MTKParameters{T, I, D, C, N, H}, idx::Int) where {T, I, D, C, N, H}
     paths = []
-    if !(T <: SizedVector{0})
+    if !(T <: SVector{0})
         push!(paths, :(ps.tunable))
     end
-    if !(I <: SizedVector{0})
+    if !(I <: SVector{0})
         push!(paths, :(ps.initials))
     end
     for i in 1:fieldcount(D)
@@ -909,10 +909,10 @@ end
 @generated function Base.length(ps::MTKParameters{
         T, I, D, C, N, H}) where {T, I, D, C, N, H}
     len = 0
-    if !(T <: SizedVector{0})
+    if !(T <: SVector{0})
         len += 1
     end
-    if !(I <: SizedVector{0})
+    if !(I <: SVector{0})
         len += 1
     end
     len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
