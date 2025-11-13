@@ -234,7 +234,7 @@ function process_DynamicOptProblem(
     warn_overdetermined(sys, op)
     ctrls = unbound_inputs(sys)
     states = unknowns(sys)
-    params = tune_parameters ? tunable_parameters(sys) : []
+    tunable_params = tune_parameters ? tunable_parameters(sys) : []
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
@@ -248,9 +248,16 @@ function process_DynamicOptProblem(
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
     warn_overdetermined(sys, op)
 
-    pmap = filter(p -> (first(p) ∉ Set(unknowns(sys))), op)
-    pmap = recursive_unwrap(AnyDict(pmap))
-    evaluate_varmap!(pmap, keys(pmap))
+    # Build pmap for symbolic substitution in costs/constraints/bounds
+    all_parameters = default_toterm.(parameters(sys))
+    # Extract all parameter values from processed p (which has defaults filled in)
+    getter = SymbolicIndexingInterface.getp(sys, all_parameters)
+    pmap = AnyDict(all_parameters .=> getter(p))
+
+    # Filter out tunable parameters - they should remain symbolic
+    tunable_set = Set(default_toterm.(tunable_params))
+    pmap = filter(kvp -> first(kvp) ∉ tunable_set, pmap)
+
     c0 = value.([pmap[c] for c in ctrls])
     p0, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
 
@@ -259,9 +266,15 @@ function process_DynamicOptProblem(
     generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
-    P = generate_tunable_params!(model, p0, length(params))
+    P = generate_tunable_params!(model, p0, length(tunable_params))
     tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
     fullmodel = model_type(model, U, V, P, tₛ, is_free_t)
+
+    # Add the symbolic representation of the tunable parameters to the map
+    # The order of the Tunable section is given by the tunable_parameters(sys)
+    # Some backends need symbolic accessors instead of raw variables
+    P_syms = [get_param_for_pmap(fullmodel, P, i) for i in eachindex(tunable_params)]
+    merge!(pmap, Dict(tunable_params .=> P_syms))
 
     set_variable_bounds!(fullmodel, sys, pmap, tspan[2])
     add_cost_function!(fullmodel, sys, tspan, pmap)
@@ -279,6 +292,22 @@ function generate_tunable_params! end
 function generate_timescale! end
 function add_initial_constraints! end
 function add_constraint! end
+# Default: return P[i] directly. Symbolic backends (like Pyomo) can override this.
+get_param_for_pmap(model, P, i) = P isa AbstractArray ? P[i] : P
+
+function f_wrapper(f, Uₙ, Vₙ, p, P, t)
+    if isempty(P)
+        # no tunable parameters
+        return f(Uₙ, Vₙ, p, t)
+    end
+    if SciMLStructures.isscimlstructure(p)
+        _, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+        p′ = repack(P)
+        f(Uₙ, Vₙ, p′, t)
+    else
+        f(Uₙ, Vₙ, P, t)
+    end
+end
 
 function set_variable_bounds!(m, sys, pmap, tf)
     @unpack model, U, V, tₛ = m
@@ -394,6 +423,7 @@ function process_integral_bounds end
 function lowered_integral end
 function lowered_derivative end
 function lowered_var end
+function lowered_param end
 function fixed_t_map end
 
 function add_user_constraints!(model, sys, tspan, pmap)
@@ -445,8 +475,8 @@ function substitute_toterm(vars, exprs)
     exprs = map(c -> Symbolics.fast_substitute(c, toterm_map), exprs)
 end
 
-function substitute_params(pmap, exprs)
-    exprs = map(c -> Symbolics.fixpoint_sub(c, Dict(pmap)), exprs)
+function substitute_params(pmap::Dict, exprs)
+    exprs = map(c -> Symbolics.fixpoint_sub(c, pmap), exprs)
 end
 
 function check_constraint_vars(vars)
