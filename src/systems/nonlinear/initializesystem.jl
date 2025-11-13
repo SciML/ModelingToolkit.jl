@@ -423,7 +423,7 @@ directly or indirectly contain a delayed unknown of `sys`.
 """
 function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{Equation})
     is_time_dependent(sys) || return trueobs
-    banned_vars = Set()
+    banned_vars = Set{SymbolicT}()
     idxs_to_remove = Int[]
     for (i, eq) in enumerate(trueobs)
         _has_delays(sys, eq.rhs, banned_vars) || continue
