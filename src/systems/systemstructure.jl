@@ -957,7 +957,7 @@ function mtkcompile!(state::TearingState;
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(tss[continuous_id];
-            inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
+            inputs = inputs, discrete_inputs = clocked_inputs[continuous_id], outputs, disturbance_inputs,
             check_consistency, fully_determined,
             kwargs...)
         additional_passes = get(kwargs, :additional_passes, nothing)
@@ -994,7 +994,7 @@ end
 
 function _mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true,
+        dummy_derivative = true, discrete_inputs = Any[],
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
@@ -1004,7 +1004,10 @@ function _mtkcompile!(state::TearingState;
         check_consistency = true
     end
     orig_inputs = Set()
-    ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
+
+    ModelingToolkit.markio!(state, orig_inputs, discrete_inputs, [], [])
+    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs)
+    ModelingToolkit.markio!(state, Set(), inputs, outputs, disturbance_inputs)
     state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
