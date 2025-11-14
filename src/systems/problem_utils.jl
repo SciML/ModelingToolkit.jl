@@ -780,7 +780,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
     # `syms[1]` is always the tunables because `srcsys` will have initials.
     tunable_syms = syms[1]
     tunable_getter = if isempty(tunable_syms)
-        Returns(SizedVector{0, Float64}())
+        Returns(SVector{0, Float64}())
     else
         p_constructor ∘ concrete_getu(srcsys, tunable_syms; eval_expression, eval_module)
     end
@@ -803,7 +803,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         end
         p_constructor ∘ concrete_getu(srcsys, initsyms; eval_expression, eval_module)
     else
-        Returns(SizedVector{0, Float64}())
+        Returns(SVector{0, Float64}())
     end
     discs_getter = if isempty(syms[3])
         Returns(())
