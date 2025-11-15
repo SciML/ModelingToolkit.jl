@@ -158,6 +158,13 @@ function MTKParameters(
         if ctype == Real && floatT !== nothing
             ctype = floatT
         end
+        if isinitial(sym)
+            if val === COMMON_NOTHING
+                val = COMMON_FALSE
+            elseif SU.is_array_shape(SU.shape(val)) && any(Base.Fix2(===, COMMON_NOTHING) ∘ Base.Fix1(getindex, val), SU.stable_eachindex(val))
+                val = map(x -> x === COMMON_NOTHING ? false : unwrap_const(x), collect(val))
+            end
+        end
         val = symconvert(ctype, unwrap_const(val))
         set_value(sym, val)
     end
