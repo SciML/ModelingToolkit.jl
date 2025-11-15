@@ -267,13 +267,15 @@ function process_DynamicOptProblem(
     U = generate_state_variable!(model, u0, length(states), tsteps)
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     P = generate_tunable_params!(model, p0, length(tunable_params))
-    tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
-    fullmodel = model_type(model, U, V, P, tₛ, is_free_t)
-
     # Add the symbolic representation of the tunable parameters to the map
     # The order of the Tunable section is given by the tunable_parameters(sys)
     # Some backends need symbolic accessors instead of raw variables
-    P_syms = [get_param_for_pmap(fullmodel, P, i) for i in eachindex(tunable_params)]
+    P_syms = [get_param_for_pmap(model, P, i) for i in eachindex(tunable_params)]
+    P_backend = needs_individual_tunables(model) ? P_syms : P
+
+    tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
+    fullmodel = model_type(model, U, V, P_backend, tₛ, is_free_t)
+
     merge!(pmap, Dict(tunable_params .=> P_syms))
 
     set_variable_bounds!(fullmodel, sys, pmap, tspan[2])
@@ -294,6 +296,8 @@ function add_initial_constraints! end
 function add_constraint! end
 # Default: return P[i] directly. Symbolic backends (like Pyomo) can override this.
 get_param_for_pmap(model, P, i) = P isa AbstractArray ? P[i] : P
+# Some backends need symbolic accessors instead of raw variables (CasADi in particular)
+needs_individual_tunables(model) = false
 
 function f_wrapper(f, Uₙ, Vₙ, p, P, t)
     if isempty(P)

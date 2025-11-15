@@ -150,6 +150,9 @@ function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
     model.tₛ * total
 end
 
+MTK.needs_individual_tunables(::Opti) = true
+MTK.get_param_for_pmap(::Opti, P, i) = P[i]
+
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack wrapped_model, f, p = prob
@@ -240,7 +243,7 @@ end
 
 function MTK.get_P_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
-    value_getter(model.solver_opti, model.P)
+    [value_getter(model.solver_opti, model.P[i]) for i in eachindex(model.P)]
 end
 
 function MTK.get_t_values(model::CasADiModel)
