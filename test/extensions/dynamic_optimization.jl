@@ -238,49 +238,49 @@ end
 
 @testset "Rocket launch" begin
 
-    @parameters h_c m₀ h₀ g₀ D_c c Tₘ m_c
-    @variables h(..) v(..) m(..) = m₀ [bounds = (m_c, 1)] T(..) [input = true, bounds = (0, Tₘ)]
+    ps = @parameters h_c m₀ h₀ g₀ D_c c Tₘ m_c
+    vars = @variables h(t) v(t) m(t) = m₀ [bounds = (m_c, 1)] T(t) [input = true, bounds = (0, Tₘ)]
     drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
     gravity(h) = g₀ * (h₀ / h)
 
-    eqs = [D(h(t)) ~ v(t),
-        D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
-        D(m(t)) ~ -T(t) / c]
+    eqs = [D(h) ~ v,
+        D(v) ~ (T - drag(h, v)) / m - gravity(h),
+        D(m) ~ -T / c]
 
     (ts, te) = (0.0, 0.2)
-    costs = [-h(te)]
-    cons = [T(te) ~ 0, m(te) ~ m_c]
-    @named rocket = System(eqs, t; costs, constraints = cons)
-    rocket = mtkcompile(rocket; inputs = [T(t)])
+    costs = [-EvalAt(te)(h)]
+    cons = [EvalAt(te)(T) ~ 0, EvalAt(te)(m) ~ m_c]
+    @named rocket = System(eqs, t, vars, ps; costs, constraints = cons)
+    rocket = mtkcompile(rocket; inputs = [T])
 
-    u0map = [h(t) => h₀, m(t) => m₀, v(t) => 0]
+    u0map = [h => h₀, m => m₀, v => 0]
     pmap = [
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
-        Tₘ => 3.5 * g₀ * m₀, T(t) => 0.0, h₀ => 1, m_c => 0.6]
+        Tₘ => 3.5 * g₀ * m₀, T => 0.0, h₀ => 1, m_c => 0.6]
     jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
-    @test jsol.sol[h(t)][end] > 1.012
+    @test jsol.sol[h][end] > 1.012
 
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(
             rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
         csol = solve(cprob, CasADiCollocation("ipopt"))
-        @test csol.sol[h(t)][end] > 1.012
+        @test csol.sol[h][end] > 1.012
     end
 
     iprob = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
-    @test isol.sol[h(t)][end] > 1.012
+    @test isol.sol[h][end] > 1.012
 
     pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
     psol = solve(pprob, PyomoCollocation("ipopt", LagrangeRadau(4)))
-    @test psol.sol[h(t)][end] > 1.012
+    @test psol.sol[h][end] > 1.012
 
     # Test solution
     @parameters (T_interp::CubicSpline)(..)
-    eqs = [D(h(t)) ~ v(t),
-        D(v(t)) ~ (T_interp(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
-        D(m(t)) ~ -T_interp(t) / c]
+    eqs = [D(h) ~ v,
+        D(v) ~ (T_interp(t) - drag(h, v)) / m - gravity(h),
+        D(m) ~ -T_interp(t) / c]
     @mtkcompile rocket_ode = System(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
     oprob = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap), (ts, te))
