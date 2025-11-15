@@ -64,6 +64,9 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         idx === nothing || deleteat!(get_ps(isys), idx)
     end
 
+    if !is_split(sys)
+        @set! isys.ps = mapreduce(collect, vcat, get_ps(isys))
+    end
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys))
     end
