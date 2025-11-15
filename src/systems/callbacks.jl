@@ -11,7 +11,7 @@ struct SymbolicAffect
 end
 
 function SymbolicAffect(affect::Vector{Equation}; alg_eqs = Equation[],
-        discrete_parameters = infer_discrete_parameters(affect), kwargs...)
+        discrete_parameters = Any[], kwargs...)
     if !(discrete_parameters isa AbstractVector)
         discrete_parameters = Any[discrete_parameters]
     elseif !(discrete_parameters isa Vector{Any})
@@ -30,38 +30,6 @@ function Symbolics.fast_substitute(aff::SymbolicAffect, rules)
     SymbolicAffect(map(substituter, aff.affect), map(substituter, aff.alg_eqs),
         map(substituter, aff.discrete_parameters))
 end
-
-# The discrete parameters (i.e. parameters that are updated in an event) can be inferred as
-# those that occur in an affect equation *outside* of a `Pre(...)` operator.
-function infer_discrete_parameters(affects)
-    discrete_parameters = Set()
-    for affect in affects
-        if affect isa Equation
-            infer_discrete_parameters!(discrete_parameters, affect.lhs)
-            infer_discrete_parameters!(discrete_parameters, affect.rhs)
-        elseif affect isa NamedTuple
-            haskey(affect, :modified) && union!(discrete_parameters, affect.modified)
-        end
-    end
-    return collect(discrete_parameters)
-end
-
-# Find all `expr`'s parameters that occur *outside* of a Pre(...) statement. Add these to `discrete_parameters`.
-function infer_discrete_parameters!(discrete_parameters, expr)
-    expr_pre_removed = Symbolics.replacenode(expr, precall_to_1)
-    dynamic_symvars = Symbolics.get_variables(expr_pre_removed)
-    # Change this coming line to a Symbolic append type of thing.
-    union!(discrete_parameters, filter(ModelingToolkit.isparameter, dynamic_symvars))
-end
-
-# When updating vector variables, the affect side can be a vector.
-function infer_discrete_parameters!(discrete_parameters, expr_vec::Vector)
-    foreach(expr -> infer_discrete_parameters!(discrete_parameters, expr), expr_vec)
-end
-
-# Functions for replacing a Pre-call with a `1.0` (removing its content from an expression).
-is_precall(expr) = iscall(expr) ? operation(expr) isa Pre : false
-precall_to_1(expr) = (is_precall(expr) ? 1.0 : expr)
 
 struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
