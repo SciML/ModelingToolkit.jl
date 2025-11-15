@@ -63,6 +63,16 @@ struct IndexCache
     symbol_to_variable::Dict{Symbol, SymbolicParam}
 end
 
+function Base.copy(ic::IndexCache)
+    IndexCache(copy(ic.unknown_idx), copy(ic.discrete_idx), copy(ic.callback_to_clocks),
+        copy(ic.tunable_idx), copy(ic.initials_idx), copy(ic.constant_idx),
+        copy(ic.nonnumeric_idx), copy(ic.observed_syms_to_timeseries),
+        copy(ic.dependent_pars_to_timeseries), copy(ic.discrete_buffer_sizes),
+        ic.tunable_buffer_size, ic.initials_buffer_size,
+        copy(ic.constant_buffer_sizes), copy(ic.nonnumeric_buffer_sizes),
+        copy(ic.symbol_to_variable))
+end
+
 function IndexCache(sys::AbstractSystem)
     unks = unknowns(sys)
     unk_idxs = UnknownIndexMap()
@@ -131,8 +141,14 @@ function IndexCache(sys::AbstractSystem)
         end
 
         for sym in discs
-            is_parameter(sys, sym) ||
-                error("Expected discrete variable $sym in callback to be a parameter")
+            if !is_parameter(sys, sym)
+                if iscall(sym) && operation(sym) === getindex &&
+                   is_parameter(sys, arguments(sym)[1])
+                    sym = arguments(sym)[1]
+                else
+                    error("Expected discrete variable $sym in callback to be a parameter")
+                end
+            end
 
             # Only `foo(t)`-esque parameters can be saved
             if iscall(sym) && length(arguments(sym)) == 1 &&
@@ -715,4 +731,56 @@ function subset_unknowns_observed(
     ic = @set ic.unknown_idx = unknown_idx
     @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
     return ic
+end
+
+function with_additional_constant_parameter(sys::AbstractSystem, par)
+    par = unwrap(par)
+    ps = copy(get_ps(sys))
+    push!(ps, par)
+    @set! sys.ps = ps
+    is_split(sys) || return sys
+
+    ic = copy(get_index_cache(sys))
+    T = symtype(par)
+    bufidx = findfirst(buft -> buft.type == T, ic.constant_buffer_sizes)
+    if bufidx === nothing
+        push!(ic.constant_buffer_sizes, BufferTemplate(T, 1))
+        bufidx = length(ic.constant_buffer_sizes)
+        idx_in_buf = 1
+    else
+        buft = ic.constant_buffer_sizes[bufidx]
+        ic.constant_buffer_sizes[bufidx] = BufferTemplate(T, buft.length + 1)
+        idx_in_buf = buft.length + 1
+    end
+
+    ic.constant_idx[par] = ic.constant_idx[renamespace(sys, par)] = (bufidx, idx_in_buf)
+    @set! sys.index_cache = ic
+
+    return sys
+end
+
+function with_additional_nonnumeric_parameter(sys::AbstractSystem, par)
+    par = unwrap(par)
+    ps = copy(get_ps(sys))
+    push!(ps, par)
+    @set! sys.ps = ps
+    is_split(sys) || return sys
+
+    ic = copy(get_index_cache(sys))
+    T = symtype(par)
+    bufidx = findfirst(buft -> buft.type == T, ic.nonnumeric_buffer_sizes)
+    if bufidx === nothing
+        push!(ic.nonnumeric_buffer_sizes, BufferTemplate(T, 1))
+        bufidx = length(ic.nonnumeric_buffer_sizes)
+        idx_in_buf = 1
+    else
+        buft = ic.nonnumeric_buffer_sizes[bufidx]
+        ic.nonnumeric_buffer_sizes[bufidx] = BufferTemplate(T, buft.length + 1)
+        idx_in_buf = buft.length + 1
+    end
+
+    ic.nonnumeric_idx[par] = ic.nonnumeric_idx[renamespace(sys, par)] = (bufidx, idx_in_buf)
+    @set! sys.index_cache = ic
+
+    return sys
 end

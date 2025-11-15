@@ -1441,6 +1441,101 @@ end
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
 end
 
+@testset "Test erroneously created events yields errors" begin
+    @parameters p(t) d
+    @variables X(t)
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X <
+                                                                                            5.0] => [X ~
+                                                                                                     Pre(X) +
+                                                                                                     10.0])
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([
+        X < 5.0, X > 10.0] => [X ~ Pre(X) + 10.0])
+    @test_throws "MethodError: no method" SymbolicContinuousCallback((X <
+                                                                      5.0) => [X ~
+                                                                               Pre(X) +
+                                                                               10.0])
+end
+
+@testset "Issue#3990: Scalarized array passed to `discrete_parameters` of symbolic affect" begin
+    N = 2
+    @parameters v(t)[1:N]
+    @parameters M(t)[1:N, 1:N]
+
+    @variables x(t)
+
+    Mini = rand(N, N) ./ (N^2)
+    vini = vec(sum(Mini, dims = 1))
+
+    v_eq = [D(x) ~ x * Symbolics.scalarize(sum(v))]
+    M_eq = [D(x) ~ x * Symbolics.scalarize(sum(M))]
+
+    v_event = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0,
+        [v ~ -Pre(v)],
+        discrete_parameters = [v]
+    )
+
+    M_event = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0,
+        [M ~ -Pre(M)],
+        discrete_parameters = [M]
+    )
+
+    @mtkcompile v_sys = System(v_eq, t; discrete_events = v_event)
+    @mtkcompile M_sys = System(M_eq, t; discrete_events = M_event)
+
+    u0p0_map = Dict(x => 1.0, M => Mini, v => vini)
+
+    v_prob = ODEProblem(v_sys, u0p0_map, (0.0, 2.5))
+    M_prob = ODEProblem(M_sys, u0p0_map, (0.0, 2.5))
+
+    v_sol = solve(v_prob, Tsit5())
+    M_sol = solve(M_prob, Tsit5())
+
+    @test v_sol[v] ≈ [vini, -vini, vini]
+    @test M_sol[M] ≈ [Mini, -Mini, Mini]
+end
+
+@testset "Issue#3990: Scalarized array passed to `discrete_parameters` of symbolic affect" begin
+    N = 2
+    @parameters v(t)[1:N]
+    @parameters M(t)[1:N, 1:N]
+
+    @variables x(t)
+
+    Mini = rand(N, N) ./ (N^2)
+    vini = vec(sum(Mini, dims = 1))
+
+    v_eq = [D(x) ~ x * Symbolics.scalarize(sum(v))]
+    M_eq = [D(x) ~ x * Symbolics.scalarize(sum(M))]
+
+    v_event = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0,
+        [v ~ -Pre(v)],
+        discrete_parameters = collect(v)
+    )
+
+    M_event = ModelingToolkit.SymbolicDiscreteCallback(
+        1.0,
+        [M ~ -Pre(M)],
+        discrete_parameters = vec(collect(M))
+    )
+
+    @mtkcompile v_sys = System(v_eq, t; discrete_events = v_event)
+    @mtkcompile M_sys = System(M_eq, t; discrete_events = M_event)
+
+    u0p0_map = Dict(x => 1.0, M => Mini, v => vini)
+
+    v_prob = ODEProblem(v_sys, u0p0_map, (0.0, 2.5))
+    M_prob = ODEProblem(M_sys, u0p0_map, (0.0, 2.5))
+
+    v_sol = solve(v_prob, Tsit5())
+    M_sol = solve(M_prob, Tsit5())
+
+    @test v_sol[v] ≈ [vini, -vini, vini]
+    @test M_sol[M] ≈ [Mini, -Mini, Mini]
+end
+
 @testset "Automatic inference of `discrete_parameters`" begin
     # Basic case, checks for both types of events (in combination and isolation).
     let

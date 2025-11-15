@@ -245,6 +245,13 @@ function recursive_unwrap(x::AbstractArray)
     symbolic_type(x) == ArraySymbolic() ? unwrap(x) : recursive_unwrap.(x)
 end
 
+function recursive_unwrap(x::SparseMatrixCSC)
+    I, J, V = findnz(x)
+    V = recursive_unwrap(V)
+    m, n = size(x)
+    return sparse(I, J, V, m, n)
+end
+
 recursive_unwrap(x) = unwrap(x)
 
 function recursive_unwrap(x::AbstractDict)

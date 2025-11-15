@@ -97,8 +97,8 @@ newsys = tearing(sys)
 # e5 [  1           1 |  1 ]
 
 let state = TearingState(sys)
-    torn_matching, = tearing(state)
-    S = StructuralTransformations.reordered_matrix(sys, torn_matching)
+    result, = tearing(state)
+    S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
     @test S == [1 0 0 0 1
                 1 1 0 0 0
                 1 1 1 0 0

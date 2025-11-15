@@ -214,7 +214,7 @@ ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
 ```
 
-## Namepsace manipulation
+## Namespace manipulation
 
 ModelingToolkit namespaces variables from subsystems when using them in a parent system to
 disambiguate from identically named variables in other subsystems or the parent system. The

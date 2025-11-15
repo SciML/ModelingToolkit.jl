@@ -456,7 +456,8 @@ function TearingState(sys; quick_cancel = false, check = true, sort_eqs = true)
 
             if !symbolic_contains(v, dvs)
                 isvalid = iscall(v) &&
-                          (operation(v) isa Shift || is_transparent_operator(operation(v)))
+                          (operation(v) isa Shift || isempty(arguments(v)) ||
+                           is_transparent_operator(operation(v)))
                 v′ = v
                 while !isvalid && iscall(v′) && operation(v′) isa Union{Differential, Shift}
                     v′ = arguments(v′)[1]
@@ -919,19 +920,19 @@ function make_eqs_zero_equals!(ts::TearingState)
     copyto!(get_eqs(ts.sys), neweqs)
 end
 
-function mtkcompile!(state::TearingState; simplify = false,
+function mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true, warn_initialize_determined = true,
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
     if !is_time_dependent(state.sys)
-        return _mtkcompile!(state; simplify, check_consistency,
+        return _mtkcompile!(state; check_consistency,
             inputs, outputs, disturbance_inputs,
             fully_determined, kwargs...)
     end
     # split_system returns one or two systems and the inputs for each
     # mod clock inference to be binary
-    # if it's continous keep going, if not then error unless given trait impl in additional passes
+    # if it's continuous keep going, if not then error unless given trait impl in additional passes
     ci = ModelingToolkit.ClockInference(state)
     ci = ModelingToolkit.infer_clocks!(ci)
     time_domains = merge(Dict(state.fullvars .=> ci.var_domain),
@@ -955,8 +956,8 @@ function mtkcompile!(state::TearingState; simplify = false,
     if length(tss) > 1
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
-        sys = _mtkcompile!(tss[continuous_id]; simplify,
-            inputs = [inputs; clocked_inputs[continuous_id]], outputs, disturbance_inputs,
+        sys = _mtkcompile!(tss[continuous_id];
+            inputs = inputs, discrete_inputs = clocked_inputs[continuous_id], outputs, disturbance_inputs,
             check_consistency, fully_determined,
             kwargs...)
         additional_passes = get(kwargs, :additional_passes, nothing)
@@ -985,15 +986,15 @@ function mtkcompile!(state::TearingState; simplify = false,
         state.sys = sys
     end
 
-    sys = _mtkcompile!(state; simplify, check_consistency,
+    sys = _mtkcompile!(state; check_consistency,
         inputs, outputs, disturbance_inputs,
         fully_determined, kwargs...)
     return sys
 end
 
-function _mtkcompile!(state::TearingState; simplify = false,
+function _mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true, warn_initialize_determined = false,
-        dummy_derivative = true,
+        dummy_derivative = true, discrete_inputs = Any[],
         inputs = Any[], outputs = Any[],
         disturbance_inputs = Any[],
         kwargs...)
@@ -1003,7 +1004,10 @@ function _mtkcompile!(state::TearingState; simplify = false,
         check_consistency = true
     end
     orig_inputs = Set()
-    ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
+
+    ModelingToolkit.markio!(state, orig_inputs, discrete_inputs, [], [])
+    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs)
+    ModelingToolkit.markio!(state, Set(), inputs, outputs, disturbance_inputs)
     state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
     trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
@@ -1013,17 +1017,17 @@ function _mtkcompile!(state::TearingState; simplify = false,
     end
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, kwargs...)
+            sys, state; mm, check_consistency, kwargs...)
     elseif fully_determined
         var_eq_matching = pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
+            sys, state; mm, check_consistency, fully_determined, kwargs...)
     else
         sys = ModelingToolkit.tearing(
-            sys, state; simplify, mm, check_consistency, fully_determined, kwargs...)
+            sys, state; mm, check_consistency, fully_determined, kwargs...)
     end
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullunknowns)

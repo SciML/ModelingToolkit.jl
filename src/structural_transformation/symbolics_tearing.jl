@@ -773,8 +773,14 @@ function codegen_equation!(eg::EquationGenerator,
         dx = D(simplify_shifts(fullvars[lv]))
 
         neweq = make_differential_equation(var, dx, eq, total_sub)
+        # We will add `neweq.lhs` to `total_sub`, so any equation involving it won't be
+        # incident on it. Remove the edges incident on `iv` from the graph, and add
+        # the replacement vertices from `ieq` so that the incidence is still correct.
         for e in 𝑑neighbors(graph, iv)
             e == ieq && continue
+            for v in 𝑠neighbors(graph, ieq)
+                add_edge!(graph, e, v)
+            end
             rem_edge!(graph, e, iv)
         end
 
@@ -1041,9 +1047,15 @@ differential variables.
 - `var_sccs`: The topologically sorted strongly connected components of the system
   according to `full_var_eq_matching`.
 """
-function tearing_reassemble(state::TearingState, var_eq_matching::Matching,
-        full_var_eq_matching::Matching, var_sccs::Vector{Vector{Int}}; simplify = false, mm,
-        array_hack = true, fully_determined = true)
+@kwdef struct DefaultReassembleAlgorithm <: ReassembleAlgorithm
+    simplify::Bool = false
+    array_hack::Bool = true
+end
+
+function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::TearingResult, mm::Union{SparseMatrixCLIL,  Nothing}; fully_determined::Bool = true, kw...)
+    @unpack simplify, array_hack = alg
+    @unpack var_eq_matching, full_var_eq_matching, var_sccs = tearing_result
+
     extra_eqs_vars = get_extra_eqs_vars(
         state, var_eq_matching, full_var_eq_matching, fully_determined)
     neweqs = collect(equations(state))
@@ -1308,25 +1320,25 @@ end
     ndims = ndims(arr)
 end
 
-function tearing(state::TearingState; kwargs...)
+function tearing(state::TearingState; tearing_alg::TearingAlgorithm = DummyDerivativeTearing(),
+                 kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    tearing_with_dummy_derivatives(state.structure, ())
+    tearing_alg(state.structure)
 end
 
 """
-    tearing(sys; simplify=false)
+    tearing(sys)
 
 Tear the nonlinear equations in system. When `simplify=true`, we simplify the
 new residual equations after tearing. End users are encouraged to call [`mtkcompile`](@ref)
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-        simplify = false, array_hack = true, fully_determined = true, kwargs...)
-    var_eq_matching, full_var_eq_matching, var_sccs, can_eliminate = tearing(state)
-    invalidate_cache!(tearing_reassemble(
-        state, var_eq_matching, full_var_eq_matching, var_sccs; mm,
-        simplify, array_hack, fully_determined))
+        reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
+        fully_determined = true, kwargs...)
+    tearing_result, extras = tearing(state; kwargs...)
+    invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
 end
 
 """
@@ -1335,8 +1347,9 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-        mm = nothing, array_hack = true, fully_determined = true, kwargs...)
+function dummy_derivative(sys, state = TearingState(sys);
+        reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
+        mm = nothing, fully_determined = true, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -1358,10 +1371,7 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false,
             p
         end
     end
-    var_eq_matching, full_var_eq_matching, var_sccs,
-    can_eliminate, summary = dummy_derivative_graph!(
-        state, jac; state_priority,
-        kwargs...)
-    tearing_reassemble(state, var_eq_matching, full_var_eq_matching, var_sccs;
-        simplify, mm, array_hack, fully_determined)
+    tearing_result, extras = dummy_derivative_graph!(
+        state, jac; state_priority, kwargs...)
+    reassemble_alg(state, tearing_result, mm; fully_determined)
 end

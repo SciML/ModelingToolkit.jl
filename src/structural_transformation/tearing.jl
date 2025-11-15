@@ -83,3 +83,65 @@ function free_equations(graph, vars_scc, var_eq_matching, varfilter::F) where {F
     end
     findall(!, seen_eqs)
 end
+
+struct SelectedState end
+const MatchingT{T} = Matching{T, Vector{Union{T, Int}}}
+const MatchedVarT = Union{Unassigned, SelectedState}
+const VarEqMatchingT = MatchingT{MatchedVarT}
+
+"""
+    $TYPEDEF
+
+A struct containing the results of tearing.
+
+# Fields
+
+$TYPEDFIELDS
+"""
+struct TearingResult
+    """
+    The variable-equation matching. Differential variables are matched to `SelectedState`.
+    The derivative of a differential variable is matched to the corresponding differential
+    equation. Solved variables are matched to the equation they are solved from. Algebraic
+    variables are matched to `unassigned`.
+    """
+    var_eq_matching::VarEqMatchingT
+    """
+    The variable-equation matching prior to tearing. This is the maximal matching used to
+    compute `var_sccs` (see below). For generating the torn system, `var_eq_matching` is
+    the source of truth. This should only be used to identify algebraic equations in each
+    SCC.
+    """
+    full_var_eq_matching::VarEqMatchingT
+    """
+    The partitioning of variables into strongly connected components (SCCs). The SCCs are
+    sorted in dependency order, so each SCC depends on variables in previous SCCs.
+    """
+    var_sccs::Vector{Vector{Int}}
+end
+
+"""
+    $TYPEDEF
+
+Supertype for all tearing algorithms. A tearing algorithm takes as input the
+`SystemStructure` along with any other necessary arguments.
+
+The output of a tearing algorithm must be a `TearingResult` and a `NamedTuple` of
+any additional data computed in the process that may be useful for further processing.
+"""
+abstract type TearingAlgorithm end
+
+"""
+    $TYPEDEF
+
+Supertype for all reassembling algorithms. A reassembling algorithm takes as input the
+`TearingState`, `TearingResult` and integer incidence matrix `mm::SparseMatrixCLIL`. The
+matrix `mm` may be `nothing`. The algorithm must also accept arbitrary keyword arguments.
+The following keyword arguments will always be provided:
+- `fully_determined::Bool`: flag indicating whether the system is fully determined.
+
+The output of a reassembling algorithm must be the torn system.
+
+A reassemble algorithm must also implement `with_fully_determined`
+"""
+abstract type ReassembleAlgorithm end

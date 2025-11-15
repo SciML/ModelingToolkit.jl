@@ -424,6 +424,7 @@ function vars(exprs; op = Differential)
         vars!(Set(), unwrap(exprs); op)
     end
 end
+vars(exprs::SparseMatrixCSC; op = Differential) = vars(nonzeros(exprs); op)
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
     (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
@@ -633,15 +634,21 @@ can be checked using `check_scope_depth`.
 This function should return `nothing`.
 """
 function collect_vars!(unknowns, parameters, expr, iv; depth = 0, op = Symbolics.Operator)
+    expr = unwrap(expr)
     if issym(expr)
         return collect_var!(unknowns, parameters, expr, iv; depth)
     end
-    for var in vars(expr; op)
-        while iscall(var) && operation(var) isa op
-            validate_operator(operation(var), arguments(var), iv; context = expr)
-            var = arguments(var)[1]
+    varsbuf = OrderedSet()
+    vars!(varsbuf, expr; op)
+    for var in varsbuf
+        if iscall(var) && operation(var) isa op
+            args = arguments(var)
+            validate_operator(operation(var), args, iv; context = expr)
+            isempty(args) && continue
+            push!(varsbuf, args[1])
+        else
+            collect_var!(unknowns, parameters, var, iv; depth)
         end
-        collect_var!(unknowns, parameters, var, iv; depth)
     end
     return nothing
 end
