@@ -341,6 +341,10 @@ function IndexCache(sys::AbstractSystem)
     populate_symbol_to_var!(symbol_to_variable, keys(nonnumeric_idxs))
     populate_symbol_to_var!(symbol_to_variable, independent_variable_symbols(sys))
     populate_symbol_to_var!(symbol_to_variable, observables(sys))
+    pbg = get_parameter_bindings_graph(sys)
+    if pbg isa ParameterBindingsGraph
+        populate_symbol_to_var!(symbol_to_variable, pbg.bound_ps)
+    end
 
     return IndexCache(
         unk_idxs,
