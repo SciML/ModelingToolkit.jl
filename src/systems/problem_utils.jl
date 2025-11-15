@@ -1270,7 +1270,7 @@ function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic
     u0_constructor === identity || return u0_constructor
     u0Type <: StaticArray || return u0_constructor
     return function (vals)
-        elT = if symbolic_u0 && any(x -> symbolic_type(x) != NotSymbolic(), vals)
+        elT = if symbolic_u0 && any(x -> x === nothing || symbolic_type(x) != NotSymbolic(), vals)
             nothing
         else
             floatT

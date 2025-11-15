@@ -263,7 +263,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
     for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
             typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...)
-        symbolic_idxs = findall(x -> symbolic_type(x) != NotSymbolic(), _u0)
+        symbolic_idxs = findall(x -> x === nothing || symbolic_type(x) !== NotSymbolic(), _u0)
         if f isa LinearFunction
             _u0 = isempty(symbolic_idxs) ? _u0 : zeros(u0_eltype, length(_u0))
             _u0 = u0_eltype.(_u0)
