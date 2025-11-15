@@ -48,10 +48,10 @@ struct PDESystem <: AbstractSystem
     "The parameters."
     ps::Any
     """
-    The default values to use when initial conditions and/or
-    parameters are not supplied in `ODEProblem`.
+    Initial conditions for variables (unknowns/observables/parameters) which can be
+    changed/overridden. When constructing a numerical problem from the system.
     """
-    defaults::Dict
+    initial_conditions::SymmapT
     """
     Type of the system.
     """
@@ -91,7 +91,7 @@ struct PDESystem <: AbstractSystem
     gui_metadata::Union{Nothing, GUIMetadata}
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
             ps = SciMLBase.NullParameters();
-            defaults = Dict(),
+            initial_conditions = Dict(),
             systems = [],
             connector_type = nothing,
             metadata = nothing,
@@ -131,7 +131,7 @@ struct PDESystem <: AbstractSystem
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
 
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+        new(eqs, bcs, domain, ivs, dvs, ps, initial_conditions, connector_type, systems, analytic,
             analytic_func, name, description, metadata, gui_metadata)
     end
 end
@@ -163,6 +163,6 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
     println(io, "Dependent Variables: ", get_dvs(sys))
     println(io, "Independent Variables: ", get_ivs(sys))
     println(io, "Parameters: ", get_ps(sys))
-    print(io, "Default Parameter Values", get_defaults(sys))
+    print(io, "Default Parameter Values", get_initial_conditions(sys))
     return nothing
 end
