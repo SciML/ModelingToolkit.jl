@@ -1819,17 +1819,13 @@ Return the `u0` vector for the given system `sys` and variable-value mapping `va
 keyword arguments are forwarded to [`varmap_to_vars`](@ref).
 """
 function get_u0(sys::AbstractSystem, varmap; kwargs...)
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    op = to_varmap(varmap, dvs)
-    add_observed!(sys, op)
-    add_parameter_dependencies!(sys, op)
-    missing_dvs, _ = build_operating_point!(
-        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
+    op = build_operating_point(sys, varmap)
+    binds = bindings(sys)
+    no_override_merge_except_missing!(op, binds)
+    obs, _ = unhack_observed(observed(sys), equations(sys))
+    add_observed_equations!(op, obs)
 
-    isempty(missing_dvs) || throw(MissingVariablesError(collect(missing_dvs)))
-
-    return varmap_to_vars(op, dvs; kwargs...)
+    return varmap_to_vars(op, unknowns(sys); kwargs...)
 end
 
 """
@@ -1840,19 +1836,16 @@ keyword arguments are forwarded to [`MTKParameters`](@ref) for split systems and
 [`varmap_to_vars`](@ref) for non-split systems.
 """
 function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    op = to_varmap(varmap, dvs)
-    add_observed!(sys, op)
-    add_parameter_dependencies!(sys, op)
-    _, missing_ps = build_operating_point!(
-        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
-
-    isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
+    op = build_operating_point(sys, varmap)
+    binds = bindings(sys)
+    no_override_merge_except_missing!(op, binds)
+    add_initials!(sys, op)
+    obs, _ = unhack_observed(observed(sys), equations(sys))
+    add_observed_equations!(op, obs)
 
     if split
         MTKParameters(sys, op; kwargs...)
     else
-        varmap_to_vars(op, ps; kwargs...)
+        varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)
     end
 end
