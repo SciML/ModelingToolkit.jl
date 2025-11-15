@@ -943,6 +943,7 @@ function NonlinearSystem(sys::System)
     end
     eqs = equations(sys)
     obs = observed(sys)
+    D = Differential(get_iv(sys))
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
@@ -950,7 +951,11 @@ function NonlinearSystem(sys::System)
     eqs = map(eqs) do eq
         substitute(eq, subrules)
     end
-    nsys = System(eqs, unknowns(sys), [parameters(sys); get_iv(sys)];
+    new_ps = [parameters(sys); get_iv(sys)]
+    if iscomplete(sys)
+        append!(new_ps, collect(bound_parameters(sys)))
+    end
+    nsys = System(eqs, unknowns(sys), new_ps;
         bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
         initial_conditions = initial_conditions(sys), guesses = guesses(sys),
         initialization_eqs = initialization_equations(sys), name = nameof(sys),
