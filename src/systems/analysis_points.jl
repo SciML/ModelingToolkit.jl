@@ -850,14 +850,14 @@ function handle_loop_openings(sys::AbstractSystem, aps)
 end
 
 const DOC_LOOP_OPENINGS = """
-    - `loop_openings`: A list of analysis points whose connections should be removed and
-      the outputs set to the input as a part of the linear analysis.
+- `loop_openings`: A list of analysis points whose connections should be removed and
+  the outputs set to the input as a part of the linear analysis.
 """
 
 const DOC_SYS_MODIFIER = """
-    - `system_modifier`: A function taking the transformed system and applying any
-      additional transformations, returning the modified system. The modified system
-      is passed to `linearization_function`. 
+- `system_modifier`: A function taking the transformed system and applying any
+  additional transformations, returning the modified system. The modified system
+  is passed to `linearization_function`. 
 """
 """
     $(TYPEDSIGNATURES)
@@ -1021,8 +1021,8 @@ function linearization_function(sys::AbstractSystem,
 end
 
 @doc """
-        get_sensitivity(sys, ap::AnalysisPoint; kwargs)
-        get_sensitivity(sys, ap_name::Symbol; kwargs)
+    get_sensitivity(sys, ap::AnalysisPoint; kwargs)
+    get_sensitivity(sys, ap_name::Symbol; kwargs)
 
 Compute the sensitivity function in analysis point `ap`. The sensitivity function is obtained by introducing an infinitesimal perturbation `d` at the input of `ap`, linearizing the system and computing the transfer function between `d` and the output of `ap`.
 
