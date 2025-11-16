@@ -3066,6 +3066,7 @@ eq2 = 0 ~ p - d*X
 @named osys = System([eq1, eq2], t)
 
 alg_equations(osys) # returns `[0 ~ p - d*X(t)]`.
+```
 """
 alg_equations(sys::AbstractSystem) = filter(is_alg_equation, equations(sys))
 
@@ -3085,6 +3086,7 @@ eq2 = 0 ~ p - d*X
 @named osys = System([eq1, eq2], t)
 
 diff_equations(osys) # returns `[Differential(t)(X(t)) ~ p - d*X(t)]`.
+```
 """
 diff_equations(sys::AbstractSystem) = filter(is_diff_equation, equations(sys))
 
