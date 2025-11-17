@@ -1204,7 +1204,7 @@ function calculate_A_b(sys::System; sparse = false)
         for (j, var) in enumerate(dvs)
             p, q, islinear = Symbolics.linear_expansion(resid, var)
             if !islinear
-                throw(ArgumentError("System is not linear. Equation $((0 ~ rhs)) is not linear in unknown $var."))
+                throw(ArgumentError("System is not linear. Equation $(0 ~ rhs) is not linear in unknown $var."))
             end
             A[i, j] = p
             resid = q
@@ -1475,6 +1475,7 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
     iip_x = generated_argument_name(2)
     oop_x = generated_argument_name(1)
 
+    shape = SU.Unknown(-1)
     ## iip
     f1_iip_ir = Assignment[]
     f2_iip_ir = Assignment[]
@@ -1489,19 +1490,24 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
         B_vals = map(eachindex(eqs)) do i
             B[i] === nothing && return nothing
             tmp_buf = term(
-                PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM)
-            tmp_buf = term(view, tmp_buf, 1:length(dvs))
+                PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM;
+                type = Vector{Real}, shape)
+            tmp_buf = term(view, tmp_buf, 1:length(dvs); type = Vector{Real}, shape)
 
-            result = term(*, term(transpose, iip_x), :__tmp_B_1)
+            result = term(*, term(transpose, iip_x; type = Matrix{Real}, shape),
+                          :__tmp_B_1; type = Vector{Real}, shape)
             # if both write to the same buffer, don't overwrite
             if stiff_quadratic == stiff_nonlinear && C !== nothing
-                result = term(+, result, term(getindex, Symbolics.DEFAULT_OUTSYM, i))
+                result = term(+, result, term(getindex, Symbolics.DEFAULT_OUTSYM, i;
+                                              type = Real, shape);
+                              type = Real, shape)
             end
             intermediates = [
                 Assignment(:__tmp_B_buffer, tmp_buf),
                 Assignment(:__tmp_B_1,
                     term(mul!, :__tmp_B_buffer,
-                        term(UpperTriangular, quadratic_forms[i]), iip_x))
+                        term(UpperTriangular, quadratic_forms[i]; type = Matrix{Real}, shape),
+                        iip_x; type = Any, shape))
             ]
             return AtIndex(i, Let(intermediates, result))
         end
@@ -1516,27 +1522,38 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
         push!(A_ir,
             Assignment(:__tmp_A,
                 term(mul!, Symbolics.DEFAULT_OUTSYM,
-                    linear_matrix_param, iip_x, true, retain_old)))
+                    linear_matrix_param, iip_x, true, retain_old; type = Any, shape)))
     end
     ## oop
     f1_terms = []
     f2_terms = []
     if A !== nothing
-        push!(stiff_linear ? f1_terms : f2_terms, term(*, linear_matrix_param, oop_x))
+        push!(stiff_linear ? f1_terms : f2_terms,
+              term(*, linear_matrix_param, oop_x; type = Vector{Real}, shape))
     end
     if B !== nothing
         B_elems = map(eachindex(eqs)) do i
             B[i] === nothing && return 0
             term(
-                *, term(transpose, oop_x), term(UpperTriangular, quadratic_forms[i]), oop_x)
+                *, term(transpose, oop_x; type = Matrix{Real}, shape),
+                term(UpperTriangular, quadratic_forms[i]; type = Matrix{Real}, shape),
+                oop_x; type = Matrix{Real}, shape)
         end
         push!(stiff_quadratic ? f1_terms : f2_terms, MakeArray(B_elems, oop_x))
     end
     if C !== nothing
         push!(stiff_nonlinear ? f1_terms : f2_terms, MakeArray(C, oop_x))
     end
-    f1_expr = length(f1_terms) == 1 ? only(f1_terms) : term(+, f1_terms...)
-    f2_expr = length(f2_terms) == 1 ? only(f2_terms) : term(+, f2_terms...)
+    f1_expr = if length(f1_terms) == 1
+        only(f1_terms)
+    else
+        term(+, f1_terms...; type = Vector{Real}, shape)
+    end
+    f2_expr = if length(f2_terms) == 1
+        only(f2_terms)
+    else
+        term(+, f2_terms...; type = Vector{Real}, shape)
+    end
 
     f1_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
@@ -1546,8 +1563,14 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
         extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...)
     f1_oop = build_function_wrapper(
         sys, f1_expr, dvs, ps..., iv; expression = Val{true}, kwargs...)
+    if f1_oop isa NTuple{2, Expr}
+        f1_oop = f1_oop[1]
+    end
     f2_oop = build_function_wrapper(
         sys, f2_expr, dvs, ps..., iv; expression = Val{true}, kwargs...)
+    if f2_oop isa NTuple{2, Expr}
+        f2_oop = f2_oop[1]
+    end
 
     f1 = maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
         (f1_oop, f1_iip); eval_expression, eval_module)
