@@ -155,9 +155,7 @@ function IndexCache(sys::AbstractSystem)
                 symi += 1
                 clocki += 1
                 ttsym = default_toterm(sym)
-                rsym = renamespace(sys, sym)
-                rttsym = renamespace(sys, ttsym)
-                for cursym in (sym, ttsym, rsym, rttsym)
+                for cursym in (sym, ttsym)
                     disc_idxs[cursym] = DiscreteIndex(typei, symi, parti, clocki)
                 end
             end
