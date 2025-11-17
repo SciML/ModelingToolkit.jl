@@ -5,7 +5,7 @@ on:
     branches:
       - master
       - 'release-'
-      - v10
+      - as/su-v4
     paths-ignore:
       - 'docs/**'
   push:
