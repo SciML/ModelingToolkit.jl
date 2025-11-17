@@ -19,11 +19,11 @@ const SPECIAL_FUNCTIONS_DICT = Dict([acos => Pyomo.py_acos,
     exp => Pyomo.py_exp,
     abs2 => (x -> x^2)])
 
-struct PyomoDynamicOptModel
+struct PyomoDynamicOptModel{T}
     model::ConcreteModel
     U::PyomoVar
     V::PyomoVar
-    P::PyomoVar
+    P::T
     tₛ::PyomoVar
     is_free_final::Bool
     solver_model::Union{Nothing, ConcreteModel}
@@ -35,7 +35,7 @@ struct PyomoDynamicOptModel
     function PyomoDynamicOptModel(model, U, V, P, tₛ, is_free_final)
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
-        new(model, U, V, P, tₛ, is_free_final, nothing,
+        new{typeof(P)}(model, U, V, P, tₛ, is_free_final, nothing,
             PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
 end
@@ -178,15 +178,17 @@ function MTK.lowered_var(m::PyomoDynamicOptModel, uv, i, t)
     Symbolics.unwrap(var)
 end
 
-function MTK.lowered_param(m::PyomoDynamicOptModel, i)
-    P = Symbolics.value(pysym_getproperty(m.model_sym, :P))
-    Symbolics.unwrap(P[i])
+# For Pyomo, we need to create symbolic representations for pmap
+# This is needed because Pyomo uses symbolic building for constraints
+function MTK.get_param_for_pmap(m::ConcreteModel, P::PyomoVar, i)
+    # Create a symbolic variable that will be used in the pmap
+    # The actual PyomoVar will be accessed via the symbolic representation
+    @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel)
+    P_sym = Symbolics.value(pysym_getproperty(MODEL_SYM, :P))
+    Symbolics.unwrap(P_sym[i])
 end
 
-# For Pyomo, return symbolic accessors instead of raw PyomoVar
-function MTK.get_param_for_pmap(m::PyomoDynamicOptModel, P, i)
-    MTK.lowered_param(m, i)
-end
+MTK.needs_individual_tunables(m::ConcreteModel) = true
 
 struct PyomoCollocation <: AbstractCollocation
     solver::Union{String, Symbol}
