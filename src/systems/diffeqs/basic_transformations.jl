@@ -312,7 +312,7 @@ function fractional_to_ordinary(
         append!(all_def, def)
     end
     append!(all_eqs, additional_eqs)
-    @named sys = System(all_eqs, iv; defaults=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions=all_def)
     return mtkcompile(sys)
 end
 
@@ -417,7 +417,7 @@ function linear_fractional_to_ordinary(
         end
     end
     push!(all_eqs, 0 ~ new_rhs)
-    @named sys = System(all_eqs, iv; defaults=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions=all_def)
     return mtkcompile(sys)
 end
 
@@ -939,7 +939,8 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
         sub.x[iv] = t # otherwise the Differentials aren't fixed
     end
     neweqs = map(sub, equations(sys))
-    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    binds = Dict(sub(k) => sub(v) for (k, v) in bindings(sys))
+    ics = Dict(sub(k) => sub(v) for (k, v) in initial_conditions(sys))
     neqs = get_noise_eqs(sys)
     if neqs !== nothing
         neqs = map(sub, neqs)
@@ -949,7 +950,8 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
     @set! sys.eqs = neweqs
     @set! sys.iv = t
     @set! sys.unknowns = newsts
-    @set! sys.defaults = defs
+    @set! sys.bindings = binds
+    @set! sys.initial_conditions = ics
     @set! sys.name = name
     @set! sys.noise_eqs = neqs
     @set! sys.constraints = cstrs
