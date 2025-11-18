@@ -825,7 +825,7 @@ function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{Symboli
         # if the sym is not a scalarized array symbolic OR it was already scalarized,
         # just push it as-is
         arrsym, isarr = split_indexed_var(sym)
-        if !isarr
+        if !isarr || !symbolic_has_known_size(arrsym)
             push!(buffer, sym)
             i += 1
             continue

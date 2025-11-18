@@ -233,6 +233,7 @@ function IndexCache(sys::AbstractSystem)
         arrsym, isarr = split_indexed_var(p)
         isarr || continue
         arrsym in found_array_syms && continue
+        symbolic_has_known_size(arrsym) || continue
         idxs = Int[]
         valid_arrsym = true
         for i in eachindex(arrsym)
