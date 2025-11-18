@@ -116,6 +116,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     end
 
     if t !== nothing
+        op = copy(op)
         op[get_iv(sys)] = t
     end
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
