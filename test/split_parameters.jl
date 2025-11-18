@@ -6,7 +6,6 @@ using BlockArrays: BlockedArray
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants, Initials
-using StaticArrays: SizedVector
 using SymbolicIndexingInterface: is_parameter, getp
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]

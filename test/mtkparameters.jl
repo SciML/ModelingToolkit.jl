@@ -429,3 +429,13 @@ end
     grad = ForwardDiff.gradient(Base.Fix2(loss, (setter, prob)), [3.0])
     @test grad ≈ [0.14882627068752538] atol=1e-10
 end
+
+@testset "MTKParameters can be made `isbits`" begin
+    @variables x(t)
+    @parameters p
+    @named sys = System(D(x) ~ x * p, t)
+    sys = complete(sys)
+    prob = ODEProblem(sys, SA[x => 1.0, p => 1.0], (0.0, 1.0))
+    @test isbits(prob.p)
+    @test isbits(prob.f.initialization_data.initializeprob.p)
+end
