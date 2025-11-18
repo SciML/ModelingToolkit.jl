@@ -42,14 +42,18 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
 end
 
 passed_kwargs = ScopedValue(Dict{Symbol, Any}())
-lookup_passed_kwarg(kwarg::Symbol, val) = (@show(kwarg); get(passed_kwargs[], kwarg, val))
+lookup_passed_kwarg(kwarg::Symbol, val) = get(passed_kwargs[], kwarg, val)
+lookup_passed_kwarg(num::Num, val) = lookup_passed_kwarg(Symbol(string(num)), val)
+
+setdefault_g(p::Num, val) = setdefault(p, lookup_passed_kwarg(Symbol(string(p)), val))
+setdefault_g(p, val) = setdefault(p, val)  # fallback, sometimes p is some exotic structure
 
 function construct_subcomponent(body::Function, lhs, other_kwargs)
     root = string(lhs, "__")
     dict2 = Dict{Symbol, Any}(Symbol(string(k)[length(root)+1:end])=>v
                               for (k, v) in other_kwargs
                               if startswith(string(k), root))
-    @show keys(other_kwargs) lhs keys(dict2)
+    #@show keys(other_kwargs) lhs keys(dict2)
     return with(body, passed_kwargs => dict2)
 end
 
@@ -739,8 +743,8 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
                 push!(sps, a)
-                push!(kwargs, Expr(:kw, Expr(:(::), a, type),
-                                   :($lookup_passed_kwarg($(QuoteNode(a)), $b))))
+                push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
+                push!(exprs, :($a = $lookup_passed_kwarg($(Expr(:quote, a)), $a)))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
                     :value => b, :type => type)
             end
@@ -748,12 +752,13 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 a,
                 b) => begin
                 push!(sps, a)
-                push!(kwargs, Expr(:kw, a, :($lookup_passed_kwarg($(QuoteNode(a)), $b))))
+                push!(kwargs, Expr(:kw, a, b))
+                push!(exprs, :($a = $lookup_passed_kwarg($(Expr(:quote, a)), $a)))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
                 push!(sps, a)
-                push!(kwargs, a)
+                push!(kwargs, a)  # TODO: maybe use NOVALUE
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => nothing)
             end
         end
@@ -938,10 +943,10 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
             unit = metadata_with_exprs[VariableUnit]
             quote
                 $name = if $name === $NO_VALUE
-                    $setdefault($vv, $def)
+                    $setdefault($vv, $lookup_passed_kwarg($vv, $def))
                 else
                     try
-                        $setdefault($vv, $convert_units($unit, $name))
+                        $setdefault($vv, $convert_units($unit, $lookup_passed_kwarg($vv, $name)))
                     catch e
                         if isa(e, $(DynamicQuantities.DimensionError)) ||
                            isa(e, $(Unitful.DimensionError))
@@ -958,9 +963,9 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
         else
             quote
                 $name = if $name === $NO_VALUE
-                    $setdefault($vv, $def)
+                    $setdefault_g($vv, $def)
                 else
-                    $setdefault($vv, $name)
+                    $setdefault_g($vv, $name)
                 end
             end
         end
