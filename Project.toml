@@ -90,6 +90,7 @@ MTKLatexifyExt = "Latexify"
 MTKPyomoDynamicOptExt = "Pyomo"
 
 [sources]
+DataInterpolations = { url = "https://github.com/SciML/DataInterpolations.jl", rev = "master" }
 Optimization = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7" }
 OptimizationMOI = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7", subdir = "lib/OptimizationMOI" }
 ModelingToolkitStandardLibrary = { url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl", rev = "as/mtk-v11" }
