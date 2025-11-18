@@ -206,6 +206,9 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     # delayed unknowns
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
 
+    og_dvs = as_atomic_array_set(unknowns(sys))
+    union!(og_dvs, as_atomic_array_set(observables(sys)))
+
     init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
 
     eqs_ics = Equation[]
@@ -224,7 +227,21 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for v in bound_parameters(sys)
          push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
-    initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, guesses)
+    # Anything with a binding of `missing` is solvable.
+    for (k, v) in binds
+        if v === COMMON_MISSING
+            push!(init_vars_set, k)
+            delete!(init_ps, k)
+            continue
+        end
+        k in og_dvs && continue
+        if is_variable_floatingpoint(k)
+            push!(eqs_ics, k ~ v)
+            get!(guesses, k, v)
+        else
+            newbinds[k] = v
+        end
+    end
 
     op::SymmapT = if fast_path
         op
