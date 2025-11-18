@@ -206,7 +206,7 @@ end
     _u0_eltype = something(u0_eltype, floatT)
 
     guess = copy(guesses(sys))
-    defs = copy(defaults(sys))
+    defs = copy(initial_conditions(sys))
     if A !== nothing
         guess[linear_matrix_param] = fill(NaN, size(A))
         defs[linear_matrix_param] = A
@@ -220,7 +220,7 @@ end
         defs[diffcache_par] = DiffCache(zeros(DiffEqBase.value(_u0_eltype), cachelen))
     end
     @set! sys.guesses = guess
-    @set! sys.defaults = defs
+    @set! sys.initial_conditions = defs
 
     f, u0,
     p = process_SciMLProblem(SemilinearODEFunction{iip, spec}, sys, op;
