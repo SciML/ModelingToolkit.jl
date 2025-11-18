@@ -979,6 +979,7 @@ struct CheckInvalidAndTrackNamespaced
     dervars::Set{SymbolicT}
     ns_map::Dict{SymbolicT, SymbolicT}
     namespace_subs::Dict{SymbolicT, SymbolicT}
+    iv::Union{SymbolicT, Nothing}
     throw::Bool
 end
 
@@ -992,6 +993,15 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         x = newx
     end
     arrx, _ = split_indexed_var(x)
+    iv = pred.iv
+    if iv isa SymbolicT
+        Moshi.Match.@match arrx begin
+            BSImpl.Term(f, args) && if f isa SymbolicT && iscall(args[1]) end => begin
+                arrx = f(iv)
+            end
+            _ => nothing
+        end
+    end
     arrx in pred.simplevars && return true
     x in pred.dervars && return true
     if pred.throw
@@ -1126,7 +1136,8 @@ function build_explicit_observed_function(sys, ts;
             push!(dervars, default_toterm(k))
         end
     end
-    pred = CheckInvalidAndTrackNamespaced(allsyms, dervars, ns_map, namespace_subs, throw)
+    pred = CheckInvalidAndTrackNamespaced(allsyms, dervars, ns_map, namespace_subs,
+                                          get_iv(sys), throw)
     iv = has_iv(sys) ? get_iv(sys) : nothing
     if ts isa SymbolicT
         SU.query(pred, ts)
