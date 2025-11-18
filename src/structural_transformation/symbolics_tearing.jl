@@ -1210,15 +1210,35 @@ differential variables.
 - `full_var_eq_matching`: The maximal matching prior to state selection.
 - `var_sccs`: The topologically sorted strongly connected components of the system
   according to `full_var_eq_matching`.
+
+# Options
+
+$TYPEDFIELDS
 """
 @kwdef struct DefaultReassembleAlgorithm <: ReassembleAlgorithm
+    """
+    Whether to use `SymbolicUtils.simplify` when generating the equations.
+    """
     simplify::Bool = false
+    """
+    Experimental toggle for disabling passes that aid in code generation of arrays.
+    """
     array_hack::Bool = true
+    """
+    Whether SCCs which are linear systems of the associated variables should be
+    handled using inline linear solves via `LinearSolve.jl`. By default, such
+    SCCs generate algebraic equations.
+    """
     inline_linear_sccs::Bool = false
+    """
+    If `inline_linear_sccs == true`, this is the maximum size of a system of linear
+    equations which is solved symbolically rather than using `LinearSolve.jl`.
+    """
+    analytical_linear_scc_limit::Int = 2
 end
 
 function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::TearingResult, mm::Union{SparseMatrixCLIL,  Nothing}; fully_determined::Bool = true, kw...)
-    @unpack simplify, array_hack, inline_linear_sccs = alg
+    @unpack simplify, array_hack, inline_linear_sccs, analytical_linear_scc_limit = alg
     @unpack var_eq_matching, full_var_eq_matching, var_sccs = tearing_result
 
     extra_eqs_vars = get_extra_eqs_vars(
@@ -1254,7 +1274,8 @@ function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::
     nelim_eq,
     nelim_var = generate_system_equations!(
         state, neweqs, var_eq_matching, full_var_eq_matching,
-        var_sccs, extra_eqs_vars, iv, D; simplify, inline_linear_sccs)
+        var_sccs, extra_eqs_vars, iv, D; simplify, inline_linear_sccs,
+        analytical_linear_scc_limit)
 
     state = reorder_vars!(
         state, var_eq_matching, var_sccs, eq_ordering, var_ordering, nelim_eq, nelim_var)
