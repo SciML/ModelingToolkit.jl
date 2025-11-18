@@ -17,6 +17,7 @@ struct InfiniteOptModel
     P::Vector{<:AbstractVariableRef}
     tₛ::AbstractVariableRef
     is_free_final::Bool
+    tsteps::LinRange{Float64, Int}
 end
 
 struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
@@ -138,6 +139,10 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
     @unpack tₛ, U, V, P, model = wrapped_model
     t = model[:t]
     tsteps = supports(t)
+
+    # InfiniteOpt can introduce additional collocation points
+    # Make sure that the collocation points are correct.
+    MTK.check_collocation_time_mismatch(prob.f.sys, wrapped_model.tsteps, tsteps)
 
     dt = (tsteps[end] - tsteps[1]) / (length(tsteps) - 1)
 

@@ -28,10 +28,11 @@ mutable struct CasADiModel{T}
     P::T
     tₛ::MX
     is_free_final::Bool
+    tsteps::LinRange{Float64, Int}
     solver_opti::Union{Nothing, Opti}
 
-    function CasADiModel(opti, U, V, P, tₛ, is_free_final, solver_opti = nothing)
-        new{typeof(P)}(opti, U, V, P, tₛ, is_free_final, solver_opti)
+    function CasADiModel(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti = nothing)
+        new{typeof(P)}(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti)
     end
 end
 
@@ -160,7 +161,10 @@ function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     solver_opti = copy(model)
 
     tsteps = U.t
-    dt = tsteps[2] - tsteps[1]
+    dt = (tsteps[end] - tsteps[1]) / (length(tsteps) - 1)
+
+    # CasADi uses linear interpolation for cost evaluations that are not on the collocation points
+    @assert tsteps == wrapped_model.tsteps "Collocation points mismatch."
 
     nᵤ = size(U.u, 1)
     nᵥ = size(V.u, 1)

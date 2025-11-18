@@ -487,10 +487,8 @@ end
     # test with different time stepping
 
     jprob = JuMPDynamicOptProblem(sys′, u0map, tspan; dt=1/120, tune_parameters=true)
-    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
-
-    @test jsol.sol.ps[δ] ≈ 1.8 rtol=1e-4 broken=true
-    @test jsol.sol.ps[α] ≈ 2.5 rtol=1e-4 broken=true
+    err_msg = "x is evaluated inside the cost function at 40 points that are not in the 121 collocation points."
+    @test_throws err_msg solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
 
     iprob = InfiniteOptDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
@@ -503,8 +501,8 @@ end
     iprob = InfiniteOptDynamicOptProblem(sys′, u0map, tspan, dt = 1/120, tune_parameters=true)
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
 
-    @test isol.sol.ps[δ] ≈ 1.8 rtol=1e-3
-    @test isol.sol.ps[α] ≈ 2.5 rtol=1e-3
+    @test isol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+    @test isol.sol.ps[α] ≈ 2.5 rtol=1e-4
 
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(sys′, u0map, tspan; dt = 1/50, tune_parameters=true)
@@ -516,8 +514,8 @@ end
 
         cprob = CasADiDynamicOptProblem(sys′, u0map, tspan; dt = 1/120, tune_parameters=true)
         csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
-        @test csol.sol.ps[δ] ≈ 1.8 rtol=1e-4 broken=false
-        @test csol.sol.ps[α] ≈ 2.5 rtol=1e-4 broken=true
+        @test csol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+        @test csol.sol.ps[α] ≈ 2.5 rtol=1e-3
     end
 
     pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)

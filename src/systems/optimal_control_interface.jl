@@ -222,6 +222,56 @@ function process_tspan(tspan, dt, steps)
     end
 end
 
+function get_discrete_time_evaluations(expr)
+    vars = Symbolics.get_variables(expr)
+
+    # Group by base variable
+    result = Dict()
+
+    for v in vars
+        if iscall(v)
+            args = arguments(v)
+            if length(args) == 1 && args[1] isa Number
+                base_var = operation(v)
+                time_point = args[1]
+
+                if !haskey(result, base_var)
+                    result[base_var] = Float64[]
+                end
+                push!(result[base_var], time_point)
+            end
+        end
+    end
+
+    # Sort and unique the time points
+    for (var, times) in result
+        result[var] = sort!(unique!(times))
+    end
+
+    return result
+end
+
+function check_collocation_time_mismatch(sys, expected_tsteps, tsteps)
+    if collect(expected_tsteps)≠tsteps
+        eval_times = get_discrete_time_evaluations(cost(sys))
+        for (var, ts) in eval_times
+            tdiff = setdiff(ts, expected_tsteps)
+            @info tdiff
+            if !isempty(tdiff)
+                error("$var is evaluated inside the cost function at $(length(tdiff)) points " *
+                    "that are not in the $(length(expected_tsteps)) collocation points. " *
+                    "Cost evaluation points must align with the collocation grid. "*
+                    "Adjust the dt to match the time points used in the cost function.")
+            end
+        end
+        if length(expected_tsteps) ≠ length(tsteps)
+            error("Found extra $(abs(length(expected_tsteps) - length(tsteps))) collocation points.")
+        elseif maximum(abs.(expected_tsteps .- tsteps)) > 1e-10
+            error("The collocation points differ from the expected ones by more than 1e-10.")
+        end
+    end
+end
+
 ##########################
 ### MODEL CONSTRUCTION ###
 ##########################
@@ -274,7 +324,7 @@ function process_DynamicOptProblem(
     P_backend = needs_individual_tunables(model) ? P_syms : P
 
     tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
-    fullmodel = model_type(model, U, V, P_backend, tₛ, is_free_t)
+    fullmodel = model_type(model, U, V, P_backend, tₛ, is_free_t, tsteps)
 
     merge!(pmap, Dict(tunable_params .=> P_syms))
 
@@ -427,7 +477,6 @@ function process_integral_bounds end
 function lowered_integral end
 function lowered_derivative end
 function lowered_var end
-function lowered_param end
 function fixed_t_map end
 
 function add_user_constraints!(model, sys, tspan, pmap)

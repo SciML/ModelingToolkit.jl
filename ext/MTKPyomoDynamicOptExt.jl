@@ -26,16 +26,17 @@ struct PyomoDynamicOptModel{T}
     P::T
     tₛ::PyomoVar
     is_free_final::Bool
+    tsteps::LinRange{Float64, Int}
     solver_model::Union{Nothing, ConcreteModel}
     dU::PyomoVar
     model_sym::Union{Num, Symbolics.BasicSymbolic}
     t_sym::Union{Num, Symbolics.BasicSymbolic}
     dummy_sym::Union{Num, Symbolics.BasicSymbolic}
 
-    function PyomoDynamicOptModel(model, U, V, P, tₛ, is_free_final)
+    function PyomoDynamicOptModel(model, U, V, P, tₛ, is_free_final, tsteps)
         @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
-        new{typeof(P)}(model, U, V, P, tₛ, is_free_final, nothing,
+        new{typeof(P)}(model, U, V, P, tₛ, is_free_final, tsteps, nothing,
             PyomoVar(model.dU), MODEL_SYM, T_SYM, DUMMY_SYM)
     end
 end
