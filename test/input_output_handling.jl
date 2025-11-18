@@ -136,22 +136,20 @@ matrices, ssys = linearize(
     model, model_inputs, model_outputs; op);
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
-if VERSION >= v"1.8" # :opaque_closure not supported before
-    let # Just to have a local scope for D
-        matrices, ssys = linearize(model, model_inputs, [y]; op)
-        A, B, C, D = matrices
-        obsf = ModelingToolkit.build_explicit_observed_function(ssys,
-            [y],
-            inputs = [torque.tau.u])
-        x = randn(size(A, 1))
-        u = randn(size(B, 2))
-        p = getindex.(
-            Ref(ModelingToolkit.defaults_and_guesses(ssys)),
-            parameters(ssys))
-        y1 = obsf(x, u, p, 0)
-        y2 = C * x + D * u
-        @test y1[] ≈ y2[]
-    end
+let # Just to have a local scope for D
+    matrices, ssys = linearize(model, model_inputs, [y]; op)
+    A, B, C, D = matrices
+    obsf = ModelingToolkit.build_explicit_observed_function(ssys,
+        [y],
+        inputs = [torque.tau.u])
+    x = randn(size(A, 1))
+    u = randn(size(B, 2))
+    p = getindex.(
+        Ref(ModelingToolkit.initial_conditions_and_guesses(ssys)),
+        parameters(ssys))
+    y1 = obsf(x, u, p, 0)
+    y2 = C * x + D * u
+    @test y1[] ≈ y2[]
 end
 
 ## Code generation with unbound inputs
@@ -324,7 +322,7 @@ f, dvs, ps, io_sys = ModelingToolkit.generate_control_function(
 @test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkit.varmap_to_vars(
-    merge(ModelingToolkit.defaults(model),
+    merge(ModelingToolkit.initial_conditions(model),
         Dict(D.(unknowns(model)) .=> 0.0)), dvs)
 u = [rand()]
 out = f[1](x, u, p, 1)
@@ -337,145 +335,48 @@ eqs = [D(x) ~ u]
 @named sys = System(eqs, t)
 @test_nowarn mtkcompile(sys, inputs = [u], outputs = [])
 
-#=
-## Disturbance input handling
-We test that the generated disturbance dynamics is correct by calling the dynamics in two different points that differ in the disturbance state, and check that we get the same result as when we call the linearized dynamics in the same two points. The true system is linear so the linearized dynamics are exact.
+@testset "IO canonicalization" begin
+    @variables x(t)[1:3] = zeros(3)
+    @variables u(t)[1:2]
+    y₁, y₂, y₃ = x
+    u1, u2 = u
+    k₁, k₂, k₃ = 1, 1, 1
+    eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
+           D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
+           y₁ + y₂ + y₃ ~ 1]
 
-The test below builds a double-mass model and adds an integrating disturbance to the input
-=#
+    @named sys = System(eqs, t)
 
-using ModelingToolkit
-using ModelingToolkitStandardLibrary.Mechanical.Rotational
-using ModelingToolkitStandardLibrary.Blocks
+    @test_throws "entire array must be an input" mtkcompile(sys; inputs = [u1])
+    @test_throws "entire array must be an disturbance input" mtkcompile(sys; disturbance_inputs = [x[1]])
+    @test_throws "sorted order" mtkcompile(sys; inputs = [u2, u1])
+    @test_throws "sorted order" mtkcompile(sys; disturbance_inputs = [u2, u1])
 
-# Parameters
-m1 = 1
-m2 = 1
-k = 1000 # Spring stiffness
-c = 10   # Damping coefficient
-
-@named inertia1 = Rotational.Inertia(; J = m1)
-@named inertia2 = Rotational.Inertia(; J = m2)
-@named spring = Rotational.Spring(; c = k)
-@named damper = Rotational.Damper(; d = c)
-@named torque = Rotational.Torque(; use_support = false)
-
-function SystemModel(u = nothing; name = :model)
-    eqs = [connect(torque.flange, inertia1.flange_a)
-           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
-    if u !== nothing
-        push!(eqs, connect(torque.tau, u.output))
-        return @named model = System(eqs, t;
-            systems = [
-                torque,
-                inertia1,
-                inertia2,
-                spring,
-                damper,
-                u
-            ])
-    end
-    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-        name, guesses = [spring.flange_a.phi => 0.0])
+    ss1 = mtkcompile(sys; inputs = [u], outputs = [x])
+    @test isequal(ModelingToolkit.inputs(ss1), [u1, u2])
+    @test isequal(ModelingToolkit.outputs(ss1), [x[1], x[2], x[3]])
 end
 
-model = SystemModel() # Model with load disturbance
-model = complete(model)
-model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
-
-@named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
-
-@named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
-f, outersys, dvs, p, io_sys = ModelingToolkit.add_input_disturbance(model, dist)
-
-@unpack u, d = outersys
-matrices, ssys = linearize(outersys, [u, d], model_outputs; guesses = [dmodel.x[1] => 0.0])
-
-def = ModelingToolkit.defaults(outersys)
-
-# Create a perturbation in the disturbance state
-dstate = setdiff(dvs, model_outputs)[]
-x_add = ModelingToolkit.varmap_to_vars(merge(Dict(dvs .=> 0), Dict(dstate => 1)), dvs)
-
-x0 = randn(5)
-x1 = copy(x0) + x_add # add disturbance state perturbation
-u = randn(1)
-pn = MTKParameters(io_sys, [])
-xp0 = f[1](x0, u, pn, 0)
-xp1 = f[1](x1, u, pn, 0)
-
-@test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
-@test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
-
-@variables x(t)[1:3] = zeros(3)
-@variables u(t)[1:2]
-y₁, y₂, y₃ = x
-u1, u2 = u
-k₁, k₂, k₃ = 1, 1, 1
-eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
-       D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
-       y₁ + y₂ + y₃ ~ 1]
-
-@named sys = System(eqs, t)
-m_inputs = [u[1], u[2]]
-m_outputs = [y₂]
-sys_simp = mtkcompile(sys, inputs = m_inputs, outputs = m_outputs)
-@test issetequal(unknowns(sys_simp), collect(x[1:2]))
-@test length(inputs(sys_simp)) == 2
-
-# https://github.com/SciML/ModelingToolkit.jl/issues/1577
-@named c = Constant(; k = 2)
-@named gain = Gain(1;)
-@named int = Integrator(; k = 1)
-@named fb = Feedback(;)
-@named model = System(
-    [
-        connect(c.output, fb.input1),
-        connect(fb.input2, int.output),
-        connect(fb.output, gain.input),
-        connect(gain.output, int.input)
-    ],
-    t,
-    systems = [int, gain, c, fb])
-sys = mtkcompile(model)
-@test length(unknowns(sys)) == length(equations(sys)) == 1
-
-## Disturbance models when plant has multiple inputs
-using ModelingToolkit, LinearAlgebra
-using ModelingToolkit: DisturbanceModel, get_iv, get_disturbance_system
 using ModelingToolkitStandardLibrary.Blocks
-A, C = [randn(2, 2) for i in 1:2]
-B = [1.0 0; 0 1.0]
-@named model = Blocks.StateSpace(A, B, C)
-@named integrator = Blocks.StateSpace([-0.001;;], [1.0;;], [1.0;;], [0.0;;])
 
-ins = collect(complete(model).input.u)
-outs = collect(complete(model).output.u)
-
-disturbed_input = ins[1]
-@named dist_integ = DisturbanceModel(disturbed_input, integrator)
-
-f, augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model,
-    dist_integ,
-    ins)
-
-augmented_sys = complete(augmented_sys)
-matrices,
-ssys = linearize(augmented_sys,
-    [
-        augmented_sys.u,
-        augmented_sys.input.u[2],
-        augmented_sys.d
-    ], outs;
-    op = [augmented_sys.u => 0.0, augmented_sys.input.u[2] => 0.0, augmented_sys.d => 0.0],
-    guesses = [augmented_sys.x[1] => 0.0])
-matrices = ModelingToolkit.reorder_unknowns(
-    matrices, unknowns(ssys), [ssys.x[1], ssys.x[2], ssys.integrator.x[1]])
-@test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
-@test matrices.B == I
-@test matrices.C == [C zeros(2)]
-@test matrices.D == zeros(2, 3)
+@testset "Issue#1577" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/1577
+    @named c = Constant(; k = 2)
+    @named gain = Gain(1;)
+    @named int = Integrator(; k = 1)
+    @named fb = Feedback(;)
+    @named model = System(
+        [
+            connect(c.output, fb.input1),
+            connect(fb.input2, int.output),
+            connect(fb.output, gain.input),
+            connect(gain.output, int.input)
+        ],
+        t,
+        systems = [int, gain, c, fb])
+    sys = mtkcompile(model)
+    @test length(unknowns(sys)) == length(equations(sys)) == 1
+end
 
 # Verify using ControlSystemsBase
 # P = ss(A,B,C,0)

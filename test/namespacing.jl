@@ -1,6 +1,7 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, iscomplete, does_namespacing,
                        renamespace
+using Test
 
 @variables x(t)
 @parameters p

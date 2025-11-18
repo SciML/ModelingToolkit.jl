@@ -2,6 +2,7 @@ using ModelingToolkit, SymbolicIndexingInterface, SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D, ParameterIndex,
                        SymbolicContinuousCallback
 using SciMLStructures: Tunable
+using Test
 
 @testset "System" begin
     @parameters a b
@@ -46,7 +47,7 @@ using SciMLStructures: Tunable
     @test_nowarn @inferred getter(prob)
 
     @named odesys = System(
-        eqs, t, [x, y], [a, b]; defaults = [xy => 3.0], observed = [xy ~ x + y])
+        eqs, t, [x, y], [a, b]; initial_conditions = [xy => 3.0], observed = [xy ~ x + y])
     odesys = complete(odesys)
     @test default_values(odesys)[xy] == 3.0
     pobs = parameter_observed(odesys, a + b)
@@ -208,7 +209,7 @@ end
 @testset "Parameter dependencies as symbols" begin
     @variables x(t) = 1.0
     @parameters a=1 b
-    @named model = System([D(x) ~ x + a - b, b ~ a + 1], t)
+    @named model = System([D(x) ~ x + a - b], t; bindings = [b => a+1])
     sys = complete(model)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
@@ -227,7 +228,7 @@ end
 
 @testset "`timeseries_parameter_index` on unwrapped scalarized timeseries parameter" begin
     @variables x(t)[1:2]
-    @parameters p(t)[1:2, 1:2]
+    @discretes p(t)[1:2, 1:2]
     ev = SymbolicContinuousCallback(
         [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p])
     @mtkcompile sys = System(D(x) ~ p * x, t; continuous_events = [ev])

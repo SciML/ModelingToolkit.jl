@@ -1,5 +1,6 @@
 using ModelingToolkit, SymbolicIndexingInterface, SciMLStructures
 using ModelingToolkit: t_nounits as t
+using Test
 
 # Ensure indexes of array symbolics are cached appropriately
 @variables x(t)[1:2]

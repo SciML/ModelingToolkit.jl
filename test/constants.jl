@@ -11,7 +11,7 @@ MT = ModelingToolkit
 D = Differential(t)
 eqs = [D(x) ~ a]
 @named sys = System(eqs, t)
-prob = ODEProblem(complete(sys), [0], [0.0, 1.0])
+prob = ODEProblem(complete(sys), [x => 0], [0.0, 1.0])
 sol = solve(prob, Tsit5())
 
 # Test mtkcompile substitutions & observed values

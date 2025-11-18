@@ -76,9 +76,9 @@ eqs2 = [S ~ S(k - 1) - infection2,
 
 @mtkcompile sys = System(
     eqs2, t, [S, I, R, R2], [c, nsteps, δt, β, γ])
-@test ModelingToolkit.defaults(sys) != Dict()
+@test ModelingToolkit.initial_conditions(sys) != Dict()
 
-prob_map2 = DiscreteProblem(sys, [], tspan)
+prob_map2 = DiscreteProblem(sys, [], tspan; guesses = [S(k-1) => 1.0, R(k-1) => 1.0, I(k-1) => 1.0])
 # prob_map2 = DiscreteProblem(sys, [S(k - 1) => S, I(k - 1) => I, R(k - 1) => R], tspan)
 sol_map2 = solve(prob_map2, FunctionMap());
 
@@ -275,7 +275,7 @@ end
     @test sol[[x..., y...], end] == 8ones(4)
 end
 
-@testset "Defaults are totermed appropriately" begin
+@testset "initial conditionsare totermed appropriately" begin
     @parameters σ ρ β q
     @variables x(t) y(t) z(t)
     k = ShiftIndex(t)
@@ -286,7 +286,7 @@ end
     @mtkcompile discsys = System(
         [x ~ x(k - 1) * ρ + y(k - 2), y ~ y(k - 1) * σ - z(k - 2),
             z ~ z(k - 1) * β + x(k - 2)],
-        t; defaults = [x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
+        t; initial_conditions = [x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
             y(k - 1) => 1.0, z(k - 1) => 1.0])
     discprob = DiscreteProblem(discsys, p, (0, 10))
     sol = solve(discprob, FunctionMap())

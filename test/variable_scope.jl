@@ -92,11 +92,10 @@ function Bar(; name, p = 2)
 end
 @named bar = Bar()
 bar = complete(bar)
-@test length(parameters(bar)) == 2
-@test sort(getname.(parameters(bar))) == [:foo₊p, :p]
-defs = ModelingToolkit.defaults(bar)
-@test value(defs[bar.p]) == 2
-@test isequal(defs[bar.foo.p], bar.p)
+@test length(parameters(bar)) == 1
+@test getname.(parameters(bar)) == [:p]
+@test value(initial_conditions(bar)[bar.p]) == 2
+@test isequal(bindings(bar)[bar.foo.p], bar.p)
 
 @testset "Issue#3101" begin
     @variables x1(t) x2(t) x3(t) x4(t)

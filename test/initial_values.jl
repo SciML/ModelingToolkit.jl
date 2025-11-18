@@ -4,6 +4,7 @@ using OrdinaryDiffEq
 using DataInterpolations
 using StaticArrays
 using SymbolicIndexingInterface
+using Test
 
 @variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
@@ -12,7 +13,6 @@ reorderer = getsym(sys, x)
 @test reorderer(get_u0(sys, [])) == [1.0, 2.0, 3.0]
 @test reorderer(get_u0(sys, [x => [2.0, 3.0, 4.0]])) == [2.0, 3.0, 4.0]
 @test reorderer(get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0])) == [2.0, 3.0, 4.0]
-@test get_u0(sys, [2.0, 3.0, 4.0]) == [2.0, 3.0, 4.0]
 
 @mtkcompile sys=System([
         D(x)~3x,
@@ -54,10 +54,10 @@ vals = ModelingToolkit.varmap_to_vars(merge(defaults, Dict(var_vals)), desired_v
 # Issue#2565
 # Create ODESystem.
 @variables X1(t) X2(t)
-@parameters k1 k2 Γ[1:1]=[X1 + X2]
+@parameters k1 k2 Γ[1:1]=missing
 eq = D(X1) ~ -k1 * X1 + k2 * (-X1 + Γ[1])
 obs = X2 ~ Γ[1] - X1
-@mtkcompile osys_m = System([eq], t, [X1], [k1, k2, Γ[1]]; observed = [X2 ~ Γ[1] - X1])
+@mtkcompile osys_m = System([eq, obs], t, [X1, X2], [k1, k2, Γ])
 
 # Creates ODEProblem.
 u0 = [X1 => 1.0, X2 => 2.0]
@@ -73,49 +73,32 @@ eqs = [D(D(z)) ~ ones(2, 2)]
 @mtkcompile sys = System(eqs, t)
 @test_nowarn ODEProblem(sys, [z => zeros(2, 2), D(z) => ones(2, 2)], (0.0, 10.0))
 
-# Initialization with defaults involving parameters that are not part of the system
-# Issue#2817
-@parameters A1 A2 B1 B2
-@variables x1(t) x2(t)
-@mtkcompile sys = System(
-    [
-        x1 ~ B1,
-        x2 ~ B2
-    ], t; defaults = [
-        A2 => 1 - A1,
-        B1 => A1,
-        B2 => A2
-    ])
-prob = ODEProblem(sys, [A1 => 0.3], (0.0, 1.0))
-@test prob.ps[B1] == 0.3
-@test prob.ps[B2] == 0.7
-
-@testset "default=nothing is skipped" begin
+@testset "binding=nothing is skipped" begin
     @parameters p = nothing
     @variables x(t)=nothing y(t)
-    @named sys = System(Equation[], t, [x, y], [p]; defaults = [y => nothing])
-    @test isempty(ModelingToolkit.defaults(sys))
+    @named sys = System(Equation[], t, [x, y], [p]; bindings = [y => nothing])
+    @test isempty(ModelingToolkit.bindings(sys))
 end
 
 # Using indepvar in initialization
 # Issue#2799
 @variables x(t)
 @parameters p
-@mtkcompile sys = System([D(x) ~ p], t; defaults = [x => t, p => 2t])
+@mtkcompile sys = System([D(x) ~ p], t; bindings = [x => t, p => 2t])
 prob = ODEProblem(sys, [], (1.0, 2.0))
 @test prob[x] == 1.0
 @test prob.ps[p] == 2.0
 
 @testset "Array of symbolics is unwrapped" begin
     @variables x(t)[1:2] y(t)
-    @mtkcompile sys = System([D(x) ~ x, D(y) ~ t], t; defaults = [x => [y, 3.0]])
+    @mtkcompile sys = System([D(x) ~ x, D(y) ~ t], t; initial_conditions = [x => [y, 3.0]])
     prob = ODEProblem(sys, [y => 1.0], (0.0, 1.0))
     @test eltype(prob.u0) <: Float64
     prob = ODEProblem(sys, [x => [y, 4.0], y => 2.0], (0.0, 1.0))
     @test eltype(prob.u0) <: Float64
 end
 
-@testset "split=false systems with all parameter defaults" begin
+@testset "split=false systems with all parameter initial conditions" begin
     @variables x(t) = 1.0
     @parameters p=1.0 q=2.0 r=3.0
     @mtkcompile sys=System(D(x)~p*x+q*t+r, t) split=false
@@ -141,10 +124,7 @@ end
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
         guesses = [x => 2y, y => 2x])
-    @test_warn ["Cycle", "unknowns", "x", "y"] try
-        ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
-    catch
-    end
+    @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
     @test_throws ModelingToolkit.UnexpectedSymbolicValueInVarmap ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
         substitution_limit = 10)
@@ -153,13 +133,8 @@ end
     @mtkcompile sys = System(
         [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0])
     # "unknowns" because they are initialization unknowns
-    @test_warn ["Cycle", "unknowns", "p", "q"] try
-        ODEProblem(sys, [x => 1, y => 2, p => 2q, q => 3p],
+    @test_warn ["Cycle", "parameters", "p", "q"] ODEProblem(sys, [x => 1, y => 2, p => 2q, q => 3p],
             (0.0, 1.0); warn_cyclic_dependency = true)
-    catch
-    end
-    @test_throws ModelingToolkit.MissingGuessError ODEProblem(
-        sys, [x => 1, y => 2, p => 2q, q => 3p], (0.0, 1.0))
 end
 
 @testset "`add_fallbacks!` checks scalarized array parameters correctly" begin
@@ -167,7 +142,7 @@ end
     @parameters p[1:2, 1:2]
     @mtkcompile sys = System(D(x) ~ p * x, t)
     # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
-    @test_throws ModelingToolkit.MissingParametersError ODEProblem(
+    @test_throws "Could not evaluate" ODEProblem(
         sys, [x => ones(2)], (0.0, 1.0))
 end
 
@@ -179,7 +154,7 @@ end
         y[1] ~ x[3],
         y[2] ~ x[4]
     ]
-    @mtkcompile sys = System(eqs, t; defaults = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
+    @mtkcompile sys = System(eqs, t; bindings = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)

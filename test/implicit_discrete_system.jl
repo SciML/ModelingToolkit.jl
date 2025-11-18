@@ -24,8 +24,8 @@ rng = StableRNG(22525)
 
     prob = ImplicitDiscreteProblem(sys, [x(k - 1) => 3.0], tspan)
     @test prob.u0 == [3.0, 1.0]
-    prob = ImplicitDiscreteProblem(sys, [], tspan)
-    @test prob.u0 == [1.0, 1.0]
+    prob = ImplicitDiscreteProblem(sys, [], tspan; guesses = [x(k-1) => 3.0])
+    @test prob.u0 == [3.0, 1.0]
     @variables x(t)
     @mtkcompile sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
     @test_throws ModelingToolkit.MissingGuessError prob=ImplicitDiscreteProblem(

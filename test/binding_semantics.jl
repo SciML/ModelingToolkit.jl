@@ -1,6 +1,7 @@
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicContinuousCallback, SymbolicDiscreteCallback
 using Symbolics: SConst
+using Test
 
 @testset "Simple metadata bindings" begin
     @variables x(t) = 1 y(t) = x
@@ -63,4 +64,47 @@ end
     @parameters p = missing
     @named sys = System(D(x) ~ x * p, t)
     @test bindings(sys)[p] === ModelingToolkit.COMMON_MISSING
+end
+
+function SubComp(; k, name)
+    @parameters k = k
+    System(Equation[], t, [], [k]; name)
+end
+
+function Comp(; name)
+    @parameters k
+    @variables x(t)
+    @named sub = SubComp(; k)
+    System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
+end
+
+function BadComp(; name)
+    @parameters k
+    @variables x(t)
+    @named sub = SubComp(; k = x)
+    System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
+end
+
+
+@testset "Parameter can be bound to parameter in parent system" begin
+    @named sys = Comp()
+    nnsys = toggle_namespacing(sys, false)
+    @test issetequal(ModelingToolkit.get_ps(sys), [nnsys.k, nnsys.sub.k])
+    @test isempty(ModelingToolkit.get_bindings(sys))
+    @test isequal(bindings(sys)[nnsys.sub.k], nnsys.k)
+    csys = complete(sys)
+    @test issetequal(parameters(csys), [nnsys.k])
+    @test issetequal(bound_parameters(csys), [nnsys.sub.k])
+
+    @named sys = BadComp()
+    nnsys = toggle_namespacing(sys, false)
+    @test issetequal(ModelingToolkit.get_ps(sys), [nnsys.k, nnsys.sub.k])
+    @test_throws ["Bindings", "functions of other parameters"] complete(sys)
+end
+
+@testset "Cannot have `missing` bindings for non-floating-point parameters" begin
+    @parameters p::Int q::String
+    @test_throws "only valid for solvable" System(Equation[], t, [], [p]; bindings = [p => missing], name = :a)
+    @parameters p::Int q::String
+    @test_throws "only valid for solvable" System(Equation[], t, [], [q]; bindings = [q => missing], name = :a)
 end

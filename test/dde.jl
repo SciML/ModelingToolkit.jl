@@ -138,8 +138,8 @@ prob_sa = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc
 
 @testset "DDE observed with array variables" begin
     @component function valve(; name)
+        @discretes open(t)::Bool = false
         @parameters begin
-            open(t)::Bool = false
             Kp = 2
             Ksnap = 1.1
             τ = 0.1

@@ -260,8 +260,8 @@ params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
-@test [value(ModelingToolkit.defaults(sys)[s]) for s in unknowns(sys)] == u0
-@test [value(ModelingToolkit.defaults(sys)[s]) for s in parameters(sys)] == [10, 20]
+@test [value(ModelingToolkit.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
+@test [value(ModelingToolkit.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]
 
 @parameters sig=10 rho=28.0 beta=8/3
 @variables x(t)=100 y(t)=1.0 z(t)=1
@@ -446,10 +446,10 @@ u0 = [0.0, 0.0]
 prob = NonlinearLeastSquaresProblem(
     NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0)
 sys = modelingtoolkitize(prob)
-@test length(equations(sys)) == 3
+@test length(equations(sys)) == 2
 @test length(equations(mtkcompile(sys; fully_determined = false))) == 0
 
-@testset "`modelingtoolkitize(::SDEProblem)` sets defaults" begin
+@testset "`modelingtoolkitize(::SDEProblem)` sets initial conditions" begin
     function sdeg!(du, u, p, t)
         du[1] = 0.3 * u[1]
         du[2] = 0.3 * u[2]
@@ -467,7 +467,7 @@ sys = modelingtoolkitize(prob)
     p = [10.0, 28.0, 2.66]
     sprob = SDEProblem(sdef!, sdeg!, u0, tspan, p)
     sys = complete(modelingtoolkitize(sprob))
-    @test length(ModelingToolkit.defaults(sys)) == 3length(u0) + length(p)
+    @test length(ModelingToolkit.initial_conditions(sys)) == length(u0) + length(p)
     sprob2 = SDEProblem(sys, [], tspan)
 
     truevals = similar(u0)

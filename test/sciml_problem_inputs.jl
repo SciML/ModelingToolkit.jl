@@ -168,20 +168,18 @@ end
     @test_deprecated DiscreteSystem([x ~ x(k - 1) + x(k - 2)], t; name = :a)
     @mtkcompile discsys = System([x ~ x(k - 1) * p], t)
     @test_deprecated ImplicitDiscreteSystem([x ~ x(k - 1) + x(k - 2) * p * x], t; name = :a)
-    @mtkcompile idiscsys = System([x ~ x(k - 1) * p * x], t)
+    @mtkcompile idiscsys = System([x ~ x(k - 1) * p * x], t; guesses = [x(k-1) => 1.0])
     @mtkcompile optsys = OptimizationSystem(x^2 + p)
 
     u0s = [
         Dict(x => 1.0),
         [x => 1.0],
-        [1.0],
         [],
         nothing
     ]
     ps = [
         Dict(p => 1.0),
         [p => 1.0],
-        [1.0],
         [],
         nothing,
         SciMLBase.NullParameters()

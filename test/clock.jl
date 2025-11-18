@@ -150,7 +150,7 @@ eqs = [yd ~ Sample(dt)(y)
 end
 
 struct ZeroArgOp <: Symbolics.Operator end
-(o::ZeroArgOp)() = SU.Term{VartypeT}(o, Any[]; type = Bool, shape = [])
+(o::ZeroArgOp)() = SymbolicUtils.Term{VartypeT}(o, Any[]; type = Bool, shape = [])
 SymbolicUtils.promote_symtype(::ZeroArgOp, T) = Union{Bool, T}
 SymbolicUtils.isbinop(::ZeroArgOp) = false
 Base.nameof(::ZeroArgOp) = :ZeroArgOp

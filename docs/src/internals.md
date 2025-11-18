@@ -14,3 +14,9 @@ These components work together to enable ModelingToolkit's symbolic manipulation
 
 !!! warning
     The functions and types documented in this section are internal implementation details. Users should not rely on these APIs as they may change or be removed without deprecation warnings.
+
+## Misc
+
+- Bindings, initial conditions and guesses are stored as `AtomicArrayDict`. This is a custom wrapper which only
+  supports symbolic keys, and disallows keys which are indexed array variables.
+- Keys of parameter bindings cannot be present in `get_ps(sys)`.

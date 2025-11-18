@@ -59,7 +59,7 @@ include("common/rc_model.jl")
     @test_throws ModelingToolkit.RepeatedStructuralSimplificationError mtkcompile(sys)
     @test length(equations(sys)) == 1
     check_contract(sys)
-    @test !isempty(ModelingToolkit.defaults(sys))
+    @test !isempty(ModelingToolkit.bindings(sys))
     u0 = [capacitor.v => 0.0]
     prob = ODEProblem(sys, u0, (0, 10.0))
     sol = solve(prob, Rodas4())
@@ -98,7 +98,7 @@ end
     @test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
     expand_connections(sys_inner_outer)
     sys_inner_outer = mtkcompile(sys_inner_outer)
-    @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
+    @test !isempty(ModelingToolkit.bindings(sys_inner_outer))
     u0 = [rc_comp.capacitor.v => 0.0]
     prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
     sol_inner_outer = solve(prob, Rodas4())
@@ -157,12 +157,12 @@ end
         defs[foo.a] = 3
         defs[foo.b] = 300
         pars = @parameters x=2 y=20
-        compose(System(Equation[], t, [], pars; name, defaults = defs), foo)
+        compose(System(Equation[], t, [], pars; name, initial_conditions = defs), foo)
     end
     @named goo = first_model()
     @unpack foo = goo
-    @test value(ModelingToolkit.defaults(goo)[foo.a]) == 3
-    @test value(ModelingToolkit.defaults(goo)[foo.b]) == 300
+    @test value(ModelingToolkit.initial_conditions(goo)[foo.a]) == 3
+    @test value(ModelingToolkit.initial_conditions(goo)[foo.b]) == 300
 end
 
 function Load(; name)

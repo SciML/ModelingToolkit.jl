@@ -12,7 +12,8 @@ using NonlinearSolve
 import DiffEqNoiseProcess
 
 @testset "ODESystem with callbacks" begin
-    @parameters p1(t)=1.0 p2
+    @discretes p1(t) = 1.0
+    @parameters p2 = 2p1
     @variables x(t)
     cb1 = SymbolicContinuousCallback([x ~ 2.0] => [p1 ~ 2.0], discrete_parameters = [p1]) # triggers at t=-2+√6
     function affect1!(mod, obs, ctx, integ)
@@ -22,13 +23,13 @@ import DiffEqNoiseProcess
     cb3 = SymbolicDiscreteCallback([1.0] => [p1 ~ 5.0], discrete_parameters = [p1])
 
     @mtkcompile sys = System(
-        [D(x) ~ p1 * t + p2, p2 ~ 2p1],
+        [D(x) ~ p1 * t + p2],
         t;
         continuous_events = [cb1, cb2],
         discrete_events = [cb3]
     )
     @test !(p2 in Set(parameters(sys)))
-    @test p2 in Set(full_parameters(sys))
+    @test p2 in Set(bound_parameters(sys))
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.5), jac = true)
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
@@ -50,12 +51,12 @@ import DiffEqNoiseProcess
     @test integ.ps[p2] == 10.0
 end
 
-@testset "vector parameter deps" begin
-    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+@testset "vector parameter bindings" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=2p1
     @variables x(t) = 0
 
     @named sys = System(
-        [D(x) ~ sum(p1) * t + sum(p2), p2 ~ 2p1],
+        [D(x) ~ sum(p1) * t + sum(p2)],
         t
     )
     prob = ODEProblem(complete(sys), [], (0.0, 1.0))
@@ -69,31 +70,31 @@ end
 end
 
 @testset "extend" begin
-    @parameters p1=1.0 p2=1.0
+    @parameters p1=1.0 p2
     @variables x(t) = 0
 
     @mtkcompile sys1 = System(
         [D(x) ~ p1 * t + p2],
         t
     )
-    @named sys2 = System(
-        [p2 ~ 2p1],
-        t
+    @named sys2 = System(Equation[],
+        t, [], [];
+        bindings = [p2 => 2p1]
     )
     sys = complete(extend(sys2, sys1))
     @test !(p2 in Set(parameters(sys)))
-    @test p2 in Set(full_parameters(sys))
+    @test p2 in Set(bound_parameters(sys))
     prob = ODEProblem(complete(sys), nothing, (0.0, 1.0))
     get_dep = getu(prob, 2p2)
     @test get_dep(prob) == 4
 end
 
-@testset "getu with parameter deps" begin
-    @parameters p1=1.0 p2=1.0
+@testset "getu with parameter bindings" begin
+    @parameters p1=1.0 p2=2p1
     @variables x(t) = 0
 
     @named sys = System(
-        [D(x) ~ p1 * t + p2, p2 ~ 2p1],
+        [D(x) ~ p1 * t + p2],
         t
     )
     prob = ODEProblem(complete(sys), nothing, (0.0, 1.0))
@@ -101,12 +102,12 @@ end
     @test get_dep(prob) == 4
 end
 
-@testset "getu with vector parameter deps" begin
-    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+@testset "getu with vector parameter bindings" begin
+    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=2p1
     @variables x(t) = 0
 
     @named sys = System(
-        [D(x) ~ sum(p1) * t + sum(p2), p2 ~ 2p1],
+        [D(x) ~ sum(p1) * t + sum(p2)],
         t
     )
     prob = ODEProblem(complete(sys), [], (0.0, 1.0))
@@ -114,17 +115,17 @@ end
     @test get_dep(prob) == [2.0, 4.0]
 end
 
-@testset "composing systems with parameter deps" begin
-    @parameters p1=1.0 p2=2.0
+@testset "composing systems with parameter bindings" begin
+    @parameters p1=1.0 p2
     @variables x(t) = 0
 
     @named sys1 = System(
         [D(x) ~ p1 * t + p2],
-        t
+        t; initial_conditions = [p2 => 1.0]
     )
     @named sys2 = System(
-        [D(x) ~ p1 * t - p2, p2 ~ 2p1],
-        t
+        [D(x) ~ p1 * t - p2],
+        t, bindings = [p2 => 2p1]
     )
     sys = complete(System(Equation[], t, systems = [sys1, sys2], name = :sys))
 
@@ -144,12 +145,12 @@ end
 
     new_prob = remake(prob, p = [sys2.p1 => 1.5])
 
-    @test !isempty(ModelingToolkit.parameter_dependencies(sys))
+    @test !isempty(ModelingToolkit.bindings(sys))
     @test new_prob.ps[sys2.p1] == 1.5
     @test new_prob.ps[sys2.p2] == 3.0
 end
 
-@testset "parameter dependencies across model hierarchy" begin
+@testset "parameter bindings across model hierarchy" begin
     sys2 = let name = :sys2
         @parameters p2
         @variables x(t) = 1.0
@@ -158,14 +159,9 @@ end
     end
 
     @parameters p1 = 1.0
-    parameter_dependencies = []
     sys1 = System(
-        [sys2.p2 ~ p1 * 2.0], t, [], [p1]; name = :sys1, systems = [sys2])
-
-    # ensure that parameter_dependencies is type stable
-    # (https://github.com/SciML/ModelingToolkit.jl/pull/2978)
-    sys = complete(sys1)
-    @inferred ModelingToolkit.parameter_dependencies(sys)
+        Equation[], t, [], [p1];
+        bindings = [sys2.p2 => 2p1], name = :sys1, systems = [sys2])
 
     sys = mtkcompile(sys1)
 
@@ -216,8 +212,8 @@ end
     @variables y(t) = 1
     @parameters p=2 (i::CallableFoo)(..)
 
-    eqs = [D(y) ~ i(t) + p, i ~ CallableFoo(p)]
-    @named model = System(eqs, t, [y], [p, i])
+    eqs = [D(y) ~ i(t) + p]
+    @named model = System(eqs, t, [y], [p, i]; bindings = [i => CallableFoo(p)])
     sys = mtkcompile(model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
@@ -226,57 +222,8 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
-@testset "Clock system" begin
-    dt = 0.1
-    @variables x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
-    @parameters kp(t) kq
-    d = Clock(dt)
-    k = ShiftIndex(d)
-
-    eqs = [yd ~ Sample(dt)(y)
-           ud ~ kp * (r - yd) + kq * z
-           r ~ 1.0
-           u ~ Hold(ud)
-           D(x) ~ -x + u
-           y ~ x
-           z(k) ~ z(k - 2) + yd(k - 2)
-           kq ~ 2kp]
-    @test_throws ModelingToolkit.HybridSystemNotSupportedException @mtkcompile sys = System(
-        eqs, t)
-
-    @test_skip begin
-        Tf = 1.0
-        prob = ODEProblem(sys,
-            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
-                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
-            (0.0, Tf))
-        @test_nowarn solve(prob, Tsit5())
-
-        @mtkcompile sys = System(eqs, t;
-            discrete_events = [SymbolicDiscreteCallback(
-                [0.5] => [kp ~ 2.0], discrete_parameters = [kp])])
-        prob = ODEProblem(sys,
-            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
-                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
-            (0.0, Tf))
-        @test prob.ps[kp] == 1.0
-        @test prob.ps[kq] == 2.0
-        @test_nowarn solve(prob, Tsit5())
-        prob = ODEProblem(sys,
-            [x => 0.0, y => 0.0, kp => 1.0, z(k - 1) => 3.0,
-                yd(k - 1) => 0.0, z(k - 2) => 4.0, yd(k - 2) => 2.0],
-            (0.0, Tf))
-        integ = init(prob, Tsit5())
-        @test integ.ps[kp] == 1.0
-        @test integ.ps[kq] == 2.0
-        step!(integ, 0.6)
-        @test integ.ps[kp] == 2.0
-        @test integ.ps[kq] == 4.0
-    end
-end
-
 @testset "SDESystem" begin
-    @parameters σ(t) ρ β
+    @parameters σ ρ β
     @variables x(t) y(t) z(t)
 
     eqs = [D(x) ~ σ * (y - x),
@@ -288,34 +235,20 @@ end
         0.1 * z]
 
     @named sys = System(eqs, t)
-    @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ ~ 2σ])
+    @named sdesys = SDESystem(sys, noiseeqs; bindings = [ρ => 2σ])
     sdesys = complete(sdesys)
     @test !(ρ in Set(parameters(sdesys)))
-    @test ρ in Set(full_parameters(sdesys))
+    @test ρ in Set(bound_parameters(sdesys))
 
     prob = SDEProblem(
         sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0))
     @test prob.ps[ρ] == 2prob.ps[σ]
     @test_nowarn solve(prob, SRIW1())
-
-    @named sys = System(eqs, t)
-    @named sdesys = SDESystem(sys, noiseeqs; parameter_dependencies = [ρ ~ 2σ],
-        discrete_events = [SymbolicDiscreteCallback(
-            [10.0] => [σ ~ 15.0], discrete_parameters = [σ])])
-    sdesys = complete(sdesys)
-    prob = SDEProblem(
-        sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0))
-    integ = init(prob, SRIW1())
-    @test integ.ps[σ] == 10.0
-    @test integ.ps[ρ] == 20.0
-    step!(integ, 11.0)
-    @test integ.ps[σ] == 15.0
-    @test integ.ps[ρ] == 30.0
 end
 
 @testset "JumpSystem" begin
     rng = StableRNG(12345)
-    @parameters β γ(t)
+    @parameters β γ
     @constants h = 1
     @variables S(t) I(t) R(t)
     rate₁ = β * S * I * h
@@ -325,12 +258,11 @@ end
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₃ = ConstantRateJump(rate₃, affect₃)
     @named js2 = JumpSystem(
-        [j₃, β ~ 0.01γ], t, [S, I, R], [β, γ, h])
+        [j₃], t, [S, I, R], [β, γ, h]; bindings = [β => 0.01γ])
     @test issetequal(parameters(js2), [β, γ, h])
-    @test Set(full_parameters(js2)) == Set([γ, β, h])
     js2 = complete(js2)
     @test issetequal(parameters(js2), [γ, h])
-    @test Set(full_parameters(js2)) == Set([γ, β, h])
+    @test Set(bound_parameters(js2)) == Set([β])
     tspan = (0.0, 250.0)
     u₀map = [S => 999, I => 1, R => 0]
     parammap = [γ => 0.01]
@@ -339,29 +271,15 @@ end
     @test jprob.ps[γ] == 0.01
     @test jprob.ps[β] == 0.0001
     @test_nowarn solve(jprob, SSAStepper())
-
-    @named js2 = JumpSystem(
-        [j₁, j₃, β ~ 0.01γ], t, [S, I, R], [β, γ, h];
-        discrete_events = [SymbolicDiscreteCallback(
-            [10.0] => [γ ~ 0.02], discrete_parameters = [γ])])
-    js2 = complete(js2)
-    jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
-        save_positions = (false, false), rng = rng)
-    integ = init(jprob, SSAStepper())
-    @test integ.ps[γ] == 0.01
-    @test integ.ps[β] == 0.0001
-    step!(integ, 11.0)
-    @test integ.ps[γ] == 0.02
-    @test integ.ps[β] == 0.0002
 end
 
 @testset "NonlinearSystem" begin
-    @parameters p1=1.0 p2=1.0
+    @parameters p1=1.0 p2
     @variables x(t)
-    eqs = [0 ~ p1 * x * exp(x) + p2, p2 ~ 2p1]
-    @mtkcompile sys = System(eqs; parameter_dependencies = [p2 ~ 2p1])
+    eqs = [0 ~ p1 * x * exp(x) + p2]
+    @mtkcompile sys = System(eqs; bindings = [p2 => 2p1])
     @test isequal(only(parameters(sys)), p1)
-    @test Set(full_parameters(sys)) == Set([p1, p2, Initial(p2), Initial(x)])
+    @test Set(bound_parameters(sys)) == Set([p2])
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.ps[p1] == 1.0
     @test prob.ps[p2] == 2.0
@@ -372,7 +290,7 @@ end
 end
 
 @testset "SciMLStructures interface" begin
-    @parameters p1=1.0 p2=1.0
+    @parameters p1=1.0 p2
     @variables x(t)
     cb1 = [x ~ 2.0] => [p1 ~ 2.0] # triggers at t=-2+√6
     function affect1!(integ, u, p, ctx)
@@ -382,8 +300,8 @@ end
     cb3 = [1.0] => [p1 ~ 5.0]
 
     @mtkcompile sys = System(
-        [D(x) ~ p1 * t + p2, p2 ~ 2p1],
-        t
+        [D(x) ~ p1 * t + p2],
+        t; bindings = [p2 => 2p1]
     )
     prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.5), jac = true)
     prob.ps[p1] = 3.0
@@ -408,24 +326,12 @@ end
     @test getp(sys, p2)(ps2) == 4.0
 end
 
-@testset "Discovery of parameters from dependencies" begin
-    @parameters p1 p2
-    @variables x(t) y(t)
-    @named sys = System([D(x) ~ y + p2, p2 ~ 2p1], t)
-    @test is_parameter(sys, p1)
-    @named sys = System([x * y^2 ~ y + p2, p2 ~ 2p1])
-    @test is_parameter(sys, p1)
-    k = ShiftIndex(t)
-    @named sys = System(
-        [x(k - 1) ~ x(k) + y(k) + p2, p2 ~ 2p1], t)
-    @test is_parameter(sys, p1)
-end
-
-@testset "Scalarized array as RHS of parameter dependency" begin
-    @parameters p[1:2] p1 p2
+@testset "Scalarized array as RHS of parameter binding" begin
+    @parameters p[1:2] p1 = p[1] p2 = p[2]
     @variables x(t)
-    @named sys = System([D(x) ~ x, p1 ~ p[1], p2 ~ p[2]], t)
+    @named sys = System([D(x) ~ x], t, [x], [p, p1, p2])
+    sys = complete(sys)
     @test any(isequal(p), ModelingToolkit.get_ps(sys))
     sys = mtkcompile(sys)
-    @test length(ModelingToolkit.parameter_dependencies(sys)) == 2
+    @test length(ModelingToolkit.bound_parameters(sys)) == 2
 end

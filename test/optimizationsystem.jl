@@ -158,7 +158,7 @@ end
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
     sys = complete(OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
         constraints = [sys1.x + sys2.y ~ 2], checks = false))
-    prob = OptimizationProblem(sys, [0.0, 0.0])
+    prob = OptimizationProblem(sys, unknowns(sys) .=> [0.0, 0.0])
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
     @test isequal(cost(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(unknowns(sys), [sys1.x, sys2.y])

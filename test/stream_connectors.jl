@@ -294,7 +294,7 @@ end
 # Test the new Domain feature
 
 sys_ = expand_connections(n1m1Test)
-sys_defs = ModelingToolkit.defaults(sys_)
+sys_defs = ModelingToolkit.bindings(sys_)
 csys = complete(n1m1Test)
 @test Symbol(sys_defs[csys.pipe.port_a.rho]) == Symbol(csys.fluid.rho)
 @test Symbol(sys_defs[csys.pipe.port_b.rho]) == Symbol(csys.fluid.rho)
@@ -317,7 +317,7 @@ csys = complete(n1m1Test)
     # equations ---------------------------
     eqs = Equation[]
 
-    System(eqs, t, vars, pars; name, defaults = [dm => 0])
+    System(eqs, t, vars, pars; name, initial_conditions = [dm => 0])
 end
 
 @connector function Fluid(; name, R, B, V)
@@ -386,7 +386,7 @@ function StaticVolume(; P, V, name)
            H.dm ~ drho * V]
 
     System(eqs, t, vars, pars; name, systems,
-        defaults = [vrho => rho_0 * (1 + p_int / H.bulk)])
+        initial_conditions = [vrho => rho_0 * (1 + p_int / H.bulk)])
 end
 
 function PipeBase(; P, R, name)
@@ -464,7 +464,7 @@ end
 @named two_fluid_system = TwoFluidSystem()
 sys = expand_connections(two_fluid_system)
 
-sys_defs = ModelingToolkit.defaults(sys)
+sys_defs = ModelingToolkit.bindings(sys)
 csys = complete(two_fluid_system)
 
 @test Symbol(sys_defs[csys.volume_a.H.rho]) == Symbol(csys.fluid_a.rho)
@@ -502,7 +502,7 @@ end
 @named one_fluid_system = OneFluidSystem()
 sys = expand_connections(one_fluid_system)
 
-sys_defs = ModelingToolkit.defaults(sys)
+sys_defs = ModelingToolkit.bindings(sys)
 csys = complete(one_fluid_system)
 
 @test Symbol(sys_defs[csys.volume_a.H.rho]) == Symbol(csys.fluid.rho)

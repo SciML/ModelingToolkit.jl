@@ -1,4 +1,5 @@
 using ModelingToolkit, AbstractTrees, Test
+using ModelingToolkit: t_nounits as t
 
 include("common/rc_model.jl")
 
