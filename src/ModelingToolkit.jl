@@ -36,6 +36,7 @@ else
     const IntDisjointSet = IntDisjointSets
 end
 using Base.Threads
+using Base.ScopedValues
 using Latexify, Unitful, ArrayInterface
 using Setfield, ConstructionBase
 import Libdl

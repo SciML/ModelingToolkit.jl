@@ -41,6 +41,8 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
 end
 
+passed_kwargs = ScopedValue(Dict())
+
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     if fullname isa Symbol
         name, type = fullname, :System
