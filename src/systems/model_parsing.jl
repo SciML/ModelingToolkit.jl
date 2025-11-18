@@ -41,7 +41,17 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
 end
 
-passed_kwargs = ScopedValue(Dict())
+passed_kwargs = ScopedValue(Dict{Symbol, Any}())
+lookup_passed_kwarg(kwarg::Symbol, val) = (@show(kwarg); get(passed_kwargs[], kwarg, val))
+
+function construct_subcomponent(body::Function, lhs, other_kwargs)
+    root = string(lhs, "__")
+    dict2 = Dict{Symbol, Any}(Symbol(string(k)[length(root)+1:end])=>v
+                              for (k, v) in other_kwargs
+                              if startswith(string(k), root))
+    @show keys(other_kwargs) lhs keys(dict2)
+    return with(body, passed_kwargs => dict2)
+end
 
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     if fullname isa Symbol
@@ -158,11 +168,11 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(var"#___sys___"))
 
     f = if length(where_types) == 0
-        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+        :($(Symbol(:__, name, :__))(; name, $(kwargs...), other_kwargs...) = $exprs)
     else
         f_with_where = Expr(:where)
         push!(f_with_where.args,
-            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+            :($(Symbol(:__, name, :__))(; name, $(kwargs...), other_kwargs...)), where_types...)
         :($f_with_where = $exprs)
     end
 
@@ -729,7 +739,8 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 type = getfield(mod, type)
                 b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
                 push!(sps, a)
-                push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
+                push!(kwargs, Expr(:kw, Expr(:(::), a, type),
+                                   :($lookup_passed_kwarg($(QuoteNode(a)), $b))))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
                     :value => b, :type => type)
             end
@@ -737,7 +748,7 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 a,
                 b) => begin
                 push!(sps, a)
-                push!(kwargs, Expr(:kw, a, b))
+                push!(kwargs, Expr(:kw, a, :($lookup_passed_kwarg($(QuoteNode(a)), $b))))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
@@ -1480,7 +1491,8 @@ function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
         Expr(:(=), lhs, rhs) => begin
             push!(dict[:components], [lhs, :unimplemented])  # TODO
             # push!(kwargs, Expr(:kw, lhs, rhs))  # this is to support components as kwargs
-            push!(exprs, :($lhs = $component_rename($rhs, $(Expr(:quote, lhs)))))
+            rhs_2 = :($construct_subcomponent($(Expr(:quote, lhs)), other_kwargs) do; $rhs end)
+            push!(exprs, :($lhs = $component_rename($rhs_2, $(Expr(:quote, lhs)))))
             push!(exprs, :($push_append!(systems, $lhs)))
         end
         _ => error("Expression not handled ", compexpr)

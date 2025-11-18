@@ -152,7 +152,7 @@ end
 C_val = 20u"F"
 R_val = 20u"Ω"
 res__R = 100u"Ω"
-@mtkcompile rc = RC(; C_val, R_val)
+@mtkcompile rc = RC(; C_val, R_val, resistor.R = res__R)
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob)
 defs = ModelingToolkit.defaults(rc)
@@ -163,7 +163,7 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @test getname(rc.resistor.R) === getname(resistor.R)
 @test getname(rc.resistor.v) === getname(resistor.v)
 # Test that `resistor.R` overrides `R_val` in the argument.
-@test_broken getdefault(rc.resistor.R) * get_unit(rc.resistor.R) == res__R != R_val
+@test getdefault(rc.resistor.R) * get_unit(rc.resistor.R) == res__R != R_val
 # Test that `C_val` passed via argument is set as default of C.
 @test getdefault(rc.capacitor.C) * get_unit(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
