@@ -252,7 +252,7 @@ let
     # ----------------------------------------------------------------------------
 
     # solution -------------------------------------------------------------------
-    @named catapult = System(eqs, t, vars, params, defaults = defs)
+    @named catapult = System(eqs, t, vars, params, initial_conditions = defs)
     sys = mtkcompile(catapult)
     prob = ODEProblem(sys, [l_2f => 0.55, damp => 1e7], (0.0, 0.1); jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success

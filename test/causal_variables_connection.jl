@@ -1,5 +1,6 @@
 using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Test
 
 @testset "Error checking" begin
     @variables begin

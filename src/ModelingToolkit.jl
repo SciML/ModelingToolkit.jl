@@ -68,6 +68,7 @@ import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, bloc
 using OffsetArrays: Origin
 import CommonSolve
 import EnumX
+import ReadOnlyDicts: ReadOnlyDict
 
 using RuntimeGeneratedFunctions
 using RuntimeGeneratedFunctions: drop_expr
@@ -89,7 +90,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   scalarize, hasderiv
 
 import DiffEqBase: @add_kwonly
-export independent_variables, unknowns, observables, parameters, full_parameters,
+export independent_variables, unknowns, observables, parameters, bound_parameters,
        continuous_events, discrete_events
 @reexport using Symbolics
 @reexport using UnPack
@@ -157,13 +158,21 @@ using .BipartiteGraphs
 export EvalAt
 include("variables.jl")
 include("parameters.jl")
+include("discretes.jl")
 include("independent_variables.jl")
 include("constants.jl")
 include("derivative_dict.jl")
+include("atomic_array_dict.jl")
+include("parameter_bindings_graph.jl")
 
-const SymmapT = Dict{SymbolicT, SymbolicT}
+const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
+const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
+struct CommonSentinel end
+const COMMON_SENTINEL = SU.Const{VartypeT}(CommonSentinel())
 const COMMON_NOTHING = SU.Const{VartypeT}(nothing)
 const COMMON_MISSING = SU.Const{VartypeT}(missing)
+const COMMON_TRUE = SU.Const{VartypeT}(true)
+const COMMON_FALSE = SU.Const{VartypeT}(false)
 
 include("utils.jl")
 
@@ -276,7 +285,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
        brownians
-export initialization_equations, guesses, defaults, parameter_dependencies, hierarchy
+export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export mtkcompile, expand_connections, linearize, linearization_function,
        LinearizationProblem, linearization_ap_transform, structural_simplify
 export solve
@@ -306,7 +315,8 @@ export generate_initializesystem, Initial, isinitial, InitializationProblem
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
-export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian
+export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
+       @discretes
 export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 
@@ -359,6 +369,9 @@ function __init__()
     SU.hashcons(unwrap(t_nounits), true)
     SU.hashcons(COMMON_NOTHING, true)
     SU.hashcons(COMMON_MISSING, true)
+    SU.hashcons(COMMON_TRUE, true)
+    SU.hashcons(COMMON_FALSE, true)
+    SU.hashcons(COMMON_SENTINEL, true)
 end
 
 PrecompileTools.@compile_workload begin

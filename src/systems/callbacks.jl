@@ -33,6 +33,8 @@ function (s::SymbolicUtils.Substituter)(aff::SymbolicAffect)
     SymbolicAffect(s(aff.affect), s(aff.alg_eqs), s(aff.discrete_parameters))
 end
 
+discretes(affect::SymbolicAffect) = affect.discrete_parameters
+
 struct AffectSystem
     """The internal implicit discrete system whose equations are solved to obtain values after the affect."""
     system::AbstractSystem

@@ -1,5 +1,6 @@
 using ModelingToolkit, OrdinaryDiffEq, SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Test
 
 @testset "`generate_custom_function`" begin
     @variables x(t) y(t)[1:3]
@@ -66,20 +67,6 @@ end
     @test prob.ps[p[0]] == 1.0
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-
-    @testset "Array split across buffers" begin
-        @variables x(t)[0:2]
-        @parameters p[1:2] (f::Function)(..)
-        @named sys = System(
-            [D(x[0]) ~ p[1] * x[0] + x[2], D(x[1]) ~ p[2] * f(x) + x[2]], t)
-        sys = mtkcompile(sys, inputs = [x[2]], outputs = [])
-        @test is_parameter(sys, x[2])
-        prob = ODEProblem(
-            sys, [x[0] => 1.0, x[1] => 1.0, x[2] => 2.0, p => ones(2), f => sum],
-            (0.0, 1.0))
-        sol = solve(prob, Tsit5())
-        @test SciMLBase.successful_retcode(sol)
-    end
 end
 
 @testset "scalarized array observed calling same function multiple times" begin

@@ -28,6 +28,8 @@ function modelingtoolkitize(
     rhs = trace_rhs(prob, vars, params, nothing; prototype = prob.f.resid_prototype)
     eqs = vcat([0 ~ rhs[i] for i in eachindex(rhs)]...)
 
+    filter!(eq -> !SU._iszero(eq.rhs), eqs)
+
     sts = vec(collect(vars))
 
     # turn `params` into a list of symbolic variables as opposed to
@@ -35,14 +37,14 @@ function modelingtoolkitize(
     _params = params
     params = to_paramvec(params)
 
-    defaults = defaults_from_u0_p(prob, vars, _params, params)
+    initial_conditions = defaults_from_u0_p(prob, vars, _params, params)
     # In case initials crept in, specifically from when we constructed parameters
     # using prob.f.sys
     filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
-    filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), defaults)
+    filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), initial_conditions)
 
     return System(eqs, sts, params;
-        defaults,
+        initial_conditions,
         name = gensym(:MTKizedNonlin),
         kwargs...)
 end

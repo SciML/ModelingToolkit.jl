@@ -8,11 +8,13 @@ using OrdinaryDiffEq
 using ForwardDiff
 using JET
 
-@parameters a b c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
+@discretes c(t)
+@parameters a b d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = System(
-    [b ~ 2a], t, [], [a, b, c, d, e, f, g, h];
+    Equation[], t, [], [a, b, c, d, e, f, g, h];
     continuous_events = [ModelingToolkit.SymbolicContinuousCallback(
-        [a ~ 0] => [c ~ 0], discrete_parameters = c)], defaults = Dict(a => 0.0))
+        [a ~ 0] => [c ~ 0], discrete_parameters = c)], bindings = [b => 2a],
+    initial_conditions = Dict(a => 0.0))
 sys = complete(sys)
 
 ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
@@ -167,53 +169,50 @@ u0 = [X => 1.0]
 tspan = (0.0, 100.0)
 ps = [p => 1.0] # Value for `d` is missing
 
-@test_throws ModelingToolkit.MissingParametersError ODEProblem(sys, [u0; ps], tspan)
+@test_throws "Could not evaluate" ODEProblem(sys, [u0; ps], tspan)
 @test_nowarn ODEProblem(sys, [u0; ps; [d => 1.0]], tspan)
 
 # JET tests
 
 # scalar parameters only
 function level1()
-    @parameters p1=0.5 [tunable=true] p2=1 [tunable=true] p3=3 [tunable=false] p4=3 [tunable=true] y0=1
+    @parameters p1=0.5 [tunable=true] p2=1 [tunable=true] p3=3 [tunable=false] p4=3 [tunable=true] y0
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p2 * x * y
-           D(y) ~ -p3 * y + p4 * x * y
-           y0 ~ 2p4]
+           D(y) ~ -p3 * y + p4 * x * y]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys)))
+        eqs, t, name = :sys, bindings = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters
 function level2()
-    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4=3 [tunable=false] y0=1
+    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4=3 [tunable=false] y0
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y
-           y0 ~ 2p4]
+           D(y) ~ -p23[2] * y + p4 * x * y]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys)))
+        eqs, t, name = :sys, bindings = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters with different scalar types
 function level3()
-    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4::Int=3 [tunable=true] y0::Int=1
+    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4::Int=3 [tunable=true] y0::Int
     @variables x(t)=2 y(t)=y0
     D = Differential(t)
 
     eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y
-           y0 ~ 2p4]
+           D(y) ~ -p23[2] * y + p4 * x * y]
 
     sys = mtkcompile(complete(System(
-        eqs, t, name = :sys)))
+        eqs, t, name = :sys, bindings = [y0 => 2p4])))
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
@@ -316,7 +315,7 @@ end
 
 @testset "Error on missing parameter defaults" begin
     @parameters a b c
-    @named sys = System(Equation[], t, [], [a, b]; defaults = Dict(b => 2c))
+    @named sys = System(Equation[], t, [], [a, b]; initial_conditions = Dict(b => 2c))
     sys = complete(sys)
     @test_throws ["Could not evaluate", "b", "Missing", "2c"] MTKParameters(sys, [a => 1.0])
 end
@@ -403,7 +402,7 @@ end
             systems=[
                 resistor1, resistor2, capacitor1, capacitor2,
                 source, input_signal, ground, ampermeter
-            ])
+            ], guesses = [capacitor1.i => 1.0])
     end
 
     model = circuit_model()

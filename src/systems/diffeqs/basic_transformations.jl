@@ -76,7 +76,7 @@ eqs = [D(x) ~ α*x]
 tspan = (0., 1.)
 def = [x => 1.0, α => -0.5]
 
-@mtkcompile sys = System(eqs, t;defaults=def)
+@mtkcompile sys = System(eqs, t; initial_conditions = def)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
 
@@ -159,24 +159,24 @@ function change_of_variables(
         push!(new_eqs, Differential(t)(new_var) ~ ex)
     end
 
-    defs = get_defaults(sys)
-    new_defs = Dict()
+    ics = get_initial_conditions(sys)
+    new_ics = SymmapT()
     for f_sub in forward_subs
-        ex = substitute(first(f_sub), defs)
+        ex = substitute(first(f_sub), ics)
         if !ismissing(t0)
             ex = substitute(ex, t => t0)
         end
-        new_defs[last(f_sub)] = ex
+        write_possibly_indexed_array!(new_ics, unwrap(last(f_sub)), unwrap(ex), COMMON_NOTHING)
     end
     for para in parameters(sys)
-        if haskey(defs, para)
-            new_defs[para] = defs[para]
+        if haskey(ics, para)
+            new_ics[para] = ics[para]
         end
     end
 
     @named new_sys = System(
         vcat(new_eqs, first.(backward_subs) .~ last.(backward_subs)), t;
-        defaults = new_defs,
+        initial_conditions = new_ics,
         observed = observed(sys)
     )
     if simplify
@@ -312,7 +312,7 @@ function fractional_to_ordinary(
         append!(all_def, def)
     end
     append!(all_eqs, additional_eqs)
-    @named sys = System(all_eqs, iv; defaults=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions=all_def)
     return mtkcompile(sys)
 end
 
@@ -417,7 +417,7 @@ function linear_fractional_to_ordinary(
         end
     end
     push!(all_eqs, 0 ~ new_rhs)
-    @named sys = System(all_eqs, iv; defaults=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions=all_def)
     return mtkcompile(sys)
 end
 
@@ -587,9 +587,10 @@ function change_independent_variable(
         ps = filter(!isinitial, ps) # remove Initial(...) # TODO: shouldn't have to touch this
         observed = map(transform, get_observed(sys))
         initialization_eqs = map(transform, get_initialization_eqs(sys))
-        parameter_dependencies = map(transform, get_parameter_dependencies(sys))
-        defaults = Dict(transform(var) => transform(val)
-        for (var, val) in get_defaults(sys))
+        bindings = Dict(transform(var) => transform(val)
+        for (var, val) in get_bindings(sys))
+        initial_conditions = Dict(transform(var) => transform(val)
+        for (var, val) in get_initial_conditions(sys))
         guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
         connector_type = get_connector_type(sys)
         assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
@@ -598,13 +599,12 @@ function change_independent_variable(
         wasflat = isempty(systems)
         sys = typeof(sys)( # recreate system with transformed fields
             eqs, iv2, unknowns, ps; observed, initialization_eqs,
-            defaults, guesses, connector_type,
+            bindings, initial_conditions, guesses, connector_type,
             assertions, name = nameof(sys), description = description(sys)
         )
         sys = compose(sys, systems) # rebuild hierarchical system
         if wascomplete
             sys = complete(sys; split = wassplit, flatten = wasflat) # complete output if input was complete
-            @set! sys.parameter_dependencies = parameter_dependencies
         end
         return sys
     end
@@ -777,7 +777,7 @@ function Girsanov_transform(sys::System, u; θ0 = 1.0)
     @set! sys.eqs = deqs
     @set! sys.noise_eqs = unwrap.(noiseeqs)
     @set! sys.unknowns = unknown_vars
-    get_defaults(sys)[θ] = θ0
+    get_initial_conditions(sys)[θ] = θ0
     obs = observed(sys)
     @set! sys.observed = [weight ~ θ / θ0; obs]
     if get_parent(sys) !== nothing
@@ -821,7 +821,7 @@ function add_accumulations(sys::System, vars::Vector{<:Pair})
     D = Differential(get_iv(sys))
     @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
     @set! sys.unknowns = [get_unknowns(sys); avars]
-    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
+    @set! sys.initial_conditions = merge(get_initial_conditions(sys), Dict(a => 0.0 for a in avars))
     return sys
 end
 
@@ -939,7 +939,8 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
         sub.x[iv] = t # otherwise the Differentials aren't fixed
     end
     neweqs = map(sub, equations(sys))
-    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    binds = Dict(sub(k) => sub(v) for (k, v) in bindings(sys))
+    ics = Dict(sub(k) => sub(v) for (k, v) in initial_conditions(sys))
     neqs = get_noise_eqs(sys)
     if neqs !== nothing
         neqs = map(sub, neqs)
@@ -949,7 +950,8 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
     @set! sys.eqs = neweqs
     @set! sys.iv = t
     @set! sys.unknowns = newsts
-    @set! sys.defaults = defs
+    @set! sys.bindings = binds
+    @set! sys.initial_conditions = ics
     @set! sys.name = name
     @set! sys.noise_eqs = neqs
     @set! sys.constraints = cstrs
@@ -1001,7 +1003,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     new_ps = copy(get_ps(sys))
     @set! sys.ps = new_ps
 
-    extras = []
+    extras = Union{SymbolicT, Pair}[]
     if all
         for x in filter(!is_variable_numeric, get_ps(sys))
             if any(y -> isequal(x, y) || y isa Pair && isequal(x, y[1]), mapping) ||
@@ -1014,10 +1016,10 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     end
     ps_to_specialize = Iterators.flatten((extras, mapping))
 
-    defs = copy(defaults(sys))
-    @set! sys.defaults = defs
+    defs = copy(initial_conditions(sys))
+    @set! sys.initial_conditions = defs
     final_defs = copy(defs)
-    evaluate_varmap!(final_defs, ps_to_specialize)
+    evaluate_varmap!(final_defs, Iterators.map(x -> x isa Pair ? x[1] : x, ps_to_specialize))
 
     subrules = Dict()
 
@@ -1032,7 +1034,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             """
             @assert symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) """
             Parameter $k needs an associated value to be respecialized. Found symbolic \
-            default $v.
+            initial value $v.
             """
         end
 
@@ -1064,7 +1066,7 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         end
 
         get_ps(sys)[idx] = new_p
-        defaults(sys)[new_p] = v
+        initial_conditions(sys)[new_p] = v
         subrules[unwrap(k)] = unwrap(new_p)
     end
 
@@ -1076,8 +1078,8 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
         @set! sys.noise_eqs = map(substituter, get_noise_eqs(sys))
     end
     @set! sys.assertions = Dict([substituter(k) => v for (k, v) in assertions(sys)])
-    @set! sys.parameter_dependencies = map(substituter, get_parameter_dependencies(sys))
-    @set! sys.defaults = Dict([substituter(k) => substituter(v) for (k, v) in defaults(sys)])
+    @set! sys.bindings = Dict([substituter(k) => substituter(v) for (k, v) in bindings(sys)])
+    @set! sys.initial_conditions = Dict([substituter(k) => substituter(v) for (k, v) in initial_conditions(sys)])
     @set! sys.guesses = Dict([k => substituter(v) for (k, v) in guesses(sys)])
     @set! sys.continuous_events = map(get_continuous_events(sys)) do cev
         SymbolicContinuousCallback(

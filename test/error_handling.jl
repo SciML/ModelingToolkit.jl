@@ -14,7 +14,7 @@ function UnderdefinedConstantVoltage(; name, V = 1.0)
         V ~ p.v - n.v        # Remove equation
     # 0 ~ p.i + n.i
     ]
-    System(eqs, t, [], [V], systems = [p, n], defaults = Dict(V => val), name = name)
+    System(eqs, t, [], [V], systems = [p, n], initial_conditions = Dict(V => val), name = name)
 end
 
 function OverdefinedConstantVoltage(; name, V = 1.0, I = 1.0)
@@ -27,7 +27,7 @@ function OverdefinedConstantVoltage(; name, V = 1.0, I = 1.0)
            # Overdefine p.i and n.i
            n.i ~ I
            p.i ~ I]
-    System(eqs, t, [], [V, I], systems = [p, n], defaults = Dict(V => val, I => val2),
+    System(eqs, t, [], [V, I], systems = [p, n], initial_conditions = Dict(V => val, I => val2),
         name = name)
 end
 

@@ -2,6 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, SymbolicIndexingInterfa
 import Logging
 using ModelingToolkit: t_nounits as t, D_nounits as D, ASSERTION_LOG_VARIABLE
 import DiffEqNoiseProcess
+using Test
 
 @variables x(t)
 @brownians a

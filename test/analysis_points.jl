@@ -319,7 +319,7 @@ end
                    connect(er.output, :e, pid.err_input)]
 
     closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
-        name = :closed_loop, defaults = [
+        name = :closed_loop, initial_conditions = [
             model.inertia1.phi => 0.0,
             model.inertia2.phi => 0.0,
             model.inertia1.w => 0.0,
@@ -470,10 +470,10 @@ end
     P_not_broken, _ = linearize(sys_inner, :u, :y)
     @test P_not_broken.A[] == -2
     P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:u])
-    @test isequal(defaults(ssys)[ssys.d_u], ssys.feedback.output.u)
+    @test isequal(initial_conditions(ssys)[ssys.d_u], ssys.feedback.output.u)
     @test P_broken.A[] == -1
     P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:y])
-    @test isequal(defaults(ssys)[ssys.d_y], ssys.P_inner.output.u)
+    @test isequal(initial_conditions(ssys)[ssys.d_y], ssys.P_inner.output.u)
     @test P_broken.A[] == -1
 
     Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))

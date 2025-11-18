@@ -190,29 +190,17 @@ Return the list of variables in `varlist` not present in `varmap`. Uses the same
 for missing array variables and `toterm` forms as [`add_fallbacks!`](@ref).
 """
 function missingvars(
-        varmap::AbstractDict, varlist::Vector; toterm = default_toterm)
-    missingvars = Set()
+        varmap::AtomicArrayDict, varlist::Vector; toterm = default_toterm)
+    missings = Set{SymbolicT}()
     for var in varlist
+        var = unwrap(var)
+        has_possibly_indexed_key(varmap, var) && continue
         haskey(varmap, var) && continue
         ttsym = toterm(var)
-        haskey(varmap, ttsym) && continue
-
-        if Symbolics.isarraysymbolic(var) && symbolic_has_known_size(var)
-            mask = map(eachindex(var)) do idx
-                !haskey(varmap, var[idx]) && !haskey(varmap, ttsym[idx])
-            end
-            if all(mask)
-                push!(missingvars, var)
-            else
-                for i in eachindex(var)
-                    mask[i] && push!(missingvars, var[i])
-                end
-            end
-        else
-            push!(missingvars, var)
-        end
+        has_possibly_indexed_key(varmap, ttsym) && continue
+        push!(missings, var)
     end
-    return missingvars
+    return missings
 end
 
 """
@@ -265,15 +253,20 @@ Add equations `eqs` to `varmap`. Assumes each element in `eqs` maps a single sym
 variable to an expression representing its value. In case `varmap` already contains an
 entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
-function add_observed_equations!(varmap::AbstractDict, eqs)
+function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector{Equation}, bound_ps::Union{Nothing, ROSymmapT} = nothing)
     for eq in eqs
-        if var_in_varlist(eq.lhs, keys(varmap), nothing)
+        if has_possibly_indexed_key(varmap, eq.lhs)
             SU.isconst(eq.rhs) && continue
-            var_in_varlist(eq.rhs, keys(varmap), nothing) && continue
-            !iscall(eq.rhs) || issym(operation(eq.rhs)) || continue
-            varmap[eq.rhs] = eq.lhs
+            has_possibly_indexed_key(varmap, eq.rhs) && continue
+            bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
+            Moshi.Match.@match eq.rhs begin
+                BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
+                BSImpl.Sym(;) => nothing
+                _ => continue
+            end
+            write_possibly_indexed_array!(varmap, eq.rhs, eq.lhs, COMMON_NOTHING)
         else
-            varmap[eq.lhs] = eq.rhs
+            write_possibly_indexed_array!(varmap, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
 end
@@ -285,17 +278,6 @@ Add all equations in `observed(sys)` to `varmap` using [`add_observed_equations!
 """
 function add_observed!(sys::AbstractSystem, varmap::AbstractDict)
     add_observed_equations!(varmap, observed(sys))
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Add all equations in `parameter_dependencies(sys)` to `varmap` using
-[`add_observed_equations!`](@ref).
-"""
-function add_parameter_dependencies!(sys::AbstractSystem, varmap::AbstractDict)
-    has_parameter_dependencies(sys) || return nothing
-    add_observed_equations!(varmap, parameter_dependencies(sys))
 end
 
 struct UnexpectedSymbolicValueInVarmap <: Exception
@@ -379,7 +361,9 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         is_initializeprob = false, substitution_limit = 100)
     isempty(vars) && return nothing
 
-    varmap = recursive_unwrap(varmap)
+    if !(varmap isa SymmapT)
+        varmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(varmap), COMMON_NOTHING)
+    end
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
@@ -394,7 +378,25 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         end
     end
     evaluate_varmap!(varmap, vars; limit = substitution_limit)
-    vals = map(x -> get(varmap, x, x), vars)
+    vals = map(vars) do x
+        x = unwrap(x)
+        v = get_possibly_indexed(varmap, x, x)
+        Moshi.Match.@match v begin
+            BSImpl.Const(; val) => return val
+            _ => begin
+                Moshi.Match.@match x begin
+                    BSImpl.Term(; f, args) && if f isa Initial && isequal(v, args[1]) end => begin
+                        if Symbolics.isarraysymbolic(v)
+                            return fill(false, size(v))
+                        else
+                            return false
+                        end
+                    end
+                    _ => return v
+                end
+            end
+        end
+    end
     if !allow_symbolic
         missingsyms = Any[]
         missingvals = Any[]
@@ -487,13 +489,13 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict, vars; limit = 100)
+function evaluate_varmap!(varmap::AtomicArrayDict, vars; limit = 100)
     for k in vars
-        v = get(varmap, k, nothing)
-        v === nothing && continue
-        symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-        haskey(varmap, k) || continue
-        varmap[k] = value(fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true)))
+        arr, _ = split_indexed_var(unwrap(k))
+        v = get(varmap, arr, COMMON_NOTHING)
+        v === COMMON_NOTHING && continue
+        SU.isconst(v) && continue
+        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
     end
 end
 
@@ -583,76 +585,25 @@ function EmptySciMLFunction{iip}(args...; kwargs...) where {iip}
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Construct the operating point of the system from the user-provided `u0map` and `pmap`, system
-defaults `defs`, unknowns `dvs` and parameters `ps`. Return the operating point as a dictionary,
-the list of unknowns for which no values can be determined, and the list of parameters for which
-no values can be determined.
-
-Also updates `u0map` and `pmap` in-place to contain all the initial conditions in `op`, split
-by unknowns and parameters respectively.
+For every `Initial(x)` parameter in `sys`, add `Initial(x) => x` to `op` if it does not
+already contain that key.
 """
-function build_operating_point!(sys::AbstractSystem,
-        op::AbstractDict, u0map::AbstractDict, pmap::AbstractDict, defs::AbstractDict, dvs, ps)
-    add_toterms!(op)
-    missing_unknowns = add_fallbacks!(op, dvs, defs)
-    for (k, v) in defs
-        haskey(op, k) && continue
-        op[k] = v
-    end
-    filter_missing_values!(op; missing_values = missing_unknowns)
-
-    merge!(op, pmap)
-    missing_pars = add_fallbacks!(op, ps, defs)
-    filter_missing_values!(op; missing_values = missing_pars)
-
-    filter!(kvp -> kvp[2] === nothing, u0map)
-    filter!(kvp -> kvp[2] === nothing, pmap)
-    neithermap = anydict()
-
-    for (k, v) in op
-        k = unwrap(k)
-        if is_parameter(sys, k)
-            pmap[k] = v
-        elseif has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k) &&
-               v !== nothing && !isequal(v, Initial(k))
-            op[Initial(k)] = v
-            pmap[Initial(k)] = v
-            op[k] = Initial(k)
-            pmap[k] = Initial(k)
-        elseif is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
-               iscall(k) &&
-               operation(k) isa Differential && is_variable(sys, arguments(k)[1])
-            if symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) &&
-               v !== nothing
-                op[Initial(k)] = v
-                pmap[Initial(k)] = v
-                op[k] = Initial(k)
-                v = Initial(k)
+function add_initials!(sys::AbstractSystem, op::SymmapT)
+    for p in get_ps(sys)
+        haskey(op, p) && continue
+        Moshi.Match.@match p begin
+            BSImpl.Term(; f, args) && if f isa Initial end => begin
+                write_possibly_indexed_array!(op, p, if Symbolics.isarraysymbolic(p)
+                    BSImpl.Const{VartypeT}(fill(false, size(p)))
+                else
+                    COMMON_FALSE
+                end, COMMON_FALSE)
             end
-            u0map[k] = v
-        else
-            neithermap[k] = v
+            _ => nothing
         end
     end
-
-    if !isempty(neithermap)
-        for (k, v) in u0map
-            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
-            isequal(k, v) && continue
-            u0map[k] = v
-        end
-        for (k, v) in pmap
-            symbolic_type(v) == NotSymbolic() && !is_array_of_symbolics(v) && continue
-            v = fixpoint_sub(v, neithermap; operator = Symbolics.Operator)
-            isequal(k, v) && continue
-            pmap[k] = v
-        end
-    end
-
-    return missing_unknowns, missing_pars
 end
 
 """
@@ -998,11 +949,11 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     """
     The operating point used to construct the initialization.
     """
-    op::Dict{Any, Any}
+    op::SymmapT
     """
     The `guesses` used to construct the initialization.
     """
-    guesses::Dict{Any, Any}
+    guesses::SymmapT
     """
     The `initialization_eqs` in addition to those of the system that were used to construct
     the initialization.
@@ -1063,7 +1014,8 @@ function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinear
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
-        guessvars[i] = !isequal(get(op, var, nothing), Initial(var))
+        varval = get(op, var, COMMON_NOTHING)
+        guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
     get_guessvars = getu(initprob, dvs[guessvars])
     get_initial_unknowns = getu(sys, Initial.(dvs))
@@ -1123,8 +1075,7 @@ constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments 
 to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, t, defs,
-        guesses, missing_unknowns; implicit_dae = false,
+        sys::AbstractSystem, iip, op::AbstractDict, t, guesses;
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__, kwargs...)
@@ -1134,8 +1085,9 @@ function maybe_build_initialization_problem(
         t = zero(floatT)
     end
 
+    orig_op = copy(op)
     initializeprob = ModelingToolkit.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs,
+        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...)
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1171,7 +1123,9 @@ function maybe_build_initialization_problem(
         nothing
     end
     meta = InitializationMetadata(
-        copy(op), anydict(copy(guesses)), Vector{Equation}(initialization_eqs),
+        orig_op,
+        as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING),
+        Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
@@ -1208,34 +1162,40 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkit.update_initializeprob!
     end
 
-    filter!(punknowns) do p
-        is_parameter_solvable(p, op, defs, guesses) && get(op, p, missing) === missing
+    missingvars = AtomicArraySet()
+    for (k, v) in op
+        v === COMMON_MISSING && push!(missingvars, k)
     end
-    # See comment below for why `getu` is not used here.
-    _pgetter = build_explicit_observed_function(initializeprob.f.sys, punknowns)
-    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
-    for (p, pval) in zip(punknowns, pvals)
-        p = unwrap(p)
-        op[p] = pval
-        if iscall(p) && operation(p) === getindex
-            arrp = arguments(p)[1]
-            get(op, arrp, nothing) !== missing && continue
-            op[arrp] = collect(arrp)
-        end
-    end
-
     if time_dependent_init
-        # We can't use `getu` here because that goes to `SII.observed`, which goes to
-        # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
-        # `eval_expression == true`, this then runs into world-age issues. Building an
-        # RGF here is fine since it is always discarded. We can't use `eval_module` for
-        # the RGF since the user may not have run RGF's init.
-        _ugetter = build_explicit_observed_function(initializeprob.f.sys, collect(missing_unknowns))
-        uvals = _ugetter(state_values(initializeprob), parameter_values(initializeprob))
-        for (v, val) in zip(missing_unknowns, uvals)
-            op[v] = val
+        binds = bindings(sys)
+        for v in unknowns(sys)
+            has_possibly_indexed_key(parent(binds), v) && continue
+            if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
+                push_as_atomic_array!(missingvars, v)
+            end
         end
-        empty!(missing_unknowns)
+    end
+    for v in get_all_discretes_fast(sys)
+            has_possibly_indexed_key(parent(binds), v) && continue
+        has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
+    end
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
+    end
+    for p in as_atomic_array_set(parameters(sys))
+        haskey(op, p) || push!(missingvars, p)
+    end
+    missingvars = collect(missingvars)
+
+    # We can't use `getu` here because that goes to `SII.observed`, which goes to
+    # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
+    # `eval_expression == true`, this then runs into world-age issues. Building an
+    # RGF here is fine since it is always discarded. We can't use `eval_module` for
+    # the RGF since the user may not have run RGF's init.
+    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars)
+    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
+    for (p, pval) in zip(missingvars, pvals)
+        op[p] = pval
     end
 
     return (;
@@ -1243,6 +1203,9 @@ function maybe_build_initialization_problem(
         initializeprob, update_initializeprob!, initializeprobmap,
         initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
 end
+
+rm_union(::Type{Union{T, Nothing}}) where {T} = T
+rm_union(::Type{T}) where {T} = T
 
 """
     $(TYPEDSIGNATURES)
@@ -1253,13 +1216,14 @@ with a constant value.
 function float_type_from_varmap(varmap, floatT = Bool)
     for (k, v) in varmap
         is_variable_floatingpoint(k) || continue
-        symbolic_type(v) == NotSymbolic() || continue
+        SU.isconst(v) || symbolic_type(v) isa NotSymbolic || continue
         is_array_of_symbolics(v) && continue
-
+        v = unwrap_const(v)
         if v isa AbstractArray
-            floatT = promote_type(floatT, eltype(v))
+            # Remove union in case some elements of the array are `nothing`
+            floatT = promote_type(floatT, rm_union(eltype(unwrap_const(v))))
         elseif v isa Number
-            floatT = promote_type(floatT, typeof(v))
+            floatT = promote_type(floatT, typeof(unwrap_const(v)))
         end
     end
     return float(floatT)
@@ -1306,7 +1270,7 @@ function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic
     u0_constructor === identity || return u0_constructor
     u0Type <: StaticArray || return u0_constructor
     return function (vals)
-        elT = if symbolic_u0 && any(x -> symbolic_type(x) != NotSymbolic(), vals)
+        elT = if symbolic_u0 && any(x -> x === nothing || symbolic_type(x) != NotSymbolic(), vals)
             nothing
         else
             floatT
@@ -1331,6 +1295,41 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
 end
 
 abstract type ProblemConstructionHook end
+
+function operating_point_preprocess(sys::AbstractSystem, op)
+    if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
+        throw(ArgumentError("""
+        The operating point passed to the problem constructor must be a symbolic map.
+        """))
+    end
+    op = recursive_unwrap(anydict(op))
+    symbols_to_symbolics!(sys, op)
+    return op
+end
+
+function build_operating_point(sys::AbstractSystem, op; fast_path = false)
+    if !fast_path
+        op = operating_point_preprocess(sys, op)
+    end
+    # Replace `nothing`s with sentinels so that `left_merge!` thinks they're values
+    # and doesn't override them. This is because explicit `nothing` values in `op`
+    # should be considered as overrides for initial conditions in `ics`.
+    map!(x -> @something(x, CommonSentinel()), values(op))
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+    ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
+    left_merge!(op, ics)
+    map!(values(op)) do v
+        Symbolics.isarraysymbolic(v) || return v
+        any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
+
+        new_v = map(SU.stable_eachindex(v)) do i
+            v[i] === COMMON_SENTINEL ? COMMON_NOTHING : v[i]
+        end
+        return SU.Const{VartypeT}(new_v)
+    end
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
+    return op
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -1379,33 +1378,25 @@ function process_SciMLProblem(
 
     u0Type = pType = typeof(op)
 
-    op = to_varmap(op, dvs)
-    symbols_to_symbolics!(sys, op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(u0_eltype, floatT)
+
+    op = build_operating_point(sys, op; fast_path = true)
 
     check_inputmap_keys(sys, op)
 
     op = getmetadata(sys, ProblemConstructionHook, identity)(op)
 
-    defs = add_toterms(recursive_unwrap(defaults(sys)); replace = is_discrete_system(sys))
     kwargs = NamedTuple(kwargs)
 
-    if eltype(eqs) <: Equation
-        obs, eqs = unhack_observed(observed(sys), eqs)
-    else
-        obs, _ = unhack_observed(observed(sys), Equation[x for x in eqs if x isa Equation])
-    end
+    add_initials!(sys, op)
 
-    u0map = anydict()
-    pmap = anydict()
-    missing_unknowns,
-    missing_pars = build_operating_point!(sys, op,
-        u0map, pmap, defs, dvs, ps)
+    obs, eqs = unhack_observed(observed(sys), eqs)
 
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
-        add_observed_equations!(op, obs)
+        add_observed_equations!(op, obs, bindings(sys))
     end
 
     u0_constructor = get_u0_constructor(u0_constructor, u0Type, u0_eltype, symbolic_u0)
@@ -1414,8 +1405,8 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, defs, guesses, missing_unknowns;
-            implicit_dae, warn_initialize_determined, initialization_eqs,
+            op, t, guesses;
+            warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
@@ -1429,8 +1420,19 @@ function process_SciMLProblem(
         op[iv] = t
     end
 
+    binds = bindings(sys)
+    # If we aren't building an initialization problem, we aren't respecting non-parameter
+    # bindings anyway.
+    if build_initializeprob
+        no_override_merge_except_missing!(op, binds)
+    else
+        for p in bound_parameters(sys)
+            haskey(op, p) && throw(ArgumentError("Cannot provide initial value for bound parameter $p."))
+            op[p] = binds[p]
+        end
+        left_merge!(op, binds)
+    end
     add_observed_equations!(op, obs)
-    add_parameter_dependencies!(sys, op)
 
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
@@ -1817,17 +1819,13 @@ Return the `u0` vector for the given system `sys` and variable-value mapping `va
 keyword arguments are forwarded to [`varmap_to_vars`](@ref).
 """
 function get_u0(sys::AbstractSystem, varmap; kwargs...)
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    op = to_varmap(varmap, dvs)
-    add_observed!(sys, op)
-    add_parameter_dependencies!(sys, op)
-    missing_dvs, _ = build_operating_point!(
-        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
+    op = build_operating_point(sys, varmap)
+    binds = bindings(sys)
+    no_override_merge_except_missing!(op, binds)
+    obs, _ = unhack_observed(observed(sys), equations(sys))
+    add_observed_equations!(op, obs)
 
-    isempty(missing_dvs) || throw(MissingVariablesError(collect(missing_dvs)))
-
-    return varmap_to_vars(op, dvs; kwargs...)
+    return varmap_to_vars(op, unknowns(sys); kwargs...)
 end
 
 """
@@ -1838,19 +1836,16 @@ keyword arguments are forwarded to [`MTKParameters`](@ref) for split systems and
 [`varmap_to_vars`](@ref) for non-split systems.
 """
 function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    op = to_varmap(varmap, dvs)
-    add_observed!(sys, op)
-    add_parameter_dependencies!(sys, op)
-    _, missing_ps = build_operating_point!(
-        sys, op, Dict(), Dict(), defaults(sys), dvs, ps)
-
-    isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
+    op = build_operating_point(sys, varmap)
+    binds = bindings(sys)
+    no_override_merge_except_missing!(op, binds)
+    add_initials!(sys, op)
+    obs, _ = unhack_observed(observed(sys), equations(sys))
+    add_observed_equations!(op, obs)
 
     if split
         MTKParameters(sys, op; kwargs...)
     else
-        varmap_to_vars(op, ps; kwargs...)
+        varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)
     end
 end

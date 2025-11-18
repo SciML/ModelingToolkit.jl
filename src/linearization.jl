@@ -718,7 +718,7 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
     prob = LinearizationProblem(lin_fun, t)
-    op = anydict(op)
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
     for (k, v) in op
         v === nothing && continue

@@ -44,175 +44,148 @@ $(TYPEDSIGNATURES)
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
 """
 function generate_initializesystem_timevarying(sys::AbstractSystem;
-        op = Dict(),
-        initialization_eqs = [],
-        guesses = Dict(),
+        op = SymmapT(),
+        initialization_eqs = Equation[],
+        guesses = SymmapT(),
         default_dd_guess = Bool(0),
+        fast_path = false,
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...)
     eqs = equations(sys)
-    if !(eqs isa Vector{Equation})
-        eqs = Equation[x for x in eqs if x isa Equation]
-    end
     trueobs, eqs = unhack_observed(observed(sys), eqs)
     # remove any observed equations that directly or indirectly contain
     # delayed unknowns
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
-    vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
-    vars_set = Set(vars) # for efficient in-lookup
-    arrvars = Set()
-    for var in vars
-        if iscall(var) && operation(var) === getindex
-            push!(arrvars, first(arguments(var)))
-        end
-    end
+
+    # Firstly, all variables and observables are initialization unknowns
+    init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
+    add_trivial_initsys_vars!(init_vars_set, unknowns(sys), trueobs)
+    union!(init_vars_set, get_all_discretes_fast(sys))
 
     eqs_ics = Equation[]
-    defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
-    additional_guesses = anydict(guesses)
-    guesses = merge(get_guesses(sys), additional_guesses)
-    idxs_diff = isdiffeq.(eqs)
 
-    # PREPROCESSING
-    op = anydict(op)
-    if isempty(op)
-        op = anydict(copy(defs))
-    end
-    scalarize_vars_in_varmap!(op, arrvars)
-    u0map = anydict()
-    pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
-        parameters(sys; initial_parameters = true))
-    for (k, v) in op
-        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
-            pmap[k] = v
-        end
-    end
-    initsys_preprocessing!(u0map, defs)
-
-    # 1) Use algebraic equations of system as initialization constraints
-    idxs_alge = .!idxs_diff
-    append!(eqs_ics, eqs[idxs_alge]) # start equation list with algebraic equations
-
-    eqs_diff = eqs[idxs_diff]
-    D = Differential(get_iv(sys))
-    diffmap = DerivativeDict(merge(
-        Dict(eq.lhs => eq.rhs for eq in eqs_diff),
-        Dict(D(eq.lhs) => D(eq.rhs) for eq in trueobs)
-    ))
-
-    if has_schedule(sys) && (schedule = get_schedule(sys); !isnothing(schedule))
-        # 2) process dummy derivatives and u0map into initialization system
-        # prepare map for dummy derivative substitution
-        for x in filter(x -> !isnothing(x[1]), schedule.dummy_sub)
-            # set dummy derivatives to default_dd_guess unless specified
-            push!(defs, x[1] => get(guesses, x[1], default_dd_guess))
-        end
-        function process_u0map_with_dummysubs(y, x)
-            y = get(schedule.dummy_sub, y, y)
-            y = fixpoint_sub(y, diffmap)
-            # FIXME: DAEs provide initial conditions that require reducing the system
-            # to index zero. If `isdifferential(y)`, an initial condition was given for an
-            # algebraic variable, so ignore it. Otherwise, the initialization system
-            # gets a `D(y) ~ ...` equation and errors. This is the same behavior as v9.
-            if isdifferential(y)
-                return
+    inps = copy(get_inputs(sys))
+    ps = parameters(sys; initial_parameters = true)
+    init_ps = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
+    for v in inps
+        Moshi.Match.@match v begin
+            BSImpl.Term(; f, args) => begin
+                if f === getindex
+                    push!(init_ps, args[1])
+                elseif f isa SymbolicT
+                    push!(init_ps, v)
+                else
+                    error("Unexpected input $v.")
+                end
             end
-            # If we have `D(x) ~ x` and provide [D(x) => x, x => 1.0] to `u0map`, then
-            # without this condition `defs` would get `x => x` instead of retaining
-            # `x => 1.0`.
-            isequal(y, x) && return
-            if y ∈ vars_set
-                # variables specified in u0 overrides defaults
-                push!(defs, y => x)
-            elseif y isa Symbolics.Arr
-                # TODO: don't scalarize arrays
-                merge!(defs, Dict(scalarize(y .=> x)))
-            elseif y isa Symbolics.BasicSymbolic
-                # y is a derivative expression expanded; add it to the initialization equations
-                push!(eqs_ics, y ~ x)
-            else
-                error("Initialization expression $y is currently not supported. If its a higher order derivative expression, then only the dummy derivative expressions are supported.")
-            end
-        end
-        for (y, x) in u0map
-            if Symbolics.isarraysymbolic(y)
-                process_u0map_with_dummysubs.(collect(y), collect(x))
-            else
-                process_u0map_with_dummysubs(y, x)
-            end
-        end
-    else
-        # TODO: Check if this is still necessary
-        # 2) System doesn't have a schedule, so dummy derivatives don't exist/aren't handled (SDESystem)
-        for (k, v) in u0map
-            defs[k] = v
+            # Intentionally no fallback case. All inputs are originally variables.
         end
     end
+    push!(init_ps, get_iv(sys)::SymbolicT)
+    initsys_sort_system_parameters!(init_vars_set, init_ps, ps)
 
-    # 3) process other variables
-    for var in vars
-        if var ∈ keys(op)
-            push!(eqs_ics, var ~ op[var])
-        elseif var ∈ keys(guesses)
-            push!(defs, var => guesses[var])
-        elseif check_defguess
-            error("Invalid setup: variable $(var) has no default value or initial guess")
-        end
+    guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
+    left_merge!(guesses, ModelingToolkit.guesses(sys))
+
+    # Anything with a binding of `missing` is solvable.
+    binds = bindings(sys)
+    newbinds = SymmapT()
+    # All bound parameters are solvable. The corresponding equation comes from the binding
+    for v in bound_parameters(sys)
+         push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
+    initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, guesses)
 
-    # 4) process explicitly provided initialization equations
-    if !algebraic_only
-        initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
-        for eq in initialization_eqs
-            eq = fixpoint_sub(eq, diffmap) # expand dummy derivatives
+    derivative_rules = DerivativeDict()
+    dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
+    banned_derivatives = Set{SymbolicT}()
+    if has_schedule(sys) && (schedule = get_schedule(sys); schedule isa Schedule)
+        for (k, v) in schedule.dummy_sub
+            if !has_possibly_indexed_key(guesses, k)
+                write_possibly_indexed_array!(guesses, k, dd_guess_sym, COMMON_NOTHING)
+            end
+            ttk = default_toterm(k)
+            # For DDEs, the derivatives can have delayed terms
+            if _has_delays(sys, v, banned_derivatives)
+                push!(banned_derivatives, ttk)
+                continue
+            end
+            push_as_atomic_array!(init_vars_set, ttk)
+            isequal(ttk, v) || push!(eqs_ics, ttk ~ v)
+            derivative_rules[k] = ttk
+        end
+        merge!(derivative_rules, as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(derivative_rules), COMMON_NOTHING))
+    end
+    for eq in eqs
+        if _has_delays(sys, eq.rhs, banned_derivatives)
+            isdiffeq(eq) && push!(banned_derivatives, default_toterm(eq.lhs))
+            continue
+        end
+        if isdiffeq(eq)
+            get!(derivative_rules, eq.lhs) do
+                ttk = default_toterm(eq.lhs)
+                push_as_atomic_array!(init_vars_set, ttk)
+                push!(eqs_ics, ttk ~ eq.rhs)
+                ttk
+            end
+        else
             push!(eqs_ics, eq)
         end
     end
-
-    # 5) process parameters as initialization unknowns
-    solved_params = setup_parameter_initialization!(
-        sys, pmap, defs, guesses, eqs_ics; check_defguess)
-
-    # 6) parameter dependencies become equations, their LHS become unknowns
-    # non-numeric dependent parameters stay as parameter dependencies
-    new_parameter_deps = solve_parameter_dependencies!(
-        sys, solved_params, eqs_ics, defs, guesses)
-
-    # 7) handle values provided for dependent parameters similar to values for observed variables
-    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics)
-
-    # parameters do not include ones that became initialization unknowns
-    pars = Vector{SymbolicParam}(filter(
-        !in(solved_params), parameters(sys; initial_parameters = true)))
-    push!(pars, get_iv(sys))
-
-    # 8) use observed equations for guesses of observed variables if not provided
-    guessed = Set(keys(defs)) # x(t), D(x(t)), ...
-    guessed = union(guessed, Set(default_toterm.(guessed))) # x(t), D(x(t)), xˍt(t), ...
+    D = Differential(get_iv(sys))
     for eq in trueobs
-        if !(eq.lhs in guessed)
-            defs[eq.lhs] = eq.rhs
-            #push!(guessed, eq.lhs) # should not encounter eq.lhs twice, so don't need to track it
+        # Observed derivatives aren't added the same way as dummy_sub/diffeqs because
+        # doing so would require all observed equations to be symbolically differentiable.
+        get!(derivative_rules, D(eq.lhs), D(eq.rhs))
+        # Add as guesses
+        if !has_possibly_indexed_key(guesses, eq.lhs)
+            write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
+    op::SymmapT = if fast_path
+        op
+    else
+        build_operating_point(sys, op)
+    end
+    timevaring_initsys_process_op!(init_vars_set, init_ps, eqs_ics, op, derivative_rules, guesses)
+
+    # process explicitly provided initialization equations
+    if !algebraic_only
+        initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
+        for eq in initialization_eqs
+            eq = fixpoint_sub(eq, derivative_rules; maxiters = get_maxiters(derivative_rules)) # expand dummy derivatives
+            push!(eqs_ics, eq)
+        end
+    end
+    # TODO
+    # 8) use observed equations for guesses of observed variables if not provided
+    # guessed = Set(keys(defs)) # x(t), D(x(t)), ...
+    # guessed = union(guessed, Set(default_toterm.(guessed))) # x(t), D(x(t)), xˍt(t), ...
+    # for eq in trueobs
+    #     if !(eq.lhs in guessed)
+    #         defs[eq.lhs] = eq.rhs
+    #         #push!(guessed, eq.lhs) # should not encounter eq.lhs twice, so don't need to track it
+    #     end
+    # end
+
     append!(eqs_ics, trueobs)
 
-    vars = [vars; collect(solved_params)]
-
-    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
-    merge!(defs, initials)
-    isys = System(Vector{Equation}(eqs_ics),
+    vars = collect(init_vars_set)
+    pars = collect(init_ps)
+    System(Vector{Equation}(eqs_ics),
         vars,
         pars;
-        defaults = defs,
+        bindings = newbinds,
+        initial_conditions = guesses,
         checks = check_units,
         name,
         is_initializesystem = true,
+        discover_from_metadata = false,
         kwargs...)
-    @set isys.parameter_dependencies = new_parameter_deps
 end
+
+get_maxiters(subrules::AbstractDict) = max(3, min(1000, length(subrules)))
 
 """
 $(TYPEDSIGNATURES)
@@ -225,228 +198,238 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         guesses = Dict(),
         algebraic_only = false,
         check_units = true, check_defguess = false,
+        fast_path = false,
         name = nameof(sys), kwargs...)
     eqs = equations(sys)
     trueobs, eqs = unhack_observed(observed(sys), eqs)
-    vars = unique([unknowns(sys); getfield.(trueobs, :lhs)])
+    # remove any observed equations that directly or indirectly contain
+    # delayed unknowns
+    isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
+
+    og_dvs = as_atomic_array_set(unknowns(sys))
+    union!(og_dvs, as_atomic_array_set(observables(sys)))
+
+    init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
 
     eqs_ics = Equation[]
-    defs = copy(defaults(sys)) # copy so we don't modify sys.defaults
-    additional_guesses = anydict(guesses)
-    guesses = merge(get_guesses(sys), additional_guesses)
 
-    # PREPROCESSING
-    op = anydict(op)
-    u0map = anydict()
-    pmap = anydict()
-    build_operating_point!(sys, op, u0map, pmap, Dict(), unknowns(sys),
-        parameters(sys; initial_parameters = true))
-    for (k, v) in op
-        if has_parameter_dependency_with_lhs(sys, k) && is_variable_floatingpoint(k)
-            pmap[k] = v
+    ps = parameters(sys; initial_parameters = true)
+    init_ps = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
+    initsys_sort_system_parameters!(init_vars_set, init_ps, ps)
+
+    guesses = SymmapT(guesses)
+    left_merge!(guesses, ModelingToolkit.guesses(sys))
+
+    # Anything with a binding of `missing` is solvable.
+    binds = bindings(sys)
+    newbinds = SymmapT()
+    # All bound parameters are solvable. The corresponding equation comes from the binding
+    for v in bound_parameters(sys)
+         push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
+    end
+    # Anything with a binding of `missing` is solvable.
+    for (k, v) in binds
+        if v === COMMON_MISSING
+            push!(init_vars_set, k)
+            delete!(init_ps, k)
+            continue
+        end
+        k in og_dvs && continue
+        if is_variable_floatingpoint(k)
+            push!(eqs_ics, k ~ v)
+            get!(guesses, k, v)
+        else
+            newbinds[k] = v
         end
     end
-    initsys_preprocessing!(u0map, defs)
 
-    # Calculate valid `Initial` parameters. These are unknowns for
-    # which constant initial values were provided. By this point,
-    # they have been separated into `x => Initial(x)` in `u0map`
-    # and `Initial(x) => val` in `pmap`.
-    valid_initial_parameters = Set{BasicSymbolic}()
-    for (k, v) in u0map
-        isequal(Initial(k), v) || continue
-        push!(valid_initial_parameters, v)
+    op::SymmapT = if fast_path
+        op
+    else
+        build_operating_point(sys, op)
     end
 
-    # get the initialization equations
+    valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
+    for (k, v) in op
+        if is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
+            Moshi.Match.@match k begin
+                BSImpl.Term(; f, args) && if f isa Differential end => is_variable(sys, args[1])
+                _ => false
+            end
+
+            isconst(v) && push!(valid_initial_parameters, Initial(k))
+            continue
+        end
+
+        if v === COMMON_MISSING
+            push!(init_vars_set, k)
+            delete!(init_ps, k)
+            continue
+        end
+
+        # No need to process any non-solvables
+        if k in init_ps
+            continue
+        end
+
+        if isconst(v)
+            push!(eqs_ics, k ~ Initial(k))
+            op[Initial(k)] = v
+        else
+            push!(eqs_ics, k ~ v)
+        end
+    end
+
+    for k in valid_initial_parameters
+        op[k] = Moshi.Data.variant_getfield(k, BSImpl.Term, :args)[1]
+    end
+
+    # process explicitly provided initialization equations
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
     end
 
     # only include initialization equations where all the involved `Initial`
     # parameters are valid.
-    vs = Set()
+    vs = Set{SymbolicT}()
+    allpars = as_atomic_array_set(parameters(sys; initial_parameters = true))
+    union!(allpars, bound_parameters(sys))
     initialization_eqs = filter(initialization_eqs) do eq
         empty!(vs)
         SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
-        allpars = full_parameters(sys)
-        for p in allpars
-            if symbolic_type(p) == ArraySymbolic() && symbolic_has_known_size(p)
-                append!(allpars, Symbolics.scalarize(p))
-            end
-        end
-        allpars = Set(allpars)
-        non_params = filter(!in(allpars), vs)
         # error if non-parameters are present in the initialization equations
+        non_params = filter(!Base.Fix1(contains_possibly_indexed_element, allpars), vs)
         if !isempty(non_params)
             throw(UnknownsInTimeIndependentInitializationError(eq, non_params))
         end
         filter!(x -> iscall(x) && isinitial(x), vs)
+        return issubset(vs, valid_initial_parameters)
         invalid_initials = setdiff(vs, valid_initial_parameters)
         return isempty(invalid_initials)
     end
 
     append!(eqs_ics, initialization_eqs)
 
-    # process parameters as initialization unknowns
-    solved_params = setup_parameter_initialization!(
-        sys, pmap, defs, guesses, eqs_ics; check_defguess)
-
-    # parameter dependencies become equations, their LHS become unknowns
-    # non-numeric dependent parameters stay as parameter dependencies
-    new_parameter_deps = solve_parameter_dependencies!(
-        sys, solved_params, eqs_ics, defs, guesses)
-
-    # handle values provided for dependent parameters similar to values for observed variables
-    handle_dependent_parameter_constraints!(sys, pmap, eqs_ics)
-
-    # parameters do not include ones that became initialization unknowns
-    pars = Vector{SymbolicParam}(filter(
-        !in(solved_params), parameters(sys; initial_parameters = true)))
-    vars = collect(solved_params)
-
-    initials = Dict(k => v for (k, v) in pmap if isinitial(k))
-    merge!(defs, initials)
-    isys = System(Vector{Equation}(eqs_ics),
+    vars = collect(init_vars_set)
+    pars = collect(init_ps)
+    System(Vector{Equation}(eqs_ics),
         vars,
         pars;
-        defaults = defs,
+        initial_conditions = guesses,
         checks = check_units,
         name,
         is_initializesystem = true,
+        discover_from_metadata = false,
         kwargs...)
-    @set isys.parameter_dependencies = new_parameter_deps
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Preprocessing step for initialization. Currently removes key `k` from `defs` and `u0map`
-if `k => nothing` is present in `u0map`.
-"""
-function initsys_preprocessing!(u0map::AbstractDict, defs::AbstractDict)
-    for (k, v) in u0map
-        v === nothing || continue
-        delete!(defs, k)
+function add_trivial_initsys_vars!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}}, dvs::Vector{SymbolicT}, trueobs::Vector{Equation})
+    for v in dvs
+        push!(init_vars_set, split_indexed_var(v)[1])
     end
-    filter_missing_values!(u0map)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Update `defs` and `eqs_ics` appropriately for parameter initialization. Return a dictionary
-mapping solvable parameters to their `tovar` variants.
-"""
-function setup_parameter_initialization!(
-        sys::AbstractSystem, pmap::AbstractDict, defs::AbstractDict,
-        guesses::AbstractDict, eqs_ics::Vector{Equation}; check_defguess = false)
-    solved_params = Set()
-    for p in parameters(sys)
-        if is_parameter_solvable(p, pmap, defs, guesses)
-            # If either of them are `missing` the parameter is an unknown
-            # But if the parameter is passed a value, use that as an additional
-            # equation in the system
-            _val1 = get_possibly_array_fallback_singletons(pmap, p)
-            _val2 = get_possibly_array_fallback_singletons(defs, p)
-            _val3 = get_possibly_array_fallback_singletons(guesses, p)
-            varp = p
-            push!(solved_params, p)
-            # Has a default of `missing`, and (either an equation using the value passed to `ODEProblem` or a guess)
-            if _val2 === missing
-                if _val1 !== nothing && _val1 !== missing
-                    push!(eqs_ics, varp ~ _val1)
-                    push!(defs, varp => _val1)
-                elseif _val3 !== nothing
-                    # assuming an equation exists (either via algebraic equations or initialization_eqs)
-                    push!(defs, varp => _val3)
-                elseif check_defguess
-                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
-                end
-                # `missing` passed to `ODEProblem`, and (either an equation using default or a guess)
-            elseif _val1 === missing
-                if _val2 !== nothing && _val2 !== missing
-                    push!(eqs_ics, varp ~ _val2)
-                    push!(defs, varp => _val2)
-                elseif _val3 !== nothing
-                    push!(defs, varp => _val3)
-                elseif check_defguess
-                    error("Invalid setup: parameter $(p) has no default value, initial value, or guess")
-                end
-                # given a symbolic value to ODEProblem
-            elseif symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1)
-                push!(eqs_ics, varp ~ _val1)
-                push!(defs, varp => _val3)
-                # No value passed to `ODEProblem`, but a default and a guess are present
-                # _val2 !== missing is implied by it falling this far in the elseif chain
-            elseif _val1 === nothing && _val2 !== nothing
-                push!(eqs_ics, varp ~ _val2)
-                push!(defs, varp => _val3)
-            else
-                # _val1 !== missing and _val1 !== nothing, so a value was provided to ODEProblem
-                # This would mean `is_parameter_solvable` returned `false`, so we never end up
-                # here
-                error("This should never be reached")
-            end
-        end
+    for eq in trueobs
+        push!(init_vars_set, split_indexed_var(eq.lhs)[1])
     end
-
-    return solved_params
 end
 
-"""
-    $(TYPEDSIGNATURES)
+function initsys_sort_system_parameters!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                         ps::Vector{SymbolicT})
+    for v in ps
+        arr, _ = split_indexed_var(v)
+        arr in init_vars_set && continue
+        push!(init_ps, arr)
+    end
+end
 
-Add appropriate parameter dependencies as initialization equations. Return the new list of
-parameter dependencies for the initialization system.
-"""
-function solve_parameter_dependencies!(sys::AbstractSystem, solved_params::AbstractSet,
-        eqs_ics::Vector{Equation}, defs::AbstractDict, guesses::AbstractDict)
-    new_parameter_deps = Equation[]
-    for eq in parameter_dependencies(sys)
-        if !is_variable_floatingpoint(eq.lhs)
-            push!(new_parameter_deps, eq)
+function initsys_sort_system_bindings!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                       init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                       eqs_ics::Vector{Equation}, binds::ROSymmapT,
+                                       newbinds::SymmapT, guesses::SymmapT)
+    # Anything with a binding of `missing` is solvable.
+    for (k, v) in binds
+        if v === COMMON_MISSING
+            push!(init_vars_set, k)
+            delete!(init_ps, k)
             continue
         end
-        push!(solved_params, eq.lhs)
-        push!(eqs_ics, eq)
-        guessval = get(guesses, eq.lhs, eq.rhs)
-        push!(defs, eq.lhs => guessval)
-    end
-
-    return new_parameter_deps
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Turn values provided for parameter dependencies into initialization equations.
-"""
-function handle_dependent_parameter_constraints!(sys::AbstractSystem, pmap::AbstractDict,
-        eqs_ics::Vector{Equation})
-    for (k, v) in merge(defaults(sys), pmap)
-        if is_variable_floatingpoint(k) && has_parameter_dependency_with_lhs(sys, k)
+        if is_variable_floatingpoint(k)
             push!(eqs_ics, k ~ v)
+            get!(guesses, k, v)
+        else
+            newbinds[k] = v
         end
     end
-
-    return nothing
 end
 
-"""
-    $(TYPEDSIGNATURES)
+function timevaring_initsys_process_op!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                        init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+                                        eqs_ics::Vector{Equation}, op::SymmapT,
+                                        derivative_rules::DerivativeDict, guesses::SymmapT)
+    for (k, v) in op
+        # Late binding `missing` also makes the key solvable
+        if v === COMMON_MISSING
+            push!(init_vars_set, k)
+            delete!(init_ps, k)
+            continue
+        end
+        # No need to process any non-solvables
+        if k in init_ps
+            continue
+        end
 
-Get a new symbolic variable of the same type and size as `sym`, which is a parameter.
-"""
-function get_initial_value_parameter(sym)
-    sym = default_toterm(unwrap(sym))
-    name = hasname(sym) ? getname(sym) : Symbol(sym)
-    if iscall(sym) && operation(sym) === getindex
-        name = Symbol(name, :_, join(arguments(sym)[2:end], "_"))
+        # At this point, not only is `k` solvable but it should also have
+        # `Initial(k)` defined if required.
+        ik = Initial(k)
+        @assert ik in init_ps
+        subk = fixpoint_sub(k, derivative_rules; maxiters = get_maxiters(derivative_rules))
+        # FIXME: DAEs can have initial conditions that require reducing the system
+        # to index zero. If `isdifferential(y)`, an initial condition was given for the
+        # derivative of an algebraic variable, so ignore it. Otherwise, the initialization
+        # system gets a `D(y) ~ ...` equation and errors. This is the same behavior as v9.
+        if isdifferential(subk)
+            continue
+        end
+        shk = SU.shape(k)
+        if SU.isconst(v)
+            # The operating point already has `Initial(x) => x`. This same operating point
+            # will be passed to the `NonlinearProblem` constructor, and guesses will not take
+            # priority over it. So instead of adding `Initial(x) => v` as a guess, add `x => v`.
+            op[ik] = k
+            left_merge!(guesses, AtomicArrayDict(k => v))
+            if !SU.is_array_shape(shk)
+                push!(eqs_ics, subk ~ ik)
+                continue
+            end
+            for i in SU.stable_eachindex(k)
+                v[i] === COMMON_NOTHING && continue
+                push!(eqs_ics, subk[i] ~ ik[i])
+            end
+            continue
+        end
+        if Symbolics.isarraysymbolic(k)
+            for idx in SU.stable_eachindex(k)
+                vv = v[idx]
+                # `as_atomic_dict_with_defaults` is used to build `op`, which in
+                # `build_operating_point` will put `COMMON_NOTHING` for missing
+                # entries. Ignore them.
+                vv === COMMON_NOTHING && continue
+                kk = k[idx]
+                subkk = subk[idx]
+                ikk = Initial(kk)
+                if SU.isconst(vv)
+                    push!(eqs_ics, subkk ~ ikk)
+                else
+                    write_possibly_indexed_array!(guesses, kk, vv, COMMON_FALSE)
+                    vv = fixpoint_sub(vv, derivative_rules; maxiters = get_maxiters(derivative_rules))
+                    push!(eqs_ics, subkk ~ vv)
+                end
+            end
+        else
+            v = fixpoint_sub(v, derivative_rules; maxiters = get_maxiters(derivative_rules))
+            isequal(subk, v) || push!(eqs_ics, subk ~ v)
+        end
     end
-    name = Symbol(name, :ₘₜₖ_₀)
-    newvar = unwrap(similar_variable(sym, name; use_gensym = false))
-    return toparam(newvar)
 end
 
 """
@@ -457,7 +440,7 @@ directly or indirectly contain a delayed unknown of `sys`.
 """
 function filter_delay_equations_variables!(sys::AbstractSystem, trueobs::Vector{Equation})
     is_time_dependent(sys) || return trueobs
-    banned_vars = Set()
+    banned_vars = Set{SymbolicT}()
     idxs_to_remove = Int[]
     for (i, eq) in enumerate(trueobs)
         _has_delays(sys, eq.rhs, banned_vars) || continue
@@ -495,50 +478,6 @@ function _has_delays(sys::AbstractSystem, ex, banned)
     return any(x -> _has_delays(sys, x, banned), args)
 end
 
-function get_possibly_array_fallback_singletons(varmap, p)
-    if haskey(varmap, p)
-        return value(varmap[p])
-    end
-    if symbolic_type(p) == ArraySymbolic()
-        symbolic_has_known_size(p) || return nothing
-        scal = collect(p)
-        if all(x -> haskey(varmap, x), scal)
-            res = [value(varmap[x]) for x in scal]
-            if any(x -> x === nothing, res)
-                return nothing
-            elseif any(x -> x === missing, res)
-                return missing
-            end
-            return res
-        end
-    elseif iscall(p) && operation(p) == getindex
-        arrp = arguments(p)[1]
-        val = get_possibly_array_fallback_singletons(varmap, arrp)
-        if val === nothing
-            return nothing
-        elseif val === missing
-            return missing
-        else
-            return val
-        end
-    end
-    return nothing
-end
-
-function is_parameter_solvable(p, pmap, defs, guesses)
-    p = unwrap(p)
-    is_variable_floatingpoint(p) || return false
-    _val1 = pmap isa AbstractDict ? get_possibly_array_fallback_singletons(pmap, p) :
-            nothing
-    _val2 = get_possibly_array_fallback_singletons(defs, p)
-    _val3 = get_possibly_array_fallback_singletons(guesses, p)
-    # either (missing is a default or was passed to the ODEProblem) or (nothing was passed to
-    # the ODEProblem and it has a default and a guess)
-    return ((_val1 === missing || _val2 === missing) ||
-            (symbolic_type(_val1) != NotSymbolic() || is_array_of_symbolics(_val1) ||
-             _val1 === nothing && _val2 !== nothing)) && _val3 !== nothing
-end
-
 function SciMLBase.remake_initialization_data(
         sys::AbstractSystem, odefn, u0, t0, p, newu0, newp)
     if u0 === missing && p === missing
@@ -550,15 +489,12 @@ function SciMLBase.remake_initialization_data(
     # We _always_ build initialization now. So if we didn't build  it before, don't do
     # it now
     oldinitdata === nothing && return nothing
+    meta = oldinitdata.metadata
+    meta isa InitializationMetadata || return oldinitdata
 
     if !(eltype(u0) <: Pair) && !(eltype(p) <: Pair)
-        oldinitdata === nothing && return nothing
-
         oldinitprob = oldinitdata.initializeprob
         oldinitprob === nothing && return nothing
-
-        meta = oldinitdata.metadata
-        meta isa InitializationMetadata || return oldinitdata
 
         reconstruct_fn = meta.oop_reconstruct_u0_p
         # the history function doesn't matter because `reconstruct_fn` is only going to
@@ -582,84 +518,54 @@ function SciMLBase.remake_initialization_data(
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    u0map = to_varmap(u0, dvs)
-    symbols_to_symbolics!(sys, u0map)
-    add_toterms!(u0map)
-    pmap = to_varmap(p, ps)
-    symbols_to_symbolics!(sys, pmap)
-    guesses = Dict()
-    defs = defaults(sys)
+    if eltype(u0) <: Pair
+        if u0 isa Array
+            u0 = Dict(u0)
+        end
+        if keytype(u0) === Any || keytype(u0) <: Symbol
+            u0 = anydict(u0)
+            symbols_to_symbolics!(sys, u0)
+        end
+    else
+        u0 = to_varmap(u0, dvs)
+        symbols_to_symbolics!(sys, u0)
+    end
+    u0map = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(u0), COMMON_NOTHING)
+    if eltype(p) <: Pair
+        if p isa Array
+            p = Dict(p)
+        end
+        if keytype(p) === Any || keytype(p) <: Symbol
+            p = anydict(p)
+            symbols_to_symbolics!(sys, p)
+        end
+    else
+        p = to_varmap(p, ps)
+        symbols_to_symbolics!(sys, p)
+    end
+    pmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(p), COMMON_NOTHING)
+    op = merge!(u0map, pmap)
+    guesses = SymmapT()
     use_scc = true
     initialization_eqs = Equation[]
-    op = anydict()
 
-    if oldinitdata !== nothing && oldinitdata.metadata isa InitializationMetadata
-        meta = oldinitdata.metadata
-        op = copy(meta.op)
-        merge!(guesses, meta.guesses)
-        use_scc = meta.use_scc
-        initialization_eqs = meta.additional_initialization_eqs
-        time_dependent_init = meta.time_dependent_init
-    else
-        # there is no initializeprob, so the original problem construction
-        # had no solvable parameters and had the differential variables
-        # specified in `u0map`.
-        if u0 === missing
-            # the user didn't pass `u0` to `remake`, so they want to retain
-            # existing values. Fill the differential variables in `u0map`,
-            # initialization will either be elided or solve for the algebraic
-            # variables
-            diff_idxs = isdiffeq.(equations(sys))
-            for i in eachindex(dvs)
-                diff_idxs[i] || continue
-                u0map[dvs[i]] = newu0[i]
-            end
-        end
-        # ensure all unknowns have guesses in case they weren't given one
-        # and become solvable
-        for i in eachindex(dvs)
-            haskey(guesses, dvs[i]) && continue
-            guesses[dvs[i]] = newu0[i]
-        end
-        if p === missing
-            # the user didn't pass `p` to `remake`, so they want to retain
-            # existing values. Fill all parameters in `pmap` so that none of
-            # them are solvable.
-            for p in ps
-                pmap[p] = getp(sys, p)(newp)
-            end
-        end
-        # all non-solvable parameters need values regardless
-        for p in ps
-            haskey(pmap, p) && continue
-            is_parameter_solvable(p, pmap, defs, guesses) && continue
-            pmap[p] = getp(sys, p)(newp)
-        end
-    end
+    left_merge!(op, meta.op)
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
+    merge!(guesses, meta.guesses)
+    use_scc = meta.use_scc
+    initialization_eqs = meta.additional_initialization_eqs
+    time_dependent_init = meta.time_dependent_init
+
     if t0 === nothing && is_time_dependent(sys)
         t0 = 0.0
     end
-    merge!(op, u0map, pmap)
-    filter_missing_values!(op)
 
-    u0map = anydict()
-    pmap = anydict()
-    missing_unknowns,
-    missing_pars = build_operating_point!(sys, op,
-        u0map, pmap, defs, dvs, ps)
     floatT = float_type_from_varmap(op)
-    u0_constructor = p_constructor = identity
-    if newu0 isa StaticArray
-        u0_constructor = vals -> SymbolicUtils.Code.create_array(
-            typeof(newu0), floatT, Val(1), Val(length(vals)), vals...)
-    end
-    if newp isa StaticArray || newp isa MTKParameters && newp.initials isa StaticArray
-        p_constructor = vals -> SymbolicUtils.Code.create_array(
-            typeof(newp.initials), floatT, Val(1), Val(length(vals)), vals...)
-    end
+    u0_constructor = get_u0_constructor(identity, typeof(newu0), floatT, false)
+    p_constructor = get_p_constructor(identity, typeof(newu0), floatT)
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, t0, defs, guesses,
-        missing_unknowns; time_dependent_init, use_scc, initialization_eqs, floatT,
+        sys, SciMLBase.isinplace(odefn), op, t0, guesses;
+        time_dependent_init, use_scc, initialization_eqs, floatT, fast_path = true,
         u0_constructor, p_constructor, allow_incomplete = true, check_units = false)
 
     odefn = remake(odefn; kws...)

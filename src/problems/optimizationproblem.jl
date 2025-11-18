@@ -116,14 +116,12 @@ function SciMLBase.OptimizationProblem{iip}(
             throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
     end
 
-    ps = parameters(sys)
-    defs = defaults(sys)
-    op = to_varmap(op, dvs)
-    lbmap = merge(op, AnyDict(dvs .=> lb))
-    _, _ = build_operating_point!(sys, lbmap, Dict(), Dict(), defs, dvs, ps)
+    op = build_operating_point(sys, op)
+    lbmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> lb), COMMON_NOTHING)
+    left_merge!(lbmap, op)
     lb = varmap_to_vars(lbmap, dvs; tofloat = false)
-    ubmap = merge(op, AnyDict(dvs .=> ub))
-    _, _ = build_operating_point!(sys, ubmap, Dict(), Dict(), defs, dvs, ps)
+    ubmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> ub), COMMON_NOTHING)
+    left_merge!(ubmap, op)
     ub = varmap_to_vars(ubmap, dvs; tofloat = false)
 
     if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)

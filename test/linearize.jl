@@ -127,10 +127,10 @@ lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @test isequal(lsyss.A, lsyss_ns.A)
 
 lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl))) == lsys.A
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl))) == lsys.B
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl))) == lsys.C
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.defaults(cl))) == lsys.D
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.initial_conditions(cl))) == lsys.A
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.initial_conditions(cl))) == lsys.B
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.initial_conditions(cl))) == lsys.C
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.initial_conditions(cl))) == lsys.D
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -158,13 +158,13 @@ ssys2 = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
 lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
 
 @test value.(ModelingToolkit.fixpoint_sub(
-    lsyss.A, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.A
+    lsyss.A, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true))) == lsys.A
 @test value.(ModelingToolkit.fixpoint_sub(
-    lsyss.B, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.B
+    lsyss.B, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true))) == lsys.B
 @test value.(ModelingToolkit.fixpoint_sub(
-    lsyss.C, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.C
+    lsyss.C, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true))) == lsys.C
 @test value.(ModelingToolkit.fixpoint_sub(
-    lsyss.D, ModelingToolkit.defaults_and_guesses(pid); fold = Val(true))) == lsys.D
+    lsyss.D, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true))) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_order))
@@ -274,7 +274,7 @@ connections = [connect(r.output, :r, filt.input)
                connect(er.output, :e, pid.err_input)]
 
 closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
-    name = :closed_loop, defaults = [
+    name = :closed_loop, initial_conditions = [
         model.inertia1.phi => 0.0,
         model.inertia2.phi => 0.0,
         model.inertia1.w => 0.0,
@@ -296,7 +296,7 @@ closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er]
     end
     # Model variables, with initial values needed
     @variables begin
-        m(t) = 1.5 * ρ * A, [description = "Liquid mass"]
+        m(t), [description = "Liquid mass"]
         md_i(t), [description = "Influent mass flow rate"]
         md_e(t), [description = "Effluent mass flow rate"]
         V(t), [description = "Liquid volume"]
@@ -342,7 +342,7 @@ end
     @variables x(t) y(t)
     @parameters p
     eqs = [0 ~ x * log(y) - p]
-    @named sys = System(eqs, t; defaults = [p => 1.0])
+    @named sys = System(eqs, t; initial_conditions = [p => 1.0])
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingGuessError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
@@ -364,5 +364,5 @@ end
     @unpack md_i, h, m = tank_noi
     m_ss = 2.4000000003229878
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
-        tank_noi, [md_i], [h]; p = [md_i => 1.0])
+        tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss])
 end

@@ -184,6 +184,13 @@ function delay_to_function(expr, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
     end
 end
 
+function __search_dervars_recurse(x::SymbolicT)
+    iscall(x) && Moshi.Match.@match x begin
+        BSImpl.Term(; f) && if f isa Operator end => false
+        _ => true
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -250,24 +257,54 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
         p_start += 1
         p_end += 1
     end
-    pdeps = get_parameter_dependencies(sys)
 
+    dervars = Dict{SymbolicT, SymbolicT}()
+    dervars_in_expr = Set{SymbolicT}()
+    if isscheduled(sys)
+        sched::Schedule = get_schedule(sys)
+        for (k, v) in sched.dummy_sub
+            ttk = default_toterm(k)
+            isequal(ttk, v) && continue
+            dervars[default_toterm(k)] = v
+        end
+        Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
+    end
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)
-        obsidxs = observed_equations_used_by(sys, expr; obs)
+        obsidxs = BitSet(observed_equations_used_by(sys, expr; obs))
     else
-        obsidxs = Int[]
+        obsidxs = BitSet()
     end
     # similarly for parameter dependency equations
-    pdepidxs = observed_equations_used_by(sys, expr; obs = pdeps)
-    for i in obsidxs
-        union!(pdepidxs, observed_equations_used_by(sys, obs[i].rhs; obs = pdeps))
+    reqd_bound_pars = OrderedSet{SymbolicT}()
+    bgraph::ParameterBindingsGraph = if iscomplete(sys)
+        get_parameter_bindings_graph(sys)
+    else
+        ParameterBindingsGraph(sys)
     end
+    
+    bound_parameters_used_by!(reqd_bound_pars, sys, expr; bgraph)
+    for i in obsidxs
+        bound_parameters_used_by!(reqd_bound_pars, sys, obs[i].rhs; bgraph)
+    end
+    for dervar in dervars_in_expr
+        bound_parameters_used_by!(reqd_bound_pars, sys, dervars[dervar]; bgraph)
+        union!(obsidxs, observed_equations_used_by(sys, dervars[dervar]; obs))
+    end
+    sort_bound_parameters!(reqd_bound_pars, sys; bgraph)
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
-
-    for eq in Iterators.flatten((pdeps[pdepidxs], obs[obsidxs]))
+    binds = bindings(sys)
+    for p in reqd_bound_pars
+        push!(assignments, p ← binds[p])
+    end
+    obsidxs = collect(obsidxs)
+    for eq in obs[obsidxs]
         push!(assignments, eq.lhs ← eq.rhs)
+    end
+
+    for dervar in dervars_in_expr
+        push!(assignments, dervar ← dervars[dervar])
     end
     append!(assignments, extra_assignments)
 

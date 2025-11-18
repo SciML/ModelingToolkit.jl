@@ -7,7 +7,7 @@ using SymbolicIndexingInterface
 using ModelingToolkit: value
 using ModelingToolkit: get_default_or_guess, MTKParameters
 import SymbolicUtils as SU
-using Symbolics: VartypeT
+using Symbolics: VartypeT, unwrap
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -27,7 +27,7 @@ end
 eqs = [0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
-@named ns = System(eqs, [x, y, z], [σ, ρ, β, h], defaults = Dict(x => 2))
+@named ns = System(eqs, [x, y, z], [σ, ρ, β, h], initial_conditions = Dict(x => 2))
 ns2 = eval(toexpr(ns))
 @test issetequal(equations(ns), equations(ns2))
 @test issetequal(unknowns(ns), unknowns(ns2))
@@ -209,9 +209,9 @@ eq = [v1 ~ sin(2pi * t * h)
     eqs = [0 ~ a * (y - x) * h,
         0 ~ x * (b - z) - y,
         0 ~ x * y - c * z]
-    @named sys = System(eqs, [x, y, z], [a, b, c, h], defaults = Dict(x => 2.0))
+    @named sys = System(eqs, [x, y, z], [a, b, c, h], initial_conditions = Dict(x => 2.0))
     sys = complete(sys)
-    prob = NonlinearProblem(sys, ones(length(unknowns(sys))))
+    prob = NonlinearProblem(sys, unknowns(sys) .=> ones(length(unknowns(sys))))
 
     prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [a => 1.1, b => 1.2, c => 1.3])
     @test prob_.u0 == [1.0, 2.0, 3.0]
@@ -292,8 +292,8 @@ sys = mtkcompile(ns; conservative = true)
     @variables x y z
     eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
     @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
-    @test isequal(expand.(calculate_jacobian(ns)), [-3 // 2 - x;;])
-    @test isequal(calculate_hessian(ns), [[-1;;]])
+    @test isequal(expand.(calculate_jacobian(ns)), unwrap.([3 // 2 + y;;]))
+    @test isequal(calculate_hessian(ns), [Num[1;;]])
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
@@ -373,20 +373,18 @@ end
 @testset "Can convert from `System`" begin
     @variables x(t) y(t)
     @parameters p q r
-    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r, r ~ 3p], t;
-        defaults = [x => 1.0, p => missing], guesses = [p => 1.0],
+    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+        initial_conditions = [x => 1.0], bindings = [p => missing, r => 3p], guesses = [p => 1.0],
         initialization_eqs = [p^3 + q^3 ~ 4r])
     nlsys = NonlinearSystem(sys)
     nlsys = complete(nlsys)
-    defs = defaults(nlsys)
-    @test length(defs) == 6
-    @test value(defs[x]) == 1.0
-    @test value(defs[p]) === missing
-    @test isinf(value(defs[t]))
+    @test value(initial_conditions(nlsys)[x]) == 1.0
+    @test value(bindings(nlsys)[p]) === missing
+    @test isequal(bindings(nlsys)[r], 3p)
+    @test isinf(value(bindings(nlsys)[t]))
     @test length(guesses(nlsys)) == 1
     @test value(guesses(nlsys)[p]) == 1.0
     @test length(initialization_equations(nlsys)) == 1
-    @test length(parameter_dependencies(nlsys)) == 1
     @test length(equations(nlsys)) == 2
     @test all(iszero, [value(eq.lhs) for eq in equations(nlsys)])
     @test nameof(nlsys) == nameof(sys)

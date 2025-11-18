@@ -192,7 +192,7 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
 @test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(sys)
 
 # Example 5 from Pantelides' original paper
-params = collect(@parameters y1(t) y2(t))
+params = collect(@parameters y1 y2)
 sts = collect(@variables x(t) u1(t) u2(t))
 eqs = [0 ~ x + sin(u1 + u2)
        D(x) ~ x + y1

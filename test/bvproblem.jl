@@ -4,6 +4,7 @@ using BoundaryValueDiffEqMIRK, BoundaryValueDiffEqAscher
 using ModelingToolkit
 using SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Test
 
 ### Test Collocation solvers on simple problems 
 solvers = [MIRK4]

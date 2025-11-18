@@ -3,7 +3,7 @@ using ModelingToolkit
 using Graphs
 using SparseArrays
 using UnPack
-using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm
+using ModelingToolkit: t_nounits as t, D_nounits as D, default_toterm, SymbolicDiscreteCallback
 using Symbolics: unwrap
 using DataInterpolations
 using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
@@ -61,8 +61,8 @@ end
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 
     isys = ModelingToolkit.generate_initializesystem(sys)
-    @test length(unknowns(isys)) == 5
-    @test length(equations(isys)) == 4
+    @test length(unknowns(isys)) == 4
+    @test length(equations(isys)) == 5
     @test !any(equations(isys)) do eq
         iscall(eq.rhs) && operation(eq.rhs) in [StructuralTransformations.change_origin]
     end
@@ -222,8 +222,10 @@ end
 @testset "Issue#3480: Derivatives of time-dependent parameters" begin
     @component function FilteredInput(; name, x0 = 0, T = 0.1)
         params = @parameters begin
-            k(t) = x0
             T = T
+        end
+        discs = @discretes begin
+            k(t) = x0
         end
         vars = @variables begin
             x(t) = k
@@ -234,16 +236,19 @@ end
         eqs = [D(x) ~ dx
                D(dx) ~ ddx
                dx ~ (k - x) / T]
-        return System(eqs, t, vars, params; systems, name)
+        evt = SymbolicDiscreteCallback([1.0], [k ~ x]; discrete_parameters = [k])
+        return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
 
     @component function FilteredInputExplicit(; name, x0 = 0, T = 0.1)
         params = @parameters begin
-            k(t)[1:1] = [x0]
             T = T
         end
+        discs = @discretes begin
+            k(t)[1:1] = [x0]
+        end
         vars = @variables begin
-            x(t) = k
+            x(t) = k[1]
             dx(t) = 0
             ddx(t)
         end
@@ -252,13 +257,16 @@ end
                D(dx) ~ ddx
                D(k[1]) ~ 1.0
                dx ~ (k[1] - x) / T]
-        return System(eqs, t, vars, params; systems, name)
+        evt = SymbolicDiscreteCallback([1.0], [k[1] ~ x]; discrete_parameters = [k])
+        return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
 
     @component function FilteredInputErr(; name, x0 = 0, T = 0.1)
         params = @parameters begin
-            k(t) = x0
             T = T
+        end
+        discs = @discretes begin
+            k(t) = x0
         end
         vars = @variables begin
             x(t) = k
@@ -270,7 +278,8 @@ end
                D(dx) ~ ddx
                dx ~ (k - x) / T
                D(k) ~ missing]
-        return System(eqs, t, vars, params; systems, name)
+        evt = SymbolicDiscreteCallback([1.0], [k ~ x]; discrete_parameters = [k])
+        return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
 
     @named sys = FilteredInputErr()
@@ -330,10 +339,11 @@ end
 @testset "Don't rely on metadata" begin
     @testset "ODESystem" begin
         @variables x(t) p
-        @parameters y(t) q
+        @parameters q
+        @discretes y(t)
         @mtkcompile sys = System([D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
             [p, q]; initialization_eqs = [p + q ~ 3],
-            defaults = [p => missing], guesses = [p => 1.0, y => 1.0])
+            bindings = [p => missing], guesses = [p => 1.0, y => 1.0])
         @test length(equations(sys)) == 2
         @test length(parameters(sys)) == 2
         prob = ODEProblem(sys, [x => 1.0, q => 2.0], (0.0, 1.0))
@@ -347,7 +357,7 @@ end
         @parameters y q
         @mtkcompile sys = System([0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
             [p, q]; initialization_eqs = [p ~ q + 1],
-            guesses = [p => 1.0], defaults = [p => missing])
+            guesses = [p => 1.0], bindings = [p => missing])
         @test length(equations(sys)) == length(unknowns(sys)) == 1
         @test length(observed(sys)) == 1
         @test observed(sys)[1].lhs in Set([x, y])
@@ -359,11 +369,12 @@ end
 
     @testset "SDESystem" begin
         @variables x(t) p a
-        @parameters y(t) q b
+        @parameters q b
+        @discretes y(t)
         @brownians c
         @mtkcompile sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
             [p, q], [a, b, c]; initialization_eqs = [p + q ~ 4],
-            guesses = [p => 1.0], defaults = [p => missing])
+            guesses = [p => 1.0], bindings = [p => missing])
         @test length(equations(sys)) == 2
         @test issetequal(unknowns(sys), [x, y])
         @test issetequal(parameters(sys), [p, q])

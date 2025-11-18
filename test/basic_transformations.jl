@@ -2,6 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Te
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
 using SymbolicUtils: symtype, _iszero
+using ModelingToolkit: SymbolicContinuousCallback
 
 @independent_variables t
 D = Differential(t)
@@ -341,15 +342,17 @@ foofn(x) = 4
 @register_symbolic foofn(x::AbstractFoo)
 
 @testset "`respecialize`" begin
-    @parameters p::AbstractFoo p2(t)::AbstractFoo = p q[1:2]::AbstractFoo r
+    @parameters p::AbstractFoo q[1:2]::AbstractFoo r
+    @discretes p2(t)::AbstractFoo 
     rp = only(let p = nothing
         @parameters p::Bar
     end)
     rp2 = only(let p2 = nothing
-        @parameters p2(t)::Baz
+        @discretes p2(t)::Baz
     end)
     @variables x(t) = 1.0
-    @named sys1 = System([D(x) ~ foofn(p) + foofn(p2) + x], t, [x], [p, p2, q, r])
+    evt = SymbolicContinuousCallback([x ~ 1.0], [x ~ Pre(x)]; discrete_parameters = [p2])
+    @named sys1 = System([D(x) ~ foofn(p) + foofn(p2) + x], t, [x], [p, p2, q, r]; initial_conditions = [p2 => p])
 
     @test_throws ["completed systems"] respecialize(sys1)
     @test_throws ["completed systems"] respecialize(sys1, [])
@@ -361,31 +364,31 @@ foofn(x) = 4
     @test_throws ["Parameter p", "associated value"] respecialize(sys)
     @test_throws ["Parameter p", "associated value"] respecialize(sys, [p])
 
-    @test_throws ["Parameter p2", "symbolic default"] respecialize(sys, [p2])
+    @test_throws ["Parameter p2", "symbolic initial value"] respecialize(sys, [p2])
 
     sys2 = respecialize(sys, [p => Bar()])
     @test ModelingToolkit.iscomplete(sys2)
     @test ModelingToolkit.is_split(sys2)
     ps = ModelingToolkit.get_ps(sys2)
     idx = findfirst(isequal(rp), ps)
-    @test value(defaults(sys2)[rp]) == Bar()
+    @test value(initial_conditions(sys2)[rp]) == Bar()
     @test symtype(ps[idx]) <: Bar
     ic = ModelingToolkit.get_index_cache(sys2)
     @test any(x -> x.type == Bar && x.length == 1, ic.nonnumeric_buffer_sizes)
     prob = ODEProblem(sys2, [p2 => Bar(), q => [Bar(), Bar()], r => 1], (0.0, 1.0))
     @test any(x -> x isa Vector{Bar} && length(x) == 1, prob.p.nonnumeric)
 
-    defaults(sys)[p2] = Baz()
+    initial_conditions(sys)[p2] = Baz()
     sys2 = respecialize(sys, [p => Bar()]; all = true)
     @test ModelingToolkit.iscomplete(sys2)
     @test ModelingToolkit.is_split(sys2)
     ps = ModelingToolkit.get_ps(sys2)
     idx = findfirst(isequal(rp2), ps)
-    @test value(defaults(sys2)[rp2]) == Baz()
+    @test value(initial_conditions(sys2)[rp2]) == Baz()
     @test symtype(ps[idx]) <: Baz
     ic = ModelingToolkit.get_index_cache(sys2)
     @test any(x -> x.type == Baz && x.length == 1, ic.nonnumeric_buffer_sizes)
-    delete!(defaults(sys), p2)
+    delete!(initial_conditions(sys), p2)
     prob = ODEProblem(sys2, [q => [Bar(), Bar()], r => 1], (0.0, 1.0))
     @test any(x -> x isa Vector{Bar} && length(x) == 1, prob.p.nonnumeric)
     @test any(x -> x isa Vector{Baz} && length(x) == 1, prob.p.nonnumeric)

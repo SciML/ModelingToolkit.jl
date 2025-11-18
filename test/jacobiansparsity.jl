@@ -48,14 +48,14 @@ prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 # test sparse jacobian pattern only.
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = false)
 JP = prob.f.jac_prototype
 @test findnz(Symbolics.jacobian_sparsity(map(x -> x.rhs, equations(sys)),
     unknowns(sys)))[1:2] ==
       findnz(JP)[1:2]
 
 # test sparse jacobian
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = true)
 #@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
       findnz(prob.f.jac_prototype)[1:2]
@@ -63,10 +63,10 @@ out = similar(prob.f.jac_prototype)
 @test (@ballocated $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), 0.0)) == 0 # should not allocate
 
 # test when not sparse
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = false, jac = true)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = false, jac = true)
 @test prob.f.jac_prototype == nothing
 
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = false, jac = false)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = false, jac = false)
 @test prob.f.jac_prototype == nothing
 
 # test when u0 is nothing
@@ -90,10 +90,10 @@ prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
     u0, (0.0, 11.5), p)
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = false)
 @test eltype(prob.f.jac_prototype) == Float32
 
-prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
+prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = true)
 @test eltype(prob.f.jac_prototype) == Float32
 
 @testset "W matrix sparsity" begin

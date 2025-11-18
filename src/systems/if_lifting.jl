@@ -47,7 +47,7 @@ function new_cond_sym(cw::CondRewriter, expr, dep)
     cvar = gensym("cond")
     st = symtype(expr)
     iv = cw.iv
-    cv = unwrap(first(@parameters $(cvar)(iv)::st = true)) # TODO: real init 
+    cv = unwrap(first(@discretes $(cvar)(iv)::st = true)) # TODO: real init 
     cw.conditions[cv] = (dependency = dep, expression = expr)
     return cv
 end
@@ -76,18 +76,20 @@ and family.
 """
 function (cw::CondRewriter)(expr, dep)
     # single variable, trivial case
-    if issym(expr) || iscall(expr) && issym(operation(expr))
-        return (expr, expr, !expr)
-        # literal boolean or integer
-    elseif expr isa Bool
-        return (expr, expr, !expr)
-    elseif expr isa Int
-        return (expr, true, true)
-        # other singleton symbolic variables
-    elseif !iscall(expr)
-        @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
-        return (expr, true, true) # error case => conservative assumption is that both true and false have to be evaluated
-    elseif operation(expr) == Base.:(|) # OR of two conditions
+    Moshi.Match.@match expr begin
+        BSImpl.Sym(;) => return (expr, expr, !expr)
+        BSImpl.Term(; f) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            return (expr, expr, !expr)
+        end
+        BSImpl.Const(; val) && if val isa Bool end => return (expr, expr, !expr)
+        BSImpl.Const(; val) && if val isa Int end => return (expr, COMMON_TRUE, COMMON_TRUE)
+        if !iscall(expr) end => begin
+            @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+            return (expr, COMMON_TRUE, COMMON_TRUE) # error case => conservative assumption is that both true and false have to be evaluated
+        end
+        _ => nothing
+    end
+    if operation(expr) == Base.:(|) # OR of two conditions
         a, b = arguments(expr)
         (rw_conda, truea, falsea) = cw(a, dep)
         # only evaluate second if first is false
@@ -529,7 +531,7 @@ function IfLifting(sys::System)
     new_cond_vars_graph = observed_dependency_graph(new_cond_dep_eqs)
 
     new_callbacks = continuous_events(sys)
-    new_defaults = defaults(sys)
+    new_initial_conditions = copy(initial_conditions(sys))
     new_ps = Vector{SymbolicParam}(parameters(sys))
 
     for var in new_cond_vars
@@ -541,11 +543,11 @@ function IfLifting(sys::System)
             initialize = up_affect, rootfind = SciMLBase.RightRootFind)
 
         push!(new_callbacks, cb)
-        new_defaults[var] = getdefault(var)
+        new_initial_conditions[var] = getdefault(var)
         push!(new_ps, var)
     end
 
-    @set! sys.defaults = new_defaults
+    @set! sys.initial_conditions = new_initial_conditions
     @set! sys.eqs = eqs
     # do not need to topsort because we didn't modify the order
     @set! sys.observed = obs

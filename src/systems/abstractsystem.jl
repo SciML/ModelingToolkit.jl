@@ -291,20 +291,6 @@ function has_observed_with_lhs(sys::AbstractSystem, sym)
     end
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Check if the system `sys` contains a parameter dependency equation with LHS `sym`.
-"""
-function has_parameter_dependency_with_lhs(sys, sym)
-    has_parameter_dependencies(sys) || return false
-    if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-        return haskey(ic.dependent_pars_to_timeseries, unwrap(sym))
-    else
-        return any(isequal(sym), [eq.lhs for eq in get_parameter_dependencies(sys)])
-    end
-end
-
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym)
     if is_variable(sys, sym) || is_independent_variable(sys, sym)
         push!(ts_idxs, ContinuousTimeseries())
@@ -429,7 +415,8 @@ end
 function SymbolicIndexingInterface.default_values(sys::AbstractSystem)
     return recursive_unwrap(merge(
         Dict(eq.lhs => eq.rhs for eq in observed(sys)),
-        defaults(sys)
+        bindings(sys),
+        initial_conditions(sys),
     ))
 end
 
@@ -445,7 +432,7 @@ end
 
 function SymbolicIndexingInterface.all_symbols(sys::AbstractSystem)
     syms = all_variable_symbols(sys)
-    for other in (full_parameters(sys), independent_variable_symbols(sys))
+    for other in (parameters(sys; initial_parameters = true), collect(bound_parameters(sys)), independent_variable_symbols(sys))
         isempty(other) || (syms = vcat(syms, other))
     end
     return syms
@@ -547,19 +534,21 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     eqs = equations(sys)
     obs, eqs = unhack_observed(observed(sys), eqs)
     for x in unknowns(sys)
-        if iscall(x) && operation(x) == getindex && split
-            push!(all_initialvars, arguments(x)[1])
-        else
+        if !split
             push!(all_initialvars, x)
+            continue
         end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
     end
     for eq in obs
         x = eq.lhs
-        if iscall(x) && operation(x) == getindex && split
-            push!(all_initialvars, arguments(x)[1])
-        else
+        if !split
             push!(all_initialvars, x)
+            continue
         end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
     end
 
     # add derivatives of all variables for steady-state initial conditions
@@ -569,28 +558,26 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             iscall(v) && push!(all_initialvars, D(v))
         end
     end
-    for eq in get_parameter_dependencies(sys)
-        is_variable_floatingpoint(eq.lhs) || continue
-        push!(all_initialvars, eq.lhs)
+
+    # Do this after the previous block to avoid adding derivatives of discretes
+    for x in get_all_discretes(sys)
+        if !split
+            push!(all_initialvars, x)
+            continue
+        end
+        arr, _ = split_indexed_var(x)
+        push!(all_initialvars, arr)
     end
+
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING && push!(all_initialvars, k)
+    end
+
     initials = collect(all_initialvars)
     for (i, v) in enumerate(initials)
         initials[i] = Initial()(v)
     end
     @set! sys.ps = unique!([filter(!isinitial, get_ps(sys)); initials])
-    defs = copy(get_defaults(sys))
-    for ivar in initials
-        if symbolic_type(ivar) == ScalarSymbolic()
-            defs[ivar] = false
-        else
-            defs[ivar] = collect(ivar)
-            for idx in SU.stable_eachindex(ivar)
-                scal_ivar = ivar[idx]
-                defs[scal_ivar] = false
-            end
-        end
-    end
-    @set! sys.defaults = defs
     return sys
 end
 
@@ -640,11 +627,15 @@ function complete(
     if flatten
         newsys = expand_connections(sys)
         newsys = ModelingToolkit.flatten(newsys)
+        newsys = discrete_unknowns_to_parameters(newsys)
+        @set! newsys.parameter_bindings_graph = ParameterBindingsGraph(newsys)
+        newsys = remove_bound_parameters_from_ps(newsys)
+        check_no_bound_initial_conditions(newsys)
         if has_parent(newsys) && get_parent(sys) === nothing
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
         sys = newsys
-        sys = process_parameter_equations(sys)::T
+        check_no_parameter_equations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)::T
         end
@@ -665,6 +656,9 @@ function complete(
             end
             @set! sys.discrete_events = devts
         end
+    else
+        # reduce the potential for outdated information
+        @set! sys.parameter_bindings_graph = nothing
     end
     if split && has_index_cache(sys)
         @set! sys.index_cache = IndexCache(sys)
@@ -698,8 +692,9 @@ function complete(
                 # ensure inputs are sorted
                 last_idx = 0
                 for p in input_vars
+                    p, _ = split_indexed_var(p)
                     idx = findfirst(isequal(p), ordered_ps)::Int
-                    @assert last_idx < idx
+                    @assert last_idx <= idx
                     last_idx = idx
                 end
             end
@@ -716,6 +711,87 @@ function complete(
     end
     sys = toggle_namespacing(sys, false; safe = true)
     isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Find all discretes from symbolic event affects.
+"""
+function get_all_discretes(sys::AbstractSystem)
+    all_discretes = AtomicArraySet()
+    is_time_dependent(sys) || return all_discretes
+    for cb::SymbolicContinuousCallback in continuous_events(sys)
+        for aff in (cb.affect, cb.affect_neg, cb.initialize, cb.finalize)
+            aff === nothing && continue
+            discs = discretes(aff)
+            for v in discs
+                push_as_atomic_array!(all_discretes, v)
+            end
+        end
+    end
+    for cb::SymbolicDiscreteCallback in discrete_events(sys)
+        for aff in (cb.affect, cb.initialize, cb.finalize)
+            aff === nothing && continue
+            discs = discretes(aff)
+            for v in discs
+                push_as_atomic_array!(all_discretes, v)
+            end
+        end
+    end
+
+    return all_discretes
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Identical to `get_all_discretes`, except it uses the `IndexCache` as a fast path if
+possible.
+"""
+function get_all_discretes_fast(sys::AbstractSystem)
+    is_split(sys) || return get_all_discretes(sys)
+    ic::IndexCache = get_index_cache(sys)
+    all_discretes = AtomicArraySet()
+    for k in keys(ic.discrete_idx)
+        push_as_atomic_array!(all_discretes, k)
+    end
+    return all_discretes
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Find discrete variables in `unknowns(sys)` and turn them into parameters.
+"""
+function discrete_unknowns_to_parameters(sys::AbstractSystem)
+    all_discretes = get_all_discretes(sys)
+
+    all_dvs = AtomicArraySet()
+    for v in unknowns(sys)
+        push_as_atomic_array!(all_dvs, v)
+    end
+
+    intersect!(all_discretes, all_dvs)
+
+    new_dvs = SymbolicT[]
+    for v in unknowns(sys)
+        split_indexed_var(v)[1] in all_discretes && continue
+        push!(new_dvs, v)
+    end
+
+    @set! sys.unknowns = new_dvs
+    @set! sys.ps = [get_ps(sys); collect(all_discretes)]
+
+    return sys
+end
+
+function remove_bound_parameters_from_ps(sys::AbstractSystem)
+    bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys)
+    ps = OrderedSet{SymbolicT}(get_ps(sys))
+    filterer = !in(bgraph.bound_ps) ∘ first ∘ split_indexed_var
+    filter!(filterer, ps)
+    @set! sys.ps = collect(ps)
 end
 
 """
@@ -748,13 +824,13 @@ function unflatten_parameters!(buffer::Vector{SymbolicT}, params::Vector{Symboli
         sym = params[i]
         # if the sym is not a scalarized array symbolic OR it was already scalarized,
         # just push it as-is
-        if !iscall(sym) || operation(sym) !== getindex || sym in all_ps
+        arrsym, isarr = split_indexed_var(sym)
+        if !isarr || !symbolic_has_known_size(arrsym)
             push!(buffer, sym)
             i += 1
             continue
         end
 
-        arrsym = first(arguments(sym))
         # the next `length(sym)` symbols should be scalarized versions of the same
         # array symbolic
         for j in (i+1):(i+length(sym)-1)
@@ -780,7 +856,8 @@ const SYS_PROPS = [:eqs
                    :name
                    :description
                    :var_to_name
-                   :defaults
+                   :bindings
+                   :initial_conditions
                    :guesses
                    :observed
                    :systems
@@ -799,7 +876,6 @@ const SYS_PROPS = [:eqs
                    :gui_metadata
                    :is_initializesystem
                    :is_discrete
-                   :parameter_dependencies
                    :assertions
                    :ignored_connections
                    :parent
@@ -808,6 +884,7 @@ const SYS_PROPS = [:eqs
                    :inputs
                    :outputs
                    :index_cache
+                   :parameter_bindings_graph
                    :isscheduled
                    :costs
                    :consolidate]
@@ -999,7 +1076,7 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     easily using packages such as Setfield.jl.
 
     If you are looking for the old behavior of updating the default of a variable via \
-    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_defaults(sys)`.
+    `setproperty!`, this should now be done by mutating `ModelingToolkit.get_initial_conditions(sys)`.
     """)
 end
 
@@ -1180,16 +1257,7 @@ end
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
-function namespace_defaults(sys)
-    defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : unknowns(sys, k)) => namespace_expr(v, sys)
-    for (k, v) in pairs(defs))
-end
-
-function namespace_guesses(sys)
-    guess = guesses(sys)
-    Dict(unknowns(sys, k) => namespace_expr(v, sys) for (k, v) in guess)
-end
+namespace_guesses(sys::AbstractSystem) = namespace_expr(guesses(sys), sys)
 
 """
     $(TYPEDSIGNATURES)
@@ -1305,6 +1373,13 @@ function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameo
     end
     return O
 end
+function namespace_expr(O::AbstractDict, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+    O2 = empty(O)
+    for (k, v) in O
+        O2[namespace_expr(k, sys, n; kw...)] = namespace_expr(v, sys, n; kw...)
+    end
+    return O2
+end
 function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
     any(isequal(O), ivs) && return O
     isvar = isvariable(O)
@@ -1400,10 +1475,11 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         ps = Vector{SymbolicT}(unwrap.(first.(ps)))
     end
     systems = get_systems(sys)
-    result = copy(ps)
+    result = OrderedSet{SymbolicT}(ps)
     for subsys in systems
-        append!(result, namespace_parameters(subsys))
+        union!(result, namespace_parameters(subsys))
     end
+    result = collect(result)
     if !initial_parameters && !is_initializesystem(sys)
         filter!(result) do sym
             return !(isoperator(sym, Initial) ||
@@ -1412,16 +1488,6 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
         end
     end
     return result
-end
-
-function dependent_parameters(sys::AbstractSystem)
-    if !iscomplete(sys)
-        throw(ArgumentError("""
-        `dependent_parameters` requires that the system is marked as complete. Call
-        `complete` or `mtkcompile` on the system.
-        """))
-    end
-    return map(eq -> eq.lhs, parameter_dependencies(sys))
 end
 
 """
@@ -1437,33 +1503,14 @@ function parameters_toplevel(sys::AbstractSystem)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Get the parameter dependencies of the system `sys` and its subsystems. Requires that the
-system is `complete`d.
+Return the bound parameters of a system. Currently requires that the system is
+marked complete.
 """
-function parameter_dependencies(sys::AbstractSystem)
-    if !iscomplete(sys)
-        throw(ArgumentError("""
-        `parameter_dependencies` requires that the system is marked as complete. Call \
-        `complete` or `mtkcompile` on the system.
-        """))
-    end
-    if !has_parameter_dependencies(sys)
-        return Equation[]
-    end
-    get_parameter_dependencies(sys)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Return all of the parameters of the system, including hidden initial parameters and ones
-eliminated via `parameter_dependencies`.
-"""
-function full_parameters(sys::AbstractSystem)
-    dep_ps = [eq.lhs for eq in get_parameter_dependencies(sys)]
-    vcat(parameters(sys; initial_parameters = true), dep_ps)
+function bound_parameters(sys::AbstractSystem)
+    iscomplete(sys) || error("`bound_parameters` requires a completed system.")
+    (get_parameter_bindings_graph(sys)::ParameterBindingsGraph).bound_ps
 end
 
 """
@@ -1561,27 +1608,39 @@ function observables(sys::AbstractSystem)
 end
 
 """
-$(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Get the default values of the system sys and its subsystems.
-If they are not explicitly provided, variables and parameters are initialized to these values.
-
-See also [`initialization_equations`](@ref) and [`ModelingToolkit.get_defaults`](@ref).
+Get the bindings of a system `sys` and its subsystems.
 """
-function defaults(sys::AbstractSystem)
+function bindings(sys::AbstractSystem)
     systems = get_systems(sys)
-    defs = get_defaults(sys)
-    # `mapfoldr` is really important!!! We should prefer the base model for
-    # defaults, because people write:
-    #
-    # `compose(System(...; defaults=defs), ...)`
-    #
-    # Thus, right associativity is required and crucial for correctness.
-    isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
+    binds = get_bindings(sys)
+    isempty(systems) && return binds
+    binds = copy(parent(binds))
+    for s in systems
+        no_override_merge!(binds, namespace_expr(parent(bindings(s)), s))
+    end
+    return ROSymmapT(binds)
 end
 
-function defaults_and_guesses(sys::AbstractSystem)
-    merge(guesses(sys), defaults(sys))
+"""
+    $TYPEDSIGNATURES
+
+Get the initial conditions of a system `sys` and its subsystems.
+"""
+function initial_conditions(sys::AbstractSystem)
+    systems = get_systems(sys)
+    ics = get_initial_conditions(sys)
+    isempty(systems) && return ics
+    ics = copy(ics)
+    for s in systems
+        left_merge!(ics, namespace_expr(initial_conditions(s), s))
+    end
+    return ics
+end
+
+function initial_conditions_and_guesses(sys::AbstractSystem)
+    merge(guesses(sys), initial_conditions(sys))
 end
 
 unknowns(sys::Union{AbstractSystem, Nothing}, v) = namespace_expr(v, sys)
@@ -1785,7 +1844,7 @@ $(TYPEDSIGNATURES)
 
 Get the initialization equations of the system `sys` and its subsystems.
 
-See also [`guesses`](@ref), [`defaults`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
+See also [`guesses`](@ref), [`initial_conditions`](@ref) and [`ModelingToolkit.get_initialization_eqs`](@ref).
 """
 function initialization_equations(sys::AbstractSystem)
     eqs = get_initialization_eqs(sys)
@@ -1996,7 +2055,7 @@ end
 ###
 ### System I/O
 ###
-function toexpr(sys::AbstractSystem)
+function SymbolicUtils.Code.toexpr(sys::AbstractSystem)
     sys = flatten(sys)
     expr = Expr(:block)
     stmt = expr.args
@@ -2026,11 +2085,14 @@ function toexpr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
-    filtered_defs = filter(
-        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), defaults(sys))
+    filtered_bindings = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
+    filtered_initial_conditions = filter(
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
     filtered_guesses = filter(
         kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
-    defs_name = push_defaults!(stmt, filtered_defs, var2name)
+    bindings_name = push_defaults!(stmt, filtered_bindings, var2name; name = :bindings)
+    initial_conditions_name = push_defaults!(stmt, filtered_bindings, var2name; name = :initial_conditions)
     guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
@@ -2042,8 +2104,8 @@ function toexpr(sys::AbstractSystem)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
     end
     push!(stmt,
-        :($System($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-            guesses = $guesses_name, observed = $obs_name,
+        :($System($eqs_name, $ivname, $stsname, $psname; bindings = $bindings_name,
+            initial_conditions = $initial_conditions_name, guesses = $guesses_name, observed = $obs_name,
             name = $name, checks = false)))
 
     expr = :(let
@@ -2138,7 +2200,7 @@ function Base.show(
         printstyled(io, "\n$header ($nvars):"; bold)
         hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
-        defs = has_defaults(sys) ? defaults(sys) : nothing
+        defs = has_bindings(sys) ? bindings(sys) : nothing
         for i in 1:nrows
             s = vars[i]
             print(io, "\n  ", s)
@@ -2161,11 +2223,6 @@ function Base.show(
         limited = nrows < nvars
         limited && printstyled(io, "\n  ⋮") # too many variables to print
     end
-
-    # Print parameter dependencies
-    npdeps = has_parameter_dependencies(sys) ? length(get_parameter_dependencies(sys)) : 0
-    npdeps > 0 && printstyled(io, "\nParameter dependencies ($npdeps):"; bold)
-    npdeps > 0 && hint && print(io, " see parameter_dependencies($name)")
 
     # Print observed
     nobs = has_observed(sys) ? length(observed(sys)) : 0
@@ -2532,7 +2589,7 @@ function debug_system(
         eqs = debug_sub.(equations(sys), Ref(functions); kw...)
         @set! sys.eqs = eqs
         @set! sys.ps = unique!([get_ps(sys); ASSERTION_LOG_VARIABLE])
-        @set! sys.defaults = merge(get_defaults(sys), Dict(ASSERTION_LOG_VARIABLE => true))
+        @set! sys.initial_conditions = merge(get_initial_conditions(sys), Dict(ASSERTION_LOG_VARIABLE => true))
     end
     if has_observed(sys)
         @set! sys.observed = debug_sub.(observed(sys), Ref(functions); kw...)
@@ -2637,7 +2694,7 @@ end
 $(TYPEDSIGNATURES)
 
 Extend `basesys` with `sys`. This can be thought of as the `merge` operation on systems.
-Values in `sys` take priority over duplicates in `basesys` (for example, defaults).
+Values in `sys` take priority over duplicates in `basesys` (for example, initial conditions).
 
 By default, the resulting system inherits `sys`'s name and description.
 
@@ -2665,11 +2722,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     eqs = union(get_eqs(basesys), get_eqs(sys))
     sts = union(get_unknowns(basesys), get_unknowns(sys))
     ps = union(get_ps(basesys), get_ps(sys))
-    dep_ps = union(get_parameter_dependencies(basesys), get_parameter_dependencies(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
-    defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
+    ics = merge(get_initial_conditions(basesys), get_initial_conditions(sys)) # prefer `sys`
+    binds = merge(get_bindings(basesys), get_bindings(sys)) # prefer `sys`
     meta = MetadataT()
     for kvp in get_metadata(basesys)
         kvp[1] == MutableCacheKey && continue
@@ -2682,7 +2739,8 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     syss = union(get_systems(basesys), get_systems(sys))
     args = length(ivs) == 0 ? (eqs, sts, ps) : (eqs, ivs[1], sts, ps)
     kwargs = (observed = obs, continuous_events = cevs,
-        discrete_events = devs, defaults = defs, systems = syss, metadata = meta,
+        discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
+        metadata = meta,
         name = name, description = description, gui_metadata = gui_metadata)
 
     # collect fields specific to some system types
@@ -2696,7 +2754,6 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem;
     end
 
     newsys = T(args...; kwargs...)
-    @set! newsys.parameter_dependencies = dep_ps
 
     return newsys
 end
@@ -2795,36 +2852,8 @@ function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
     getproperty(sys, p; namespace = false)
 end
 
-"""
-    missing_variable_defaults(sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
-
-Returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
-"""
-function missing_variable_defaults(
-        sys::AbstractSystem, default = 0.0; subset = unknowns(sys))
-    varmap = get_defaults(sys)
-    varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(subset, keys(varmap))
-    ds = Pair[]
-
-    n = length(missingvars)
-
-    if default isa Vector
-        @assert length(default)==n "`default` size ($(length(default))) should match the number of missing variables: $n"
-    end
-
-    for (i, missingvar) in enumerate(missingvars)
-        if default isa Vector
-            push!(ds, missingvar => default[i])
-        else
-            push!(ds, missingvar => default)
-        end
-    end
-
-    return ds
-end
-
-keytype(::Type{<:Pair{T, V}}) where {T, V} = T
+_keytype(::Type{<:Pair{T, V}}) where {T, V} = T
+_keytype(::Type{T}) where {T} = keytype(T)
 function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
     if has_continuous_domain(sys) && get_continuous_events(sys) !== nothing &&
        !isempty(get_continuous_events(sys)) ||
@@ -2832,7 +2861,7 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
        !isempty(get_discrete_events(sys))
         @warn "`substitute` only supports performing substitutions in equations. This system has events, which will not be updated."
     end
-    if keytype(eltype(rules)) <: Symbol
+    if _keytype(eltype(rules)) <: Symbol
         dict = todict(rules)
         systems = get_systems(sys)
         # post-walk to avoid infinite recursion
@@ -2848,10 +2877,10 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
         @set! newsys.ps = map(get_ps(sys)) do var
             get(rules, var, var)
         end
-        @set! newsys.parameter_dependencies = substitute(
-            get_parameter_dependencies(sys), rules)
-        @set! newsys.defaults = Dict(substitute(k, rules) => substitute(v, rules)
-        for (k, v) in get_defaults(sys))
+        @set! newsys.bindings = Dict(substitute(k, rules) => substitute(v, rules)
+        for (k, v) in get_bindings(sys))
+        @set! newsys.initial_conditions = Dict(substitute(k, rules) => substitute(v, rules)
+        for (k, v) in get_initial_conditions(sys))
         @set! newsys.guesses = Dict(substitute(k, rules) => substitute(v, rules)
         for (k, v) in get_guesses(sys))
         @set! newsys.noise_eqs = substitute(get_noise_eqs(sys), rules)
@@ -2865,64 +2894,6 @@ function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, 
     else
         error("substituting symbols is not supported for $(typeof(sys))")
     end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Find equations of `sys` involving only parameters and separate them out into the
-`parameter_dependencies` field. Relative ordering of equations is maintained.
-Parameter-only equations are validated to be explicit and sorted topologically. All such
-explicitly determined parameters are removed from the parameters of `sys`. Return the new
-system.
-"""
-function process_parameter_equations(sys::AbstractSystem)
-    if !isempty(get_systems(sys))
-        throw(ArgumentError("Expected flattened system"))
-    end
-    varsbuf = Set{SymbolicT}()
-    pareq_idxs = Int[]
-    eqs = equations(sys)
-    for (i, eq) in enumerate(eqs)
-        empty!(varsbuf)
-        SU.search_variables!(varsbuf, eq; is_atomic = OperatorIsAtomic{Union{Differential, Initial, Pre, Hold, Sample}}())
-        # singular equations
-        isempty(varsbuf) && continue
-        if let sys = sys
-            all(varsbuf) do sym
-            is_parameter(sys, sym) ||
-                symbolic_type(sym) == ArraySymbolic() &&
-                symbolic_has_known_size(sym) &&
-                all(Base.Fix1(is_parameter, sys), collect(sym)) ||
-                iscall(sym) &&
-                operation(sym) === getindex && is_parameter(sys, arguments(sym)[1])
-        end
-        end
-            # Everything in `varsbuf` is a parameter, so this is a cheap `is_parameter`
-            # check.
-            if !(eq.lhs in varsbuf)
-                throw(ArgumentError("""
-                LHS of parameter dependency equation must be a single parameter. Found \
-                $(eq.lhs).
-                """))
-            end
-            push!(pareq_idxs, i)
-        end
-    end
-
-    pareqs = Equation[get_parameter_dependencies(sys); eqs[pareq_idxs]]
-    explicitpars = SymbolicT[]
-    for eq in pareqs
-        push!(explicitpars, eq.lhs)
-    end
-    pareqs = topsort_equations(pareqs, explicitpars)
-
-    eqs = eqs[setdiff(eachindex(eqs), pareq_idxs)]
-
-    @set! sys.eqs = eqs
-    @set! sys.parameter_dependencies = pareqs
-    @set! sys.ps = setdiff(get_ps(sys), explicitpars)
-    return sys
 end
 
 """
@@ -2945,25 +2916,17 @@ ModelingToolkit.dump_parameters(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_unknowns`](@ref)
 """
 function dump_parameters(sys::AbstractSystem)
-    defs = defaults(sys)
-    pdeps = get_parameter_dependencies(sys)
-    metas = map(dump_variable_metadata.(parameters(sys))) do meta
-        if haskey(defs, meta.var)
-            meta = merge(meta, (; default = defs[meta.var]))
+    ics = initial_conditions(sys)
+    binds = bindings(sys)
+    return map(dump_variable_metadata.(parameters(sys))) do meta
+        if haskey(ics, meta.var)
+            meta = merge(meta, (; initial_condition = ics[meta.var]))
+        end
+        if haskey(binds, meta.var)
+            meta = merge(meta, (; binding = binds[meta.var]))
         end
         meta
     end
-    pdep_metas = map(pdeps) do eq
-        sym = eq.lhs
-        val = eq.rhs
-        meta = dump_variable_metadata(sym)
-        defs[eq.lhs] = eq.rhs
-        meta = merge(meta,
-            (; dependency = val,
-                default = symbolic_evaluate(val, defs)))
-        return meta
-    end
-    return vcat(metas, pdep_metas)
 end
 
 """
@@ -2986,11 +2949,15 @@ ModelingToolkit.dump_unknowns(sys)
 See also: [`ModelingToolkit.dump_variable_metadata`](@ref), [`ModelingToolkit.dump_parameters`](@ref)
 """
 function dump_unknowns(sys::AbstractSystem)
-    defs = add_toterms(defaults(sys))
+    binds = add_toterms(bindings(sys))
+    ics = add_toterms(initial_conditions(sys))
     gs = add_toterms(guesses(sys))
     map(dump_variable_metadata.(unknowns(sys))) do meta
-        if haskey(defs, meta.var)
-            meta = merge(meta, (; default = defs[meta.var]))
+        if haskey(binds, meta.var)
+            meta = merge(meta, (; binding = binds[meta.var]))
+        end
+        if haskey(ics, meta.var)
+            meta = merge(meta, (; initial_condition = ics[meta.var]))
         end
         if haskey(gs, meta.var)
             meta = merge(meta, (; guess = gs[meta.var]))

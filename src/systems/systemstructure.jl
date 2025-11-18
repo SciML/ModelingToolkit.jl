@@ -355,7 +355,9 @@ end
 function TearingState(sys; check = true, sort_eqs = true)
     # flatten system
     sys = flatten(sys)
-    sys = process_parameter_equations(sys)
+    sys = discrete_unknowns_to_parameters(sys)
+    sys = discover_globalscoped(sys)
+    check_no_parameter_equations(sys)
     ivs = independent_variables(sys)
     iv = length(ivs) == 1 ? ivs[1] : nothing
     # flatten array equations
@@ -369,7 +371,12 @@ function TearingState(sys; check = true, sort_eqs = true)
     dvs = Set{SymbolicT}()
     collect_vars_to_set!(dvs, unknowns(sys))
     ps = Set{SymbolicT}()
-    collect_vars_to_set!(ps, full_parameters(sys))
+    collect_vars_to_set!(ps, parameters(sys; initial_parameters = true))
+    # People sometimes pass completed systems to `mtkcompile`, which means the bound
+    # parameters are not in `parameters(sys)` above. So add them here.
+    if iscomplete(sys)
+        collect_vars_to_set!(ps, collect(bound_parameters(sys)))
+    end
     browns = Set{SymbolicT}()
     collect_vars_to_set!(browns, brownians(sys))
     var2idx = Dict{SymbolicT, Int}()
@@ -395,8 +402,7 @@ function TearingState(sys; check = true, sort_eqs = true)
             end
 
             # TODO: Can we handle this without `isparameter`?
-            if symbolic_contains(v, ps) ||
-               getmetadata(v, SymScope, LocalScope()) isa GlobalScope && isparameter(v)
+            if symbolic_contains(v, ps)
                 if is_time_dependent_parameter(v, ps, iv) &&
                    !haskey(param_derivative_map, Differential(iv)(v)) && !(Differential(iv)(v) in no_deriv_params)
                     # Parameter derivatives default to zero - they stay constant
@@ -428,7 +434,7 @@ function TearingState(sys; check = true, sort_eqs = true)
                             else
                                 break
                             end
-                            if v′ in dvs || getmetadata(v′, SymScope, LocalScope()) isa GlobalScope
+                            if v′ in dvs
                                 isvalid = true
                                 break
                             end

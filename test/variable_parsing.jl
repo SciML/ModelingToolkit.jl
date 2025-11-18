@@ -48,22 +48,6 @@ end
 @test all(ModelingToolkit.isparameter, collect(s))
 @test all(ModelingToolkit.isparameter, Any[σ(t)[1], σ(t)[2]])
 
-# fntype(n, T) = FnType{NTuple{n, Any}, T}
-# t1 = Num[Variable{Real}(:t, 1), Variable{Real}(:t, 2)]
-# s1 = Num[Variable{Real}(:s, 1, 1) Variable{Real}(:s, 1, 2);
-#         Variable{Real}(:s, 3, 1) Variable{Real}(:s, 3, 2)]
-# σ1 = [Num(Variable{fntype(1, Real)}(:σ, 1)), Num(Variable{fntype(1, Real)}(:σ, 2))]
-# @test isequal(t1, collect(t))
-# @test isequal(s1, collect(s))
-# @test isequal(σ1, σ)
-
-#@independent_variables t
-#@variables x[1:2](t)
-#x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
-#      Variable{FnType{Tuple{Any}, Real}}(:x, 2)(t.val)]
-#
-#@test isequal(x1, x)
-
 @variables a[1:11, 1:2]
 @variables a()
 
@@ -133,3 +117,9 @@ a = rename(value(x), :a)
 @test ModelingToolkit.isparameter(p)
 
 @test_throws Any (@macroexpand @parameters p=2 [unit = u"m", abc = 2])
+
+@testset "Parameters cannot be dependent" begin
+    @test_throws ["cannot create time-dependent"] @parameters p(t)
+    @test_throws ["cannot create time-independent"] @discretes p
+end
+

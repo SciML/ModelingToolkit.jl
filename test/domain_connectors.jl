@@ -14,7 +14,7 @@ using Test
         dm(t), [connect = Flow]
     end
 
-    System(Equation[], t, vars, pars; name, defaults = [dm => 0])
+    System(Equation[], t, vars, pars; name, initial_conditions = [dm => 0])
 end
 
 @connector function HydraulicFluid(;
@@ -36,7 +36,7 @@ end
         dm ~ 0
     ]
 
-    System(eqs, t, vars, pars; name, defaults = [dm => 0])
+    System(eqs, t, vars, pars; name, initial_conditions = [dm => 0])
 end
 
 function FixedPressure(; p, name)
@@ -151,5 +151,5 @@ csys = complete(odesys)
 sys = mtkcompile(odesys)
 @test length(equations(sys)) == length(unknowns(sys))
 
-sys_defs = ModelingToolkit.defaults(sys)
+sys_defs = ModelingToolkit.bindings(sys)
 @test Symbol(sys_defs[csys.vol.port.ρ]) == Symbol(csys.fluid.ρ)

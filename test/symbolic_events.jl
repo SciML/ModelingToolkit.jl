@@ -405,7 +405,7 @@ end
     ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
     @named sys = System(eq, t, continuous_events = ev)
     sys = mtkcompile(sys)
-    prob = ODEProblem(sys, zeros(2), (0.0, 5.1))
+    prob = ODEProblem(sys, [v => 0, vmeasured => 0], (0.0, 5.1))
     sol = solve(prob, Tsit5())
     @test all(minimum((0:0.1:5) .- sol.t', dims = 2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
     @test sol([0.25 - eps()])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
@@ -415,8 +415,8 @@ end
 @testset "Handle Empty Events" begin
     Dₜ = D
 
-    @parameters u(t) [input = true]  # Indicate that this is a controlled input
-    @parameters y(t) [output = true] # Indicate that this is a measured output
+    @discretes u(t) [input = true]  # Indicate that this is a controlled input
+    @discretes y(t) [output = true] # Indicate that this is a measured output
 
     function Mass(; name, m = 1.0, p = 0, v = 0)
         ps = @parameters m = m
@@ -471,7 +471,8 @@ end
         sol
     end
 
-    @parameters k(t) t1 t2
+    @parameters t1 t2
+    @discretes k(t)
     @variables A(t) B(t)
 
     cond1 = (t == t1)
@@ -510,8 +511,8 @@ end
     # same as above - but with set-time event syntax
     cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
     cb2‵ = SymbolicDiscreteCallback([2.0] => affect2, discrete_parameters = [k], iv = t)
-    @named osys‵ = System(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
-    @named ssys‵ = SDESystem(eqs, [0.0], t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    @named osys‵ = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
+    @named ssys‵ = SDESystem(eqs, [0.0], t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
     testsol(osys‵, ODEProblem, Tsit5, u0, p, tspan; paramtotest = k)
     testsol(ssys‵, SDEProblem, RI5, u0, p, tspan; paramtotest = k)
 
@@ -527,8 +528,8 @@ end
         return (; k = 1.0)
     end
     cb2‵‵ = [2.0] => (f = affect!, modified = (; k))
-    @named osys4 = System(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
-    @named ssys4 = SDESystem(eqs, [0.0], t, [A], [k, t1],
+    @named osys4 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵])
+    @named ssys4 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵‵])
     oprob4 = ODEProblem(complete(osys4), [u0; p], tspan)
     testsol(osys4, ODEProblem, Tsit5, u0, p, tspan; tstops = [1.0], paramtotest = k)
@@ -575,7 +576,8 @@ end
         sol
     end
 
-    @parameters k(t) t1 t2
+    @parameters t1 t2
+    @discretes k(t)
     @variables A(t) B(t)
 
     eqs = [MassActionJump(k, [A => 1], [A => -1])]
@@ -890,7 +892,7 @@ end
 
 @testset "Discrete variable timeseries" begin
     @variables x(t)
-    @parameters a(t) b(t) c(t)
+    @discretes a(t) b(t) c(t)
     cb1 = SymbolicContinuousCallback([x ~ 1.0] => [a ~ -Pre(a)], discrete_parameters = [a])
     function save_affect!(mod, obs, ctx, integ)
         return (; b = 5.0)
@@ -1204,7 +1206,7 @@ end
 
 @testset "Array parameter updates in ImperativeAffect" begin
     function weird1(max_time; name)
-        params = @parameters begin
+        params = @discretes begin
             θ(t) = 0.0
         end
         vars = @variables begin
@@ -1224,7 +1226,7 @@ end
     end
 
     function weird2(max_time; name)
-        params = @parameters begin
+        params = @discretes begin
             θ(t) = 0.0
         end
         vars = @variables begin
@@ -1289,7 +1291,7 @@ end
     @test_throws UnsolvableCallbackError sol=solve(prob, FBDF())
 
     # Changing both variables and parameters in the same affect.
-    @parameters g(t)
+    @discretes g(t)
     eqs = [D(D(x)) ~ λ * x
            D(D(y)) ~ λ * y - g
            x^2 + y^2 ~ 1]
@@ -1337,7 +1339,7 @@ end
         return System(eqs, t, vars, []; name = name,
             continuous_events = [[x ~ max_time] => reset])
     end
-    shared_pars = @parameters begin
+    shared_pars = @discretes begin
         vals(t)[1:2] = zeros(2)
     end
 
@@ -1349,7 +1351,7 @@ end
 
 @testset "non-floating-point discretes and namespaced affects" begin
     function Inner(; name)
-        @parameters p(t)::Int
+        @discretes p(t)::Int
         @variables x(t)
         cevs = ModelingToolkit.SymbolicContinuousCallback(
             [x ~ 1.0], [p ~ Pre(p) + 1]; iv = t, discrete_parameters = [p])
@@ -1373,11 +1375,10 @@ end
     p1 = ParamTest(1)
     tp1 = typeof(p1)
     @parameters (p_1::tp1)(..) = p1
-    @parameters p2(t) = 1.0
+    @discretes p2(t) = 1.0
     @variables x(t) = 0.0
     @variables x2(t)
-    event = ModelingToolkit.SymbolicDiscreteCallback(
-        [0.5] => [p2 ~ Pre(t)]; discrete_parameters = [p2])
+    event = SymbolicDiscreteCallback([0.5], [p2 ~ Pre(t)]; discrete_parameters = [p2])
 
     eq = [
         D(x) ~ p2,
@@ -1388,6 +1389,7 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
+    @test sol[p2] ≈ [1.0, 0.5]
     @test sol[x, end]≈0.75 atol=1e-6
 end
 
@@ -1445,7 +1447,8 @@ end
 end
 
 @testset "Test erroneously created events yields errors" begin
-    @parameters p(t) d
+    @discretes p(t)
+    @parameters d
     @variables X(t)
     @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X <
                                                                                             5.0] => [X ~
@@ -1461,8 +1464,8 @@ end
 
 @testset "Issue#3990: Scalarized array passed to `discrete_parameters` of symbolic affect" begin
     N = 2
-    @parameters v(t)[1:N]
-    @parameters M(t)[1:N, 1:N]
+    @discretes v(t)[1:N]
+    @discretes M(t)[1:N, 1:N]
 
     @variables x(t)
 
@@ -1487,10 +1490,8 @@ end
     @mtkcompile v_sys = System(v_eq, t; discrete_events = v_event)
     @mtkcompile M_sys = System(M_eq, t; discrete_events = M_event)
 
-    u0p0_map = Dict(x => 1.0, M => Mini, v => vini)
-
-    v_prob = ODEProblem(v_sys, u0p0_map, (0.0, 2.5))
-    M_prob = ODEProblem(M_sys, u0p0_map, (0.0, 2.5))
+    v_prob = ODEProblem(v_sys, [x => 1.0, v => vini], (0.0, 2.5))
+    M_prob = ODEProblem(M_sys, [x => 1.0, M => Mini], (0.0, 2.5))
 
     v_sol = solve(v_prob, Tsit5())
     M_sol = solve(M_prob, Tsit5())
@@ -1501,8 +1502,8 @@ end
 
 @testset "Issue#3990: Scalarized array passed to `discrete_parameters` of symbolic affect" begin
     N = 2
-    @parameters v(t)[1:N]
-    @parameters M(t)[1:N, 1:N]
+    @discretes v(t)[1:N]
+    @discretes M(t)[1:N, 1:N]
 
     @variables x(t)
 
@@ -1527,10 +1528,8 @@ end
     @mtkcompile v_sys = System(v_eq, t; discrete_events = v_event)
     @mtkcompile M_sys = System(M_eq, t; discrete_events = M_event)
 
-    u0p0_map = Dict(x => 1.0, M => Mini, v => vini)
-
-    v_prob = ODEProblem(v_sys, u0p0_map, (0.0, 2.5))
-    M_prob = ODEProblem(M_sys, u0p0_map, (0.0, 2.5))
+    v_prob = ODEProblem(v_sys, [x => 1.0, v => vini], (0.0, 2.5))
+    M_prob = ODEProblem(M_sys, [x => 1.0, M => Mini], (0.0, 2.5))
 
     v_sol = solve(v_prob, Tsit5())
     M_sol = solve(M_prob, Tsit5())

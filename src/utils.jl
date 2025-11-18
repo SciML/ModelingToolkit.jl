@@ -267,6 +267,121 @@ function iv_from_nested_derivative(x, op = Differential)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Check the validity of `bindings` given the list of parameters `ps`. This method assumes
+that there are no discrete values in `ps`.
+"""
+function check_bindings(ps::Vector{SymbolicT}, bindings::SymmapT)
+    atomic_ps = AtomicArraySet()
+    for p in ps
+        push_as_atomic_array!(atomic_ps, p)
+    end
+    check_bindings(atomic_ps, bindings)
+end
+
+function check_bindings_is_atomic(x::SymbolicT)
+    SU.default_is_atomic(x) && Moshi.Match.@match x begin
+        BSImpl.Term(; f) && if f isa Operator end => f isa Initial
+        BSImpl.Term(; f) && if f === getindex end => false
+        _ => true
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if `bindings` are valid, given a list of parameters `atomic_ps`. Assumes no values in
+`atomic_ps` are discretes.
+"""
+function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bindings::SymmapT)
+    varsbuf = Set{SymbolicT}()
+    for p in atomic_ps
+        val = get(bindings, p, COMMON_NOTHING)
+        val === COMMON_NOTHING && continue
+        if val === COMMON_MISSING
+            if !is_variable_floatingpoint(p)
+                throw(ArgumentError("""
+                `missing` bindings are only valid for solvable parameters! Non-floating \
+                point parameters cannot be solved for, and thus do not accept a binding \
+                of `missing`. Found invalid parameter $p of symtype $(symtype(p)).
+                """))
+            end
+        end
+        empty!(varsbuf)
+        SU.search_variables!(varsbuf, val; is_atomic = check_bindings_is_atomic)
+        setdiff!(varsbuf, atomic_ps)
+        filter!(x -> getmetadata(x, SymScope, LocalScope()) isa LocalScope, varsbuf)
+        filter!(!isinitial, varsbuf)
+        isempty(varsbuf) && continue
+
+        throw(ArgumentError("""
+        Bindings for parameters can only be functions of other parameters. For parameter \
+        $p, encountered binding $val which contains non-parameter symbolics $varsbuf. If \
+        you intended $p to be a discrete variable, pass it as an unknown of the system.
+        """))
+    end
+end
+
+function check_no_parameter_equations_recurse(ex::SymbolicT)
+    iscall(ex) && !check_bindings_is_atomic(ex)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Validate that all equations of the system involve the unknowns/observables.
+"""
+function check_no_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
+    end
+    varsbuf = Set{SymbolicT}()
+    pareqs = Equation[]
+    allowed_vars = as_atomic_array_set(unknowns(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
+    for eq in equations(sys)
+        empty!(varsbuf)
+        Symbolics.get_variables!(varsbuf, eq, allowed_vars; is_atomic = check_bindings_is_atomic, recurse = check_no_parameter_equations_recurse)
+        isempty(varsbuf) && push!(pareqs, eq)
+    end
+
+    if !isempty(pareqs)
+        error("""
+        The equations of a system must involve the unknowns/observables. The following \
+        equations were found to have no unknowns/observables:
+        $(join(string.(pareqs), "\n"))
+        """)
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Verify that bound parameters have not been provided initial conditions. Requires the \
+existence of an up-to-data `parameter_bindings_graph`.
+"""
+function check_no_bound_initial_conditions(sys::AbstractSystem)
+    bound_ps = (get_parameter_bindings_graph(sys)::ParameterBindingsGraph).bound_ps
+    ics = initial_conditions(sys)
+    bound_ics = intersect(bound_ps, keys(ics))
+    isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
+end
+
+struct BoundInitialConditionsError <: Exception
+    bound_pars::Vector{SymbolicT}
+end
+
+function Base.showerror(io::IO, err::BoundInitialConditionsError)
+    print(io, """
+    Bound parameters cannot have initial conditions. The following bound parameters \
+    were found to have initial conditions:
+    $(join(string.(collect(err.bound_pars)), "\n"))
+    """)
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Check if the symbolic variable `v` has a default value.
@@ -287,62 +402,69 @@ function setdefault(v, val)
     val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
-function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
-    collect_defaults!(defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
+    collect_defaults!(initial_conditions, bindings, vars)
     collect_guesses!(guesses, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, defs::SymmapT, vars::Vector{SymbolicT})
-    collect_defaults!(defs, vars)
+function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, vars::Vector{SymbolicT})
+    collect_defaults!(initial_conditions, bindings, vars)
     collect_var_to_name!(var_to_name, vars)
     return nothing
 end
 
-function collect_defaults!(defs::SymmapT, vars::Vector{SymbolicT})
-    for v in vars
-        isconst(v) && continue
-        haskey(defs, v) && continue
-        def = Symbolics.getdefaultval(v, nothing)
-        if def !== nothing
-            defs[v] = SU.Const{VartypeT}(def)
-            continue
+function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::SymbolicT)
+    if hasname(v) && occursin(NAMESPACE_SEPARATOR, string(getname(v)))
+        return
+    end
+    Moshi.Match.@match v begin
+        BSImpl.Const(;) => return
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            collect_defaults!(initial_conditions, bindings, args[1])
         end
-        Moshi.Match.@match v begin
-            BSImpl.Term(; f, args) && if f === getindex end => begin
-                haskey(defs, args[1]) && continue
-                def = Symbolics.getdefaultval(args[1], nothing)
-                def === nothing && continue
-                defs[args[1]] = def
+        _ => begin
+            def = Symbolics.getdefaultval(v, nothing)
+            def === nothing && return
+            def = BSImpl.Const{VartypeT}(def)
+            Moshi.Match.@match def begin
+                # `get!` here is just shorthand for "if the key doesn't exist, add this
+                # value".
+                BSImpl.Const(;) => if def === COMMON_MISSING
+                    get!(bindings, v, def)
+                else
+                    get!(initial_conditions, v, def)
+                end
+                _ => get!(bindings, v, def)
             end
-            _ => nothing
         end
     end
-    return defs
 end
 
-function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
+function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, vars::Vector{SymbolicT})
     for v in vars
-        isconst(v) && continue
-        symbolic_type(v) == NotSymbolic() && continue
-        haskey(guesses, v) && continue
-        def = getguess(v)
-        if def !== nothing
-            guesses[v] = SU.Const{VartypeT}(def)
-            continue
+        collect_defaults!(initial_conditions, bindings, v)
+    end
+end
+
+function collect_guesses!(guesses::SymmapT, v::SymbolicT)
+    Moshi.Match.@match v begin
+        BSImpl.Const(;) => return
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            collect_guesses!(guesses, args[1])
         end
-        Moshi.Match.@match v begin
-            BSImpl.Term(; f, args) && if f === getindex end => begin
-                haskey(guesses, args[1]) && continue
-                def = getguess(args[1])
-                def === nothing && continue
-                guesses[args[1]] = def
-            end
-            _ => nothing
+        _ => begin
+            def = getguess(v)
+            def === nothing && return
+            get!(guesses, v, BSImpl.Const{VartypeT}(def))
         end
     end
-    return guesses
+end
+function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
+    for v in vars
+        collect_guesses!(guesses, v)
+    end
 end
 
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
@@ -1162,6 +1284,7 @@ function underscore_to_D(v, iv, inv_map)
         end
         repeats = length(suffix) ÷ length(string(iv))
         D = Differential(iv)
+        v = SSym(Symbol(n); type = FnType{Tuple, Real, Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
         wrap_with_D(v, D, repeats)
     end
 end
@@ -1172,4 +1295,99 @@ function wrap_with_D(n, D, repeats)
     else
         wrap_with_D(D(n), D, repeats - 1)
     end
+end
+
+const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
+return the array and `true`. Otherwise, return `x, false`.
+"""
+function split_indexed_var(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => (args[1], true)
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            arr, isarr = split_indexed_var(args[1])
+            isarr || return x, false
+            return f(arr), isarr
+        end
+        _ => return x, false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, assume `split_indexed_var(x)[2]` is `true`. Return the
+corresponding `SymbolicUtils.StableIndex`.
+"""
+function get_stable_index(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
+        BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
+        _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Merge `b` into `a`, but error if `a` already contains that key. Return the modified `a`.
+"""
+function no_override_merge!(a::AbstractDict, b::AbstractDict)
+    for (k, v) in b
+        if haskey(a, k)
+            throw(ArgumentError("Cannot merge without overriding: common key $k."))
+        end
+        a[k] = v
+    end
+    return a
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Identical to `no_override_merge!` but `COMMON_MISSING` values in `b` are ignored.
+"""
+function no_override_merge_except_missing!(a::AbstractDict, b::AbstractDict)
+    for (k, v) in b
+        v === COMMON_MISSING && continue
+        if haskey(a, k)
+            throw(ArgumentError("Cannot merge without overriding: common key $k."))
+        end
+        a[k] = v
+    end
+    return a
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Merge `b` into `a`, modifying `a`. For all keys common to `a` and `b`,
+prefer the value in `a`.
+"""
+function left_merge!(a::AbstractDict, b::AbstractDict)
+    mergewith!(first ∘ tuple, a, b)
+end
+
+function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT})
+    for (k, v) in b
+        if !haskey(a, k)
+            a[k] = v
+            continue
+        end
+
+        v_a = a[k]
+        sh = SU.shape(k)
+        SU.is_array_shape(sh) || continue
+        any(Base.Fix2(===, COMMON_NOTHING) ∘ Base.Fix1(getindex, v_a), SU.stable_eachindex(v_a)) || continue
+
+        new_v = map(SU.stable_eachindex(v_a)) do i
+            v_a[i] === COMMON_NOTHING ? v[i] : v_a[i]
+        end
+        a[k] = BSImpl.Const{VartypeT}(reshape(new_v, size(v_a)))
+    end
+    mergewith!(first ∘ tuple, a, b)
 end

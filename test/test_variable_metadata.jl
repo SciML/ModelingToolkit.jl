@@ -1,6 +1,7 @@
 using ModelingToolkit
 using Symbolics: value
 using DynamicQuantities
+using Test
 
 # Bounds
 @variables u [bounds = (-1, 1)]
@@ -177,17 +178,19 @@ sp = Set(p)
 # Defaults, guesses overridden by system, parameter dependencies
 @variables x(t)=1.0 y(t) [guess = 1.0]
 @parameters p=2.0 q
-@named sys = System([q ~ 2p], t, [x, y], [p, q]; defaults = Dict(x => 2.0, p => 3.0),
-    guesses = Dict(y => 2.0))
+@named sys = System(Equation[], t, [x, y], [p, q];
+                    bindings = [q => 2p], initial_conditions = Dict(x => 2.0, p => 3.0),
+                    guesses = Dict(y => 2.0))
 sys = complete(sys)
 unks_meta = ModelingToolkit.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in unks_meta])
-@test value(unks_meta[:x].default) == 2.0
+@test value(unks_meta[:x].default) == 1.0
+@test value(unks_meta[:x].initial_condition) == 2.0
 @test value(unks_meta[:y].guess) == 2.0
 params_meta = ModelingToolkit.dump_parameters(sys)
 params_meta = Dict([ModelingToolkit.getname(meta.var) => meta for meta in params_meta])
-@test value(params_meta[:p].default) == 3.0
-@test isequal(params_meta[:q].dependency, 2p)
+@test value(params_meta[:p].default) == 2.0
+@test value(params_meta[:p].initial_condition) == 3.0
 
 # Connect
 @variables x [connect = Flow]

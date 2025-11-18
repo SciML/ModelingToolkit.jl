@@ -155,9 +155,7 @@ function IndexCache(sys::AbstractSystem)
                 symi += 1
                 clocki += 1
                 ttsym = default_toterm(sym)
-                rsym = renamespace(sys, sym)
-                rttsym = renamespace(sys, ttsym)
-                for cursym in (sym, ttsym, rsym, rttsym)
+                for cursym in (sym, ttsym)
                     disc_idxs[cursym] = DiscreteIndex(typei, symi, parti, clocki)
                 end
             end
@@ -230,6 +228,32 @@ function IndexCache(sys::AbstractSystem)
             symbol_to_variable[getname(default_toterm(p))] = p
         end
     end
+    found_array_syms = Set{SymbolicT}()
+    for p in tunable_pars
+        arrsym, isarr = split_indexed_var(p)
+        isarr || continue
+        arrsym in found_array_syms && continue
+        symbolic_has_known_size(arrsym) || continue
+        idxs = Int[]
+        valid_arrsym = true
+        for i in eachindex(arrsym)
+            idxsym = arrsym[i]
+            idx = get(tunable_idxs, idxsym, nothing)::Union{Int, Nothing}
+            valid_arrsym = idx !== nothing
+            valid_arrsym || break
+            push!(idxs, idx::Int)
+        end
+        push!(found_array_syms, arrsym)
+        valid_arrsym || break
+        if idxs == idxs[begin]:idxs[end]
+            idxs = reshape(idxs[begin]:idxs[end], size(arrsym))::AbstractArray{Int}
+        else
+            idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
+        end
+        rsym = renamespace(sys, arrsym)
+        tunable_idxs[arrsym] = idxs
+        tunable_idxs[rsym] = idxs
+    end
 
     initials_idxs = TunableIndexMap()
     initials_buffer_size = 0
@@ -271,27 +295,6 @@ function IndexCache(sys::AbstractSystem)
 
     dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
     vs = Set{SymbolicT}()
-    for eq in get_parameter_dependencies(sys)
-        sym = eq.lhs
-        SU.search_variables!(vs, eq.rhs)
-        timeseries = TimeseriesSetType()
-        if is_time_dependent(sys)
-            for v in vs
-                if (idx = get(disc_idxs, v, nothing)) !== nothing
-                    push!(timeseries, idx.clock_idx)
-                end
-            end
-        end
-        ttsym = default_toterm(sym)
-        rsym = renamespace(sys, sym)
-        rttsym = renamespace(sys, ttsym)
-        for s in (sym, ttsym, rsym, rttsym)
-            dependent_pars_to_timeseries[s] = timeseries
-            if hasname(s) && (!iscall(s) || operation(s) !== getindex)
-                symbol_to_variable[getname(s)] = sym
-            end
-        end
-    end
 
     observed_syms_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
     for eq in observed(sys)
@@ -337,6 +340,10 @@ function IndexCache(sys::AbstractSystem)
     populate_symbol_to_var!(symbol_to_variable, keys(nonnumeric_idxs))
     populate_symbol_to_var!(symbol_to_variable, independent_variable_symbols(sys))
     populate_symbol_to_var!(symbol_to_variable, observables(sys))
+    pbg = get_parameter_bindings_graph(sys)
+    if pbg isa ParameterBindingsGraph
+        populate_symbol_to_var!(symbol_to_variable, pbg.bound_ps)
+    end
 
     return IndexCache(
         unk_idxs,

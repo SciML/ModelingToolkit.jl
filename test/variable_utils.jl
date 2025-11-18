@@ -155,7 +155,8 @@ end
 @testset "At" begin
     @independent_variables u
     @variables x(t) v(..) w(t)[1:3]
-    @parameters y z(u, t) r[1:3]
+    @parameters y r[1:3]
+    @discretes z(u, t)
 
     @test EvalAt(1)(x) isa Num
     @test isequal(EvalAt(1)(y), y)

@@ -91,7 +91,7 @@ sol = solve(prob, ImplicitEuler());
 @test sol[y][end] == x[end]
 
 #TODO: remake becomes more complicated now, how to improve?
-defs = ModelingToolkit.defaults(sys)
+defs = ModelingToolkit.initial_conditions(sys)
 defs[s.src.interpolator] = Interpolator(2x, dt)
 p′ = ModelingToolkit.MTKParameters(sys, defs)
 prob′ = remake(prob; p = p′)
@@ -238,7 +238,7 @@ end
         @parameters fn(::Real) = _f1
         @mtkcompile sys = System(D(x) ~ fn(t), t)
         @test is_parameter(sys, fn)
-        @test value(ModelingToolkit.defaults(sys)[fn]) == _f1
+        @test value(ModelingToolkit.initial_conditions(sys)[fn]) == _f1
 
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
@@ -305,7 +305,7 @@ end
     @named sys = ApexSystem()
     sysref = complete(sys)
     sys2 = complete(sys; split = true, flatten = false)
-    ps = Set(full_parameters(sys2))
+    ps = Set(parameters(sys2))
     @test sysref.k in ps
     @test sysref.subsys.c in ps
     @test length(ps) == 2
