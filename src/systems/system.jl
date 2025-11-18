@@ -440,6 +440,18 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     bindings = defsdict(bindings)
     initial_conditions = defsdict(initial_conditions)
     guesses = defsdict(guesses)
+    all_dvs = as_atomic_array_set(dvs)
+    if iv === nothing
+        for k in keys(bindings)
+            k in all_dvs || continue
+            throw(ArgumentError("""
+            Bindings for variables are enforced during initialization. Since \
+            time-independent systems only perform parameter initialization, \
+            bindings for variables in such systems are invalid. $k was found to have \
+            a binding in the system $name.
+            """))
+        end
+    end
     let initial_conditions = discover_from_metadata ? initial_conditions : SymmapT(),
         bindings = discover_from_metadata ? bindings : SymmapT(),
         guesses = discover_from_metadata ? guesses : SymmapT(),
@@ -466,6 +478,17 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
+
+    if iv === nothing
+        filter!(bindings) do kvp
+            k = kvp[1]
+            if k in all_dvs
+                initial_conditions[k] = kvp[2]
+                return false
+            end
+            return true
+        end
+    end
 
     check_bindings(ps, bindings)
     bindings = ROSymmapT(bindings)
