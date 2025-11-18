@@ -547,15 +547,17 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
         var_eq_matching::Matching, full_var_eq_matching::Matching,
         var_sccs::Vector{Vector{Int}}, extra_eqs_vars::NTuple{2, Vector{Int}},
         iv::Union{SymbolicT, Nothing}, D::Union{Differential, Shift, Nothing};
-        simplify::Bool = false)
+        simplify::Bool = false, inline_linear_sccs = false, analytical_linear_scc_limit = 2)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
     eq_var_matching = invview(var_eq_matching)
+    full_eq_var_matching = invview(full_var_eq_matching)
     diff_to_var = invview(var_to_diff)
     extra_eqs, extra_vars = extra_eqs_vars
 
     total_sub = DerivativeDict()
-    if is_only_discrete(structure)
+    is_disc = is_only_discrete(structure)
+    if is_disc
         for (i, v) in enumerate(fullvars)
             Moshi.Match.@match v begin
                 BSImpl.Term(; f) && if f isa Shift && f.steps < 0 end => begin
@@ -598,10 +600,43 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
             isempty(vscc) && continue
         end
 
-        for ieq in escc
-            iv = eq_var_matching[ieq]
-            neq = neweqs[ieq]
-            codegen_equation!(eq_generator, neq, ieq, iv; simplify)
+        # Inline linear SCCs pass is only valid on continuous systems. We check if the
+        # current SCC is algebraic and if the algebraic equations are linear in the
+        # algebraic variables.
+        if !is_disc && inline_linear_sccs && (
+            (alg_eqs, alg_vars) = find_alg_eqs_vars(vscc, escc, var_eq_matching);
+            is_linear_scc(structure, alg_eqs, alg_vars)
+        )
+            # Generate all the solved equations in this SCC first, since some of them will
+            # have an RHS that uses the algebraic variables, and we want to populate
+            # `eq_generator.solved_eqs_sub` with those equations. For example, if
+            # `x ~ 2z + 3` is a solved equation in this SCC, and `z ~ x + y + q` is
+            # an algebraic equation the inline linsolve will handle, correctness requires
+            # substituting `x` into the algebraic equation. This does imply that
+            # the observed equations we generate are not topologically sorted, but
+            # `topsort_equations` will handle that.
+            for ieq in escc
+                # do not codegen algebraic equations
+                ieq in alg_eqs && continue
+                iv = eq_var_matching[ieq]
+                neq = neweqs[ieq]
+                codegen_equation!(eq_generator, neq, ieq, iv; simplify)
+            end
+            linsol = get_linear_scc_linsol(alg_eqs, alg_vars, neweqs, eq_generator.solved_eqs_sub, total_sub, fullvars, analytical_linear_scc_limit, simplify)
+            # Generate the algebraic equations
+            for (algevar_idx, _) in enumerate(alg_eqs)
+                iv = alg_vars[algevar_idx]
+                var = fullvars[iv]
+                # Mark equation and variable as solved
+                push!(eq_generator.solved_eqs, var ~ linsol[algevar_idx])
+                push!(eq_generator.solved_vars, iv)
+            end
+        else
+            for ieq in escc
+                iv = eq_var_matching[ieq]
+                neq = neweqs[ieq]
+                codegen_equation!(eq_generator, neq, ieq, iv; simplify)
+            end
         end
     end
 
@@ -643,6 +678,102 @@ function generate_system_equations!(state::TearingState, neweqs::Vector{Equation
     neweqs = neweqs′
     return neweqs, solved_eqs, eq_ordering, var_ordering, length(solved_vars),
     length(solved_vars_set)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Find algebraic equations and variables in the given SCC. `vscc` is the variable SCC and
+`escc` is the corresponding equation SCC. Returns `alg_eqs::BitSet, alg_vars::Vector{Int}`.
+"""
+function find_alg_eqs_vars(vscc::Vector{Int}, escc::Vector{Int}, var_eq_matching::Matching)
+    eq_var_matching = invview(var_eq_matching)
+    alg_eqs = BitSet()
+    for ieq in escc
+        eq_var_matching[ieq] isa Int || push!(alg_eqs, ieq)
+    end
+    alg_vars = Int[]
+    for iv in vscc
+        var_eq_matching[iv] isa Int || push!(alg_vars, iv)
+    end
+    @assert length(alg_eqs) == length(alg_vars)
+    return alg_eqs, alg_vars
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if the algebraic equations `alg_eqs` are linear in the algebraic variables `alg_vars`.
+"""
+function is_linear_scc(structure::SystemStructure, alg_eqs::BitSet, alg_vars::Vector{Int})
+    isempty(alg_eqs) && return false
+    @unpack graph, solvable_graph = structure
+    for iv in alg_vars
+        incident = intersect(alg_eqs, 𝑑neighbors(graph, iv))
+        solvable = 𝑑neighbors(solvable_graph, iv)
+        setdiff!(incident, solvable)
+        isempty(incident) || return false
+    end
+    return true
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get a symbolic expression of the appropriate size representing the solution of the linear SCC.
+"""
+function get_linear_scc_linsol(alg_eqs::BitSet, alg_vars::Vector{Int}, neweqs::Vector{Equation}, solved_eqs_sub::Dict{SymbolicT, SymbolicT}, total_sub::DerivativeDict{SymbolicT, Dict{SymbolicT, SymbolicT}}, fullvars::Vector{SymbolicT}, analytical_linear_scc_limit::Int, simplify::Bool)
+    N = length(alg_eqs)
+    if N <= analytical_linear_scc_limit
+        resids = SymbolicT[]
+        for ieq in alg_eqs
+            eq = neweqs[ieq]
+            resid = eq.rhs
+            if simplify
+                resid = SymbolicUtils.simplify(resid)
+            end
+            # Substitute solved differential equations
+            resid = Symbolics.fixpoint_sub(
+                resid, total_sub; operator = ModelingToolkit.Shift)
+            # Substitute solved equations
+            resid = SU.substitute(resid, solved_eqs_sub)
+            push!(resids, resid)
+        end
+        return @views Symbolics.symbolic_linear_solve(resids, fullvars[alg_vars])
+    end
+    # Linear coefficients
+    A = fill(Symbolics.COMMON_ZERO, N, N)
+    b = fill(Symbolics.COMMON_ZERO, N)
+
+    for (eqidx, ieq) in enumerate(alg_eqs)
+        eq = neweqs[ieq]
+        @assert SU._iszero(eq.lhs)
+        resid = eq.rhs
+        if simplify
+            resid = Symbolics.simplify(resid)
+        end
+        # Substitute solved differential equations
+        resid = Symbolics.fixpoint_sub(
+            resid, total_sub; operator = ModelingToolkit.Shift)
+        # Substitute solved equations
+        resid = SU.substitute(resid, solved_eqs_sub)
+        # Standard `linear_expansion`-based process
+        for (varidx, iv) in enumerate(alg_vars)
+            var = fullvars[iv]
+            a, resid, islinear = Symbolics.linear_expansion(resid, var)
+            @assert islinear
+            A[eqidx, varidx] = a
+        end
+        # `-` is important! `b` is on the other side of the equality.
+        b[eqidx] = -resid
+    end
+    # Turn into symbolic arrays
+    A = SU.Const{VartypeT}(A)
+    b = SU.Const{VartypeT}(b)
+    # Build `LinearProblem`. The `type` and `shape` don't particularly matter.
+    linprob = SU.BSImpl.Term{VartypeT}(LinearProblem, SU.ArgsT{VartypeT}((A, b)); type = Any, shape = SU.ShapeVecT())
+    # Build solution with the appropriate shape.
+    return SU.BSImpl.Term{VartypeT}(CommonSolve.solve, SU.ArgsT{VartypeT}((linprob,)); type = Vector{Real}, shape = SU.ShapeVecT((1:N,)))
 end
 
 """
@@ -732,11 +863,16 @@ struct EquationGenerator{S}
     `eq_ordering` for `solved_eqs`.
     """
     solved_vars::Vector{Int}
+    """
+    `solved_eqs` as substitution rules, but where each equation has already been
+    substituted with all prior equations.
+    """
+    solved_eqs_sub::Dict{SymbolicT, SymbolicT}
 end
 
 function EquationGenerator(state, total_sub, D, idep)
     EquationGenerator(
-        state, total_sub, D, idep, Equation[], Int[], Int[], Equation[], Int[])
+        state, total_sub, D, idep, Equation[], Int[], Int[], Equation[], Int[], Dict{SymbolicT, SymbolicT}())
 end
 
 """
@@ -771,7 +907,7 @@ function codegen_equation!(eg::EquationGenerator,
     #   Solvable equations of differential variables D(x) become differential equations
     #   Solvable equations of non-differential variables become observable equations
     #   Non-solvable equations become algebraic equations.
-    @unpack state, total_sub, neweqs′, eq_ordering, var_ordering = eg
+    @unpack state, total_sub, neweqs′, eq_ordering, var_ordering, solved_eqs_sub = eg
     @unpack solved_eqs, solved_vars, D, idep = eg
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
@@ -824,6 +960,9 @@ function codegen_equation!(eg::EquationGenerator,
             end
             push!(solved_eqs, neweq)
             push!(solved_vars, iv)
+            lhs = neweq.lhs
+            rhs = SU.substitute(neweq.rhs, solved_eqs_sub)
+            solved_eqs_sub[lhs] = rhs
         end
     else
         neweq = make_algebraic_equation(eq, total_sub)
@@ -1071,14 +1210,35 @@ differential variables.
 - `full_var_eq_matching`: The maximal matching prior to state selection.
 - `var_sccs`: The topologically sorted strongly connected components of the system
   according to `full_var_eq_matching`.
+
+# Options
+
+$TYPEDFIELDS
 """
 @kwdef struct DefaultReassembleAlgorithm <: ReassembleAlgorithm
+    """
+    Whether to use `SymbolicUtils.simplify` when generating the equations.
+    """
     simplify::Bool = false
+    """
+    Experimental toggle for disabling passes that aid in code generation of arrays.
+    """
     array_hack::Bool = true
+    """
+    Whether SCCs which are linear systems of the associated variables should be
+    handled using inline linear solves via `LinearSolve.jl`. By default, such
+    SCCs generate algebraic equations.
+    """
+    inline_linear_sccs::Bool = false
+    """
+    If `inline_linear_sccs == true`, this is the maximum size of a system of linear
+    equations which is solved symbolically rather than using `LinearSolve.jl`.
+    """
+    analytical_linear_scc_limit::Int = 2
 end
 
 function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::TearingResult, mm::Union{SparseMatrixCLIL,  Nothing}; fully_determined::Bool = true, kw...)
-    @unpack simplify, array_hack = alg
+    @unpack simplify, array_hack, inline_linear_sccs, analytical_linear_scc_limit = alg
     @unpack var_eq_matching, full_var_eq_matching, var_sccs = tearing_result
 
     extra_eqs_vars = get_extra_eqs_vars(
@@ -1114,7 +1274,8 @@ function (alg::DefaultReassembleAlgorithm)(state::TearingState, tearing_result::
     nelim_eq,
     nelim_var = generate_system_equations!(
         state, neweqs, var_eq_matching, full_var_eq_matching,
-        var_sccs, extra_eqs_vars, iv, D; simplify)
+        var_sccs, extra_eqs_vars, iv, D; simplify, inline_linear_sccs,
+        analytical_linear_scc_limit)
 
     state = reorder_vars!(
         state, var_eq_matching, var_sccs, eq_ordering, var_ordering, nelim_eq, nelim_var)
