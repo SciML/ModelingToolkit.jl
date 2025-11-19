@@ -69,6 +69,7 @@ end
 end
 
 @testset "array hack can be disabled" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; array_hack = false)
     @testset "fully_determined = true" begin
         @variables x(t) y(t)[1:2] z(t)[1:2]
         @parameters foo(::AbstractVector)[1:2]
@@ -76,7 +77,7 @@ end
         @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys2 = mtkcompile(sys; array_hack = false)
+        sys2 = mtkcompile(sys; reassemble_alg)
         @test length(observed(sys2)) == 4
         @test !any(observed(sys2)) do eq
             iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
@@ -90,7 +91,7 @@ end
         @named sys = System(
             [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
 
-        sys2 = mtkcompile(sys; array_hack = false, fully_determined = false)
+        sys2 = mtkcompile(sys; reassemble_alg, fully_determined = false)
         @test length(observed(sys2)) == 4
         @test !any(observed(sys2)) do eq
             iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
