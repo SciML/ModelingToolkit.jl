@@ -109,40 +109,6 @@ function find_types(array)
     return by.(array)
 end
 
-function split_parameters_by_type(ps)
-    if ps === SciMLBase.NullParameters()
-        return Float64[], [] #use Float64 to avoid Any type warning
-    else
-        by = let set = Dict{Any, Int}(), counter = Ref(0)
-            x -> begin
-                get!(set, typeof(x)) do
-                    counter[] += 1
-                end
-            end
-        end
-        idxs = by.(ps)
-        split_idxs = [Int[]]
-        for (i, idx) in enumerate(idxs)
-            if idx > length(split_idxs)
-                push!(split_idxs, Int[])
-            end
-            push!(split_idxs[idx], i)
-        end
-        tighten_types = x -> identity.(x)
-        split_ps = tighten_types.(Base.Fix1(getindex, ps).(split_idxs))
-
-        if ps isa StaticArray
-            parrs = map(x -> SArray{Tuple{size(x)...}}(x), split_ps)
-            split_ps = SArray{Tuple{size(parrs)...}}(parrs)
-        end
-        if length(split_ps) == 1  #Tuple not needed, only 1 type
-            return split_ps[1], split_idxs
-        else
-            return (split_ps...,), split_idxs
-        end
-    end
-end
-
 """
     $(TYPEDSIGNATURES)
 

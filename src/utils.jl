@@ -1,14 +1,3 @@
-"""
-    union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-
-Unite x and y gracefully when they could be nothing. If neither is nothing, x and y are united normally. If one is nothing, the other is returned unmodified. If both are nothing, nothing is returned.
-"""
-function union_nothing(x::Union{T1, Nothing}, y::Union{T2, Nothing}) where {T1, T2}
-    isnothing(x) && return y # y can be nothing or something
-    isnothing(y) && return x # x can be nothing or something
-    return union(x, y) # both x and y are something and can be united normally
-end
-
 get_iv(D::Differential) = D.x
 
 """
@@ -1170,25 +1159,6 @@ function symbol_to_symbolic(sys::AbstractSystem, sym; allsyms = all_symbols(sys)
         sym = arguments(sym)[1]
     end
     return sym
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Check if `var` is present in `varlist`. `iv` is the independent variable of the system,
-and should be `nothing` if not applicable.
-"""
-function var_in_varlist(var, varlist::AbstractSet, iv)
-    var = unwrap(var)
-    # simple case
-    return var in varlist ||
-           # indexed array symbolic, unscalarized array present
-           (iscall(var) && operation(var) === getindex && arguments(var)[1] in varlist) ||
-           # unscalarized sized array symbolic, all scalarized elements present
-           (symbolic_type(var) == ArraySymbolic() && symbolic_has_known_size(var) &&
-            all(x -> x in varlist, collect(var))) ||
-           # delayed variables
-           (isdelay(var, iv) && var_in_varlist(operation(var)(iv), varlist, iv))
 end
 
 """
