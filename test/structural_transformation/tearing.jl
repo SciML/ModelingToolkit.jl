@@ -1,6 +1,6 @@
 using Test
 using ModelingToolkit
-using ModelingToolkit: Equation
+using ModelingToolkit: Equation, observed
 using ModelingToolkit.StructuralTransformations: SystemStructure, find_solvables!
 using NonlinearSolve
 using LinearAlgebra

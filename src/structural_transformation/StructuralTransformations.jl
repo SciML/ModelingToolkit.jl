@@ -21,20 +21,20 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,
-                       has_tearing_state, defaults, InvalidSystemException,
+                       has_tearing_state, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
-                       vars!, invalidate_cache!,
-                       vars!, invalidate_cache!, Shift,
+                       invalidate_cache!, Shift,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        filter_kwargs, lower_varname_with_unit,
                        lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
                        Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
-                       VariableShift, DerivativeDict
+                       VariableShift, DerivativeDict, shift2term, simplify_shifts,
+                       distribute_shift
 
-using ModelingToolkit.BipartiteGraphs
-import .BipartiteGraphs: invview, complete
+using BipartiteGraphs
+import BipartiteGraphs: invview, complete
 import ModelingToolkit: var_derivative!, var_derivative_graph!
 using Graphs
 using ModelingToolkit: algeqs, EquationsView,
@@ -68,11 +68,10 @@ export sorted_incidence_matrix,
        pantelides!, pantelides_reassemble, find_solvables!,
        linear_subsys_adjmat!
 export tearing_substitution
-export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
 export computed_highest_diff_variables
-export shift2term, lower_shift_varname, simplify_shifts, distribute_shift
+export lower_shift_varname
 
 include("utils.jl")
 include("tearing.jl")
