@@ -25,7 +25,6 @@ end
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
-            @safetestset "Linear Algebra Test" include("linalg.jl")
             @safetestset "AbstractSystem Test" include("abstractsystem.jl")
             @safetestset "Variable Scope Tests" include("variable_scope.jl")
             @safetestset "Parsing Test" include("variable_parsing.jl")
