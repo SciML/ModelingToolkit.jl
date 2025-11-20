@@ -234,7 +234,7 @@ initprob = ModelingToolkit.InitializationProblem(sys, 0.0)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
 @test initprob isa NonlinearLeastSquaresProblem
-@test length(initprob.u0) == 3
+@test length(initprob.u0) == 4
 initsol = solve(initprob, reltol = 1e-12, abstol = 1e-12)
 @test SciMLBase.successful_retcode(initsol)
 @test maximum(abs.(initsol[conditions])) < 1e-14

@@ -3,7 +3,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @variables x(t)
 
-@named sys = System([D(x) ~ -0.5 * x], t, defaults = Dict(x => 1.0))
+@named sys = System([D(x) ~ -0.5 * x], t, initial_conditions = Dict(x => 1.0))
 sys = complete(sys)
 for prob in [
     eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing)),
