@@ -1,3 +1,16 @@
+const accept_unnamed_model = ScopedValue(false)
+macro accept_unnamed_model(expr)
+    esc(:($with(()->$expr, $ModelingToolkit.accept_unnamed_model => true)))
+end
+function default_model_name(m::Model)
+    if accept_unnamed_model[]
+        return :unnamed
+    else
+        error("Model constructors require a `name=` keyword argument ",
+              "(or usage of `@named`, `@mtkbuild`)")
+    end
+end
+
 """
 $(TYPEDEF)
 
@@ -22,7 +35,7 @@ struct Model{F, S}
         """
     isconnector::Bool
 end
-(m::Model)(args...; name=:unnamed, kw...) = m.f(args...; name, kw...)
+(m::Model)(args...; name=default_model_name(m), kw...) = m.f(args...; name, kw...)
 
 Base.parentmodule(m::Model) = parentmodule(m.f)
 

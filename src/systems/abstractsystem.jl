@@ -2153,7 +2153,10 @@ function _named(name, call, runtime = false)
     op = call.args[1]
     quote
         $is_sys_construction = ($op isa $DataType) && ($op <: $AbstractSystem)
-        $call
+        # It is counterintuitive that `@accept_unnamed_model` is used inside of `@named`, but
+        # the point is that inside of `@named my_model = Model(sub_component=MyComponent())`,
+        # `sub_component` does not require an explicit `name`.
+        $ModelingToolkit.@accept_unnamed_model $call
     end
 end
 
