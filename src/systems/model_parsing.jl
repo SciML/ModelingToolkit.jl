@@ -2,12 +2,12 @@ const accept_unnamed_model = ScopedValue(false)
 macro accept_unnamed_model(expr)
     esc(:($with(()->$expr, $ModelingToolkit.accept_unnamed_model => true)))
 end
-function default_model_name(m::Model)
+function default_model_name(m)
     if accept_unnamed_model[]
         return :unnamed
     else
-        error("Model constructors require a `name=` keyword argument ",
-              "(or usage of `@named`, `@mtkbuild`)")
+        error("Model constructor ", m, " require a `name=` keyword argument ",
+              "(or usage of `@named`, `@mtkcompile`)")
     end
 end
 
