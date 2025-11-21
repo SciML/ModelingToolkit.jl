@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 version = "10.29.0"
+authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -115,7 +115,7 @@ DomainSets = "0.6, 0.7"
 DynamicQuantities = "^0.11.2, 0.12, 0.13, 1"
 EnumX = "1.0.4"
 ExprTools = "0.1.10"
-FMI = "0.14"
+FMI = "0.14, 0.15"
 FillArrays = "1.13.0"
 FindFirstFunctions = "1"
 ForwardDiff = "0.10.3, 1"
