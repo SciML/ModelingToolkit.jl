@@ -1045,7 +1045,8 @@ function maybe_build_initialization_problem(
         sys::AbstractSystem, iip, op::AbstractDict, t, guesses;
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
-        use_scc = true, eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        use_scc = true, eval_expression = false, eval_module = @__MODULE__,
+        implicit_dae = false, kwargs...)
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -1139,6 +1140,19 @@ function maybe_build_initialization_problem(
             has_possibly_indexed_key(parent(binds), v) && continue
             if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
                 push_as_atomic_array!(missingvars, v)
+            end
+        end
+        if implicit_dae
+            initsys = initializeprob.f.sys
+            for v in unknowns(sys)
+                v = Differential(get_iv(sys))(v)
+                ttv = default_toterm(v)
+                if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING &&
+                    get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
+                    # FIXME: Derivatives of algebraic variables aren't present
+                    (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
+                    push_as_atomic_array!(missingvars, ttv)
+                end
             end
         end
     end
@@ -1286,6 +1300,7 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
     map!(values(op)) do v
+        v === COMMON_SENTINEL && return COMMON_NOTHING
         Symbolics.isarraysymbolic(v) || return v
         any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
 
@@ -1378,7 +1393,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init)
+            time_dependent_init, missing_guess_value, implicit_dae)
 
         kwargs = merge(kwargs, kws)
     end
@@ -1456,7 +1471,7 @@ function process_SciMLProblem(
     end
 
     if implicit_dae
-        ddvs = map(Differential(iv), dvs)
+        ddvs = map(default_toterm ∘ Differential(iv), dvs)
         du0 = varmap_to_vars(op, ddvs; toterm = default_toterm,
             tofloat)
         kwargs = merge(kwargs, (; ddvs))
