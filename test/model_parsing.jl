@@ -1175,3 +1175,39 @@ end
 #         @test du[lag2idx] ≈ (K2*u[lag1idx] - u[lag2idx]) / T2
 #     end
 # end
+
+@testset "__ kwarg handling" begin
+    @mtkmodel Inner begin
+        @structural_parameters begin
+            N = 2
+        end
+        @parameters begin
+            p1[1:N] = fill(3, N)
+        end
+    end
+
+    @mtkmodel Outer begin
+        @components begin
+            inner = Inner()
+        end
+    end
+
+    @mtkmodel World begin
+        @components begin
+            outer = Outer()
+        end
+    end
+
+    # Strutural parameter change
+    @named world2 = World(outer__inner__N=5)
+    @test ModelingToolkit.defaults(world2)[@nonamespace(world2.outer).inner.p1[5]] == 3
+
+    # Component replacement
+    @mtkmodel AlternativeInner begin
+        @parameters begin
+            alt_level = 1
+        end
+    end
+    @named world = World(outer__inner=AlternativeInner(alt_level=10))
+    @test ModelingToolkit.defaults(world)[@nonamespace(world.outer).inner.alt_level] == 10
+end

@@ -51,9 +51,8 @@ setdefault_g(p, val) = setdefault(p, val)  # fallback, sometimes p is some exoti
 function construct_subcomponent(body::Function, lhs, other_kwargs)
     root = string(lhs, "__")
     dict2 = Dict{Symbol, Any}(Symbol(string(k)[length(root)+1:end])=>v
-                              for (k, v) in other_kwargs
+                              for (k, v) in merge(passed_kwargs[], other_kwargs)
                               if startswith(string(k), root))
-    #@show keys(other_kwargs) lhs keys(dict2)
     return with(body, passed_kwargs => dict2)
 end
 
@@ -1497,10 +1496,15 @@ function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
         Expr(:elseif, args...) => parse_components_expr!(exprs, cs, dict, Expr(:if, args...), kwargs)
         Expr(:(=), lhs, rhs) => begin
             push!(dict[:components], [lhs, :unimplemented])  # TODO
-            # push!(kwargs, Expr(:kw, lhs, rhs))  # this is to support components as kwargs
             rhs_2 = :($construct_subcomponent($(Expr(:quote, lhs)), other_kwargs) do; $rhs end)
-            push!(exprs, :($lhs = $component_rename($rhs_2, $(Expr(:quote, lhs)))))
+            push!(exprs,
+                  # The logic here is a bit complicated; the component can be taken from either
+                  # the kwargs, or `passed_kwargs`. TODO: simplify
+                  :($lhs = $component_rename($lookup_passed_kwarg($(Expr(:quote, lhs)),
+                                                                  $Base.@something($lhs, $rhs_2)),
+                                             $(Expr(:quote, lhs)))))
             push!(exprs, :($push_append!(systems, $lhs)))
+            push!(kwargs, Expr(:kw, lhs, :nothing))
         end
         _ => error("Expression not handled ", compexpr)
     end
