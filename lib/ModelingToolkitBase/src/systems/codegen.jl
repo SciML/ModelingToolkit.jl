@@ -986,6 +986,7 @@ struct CheckInvalidAndTrackNamespaced
     dervars::Set{SymbolicT}
     ns_map::Dict{SymbolicT, SymbolicT}
     namespace_subs::Dict{SymbolicT, SymbolicT}
+    present_dervars::Set{SymbolicT}
     iv::Union{SymbolicT, Nothing}
     throw::Bool
 end
@@ -1010,7 +1011,10 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         end
     end
     arrx in pred.simplevars && return true
-    x in pred.dervars && return true
+    if x in pred.dervars
+        push!(pred.present_dervars, x)
+        return true
+    end
     if pred.throw
         Base.throw(ArgumentError("Symbol $x is not present in the system."))
     end
@@ -1137,14 +1141,24 @@ function build_explicit_observed_function(sys, ts;
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
     union!(allsyms, independent_variables(sys))
     dervars = Set{SymbolicT}()
+    dervals = Dict{SymbolicT, SymbolicT}()
     if isscheduled(sys)
         sched::Schedule = get_schedule(sys)
-        for k in keys(sched.dummy_sub)
-            push!(dervars, default_toterm(k))
+        for (k, v) in sched.dummy_sub
+            ttk = default_toterm(k)
+            push!(dervars, ttk)
+            dervals[ttk] = v
+        end
+    else
+        for eq in equations(sys)
+            isdiffeq(eq) || continue
+            ttk = default_toterm(eq.lhs)
+            push!(dervars, ttk)
+            dervals[ttk] = eq.rhs
         end
     end
     pred = CheckInvalidAndTrackNamespaced(allsyms, dervars, ns_map, namespace_subs,
-                                          get_iv(sys), throw)
+                                          Set{SymbolicT}(), get_iv(sys), throw)
     iv = has_iv(sys) ? get_iv(sys) : nothing
     if ts isa SymbolicT
         SU.query(pred, ts)
@@ -1152,6 +1166,10 @@ function build_explicit_observed_function(sys, ts;
         for x in ts
             SU.query(pred, x)
         end
+    end
+    extra_assignments = Assignment[]
+    for var in pred.present_dervars
+        push!(extra_assignments, var ← dervals[var])
     end
     ts = substitute(ts, namespace_subs)
 
@@ -1209,7 +1227,7 @@ function build_explicit_observed_function(sys, ts;
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays)
+        wrap_delays, extra_assignments)
     if fns isa Tuple
         if expression
             return return_inplace ? fns : fns[1]
