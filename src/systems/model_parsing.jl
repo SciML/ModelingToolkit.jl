@@ -41,7 +41,10 @@ function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
 end
 
-passed_kwargs = ScopedValue(Dict{Symbol, Any}())
+""" This `ScopedValue` is used to handle structural parameter and component change via
+`outer__inner__variable`-type kwargs. The idea is that while we can't easily thread these kwargs
+from `outer` to `inner` explicitly, we can pass them on via `passed_kwargs`. """
+const passed_kwargs = ScopedValue(Dict{Symbol, Any}())
 lookup_passed_kwarg(kwarg::Symbol, val) = get(passed_kwargs[], kwarg, val)
 lookup_passed_kwarg(num::Num, val) = lookup_passed_kwarg(Symbol(string(num)), val)
 
