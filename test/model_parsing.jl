@@ -84,20 +84,20 @@ end
     @parameters begin
         R, [unit = u"Ω"]
     end
-#     @icon """<?xml version="1.0" encoding="UTF-8"?>
-# <svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
-# <path d="M10 15
-# l15 0
-# l2.5 -5
-# l5 10
-# l5 -10
-# l5 10
-# l5 -10
-# l5 10
-# l2.5 -5
-# l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
-# </svg>
-# """
+    @icon """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
+<path d="M10 15
+l15 0
+l2.5 -5
+l5 10
+l5 -10
+l5 10
+l5 -10
+l5 10
+l2.5 -5
+l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
+</svg>
+"""
     @equations begin
         v ~ i * R
     end
@@ -171,8 +171,8 @@ resistor = getproperty(rc, :resistor; namespace = false)
       eval(RC.structure[:kwargs][:k_val][:value])
 @test getdefault(rc.capacitor.v) == 0.0
 
-#@test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
-#      read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
+@test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
+     read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
 @test get_gui_metadata(rc.ground).layout ==
       read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @test get_gui_metadata(rc.capacitor).layout ==
@@ -404,10 +404,10 @@ end
     @test isequal(getdefault(a.b.j), 1 / params[1])
     @test getdefault(a.b.k) == 1
 
-    # @named a = A(p = 10, b.i = 20, b.j = 30, b.k = 40)
-    # @test getdefault(a.b.i) == 20
-    # @test getdefault(a.b.j) == 30
-    # @test getdefault(a.b.k) == 40
+    @named a = A(p = 10, b.i = 20, b.j = 30, b.k = 40)
+    @test getdefault(a.b.i) == 20
+    @test getdefault(a.b.j) == 30
+    @test getdefault(a.b.k) == 40
 end
 
 @testset "Metadata in variables" begin
