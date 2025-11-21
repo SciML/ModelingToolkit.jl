@@ -529,6 +529,7 @@ end
     @mtkmodel InsideTheBlock begin
         @structural_parameters begin
             flag = 1
+            inner_flag = 1
         end
         @parameters begin
             eq = flag == 1 ? 1 : 0
@@ -543,7 +544,11 @@ end
         @components begin
             default_sys = C()
             if flag == 1
-                if_sys = C()
+                if inner_flag == 1
+                    if_if_sys = C()
+                else
+                    if_else_sys = C()
+                end
             elseif flag == 2
                 elseif_sys = C()
             else
@@ -565,6 +570,8 @@ end
 
     @named if_in_sys = InsideTheBlock()
     if_in_sys = complete(if_in_sys; flatten = false)
+    @named if_else_in_sys = InsideTheBlock(inner_flag = 2)
+    if_else_in_sys = complete(if_else_in_sys; flatten = false)
     @named elseif_in_sys = InsideTheBlock(flag = 2)
     elseif_in_sys = complete(elseif_in_sys; flatten = false)
     @named else_in_sys = InsideTheBlock(flag = 3)
@@ -578,7 +585,8 @@ end
     @test getdefault(elseif_in_sys.elseif_parameter) == 101
     @test getdefault(else_in_sys.else_parameter) == 102
 
-    @test nameof.(get_systems(if_in_sys)) == [ :default_sys, :if_sys]
+    @test nameof.(get_systems(if_in_sys)) == [ :default_sys, :if_if_sys]
+    @test nameof.(get_systems(if_else_in_sys)) == [ :default_sys, :if_else_sys]
     @test nameof.(get_systems(elseif_in_sys)) == [:default_sys, :elseif_sys]
     @test nameof.(get_systems(else_in_sys)) == [:default_sys, :else_sys]
 
