@@ -46,6 +46,8 @@ $INITIALIZEPROB_KWARGS
   if `warn_cyclic_dependency == true`.
 - `substitution_limit`: The number times to substitute initial conditions into each other
   to attempt to arrive at a numeric value.
+- `missing_guess_value`: An instance of [`MissingGuessValue`](@ref) which indicates what
+  happens when the initialization problem is missing guess values for variables.
 """
 
 const TIME_DEPENDENT_PROBLEM_KWARGS = """

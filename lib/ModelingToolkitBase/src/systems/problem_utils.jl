@@ -253,6 +253,29 @@ function Base.showerror(io::IO, e::MissingVariablesError)
 end
 
 """
+    $TYPEDEF
+
+A Moshi.jl enum to allow choosing what happens with missing guess values when building a
+numerical problem from a `System`.
+
+# Variants
+
+- `MissingGuessValue.Constant(val::Number)`: Missing guesses are set to the given value
+  `val`.
+- `MissingGuessValue.Random(rng::AbstractRNG)`: Missing guesses are set to `rand(rng)`.
+- `MissingGuessValue.Error()`: Missing guess values cause an error.
+"""
+Moshi.Data.@data MissingGuessValue begin
+    Constant(Number)
+    Random(AbstractRNG)
+    Error
+end
+
+# To be overloaded downstream by MTK
+default_missing_guess_value() = default_missing_guess_value(nothing)
+default_missing_guess_value(_) = MissingGuessValue.Constant(true)
+
+"""
     $(TYPEDSIGNATURES)
 
 Return an array of values where the `i`th element corresponds to the value of `vars[i]`
@@ -278,7 +301,7 @@ Keyword arguments:
 function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
-        is_initializeprob = false, substitution_limit = 100)
+        is_initializeprob = false, substitution_limit = 100, missing_values = MissingGuessValue.Error())
     isempty(vars) && return nothing
 
     if !(varmap isa SymmapT)
@@ -289,11 +312,35 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
     end
     if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
-        if !isempty(missing_vars)
-            if is_initializeprob
-                throw(MissingGuessError(collect(missing_vars), collect(missing_vars)))
-            else
-                throw(MissingVariablesError(missing_vars))
+        Moshi.Match.@match missing_values begin
+            MissingGuessValue.Constant(val) => begin
+                cval = BSImpl.Const{VartypeT}(val)
+                for var in missing_vars
+                    if Symbolics.isarraysymbolic(var)
+                        varmap[var] = BSImpl.Const{VartypeT}(fill(val, size(var)))
+                    else
+                        write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
+                    end
+                end
+            end
+            MissingGuessValue.Random(rng) => begin
+                for var in missing_vars
+                    if Symbolics.isarraysymbolic(var)
+                        varmap[var] = rand(rng, size(var))
+                    else
+                        write_possibly_indexed_array!(varmap, var, rand(rng), COMMON_NOTHING)
+                    end
+                end
+            end
+            MissingGuessValue.Error() => begin
+                if !isempty(missing_vars)
+                    if is_initializeprob
+                        throw(MissingGuessError(collect(missing_vars), collect(missing_vars)))
+                    else
+                        throw(MissingVariablesError(missing_vars))
+                    end
+                end
+
             end
         end
     end
@@ -321,7 +368,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
         missingsyms = Any[]
         missingvals = Any[]
         for (sym, val) in zip(vars, vals)
-            symbolic_type(val) == NotSymbolic() && continue
+            val !== nothing && symbolic_type(val) == NotSymbolic() && continue
             push!(missingsyms, sym)
             push!(missingvals, val)
         end
@@ -1287,7 +1334,7 @@ function process_SciMLProblem(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10,
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
-        algebraic_only = false,
+        algebraic_only = false, missing_guess_value = default_missing_guess_value(),
         allow_incomplete = false, is_initializeprob = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1368,10 +1415,16 @@ function process_SciMLProblem(
         end
     end
 
-    u0 = varmap_to_vars(
-        op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
-        allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit)
-
+    if is_initializeprob
+        u0 = varmap_to_vars(
+            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
+            missing_values = missing_guess_value)
+    else
+        u0 = varmap_to_vars(
+            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit)
+    end
     if u0 !== nothing
         u0 = u0_constructor(u0)
     end

@@ -102,6 +102,7 @@ import PreallocationTools
 import PreallocationTools: DiffCache
 import FillArrays
 using BipartiteGraphs
+import Random: AbstractRNG
 
 export @derivatives
 
