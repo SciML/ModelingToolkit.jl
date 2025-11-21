@@ -1468,7 +1468,9 @@ component_rename(obj, name::Symbol) = rename(obj, name)
 component_rename(objs::Vector, name::Symbol) =
     [rename(obj, Symbol(name, :_, i)) for (i, obj) in enumerate(objs)]
 
-""" Recursively parse an expression inside of the `@components` block. """
+""" Recursively parse an expression inside of the `@components` block.
+
+Recursive is to handle nested `if` blocks. """
 function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
     MLStyle.@match compexpr begin
         Expr(:block, args...) => begin
