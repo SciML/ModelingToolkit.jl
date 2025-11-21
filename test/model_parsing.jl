@@ -753,6 +753,12 @@ end
         end
     end
 
+    @mtkmodel AlternativeComponent begin
+        @parameters begin
+            ac
+        end
+    end
+
     @mtkmodel Component begin
         @structural_parameters begin
             N = 2
@@ -764,6 +770,7 @@ end
                 SubComponent(; sc)
             end
             single_sub_component = SubComponent()
+            heterogeneous_components = [SubComponent(sc=1), AlternativeComponent(ac=3)]
         end
     end
 
@@ -775,13 +782,17 @@ end
         :comprehension_2,
         :written_out_for_1,
         :written_out_for_2,
-        :single_sub_component
+        :single_sub_component,
+        :heterogeneous_components_1,
+        :heterogeneous_components_2
     ]
 
     @test getdefault(component.comprehension_1.sc) == 1
     @test getdefault(component.comprehension_2.sc) == 2
     @test getdefault(component.written_out_for_1.sc) == 2
     @test getdefault(component.written_out_for_2.sc) == 3
+    @test getdefault(component.heterogeneous_components_1.sc) == 1
+    @test getdefault(component.heterogeneous_components_2.ac) == 3
 
     @mtkmodel ConditionalComponent begin
         @structural_parameters begin
