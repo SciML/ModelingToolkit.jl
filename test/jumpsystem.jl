@@ -536,7 +536,7 @@ end
         seed += 1
     end
     Xsamp /= Nsims
-    @test abs(Xsamp - Xf(0.2, p) < 0.05 * Xf(0.2, p))
+    @test abs(Xsamp - Xf(0.2, p)) < 0.05 * Xf(0.2, p)
 end
 
 @testset "JumpProcess simulation should be Int64 valued (#3446)" begin
