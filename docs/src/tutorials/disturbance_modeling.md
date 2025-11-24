@@ -119,7 +119,15 @@ y &= g(x, u, p, t)
 \end{aligned}
 ```
 
-To make use of the model defined above for state estimation, we may want to generate a Julia function for the dynamics ``f`` and the output equations ``g`` that we can plug into, e.g., a nonlinear version of a Kalman filter or a particle filter, etc. MTK contains utilities to do this, namely, [`ModelingToolkit.generate_control_function`](@ref) and [`ModelingToolkit.build_explicit_observed_function`](@ref) (described in more details in ["Input output"](@ref inputoutput)). These functions take keyword arguments `disturbance_inputs` and `disturbance_argument`, that indicate which variables in the model are considered part of ``w``, and whether or not these variables are to be added as function arguments to ``f``, i.e., whether we have ``f(x, u, p, t)`` or ``f(x, u, p, t, w)``. If we do not include the disturbance inputs as function arguments, MTK will assume that the ``w`` variables are all zero, but any dynamics associated with these variables, such as disturbance models, will be included in the generated function. This allows a state estimator to estimate the state of the disturbance model, provided that this state is [observable](https://en.wikipedia.org/wiki/Observability) from the measured outputs of the system.
+To make use of the model defined above for state estimation, we may want to generate a Julia function for the dynamics ``f`` and the output equations ``g`` that we can plug into, e.g., a nonlinear version of a Kalman filter or a particle filter, etc. MTK contains utilities to do this, namely, [`ModelingToolkit.generate_control_function`](@ref) and [`ModelingToolkit.build_explicit_observed_function`](@ref) (described in more details in ["Input output"](@ref inputoutput)).
+
+These functions support two types of disturbance inputs:
+
+- **Unknown disturbances** (`disturbance_inputs`): Variables that are part of ``w`` but NOT added as function arguments to ``f``. MTK assumes these variables are zero, but any dynamics associated with them (such as disturbance models) are included in the generated function. This allows a state estimator to estimate the state of the disturbance model, provided that this state is [observable](https://en.wikipedia.org/wiki/Observability) from measured outputs.
+
+- **Known disturbances** (`known_disturbance_inputs`): Variables that are part of ``w`` AND added as function arguments to ``f``, resulting in ``f(x, u, p, t, w)``. Use this when disturbances can be measured or are otherwise known.
+
+You can mix and match: some disturbances can be unknown while others are known. For example, `generate_control_function(sys, inputs; disturbance_inputs=[w1], known_disturbance_inputs=[w2, w3])` generates a function `f(x, u, p, t, [w2, w3])` where `w1` is set to zero but its dynamics are preserved, while `w2` and `w3` must be provided as arguments.
 
 Below, we demonstrate
 
@@ -187,7 +195,7 @@ outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 (f_oop, f_ip), x_sym,
 p_sym,
 io_sys = ModelingToolkit.generate_control_function(
-    model_with_disturbance, inputs, disturbance_inputs; disturbance_argument = true)
+    model_with_disturbance, inputs; known_disturbance_inputs = disturbance_inputs)
 
 g = ModelingToolkit.build_explicit_observed_function(
     io_sys, outputs; inputs)
@@ -196,7 +204,7 @@ op = ModelingToolkit.inputs(io_sys) .=> 0
 x0 = ModelingToolkit.get_u0(io_sys, op)
 p = MTKParameters(io_sys, op)
 u = zeros(1) # Control input
-w = zeros(length(disturbance_inputs)) # Disturbance input
+w = zeros(length(disturbance_inputs)) # Disturbance input (known disturbances are provided as arguments)
 @test f_oop(x0, u, p, t, w) == zeros(5)
 @test g(x0, u, p, 0.0) == [0, 0, 0, 0]
 
