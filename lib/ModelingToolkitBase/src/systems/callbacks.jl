@@ -131,10 +131,15 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
-    _dvs = reduce(vcat, map(scalarize, _dvs), init = SymbolicT[])
-
+    _obs, _ = unhack_observed(observed(affectsys), equations(affectsys))
+    _dvs = vcat(unknowns(affectsys), map(eq -> eq.lhs, _obs))
+    _dvs = reduce(vcat, map(safe_vec ∘ scalarize, _dvs), init = SymbolicT[])
+    _discs = reduce(vcat, map(safe_vec ∘ scalarize, discretes); init = SymbolicT[])
+    setdiff!(_dvs, _discs)
     AffectSystem(affectsys, _dvs, accessed_params, discrete_parameters)
 end
+
+safe_vec(@nospecialize(x)) = x isa SymbolicT ? [x] : vec(x::Array{SymbolicT})
 
 system(a::AffectSystem) = a.system
 discretes(a::AffectSystem) = a.discretes
