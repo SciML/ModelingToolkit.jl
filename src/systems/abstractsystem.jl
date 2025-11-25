@@ -1135,7 +1135,7 @@ function renamespace(sys, x)
     end
 end
 
-namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
+namespace_unknowns(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_defaults(sys)
@@ -1284,7 +1284,7 @@ function unknowns(sys::AbstractSystem)
     nonunique_unknowns = if isempty(systems)
         sts
     else
-        system_unknowns = reduce(vcat, namespace_variables.(systems))
+        system_unknowns = reduce(vcat, namespace_unknowns.(systems))
         isempty(sts) ? system_unknowns : [sts; system_unknowns]
     end
     isempty(nonunique_unknowns) && return nonunique_unknowns
