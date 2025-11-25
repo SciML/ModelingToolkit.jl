@@ -228,6 +228,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     newbinds = SymmapT()
     # All bound parameters are solvable. The corresponding equation comes from the binding
     for v in bound_parameters(sys)
+        # Edge case for `NonlinearSystem(::ODE)` where `t` is bound to `Inf`
+        binds[v] === COMMON_INF && continue
          push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
     # Anything with a binding of `missing` is solvable.
@@ -237,6 +239,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
             delete!(init_ps, k)
             continue
         end
+        # Edge case for `NonlinearSystem(::ODE)` where `t` is bound to `Inf`
+        v === COMMON_INF && continue
         k in og_dvs && continue
         if is_variable_floatingpoint(k)
             push!(eqs_ics, k ~ v)
