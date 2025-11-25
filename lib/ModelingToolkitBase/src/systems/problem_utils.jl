@@ -737,7 +737,9 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         # tuple of `BlockedArray`s
         Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
         Base.Fix1(broadcast, p_constructor) ∘
-        concrete_getu(srcsys, Tuple(syms[3]); eval_expression, eval_module)
+        # This `broadcast.(collect, ...)` avoids `ReshapedArray`/`SubArray`s from
+        # appearing in the result.
+        concrete_getu(srcsys, Tuple(broadcast.(collect, syms[3])); eval_expression, eval_module)
     end
     const_getter = if syms[4] == ()
         Returns(())
