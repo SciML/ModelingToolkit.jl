@@ -1109,91 +1109,91 @@ end
     @test ModelingToolkit.getmetadata(test_model, NewInt, nothing) === 1
 end
 
-# @testset "Pass parameters of higher level models as structural parameters" begin
-#     let D=ModelingToolkit.D_nounits, t=ModelingToolkit.t_nounits
-#         """
-#             ╭─────────╮
-#         in  │    K    │ out
-#         ╶─>─┤ ------- ├──>─╴
-#             │ 1 + s T │
-#             ╰─────────╯
-#         """
-#         @mtkmodel SimpleLag begin
-#             @structural_parameters begin
-#                 K # Gain
-#                 T # Time constant
-#             end
-#             @variables begin
-#                 in(t), [description="Input signal", input=true]
-#                 out(t), [description="Output signal", output=true]
-#             end
-#             @equations begin
-#                 T * D(out) ~ K*in - out
-#             end
-#         end
+@testset "Pass parameters of higher level models as structural parameters" begin
+    let D=ModelingToolkit.D_nounits, t=ModelingToolkit.t_nounits
+        """
+            ╭─────────╮
+        in  │    K    │ out
+        ╶─>─┤ ------- ├──>─╴
+            │ 1 + s T │
+            ╰─────────╯
+        """
+        @mtkmodel SimpleLag begin
+            @structural_parameters begin
+                K # Gain
+                T # Time constant
+            end
+            @variables begin
+                in(t), [description="Input signal", input=true]
+                out(t), [description="Output signal", output=true]
+            end
+            @equations begin
+                T * D(out) ~ K*in - out
+            end
+        end
 
-#         """
-#             ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-#             ┃ DoubleLag                ┃
-#             ┃ ╭─────────╮  ╭─────────╮ ┃
-#         in  ┃ │    K1   │  │    K2   │ ┃  out
-#         ─>──╂─┤ ------- ├──┤ ------- ├─╂──>──╴
-#             ┃ │ 1 + sT1 │  │ 1 + sT2 │ ┃
-#             ┃ ╰─────────╯  ╰─────────╯ ┃
-#             ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-#         """
-#         @mtkmodel DoubleLag begin
-#             @parameters begin
-#                 K1, [description="Proportional gain 1"]
-#                 T1, [description="Time constant 1"]
-#                 K2, [description="Proportional gain 2"]
-#                 T2, [description="Time constant 2"]
-#             end
-#             @components begin
-#                 lag1 = SimpleLag(K = K1, T = T1)
-#                 lag2 = SimpleLag(K = K2, T = T2)
-#             end
-#             @variables begin
-#                 in(t), [description="Input signal", input=true]
-#                 out(t), [description="Output signal", output=true]
-#             end
-#             @equations begin
-#                 in ~ lag1.in
-#                 lag1.out ~ lag2.in
-#                 out ~ lag2.out
-#             end
-#         end
+        """
+            ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+            ┃ DoubleLag                ┃
+            ┃ ╭─────────╮  ╭─────────╮ ┃
+        in  ┃ │    K1   │  │    K2   │ ┃  out
+        ─>──╂─┤ ------- ├──┤ ------- ├─╂──>──╴
+            ┃ │ 1 + sT1 │  │ 1 + sT2 │ ┃
+            ┃ ╰─────────╯  ╰─────────╯ ┃
+            ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+        """
+        @mtkmodel DoubleLag begin
+            @parameters begin
+                K1, [description="Proportional gain 1"]
+                T1, [description="Time constant 1"]
+                K2, [description="Proportional gain 2"]
+                T2, [description="Time constant 2"]
+            end
+            @components begin
+                lag1 = SimpleLag(K = K1, T = T1)
+                lag2 = SimpleLag(K = K2, T = T2)
+            end
+            @variables begin
+                in(t), [description="Input signal", input=true]
+                out(t), [description="Output signal", output=true]
+            end
+            @equations begin
+                in ~ lag1.in
+                lag1.out ~ lag2.in
+                out ~ lag2.out
+            end
+        end
 
-#         @mtkmodel ClosedSystem begin
-#             @components begin
-#                 double_lag = DoubleLag(; K1 = 1, K2 = 2, T1 = 0.1, T2 = 0.2)
-#             end
-#             @equations begin
-#                 double_lag.in ~ 1.0
-#             end
-#         end
+        @mtkmodel ClosedSystem begin
+            @components begin
+                double_lag = DoubleLag(; K1 = 1, K2 = 2, T1 = 0.1, T2 = 0.2)
+            end
+            @equations begin
+                double_lag.in ~ 1.0
+            end
+        end
 
-#         @mtkbuild sys = ClosedSystem()
-#         @test length(parameters(sys)) == 4
-#         @test length(unknowns(sys)) == 2
+        @mtkbuild sys = ClosedSystem()
+        @test length(parameters(sys)) == 4
+        @test length(unknowns(sys)) == 2
 
-#         p = MTKParameters(sys, defaults(sys))
-#         u = [0.5 for i in 1:2]
-#         du = zeros(2)
-#         # update du for given u and p
-#         ODEFunction(sys).f.f_iip(du, u, p, 0.0)
+        p = MTKParameters(sys, defaults(sys))
+        u = [0.5 for i in 1:2]
+        du = zeros(2)
+        # update du for given u and p
+        ODEFunction(sys).f.f_iip(du, u, p, 0.0)
 
-#         # find indices of lag1 and lag2 states (might be reordered due to simplification details)
-#         symnames = string.(ModelingToolkit.getname.(variable_symbols(sys)))
-#         lag1idx = findall(contains("1"), symnames) |> only
-#         lag2idx = findall(contains("2"), symnames) |> only
+        # find indices of lag1 and lag2 states (might be reordered due to simplification details)
+        symnames = string.(ModelingToolkit.getname.(variable_symbols(sys)))
+        lag1idx = findall(contains("1"), symnames) |> only
+        lag2idx = findall(contains("2"), symnames) |> only
 
-#         # check du values
-#         K1, K2, T1, T2 = 1, 2, 0.1, 0.2
-#         @test du[lag1idx] ≈ (K1*1.0 - u[lag1idx]) / T1
-#         @test du[lag2idx] ≈ (K2*u[lag1idx] - u[lag2idx]) / T2
-#     end
-# end
+        # check du values
+        K1, K2, T1, T2 = 1, 2, 0.1, 0.2
+        @test du[lag1idx] ≈ (K1*1.0 - u[lag1idx]) / T1
+        @test du[lag2idx] ≈ (K2*u[lag1idx] - u[lag2idx]) / T2
+    end
+end
 
 @testset "__ kwarg handling" begin
     @mtkmodel Inner begin

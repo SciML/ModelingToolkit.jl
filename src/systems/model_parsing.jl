@@ -35,7 +35,8 @@ struct Model{F, S}
         """
     isconnector::Bool
 end
-(m::Model)(args...; name=default_model_name(m), kw...) = m.f(args...; name, kw...)
+(m::Model)(args...; name=default_model_name(m), kw...) =
+    m.f(args...; name, Dict(k=>default_to_parentscope(v) for (k,v) in kw)...)
 
 Base.parentmodule(m::Model) = parentmodule(m.f)
 
