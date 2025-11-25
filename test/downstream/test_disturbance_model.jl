@@ -167,6 +167,10 @@ measurement2 = ModelingToolkit.build_explicit_observed_function(
     io_sys, [io_sys.y.output.u], inputs = ModelingToolkit.inputs(io_sys)[1:1],
     disturbance_inputs = ModelingToolkit.inputs(io_sys)[2:end],
     disturbance_argument = true)
+# Test new interface with known_disturbance_inputs (equivalent to above)
+measurement3 = ModelingToolkit.build_explicit_observed_function(
+    io_sys, [io_sys.y.output.u], inputs = ModelingToolkit.inputs(io_sys)[1:1],
+    known_disturbance_inputs = ModelingToolkit.inputs(io_sys)[2:end])
 
 op = ModelingToolkit.inputs(io_sys) .=> 0
 x0 = ModelingToolkit.get_u0(io_sys, op)
@@ -177,21 +181,25 @@ d = zeros(3)
 @test f[1](x, u, p, t, d) == zeros(5)
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
+@test measurement3(x, u, p, 0.0, d) == [0]  # Test new interface
 
 # Add to the integrating disturbance input
 d = [1, 0, 0]
 @test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 1, 1] # Affects disturbance state and one velocity
 @test measurement2(x, u, p, 0.0, d) == [0]
+@test measurement3(x, u, p, 0.0, d) == [0]  # Test new interface
 
 d = [0, 1, 0]
 @test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 0, 1] # Affects one velocity
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [0]
+@test measurement3(x, u, p, 0.0, d) == [0]  # Test new interface
 
 d = [0, 0, 1]
 @test sort(f[1](x, u, p, 0.0, d)) == [0, 0, 0, 0, 0] # Affects nothing
 @test measurement(x, u, p, 0.0) == [0, 0, 0, 0]
 @test measurement2(x, u, p, 0.0, d) == [1] # We have now disturbed the output
+@test measurement3(x, u, p, 0.0, d) == [1]  # Test new interface
 
 ## Further downstream tests that the functions generated above actually have the properties required to use for state estimation
 # 

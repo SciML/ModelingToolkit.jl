@@ -216,6 +216,53 @@ end
         u = [rand()]
         d = [rand()]
         @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
+
+        ## Test new known_disturbance_inputs parameter (equivalent to disturbance_argument=true)
+        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        eqs = [
+            D(x) ~ -x + u + d^2
+        ]
+
+        @named sys = System(eqs, t)
+        f, dvs,
+        ps,
+        io_sys = ModelingToolkit.generate_control_function(
+            sys, [u];
+            known_disturbance_inputs = [d],
+            simplify, split)
+
+        @test isequal(dvs[], x)
+        @test isempty(ps)
+
+        p = [rand()]
+        x = [rand()]
+        u = [rand()]
+        d = [rand()]
+        @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
+
+        ## Test mixed known and unknown disturbances
+        @variables x(t)=0 u(t)=0 [input=true] d1(t)=0 d2(t)=0
+        eqs = [
+            D(x) ~ -x + u + d1^2 + d2^3
+        ]
+
+        @named sys = System(eqs, t)
+        f, dvs,
+        ps,
+        io_sys = ModelingToolkit.generate_control_function(
+            sys, [u], [d1];           # d1 is unknown (set to zero)
+            known_disturbance_inputs = [d2],     # d2 is known (function argument)
+            simplify, split)
+
+        @test isequal(dvs[], x)
+        @test isempty(ps)
+
+        p = [rand()]
+        x = [rand()]
+        u = [rand()]
+        d2_val = [rand()]
+        # d1 is set to zero, so only u and d2 affect the dynamics
+        @test f[1](x, u, p, t, d2_val) ≈ -x + u + [d2_val[]^3]
     end
 end
 

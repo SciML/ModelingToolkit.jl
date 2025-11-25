@@ -156,28 +156,35 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 """
     (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::System,
-            inputs             = unbound_inputs(sys),
-            disturbance_inputs = disturbances(sys);
-            implicit_dae       = false,
-            simplify           = false,
-            split              = true,
+            inputs                   = unbound_inputs(sys),
+            disturbance_inputs       = disturbances(sys);
+            known_disturbance_inputs = nothing,
+            implicit_dae             = false,
+            simplify                 = false,
+            split                    = true,
         )
 
 For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate functions with additional input argument `u`
 
 The returned functions are the out-of-place (`f_oop`) and in-place (`f_ip`) forms:
 ```
-f_oop : (x,u,p,t)      -> rhs
-f_ip  : (xout,x,u,p,t) -> nothing
+f_oop : (x,u,p,t)      -> rhs         # basic form
+f_oop : (x,u,p,t,w)    -> rhs         # with known_disturbance_inputs
+f_ip  : (xout,x,u,p,t) -> nothing     # basic form
+f_ip  : (xout,x,u,p,t,w) -> nothing   # with known_disturbance_inputs
 ```
 
 The return values also include the chosen state-realization (the remaining unknowns) `x_sym` and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will (by default) not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require unknown variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement. To add an input argument corresponding to the disturbance inputs, either include the disturbance inputs among the control inputs, or set `disturbance_argument=true`, in which case an additional input argument `w` is added to the generated function `(x,u,p,t,w)->rhs`.
+# Disturbance Handling
+
+- `disturbance_inputs`: Unknown disturbance inputs. The generated dynamics will preserve any state and dynamics associated with these disturbances, but the disturbance inputs themselves will not be included as function arguments. This is useful for state observers that estimate unmeasured disturbances.
+
+- `known_disturbance_inputs`: Known disturbance inputs. The generated dynamics will preserve state and dynamics, and the disturbance inputs will be added as an additional input argument `w` to the generated function: `(x,u,p,t,w)->rhs`.
 
 # Example
 
-```
+```julia
 using ModelingToolkit: generate_control_function, varmap_to_vars, defaults
 f, x_sym, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
 p = varmap_to_vars(defaults(sys), ps)
@@ -188,6 +195,7 @@ f[1](x, inputs, p, t)
 """
 function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys);
+        known_disturbance_inputs = nothing,
         disturbance_argument = false,
         implicit_dae = false,
         simplify = false,
@@ -196,30 +204,55 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         split = true,
         kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
-    if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs, split)
+
+    # Handle backward compatibility for disturbance_argument
+    if disturbance_argument
+        Base.depwarn("The `disturbance_argument` keyword argument is deprecated. Use `known_disturbance_inputs` instead. " *
+                     "For `disturbance_argument=true`, pass `known_disturbance_inputs=disturbance_inputs, disturbance_inputs=nothing`. " *
+                     "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
+                     :generate_control_function)
+        if known_disturbance_inputs !== nothing
+            error("Cannot specify both `disturbance_argument=true` and `known_disturbance_inputs`")
+        end
+        known_disturbance_inputs = disturbance_inputs
+        disturbance_inputs = nothing
     end
-    if disturbance_inputs !== nothing
-        # add to inputs for the purposes of io processing
-        inputs = [inputs; disturbance_inputs]
+
+    # Collect all disturbance inputs for mtkcompile
+    all_disturbances = vcat(
+        disturbance_inputs === nothing ? [] : disturbance_inputs,
+        known_disturbance_inputs === nothing ? [] : known_disturbance_inputs
+    )
+
+    if !isscheduled(sys)
+        sys = mtkcompile(sys; inputs, disturbance_inputs=all_disturbances, split)
+    end
+
+    # Add all disturbances to inputs for the purposes of io processing
+    if !isempty(all_disturbances)
+        inputs = [inputs; all_disturbances]
     end
 
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     ps = setdiff(ps, inputs)
+
+    # Remove unknown disturbances from inputs (we don't want them as actual inputs to the dynamics)
     if disturbance_inputs !== nothing
-        # remove from inputs since we do not want them as actual inputs to the dynamics
         inputs = setdiff(inputs, disturbance_inputs)
-        # ps = [ps; disturbance_inputs]
     end
+
     inputs = map(value, inputs)
-    disturbance_inputs = unwrap.(disturbance_inputs)
+
+    # Prepare disturbance arrays for substitution and function arguments
+    unknown_disturbances = disturbance_inputs === nothing ? [] : unwrap.(disturbance_inputs)
+    known_disturbances = known_disturbance_inputs === nothing ? [] : unwrap.(known_disturbance_inputs)
 
     eqs = [eq for eq in full_equations(sys)]
 
-    if disturbance_inputs !== nothing && !disturbance_argument
-        # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
-        subs = Dict(disturbance_inputs .=> 0)
+    # Set unknown disturbance inputs to zero (we just want to keep the disturbance state)
+    if !isempty(unknown_disturbances)
+        subs = Dict(unknown_disturbances .=> 0)
         eqs = [eq.lhs ~ substitute(eq.rhs, subs) for eq in eqs]
     end
     check_operator_variables(eqs, Differential)
@@ -231,8 +264,9 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     p = reorder_parameters(sys, ps)
     t = get_iv(sys)
 
-    if disturbance_argument
-        args = (dvs, inputs, p..., t, disturbance_inputs)
+    # Construct args with known disturbances if provided
+    if !isempty(known_disturbances)
+        args = (dvs, inputs, p..., t, known_disturbances)
     else
         args = (dvs, inputs, p..., t)
     end
@@ -245,7 +279,8 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     f = eval_or_rgf.(f; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{(
         3 + implicit_dae, length(args) - length(p) + 1, is_split(sys))}(f...)
-    ps = setdiff(parameters(sys), inputs, disturbance_inputs)
+    # Return parameters excluding both control inputs and all disturbances
+    ps = setdiff(parameters(sys), inputs, all_disturbances)
     (; f = (f, f), dvs, ps, io_sys = sys)
 end
 
