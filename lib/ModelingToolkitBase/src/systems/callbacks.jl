@@ -195,6 +195,7 @@ function (p::Pre)(x)
     iw = Symbolics.iswrapped(x)
     x = unwrap(x)
     # non-symbolic values don't change
+    SU.isconst(x) && return x
     if symbolic_type(x) == NotSymbolic()
         return x
     end
