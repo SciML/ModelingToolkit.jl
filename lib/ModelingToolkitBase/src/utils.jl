@@ -413,6 +413,7 @@ function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::Sy
         BSImpl.Term(; f, args) && if f === getindex end => begin
             collect_defaults!(initial_conditions, bindings, args[1])
         end
+        BSImpl.Term(; f) && if f isa SymbolicT && SU.is_function_symbolic(f) end => nothing
         _ => begin
             def = Symbolics.getdefaultval(v, nothing)
             def === nothing && return
