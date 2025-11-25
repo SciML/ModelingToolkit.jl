@@ -267,8 +267,15 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
             isequal(ttk, v) && continue
             dervars[default_toterm(k)] = v
         end
-        Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
+    else
+        for eq in equations(sys)
+            isdiffeq(eq) || continue
+            ttk = default_toterm(eq.lhs)
+            isequal(ttk, eq.rhs) && continue
+            dervars[ttk] = eq.rhs
+        end
     end
+    Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)
         obsidxs = BitSet(observed_equations_used_by(sys, expr; obs))
