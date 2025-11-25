@@ -829,7 +829,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     end
     u0 = rip.ugetter(srcvalp)
     # and the eltype of the destination u0
-    if T != eltype(u0) && T != Union{}
+    if T != eltype(u0) && T != Union{} && T !== Any
         u0 = T.(u0)
     end
     # apply the promotion to tunables portion
@@ -1481,7 +1481,7 @@ function process_SciMLProblem(
         du0 = nothing
     end
 
-    if build_initializeprob
+    if build_initializeprob && (u0 === nothing || eltype(u0) <: Number)
         t0 = t
         if is_time_dependent(sys) && t0 === nothing
             t0 = zero(floatT)
