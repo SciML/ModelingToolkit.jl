@@ -129,7 +129,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
             get!(derivative_rules, eq.lhs) do
                 ttk = default_toterm(eq.lhs)
                 push_as_atomic_array!(init_vars_set, ttk)
-                push!(eqs_ics, ttk ~ eq.rhs)
+                isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ eq.rhs)
                 ttk
             end
         else
