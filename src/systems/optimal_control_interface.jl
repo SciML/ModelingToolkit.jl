@@ -560,7 +560,7 @@ function successful_solve end
 
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
-function DiffEqBase.solve(prob::SciMLBase.AbstractDynamicOptProblem,
+function CommonSolve.solve(prob::SciMLBase.AbstractDynamicOptProblem,
         solver::AbstractCollocation; verbose = false, kwargs...)
     solved_model = prepare_and_optimize!(prob, solver; verbose, kwargs...)
 
