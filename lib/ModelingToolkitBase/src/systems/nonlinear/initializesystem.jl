@@ -61,13 +61,16 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     # Firstly, all variables and observables are initialization unknowns
     init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
     add_trivial_initsys_vars!(init_vars_set, unknowns(sys), trueobs)
-    union!(init_vars_set, get_all_discretes_fast(sys))
 
     eqs_ics = Equation[]
 
     inps = copy(get_inputs(sys))
     ps = parameters(sys; initial_parameters = true)
     init_ps = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
+
+    for v in get_all_discretes_fast(sys)
+        push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
+    end
     for v in inps
         Moshi.Match.@match v begin
             BSImpl.Term(; f, args) => begin

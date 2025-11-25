@@ -565,6 +565,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
             push!(all_initialvars, x)
             continue
         end
+        is_variable_floatingpoint(x) || continue
         arr, _ = split_indexed_var(x)
         push!(all_initialvars, arr)
     end
