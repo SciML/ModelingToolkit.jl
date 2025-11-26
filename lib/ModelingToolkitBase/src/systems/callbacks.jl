@@ -167,11 +167,10 @@ function Base.hash(a::AffectSystem, s::UInt)
     hash(discretes(a), s)
 end
 
-function vars!(vars, aff::AffectSystem; op = Differential)
-    for var in Iterators.flatten((unknowns(aff), parameters(aff), discretes(aff)))
-        vars!(vars, var)
-    end
-    vars
+function SU.search_variables!(vars, aff::AffectSystem; kwargs...)
+    SU.search_variables!(vars, unknowns(aff); kwargs...)
+    SU.search_variables!(vars, parameters(aff); kwargs...)
+    SU.search_variables!(vars, discretes(aff); kwargs...)
 end
 
 """
@@ -409,21 +408,17 @@ function Base.show(io::IO, mime::MIME"text/plain", cb::AbstractCallback)
     end
 end
 
-function vars!(vars, cb::AbstractCallback; op = Differential)
-    if symbolic_type(conditions(cb)) == NotSymbolic
-        if conditions(cb) isa AbstractArray
-            for eq in conditions(cb)
-                vars!(vars, eq; op)
-            end
-        end
-    else
-        vars!(vars, conditions(cb); op)
+function SU.search_variables!(vars, cb::AbstractCallback; kwargs...)
+    if symbolic_type(conditions(cb)) isa NotSymbolic
+        SU.search_variables!(vars, conditions(cb); kwargs...)
     end
-    for aff in (affects(cb), initialize_affects(cb), finalize_affects(cb))
-        isnothing(aff) || vars!(vars, aff; op)
-    end
-    !is_discrete(cb) && vars!(vars, affect_negs(cb); op)
-    return vars
+    affs = affects(cb)
+    affs === nothing || SU.search_variables!(vars, affs; kwargs...)
+    affs = initialize_affects(cb)
+    affs === nothing || SU.search_variables!(vars, affs; kwargs...)
+    affs = finalize_affects(cb)
+    affs === nothing || SU.search_variables!(vars, affs; kwargs...)
+    is_discrete(cb) || SU.search_variables!(vars, affect_negs(cb); kwargs...)
 end
 
 ################################

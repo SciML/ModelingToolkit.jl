@@ -285,19 +285,10 @@ end
 
 scalarize_affects(affects::ImperativeAffect) = affects
 
-function vars!(vars, aff::ImperativeAffect; op = Differential)
+function SU.search_variables!(vars, aff::ImperativeAffect; kwargs...)
     for var in Iterators.flatten((observed(aff), modified(aff)))
         if symbolic_type(var) == NotSymbolic()
-            if var isa AbstractArray
-                for v in var
-                    v = unwrap(v)
-                    vars!(vars, v)
-                end
-            end
-        else
-            var = unwrap(var)
-            vars!(vars, var)
+            SU.search_variables!(vars, v; kwargs...)
         end
     end
-    return vars
 end
