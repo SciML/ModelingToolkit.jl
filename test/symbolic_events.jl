@@ -874,10 +874,9 @@ end
 
     # Test Simulation
     @mtkcompile sys = TestSystem()
-
-    # Test Simulation
     prob = ODEProblem(sys, [], (0.0, 150.0))
     sol = solve(prob)
+
     # This is singular at the second event, but the derivatives are zero so it's
     # constant after that point anyway. Just make sure it hits the last event and
     # had the correct `u`.
@@ -1374,18 +1373,20 @@ end
     @parameters p2(t) = 1.0
     @variables x(t) = 0.0
     @variables x2(t)
-    event = [0.5] => [p2 ~ Pre(t)]
+    event = SymbolicDiscreteCallback([0.5] => [p2 ~ Pre(t)], discrete_parameters = p2)
+    event_broken = [0.5] => [p2 ~ Pre(t)]
 
     eq = [
         D(x) ~ p2,
         x2 ~ p_1(x)
     ]
+    @test_throws ErrorException @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event_broken])
     @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol[x, end]≈1.0 atol=1e-6
+    @test sol[x, end] ≈ 0.75 atol=1e-6
 end
 
 @testset "Symbolic affects are compiled in `complete`" begin
