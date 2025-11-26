@@ -101,7 +101,7 @@ The `tf` mapping in the parameter map is treated as an initial guess.
 Please note that, at the moment, free final time problems cannot support constraints defined at definite time values, like `x(3) ~ 2`.
 
 !!! warning
-    
+
     The Pyomo collocation methods (LagrangeRadau, LagrangeLegendre) currently are bugged for free final time problems. Strongly suggest using BackwardEuler() for such problems when using Pyomo as the backend.
 
 When declaring the problem in this case we need to provide the number of steps, since dt can't be known in advanced. Let's solve plot our final solution and the controller for the block, using InfiniteOpt as the backend:
@@ -126,3 +126,90 @@ axislegend(ax1)
 axislegend(ax2)
 fig
 ```
+
+### Parameter estimation
+
+The dynamic optimization framework can also be used for parameter estimation. In this approach, we treat unknown parameters as tunable variables and minimize the difference between model predictions and observed data.
+
+Let's demonstrate this with the Lotka-Volterra equations. First, we'll generate some synthetic data by solving the system with known parameter values:
+
+```@example dynamic_opt
+@parameters α = 1.5 β = 1.0 [tunable=false] γ = 3.0 δ = 1.0
+@variables x_pe(t) y_pe(t)
+
+eqs_pe = [D(x_pe) ~ α * x_pe - β * x_pe * y_pe,
+    D(y_pe) ~ -γ * y_pe + δ * x_pe * y_pe]
+
+@mtkcompile sys0_pe = System(eqs_pe, t)
+tspan_pe = (0.0, 1.0)
+u0map_pe = [x_pe => 4.0, y_pe => 2.0]
+
+# True parameter values (these are what we'll try to recover)
+parammap_pe = [α => 2.5, δ => 1.8]
+
+oprob_pe = ODEProblem(sys0_pe, [u0map_pe; parammap_pe], tspan_pe)
+osol_pe = solve(oprob_pe, Tsit5())
+
+# Generate synthetic data at 51 time points
+ts_pe = range(tspan_pe..., length=51)
+data_pe = osol_pe(ts_pe, idxs=x_pe).u
+```
+
+Now we'll set up the parameter estimation problem. We use `EvalAt` to evaluate the state at specific time points and construct a least-squares cost function:
+
+```@example dynamic_opt
+costs_pe = [abs2(EvalAt(ti)(x_pe) - data_pe[i]) for (i, ti) in enumerate(ts_pe)]
+
+@mtkcompile sys_pe = System(eqs_pe, t; costs = costs_pe)
+```
+
+By default the cost values are sumed up, if a different behaviour is desired, the `consolidate` keyword can be set in the `System` definition.
+
+Next, we select which parameters to tune using `subset_tunables`. Here we'll estimate `α` and `δ` while keeping `β` and `γ` fixed:
+
+```@example dynamic_opt
+sys_pe′ = subset_tunables(sys_pe, [α, δ])
+```
+
+Now we can solve the parameter estimation problem. Note the `tune_parameters=true` flag:
+
+```@example dynamic_opt
+iprob_pe = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe; dt=1/50, tune_parameters=true)
+isol_pe = solve(iprob_pe, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+
+println("Estimated α = ", isol_pe.sol.ps[α], " (true value: 2.5)")
+println("Estimated δ = ", isol_pe.sol.ps[δ], " (true value: 1.8)")
+```
+
+Let's visualize the fit:
+
+```@example dynamic_opt
+fig = Figure(resolution = (800, 400))
+ax = Axis(fig[1, 1], title = "Parameter Estimation Results", xlabel = "Time", ylabel = "Prey Population")
+scatter!(ax, ts_pe, data_pe, label = "Data", markersize = 8)
+lines!(ax, isol_pe.sol.t, isol_pe.sol[x_pe], label = "Fitted Model", linewidth = 2)
+axislegend(ax)
+fig
+```
+
+!!! note "Time Alignment for Cost Evaluation"
+    When using `EvalAt` for parameter estimation, different backends handle the case when evaluation times don't align with collocation points differently:
+
+    - **JuMP**: Will throw an error asking you to adjust `dt` if evaluation times don't match collocation points exactly.
+    - **CasADi**: Uses linear interpolation between collocation points for cost evaluations at intermediate times.
+    - **InfiniteOpt**: Automatically adds support points for the evaluation times, handling mismatched grids gracefully.
+
+    For example, InfiniteOpt can use a different `dt` than what the data spacing requires:
+
+    ```@example dynamic_opt
+    # With InfiniteOpt, dt doesn't need to match the data points:
+    iprob_pe2 = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe,
+                                             dt = 1/120, tune_parameters=true)
+    isol_pe2 = solve(iprob_pe2, InfiniteOptCollocation(Ipopt.Optimizer,
+                                InfiniteOpt.OrthogonalCollocation(3)))
+
+    println("With dt=1/120: Estimated α = ", isol_pe2.sol.ps[α], " (true value: 2.5)")
+    println("With dt=1/120: Estimated δ = ", isol_pe2.sol.ps[δ], " (true value: 1.8)")
+    ```
+
+    This flexibility makes InfiniteOpt particularly convenient for parameter estimation when your data points don't naturally align with a uniform collocation grid.

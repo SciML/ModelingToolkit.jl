@@ -21,21 +21,23 @@ function Base.getindex(m::MXLinearInterpolation, i...)
     length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
 end
 
-mutable struct CasADiModel
+mutable struct CasADiModel{T}
     model::Opti
     U::MXLinearInterpolation
     V::MXLinearInterpolation
+    P::T
     tₛ::MX
     is_free_final::Bool
+    tsteps::LinRange{Float64, Int}
     solver_opti::Union{Nothing, Opti}
 
-    function CasADiModel(opti, U, V, tₛ, is_free_final, solver_opti = nothing)
-        new(opti, U, V, tₛ, is_free_final, solver_opti)
+    function CasADiModel(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti = nothing)
+        new{typeof(P)}(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti)
     end
 end
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       AbstractDynamicOptProblem{uType, tType, isinplace}
+       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -66,10 +68,11 @@ end
 function MTK.CasADiDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
+        tune_parameters = false,
         guesses = Dict(), kwargs...)
     prob,
     _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, guesses, kwargs...)
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
     prob
 end
 
@@ -88,6 +91,14 @@ function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
     V = CasADi.variable!(model, nc, nt)
     !isempty(c0) && set_initial!(model, V, DM(repeat(c0, 1, nt)))
     MXLinearInterpolation(V, tsteps, tsteps[2] - tsteps[1])
+end
+
+function MTK.generate_tunable_params!(model::Opti, p0, np)
+    P = CasADi.variable!(model, np)
+    for i in 1:np
+        set_initial!(model, P[i], p0[i])
+    end
+    P
 end
 
 function MTK.generate_timescale!(model::Opti, guess, is_free_t)
@@ -140,14 +151,20 @@ function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
     model.tₛ * total
 end
 
+MTK.needs_individual_tunables(::Opti) = true
+MTK.get_param_for_pmap(::Opti, P, i) = P[i]
+
 function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
     @unpack A, α, c = tableau
     @unpack wrapped_model, f, p = prob
-    @unpack model, U, V, tₛ = wrapped_model
+    @unpack model, U, V, P, tₛ = wrapped_model
     solver_opti = copy(model)
 
     tsteps = U.t
-    dt = tsteps[2] - tsteps[1]
+    dt = (tsteps[end] - tsteps[1]) / (length(tsteps) - 1)
+
+    # CasADi uses linear interpolation for cost evaluations that are not on the collocation points
+    @assert tsteps == wrapped_model.tsteps "Collocation points mismatch."
 
     nᵤ = size(U.u, 1)
     nᵥ = size(V.u, 1)
@@ -160,7 +177,7 @@ function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
                 ΔU = sum([A[i, j] * K[j] for j in 1:(i - 1)], init = MX(zeros(nᵤ)))
                 Uₙ = U.u[:, k] + ΔU * dt
                 Vₙ = V.u[:, k]
-                Kₙ = tₛ * f(Uₙ, Vₙ, p, τ + h * dt) # scale the time
+                Kₙ = tₛ * MTK.f_wrapper(f, Uₙ, Vₙ, p, P, τ + h * dt) # scale the time
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
@@ -176,7 +193,7 @@ function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
                 ΔU = ΔUs[i, :]'
                 Uₙ = U.u[:, k] + ΔU * dt
                 Vₙ = V.u[:, k]
-                subject_to!(solver_opti, Kᵢ[:, i] == tₛ * f(Uₙ, Vₙ, p, τ + h * dt))
+                subject_to!(solver_opti, Kᵢ[:, i] == tₛ * MTK.f_wrapper(f, Uₙ, Vₙ, p, P, τ + h * dt))
             end
             ΔU_tot = dt * (Kᵢ * α)
             subject_to!(solver_opti, U.u[:, k] + ΔU_tot == U.u[:, k + 1])
@@ -226,6 +243,11 @@ function MTK.get_V_values(model::CasADiModel)
     else
         nothing
     end
+end
+
+function MTK.get_P_values(model::CasADiModel)
+    value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
+    [value_getter(model.solver_opti, model.P[i]) for i in eachindex(model.P)]
 end
 
 function MTK.get_t_values(model::CasADiModel)
