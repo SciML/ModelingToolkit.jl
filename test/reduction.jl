@@ -279,7 +279,7 @@ ss = mtkcompile(sys)
 @test isempty(equations(ss))
 @test sort(string.(observed(ss))) == ["x(t) ~ 0"
                                       "xˍt(t) ~ 0"
-                                      "y(t) ~ -x(t) + xˍt(t)"]
+                                      "y(t) ~ xˍt(t) - x(t)"]
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])
