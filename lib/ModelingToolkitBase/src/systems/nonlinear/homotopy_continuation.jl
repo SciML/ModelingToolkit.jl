@@ -299,7 +299,7 @@ function PolynomialTransformation(sys::System)
         invterm = Symbolics.substitute.(invterm, (Dict(),))
         # RootsOf implies Symbolics couldn't solve the inner polynomial because
         # `Nemo` wasn't loaded.
-        if any(x -> iscall(x) && operation(x) == Symbolics.RootsOf, invterm)
+        if any(x -> iscall(x) && operation(x) === Symbolics.RootsOf, invterm)
             transformation_err = NemoNotLoaded()
             is_poly = false
             break
