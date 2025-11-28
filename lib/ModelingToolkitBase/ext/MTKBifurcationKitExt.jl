@@ -114,10 +114,10 @@ function BifurcationKit.BifurcationProblem(nsys::System,
 
     # Converts the input state guess.
     u0_bif = ModelingToolkitBase.to_varmap(u0_bif, unknowns(nsys))
-    u0_buf = merge(ModelingToolkitBase.get_defaults(nsys), u0_bif)
+    u0_buf = merge(ModelingToolkitBase.get_initial_conditions(nsys), u0_bif)
     u0_bif_vals = ModelingToolkitBase.varmap_to_vars(u0_bif, unknowns(nsys))
     ps = ModelingToolkitBase.to_varmap(ps, parameters(nsys))
-    ps = merge(ModelingToolkitBase.get_defaults(nsys), ps)
+    ps = merge(ModelingToolkitBase.get_initial_conditions(nsys), ps)
     p_vals = ModelingToolkitBase.varmap_to_vars(ps, parameters(nsys))
 
     # Computes bifurcation parameter and the plotting function.
