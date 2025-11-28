@@ -61,6 +61,7 @@ jobs:
       - name: "Test ${{ matrix.pkggroup }}"
         env:
           PKGGROUP: ${{ matrix.pkggroup }}
+          JULIA_PKG_PRECOMPILE_AUTO: 0
         shell: julia --color=yes --check-bounds=yes --depwarn=yes {0}
         run: |
           using Pkg
