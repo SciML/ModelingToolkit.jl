@@ -1208,8 +1208,8 @@ $(err.devents)
 end
 
 function supports_initialization(sys::System)
-    return isempty(jumps(sys)) && _iszero(cost(sys)) &&
-           isempty(constraints(sys))
+    return isempty(get_systems(sys)) && isempty(jumps(sys)) &&
+           isempty(get_costs(sys)) && isempty(get_constraints(sys))
 end
 
 safe_eachrow(::Nothing) = nothing
