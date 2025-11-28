@@ -398,28 +398,23 @@ function add_cost_function!(model, sys, tspan, pmap)
         return
     end
 
-    jcosts = substitute_model_vars(model, sys, [jcosts], tspan)
-    jcosts = substitute_params(pmap, jcosts)
-    jcosts = substitute_integral(model, only(jcosts), tspan)
+    rules = Dict{Any, Any}()
+    get_model_vars_substitution_rules!(rules, model, sys, tspan)
+    get_param_substitution_rules!(rules, pmap)
+    get_integral_substitution_rules!(rules, model, jcosts, tspan)
+    jcosts = substitute(jcosts, rules; fold = Val(true), filterer = Returns(true))
     set_objective!(model, value(jcosts))
 end
 
-"""
-Substitute integrals. For an integral from (ts, te):
-- Free final time problems should transcribe this to (0, 1) in the case that (ts, te) is the original timespan. Free final time problems cannot handle partial timespans.
-- CasADi cannot handle partial timespans, even for non-free-final time problems.
-time problems and unchanged otherwise.
-"""
-function substitute_integral(model, expr, tspan)
-    intmap = Dict()
+function get_integral_substitution_rules!(rules::Dict{Any, Any}, model, expr, tspan)
     for int in collect_applied_operators(expr, Symbolics.Integral)
         op = operation(int)
         arg = only(arguments(value(int)))
         lo, hi = value.((op.domain.domain.left, op.domain.domain.right))
         lo, hi = process_integral_bounds(model, (lo, hi), tspan)
-        intmap[int] = lowered_integral(model, arg, lo, hi)
+        arg = substitute(arg, rules; fold = Val(true), filterer = Returns(true))
+        rules[int] = lowered_integral(model, arg, lo, hi)
     end
-    Symbolics.substitute(expr, intmap)
 end
 
 function process_integral_bounds(model, integral_span, tspan)
@@ -435,24 +430,19 @@ function process_integral_bounds(model, integral_span, tspan)
     end
 end
 
-"""Substitute variables like x(1.5), x(t), etc. with the corresponding model variables."""
-function substitute_model_vars(model, sys, exprs, tspan)
+function get_model_vars_substitution_rules!(rules::Dict{Any, Any}, model, sys, tspan)
     x_ops = [operation(unwrap(st)) for st in unknowns(sys)]
     c_ops = [operation(unwrap(ct)) for ct in unbound_inputs(sys)]
     t = get_iv(sys)
-
-    exprs = map(
-        c -> substitute(c, whole_t_map(model, t, x_ops, c_ops)), exprs)
-
+    merge!(rules, whole_t_map(model, t, x_ops, c_ops))
     (ti, tf) = tspan
     if symbolic_type(tf) === ScalarSymbolic()
         _tf = model.tₛ + ti
-        exprs = map(
-            c -> substitute(c, free_t_map(model, tf, x_ops, c_ops)), exprs)
-        exprs = map(c -> substitute(c, Dict(tf => _tf)), exprs)
+        merge!(rules, free_t_map(model, tf, x_ops, c_ops))
+        rules[tf] = _tf
     end
-    exprs = map(c -> substitute(c, fixed_t_map(model, x_ops, c_ops)), exprs)
-    exprs
+    merge!(rules, fixed_t_map(model, x_ops, c_ops))
+    return nothing
 end
 
 """Mappings for variables that depend on the final time parameter, x(tf)."""
@@ -488,9 +478,12 @@ function add_user_constraints!(model, sys, tspan, pmap)
 
     is_free_final(model) && check_constraint_vars(cons_dvs)
 
-    jconstraints = substitute_toterm(cons_dvs, jconstraints)
-    jconstraints = substitute_model_vars(model, sys, jconstraints, tspan)
-    jconstraints = substitute_params(pmap, jconstraints)
+    rules = Dict{Any, Any}()
+    get_toterm_substitution_rules!(rules, cons_dvs)
+    get_model_vars_substitution_rules!(rules, model, sys, tspan)
+    get_param_substitution_rules!(rules, pmap)
+    # `fixpoint_sub` to recursively substitute into `toterm` rules
+    jconstraints = fixpoint_sub(jconstraints, rules; fold = Val(true), filterer = Returns(true))
 
     for c in jconstraints
         add_constraint!(model, c)
@@ -498,15 +491,16 @@ function add_user_constraints!(model, sys, tspan, pmap)
 end
 
 function add_equational_constraints!(model, sys, pmap, tspan)
-    diff_eqs = substitute_model_vars(model, sys, diff_equations(sys), tspan)
-    diff_eqs = substitute_params(pmap, diff_eqs)
-    diff_eqs = substitute_differentials(model, sys, diff_eqs)
+    rules = Dict{Any, Any}()
+    get_model_vars_substitution_rules!(rules, model, sys, tspan)
+    get_param_substitution_rules!(rules, pmap)
+    get_differential_substitution_rules!(rules, model, sys)
+    diff_eqs = substitute(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
     for eq in diff_eqs
-        add_constraint!(model, eq.lhs ~ eq.rhs * model.tₛ)
+        add_constraint!(model, eq.lhs ~ unwrap_const(eq.rhs) * model.tₛ)
     end
 
-    alg_eqs = substitute_model_vars(model, sys, alg_equations(sys), tspan)
-    alg_eqs = substitute_params(pmap, alg_eqs)
+    alg_eqs = substitute(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))
     for eq in alg_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs)
     end
@@ -515,21 +509,24 @@ end
 function set_objective! end
 objective_value(sol::DynamicOptSolution) = objective_value(sol.model)
 
-function substitute_differentials(model, sys, eqs)
+function get_differential_substitution_rules!(rules::Dict{Any, Any}, model, sys)
     t = get_iv(sys)
     D = Differential(t)
-    diffsubmap = Dict([D(lowered_var(model, :U, i, t)) => lowered_derivative(model, i)
-                       for i in 1:length(unknowns(sys))])
-    eqs = map(c -> Symbolics.substitute(c, diffsubmap), eqs)
+    diffsubmap = Dict([D(unk) => lowered_derivative(model, i)
+                       for (i, unk) in enumerate(unknowns(sys))])
+    merge!(rules, diffsubmap)
+    return nothing
 end
 
-function substitute_toterm(vars, exprs)
-    toterm_map = Dict([u => default_toterm(value(u)) for u in vars])
-    exprs = map(c -> substitute(c, toterm_map), exprs)
+function get_toterm_substitution_rules!(rules::Dict{Any, Any}, vars)
+    for u in vars
+        ttu = default_toterm(unwrap(u))
+        isequal(u, ttu) || (rules[u] = ttu)
+    end
 end
 
-function substitute_params(pmap::Dict, exprs)
-    exprs = map(c -> Symbolics.fixpoint_sub(c, pmap), exprs)
+function get_param_substitution_rules!(rules::Dict{Any, Any}, pmap)
+    left_merge!(rules, pmap)
 end
 
 function check_constraint_vars(vars)
