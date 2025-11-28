@@ -105,10 +105,10 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     banned_derivatives = Set{SymbolicT}()
     if has_schedule(sys) && (schedule = get_schedule(sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
-            if !has_possibly_indexed_key(guesses, k)
-                write_possibly_indexed_array!(guesses, k, dd_guess_sym, COMMON_NOTHING)
-            end
             ttk = default_toterm(k)
+            if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
+                write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+            end
             # For DDEs, the derivatives can have delayed terms
             if _has_delays(sys, v, banned_derivatives)
                 push!(banned_derivatives, ttk)
@@ -127,7 +127,11 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         end
         if isdiffeq(eq)
             get!(derivative_rules, eq.lhs) do
+                k = eq.lhs
                 ttk = default_toterm(eq.lhs)
+                if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
+                    write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+                end
                 push_as_atomic_array!(init_vars_set, ttk)
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ eq.rhs)
                 ttk
