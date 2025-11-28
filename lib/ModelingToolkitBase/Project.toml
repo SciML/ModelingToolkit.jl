@@ -88,6 +88,7 @@ MTKPyomoDynamicOptExt = "Pyomo"
 
 [sources]
 Optimization = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7" }
+OptimizationBase = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7", subdir = "lib/OptimizationBase" }
 OptimizationMOI = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7", subdir = "lib/OptimizationMOI" }
 ModelingToolkitStandardLibrary = { url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl", rev = "as/mtk-v11" }
 
