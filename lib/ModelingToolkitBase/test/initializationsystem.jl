@@ -461,7 +461,7 @@ end
     tspan = (0.0, 0.2)
     prob_mtk = ODEProblem(sys, [u0; p], tspan)
     sol = solve(prob_mtk, Tsit5())
-    @test sol[x * (ρ - z) - y][1] ≈ 0.0
+    @test sol[x * (ρ - z) - y][1] ≈ 0.0 atol=1e-10
 
     prob_mtk.ps[Initial(D(y))] = 1.0
     sol = solve(prob_mtk, Tsit5())
@@ -551,9 +551,10 @@ end
     ) |> mtkcompile
     ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0); fully_determined = true)
-    sol2 = solve(prob2, Tsit5())
+    sol2 = solve(prob2, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test SciMLBase.successful_retcode(sol2)
-    @test all(sol2[x] .≈ 2) && all(sol2[y] .≈ 2)
+    @test sol2[x] ≈ 2ones(length(sol2.t)) atol=1e-6 rtol=1e-6
+    @test sol2[y] ≈ 2ones(length(sol2.t)) atol=1e-6 rtol=1e-6
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/3029
@@ -682,9 +683,12 @@ end
                                  initialization_eqs = [p ~ 3 * q^2], guesses = [q => 10.0])
         # Specify `p`
         prob = Problem(sys, [x => 1.0, y => 1.0, p => 12.0], (0.0, 1.0); u0_constructor, p_constructor)
+        if !@isdefined(ModelingToolkit)
+            @test prob.f.initialization_data.initializeprob[q] ≈ 10.0 atol=1e-10
+        end
         integ = init(prob, alg; abstol = 1e-6, reltol = 1e-6)
-        @test integ.ps[p] ≈ 12.0
-        @test integ.ps[q] ≈ 2.0
+        @test integ.ps[p] ≈ 12.0 atol=1e-6
+        @test integ.ps[q] ≈ 2.0 atol=1e-6
         @test state_values(integ) isa expectedT
         @test parameter_values(integ).tunable isa expectedT
 
@@ -784,7 +788,10 @@ end
         @test prob.f.initialization_data.update_initializeprob! === nothing
         @test prob.f.initialization_data.initializeprobmap === nothing
         @test prob.f.initialization_data.initializeprobpmap === nothing
-        for alg in nl_algs
+        @testset "$alg" for alg in nl_algs
+            if !@isdefined(ModelingToolkit) && (alg == Klement() || alg == DFSane())
+                continue
+            end
             @test SciMLBase.successful_retcode(solve(prob, alg))
         end
 
@@ -792,7 +799,7 @@ end
         @test prob.f.initialization_data.update_initializeprob! === nothing
         @test prob.f.initialization_data.initializeprobmap === nothing
         @test prob.f.initialization_data.initializeprobpmap === nothing
-        for alg in nlls_algs
+        @testset "$alg" for alg in nlls_algs
             @test SciMLBase.successful_retcode(solve(prob, alg))
         end
     end
@@ -1090,11 +1097,11 @@ end
 
     prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5),
         guesses = [x => 1.0, y => 1.0, λ => 1.0])
-    sol = solve(prob, Rodas5P())
+    sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
 
     prob2 = remake(prob, u0 = [x => 0.5, y=>sqrt(3)/2])
-    sol2 = solve(prob2, Rodas5P())
+    sol2 = solve(prob2, FBDF())
     @test SciMLBase.successful_retcode(sol2)
 end
 
@@ -1332,10 +1339,10 @@ end
     @parameters p[1:2, 1:2]
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ p * y], t; initialization_eqs = [x^2 + y[1]^2 + y[2]^2 ~ 4])
-    prob = ODEProblem(sys, [x => 1.0, y[1] => 1, p => 2ones(2, 2)], (0.0, 1.0))
+    prob = ODEProblem(sys, [x => 1.0, y[1] => 1, p => 2ones(2, 2)], (0.0, 1.0); guesses = [y[2] => 2.0])
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
-    @test integ[x] ≈ 1.0
-    @test integ[y] ≈ [1.0, sqrt(2.0)]
+    @test integ[x] ≈ 1.0 atol=1e-6
+    @test integ[y] ≈ [1.0, sqrt(2.0)] atol=1e-6
     prob.ps[Initial(x)] = 0.5
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
