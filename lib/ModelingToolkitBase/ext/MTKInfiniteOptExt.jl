@@ -1,5 +1,6 @@
 module MTKInfiniteOptExt
 using ModelingToolkitBase
+import Symbolics: SymbolicT
 using InfiniteOpt
 using DiffEqBase
 using SciMLStructures
@@ -75,14 +76,14 @@ end
 
 function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequality})
     if expr isa Equation
-        @constraint(m.model, expr.lhs - expr.rhs == 0)
+        @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) == 0)
     elseif expr.relational_op === Symbolics.geq
-        @constraint(m.model, expr.lhs - expr.rhs ≥ 0)
+        @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≥ 0)
     else
-        @constraint(m.model, expr.lhs - expr.rhs ≤ 0)
+        @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≤ 0)
     end
 end
-MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, expr)
+MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, SymbolicUtils.unwrap_const(expr))
 
 function MTK.JuMPDynamicOptProblem(sys::System, op, tspan;
         dt = nothing,
@@ -108,7 +109,7 @@ function MTK.InfiniteOptDynamicOptProblem(sys::System, op, tspan;
 end
 
 function MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi)
-    model.tₛ * InfiniteOpt.∫(expr, model.model[:t], lo, hi)
+    model.tₛ * InfiniteOpt.∫(SymbolicUtils.unwrap_const(expr), model.model[:t], lo, hi)
 end
 MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
 
