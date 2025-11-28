@@ -473,6 +473,9 @@ function lower_shift_varname(var, iv)
     end
 end
 
+shift2term_with_unit(x, t) = MTKBase._with_unit(MTKBase.shift2term, x, t)
+lower_shift_varname_with_unit(var, iv) = MTKBase._with_unit(lower_shift_varname, var, iv, iv)
+
 function descend_lower_shift_varname_with_unit(var, iv)
     symbolic_type(var) == NotSymbolic() && return var
     ModelingToolkit._with_unit(descend_lower_shift_varname, var, iv, iv)

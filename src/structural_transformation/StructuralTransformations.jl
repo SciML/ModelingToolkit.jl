@@ -16,7 +16,7 @@ import Moshi
 using ModelingToolkit
 using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, diff2term_with_unit,
-                       shift2term_with_unit, value,
+                       value,
                        operation, arguments, simplify, symbolic_linear_solve,
                        isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
@@ -27,7 +27,7 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        invalidate_cache!, Shift,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        filter_kwargs, lower_varname_with_unit,
-                       lower_shift_varname_with_unit, setio, SparseMatrixCLIL,
+                       setio, SparseMatrixCLIL,
                        get_fullvars, has_equations, observed,
                        Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
                        VariableShift, DerivativeDict, shift2term, simplify_shifts,
@@ -61,6 +61,8 @@ using SparseArrays
 using SimpleNonlinearSolve
 
 using DocStringExtensions
+
+import ModelingToolkitBase as MTKBase
 
 export tearing, dae_index_lowering, check_consistency
 export dummy_derivative
