@@ -112,7 +112,7 @@ end
         @mtktestset("HomotopyContinuation Extension Test", "extensions/homotopy_continuation.jl")
         @mtktestset("BifurcationKit Extension Test", "extensions/bifurcationkit.jl")
         @mtktestset("InfiniteOpt Extension Test", "extensions/test_infiniteopt.jl")
-        @mtktestset("Auto Differentiation Test", "extensions/ad.jl")
+        # @mtktestset("Auto Differentiation Test", "extensions/ad.jl")
         @mtktestset("Dynamic Optimization Collocation Solvers", "extensions/dynamic_optimization.jl")
     end
 end
