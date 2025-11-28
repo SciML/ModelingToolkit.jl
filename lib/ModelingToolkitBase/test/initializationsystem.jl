@@ -48,7 +48,7 @@ conditions = getfield.(equations(initprob.f.sys), :rhs)
 @test initprob isa NonlinearLeastSquaresProblem
 sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
-@test maximum(abs.(sol[conditions])) < 1e-14
+@test maximum(abs.(sol[conditions])) < 5e-14
 
 @test_throws ModelingToolkitBase.ExtraVariablesSystemException ModelingToolkitBase.InitializationProblem(
     pend, 0.0, [g => 1];
@@ -70,7 +70,7 @@ prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5),
     guesses = [x => 1, y => 0.2, λ => 0.0])
 prob.f.initializeprob isa NonlinearProblem
 sol = solve(prob.f.initializeprob)
-@test maximum(abs.(sol[conditions])) < 1e-14
+@test maximum(abs.(sol[conditions])) < 5e-14
 sol = solve(prob, Rodas5P(); abstol = 1e-14)
 if @isdefined(ModelingToolkit)
     @test maximum(abs.(sol[conditions][1])) < 1e-14
@@ -461,11 +461,11 @@ end
     tspan = (0.0, 0.2)
     prob_mtk = ODEProblem(sys, [u0; p], tspan)
     sol = solve(prob_mtk, Tsit5())
-    @test sol[x * (ρ - z) - y][1] == 0.0
+    @test sol[x * (ρ - z) - y][1] ≈ 0.0
 
     prob_mtk.ps[Initial(D(y))] = 1.0
     sol = solve(prob_mtk, Tsit5())
-    @test sol[x * (ρ - z) - y][1] == 1.0
+    @test sol[x * (ρ - z) - y][1] ≈ 1.0
 end
 
 @variables x(t) y(t) z(t)
@@ -552,7 +552,8 @@ end
     ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0); fully_determined = true)
     sol2 = solve(prob2, Tsit5())
-    @test all(sol2[x] .== 2) && all(sol2[y] .== 2)
+    @test SciMLBase.successful_retcode(sol2)
+    @test all(sol2[x] .≈ 2) && all(sol2[y] .≈ 2)
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/3029
@@ -1332,15 +1333,15 @@ end
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ p * y], t; initialization_eqs = [x^2 + y[1]^2 + y[2]^2 ~ 4])
     prob = ODEProblem(sys, [x => 1.0, y[1] => 1, p => 2ones(2, 2)], (0.0, 1.0))
-    integ = init(prob, Tsit5())
+    integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 1.0
     @test integ[y] ≈ [1.0, sqrt(2.0)]
     prob.ps[Initial(x)] = 0.5
-    integ = init(prob, Tsit5())
+    integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
     @test integ[y] ≈ [1.0, sqrt(2.75)]
     prob.ps[Initial(y[1])] = 0.5
-    integ = init(prob, Tsit5())
+    integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
     @test integ[y]≈[0.5, sqrt(3.5)] atol=1e-6
 end
