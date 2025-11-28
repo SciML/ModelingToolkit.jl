@@ -820,7 +820,7 @@ end
 
     j_guess = getguess(guess_model.j)
     @test symbolic_type(j_guess) == ScalarSymbolic()
-    @test readable_code(j_guess) == "k(t) + l(t) / i(t)"
+    @test readable_code(j_guess) in ["k(t) + l(t) / i(t)", "l(t) / i(t) + k(t)"]
 
     i_guess = getguess(guess_model.i)
     @test symbolic_type(i_guess) == ScalarSymbolic()
