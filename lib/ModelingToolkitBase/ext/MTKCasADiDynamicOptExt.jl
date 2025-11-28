@@ -4,6 +4,7 @@ using CasADi
 using DiffEqBase
 using UnPack
 using NaNMath
+using Symbolics: SymbolicT
 const MTK = ModelingToolkitBase
 
 for ff in [acos, log1p, acosh, log2, asin, tan, atanh, cos, log, sin, log10, sqrt]
@@ -114,11 +115,11 @@ end
 
 function MTK.add_constraint!(m::CasADiModel, expr)
     if expr isa Equation
-        subject_to!(m.model, expr.lhs - expr.rhs == 0)
+        subject_to!(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) == 0)
     elseif expr.relational_op === Symbolics.geq
-        subject_to!(m.model, expr.lhs - expr.rhs ≥ 0)
+        subject_to!(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≥ 0)
     else
-        subject_to!(m.model, expr.lhs - expr.rhs ≤ 0)
+        subject_to!(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≤ 0)
     end
 end
 
@@ -137,6 +138,7 @@ function MTK.lowered_var(m::CasADiModel, uv, i, t)
 end
 
 function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
+    expr = SymbolicUtils.unwrap_const(expr)
     total = MX(0)
     dt = model.U.t[2] - model.U.t[1]
     for (i, t) in enumerate(model.U.t)
