@@ -570,6 +570,122 @@ function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, id
     _remake_buffer(indp, oldbuf, idxs, vals)
 end
 
+function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
+    return __remake_buffer(indp, oldbuf, idxs, vals; validate)
+end
+
+function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
+    newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
+    @set! newbuf.initials = similar(oldbuf.initials, Any)
+    @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
+    @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
+    @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
+
+    function handle_parameter(ic, sym, idx, val)
+        if validate
+            if sym === nothing
+                validate_parameter_type(ic, idx, val)
+            else
+                validate_parameter_type(ic, sym, idx, val)
+            end
+        end
+        # `ParameterIndex(idx)` turns off size validation since it relies on there
+        # being an existing value
+        set_parameter!(newbuf, val, ParameterIndex(idx))
+    end
+
+    handled_idxs = Set{ParameterIndex}()
+    # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
+    # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
+    # the index cache.
+    ic = get_index_cache(indp_to_system(indp))
+    for (idx, val) in zip(idxs, vals)
+        sym = nothing
+        if val === missing
+            val = get_temporary_value(idx)
+        end
+        if symbolic_type(idx) == ScalarSymbolic()
+            sym = idx
+            idx = parameter_index(ic, sym)
+            if idx === nothing
+                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                continue
+            end
+            idx in handled_idxs && continue
+            handle_parameter(ic, sym, idx, val)
+            push!(handled_idxs, idx)
+        elseif symbolic_type(idx) == ArraySymbolic()
+            sym = idx
+            idx = parameter_index(ic, sym)
+            if idx === nothing
+                symbolic_has_known_size(sym) ||
+                    throw(ParameterNotInSystem(sym))
+                size(sym) == size(val) || throw(InvalidParameterSizeException(sym, val))
+
+                for (i, vali) in zip(eachindex(sym), eachindex(val))
+                    idx = parameter_index(ic, sym[i])
+                    if idx === nothing
+                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
+                        continue
+                    end
+                    # Intentionally don't check handled_idxs here because array variables always take priority
+                    # See Issue#2804
+                    handle_parameter(ic, sym[i], idx, val[vali])
+                    push!(handled_idxs, idx)
+                end
+            else
+                idx in handled_idxs && continue
+                handle_parameter(ic, sym, idx, val)
+                push!(handled_idxs, idx)
+            end
+        else # NotSymbolic
+            if !(idx isa ParameterIndex)
+                throw(ArgumentError("Expected index for parameter to be a symbolic variable or `ParameterIndex`, got $idx"))
+            end
+            handle_parameter(ic, nothing, idx, val)
+        end
+    end
+
+    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
+        oldbuf.tunable, newbuf.tunable)
+    if eltype(newbuf.tunable) <: Integer
+        T = promote_type(eltype(newbuf.tunable), Float64)
+        @set! newbuf.tunable = T.(newbuf.tunable)
+    end
+    @set! newbuf.initials = narrow_buffer_type_and_fallback_undefs(
+        oldbuf.initials, newbuf.initials)
+    if eltype(newbuf.initials) <: Integer
+        T = promote_type(eltype(newbuf.initials), Float64)
+        @set! newbuf.initials = T.(newbuf.initials)
+    end
+    @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.discrete, newbuf.discrete)
+    @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
+        oldbuf.constant, newbuf.constant)
+    for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric)
+        for i in eachindex(oldv)
+            isassigned(newv, i) && continue
+            newv[i] = oldv[i]
+        end
+    end
+    @set! newbuf.nonnumeric = Tuple(
+        typeof(oldv)(newv) for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric))
+    if !ArrayInterface.ismutable(oldbuf)
+        @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
+        @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
+        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
+            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
+        end
+        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
+            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
+        end
+        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
+            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
+        end
+    end
+    return newbuf
+end
+
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
         indp, oldbuf::MTKParameters{T, I, D, C, N, H},
@@ -701,122 +817,6 @@ end
     push!(expr.args, :(return newbuf))
 
     return expr
-end
-
-function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
-    return __remake_buffer(indp, oldbuf, idxs, vals; validate)
-end
-
-function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
-    newbuf = @set oldbuf.tunable = similar(oldbuf.tunable, Any)
-    @set! newbuf.initials = similar(oldbuf.initials, Any)
-    @set! newbuf.discrete = Tuple(similar(buf, Any) for buf in newbuf.discrete)
-    @set! newbuf.constant = Tuple(similar(buf, Any) for buf in newbuf.constant)
-    @set! newbuf.nonnumeric = Tuple(similar(buf, Any) for buf in newbuf.nonnumeric)
-
-    function handle_parameter(ic, sym, idx, val)
-        if validate
-            if sym === nothing
-                validate_parameter_type(ic, idx, val)
-            else
-                validate_parameter_type(ic, sym, idx, val)
-            end
-        end
-        # `ParameterIndex(idx)` turns off size validation since it relies on there
-        # being an existing value
-        set_parameter!(newbuf, val, ParameterIndex(idx))
-    end
-
-    handled_idxs = Set{ParameterIndex}()
-    # If the parameter buffer is an `MTKParameters` object, `indp` must eventually drill
-    # down to an `AbstractSystem` using `symbolic_container`. We leverage this to get
-    # the index cache.
-    ic = get_index_cache(indp_to_system(indp))
-    for (idx, val) in zip(idxs, vals)
-        sym = nothing
-        if val === missing
-            val = get_temporary_value(idx)
-        end
-        if symbolic_type(idx) == ScalarSymbolic()
-            sym = idx
-            idx = parameter_index(ic, sym)
-            if idx === nothing
-                @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
-                continue
-            end
-            idx in handled_idxs && continue
-            handle_parameter(ic, sym, idx, val)
-            push!(handled_idxs, idx)
-        elseif symbolic_type(idx) == ArraySymbolic()
-            sym = idx
-            idx = parameter_index(ic, sym)
-            if idx === nothing
-                symbolic_has_known_size(sym) ||
-                    throw(ParameterNotInSystem(sym))
-                size(sym) == size(val) || throw(InvalidParameterSizeException(sym, val))
-
-                for (i, vali) in zip(eachindex(sym), eachindex(val))
-                    idx = parameter_index(ic, sym[i])
-                    if idx === nothing
-                        @warn "Symbolic variable $sym is not a (non-dependent) parameter in the system"
-                        continue
-                    end
-                    # Intentionally don't check handled_idxs here because array variables always take priority
-                    # See Issue#2804
-                    handle_parameter(ic, sym[i], idx, val[vali])
-                    push!(handled_idxs, idx)
-                end
-            else
-                idx in handled_idxs && continue
-                handle_parameter(ic, sym, idx, val)
-                push!(handled_idxs, idx)
-            end
-        else # NotSymbolic
-            if !(idx isa ParameterIndex)
-                throw(ArgumentError("Expected index for parameter to be a symbolic variable or `ParameterIndex`, got $idx"))
-            end
-            handle_parameter(ic, nothing, idx, val)
-        end
-    end
-
-    @set! newbuf.tunable = narrow_buffer_type_and_fallback_undefs(
-        oldbuf.tunable, newbuf.tunable)
-    if eltype(newbuf.tunable) <: Integer
-        T = promote_type(eltype(newbuf.tunable), Float64)
-        @set! newbuf.tunable = T.(newbuf.tunable)
-    end
-    @set! newbuf.initials = narrow_buffer_type_and_fallback_undefs(
-        oldbuf.initials, newbuf.initials)
-    if eltype(newbuf.initials) <: Integer
-        T = promote_type(eltype(newbuf.initials), Float64)
-        @set! newbuf.initials = T.(newbuf.initials)
-    end
-    @set! newbuf.discrete = narrow_buffer_type_and_fallback_undefs.(
-        oldbuf.discrete, newbuf.discrete)
-    @set! newbuf.constant = narrow_buffer_type_and_fallback_undefs.(
-        oldbuf.constant, newbuf.constant)
-    for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric)
-        for i in eachindex(oldv)
-            isassigned(newv, i) && continue
-            newv[i] = oldv[i]
-        end
-    end
-    @set! newbuf.nonnumeric = Tuple(
-        typeof(oldv)(newv) for (oldv, newv) in zip(oldbuf.nonnumeric, newbuf.nonnumeric))
-    if !ArrayInterface.ismutable(oldbuf)
-        @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
-        @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
-        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
-            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
-        end
-        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
-            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
-        end
-        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
-            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
-        end
-    end
-    return newbuf
 end
 
 function as_any_buffer(p::MTKParameters)
