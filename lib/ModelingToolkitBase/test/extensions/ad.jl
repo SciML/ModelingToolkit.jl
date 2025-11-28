@@ -42,7 +42,7 @@ end
         t,
         vars,
         pars;
-        defaults = [
+        initial_conditions = [
             y0 => mh * 3.1 / (2.3 * Th0),
             mh => 123.4,
             Th0 => (4 / 11)^(1 / 3) * Tγ0,
