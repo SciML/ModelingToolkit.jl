@@ -211,8 +211,10 @@ end
         @variables x=1 y=1
         @mtkcompile sys = System([x^2 + y^2 - 2x - 2 ~ 0, y ~ (x - 1) / (x - 2)])
         prob = HomotopyContinuationProblem(sys, [])
-        @test any(prob.f.denominator([2.0], parameter_values(prob)) .≈ 0.0)
-        @test SciMLBase.successful_retcode(solve(prob, singlerootalg))
+        @test any(prob.f.denominator(2ones(length(unknowns(sys))), parameter_values(prob)) .≈ 0.0)
+        if @isdefined(ModelingToolkit)
+            @test SciMLBase.successful_retcode(solve(prob, singlerootalg))
+        end
     end
 
     @testset "Rational function forced to common denominators" begin
@@ -226,13 +228,15 @@ end
     end
 end
 
-@testset "Non-polynomial observed not used in equations" begin
-    @variables x=1 y
-    @mtkcompile sys = System([x^2 - 2 ~ 0, y ~ sin(x)])
-    prob = HomotopyContinuationProblem(sys, [])
-    sol = @test_nowarn solve(prob, singlerootalg)
-    @test sol[x] ≈ √2.0
-    @test sol[y] ≈ sin(√2.0)
+if @isdefined(ModelingToolkit)
+    @testset "Non-polynomial observed not used in equations" begin
+        @variables x=1 y
+        @mtkcompile sys = System([x^2 - 2 ~ 0, y ~ sin(x)])
+        prob = HomotopyContinuationProblem(sys, [])
+        sol = @test_nowarn solve(prob, singlerootalg)
+        @test sol[x] ≈ √2.0
+        @test sol[y] ≈ sin(√2.0)
+    end
 end
 
 @testset "`fraction_cancel_fn`" begin
