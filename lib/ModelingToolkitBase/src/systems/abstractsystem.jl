@@ -2090,13 +2090,13 @@ function SymbolicUtils.Code.toexpr(sys::AbstractSystem)
 
     eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
     filtered_bindings = filter(
-        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), parent(copy(bindings(sys))))
     filtered_initial_conditions = filter(
-        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), bindings(sys))
+        kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), initial_conditions(sys))
     filtered_guesses = filter(
         kvp -> !(iscall(kvp[1]) && operation(kvp[1]) isa Initial), guesses(sys))
     bindings_name = push_defaults!(stmt, filtered_bindings, var2name; name = :bindings)
-    initial_conditions_name = push_defaults!(stmt, filtered_bindings, var2name; name = :initial_conditions)
+    initial_conditions_name = push_defaults!(stmt, filtered_initial_conditions, var2name; name = :initial_conditions)
     guesses_name = push_defaults!(stmt, filtered_guesses, var2name; name = :guesses)
     obs_name = push_eqs!(stmt, obs, var2name)
 
