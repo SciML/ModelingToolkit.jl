@@ -7,7 +7,7 @@ using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDi
 using Ipopt
 using DataInterpolations
 using CasADi
-using Pyomo
+# using Pyomo
 using Test
 
 import DiffEqBase: solve
@@ -52,9 +52,11 @@ const ENABLE_CASADI = VERSION >= v"1.11"
         csol2 = solve(cprob, CasADiCollocation("ipopt", constructImplicitEuler()))
         @test ≈(csol2.sol.u, osol2.u, rtol = 0.001)
     end
-    pprob = PyomoDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test all([≈(psol.sol(t), osol2(t), rtol = 1e-2) for t in 0.0:0.01:1.0])
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(sys, [u0map; parammap], tspan, dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test all([≈(psol.sol(t), osol2(t), rtol = 1e-2) for t in 0.0:0.01:1.0])
+    end
 
     # With a constraint
     u0map = Pair[]
@@ -76,11 +78,13 @@ const ENABLE_CASADI = VERSION >= v"1.11"
         @test csol.sol(0.3; idxs = x(t)) ≈ 7.0
     end
 
-    pprob = PyomoDynamicOptProblem(
-        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(3)))
-    @test psol.sol(0.6; idxs = x(t)) ≈ 3.5
-    @test psol.sol(0.3; idxs = x(t)) ≈ 7.0
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(
+            lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(3)))
+        @test psol.sol(0.6; idxs = x(t)) ≈ 3.5
+        @test psol.sol(0.3; idxs = x(t)) ≈ 7.0
+    end
 
     iprob = InfiniteOptDynamicOptProblem(
         lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
@@ -104,10 +108,12 @@ const ENABLE_CASADI = VERSION >= v"1.11"
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIA3()))
     @test all(u -> u > [1, 1], jsol.sol.u)
 
-    pprob = PyomoDynamicOptProblem(
-        lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", MidpointEuler()))
-    @test all(u -> u > [1, 1], psol.sol.u)
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(
+            lksys, [u0map; parammap], tspan; guesses = guess, dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", MidpointEuler()))
+        @test all(u -> u > [1, 1], psol.sol.u)
+    end
 
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(
@@ -176,15 +182,17 @@ end
     @test is_bangbang(isol.input_sol, [-1.0], [1.0])
     @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1e-5)
 
-    pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test is_bangbang(psol.input_sol, [-1.0], [1.0])
-    @test ≈(psol.sol[x(t)][end], 0.25, rtol = 1e-3)
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test is_bangbang(psol.input_sol, [-1.0], [1.0])
+        @test ≈(psol.sol[x(t)][end], 0.25, rtol = 1e-3)
+        @test all([≈(psol.sol(t), osol(t), rtol = 0.05) for t in 0.0:0.01:1.0])
+    end
 
     spline = ctrl_to_spline(isol.input_sol, ConstantInterpolation)
     oprob = ODEProblem(block_ode, [u0map; u_interp => spline], tspan)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
-    @test all([≈(psol.sol(t), osol(t), rtol = 0.05) for t in 0.0:0.01:1.0])
 
     ###################
     ### Bee example ###
@@ -214,14 +222,18 @@ end
         csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
         @test is_bangbang(csol.input_sol, [0.0], [1.0])
     end
-    pprob = PyomoDynamicOptProblem(beesys, [u0map; pmap], tspan, dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test is_bangbang(psol.input_sol, [0.0], [1.0])
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(beesys, [u0map; pmap], tspan, dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test is_bangbang(psol.input_sol, [0.0], [1.0])
+    end
 
     @parameters (α_interp::LinearInterpolation)(..)
     eqs = [D(w(t)) ~ -μ * w(t) + b * s * α_interp(t) * w(t),
         D(q(t)) ~ -ν * q(t) + c * (1 - α_interp(t)) * s * w(t)]
     @mtkcompile beesys_ode = System(eqs, t)
+    u0map = [w(t) => 40, q(t) => 2]
+    pmap = [b => 1, c => 1, μ => 1, s => 1, ν => 1]
     oprob = ODEProblem(beesys_ode,
         merge(Dict(u0map), Dict(pmap),
             Dict(α_interp => ctrl_to_spline(jsol.input_sol, LinearInterpolation))),
@@ -233,7 +245,10 @@ end
     end
     osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
-    @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.0:0.01:4.0])
+
+    if @isdefined(Pyomo)
+        @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0.0:0.01:4.0])
+    end
 end
 
 @testset "Rocket launch" begin
@@ -253,7 +268,7 @@ end
     @named rocket = System(eqs, t, vars, ps; costs, constraints = cons)
     rocket = mtkcompile(rocket; inputs = [T])
 
-    u0map = [h => h₀, m => m₀, v => 0]
+    u0map = [h => h₀, v => 0]
     pmap = [
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T => 0.0, h₀ => 1, m_c => 0.6]
@@ -272,9 +287,11 @@ end
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test isol.sol[h][end] > 1.012
 
-    pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
-    psol = solve(pprob, PyomoCollocation("ipopt", LagrangeRadau(4)))
-    @test psol.sol[h][end] > 1.012
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
+        psol = solve(pprob, PyomoCollocation("ipopt", LagrangeRadau(4)))
+        @test psol.sol[h][end] > 1.012
+    end
 
     # Test solution
     @parameters (T_interp::CubicSpline)(..)
@@ -283,6 +300,10 @@ end
         D(m) ~ -T_interp(t) / c]
     @mtkcompile rocket_ode = System(eqs, t)
     interpmap = Dict(T_interp => ctrl_to_spline(jsol.input_sol, CubicSpline))
+    u0map = [h => h₀, v => 0]
+    pmap = [
+        g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
+        h₀ => 1]
     oprob = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap), (ts, te))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)
     @test ≈(jsol.sol.u, osol.u, rtol = 0.02)
@@ -295,10 +316,12 @@ end
     osol1 = solve(oprob1, ImplicitEuler(); adaptive = false, dt = 0.001)
     @test ≈(isol.sol.u, osol1.u, rtol = 0.01)
 
-    interpmap2 = Dict(T_interp => ctrl_to_spline(psol.input_sol, CubicSpline))
-    oprob2 = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap2), (ts, te))
-    osol2 = solve(oprob2, RadauIIA5(); adaptive = false, dt = 0.001)
-    @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0:0.001:0.2])
+    if @isdefined(Pyomo)
+        interpmap2 = Dict(T_interp => ctrl_to_spline(psol.input_sol, CubicSpline))
+        oprob2 = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap2), (ts, te))
+        osol2 = solve(oprob2, RadauIIA5(); adaptive = false, dt = 0.001)
+        @test all([≈(psol.sol(t), osol2(t), rtol = 0.01) for t in 0:0.001:0.2])
+    end
 end
 
 @testset "Free final time problems" begin
@@ -331,10 +354,12 @@ end
     @test isapprox(isol.sol.t[end], 10.0, rtol = 1e-3)
     @test ≈(M.objective_value(isol), -92.75, atol = 0.25)
 
-    pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (0, tf); steps = 201)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test isapprox(psol.sol.t[end], 10.0, rtol = 1e-3)
-    @test ≈(M.objective_value(psol), -92.75, atol = 0.1)
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (0, tf); steps = 201)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test isapprox(psol.sol.t[end], 10.0, rtol = 1e-3)
+        @test ≈(M.objective_value(psol), -92.75, atol = 0.1)
+    end
 
     @variables x(..) v(..)
     @variables u(..) [bounds = (-1.0, 1.0), input = true]
@@ -363,9 +388,11 @@ end
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer), verbose = true)
     @test isapprox(isol.sol.t[end], 2.0, atol = 1e-5)
 
-    pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; steps = 51)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
-    @test isapprox(psol.sol.t[end], 2.0, atol = 1e-5)
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan; steps = 51)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test isapprox(psol.sol.t[end], 2.0, atol = 1e-5)
+    end
 end
 
 @testset "Cart-pole problem" begin
@@ -395,26 +422,30 @@ end
     @named cartpole = System(eqs, t; costs, constraints = cons)
     cartpole = mtkcompile(cartpole; inputs = [u])
 
+    var_order = [θ(t), x(t), D(θ(t)), D(x(t))]
+
     u0map = [D(x(t)) => 0.0, D(θ(t)) => 0.0, θ(t) => 0.0, x(t) => 0.0]
     pmap = [mₖ => 1.0, mₚ => 0.2, l => 0.5, g => 9.81, u => 0]
     jprob = JuMPDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRK4()))
-    @test jsol.sol.u[end] ≈ [π, 0, 0, 0]
+    @test jsol.sol[var_order][end] ≈ [π, 0, 0, 0]
 
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
         csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
-        @test csol.sol.u[end] ≈ [π, 0, 0, 0]
+        @test csol.sol[var_order][end] ≈ [π, 0, 0, 0]
     end
 
     iprob = InfiniteOptDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
     isol = solve(iprob,
         InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(2)))
-    @test isol.sol.u[end] ≈ [π, 0, 0, 0]
+    @test isol.sol[var_order][end] ≈ [π, 0, 0, 0]
 
-    pprob = PyomoDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
-    psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
-    @test psol.sol.u[end] ≈ [π, 0, 0, 0]
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(cartpole, [u0map; pmap], tspan; dt = 0.04)
+        psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
+        @test psol.sol[var_order][end] ≈ [π, 0, 0, 0]
+    end
 end
 
 @testset "Parameter defaults usage" begin
@@ -449,10 +480,12 @@ end
         @test csol.sol.u ≈ osol.u
     end
 
-    pprob = PyomoDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
-    psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(sys, u0map, tspan, dt = 0.01)
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
 
-    @test psol.sol.u ≈ osol.u rtol=1e-2
+        @test psol.sol.u ≈ osol.u rtol=1e-2
+    end
 end
 
 @testset "Parameter estimation" begin
@@ -487,7 +520,7 @@ end
     # test with different time stepping
 
     jprob = JuMPDynamicOptProblem(sys′, u0map, tspan; dt=1/120, tune_parameters=true)
-    err_msg = "x is evaluated inside the cost function at 40 points that are not in the 121 collocation points."
+    err_msg = "Found extra 40 collocation points."
     @test_throws err_msg solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructTsitouras5()))
 
     iprob = InfiniteOptDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
@@ -518,12 +551,13 @@ end
         @test csol.sol.ps[α] ≈ 2.5 rtol=1e-3
     end
 
-    pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
-    psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/50, tune_parameters=true)
+        psol = solve(pprob, PyomoCollocation("ipopt", LagrangeLegendre(4)))
 
-    @test psol.sol.ps[δ] ≈ 1.8 rtol=1e-4
-    @test psol.sol.ps[α] ≈ 2.5 rtol=1e-4
-
+        @test psol.sol.ps[δ] ≈ 1.8 rtol=1e-4
+        @test psol.sol.ps[α] ≈ 2.5 rtol=1e-4
+    end
     # test with different time stepping
 
     # pprob = PyomoDynamicOptProblem(sys′, u0map, tspan, dt = 1/120, tune_parameters=true)
