@@ -125,7 +125,7 @@ D = Differential(t)
 @named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = mtkcompile(sys)
 u0 = [subsys.x => 1]
-prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0))
+prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0); guesses = [subsys.y => 1])
 sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
 if @isdefined(ModelingToolkit)

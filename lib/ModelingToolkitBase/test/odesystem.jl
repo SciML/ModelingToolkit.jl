@@ -307,7 +307,7 @@ end
 du0 = [D(y₁) => -0.04
        D(y₂) => 0.04
        D(y₃) => 0.0]
-prob4 = DAEProblem(sys, [du0; [y₁ => nothing]; p2], tspan)
+prob4 = DAEProblem(sys, [du0; [y₁ => nothing]; p2], tspan; guesses = u01)
 prob5 = eval(DAEProblem(sys, [du0; u0; p2], tspan; expression = Val{true}))
 for prob in [prob4, prob5]
     local sol
