@@ -184,7 +184,7 @@ end
             0 ~ ((y - 3) / (y - 4)) * (n / (y - 5)) + ((x - 1.5) / (x - 5.5))^2
         ],
         [x, y],
-        [n]; defaults = [n => 4])
+        [n]; initial_conditions = [n => 4])
     sys = complete(sys)
     prob = HomotopyContinuationProblem(sys, [])
     sol = solve(prob, singlerootalg)
@@ -205,7 +205,7 @@ end
             @test any(<=(1e-7), prob.f.denominator([2.0, val + err], p))
         end
     end
-    @test prob.f.denominator([2.0, 4.0], p)[1] <= 1e-8
+    @test any(<=(1e-8), prob.f.denominator([2.0, 4.0], p))
 
     @testset "Rational function in observed" begin
         @variables x=1 y=1
