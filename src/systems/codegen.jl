@@ -217,15 +217,15 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_jacobian(sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        kwargs...)
+        checkbounds = true, kwargs...)
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t === nothing
-        wrap_code = (identity, identity)
+    if t !== nothing && sparse && checkbounds
+        wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
     else
-        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
+        wrap_code = (identity, identity)
     end
     args = (dvs, p...)
     nargs = 2
@@ -331,7 +331,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_W(sys::System;
         simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, checkbounds = true, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
@@ -341,8 +341,10 @@ function generate_W(sys::System;
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = W_GAMMA * M + J
     t = get_iv(sys)
-    if t !== nothing
-        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
+    if t !== nothing && sparse && checkbounds
+        wrap_code = assert_jac_length_header(sys)
+    else
+        wrap_code = (identity, identity)
     end
 
     p = reorder_parameters(sys, ps)
