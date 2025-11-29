@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase
+using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase, BenchmarkTools
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -58,6 +58,8 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 #@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
       findnz(prob.f.jac_prototype)[1:2]
+out = similar(prob.f.jac_prototype)
+@test (@ballocated $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), 0.0)) == 0 # should not allocate
 
 # test when not sparse
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = false, jac = true)
