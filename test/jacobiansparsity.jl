@@ -75,6 +75,12 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 @test findnz(f.jac_prototype)[1:2] == findnz(JP)[1:2]
 @test eltype(f.jac_prototype) == Float64
 
+# test sparsity index pattern checking
+f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = true, checkbounds = true)
+out = sparse([1.0 0.0; 0.0 1.0]) # choose a wrong size on purpose
+@test size(out) != size(f.jac_prototype) # check that the size is indeed wrong
+@test_throws AssertionError f.jac.f_iip(out, u0, p, 0.0) # check that we get an error
+
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
