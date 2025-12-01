@@ -935,6 +935,80 @@ end
     @test getdefault(main_sys.v1) == 13
 end
 
+@testset "Array parameters in nested @mtkmodel components" begin
+    # Test for issue where array parameters passed to nested models
+    # were not correctly resolved to their parent scope values
+    @mtkmodel InnerWithArrayParam begin
+        @parameters begin
+            a[1:2] = a
+        end
+        @variables begin
+            x(t)[1:2] = zeros(2)
+        end
+        @equations begin
+            D(x) ~ a
+        end
+    end
+
+    @mtkmodel OuterWithArrayParam begin
+        @parameters begin
+            a1 = 1
+            a2 = 2
+        end
+        @components begin
+            inner = InnerWithArrayParam(a = [a1+a2, a2])
+        end
+        @variables begin
+            y(t)[1:2] = zeros(2)
+        end
+        @equations begin
+            D(y) ~ [a1+a2, a2]
+        end
+    end
+
+    @named sys = OuterWithArrayParam()
+    sys = complete(sys)
+
+    # Check that the defaults are correctly mapped
+    defs = ModelingToolkit.defaults(sys)
+
+    # Find the keys for inner.a[1] and inner.a[2]
+    inner_a1_key = nothing
+    inner_a2_key = nothing
+    outer_a1_key = nothing
+    outer_a2_key = nothing
+
+    for (k, v) in defs
+        k_str = string(k)
+        if k_str == "inner₊a[1]"
+            inner_a1_key = k
+        elseif k_str == "inner₊a[2]"
+            inner_a2_key = k
+        elseif k_str == "a1"
+            outer_a1_key = k
+        elseif k_str == "a2"
+            outer_a2_key = k
+        end
+    end
+
+    @test inner_a1_key !== nothing
+    @test inner_a2_key !== nothing
+    @test outer_a1_key !== nothing
+    @test outer_a2_key !== nothing
+
+    # The inner array parameter elements should map to the outer parameters
+    @test isequal(defs[inner_a1_key], sys.a1 + sys.a2)
+    @test isequal(defs[inner_a2_key], sys.a2)
+    @test defs[outer_a1_key] == 1
+    @test defs[outer_a2_key] == 2
+
+    # Test that ODEProblem can be created successfully
+    prob = ODEProblem(mtkcompile(sys), [], (0.0, 1.0))
+    @test prob isa ODEProblem
+    # sol = solve(prob, Tsit5())
+    # @test sol[sys.y] ≈ sol[sys.inner.x]
+end
+
 @mtkmodel InnerModel begin
     @parameters begin
         p
