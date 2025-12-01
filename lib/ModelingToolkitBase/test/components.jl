@@ -9,6 +9,7 @@ using ModelingToolkitStandardLibrary.Thermal
 using SymbolicUtils: getmetadata
 using BipartiteGraphs
 import SymbolicUtils as SU
+using SciCompDSL
 include("common/rc_model.jl")
 
 @testset "Basics" begin

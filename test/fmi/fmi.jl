@@ -1,4 +1,5 @@
 using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, NonlinearSolve, SciMLBase
+using SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
 

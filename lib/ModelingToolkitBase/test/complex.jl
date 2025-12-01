@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t
+using SciCompDSL
 using Test
 
 @mtkmodel ComplexModel begin

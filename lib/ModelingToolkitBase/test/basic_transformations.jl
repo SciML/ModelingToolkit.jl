@@ -3,6 +3,7 @@ using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
 using SymbolicUtils: symtype, _iszero
 using ModelingToolkitBase: SymbolicContinuousCallback
+using SciCompDSL
 
 @independent_variables t
 D = Differential(t)

@@ -14,6 +14,7 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics
 using Symbolics: unwrap
 using DiffEqBase: isinplace
+using SciCompDSL
 
 # Define some variables
 @parameters σ ρ β

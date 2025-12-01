@@ -8,6 +8,7 @@ using DynamicQuantities
 using DiffEqBase: BrownFullBasicInit
 import DiffEqNoiseProcess
 using Setfield: @set!
+using SciCompDSL
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)

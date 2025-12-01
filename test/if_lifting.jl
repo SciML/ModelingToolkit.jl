@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
 import SymbolicUtils as SU
 using Test

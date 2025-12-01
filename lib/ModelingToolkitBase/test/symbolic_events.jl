@@ -6,6 +6,7 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
                        D_nounits as D,
                        affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
+using SciCompDSL
 
 using StableRNGs
 import SciMLBase
