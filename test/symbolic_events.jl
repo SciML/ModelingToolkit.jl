@@ -1374,7 +1374,8 @@ end
     @parameters p2(t) = 1.0
     @variables x(t) = 0.0
     @variables x2(t)
-    event = [0.5] => [p2 ~ Pre(t)]
+    event = ModelingToolkit.SymbolicDiscreteCallback(
+        [0.5] => [p2 ~ Pre(t)]; discrete_parameters = [p2])
 
     eq = [
         D(x) ~ p2,
@@ -1385,7 +1386,7 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol[x, end]≈1.0 atol=1e-6
+    @test sol[x, end]≈0.75 atol=1e-6
 end
 
 @testset "Symbolic affects are compiled in `complete`" begin
@@ -1534,4 +1535,31 @@ end
 
     @test v_sol[v] ≈ [vini, -vini, vini]
     @test M_sol[M] ≈ [Mini, -Mini, Mini]
+end
+
+@testset "Check array parameter and variables event" begin
+    # Creates the model using the macro. 
+    us = @variables begin
+        X(t)[1:2] = [4.0, 4.0]
+    end
+    ps = @parameters begin
+        k(t)[1:2] = [1, 1]
+        kup = 2.0
+    end
+    eqs = [
+        D(X[1]) ~ -k[1]*X[1] + k[2]*X[2]
+        D(X[2]) ~ k[1]*X[1] - k[2]*X[2]
+    ]
+    c_event = SymbolicContinuousCallback(
+        (k[2] ~ t) => [k[1] ~ Pre(k[1] + kup)]; discrete_parameters = [k[1]])
+    @mtkcompile model = System(eqs, t, us, ps; continuous_events = [c_event])
+
+    # Simulates the model. Checks that the correct values are achieved.
+    prob = ODEProblem(model, [], (0.0, 100.0))
+    sol = solve(prob, Rosenbrock23())
+    @test sol.ps[model.kup] == 2.0
+    @test sol.ps[model.k[1]][end] == 3.0
+    @test sol.ps[model.k[2]][end] == 1.0
+    @test sol[model.X[1]][end]≈2.0 atol=1e-8 rtol=1e-8
+    @test sol[model.X[2]][end]≈6.0 atol=1e-8 rtol=1e-8
 end
