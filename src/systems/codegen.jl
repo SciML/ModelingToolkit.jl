@@ -211,6 +211,8 @@ Generate the jacobian function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
+  Also forwarded to `build_function_wrapper`.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
@@ -326,6 +328,8 @@ Generate the `W = γ * M + J` function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
+  Also forwarded to `build_function_wrapper`.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
