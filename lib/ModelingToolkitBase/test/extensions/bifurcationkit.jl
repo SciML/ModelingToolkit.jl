@@ -2,7 +2,7 @@ using BifurcationKit, ModelingToolkitBase, Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
-let
+if @isdefined(ModelingToolkit)
     # Creates model.
     @variables x(t) y(t)
     @parameters μ α
@@ -96,7 +96,7 @@ end
 # Simple fold bifurcation model, checks exact position of bifurcation variable and bifurcation points.
 # Checks that default parameter values are accounted for.
 # Checks that observables (that depend on other observables, as in this case) are accounted for.
-let
+if @isdefined(ModelingToolkit)
     # Creates model, and uses `mtkcompile` to generate observables.
     @parameters μ p=2
     @variables x(t) y(t) z(t)
@@ -134,7 +134,7 @@ let
     @test fold_points ≈ [-1.1851851706940317, -5.6734983580551894e-6] # test that they occur at the correct parameter values).
 end
 
-let
+if @isdefined(ModelingToolkit)
     @mtkmodel FOL begin
         @parameters begin
             τ # parameters
@@ -152,7 +152,7 @@ let
     @mtkcompile fol = FOL()
 
     par = [fol.τ => 0.0]
-    u0 = [fol.x => -1.0]
+    u0 = [fol.x => -1.0, fol.RHS => 0.9]
     #prob = ODEProblem(fol, u0, (0.0, 1.), par)
 
     bif_par = fol.τ
