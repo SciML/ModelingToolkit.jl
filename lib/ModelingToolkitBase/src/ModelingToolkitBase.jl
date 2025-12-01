@@ -179,7 +179,6 @@ include("utils.jl")
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
-include("systems/model_parsing.jl")
 include("systems/connectiongraph.jl")
 include("systems/connectors.jl")
 include("systems/imperative_affect.jl")
@@ -252,7 +251,7 @@ export JumpProblem
 export flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
        instream
-export @component, @mtkmodel, @mtkcompile, @mtkbuild
+export @component, @mtkcompile, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
        istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription,
@@ -452,34 +451,6 @@ PrecompileTools.@compile_workload begin
     v = [p]
     isempty(v)
     # mtkcompile(sys)
-    @mtkmodel __testmod__ begin
-        @constants begin
-            c = 1.0
-        end
-        @structural_parameters begin
-            structp = false
-        end
-        if structp
-            @variables begin
-                x(t) = 0.0, [description = "foo", guess = 1.0]
-            end
-        else
-            @variables begin
-                x(t) = 0.0, [description = "foo w/o structp", guess = 1.0]
-            end
-        end
-        @parameters begin
-            a = 1.0, [description = "bar"]
-            if structp
-                b = 2 * a, [description = "if"]
-            else
-                c
-            end
-        end
-        @equations begin
-            x ~ a + b
-        end
-    end
 end
 
 end # module

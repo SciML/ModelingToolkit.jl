@@ -6,14 +6,15 @@ using ModelingToolkitBase: get_connector_type, get_initial_conditions, get_gui_m
 using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
-using DynamicQuantities, OrdinaryDiffEq
+using DynamicQuantities, OrdinaryDiffEqDefault, OrdinaryDiffEqTsit5
+using SciCompDSL
 using ModelingToolkitBase: t, D
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
-using ModelingToolkitBase, DynamicQuantities
+using ModelingToolkitBase, DynamicQuantities, SciCompDSL
 using ModelingToolkitBase: t, D
 
 export Pin
@@ -892,7 +893,7 @@ end
 
 @testset "Duplicate names" begin
     mod = @__MODULE__
-    @test_throws ErrorException ModelingToolkitBase._model_macro(mod, :ATest,
+    @test_throws ErrorException SciCompDSL._model_macro(mod, :ATest,
         :(begin
             @variables begin
                 a(t)
@@ -900,7 +901,7 @@ end
             end
         end),
         false)
-    @test_throws ErrorException ModelingToolkitBase._model_macro(mod, :ATest,
+    @test_throws ErrorException SciCompDSL._model_macro(mod, :ATest,
         :(begin
             @variables begin
                 a(t)

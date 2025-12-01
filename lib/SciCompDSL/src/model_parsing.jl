@@ -26,19 +26,17 @@ end
 
 Base.parentmodule(m::Model) = parentmodule(m.f)
 
-for f in (:connector, :mtkmodel)
-    isconnector = f == :connector ? true : false
-    @eval begin
-        macro $f(fullname::Union{Expr, Symbol}, body)
-            esc($(:_model_macro)(__module__, fullname, body, $isconnector))
-        end
-    end
+function MTKBase.__mtkmodel_connector(mod::Module, fullname::Union{Expr, Symbol}, body)
+    _model_macro(mod, fullname, body, true)
+end
+macro mtkmodel(fullname::Union{Expr, Symbol}, body)
+    esc(_model_macro(__module__, fullname, body, false))
 end
 
-flatten_equations(eqs::Vector{Equation}, eq::Equation) = vcat(eqs, [eq])
-flatten_equations(eq::Vector{Equation}, eqs::Vector{Equation}) = vcat(eq, eqs)
-function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
-    foldl(flatten_equations, eqs; init = Equation[])
+_flatten_equations(eqs::Vector{Equation}, eq::Equation) = vcat(eqs, [eq])
+_flatten_equations(eq::Vector{Equation}, eqs::Vector{Equation}) = vcat(eq, eqs)
+function _flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
+    foldl(_flatten_equations, eqs; init = Equation[])
 end
 
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
@@ -133,7 +131,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     @inline pop_structure_dict!.(
         Ref(dict), [:defaults, :kwargs, :structural_parameters])
 
-    sys = :($type($(flatten_equations)(equations), $iv, variables, parameters;
+    sys = :($type($(_flatten_equations)(equations), $iv, variables, parameters;
         name, description = $description, systems, gui_metadata = $gui_metadata,
         continuous_events = [$(c_evts...)], discrete_events = [$(d_evts...)],
         __legacy_defaults__ = defaults, costs = [$(costs...)], constraints = [$(cons...)], consolidate = $consolidate))
