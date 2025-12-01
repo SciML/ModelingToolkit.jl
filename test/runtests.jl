@@ -10,8 +10,7 @@ const GROUP = get(ENV, "GROUP", "All")
 
 function activate_fmi_env()
     Pkg.activate("fmi")
-    Pkg.develop(MTKBasePkgSpec)
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 
