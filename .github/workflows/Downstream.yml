@@ -61,6 +61,7 @@ jobs:
           using Pkg
           try
             # force it to use this PR's version of the package
+            Pkg.develop(PackageSpec(path="./lib/ModelingToolkitBase"))  # resolver may fail with main deps
             Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
             Pkg.update()
             Pkg.test(coverage=true)  # resolver may fail with test time deps

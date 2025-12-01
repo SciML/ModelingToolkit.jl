@@ -1,60 +1,5 @@
-const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
-
-struct RepeatedStructuralSimplificationError <: Exception end
-
-function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
-    print(io, REPEATED_SIMPLIFICATION_MESSAGE)
-end
-
-function canonicalize_io(iovars, type::String)
-    iobuffer = OrderedSet{SymbolicT}()
-    arrsyms = AtomicArrayDict{OrderedSet{SymbolicT}}()
-    for var in iovars
-        if Symbolics.isarraysymbolic(var)
-            if !symbolic_has_known_size(var)
-                throw(ArgumentError("""
-                All $(type)s must have known shape. Found $var with unknown shape.
-                """))
-            end
-            union!(iobuffer, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
-            continue
-        end
-        arr, isarr = split_indexed_var(var)
-        if isarr
-            tmp = get!(OrderedSet{SymbolicT}, arrsyms, arr)
-            push!(tmp, var)
-        end
-        push!(iobuffer, var)
-    end
-
-    for (k, v) in arrsyms
-        if !symbolic_has_known_size(k)
-            throw(ArgumentError("""
-            All $(type)s must have known shape. Found $k with unknown shape.
-            """))
-        end
-        if type != "output" && length(k) != length(v)
-            throw(ArgumentError("""
-            Part of an array variable cannot be made an $type. The entire array must be \
-            an $type. Found $k which has $(length(v)) elements out of $(length(k)) in \
-            the $(type)s. Either pass all scalarized elements in sorted order as $(type)s \
-            or simply pass $k as an $type.
-            """))
-        end
-        if type != "output" && !isequal(vec(collect(k))::Vector{SymbolicT}, collect(v))
-            throw(ArgumentError("""
-            Elements of scalarized array variables must be in sorted order in $(type)s. \
-            Either pass all scalarized elements in sorted order as $(type)s \
-            or simply pass $k as an $type.
-            """))
-        end
-    end
-
-    return iobuffer
-end
-
-"""
-$(SIGNATURES)
+@doc """
+    function mtkcompile(sys::System; kwargs...)
 
 Compile the given system into a form that ModelingToolkit can generate code for. Also
 performs a variety of symbolic-numeric enhancements. For ODEs, this includes processes
@@ -73,50 +18,17 @@ present in the equations of the system will be removed in this process.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
-"""
-function mtkcompile(
-        sys::System; additional_passes = (), simplify = false, split = true,
-        allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
-        inputs = SymbolicT[], outputs = SymbolicT[],
-        disturbance_inputs = SymbolicT[],
-        kwargs...)
-    isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    # Canonicalize types of arguments to prevent repeated compilation of inner methods
-    inputs = canonicalize_io(unwrap_vars(inputs), "input")
-    outputs = canonicalize_io(unwrap_vars(outputs), "output")
-    disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
-    newsys = __mtkcompile(sys; simplify,
-        allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs, additional_passes,
-        kwargs...)
-    for pass in additional_passes
-        newsys = pass(newsys)
-    end
-    @set! newsys.parent = complete(sys; split = false, flatten = false)
-    newsys = complete(newsys; split)
-    return newsys
-end
+""" mtkcompile
 
-function __mtkcompile(sys::AbstractSystem; simplify = false,
-        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
-        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
-        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT},
+function MTKBase.__mtkcompile(sys::System;
+        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         sort_eqs = true,
         kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
-    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
-        sys = noise_to_brownians(sys; names = :αₘₜₖ)
-    end
-    if !isempty(jumps(sys))
-        return sys
-    end
-    if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
-        return simplify_optimization_system(sys; kwargs..., sort_eqs, simplify)::System
-    end
-
     sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
-    state = TearingState(sys)
+    state = TearingState(sys; sort_eqs)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
@@ -137,10 +49,11 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
     else
         Is = Int[]
         Js = Int[]
-        vals = Num[]
+        vals = SymbolicT[]
         make_eqs_zero_equals!(state)
         new_eqs = copy(equations(state))
-        dvar2eq = Dict{Any, Int}()
+        dvar2eq = Dict{SymbolicT, Int}()
+        eqs = equations(state)
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue
             deqs = 𝑑neighbors(graph, dv)
@@ -157,7 +70,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
             brown = fullvars[bj]
             (coeff, residual, islinear) = Symbolics.linear_expansion(eq, brown)
             islinear || error("$brown isn't linear in $eq")
-            new_eqs[i] = 0 ~ residual
+            new_eqs[i] = COMMON_ZERO ~ residual
             push!(vals, coeff)
         end
         g = Matrix(sparse(Is, Js, vals))
@@ -170,7 +83,7 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
         ode_sys = mtkcompile(
             sys; inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
-        sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
+        sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
             dvar = eq.lhs
             # differential equations always precede algebraic equations
@@ -212,95 +125,8 @@ function __mtkcompile(sys::AbstractSystem; simplify = false,
     end
 end
 
-function simplify_optimization_system(sys::System; split = true, kwargs...)
-    sys = flatten(sys)
-    cons = constraints(sys)
-    econs = Equation[]
-    icons = Inequality[]
-    for e in cons
-        if e isa Equation
-            push!(econs, e)
-        elseif e isa Inequality
-            push!(icons, e)
-        end
-    end
-    irreducible_subs = Dict{SymbolicT, SymbolicT}()
-    dvs = SymbolicT[]
-    for var in unknowns(sys)
-        sh = SU.shape(var)::SU.ShapeVecT
-        if isempty(sh)
-            push!(dvs, var)
-        else
-            append!(dvs, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
-        end
-    end
-    for i in eachindex(dvs)
-        var = dvs[i]
-        if hasbounds(var)
-            irreducible_subs[var] = irrvar = setirreducible(var, true)::SymbolicT
-            dvs[i] = irrvar
-        end
-    end
-    subst = SU.Substituter{false}(irreducible_subs, SU.default_substitute_filter)
-    for i in eachindex(econs)
-        econs[i] = subst(econs[i])
-    end
-    nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
-    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
-    obs = observed(snlsys)
-    seqs = equations(snlsys)
-    trueobs, _ = unhack_observed(obs, seqs)
-    subs = Dict{SymbolicT, SymbolicT}()
-    for eq in trueobs
-        subs[eq.lhs] = eq.rhs
-    end
-    cons_simplified = Union{Equation, Inequality}[]
-    for eq in seqs
-        push!(cons_simplified, fixpoint_sub(eq, subs))
-    end
-    for eq in icons
-        push!(cons_simplified, fixpoint_sub(eq, subs))
-    end
-    setdiff!(dvs, keys(subs))
-    newsts = dvs
-    @set! sys.constraints = cons_simplified
-    newobs = copy(observed(sys))
-    append!(newobs, obs)
-    @set! sys.observed = newobs
-    newcosts = copy(get_costs(sys))
-    for i in eachindex(newcosts)
-        newcosts[i] = fixpoint_sub(newcosts[i], subs)
-    end
-    @set! sys.costs = newcosts
-    @set! sys.unknowns = newsts
-    return sys
-end
-
-function __num_isdiag_noise(mat)
-    for i in axes(mat, 1)
-        nnz = 0
-        for j in axes(mat, 2)
-            if !isequal(mat[i, j], 0)
-                nnz += 1
-            end
-        end
-        if nnz > 1
-            return (false)
-        end
-    end
-    true
-end
-
-function __get_num_diag_noise(mat)
-    map(axes(mat, 1)) do i
-        for j in axes(mat, 2)
-            mij = mat[i, j]
-            if !isequal(mij, 0)
-                return mij
-            end
-        end
-        0
-    end
+function MTKBase.simplify_sde_system(sys::System; kwargs...)
+    __mtkcompile(sys; kwargs...)
 end
 
 """

@@ -1,22 +1,3 @@
-using DataStructures
-using Symbolics: linear_expansion, unwrap
-using SymbolicUtils: iscall, operation, arguments
-using SymbolicUtils: quick_cancel, maketerm
-using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-                          value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, Connection, SymbolicT
-                          independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible, input_timedomain, TimeDomain,
-                          InferredTimeDomain,
-                          VariableType, getvariabletype, has_equations, System
-using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete
-using Graphs
-using UnPack
-using Setfield
-using SparseArrays
-
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
         similarterm = (x, f, args;
@@ -47,7 +28,7 @@ function Base.copy(dg::DiffGraph)
         dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
 end
 
-@noinline function require_complete(dg::DiffGraph)
+@noinline function BipartiteGraphs.require_complete(dg::DiffGraph)
     dg.diff_to_primal === nothing &&
         error("Not complete. Run `complete` first.")
 end
@@ -105,7 +86,7 @@ function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Intege
 end
 Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
 
-function complete(dg::DiffGraph)
+function BipartiteGraphs.complete(dg::DiffGraph)
     dg.diff_to_primal !== nothing && return dg
     diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
     for (var, diff) in edges(dg)
@@ -113,8 +94,9 @@ function complete(dg::DiffGraph)
     end
     return DiffGraph(dg.primal_to_diff, diff_to_primal)
 end
+MTKBase.complete(dg::DiffGraph) = BipartiteGraphs.complete(dg)
 
-function invview(dg::DiffGraph)
+function BipartiteGraphs.invview(dg::DiffGraph)
     require_complete(dg)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
@@ -138,7 +120,7 @@ abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 
 get_fullvars(ts::TransformationState) = ts.fullvars
-has_equations(::TransformationState) = true
+MTKBase.has_equations(::TransformationState) = true
 
 Base.@kwdef mutable struct SystemStructure
     """Maps the index of variable x to the index of variable D(x)."""
@@ -201,9 +183,9 @@ function complete!(s::SystemStructure)
     s
 end
 
-mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
+mutable struct TearingState <: AbstractTearingState{System}
     """The system of equations."""
-    sys::T
+    sys::System
     """The set of variables of the system."""
     fullvars::Vector{SymbolicT}
     structure::SystemStructure
@@ -216,10 +198,10 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     are not used in the rest of the system.
     """
     additional_observed::Vector{Equation}
-    statemachines::Vector{T}
+    statemachines::Vector{System}
 end
 
-TransformationState(sys::AbstractSystem) = TearingState(sys)
+TransformationState(sys::System) = TearingState(sys)
 function system_subset(ts::TearingState, ieqs::Vector{Int}, iieqs::Vector{Int}, ivars::Vector{Int})
     eqs = equations(ts)
     initeqs = initialization_equations(ts.sys)
@@ -279,10 +261,10 @@ function Base.show(io::IO, state::TearingState)
     print(io, "TearingState of ", typeof(state.sys))
 end
 
-struct EquationsView{T} <: AbstractVector{Equation}
-    ts::TearingState{T}
+struct EquationsView <: AbstractVector{Equation}
+    ts::TearingState
 end
-equations(ts::TearingState) = EquationsView(ts)
+MTKBase.equations(ts::TearingState) = EquationsView(ts)
 Base.size(ev::EquationsView) = (length(equations(ev.ts.sys)) + length(ev.ts.extra_eqs),)
 function Base.getindex(ev::EquationsView, i::Integer)
     eqs = equations(ev.ts.sys)
@@ -346,13 +328,13 @@ end
 
 Return `sys` with all equations (including those in subsystems) removed.
 """
-function remove_child_equations(sys::AbstractSystem)
+function remove_child_equations(sys::System)
     @set! sys.eqs = Equation[]
     @set! sys.systems = map(remove_child_equations, get_systems(sys))
     return sys
 end
 
-function TearingState(sys; check = true, sort_eqs = true)
+function TearingState(sys::System; check::Bool = true, sort_eqs::Bool = true)
     # flatten system
     sys = flatten(sys)
     sys = discrete_unknowns_to_parameters(sys)
@@ -530,7 +512,7 @@ function TearingState(sys; check = true, sort_eqs = true)
 
     eq_to_diff = DiffGraph(nsrcs(graph))
 
-    return TearingState{typeof(sys)}(sys, fullvars,
+    return TearingState(sys, fullvars,
         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
             complete(graph), nothing, var_types, false),
         Equation[], param_derivative_map, no_deriv_params, original_eqs, Equation[], typeof(sys)[])
@@ -1033,6 +1015,70 @@ function make_eqs_zero_equals!(ts::TearingState)
     copyto!(get_eqs(ts.sys), neweqs)
 end
 
+
+"""
+Turn input variables into parameters of the system.
+"""
+function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{SymbolicT}, outputsyms::OrderedSet{SymbolicT})
+    @unpack structure, fullvars, sys = state
+    @unpack var_to_diff, graph, solvable_graph = structure
+    @assert solvable_graph === nothing
+
+    var_reidx = zeros(Int, length(fullvars))
+    nvar = 0
+    new_fullvars = SymbolicT[]
+    for (i, v) in enumerate(fullvars)
+        if v in inputsyms
+            if var_to_diff[i] !== nothing
+                error("Input $(fullvars[i]) is differentiated!")
+            end
+            var_reidx[i] = -1
+        else
+            nvar += 1
+            var_reidx[i] = nvar
+            push!(new_fullvars, v)
+        end
+    end
+    ninputs = length(inputsyms)
+    @set! sys.inputs = inputsyms
+    @set! sys.outputs = outputsyms
+    if ninputs == 0
+        state.sys = sys
+        return state
+    end
+
+    nvars = ndsts(graph) - ninputs
+    new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
+
+    for ie in 1:nsrcs(graph)
+        for iv in 𝑠neighbors(graph, ie)
+            iv = var_reidx[iv]
+            iv > 0 || continue
+            add_edge!(new_graph, ie, iv)
+        end
+    end
+
+    new_var_to_diff = DiffGraph(nvars, true)
+    for (i, v) in enumerate(var_to_diff)
+        new_i = var_reidx[i]
+        (new_i < 1 || v === nothing) && continue
+        new_v = var_reidx[v]
+        @assert new_v > 0
+        new_var_to_diff[new_i] = new_v
+    end
+    @set! structure.var_to_diff = complete(new_var_to_diff)
+    @set! structure.graph = complete(new_graph)
+
+    @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
+    ps = copy(parameters(sys))
+    append!(ps, inputsyms)
+    @set! sys.ps = ps
+    @set! state.sys = sys
+    @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
+    @set! state.structure = structure
+    return state
+end
+
 function mtkcompile!(state::TearingState;
         check_consistency = true, fully_determined = true,
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
@@ -1143,9 +1189,9 @@ function _mtkcompile!(state::TearingState;
     ModelingToolkit.invalidate_cache!(sys)
 end
 
-function _mtkcompile_worker!(state::TearingState{S}, sys::S, mm::SparseMatrixCLIL{T, Int};
+function _mtkcompile_worker!(state::TearingState, sys::System, mm::SparseMatrixCLIL{T, Int};
                              fully_determined::Bool, dummy_derivative::Bool,
-                             kwargs...) where {S, T}
+                             kwargs...) where {T}
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
             sys, state; mm, check_consistency, kwargs...)

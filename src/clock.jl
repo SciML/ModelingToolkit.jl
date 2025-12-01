@@ -12,9 +12,6 @@ end
 
 Base.Broadcast.broadcastable(x::InferredTimeDomain) = Ref(x)
 
-struct VariableTimeDomain end
-Symbolics.option_to_metadata_type(::Val{:timedomain}) = VariableTimeDomain
-
 is_concrete_time_domain(::TimeDomain) = true
 is_concrete_time_domain(_) = false
 
@@ -111,5 +108,3 @@ end
 function Base.showerror(io::IO, cie::ClockInferenceException)
     print(io, "ClockInferenceException: ", cie.msg)
 end
-
-struct IntegerSequence end

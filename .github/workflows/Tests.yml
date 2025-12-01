@@ -31,22 +31,66 @@ jobs:
           - "1"
           - "lts"
           - "pre"
-        group:
-          - InterfaceI
-          - InterfaceII
-          - Initialization
-          - SymbolicIndexingInterface
-          - Extended
-          - Extensions
-          - Downstream
-          - RegressionI
-          - FMI
-    uses: "SciML/.github/.github/workflows/tests.yml@master"
-    with:
-      julia-version: "${{ matrix.version }}"
-      group: "${{ matrix.group }}"
-      # Disable cache for self-hosted runners since they persist between runs
-      # Set USE_SELF_HOSTED repository variable to 'true' when using self-hosted runners
-      self-hosted: ${{ vars.USE_SELF_HOSTED == 'true' }}
-      cache: ${{ vars.USE_SELF_HOSTED != 'true' }}
-    secrets: "inherit"
+        pkggroup:
+          - ModelingToolkit/InterfaceI
+          - ModelingToolkit/InterfaceII
+          - ModelingToolkit/Initialization
+          - ModelingToolkit/SymbolicIndexingInterface
+          - ModelingToolkit/Extensions
+          - ModelingToolkit/Downstream
+          - ModelingToolkit/FMI
+          - ModelingToolkitBase/InterfaceI
+          - ModelingToolkitBase/InterfaceII
+          - ModelingToolkitBase/Initialization
+          - ModelingToolkitBase/SymbolicIndexingInterface
+          - ModelingToolkitBase/Extended
+          - ModelingToolkitBase/RegressionI
+          - ModelingToolkitBase/Extensions
+    runs-on: ${{ vars.USE_SELF_HOSTED == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: "Setup Julia ${{ matrix.version }}"
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "${{ matrix.version }}"
+          arch: "${{ runner.arch }}"
+      - uses: julia-actions/cache@v2
+        if: ${{ vars.USE_SELF_HOSTED != 'true' }}
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: "Test ${{ matrix.pkggroup }}"
+        env:
+          PKGGROUP: ${{ matrix.pkggroup }}
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+        shell: julia --color=yes --check-bounds=yes --depwarn=yes {0}
+        run: |
+          using Pkg
+          const PKGGROUP = ENV["PKGGROUP"]
+          const PKG = split(PKGGROUP, "/")[1]
+          const GROUP = split(PKGGROUP, "/")[2]
+          ENV["GROUP"] = GROUP
+
+          if PKG == "ModelingToolkitBase"
+            @info "Testing ModelingToolkitBase"
+            Pkg.activate("lib/ModelingToolkitBase")
+            @info "Running tests" GROUP
+            Pkg.test()
+          elseif PKG == "ModelingToolkit"
+            @info "Testing ModelingToolkit"
+            Pkg.activate(".")
+            @info "`dev`ing ModelingToolkitBase"
+            Pkg.develop(; path = "lib/ModelingToolkitBase")
+            @info "Running tests" GROUP
+            Pkg.test()
+          else
+            error("Invalid package $PKG")
+          end
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: "src,ext,lib/ModelingToolkitBase/src,lib/ModelingToolkitBase/ext"
+      - name: "Report Coverage with Codecov"
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: "${{ secrets.CODECOV_TOKEN }}"
+          fail_ci_if_error: true

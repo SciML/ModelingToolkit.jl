@@ -64,7 +64,7 @@ end
 
 Check if the `state` represents a singular system, and return the unmatched variables.
 """
-function singular_check(state::TransformationState)
+function singular_check(state::TearingState)
     @unpack graph, var_to_diff = state.structure
     fullvars = get_fullvars(state)
     # This is defined to check if Pantelides algorithm terminates. For more
@@ -74,7 +74,7 @@ function singular_check(state::TransformationState)
     extended_var_eq_matching = maximal_matching(extended_graph)
 
     nvars = ndsts(graph)
-    unassigned_var = []
+    unassigned_var = SymbolicT[]
     for (vj, eq) in enumerate(extended_var_eq_matching)
         vj > nvars && break
         if eq === unassigned && !isempty(𝑑neighbors(graph, vj))
@@ -454,29 +454,6 @@ function uneven_invmap(n::Int, list)
     return rename
 end
 
-function torn_system_jacobian_sparsity(sys)
-    state = get_tearing_state(sys)
-    state isa TearingState || return nothing
-    @unpack structure = state
-    @unpack graph, var_to_diff = structure
-
-    neqs = nsrcs(graph)
-    nsts = ndsts(graph)
-    states_idxs = findall(!Base.Fix1(isdervar, structure), 1:nsts)
-    var2idx = uneven_invmap(nsts, states_idxs)
-    I = Int[]
-    J = Int[]
-    for ieq in 1:neqs
-        for ivar in 𝑠neighbors(graph, ieq)
-            nivar = get(var2idx, ivar, 0)
-            nivar == 0 && continue
-            push!(I, ieq)
-            push!(J, nivar)
-        end
-    end
-    return sparse(I, J, true, neqs, neqs)
-end
-
 ###
 ### Misc
 ###
@@ -496,6 +473,9 @@ function lower_shift_varname(var, iv)
     end
 end
 
+shift2term_with_unit(x, t) = MTKBase._with_unit(MTKBase.shift2term, x, t)
+lower_shift_varname_with_unit(var, iv) = MTKBase._with_unit(lower_shift_varname, var, iv, iv)
+
 function descend_lower_shift_varname_with_unit(var, iv)
     symbolic_type(var) == NotSymbolic() && return var
     ModelingToolkit._with_unit(descend_lower_shift_varname, var, iv, iv)
@@ -512,138 +492,7 @@ function descend_lower_shift_varname(var, iv)
     end
 end
 
-"""
-Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
-"""
-function shift2term(var::SymbolicT)
-    Moshi.Match.@match var begin
-        BSImpl.Term(f, args) && if f isa Shift end => begin
-            op = f
-            arg = args[1]
-            Moshi.Match.@match arg begin
-                BSImpl.Term(; f, args, type, shape, metadata) && if f === getindex end => begin
-                    newargs = copy(parent(args))
-                    newargs[1] = shift2term(op(newargs[1]))
-                    unshifted_args = copy(newargs)
-                    unshifted_args[1] = ModelingToolkit.getunshifted(newargs[1])
-                    unshifted = BSImpl.Term{VartypeT}(getindex, unshifted_args; type, shape, metadata)
-                    if metadata === nothing
-                        metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
-                    elseif metadata isa Base.ImmutableDict{DataType, Any}
-                        metadata = Base.ImmutableDict(metadata, VariableUnshifted, unshifted)
-                    end
-                    return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
-                end
-                _ => nothing
-            end
-            unshifted = ModelingToolkit.getunshifted(arg)
-            is_lowered = unshifted !== nothing
-            backshift = op.steps + ModelingToolkit.getshift(arg)
-            iszero(backshift) && return unshifted
-            io = IOBuffer()
-            O = (is_lowered ? unshifted : arg)::SymbolicT
-            write(io, getname(O))
-            # Char(0x209c) = ₜ
-            write(io, Char(0x209c))
-            # Char(0x208b) = ₋ (subscripted minus)
-            # Char(0x208a) = ₊ (subscripted plus)
-            pm = backshift > 0 ? Char(0x208a) : Char(0x208b)
-            write(io, pm)
-            _backshift = backshift
-            backshift = abs(backshift)
-            N = ndigits(backshift)
-            den = 10 ^ (N - 1)
-            for _ in 1:N
-                # subscripted number, e.g. ₁
-                write(io, Char(0x2080 + div(backshift, den) % 10))
-                den = div(den, 10)
-            end
-            newname = Symbol(take!(io))
-            newvar = Symbolics.rename(arg, newname)
-            newvar = setmetadata(newvar, ModelingToolkit.VariableUnshifted, O)
-            newvar = setmetadata(newvar, ModelingToolkit.VariableShift, _backshift)
-            return newvar
-        end
-        _ => return var
-    end
-end
-
 function isdoubleshift(var)
     return ModelingToolkit.isoperator(var, ModelingToolkit.Shift) &&
            ModelingToolkit.isoperator(arguments(var)[1], ModelingToolkit.Shift)
-end
-
-simplify_shifts(eq::Equation) = simplify_shifts(eq.lhs) ~ simplify_shifts(eq.rhs)
-
-function _simplify_shifts(var::SymbolicT)
-    Moshi.Match.@match var begin
-        BSImpl.Term(; f, args) && if f isa Shift && f.steps == 0 end => return args[1]
-        BSImpl.Term(; f = op1, args) && if op1 isa Shift end => begin
-            vv1 = args[1]
-            Moshi.Match.@match vv1 begin
-                BSImpl.Term(; f = op2, args = a2) && if op2 isa Shift end => begin
-                    vv2 = a2[1]
-                    s1 = op1.steps
-                    s2 = op2.steps
-                    t1 = op1.t
-                    t2 = op2.t
-                    return simplify_shifts(ModelingToolkit.Shift(t1 === nothing ? t2 : t1, s1 + s2)(vv2))
-                end
-                _ => return var
-            end
-        end
-        _ => var
-    end
-end
-
-"""
-Simplify multiple shifts: Shift(t, k1)(Shift(t, k2)(x)) becomes Shift(t, k1+k2)(x).
-"""
-function simplify_shifts(var::SymbolicT)
-    ModelingToolkit.hasshift(var) || return var
-    return SU.Rewriters.Postwalk(_simplify_shifts)(var)
-end
-
-"""
-Distribute a shift applied to a whole expression or equation. 
-Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
-Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
-"""
-function distribute_shift(var)
-    var = unwrap(var)
-    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
-
-    ModelingToolkit.hasshift(var) || return var
-    shift = operation(var)
-    shift isa Shift || return var
-
-    shift = operation(var)
-    expr = only(arguments(var))
-    if expr isa Equation
-        return distribute_shift(shift(expr.lhs)) ~ distribute_shift(shift(expr.rhs))
-    end
-    shiftexpr = _distribute_shift(expr, shift)
-    return simplify_shifts(shiftexpr)
-end
-
-function _distribute_shift(expr, shift)
-    if iscall(expr)
-        op = operation(expr)
-        (op isa Union{Pre, Initial, Sample, Hold}) && return expr
-        args = arguments(expr)
-
-        if ModelingToolkit.isvariable(expr) && operation(expr) !== getindex &&
-           !ModelingToolkit.iscalledparameter(expr)
-            (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
-            (return expr)
-        elseif op isa Shift
-            return shift(expr)
-        else
-            return maketerm(
-                typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
-                unwrap(expr).metadata)
-        end
-    else
-        return expr
-    end
 end

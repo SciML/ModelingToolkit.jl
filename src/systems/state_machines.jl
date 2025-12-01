@@ -154,21 +154,20 @@ entry
 When used in a finite state machine, this operator returns `true` if the queried state is active and false otherwise. 
 """ activeState
 
-function vars!(vars, O::Transition; op = Differential)
-    vars!(vars, O.from)
-    vars!(vars, O.to)
-    vars!(vars, O.cond; op)
+function SU.search_variables!(vars, O::Transition; kwargs...)
+    SU.search_variables!(vars, O.from; kwargs...)
+    SU.search_variables!(vars, O.to; kwargs...)
+    SU.search_variables!(vars, O.cond; kwargs...)
     return vars
 end
-function vars!(vars, O::InitialState; op = Differential)
-    vars!(vars, O.s; op)
-    return vars
+function SU.search_variables!(vars, O::InitialState; kwargs...)
+    SU.search_variables!(vars, O.s; kwargs...)
 end
-function vars!(vars, O::StateMachineOperator; op = Differential)
+function SU.search_variables!(vars, O::StateMachineOperator; kwargs...)
     error("Unhandled state machine operator")
 end
 
-function namespace_expr(
+function MTKBase.namespace_expr(
         O::Transition, sys, n = nameof(sys); ivs = independent_variables(sys))
     return Transition(
         O.from === nothing ? O.from : renamespace(sys, O.from),
@@ -178,11 +177,11 @@ function namespace_expr(
     )
 end
 
-function namespace_expr(
+function MTKBase.namespace_expr(
         O::InitialState, sys, n = nameof(sys); ivs = independent_variables(sys))
     return InitialState(O.s === nothing ? O.s : renamespace(sys, O.s))
 end
 
-function namespace_expr(O::StateMachineOperator, sys, n = nameof(sys); kwargs...)
+function MTKBase.namespace_expr(O::StateMachineOperator, sys, n = nameof(sys); kwargs...)
     error("Unhandled state machine operator")
 end
