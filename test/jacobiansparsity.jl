@@ -108,7 +108,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     u0 = [x => 1, y => 0]
     prob = ODEProblem(
         pend, [u0; [g => 1]], (0, 11.5), guesses = [λ => 1], sparse = true, jac = true)
-    jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true)
+    jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true, checkbounds = true)
     jac_prototype = ModelingToolkit.jacobian_sparsity(pend)
     W_prototype = ModelingToolkit.W_sparsity(pend)
     @test nnz(W_prototype) == nnz(jac_prototype) + 2
@@ -121,7 +121,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     t = 0.0
     @test_throws AssertionError jac!(similar(jac_prototype, Float64), u, p, t)
 
-    W, W! = generate_W(pend; expression = Val{false}, sparse = true)
+    W, W! = generate_W(pend; expression = Val{false}, sparse = true, checkbounds = true)
     γ = 0.1
     M = sparse(calculate_massmatrix(pend))
     @test_throws AssertionError W!(similar(jac_prototype, Float64), u, p, γ, t)
