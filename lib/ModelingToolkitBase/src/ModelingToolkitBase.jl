@@ -49,14 +49,12 @@ using Base: RefValue
 using Combinatorics
 import FunctionWrappersWrappers
 import FunctionWrappers: FunctionWrapper
-using URIs: URI
 using SciMLStructures
 using Compat
 using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
                  PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
                  NoInit
-using MLStyle
 import Moshi
 using Moshi.Data: @data
 using Reexport

@@ -2247,16 +2247,18 @@ varname_fix!(s) = return
 
 function varname_fix!(expr::Expr)
     for arg in expr.args
-        MLStyle.@match arg begin
-            ::Symbol => continue
-            Expr(:kw, a...) || Expr(:kw, a) => varname_sanitization!(arg)
-            Expr(:parameters, a...) => begin
-                for _arg in arg.args
-                    varname_sanitization!(_arg)
-                end
-            end
-            _ => @debug "skipping variable sanitization of $arg"
+        arg isa Symbol && continue
+        if Meta.isexpr(arg, :kw)
+            varname_sanitization!(arg)
+            continue
         end
+        if Meta.isexpr(arg, :parameters)
+            for _arg in arg.args
+                varname_sanitization!(_arg)
+            end
+            continue
+        end
+        @debug "skipping variable sanitization of $arg"
     end
 end
 
