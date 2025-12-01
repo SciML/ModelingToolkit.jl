@@ -1,4 +1,4 @@
-using ModelingToolkitBase, InfiniteOpt, JuMP, Ipopt
+using ModelingToolkitBase, InfiniteOpt, JuMP, Ipopt, Setfield
 using ModelingToolkitBase: D_nounits as D, t_nounits as t, varmap_to_vars
 
 @mtkmodel Pendulum begin
@@ -25,6 +25,15 @@ model = complete(model)
 inputs = [model.τ]
 outputs = [model.y]
 model = mtkcompile(model; inputs, outputs)
+if !@isdefined(ModelingToolkit)
+    idx = findfirst(isequal(model.y), unknowns(model))
+    @set! model.unknowns = setdiff(unknowns(model), [model.y])
+    eqs = copy(equations(model))
+    deleteat!(eqs, idx)
+    @set! model.eqs = eqs
+    @set! model.observed = [model.y ~ model.θ * 180 / π]
+    model = complete(model)
+end
 f, dvs, psym, io_sys = ModelingToolkitBase.generate_control_function(
     model, split = false)
 
