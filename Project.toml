@@ -60,7 +60,7 @@ MTKFMIExt = "FMI"
 
 [compat]
 ADTypes = "1.14.0"
-BipartiteGraphs = "0.1.0"
+BipartiteGraphs = "0.1.2"
 BlockArrays = "1.9.3"
 BoundaryValueDiffEqAscher = "1.6.0"
 BoundaryValueDiffEqMIRK = "1.7.0"
