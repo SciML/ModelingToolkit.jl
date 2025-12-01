@@ -1,5 +1,3 @@
-const TypeT = Union{DataType, UnionAll}
-
 struct CacheWriter{F}
     fn::F
 end
@@ -161,8 +159,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         end
 
         # map from symtype to cached variables and their expressions
-        cachevars = Dict{Union{DataType, UnionAll}, Vector{Any}}()
-        cacheexprs = Dict{Union{DataType, UnionAll}, Vector{Any}}()
+        cachevars = Dict{TypeT, Vector{Any}}()
+        cacheexprs = Dict{TypeT, Vector{Any}}()
         # observed of previous SCCs are in the cache
         # NOTE: When we get proper CSE, we can substitute these
         # and then use `subexpressions_not_involving_vars!`

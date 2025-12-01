@@ -1,5 +1,7 @@
+const TypeT = Union{DataType, UnionAll, Union}
+
 struct BufferTemplate
-    type::Union{DataType, UnionAll, Union}
+    type::TypeT
     length::Int
 end
 
