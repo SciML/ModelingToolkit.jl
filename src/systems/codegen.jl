@@ -217,7 +217,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_jacobian(sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        checkbounds = true, kwargs...)
+        checkbounds = false, kwargs...)
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
@@ -234,7 +234,7 @@ function generate_jacobian(sys::System;
         nargs = 3
     end
     res = build_function_wrapper(sys, jac, args...; wrap_code, expression = Val{true},
-        expression_module = eval_module, kwargs...)
+        expression_module = eval_module, checkbounds, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
@@ -331,7 +331,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_W(sys::System;
         simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, checkbounds = true, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
@@ -349,7 +349,7 @@ function generate_W(sys::System;
 
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        p_end = 1 + length(p), kwargs...)
+        p_end = 1 + length(p), checkbounds, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module)
 end
