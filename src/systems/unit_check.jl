@@ -213,6 +213,11 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid
 end
 
+function _validate(ap::AnalysisPoint; info::String = "")
+    conn_eq = connect(ap.input, ap.outputs)
+    return _validate(conn_eq, info=info)
+end
+    
 function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
@@ -277,7 +282,7 @@ function validate(jumps::Vector{JumpType}, t::Symbolic)
 end
 
 function validate(eq::Union{Inequality, Equation}; info::String = "")
-    if typeof(eq.lhs) == Connection
+    if typeof(eq.lhs) <: Union{Connection, AnalysisPoint}
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
