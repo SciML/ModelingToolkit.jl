@@ -1,4 +1,5 @@
 using ModelingToolkitBase, ModelingToolkitStandardLibrary.Blocks
+using SciCompDSL
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 

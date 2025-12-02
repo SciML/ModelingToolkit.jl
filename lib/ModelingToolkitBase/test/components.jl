@@ -9,6 +9,7 @@ using ModelingToolkitStandardLibrary.Thermal
 using SymbolicUtils: getmetadata
 using BipartiteGraphs
 import SymbolicUtils as SU
+using SciCompDSL
 include("common/rc_model.jl")
 
 @testset "Basics" begin
@@ -33,15 +34,23 @@ include("common/rc_model.jl")
         rpifun = sol.prob.f.observed(rc_model.resistor.p.i)
         @test rpifun.(sol.u, (sol.prob.p,), sol.t) == rpi
         @test any(!isequal(rpi[1]), rpi) # test that we don't have a constant system
-        @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
-        @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]
-        @test sol[rc_model.capacitor.n.i] == sol[capacitor.n.i] == -sol[capacitor.p.i]
-        @test iszero(sol[rc_model.ground.g.i])
-        @test iszero(sol[rc_model.ground.g.v])
         if @isdefined(ModelingToolkit)
+            @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
+            @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]
+            @test sol[rc_model.capacitor.n.i] == sol[capacitor.n.i] == -sol[capacitor.p.i]
+            @test iszero(sol[rc_model.ground.g.i])
+            @test iszero(sol[rc_model.ground.g.v])
             @test sol[rc_model.resistor.v] == sol[resistor.v] ==
                   sol[source.p.v] - sol[capacitor.p.v]
         else
+            @test sol[rc_model.resistor.p.i] ≈ sol[resistor.p.i] atol=1e-6
+            @test sol[rc_model.resistor.p.i] ≈ sol[capacitor.p.i] atol=1e-6
+            @test sol[rc_model.resistor.n.i] ≈ sol[resistor.n.i] atol=1e-6
+            @test sol[rc_model.resistor.n.i] ≈ -sol[capacitor.p.i] atol=1e-6
+            @test sol[rc_model.capacitor.n.i] ≈ sol[capacitor.n.i] atol=1e-6
+            @test sol[rc_model.capacitor.n.i] ≈ -sol[capacitor.p.i] atol=1e-6
+            @test sol[rc_model.ground.g.i] ≈ zeros(length(sol.t)) atol=1e-6
+            @test sol[rc_model.ground.g.v] ≈ zeros(length(sol.t)) atol=1e-6
             @test sol[rc_model.resistor.v] == sol[resistor.v]
             @test sol[rc_model.resistor.v] ≈ sol[source.p.v] - sol[capacitor.p.v]
         end

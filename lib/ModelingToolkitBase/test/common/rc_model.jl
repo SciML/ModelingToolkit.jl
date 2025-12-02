@@ -1,5 +1,6 @@
 import ModelingToolkitStandardLibrary.Electrical as El
 import ModelingToolkitStandardLibrary.Blocks as Bl
+using SciCompDSL
 
 @mtkmodel RCModel begin
     @parameters begin

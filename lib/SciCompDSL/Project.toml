@@ -1,0 +1,51 @@
+name = "SciCompDSL"
+uuid = "91a8cdf1-4ca6-467b-a780-87fda3fff15e"
+authors = ["Aayush Sabharwal <aayush.sabharwal@gmail.com>"]
+version = "1.0.0"
+
+[deps]
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
+SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+
+[weakdeps]
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+
+[sources]
+ModelingToolkitBase = {subdir = "lib/ModelingToolkitBase"}
+
+[extensions]
+SciCompDSLDynamicQuantitiesExt = "DynamicQuantities"
+
+[compat]
+DocStringExtensions = "0.9.5"
+DynamicQuantities = "^0.11.2, 0.12, 0.13, 1"
+MLStyle = "0.4.17"
+ModelingToolkitBase = "1"
+OrderedCollections = "1"
+PrecompileTools = "1.2.1"
+Setfield = "0.7, 0.8, 1"
+SymbolicIndexingInterface = "0.3"
+SymbolicUtils = "4"
+Symbolics = "7"
+URIs = "1"
+julia = "1.10"
+
+[extras]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["SafeTestsets", "Test", "Pkg", "Distributions", "DynamicQuantities", "OrdinaryDiffEqDefault", "OrdinaryDiffEqTsit5"]

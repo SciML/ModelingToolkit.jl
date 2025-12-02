@@ -8,6 +8,7 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants, Initials
 using SymbolicIndexingInterface: is_parameter, getp
 using Symbolics
+using SciCompDSL
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 

@@ -4,27 +4,27 @@ import REPL
 
 const MTKBasePath = joinpath(dirname(@__DIR__), "lib", "ModelingToolkitBase")
 const MTKBasePkgSpec = PackageSpec(; path = MTKBasePath)
-Pkg.develop(MTKBasePkgSpec)
+const SciCompDSLPath = joinpath(dirname(@__DIR__), "lib", "SciCompDSL")
+const SciCompDSLPkgSpec = PackageSpec(; path = SciCompDSLPath)
+Pkg.develop([MTKBasePkgSpec, SciCompDSLPkgSpec])
 
 const GROUP = get(ENV, "GROUP", "All")
 
 function activate_fmi_env()
     Pkg.activate("fmi")
-    Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
+    Pkg.develop([MTKBasePkgSpec, SciCompDSLPkgSpec, PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 
 function activate_extensions_env()
     Pkg.activate(joinpath(MTKBasePath, "test", "extensions"))
-    Pkg.develop(MTKBasePkgSpec)
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.develop([MTKBasePkgSpec, SciCompDSLPkgSpec, PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 
 function activate_downstream_env()
     Pkg.activate("downstream")
-    Pkg.develop(MTKBasePkgSpec)
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.develop([MTKBasePkgSpec, SciCompDSLPkgSpec, PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 
@@ -49,7 +49,6 @@ end
             @safetestset "Reduction Test" include("reduction.jl")
             @mtktestset("Split Parameters Test", "split_parameters.jl")
             @mtktestset("Components Test", "components.jl")
-            @mtktestset("Model Parsing Test", "model_parsing.jl")
             @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
             @mtktestset("Basic transformations", "basic_transformations.jl")
             @mtktestset("Change of variables", "changeofvariables.jl")

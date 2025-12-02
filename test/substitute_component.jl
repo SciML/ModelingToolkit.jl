@@ -1,7 +1,7 @@
 using ModelingToolkit, ModelingToolkitStandardLibrary, Test
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
-using OrdinaryDiffEq
+using OrdinaryDiffEq, SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D, renamespace,
                        NAMESPACE_SEPARATOR as NS
 

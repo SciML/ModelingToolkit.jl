@@ -5,8 +5,7 @@ const DQ = DynamicQuantities
 
 using ModelingToolkitBase, Symbolics, SymbolicUtils, JumpProcesses
 using ModelingToolkitBase: get_unit, check_units, __get_unit_type, validate, VariableUnit,
-                       JumpType, setdefault, convert_units, NoValue, ValidationError,
-                       NO_VALUE
+                       JumpType, setdefault, ValidationError
 using SymbolicUtils: isconst, issym, isadd, ismul, ispow, unwrap
 using Symbolics: SymbolicT, value
 import SciMLBase
@@ -338,47 +337,6 @@ Throws error if units of equations are invalid.
 function MTK.check_units(::Val{:DynamicQuantities}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
-end
-
-###### For `model_parsing.jl`
-
-function MTK.convert_units(varunits::DynamicQuantities.Quantity, value)
-    DynamicQuantities.ustrip(DynamicQuantities.uconvert(
-        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
-end
-
-MTK.convert_units(::DynamicQuantities.Quantity, value::NoValue) = NO_VALUE
-
-function MTK.convert_units(
-        varunits::DynamicQuantities.Quantity, value::AbstractArray{T}) where {T}
-    DynamicQuantities.ustrip.(DynamicQuantities.uconvert.(
-        DynamicQuantities.SymbolicUnits.as_quantity(varunits), value))
-end
-
-MTK.convert_units(::DynamicQuantities.Quantity, value::AbstractArray{Num}) = value
-
-MTK.convert_units(::DynamicQuantities.Quantity, value::Num) = value
-
-function ModelingToolkitBase.__generate_variable_with_unit(metadata_with_exprs, name, vv, def)
-    unit = metadata_with_exprs[VariableUnit]
-    return quote
-        $name = if $name === $(MTK.NO_VALUE)
-            $setdefault($vv, $def)
-        else
-            try
-                $setdefault($vv, $convert_units($unit, $name))
-            catch e
-                if isa(e, $(DynamicQuantities.DimensionError))
-                    error("Unable to convert units for \'" * string(:($$vv)) * "\'")
-                elseif isa(e, MethodError)
-                    error("No or invalid units provided for \'" * string(:($$vv)) *
-                          "\'")
-                else
-                    rethrow(e)
-                end
-            end
-        end
-    end
 end
 
 end

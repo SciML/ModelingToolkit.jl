@@ -1,5 +1,6 @@
 using ModelingToolkitBase, InfiniteOpt, JuMP, Ipopt, Setfield
 using ModelingToolkitBase: D_nounits as D, t_nounits as t, varmap_to_vars
+using SciCompDSL
 
 @mtkmodel Pendulum begin
     @parameters begin

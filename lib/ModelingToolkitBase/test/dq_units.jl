@@ -2,6 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
 using Symbolics
 import SymbolicUtils as SU
 using Test
+using SciCompDSL
 MT = ModelingToolkitBase
 using ModelingToolkitBase: t, D
 @parameters τ [unit = u"s"] γ

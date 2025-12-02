@@ -1,4 +1,4 @@
-using BifurcationKit, ModelingToolkitBase, Test
+using BifurcationKit, ModelingToolkitBase, Test, SciCompDSL
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.

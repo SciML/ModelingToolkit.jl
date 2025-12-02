@@ -2,6 +2,7 @@ module ModelParsingPrecompile
 
 using ModelingToolkitBase, DynamicQuantities
 using ModelingToolkitBase: t
+using SciCompDSL
 
 @mtkmodel ModelWithComponentArray begin
     @constants begin

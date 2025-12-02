@@ -103,7 +103,8 @@ Mark a system constructor function as building a connector. For example,
 end
 ```
 
-Since connectors only declare variables, the equivalent shorthand syntax can also be used:
+Since connectors only declare variables, if `SciCompDSL.jl` is loaded the equivalent
+shorthand syntax can also be used:
 
 ```julia
 @connector Pin begin
@@ -121,6 +122,14 @@ See also: [`@component`](@ref).
 """
 macro connector(expr)
     esc(component_post_processing(expr, true))
+end
+
+function __mtkmodel_connector(_...)
+    error("To use this `@connector` syntax, please import `SciCompDSL.jl`.")
+end
+
+macro connector(name, body)
+    esc(__mtkmodel_connector(__module__, name, body))
 end
 
 abstract type AbstractConnectorType end

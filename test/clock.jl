@@ -4,6 +4,7 @@ using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics, SymbolicUtils
 using Symbolics: SymbolicT, VartypeT
+using SciCompDSL
 
 function infer_clocks(sys)
     ts = TearingState(sys)

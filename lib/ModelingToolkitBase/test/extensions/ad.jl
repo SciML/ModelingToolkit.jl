@@ -12,6 +12,7 @@ using StableRNGs
 using ChainRulesCore
 using ChainRulesCore: NoTangent
 using ChainRulesTestUtils: test_rrule, rand_tangent
+using SciCompDSL
 
 @variables x(t)[1:3] y(t)
 @parameters p[1:3, 1:3] q

@@ -1,5 +1,5 @@
 using ModelingToolkit, ADTypes, Test
-using NonlinearSolve
+using NonlinearSolve, SciCompDSL
 using Symbolics: value
 using CommonSolve: solve
 

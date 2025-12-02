@@ -2,17 +2,21 @@ using SafeTestsets, Pkg, Test
 # https://github.com/JuliaLang/julia/issues/54664
 import REPL
 
+const SciCompDSLPath = joinpath(dirname(dirname(@__DIR__)), "SciCompDSL")
+const SciCompDSLPkgSpec = PackageSpec(; path = SciCompDSLPath)
+Pkg.develop(SciCompDSLPkgSpec)
+
 const GROUP = get(ENV, "GROUP", "All")
 
 function activate_extensions_env()
     Pkg.activate("extensions")
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__)), SciCompDSLPkgSpec])
     Pkg.instantiate()
 end
 
 function activate_downstream_env()
     Pkg.activate("downstream")
-    Pkg.develop(PackageSpec(path = dirname(@__DIR__)))
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__)), SciCompDSLPkgSpec])
     Pkg.instantiate()
 end
 
@@ -31,7 +35,6 @@ end
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
             @safetestset "Components Test" include("components.jl")
-            @safetestset "Model Parsing Test" include("model_parsing.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "Change of variables" include("changeofvariables.jl")
