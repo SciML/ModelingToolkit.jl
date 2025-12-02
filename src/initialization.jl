@@ -1,4 +1,4 @@
-MTKBase.singular_check(ts::TearingState) = StructuralTransformations.singular_check(ts)
+MTKBase.singular_check(ts::TearingState) = StateSelection.singular_check(ts)
 
 function MTKBase.get_initialization_problem_type(sys::System, isys::System;
                                                  warn_initialize_determined = true,
@@ -42,19 +42,6 @@ function MTKBase.get_initialization_problem_type(sys::System, isys::System;
     else
         NonlinearLeastSquaresProblem
     end
-end
-
-function MTKBase.unhack_observed(obseqs::Vector{Equation}, eqs::Vector{Equation})
-    mask = trues(length(obseqs))
-    for (i, eq) in enumerate(obseqs)
-        mask[i] = Moshi.Match.@match eq.rhs begin
-            BSImpl.Term(; f) => f !== StructuralTransformations.change_origin
-            _ => true
-        end
-    end
-
-    obseqs = obseqs[mask]
-    return obseqs, eqs
 end
 
 MTKBase.default_missing_guess_value(::Nothing) = MTKBase.MissingGuessValue.Error()

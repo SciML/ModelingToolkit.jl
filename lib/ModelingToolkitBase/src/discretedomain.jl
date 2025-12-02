@@ -177,3 +177,136 @@ end
 
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
 Base.:-(k::ShiftIndex, i::Int) = k + (-i)
+
+# SampleTime
+
+"""
+    function SampleTime()
+
+`SampleTime()` can be used in the equations of a hybrid system to represent time sampled
+at the inferred clock for that equation.
+"""
+struct SampleTime <: Operator
+    SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
+end
+SymbolicUtils.promote_symtype(::Type{SampleTime}, ::Type{T}) where {T} = Real
+SymbolicUtils.promote_shape(::Type{SampleTime}, @nospecialize(x::SU.ShapeT)) = x
+Base.nameof(::SampleTime) = :SampleTime
+SymbolicUtils.isbinop(::SampleTime) = false
+
+function validate_operator(op::SampleTime, args, iv; context = nothing) end
+
+# Sample
+
+"""
+$(TYPEDEF)
+
+Represents a sample operator. A discrete-time signal is created by sampling a continuous-time signal.
+
+# Constructors
+`Sample(clock::Union{TimeDomain, InferredTimeDomain} = InferredDiscrete())`
+`Sample(dt::Real)`
+
+`Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
+
+# Fields
+$(FIELDS)
+
+# Examples
+
+```jldoctest
+julia> using Symbolics
+
+julia> t = ModelingToolkit.t_nounits
+
+julia> Δ = Sample(0.01)
+(::Sample) (generic function with 2 methods)
+```
+"""
+struct Sample <: Operator
+    clock::Any
+end
+
+is_transparent_operator(::Type{Sample}) = true
+
+Sample(x::Num) = Sample()(unwrap(x))
+Sample(arg::Real) = Sample(Clock(arg))
+(D::Sample)(x) = STerm(D, SArgsT((x,)); type = symtype(x), shape = SU.shape(x))
+(D::Sample)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::Sample, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Sample, @nospecialize(x::SU.ShapeT)) = x
+Base.nameof(::Sample) = :Sample
+SymbolicUtils.isbinop(::Sample) = false
+
+Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
+
+Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
+Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
+
+function validate_operator(op::Sample, args, iv; context = nothing)
+    arg = unwrap(only(args))
+    if !is_variable_floatingpoint(arg)
+        throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
+    end
+    if isparameter(arg)
+        throw(ArgumentError("""
+        Expected argument of $op to be an unknown, found $arg which is a parameter.
+        """))
+    end
+end
+
+"""
+    hassample(O)
+
+Returns true if the expression or equation `O` contains [`Sample`](@ref) terms.
+"""
+hassample(O) = recursive_hasoperator(Sample, unwrap(O))
+
+# Hold
+
+"""
+$(TYPEDEF)
+
+Represents a hold operator. A continuous-time signal is produced by holding a discrete-time signal `x` with zero-order hold.
+
+```
+cont_x = Hold()(disc_x)
+```
+"""
+struct Hold <: Operator end
+
+(D::Hold)(x) = STerm(D, SArgsT((x,)); type = symtype(x), shape = SU.shape(x))
+(D::Hold)(x::Number) = x
+(D::Hold)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::Hold, ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::Hold, @nospecialize(x::SU.ShapeT)) = x
+Base.nameof(::Hold) = :Hold
+SymbolicUtils.isbinop(::Hold) = false
+
+Hold(x) = Hold()(x)
+
+function validate_operator(op::Hold, args, iv; context = nothing)
+    # TODO: maybe validate `VariableTimeDomain`?
+    return nothing
+end
+
+"""
+    hashold(O)
+
+Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
+"""
+hashold(O) = recursive_hasoperator(Hold, unwrap(O))
+
+function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
+    return SymbolicContinuousCallback(
+        [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
+        affect_neg = down ? ImperativeAffect(Returns(nothing)) : nothing,
+        kwargs..., zero_crossing_id = name)
+end
+
+function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)
+    return SciMLBase.Clocks.EventClock(cb.zero_crossing_id)
+end
+
+distribute_shift_into_operator(::Sample) = false
+distribute_shift_into_operator(::Hold) = false

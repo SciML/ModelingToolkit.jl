@@ -21,6 +21,7 @@ InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+ModelingToolkitTearing = "6bb917b9-1269-42b9-9f7c-b0dca72083ab"
 Moshi = "2e0e35c7-a2e4-4343-998d-7ef72827ed2d"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
@@ -36,6 +37,7 @@ Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 SimpleNonlinearSolve = "727e6d20-b764-4bd8-a329-72de5adea6c7"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+StateSelection = "64909d44-ed92-46a8-bbd9-f047dfbdc84b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
@@ -43,19 +45,19 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [weakdeps]
-DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 
 [sources]
 ModelingToolkitBase = {subdir = "lib/ModelingToolkitBase"}
 ModelingToolkitStandardLibrary = {rev = "as/mtk-v11", url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl"}
+ModelingToolkitTearing = {rev = "main", url = "https://github.com/JuliaComputing/StateSelection.jl/", subdir = "lib/ModelingToolkitTearing"}
 Optimization = {rev = "as/symbolics-v7", url = "https://github.com/AayushSabharwal/Optimization.jl"}
 OptimizationBase = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7", subdir = "lib/OptimizationBase" }
 OptimizationMOI = {rev = "as/symbolics-v7", subdir = "lib/OptimizationMOI", url = "https://github.com/AayushSabharwal/Optimization.jl"}
 SciCompDSL = {subdir = "lib/SciCompDSL"}
+StateSelection = {rev = "main", url = "https://github.com/JuliaComputing/StateSelection.jl/"}
 
 [extensions]
-MTKDeepDiffsExt = "DeepDiffs"
 MTKFMIExt = "FMI"
 
 [compat]
@@ -68,7 +70,6 @@ Combinatorics = "1"
 CommonSolve = "0.2.4"
 DataInterpolations = "7, 8"
 DataStructures = "0.17, 0.18, 0.19"
-DeepDiffs = "1"
 DelayDiffEq = "5.61"
 DiffEqBase = "6.189.1"
 DifferentiationInterface = "0.6.47, 0.7"
@@ -122,7 +123,6 @@ BoundaryValueDiffEqAscher = "7227322d-7511-4e07-9247-ad6ff830280e"
 BoundaryValueDiffEqMIRK = "1a22d4ce-7765-49ea-b6f2-13c8438986a6"
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
-DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 DelayDiffEq = "bcd4f6db-9728-5f36-b5f7-82caef46ccdb"
 DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 DiffEqNoiseProcess = "77a26b50-5914-5dd7-bc55-306e6241c503"

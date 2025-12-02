@@ -88,6 +88,10 @@ import FillArrays
 using BipartiteGraphs
 import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
                     undef_blocks, blocks
+import StateSelection
+import StateSelection: CLIL
+import ModelingToolkitTearing as MTKTearing
+using ModelingToolkitTearing: TearingState, SystemStructure
 
 let allnames = names(MTKBase; all = true),
     banned_names = Set{Symbol}([:eval, :include, :Variable])
@@ -113,11 +117,6 @@ end
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
                            COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
-# this has to be included early to deal with dependency issues
-include("structural_transformation/bareiss.jl")
-function var_derivative! end
-function var_derivative_graph! end
-
 include("linearization.jl")
 include("systems/analysis_points.jl")
 include("systems/solver_nlprob.jl")
@@ -127,11 +126,7 @@ include("systems/codegen.jl")
 include("problems/semilinearodeproblem.jl")
 include("problems/sccnonlinearproblem.jl")
 
-include("systems/sparsematrixclil.jl")
-
-include("clock.jl")
 include("discretedomain.jl")
-include("systems/state_machines.jl")
 include("systems/systemstructure.jl")
 include("initialization.jl")
 include("systems/systems.jl")
@@ -153,7 +148,6 @@ export map_variables_to_equations, substitute_component
 
 export TearingState
 
-export Sample, Hold, sampletime, SampleTime
 export Clock, SolverStepClock, TimeDomain
 export get_sensitivity_function, get_comp_sensitivity_function,
        get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer

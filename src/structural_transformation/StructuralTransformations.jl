@@ -14,7 +14,7 @@ import SymbolicUtils as SU
 import Moshi
 
 using ModelingToolkit
-using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Differential,
+using ModelingToolkitBase: System, AbstractSystem, var_from_nested_derivative, Differential,
                        unknowns, equations, diff2term_with_unit,
                        value,
                        operation, arguments, simplify, symbolic_linear_solve,
@@ -25,36 +25,24 @@ using ModelingToolkit: System, AbstractSystem, var_from_nested_derivative, Diffe
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        invalidate_cache!, Shift,
-                       IncrementalCycleTracker, add_edge_checked!, topological_sort,
+                       topological_sort,
                        filter_kwargs, lower_varname_with_unit,
-                       setio, SparseMatrixCLIL,
-                       get_fullvars, has_equations, observed,
+                       setio,
+                       has_equations, observed,
                        Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
                        VariableShift, DerivativeDict, shift2term, simplify_shifts,
                        distribute_shift
 
 using BipartiteGraphs
-import BipartiteGraphs: invview, complete
-import ModelingToolkit: var_derivative!, var_derivative_graph!
+import BipartiteGraphs: invview, complete, IncrementalCycleTracker, add_edge_checked!
 using Graphs
-using ModelingToolkit: algeqs, EquationsView,
-                       SystemStructure, TransformationState, TearingState,
-                       mtkcompile!,
-                       isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete,
-                       dervars_range, diffvars_range, algvars_range,
-                       DiffGraph, complete!,
-                       get_fullvars, system_subset
+using ModelingToolkit: mtkcompile!
 using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
-using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction,
-                                 RuntimeGeneratedFunctions,
-                                 drop_expr
 import Symbolics: Num, Arr, CallAndWrap
 import CommonSolve
-
-RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using SparseArrays
 
@@ -63,24 +51,28 @@ using SimpleNonlinearSolve
 using DocStringExtensions
 
 import ModelingToolkitBase as MTKBase
+import StateSelection
+import StateSelection: CLIL, SelectedState
+import ModelingToolkitTearing as MTKTearing
+using ModelingToolkitTearing: TearingState, SystemStructure, ReassembleAlgorithm,
+                              DefaultReassembleAlgorithm
 
-export tearing, dae_index_lowering, check_consistency
+export tearing, dae_index_lowering
 export dummy_derivative
-export sorted_incidence_matrix,
-       pantelides!, pantelides_reassemble, find_solvables!,
-       linear_subsys_adjmat!
+export sorted_incidence_matrix, pantelides_reassemble, find_solvables!
 export tearing_substitution
-export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
-export computed_highest_diff_variables
-export lower_shift_varname
 
 include("utils.jl")
-include("tearing.jl")
 include("pantelides.jl")
-include("bipartite_tearing/modia_tearing.jl")
+
+function tearing_substitution(sys::AbstractSystem; kwargs...)
+    neweqs = full_equations(sys::AbstractSystem; kwargs...)
+    @set! sys.eqs = neweqs
+    # @set! sys.substitutions = nothing
+    @set! sys.schedule = nothing
+end
+
 include("symbolics_tearing.jl")
-include("partial_state_selection.jl")
-include("codegen.jl")
 
 end # module
