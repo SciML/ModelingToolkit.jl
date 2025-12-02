@@ -76,3 +76,18 @@ prob = ODEProblem(model, u0, tspan)
 large_param_init["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan)
 
 large_param_init["init"] = @benchmarkable init($prob)
+
+sparse_analytical_jacobian = SUITE["sparse_analytical_jacobian"]
+
+eqs = [D(x[i]) ~ prod(x[j] for j in 1:N if (i+j) % 3 == 0) for i in 1:N]
+@mtkcompile model = System(eqs, t)
+u0 = collect(x .=> 1.0)
+tspan = (0.0, 1.0)
+jac = true
+sparse = true
+prob = ODEProblem(model, u0, tspan; jac, sparse)
+out = similar(prob.f.jac_prototype)
+
+sparse_analytical_jacobian["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan; jac, sparse)
+sparse_analytical_jacobian["f_oop"] = @benchmarkable $(prob.f.jac.f_oop)($(prob.u0), $(prob.p), $(first(tspan)))
+sparse_analytical_jacobian["f_iip"] = @benchmarkable $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), $(first(tspan)))

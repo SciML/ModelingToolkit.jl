@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase
+using ModelingToolkit, SparseArrays, OrdinaryDiffEq, DiffEqBase, BenchmarkTools
 
 N = 3
 xyd_brusselator = range(0, stop = 1, length = N)
@@ -58,6 +58,8 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
 #@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
       findnz(prob.f.jac_prototype)[1:2]
+out = similar(prob.f.jac_prototype)
+@test (@ballocated $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), 0.0)) == 0 # should not allocate
 
 # test when not sparse
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = false, jac = true)
@@ -74,6 +76,12 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = true)
 f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 @test findnz(f.jac_prototype)[1:2] == findnz(JP)[1:2]
 @test eltype(f.jac_prototype) == Float64
+
+# test sparsity index pattern checking
+f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = true, checkbounds = true)
+out = sparse([1.0 0.0; 0.0 1.0]) # choose a wrong size on purpose
+@test size(out) != size(f.jac_prototype) # check that the size is indeed wrong
+@test_throws AssertionError f.jac.f_iip(out, u0, p, 0.0) # check that we get an error
 
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
@@ -100,7 +108,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     u0 = [x => 1, y => 0]
     prob = ODEProblem(
         pend, [u0; [g => 1]], (0, 11.5), guesses = [λ => 1], sparse = true, jac = true)
-    jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true)
+    jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true, checkbounds = true)
     jac_prototype = ModelingToolkit.jacobian_sparsity(pend)
     W_prototype = ModelingToolkit.W_sparsity(pend)
     @test nnz(W_prototype) == nnz(jac_prototype) + 2
@@ -113,7 +121,7 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
     t = 0.0
     @test_throws AssertionError jac!(similar(jac_prototype, Float64), u, p, t)
 
-    W, W! = generate_W(pend; expression = Val{false}, sparse = true)
+    W, W! = generate_W(pend; expression = Val{false}, sparse = true, checkbounds = true)
     γ = 0.1
     M = sparse(calculate_massmatrix(pend))
     @test_throws AssertionError W!(similar(jac_prototype, Float64), u, p, γ, t)

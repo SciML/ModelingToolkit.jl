@@ -186,16 +186,14 @@ function calculate_jacobian(sys::System;
     if sparse
         jac = sparsejacobian(rhs, dvs; simplify)
         if get_iv(sys) !== nothing
-            W_s = W_sparsity(sys)
-            (Is, Js, Vs) = findnz(W_s)
-            # Add nonzeros of W as non-structural zeros of the Jacobian (to ensure equal
-            # results for oop and iip Jacobian)
-            for (i, j) in zip(Is, Js)
-                iszero(jac[i, j]) && begin
-                    jac[i, j] = 1
-                    jac[i, j] = 0
-                end
-            end
+            # Add nonzeros of W as non-structural zeros of the Jacobian
+            # (to ensure equal results for oop and iip Jacobian)
+            JIs, JJs, JVs = findnz(jac)
+            WIs, WJs, _ = findnz(W_sparsity(sys))
+            append!(JIs, WIs) # explicitly put all W's indices also in J,
+            append!(JJs, WJs) # even if it duplicates some indices
+            append!(JVs, zeros(eltype(JVs), length(WIs))) # add zero
+            jac = SparseArrays.sparse(JIs, JJs, JVs) # values at duplicate indices are summed; not overwritten
         end
     else
         jac = jacobian(rhs, dvs; simplify)
@@ -213,21 +211,23 @@ Generate the jacobian function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
+  Also forwarded to `build_function_wrapper`.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        kwargs...)
+        checkbounds = false, kwargs...)
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t === nothing
-        wrap_code = (identity, identity)
+    if t !== nothing && sparse && checkbounds
+        wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
     else
-        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
+        wrap_code = (identity, identity)
     end
     args = (dvs, p...)
     nargs = 2
@@ -236,7 +236,7 @@ function generate_jacobian(sys::System;
         nargs = 3
     end
     res = build_function_wrapper(sys, jac, args...; wrap_code, expression = Val{true},
-        expression_module = eval_module, kwargs...)
+        expression_module = eval_module, checkbounds, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
 end
@@ -328,12 +328,14 @@ Generate the `W = γ * M + J` function for the equations of a [`System`](@ref).
 
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `checkbounds`: Whether to check correctness of indices at runtime if `sparse`.
+  Also forwarded to `build_function_wrapper`.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_W(sys::System;
         simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
@@ -343,13 +345,15 @@ function generate_W(sys::System;
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = W_GAMMA * M + J
     t = get_iv(sys)
-    if t !== nothing
-        wrap_code = sparse ? assert_jac_length_header(sys) : (identity, identity)
+    if t !== nothing && sparse && checkbounds
+        wrap_code = assert_jac_length_header(sys)
+    else
+        wrap_code = (identity, identity)
     end
 
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        p_end = 1 + length(p), kwargs...)
+        p_end = 1 + length(p), checkbounds, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module)
 end
