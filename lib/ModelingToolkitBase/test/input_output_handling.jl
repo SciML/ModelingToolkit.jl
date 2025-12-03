@@ -9,7 +9,8 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @variables xx(t) some_input(t) [input = true]
 eqs = [D(xx) ~ some_input]
 @named model = System(eqs, t)
-@test_throws ExtraVariablesSystemException mtkcompile(model)
+err = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection.ExtraVariablesSystemException : ExtraVariablesSystemException
+@test_throws err mtkcompile(model)
 if @isdefined(ModelingToolkit)
     err = "In particular, the unset input(s) are:\n some_input(t)"
     @test_throws err mtkcompile(model)

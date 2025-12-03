@@ -189,7 +189,7 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
        E₀ ~ E + C]
 
 @named sys = System(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
-@test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(sys)
+@test_throws ModelingToolkit.StateSelection.ExtraEquationsSystemException mtkcompile(sys)
 
 # Example 5 from Pantelides' original paper
 params = collect(@parameters y1 y2)
@@ -198,7 +198,7 @@ eqs = [0 ~ x + sin(u1 + u2)
        D(x) ~ x + y1
        cos(x) ~ sin(y2)]
 @named sys = System(eqs, t, sts, params)
-@test_throws ModelingToolkit.InvalidSystemException mtkcompile(sys)
+@test_throws ModelingToolkit.StateSelection.InvalidSystemException mtkcompile(sys)
 
 # issue #963
 @variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)

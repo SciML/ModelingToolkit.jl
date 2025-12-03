@@ -10,6 +10,8 @@ import DiffEqNoiseProcess
 using Setfield: @set!
 using SciCompDSL
 
+const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
+
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
 # Manually do index reduction to allow testing with MTKBase
@@ -51,7 +53,7 @@ sol = solve(initprob)
 @test SciMLBase.successful_retcode(sol)
 @test maximum(abs.(sol[conditions])) < 5e-14
 
-@test_throws ModelingToolkitBase.ExtraVariablesSystemException ModelingToolkitBase.InitializationProblem(
+@test_throws ERRMOD.ExtraVariablesSystemException ModelingToolkitBase.InitializationProblem(
     pend, 0.0, [g => 1];
     guesses = [x => 1, y => 0.2, λ => 0.0],
     fully_determined = true)
@@ -63,7 +65,7 @@ sol = solve(initprob)
 @test !SciMLBase.successful_retcode(sol) ||
       sol.retcode == SciMLBase.ReturnCode.StalledSuccess
 
-@test_throws ModelingToolkitBase.ExtraVariablesSystemException ModelingToolkitBase.InitializationProblem(
+@test_throws ERRMOD.ExtraVariablesSystemException ModelingToolkitBase.InitializationProblem(
     pend, 0.0, [g => 1]; guesses = [x => 1, y => 0.2, λ => 0.0],
     fully_determined = true)
 
@@ -87,7 +89,7 @@ sol = solve(prob.f.initializeprob)
 sol = solve(prob, Rodas5P())
 @test maximum(abs.(sol[conditions][1])) < 1e-6
 
-@test_throws ModelingToolkitBase.ExtraVariablesSystemException ODEProblem(
+@test_throws ERRMOD.ExtraVariablesSystemException ODEProblem(
     pend, [x => 1, g => 1], (0.0, 1.5),
     guesses = [x => 1, y => 0.2, λ => 0.0],
     fully_determined = true)
@@ -277,7 +279,7 @@ else
     @test maximum(abs.(initsol[conditions])) < 5e-13
 end
 
-@test_throws ModelingToolkitBase.ExtraEquationsSystemException ModelingToolkitBase.InitializationProblem(
+@test_throws ERRMOD.ExtraEquationsSystemException ModelingToolkitBase.InitializationProblem(
     sys, 0.0, fully_determined = true)
 
 if @isdefined(ModelingToolkit)
@@ -289,7 +291,7 @@ if @isdefined(ModelingToolkit)
     @test maximum(abs.(initsol[conditions][1])) < 1e-14
 end
 
-@test_throws ModelingToolkitBase.ExtraEquationsSystemException ODEProblem(
+@test_throws ERRMOD.ExtraEquationsSystemException ODEProblem(
     sys, [], (0, 0.1), fully_determined = true)
 
 if @isdefined(ModelingToolkit)
@@ -507,7 +509,7 @@ sol = solve(prob, Tsit5())
     unsimp = generate_initializesystem(pend; op = [x => 1], initialization_eqs = [y ~ 1])
     sys = mtkcompile(unsimp; fully_determined = false)
     if @isdefined(ModelingToolkit)
-        @test length(equations(sys)) in (3, 4) # could be either depending on tearing
+        @test length(equations(sys)) in (3, 4, 5) # depending on tearing
     else
         @test length(equations(sys)) == 7
     end

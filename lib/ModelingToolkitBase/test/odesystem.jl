@@ -646,7 +646,8 @@ let
            spm ~ 0
            sph ~ a]
     @named sys = System(eqs, t, vars, pars)
-    @test_throws ModelingToolkitBase.ExtraEquationsSystemException mtkcompile(sys)
+    errmod = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
+    @test_throws errmod.ExtraEquationsSystemException mtkcompile(sys)
 end
 
 # 1561

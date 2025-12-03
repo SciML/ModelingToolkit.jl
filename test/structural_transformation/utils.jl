@@ -9,6 +9,8 @@ using DataInterpolations
 using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
 import DiffEqNoiseProcess
 import SymbolicUtils as SU
+import StateSelection
+import ModelingToolkitTearing as MTKTearing
 const ST = StructuralTransformations
 
 # Define some variables
@@ -23,7 +25,7 @@ eqs = [D(x) ~ w,
     0 ~ x^2 + y^2 - L^2]
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
-StructuralTransformations.find_solvables!(state)
+StateSelection.find_solvables!(state)
 sss = state.structure
 @unpack graph, solvable_graph, var_to_diff = sss
 @test sort(graph.fadjlist) == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]
@@ -64,7 +66,7 @@ end
     @test length(unknowns(isys)) == 4
     @test length(equations(isys)) == 5
     @test !any(equations(isys)) do eq
-        iscall(eq.rhs) && operation(eq.rhs) in [StructuralTransformations.change_origin]
+        iscall(eq.rhs) && operation(eq.rhs) in [MTKTearing.change_origin]
     end
 end
 
@@ -80,7 +82,7 @@ end
         sys2 = mtkcompile(sys; reassemble_alg)
         @test length(observed(sys2)) == 4
         @test !any(observed(sys2)) do eq
-            iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
+            iscall(eq.rhs) && operation(eq.rhs) == MTKTearing.change_origin
         end
     end
 
@@ -94,7 +96,7 @@ end
         sys2 = mtkcompile(sys; reassemble_alg, fully_determined = false)
         @test length(observed(sys2)) == 4
         @test !any(observed(sys2)) do eq
-            iscall(eq.rhs) && operation(eq.rhs) == StructuralTransformations.change_origin
+            iscall(eq.rhs) && operation(eq.rhs) == MTKTearing.change_origin
         end
     end
 end

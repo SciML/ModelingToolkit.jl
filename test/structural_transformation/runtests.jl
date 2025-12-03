@@ -9,6 +9,3 @@ end
 @safetestset "Tearing" begin
     include("tearing.jl")
 end
-@safetestset "Bareiss" begin
-    include("bareiss.jl")
-end
