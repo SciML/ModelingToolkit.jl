@@ -53,7 +53,7 @@ using Unitful
         ]
         return System(eqs, t, [], pars; systems, name)
     end
-    @mtkmodel MySquare begin
+    @mtkmodel TestAPAroundUnits begin
         @components begin
             input = UnitfulInput()
         end
@@ -68,8 +68,26 @@ using Unitful
             output ~ input.u^2
         end
     end
-    @named sq = MySquare()
-    @test sq isa System
+    @named sys = TestAPAroundUnits()
+    @test sys isa System
+    
+    @mtkmodel TestAPWithNoOutputs begin
+        @components begin
+            input = UnitfulInput()
+        end
+        @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+        @components begin
+            ub = UnitfulBlock()
+        end
+        @equations begin
+            connect(ub.output, :ap, input)
+            output ~ input.u^2
+        end
+    end
+    @named sys2 = TestAPWithNoOutputs()
+    @test sys2 isa System
 end
 
 @testset "AnalysisPoint is lowered to `connect`" begin

@@ -183,8 +183,14 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
 end
 
 function _validate(ap::AnalysisPoint; info::String = "")
-    conn_eq = connect(ap.input, ap.outputs...)
-    return _validate(conn_eq.rhs, info=info)
+    is_valid = false
+    if (ap.outputs == nothing)
+        is_valid = true
+    else
+        conn_eq = connect(ap.input, ap.outputs...)
+        is_valid = _validate(conn_eq.rhs, info=info)
+    end
+    return is_valid
 end
 
 function _validate(conn::Connection; info::String = "")
