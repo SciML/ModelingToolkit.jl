@@ -214,8 +214,8 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
 end
 
 function _validate(ap::AnalysisPoint; info::String = "")
-    conn_eq = connect(ap.input, ap.outputs)
-    return _validate(conn_eq, info=info)
+    conn_eq = connect(ap.input, ap.outputs...)
+    return _validate(conn_eq.rhs, info=info)
 end
     
 function _validate(conn::Connection; info::String = "")

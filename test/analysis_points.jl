@@ -7,6 +7,70 @@ using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSy
 import ModelingToolkit as MTK
 import ControlSystemsBase as CS
 using Symbolics: NAMESPACE_SEPARATOR
+using Unitful
+
+@testset "AnalysisPoint is ignored when verifying units" begin
+    # no units first
+    @mtkmodel FirstOrderTest begin
+        @components begin
+            in = Blocks.Step()
+            fb = Blocks.Feedback()
+            fo = Blocks.SecondOrder(k = 1, w = 1, d = 0.1)
+        end
+        @equations begin
+            connect(in.output, :u, fb.input1)
+            connect(fb.output, :e, fo.input)
+            connect(fo.output, :y, fb.input2)
+        end
+    end
+    @named model = FirstOrderTest()
+    @test model isa System
+
+    @connector function UnitfulOutput(; name)
+        vars = @variables begin
+            u(t), [unit=u"m", output=true]
+        end
+        return System(Equation[], t, vars, []; name)
+    end
+    @connector function UnitfulInput(; name)
+        vars = @variables begin
+            u(t), [unit=u"m", input=true]
+        end
+        return System(Equation[], t, vars, []; name)
+    end
+    @component function UnitfulBlock(; name)
+        pars = @parameters begin
+            offset, [unit=u"m"]
+            start_time
+            height, [unit=u"m"]
+            duration
+        end
+        systems = @named begin
+            output = UnitfulOutput()
+        end
+        eqs = [
+            output.u ~ offset + height*(0.5 + (1/pi)*atan(1e5*(t - start_time)))
+        ]
+        return System(eqs, t, [], pars; systems, name)
+    end
+    @mtkmodel MySquare begin
+        @components begin
+            input = UnitfulInput()
+        end
+        @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+        @components begin
+            ub = UnitfulBlock()
+        end
+        @equations begin
+            connect(ub.output, :ap, input)
+            output ~ input.u^2
+        end
+    end
+    @named sq = MySquare()
+    @test sq isa System
+end
 
 @testset "AnalysisPoint is lowered to `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
