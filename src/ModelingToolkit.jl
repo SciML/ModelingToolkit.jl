@@ -93,9 +93,11 @@ import StateSelection: CLIL
 import ModelingToolkitTearing as MTKTearing
 using ModelingToolkitTearing: TearingState, SystemStructure
 
-let allnames = names(MTKBase; all = true),
-    banned_names = Set{Symbol}([:eval, :include, :Variable])
+ModelingToolkitBase.complete(dg::StateSelection.DiffGraph) = BipartiteGraphs.complete(dg)
 
+macro import_mtkbase()
+    allnames = names(MTKBase; all = true)
+    banned_names = Set{Symbol}([:eval, :include, :Variable])
     using_expr = Expr(:using, Expr(:(:), Expr(:., :ModelingToolkitBase)))
     inner_using_expr = using_expr.args[1]
 
@@ -111,9 +113,15 @@ let allnames = names(MTKBase; all = true),
             push!(inner_public_expr.args, name)
         end
     end
-    @eval ModelingToolkit $using_expr
-    @eval ModelingToolkit $public_expr
+
+    quote
+        $using_expr
+        $(esc(public_expr))
+    end
 end
+
+@import_mtkbase
+
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
                            COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
