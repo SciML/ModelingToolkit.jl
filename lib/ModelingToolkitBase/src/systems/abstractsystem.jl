@@ -1699,7 +1699,7 @@ Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expre
 if `simplify == true`.
 """
 function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
-    expr = Symbolics.fixpoint_sub(expr, dict; operator = ModelingToolkitBase.Initial)
+    expr = Symbolics.fixpoint_sub(expr, dict; operator = Union{ModelingToolkitBase.Initial, Pre})
     simplify ? Symbolics.simplify(expr) : expr
 end
 
