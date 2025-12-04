@@ -13,9 +13,9 @@ using Unitful
     # no units first
     @mtkmodel FirstOrderTest begin
         @components begin
-            in = Blocks.Step()
-            fb = Blocks.Feedback()
-            fo = Blocks.SecondOrder(k = 1, w = 1, d = 0.1)
+            in = Step()
+            fb = Feedback()
+            fo = SecondOrder(k = 1, w = 1, d = 0.1)
         end
         @equations begin
             connect(in.output, :u, fb.input1)
