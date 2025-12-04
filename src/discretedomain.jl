@@ -209,6 +209,7 @@ end
 is_transparent_operator(::Type{Hold}) = true
 
 (D::Hold)(x) = Term{symtype(x)}(D, Any[x])
+(D::Hold)(x::Number) = x
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
 Base.nameof(::Hold) = :Hold

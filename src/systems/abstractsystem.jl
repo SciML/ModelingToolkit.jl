@@ -2796,7 +2796,7 @@ function process_parameter_equations(sys::AbstractSystem)
     eqs = equations(sys)
     for (i, eq) in enumerate(eqs)
         empty!(varsbuf)
-        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre})
+        vars!(varsbuf, eq; op = Union{Differential, Initial, Pre, Hold, Sample})
         # singular equations
         isempty(varsbuf) && continue
         if all(varsbuf) do sym
