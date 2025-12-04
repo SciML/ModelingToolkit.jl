@@ -1,16 +1,100 @@
-using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks, ControlSystemsBase
-using ModelingToolkitStandardLibrary.Mechanical.Rotational
-using ModelingToolkitStandardLibrary.Blocks
-using OrdinaryDiffEq, LinearAlgebra
-using Test
+using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkit as MTK
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ControlSystemsBase
 import ControlSystemsBase as CS
+using OrdinaryDiffEq, LinearAlgebra
+using Test
 using Symbolics: NAMESPACE_SEPARATOR
+using Unitful
+
+@testset "AnalysisPoint is ignored when verifying units" begin
+    # no units first
+    @mtkmodel FirstOrderTest begin
+        @components begin
+            in = Step()
+            fb = Feedback()
+            fo = SecondOrder(k = 1, w = 1, d = 0.1)
+        end
+        @equations begin
+            connect(in.output, :u, fb.input1)
+            connect(fb.output, :e, fo.input)
+            connect(fo.output, :y, fb.input2)
+        end
+    end
+    @named model = FirstOrderTest()
+    @test model isa System
+
+    @connector function UnitfulOutput(; name)
+        vars = @variables begin
+            u(t), [unit=u"m", output=true]
+        end
+        return System(Equation[], t, vars, []; name)
+    end
+    @connector function UnitfulInput(; name)
+        vars = @variables begin
+            u(t), [unit=u"m", input=true]
+        end
+        return System(Equation[], t, vars, []; name)
+    end
+    @component function UnitfulBlock(; name)
+        pars = @parameters begin
+            offset, [unit=u"m"]
+            start_time
+            height, [unit=u"m"]
+            duration
+        end
+        systems = @named begin
+            output = UnitfulOutput()
+        end
+        eqs = [
+            output.u ~ offset + height*(0.5 + (1/pi)*atan(1e5*(t - start_time)))
+        ]
+        return System(eqs, t, [], pars; systems, name)
+    end
+    @mtkmodel TestAPAroundUnits begin
+        @components begin
+            input = UnitfulInput()
+        end
+        @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+        @components begin
+            ub = UnitfulBlock()
+        end
+        @equations begin
+            connect(ub.output, :ap, input)
+            output ~ input.u^2
+        end
+    end
+    @named sys = TestAPAroundUnits()
+    @test sys isa System
+    
+    @mtkmodel TestAPWithNoOutputs begin
+        @components begin
+            input = UnitfulInput()
+        end
+        @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+        @components begin
+            ub = UnitfulBlock()
+        end
+        @equations begin
+            connect(ub.output, :ap, input)
+            output ~ input.u^2
+        end
+    end
+    @named sys2 = TestAPWithNoOutputs()
+    @test sys2 isa System
+end
 
 @testset "AnalysisPoint is lowered to `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     ap = AnalysisPoint(:plant_input)
     eqs = [connect(P.output, C.input)
@@ -30,7 +114,7 @@ end
 
 @testset "Inverse causality throws a warning" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     ap = AnalysisPoint(:plant_input)
     @test_warn ["1-th argument", "plant_input", "not a output"] connect(
@@ -41,7 +125,7 @@ end
 # also tests `connect(input, name::Symbol, outputs...)` syntax
 @testset "AnalysisPoint is accessible via `getproperty`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     eqs = [connect(P.output, C.input), connect(C.output, :plant_input, P.input)]
     sys_ap = System(eqs, t, systems = [P, C], name = :hej)
@@ -61,7 +145,7 @@ end
 ### Ported from MTKStdlib
 
 @named P = FirstOrder(k = 1, T = 1)
-@named C = Gain(; k = -1)
+@named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
 ap = AnalysisPoint(:plant_input)
 eqs = [connect(P.output, C.input), connect(C.output, ap, P.input)]
@@ -266,7 +350,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - standard `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output, :plant_output, add.input2)
@@ -302,7 +386,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - causal variable `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output.u, :plant_output, add.input2.u)
@@ -338,7 +422,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - mixed `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output.u, :plant_output, add.input2.u)
@@ -460,7 +544,7 @@ end
 
 @testset "multiple analysis points" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output, :plant_output, add.input2)

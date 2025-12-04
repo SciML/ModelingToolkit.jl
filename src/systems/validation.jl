@@ -2,7 +2,7 @@ module UnitfulUnitCheck
 
 using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, RecursiveArrayTools
 using ..ModelingToolkit: ValidationError,
-                         ModelingToolkit, Connection, instream, JumpType, VariableUnit,
+                         ModelingToolkit, Connection, instream, JumpType, VariableUnit, AnalysisPoint,
                          get_systems,
                          Conditional, Comparison
 using JumpProcesses: MassActionJump, ConstantRateJump, VariableRateJump
@@ -182,6 +182,17 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid
 end
 
+function _validate(ap::AnalysisPoint; info::String = "")
+    is_valid = false
+    if (ap.outputs == nothing)
+        is_valid = true
+    else
+        conn_eq = connect(ap.input, ap.outputs...)
+        is_valid = _validate(conn_eq.rhs, info=info)
+    end
+    return is_valid
+end
+
 function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
@@ -242,7 +253,7 @@ function validate(jumps::Vector{JumpType}, t::Symbolic)
 end
 
 function validate(eq::MT.Equation; info::String = "")
-    if typeof(eq.lhs) == Connection
+    if typeof(eq.lhs) <: Union{AnalysisPoint, Connection}
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
