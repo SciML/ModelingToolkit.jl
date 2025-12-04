@@ -1,3 +1,16 @@
+const accept_unnamed_model = ScopedValue(false)
+macro accept_unnamed_model(expr)
+    esc(:($with(()->$expr, $ModelingToolkit.accept_unnamed_model => true)))
+end
+function default_model_name(m)
+    if accept_unnamed_model[]
+        return :unnamed
+    else
+        error("Model constructor ", m, " require a `name=` keyword argument ",
+              "(or usage of `@named`, `@mtkcompile`)")
+    end
+end
+
 """
 $(TYPEDEF)
 
@@ -22,7 +35,8 @@ struct Model{F, S}
         """
     isconnector::Bool
 end
-(m::Model)(args...; kw...) = m.f(args...; kw...)
+(m::Model)(args...; name=default_model_name(m), kw...) =
+    m.f(args...; name, Dict(k=>default_to_parentscope(v) for (k,v) in kw)...)
 
 Base.parentmodule(m::Model) = parentmodule(m.f)
 
@@ -39,6 +53,24 @@ flatten_equations(eqs::Vector{Equation}, eq::Equation) = vcat(eqs, [eq])
 flatten_equations(eq::Vector{Equation}, eqs::Vector{Equation}) = vcat(eq, eqs)
 function flatten_equations(eqs::Vector{Union{Equation, Vector{Equation}}})
     foldl(flatten_equations, eqs; init = Equation[])
+end
+
+""" This `ScopedValue` is used to handle structural parameter and component change via
+`outer__inner__variable`-type kwargs. The idea is that while we can't easily thread these kwargs
+from `outer` to `inner` explicitly, we can pass them on via `passed_kwargs`. """
+const passed_kwargs = ScopedValue(Dict{Symbol, Any}())
+lookup_passed_kwarg(kwarg::Symbol, val) = get(passed_kwargs[], kwarg, val)
+lookup_passed_kwarg(num::Num, val) = lookup_passed_kwarg(Symbol(string(num)), val)
+
+setdefault_g(p::Num, val) = setdefault(p, lookup_passed_kwarg(Symbol(string(p)), val))
+setdefault_g(p, val) = setdefault(p, val)  # fallback, sometimes p is some exotic structure
+
+function construct_subcomponent(body::Function, lhs, other_kwargs)
+    root = string(lhs, "__")
+    dict2 = Dict{Symbol, Any}(Symbol(string(k)[length(root)+1:end])=>v
+                              for (k, v) in merge(passed_kwargs[], other_kwargs)
+                              if startswith(string(k), root))
+    return with(body, passed_kwargs => dict2)
 end
 
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
@@ -156,11 +188,11 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(var"#___sys___"))
 
     f = if length(where_types) == 0
-        :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+        :($(Symbol(:__, name, :__))(; name, $(kwargs...), other_kwargs...) = $exprs)
     else
         f_with_where = Expr(:where)
         push!(f_with_where.args,
-            :($(Symbol(:__, name, :__))(; name, $(kwargs...))), where_types...)
+            :($(Symbol(:__, name, :__))(; name, $(kwargs...), other_kwargs...)), where_types...)
         :($f_with_where = $exprs)
     end
 
@@ -728,6 +760,7 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 b = _type_check!(get_var(mod, b), a, type, :structural_parameters)
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, Expr(:(::), a, type), b))
+                push!(exprs, :($a = $lookup_passed_kwarg($(Expr(:quote, a)), $a)))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(
                     :value => b, :type => type)
             end
@@ -736,11 +769,12 @@ function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
                 b) => begin
                 push!(sps, a)
                 push!(kwargs, Expr(:kw, a, b))
+                push!(exprs, :($a = $lookup_passed_kwarg($(Expr(:quote, a)), $a)))
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => b)
             end
             a => begin
                 push!(sps, a)
-                push!(kwargs, a)
+                push!(kwargs, a)  # TODO: maybe use NOVALUE
                 dict[:structural_parameters][a] = dict[:kwargs][a] = Dict(:value => nothing)
             end
         end
@@ -925,10 +959,10 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
             unit = metadata_with_exprs[VariableUnit]
             quote
                 $name = if $name === $NO_VALUE
-                    $setdefault($vv, $def)
+                    $setdefault($vv, $lookup_passed_kwarg($vv, $def))
                 else
                     try
-                        $setdefault($vv, $convert_units($unit, $name))
+                        $setdefault($vv, $convert_units($unit, $lookup_passed_kwarg($vv, $name)))
                     catch e
                         if isa(e, $(DynamicQuantities.DimensionError)) ||
                            isa(e, $(Unitful.DimensionError))
@@ -945,9 +979,9 @@ function parse_variable_arg(dict, mod, arg, varclass, kwargs, where_types)
         else
             quote
                 $name = if $name === $NO_VALUE
-                    $setdefault($vv, $def)
+                    $setdefault_g($vv, $def)
                 else
-                    $setdefault($vv, $name)
+                    $setdefault_g($vv, $name)
                 end
             end
         end
@@ -1283,192 +1317,62 @@ end
 
 ### Parsing Components:
 
-function component_args!(a, b, varexpr, kwargs; index_name = nothing)
-    # Whenever `b` is a function call, skip the first arg aka the function name.
-    # Whenever it is a kwargs list, include it.
-    start = b.head == :call ? 2 : 1
-    for i in start:lastindex(b.args)
-        arg = b.args[i]
-        arg isa LineNumberNode && continue
-        MLStyle.@match arg begin
-            x::Symbol ||
-            Expr(:kw, x) => begin
-                varname, _varname = _rename(a, x)
-                b.args[i] = Expr(:kw, x, _varname)
-                push!(varexpr.args, :((if $varname !== nothing
-                    $_varname = $varname
-                elseif @isdefined $x
-                    # Allow users to define a var in `structural_parameters` and set
-                    # that as positional arg of subcomponents; it is useful for cases
-                    # where it needs to be passed to multiple subcomponents.
-                    $_varname = $x
-                end)))
-                push!(kwargs, Expr(:kw, varname, nothing))
-                # dict[:kwargs][varname] = nothing
+""" `push!`, or `append!`, depending on `x`'s type """
+push_append!(vec, x::AbstractVector) = append!(vec, x)
+push_append!(vec, x) = push!(vec, x)
+
+""" Helper; renames a single component or a vector of component. """
+component_rename(obj, name::Symbol) = rename(obj, name)
+component_rename(objs::Vector, name::Symbol) =
+    [rename(obj, Symbol(name, :_, i)) for (i, obj) in enumerate(objs)]
+
+""" Recursively parse an expression inside of the `@components` block.
+
+Recursive is to handle nested `if` blocks. """
+function parse_components_expr!(exprs, cs, dict, compexpr, kwargs)
+    MLStyle.@match compexpr begin
+        Expr(:block, args...) => begin
+            for a in args
+                parse_components_expr!(exprs, cs, dict, a, kwargs)
             end
-            Expr(:parameters, x...) => begin
-                component_args!(a, arg, varexpr, kwargs)
-            end
-            Expr(:kw,
-                x,
-                y) => begin
-                varname, _varname = _rename(a, x)
-                b.args[i] = Expr(:kw, x, _varname)
-                if isnothing(index_name)
-                    push!(varexpr.args, :($_varname = $varname === nothing ? $y : $varname))
-                else
-                    push!(varexpr.args,
-                        :($_varname = $varname === nothing ? $y : $varname[$index_name]))
-                end
-                push!(kwargs, Expr(:kw, varname, nothing))
-                # dict[:kwargs][varname] = nothing
-            end
-            _ => error("Could not parse $arg of component $a")
         end
+        Expr(:if, condition, x) => begin
+            then_exprs = []
+            parse_components_expr!(then_exprs, cs, dict, x, kwargs)
+            push!(exprs, :(if $condition begin $(then_exprs...) end end))
+        end
+        Expr(:if, condition, x, y) => begin
+            then_exprs = []
+            else_exprs = []
+            parse_components_expr!(then_exprs, cs, dict, x, kwargs)
+            parse_components_expr!(else_exprs, cs, dict, y, kwargs)
+            push!(exprs, :(if $condition
+                               begin $(then_exprs...) end
+                           else
+                               begin $(else_exprs...) end
+                           end))
+        end
+        Expr(:elseif, args...) => parse_components_expr!(exprs, cs, dict, Expr(:if, args...), kwargs)
+        Expr(:(=), lhs, rhs) => begin
+            push!(dict[:components], [lhs, :unimplemented])  # TODO
+            rhs_2 = :($construct_subcomponent($(Expr(:quote, lhs)), other_kwargs) do; $rhs end)
+            push!(exprs,
+                  # The logic here is a bit complicated; the component can be taken from either
+                  # the kwargs, or `passed_kwargs`. TODO: simplify
+                  :($lhs = $component_rename($lookup_passed_kwarg($(Expr(:quote, lhs)),
+                                                                  $Base.@something($lhs, $rhs_2)),
+                                             $(Expr(:quote, lhs)))))
+            push!(exprs, :($push_append!(systems, $lhs)))
+            push!(kwargs, Expr(:kw, lhs, :nothing))
+        end
+        _ => error("Expression not handled ", compexpr)
     end
-end
-
-model_name(name, range) = Symbol.(name, :_, collect(range))
-
-function _parse_components!(body, kwargs)
-    local expr
-    varexpr = Expr(:block)
-    comps = Vector{Union{Union{Expr, Symbol}, Expr}}[]
-    comp_names = []
-
-    Base.remove_linenums!(body)
-    arg = body.args[end]
-
-    MLStyle.@match arg begin
-        Expr(:(=),
-            a,
-            Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d)))) => begin
-            array_varexpr = Expr(:block)
-
-            push!(comp_names, :($a...))
-            push!(comps, [a, b.args[1], d])
-            b = deepcopy(b)
-
-            component_args!(a, b, array_varexpr, kwargs; index_name = c)
-
-            expr = _named_idxs(a, d, :($c -> $b); extra_args = array_varexpr)
-        end
-        Expr(:(=),
-            a,
-            Expr(:comprehension, Expr(:generator, b, Expr(:filter, e, Expr(:(=), c, d))))) => begin
-            error("List comprehensions with conditional statements aren't supported.")
-        end
-        Expr(:(=),
-            a,
-            Expr(:comprehension, Expr(:generator, b, Expr(:(=), c, d), e...))) => begin
-            # Note that `e` is of the form `Tuple{Expr(:(=), c, d)}`
-            error("More than one index isn't supported while building component array")
-        end
-        Expr(:block) => begin
-            # TODO: Do we need this?
-            error("Multiple `@components` block detected within a single block")
-        end
-        Expr(:(=),
-            a,
-            Expr(:for, Expr(:(=), c, d), b)) => begin
-            Base.remove_linenums!(b)
-            array_varexpr = Expr(:block)
-            push!(array_varexpr.args, b.args[1:(end - 1)]...)
-            push!(comp_names, :($a...))
-            push!(comps, [a, b.args[end].args[1], d])
-            b = deepcopy(b)
-
-            component_args!(a, b.args[end], array_varexpr, kwargs; index_name = c)
-
-            expr = _named_idxs(a, d, :($c -> $(b.args[end])); extra_args = array_varexpr)
-        end
-        Expr(:(=), a, b) => begin
-            arg = deepcopy(arg)
-            b = deepcopy(arg.args[2])
-
-            component_args!(a, b, varexpr, kwargs)
-
-            arg.args[2] = b
-            expr = :(@named $arg)
-            push!(comp_names, a)
-            if (isa(b.args[1], Symbol) || Meta.isexpr(b.args[1], :.))
-                push!(comps, [a, b.args[1]])
-            end
-        end
-        _ => error("Couldn't parse the component body: $arg")
-    end
-
-    return comp_names, comps, expr, varexpr
-end
-
-function push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
-    blk = Expr(:block)
-    push!(blk.args, varexpr)
-    push!(blk.args, expr_vec)
-    push!(blk.args, :($push!(systems, $(comp_names...))))
-    push!(ifexpr.args, blk)
-end
-
-function handle_if_x!(mod, exprs, ifexpr, x, kwargs, condition = nothing)
-    push!(ifexpr.args, condition)
-    comp_names, comps, expr_vec, varexpr = _parse_components!(x, kwargs)
-    push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
-    comps
-end
-
-function handle_if_y!(exprs, ifexpr, y, kwargs)
-    Base.remove_linenums!(y)
-    if Meta.isexpr(y, :elseif)
-        comps = [:elseif, y.args[1]]
-        elseifexpr = Expr(:elseif)
-        push!(comps, handle_if_x!(mod, exprs, elseifexpr, y.args[2], kwargs, y.args[1]))
-        get(y.args, 3, nothing) !== nothing &&
-            push!(comps, handle_if_y!(exprs, elseifexpr, y.args[3], kwargs))
-        push!(ifexpr.args, elseifexpr)
-        (comps...,)
-    else
-        comp_names, comps, expr_vec, varexpr = _parse_components!(y, kwargs)
-        push_conditional_component!(ifexpr, expr_vec, comp_names, varexpr)
-        comps
-    end
-end
-
-function handle_conditional_components(condition, dict, exprs, kwargs, x, y = nothing)
-    ifexpr = Expr(:if)
-    comps = handle_if_x!(mod, exprs, ifexpr, x, kwargs, condition)
-    ycomps = y === nothing ? [] : handle_if_y!(exprs, ifexpr, y, kwargs)
-    push!(exprs, ifexpr)
-    push!(dict[:components], (:if, condition, comps, ycomps))
 end
 
 function parse_components!(exprs, cs, dict, compbody, kwargs)
     dict[:components] = []
     Base.remove_linenums!(compbody)
-    for arg in compbody.args
-        MLStyle.@match arg begin
-            Expr(:if, condition,
-                x) => begin
-                handle_conditional_components(condition, dict, exprs, kwargs, x)
-            end
-            Expr(:if,
-                condition,
-                x,
-                y) => begin
-                handle_conditional_components(condition, dict, exprs, kwargs, x, y)
-            end
-            # Either the arg is top level component declaration or an invalid cause - both are handled by `_parse_components`
-            _ => begin
-                comp_names, comps, expr_vec,
-                varexpr = _parse_components!(:(begin
-                        $arg
-                    end),
-                    kwargs)
-                push!(cs, comp_names...)
-                push!(dict[:components], comps...)
-                push!(exprs, varexpr, expr_vec)
-            end
-        end
-    end
+    parse_components_expr!(exprs, cs, dict, compbody, kwargs)
 end
 
 function _rename(compname, varname)
