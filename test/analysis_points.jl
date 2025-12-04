@@ -1,11 +1,13 @@
-using ModelingToolkit, ModelingToolkitStandardLibrary.Blocks, ControlSystemsBase
-using ModelingToolkitStandardLibrary.Mechanical.Rotational
-using ModelingToolkitStandardLibrary.Blocks
-using OrdinaryDiffEq, LinearAlgebra
-using Test
+using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkit as MTK
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ControlSystemsBase
 import ControlSystemsBase as CS
+using OrdinaryDiffEq, LinearAlgebra
+using Test
 using Symbolics: NAMESPACE_SEPARATOR
 using Unitful
 
