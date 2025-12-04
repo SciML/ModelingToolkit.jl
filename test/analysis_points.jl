@@ -92,7 +92,7 @@ end
 
 @testset "AnalysisPoint is lowered to `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     ap = AnalysisPoint(:plant_input)
     eqs = [connect(P.output, C.input)
@@ -112,7 +112,7 @@ end
 
 @testset "Inverse causality throws a warning" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     ap = AnalysisPoint(:plant_input)
     @test_warn ["1-th argument", "plant_input", "not a output"] connect(
@@ -123,7 +123,7 @@ end
 # also tests `connect(input, name::Symbol, outputs...)` syntax
 @testset "AnalysisPoint is accessible via `getproperty`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = -1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     eqs = [connect(P.output, C.input), connect(C.output, :plant_input, P.input)]
     sys_ap = System(eqs, t, systems = [P, C], name = :hej)
@@ -143,7 +143,7 @@ end
 ### Ported from MTKStdlib
 
 @named P = FirstOrder(k = 1, T = 1)
-@named C = Gain(; k = -1)
+@named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
 ap = AnalysisPoint(:plant_input)
 eqs = [connect(P.output, C.input), connect(C.output, ap, P.input)]
@@ -348,7 +348,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - standard `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output, :plant_output, add.input2)
@@ -384,7 +384,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - causal variable `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output.u, :plant_output, add.input2.u)
@@ -420,7 +420,7 @@ end
 
 @testset "Duplicate `connect` statements across subsystems with AP transforms - mixed `connect`" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output.u, :plant_output, add.input2.u)
@@ -542,7 +542,7 @@ end
 
 @testset "multiple analysis points" begin
     @named P = FirstOrder(k = 1, T = 1)
-    @named C = Gain(; k = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
     @named add = Blocks.Add(k2 = -1)
 
     eqs = [connect(P.output, :plant_output, add.input2)
