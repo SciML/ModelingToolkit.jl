@@ -1280,7 +1280,7 @@ function split_indexed_var(x::SymbolicT)
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             arr, isarr = split_indexed_var(args[1])
             isarr || return x, false
-            return f(arr), isarr
+            return f(arr)::SymbolicT, isarr
         end
         _ => return x, false
     end
