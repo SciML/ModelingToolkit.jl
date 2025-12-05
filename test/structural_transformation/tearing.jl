@@ -1,12 +1,13 @@
 using Test
 using ModelingToolkit
 using ModelingToolkit: Equation, observed
-using ModelingToolkit.StructuralTransformations: SystemStructure, find_solvables!
+using ModelingToolkit.StructuralTransformations: SystemStructure
 using NonlinearSolve
 using LinearAlgebra
 using UnPack
 using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
+import StateSelection
 import SymbolicUtils as SU
 ###
 ### Nonlinear system
@@ -22,7 +23,7 @@ eqs = [
 ]
 @named sys = System(eqs, [u1, u2, u3, u4, u5], [h])
 state = TearingState(sys)
-StructuralTransformations.find_solvables!(state)
+StateSelection.find_solvables!(state)
 
 io = IOBuffer()
 show(io, MIME"text/plain"(), state.structure)
@@ -44,7 +45,7 @@ prt = String(take!(buff))
 # u4 = f4(u2, u3)
 # u5 = f5(u4, u1)
 state = TearingState(sys)
-find_solvables!(state)
+StateSelection.find_solvables!(state)
 @unpack structure, fullvars = state
 @unpack graph, solvable_graph = state.structure
 int2var = Dict(eachindex(fullvars) .=> fullvars)

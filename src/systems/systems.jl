@@ -167,9 +167,9 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
 
     graph = ts.structure.graph
     algvars = BitSet(findall(
-        Base.Fix1(StructuralTransformations.isalgvar, ts.structure), 1:ndsts(graph)))
+        Base.Fix1(StateSelection.isalgvar, ts.structure), 1:ndsts(graph)))
     algeqs = BitSet(findall(1:nsrcs(graph)) do eq
-        all(!Base.Fix1(isdervar, ts.structure), 𝑠neighbors(graph, eq))
+        all(!Base.Fix1(StateSelection.isdervar, ts.structure), 𝑠neighbors(graph, eq))
     end)
     alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
     for (i, eq) in enumerate(alge_var_eq_matching)

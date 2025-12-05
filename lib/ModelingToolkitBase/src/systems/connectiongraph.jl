@@ -108,105 +108,21 @@ function Base.show(io::IO, vert::ConnectionVertex)
     print(io, vert.name[end], "::", vert.isouter ? "outer" : "inner")
 end
 
-"""
-    $(TYPEDEF)
-
-A hypergraph used to represent the connection sets in a system. Vertices of this graph are
-of type `ConnectionVertex`. The connected components of a connection graph are the merged
-connection sets.
-
-## Fields
-
-$(TYPEDFIELDS)
-"""
-struct HyperGraph{V}
-    """
-    Mapping from vertices to their integer ID.
-    """
-    labels::Dict{V, Int}
-    """
-    Reverse mapping from integer ID to vertices.
-    """
-    invmap::Vector{V}
-    """
-    Core data structure for storing the hypergraph. Each hyperedge is a source vertex and
-    has bipartite edges to the connection vertices it is incident on.
-    """
-    graph::BipartiteGraph{Int, Nothing}
-end
-
 const ConnectionGraph = HyperGraph{ConnectionVertex}
 
-"""
-    $(TYPEDSIGNATURES)
-
-Create an empty `ConnectionGraph`.
-"""
-function HyperGraph{V}() where {V}
-    graph = BipartiteGraph(0, 0, Val(true))
-    return HyperGraph{V}(Dict{V, Int}(), V[], graph)
-end
-
-function Base.show(io::IO, graph::ConnectionGraph)
-    printstyled(io, get(io, :cgraph_name, "ConnectionGraph"); color = :blue, bold = true)
-    println(io, " with ", length(graph.labels),
-        " vertices and ", nsrcs(graph.graph), " hyperedges")
-    compact = get(io, :compact, false)
-    for edge_i in 𝑠vertices(graph.graph)
-        if compact && edge_i > 5
-            println(io, "⋮")
-            break
-        end
-        edge_idxs = 𝑠neighbors(graph.graph, edge_i)
-        type = graph.invmap[edge_idxs[1]].type
-        if type <: Union{InputVar, OutputVar}
-            type = "Causal"
-        elseif type == Equality
-            # otherwise it prints `ModelingToolkitBase.Equality`
-            type = "Equality"
-        end
-        printstyled(io, "  ", type; bold = true, color = :yellow)
-        print(io, "<")
-        for vi in @view(edge_idxs[1:(end - 1)])
-            print(io, graph.invmap[vi], ", ")
-        end
-        println(io, graph.invmap[edge_idxs[end]], ">")
+function BipartiteGraphs.print_hyperedge_hint(io::IO, ::Type{ConnectionVertex}, graph::HyperGraph{ConnectionVertex}, edge_i::Int)
+    edge_idxs = 𝑠neighbors(graph.graph, edge_i)
+    type = graph.invmap[edge_idxs[1]].type
+    if type <: Union{InputVar, OutputVar}
+        type = "Causal"
+    elseif type == Equality
+        # otherwise it prints `ModelingToolkitBase.Equality`
+        type = "Equality"
     end
+    printstyled(io, type; bold = true, color = :yellow)
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Add the given vertex to the connection graph. Return the integer ID of the added vertex.
-No-op if the vertex already exists.
-"""
-function Graphs.add_vertex!(graph::HyperGraph{V}, dst::V) where {V}
-    j = get(graph.labels, dst, 0)
-    iszero(j) || return j
-    j = Graphs.add_vertex!(graph.graph, DST)
-    push!(graph.invmap, dst)
-    @assert length(graph.invmap) == j
-    graph.labels[dst] = j
-    return j
-end
-
-const HyperGraphEdge{V} = Union{Vector{V}, Tuple{Vararg{V}}, Set{V}}
-const ConnectionGraphEdge = HyperGraphEdge{ConnectionVertex}
-
-"""
-    $(TYPEDSIGNATURES)
-
-Add the given hyperedge to the connection graph. Adds all vertices in the given edge if
-they do not exist. Returns the integer ID of the added edge.
-"""
-function Graphs.add_edge!(graph::HyperGraph{V}, src::HyperGraphEdge{V}) where {V}
-    i = Graphs.add_vertex!(graph.graph, SRC)
-    for vert in src
-        j = Graphs.add_vertex!(graph, vert)
-        Graphs.add_edge!(graph.graph, i, j)
-    end
-    return i
-end
+const ConnectionGraphEdge = BipartiteGraphs.HyperGraphEdge{ConnectionVertex}
 
 """
     $(TYPEDEF)
@@ -450,36 +366,7 @@ end
 Return the merged connection sets in `graph` as a `Vector{Vector{ConnectionVertex}}`. These
 are equivalent to the connected components of `graph`.
 """
-function connectionsets(graph::HyperGraph{V}) where {V}
-    bigraph = graph.graph
-    invmap = graph.invmap
-
-    # union all of the hyperedges
-    disjoint_sets = IntDisjointSet(length(invmap))
-    for edge_i in 𝑠vertices(bigraph)
-        hyperedge = 𝑠neighbors(bigraph, edge_i)
-        isempty(hyperedge) && continue
-        root, rest = Iterators.peel(hyperedge)
-        for vert in rest
-            union!(disjoint_sets, root, vert)
-        end
-    end
-
-    # maps the root of a vertex in `disjoint_sets` to the index of the corresponding set
-    # in `vertex_sets`
-    root_to_set = Dict{Int, Int}()
-    vertex_sets = Vector{V}[]
-    for (vert_i, vert) in enumerate(invmap)
-        root = find_root!(disjoint_sets, vert_i)
-        set_i = get!(root_to_set, root) do
-            push!(vertex_sets, V[])
-            return length(vertex_sets)
-        end
-        push!(vertex_sets[set_i], vert)
-    end
-
-    return vertex_sets
-end
+@inline connectionsets(graph::HyperGraph{V}) where {V} = Graphs.connected_components(graph)
 
 """
     $(TYPEDSIGNATURES)

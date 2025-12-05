@@ -1287,7 +1287,7 @@ if @isdefined(ModelingToolkit)
                x^2 + y^2 ~ 1]
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + 0.1]
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
-        prob = ODEProblem(pend, [x => -1, y => 0, g => 1], (0.0, 10.0), guesses = [λ => 1])
+        prob = ODEProblem(pend, [x => -1, D(x) => 0, g => 1], (0.0, 10.0), guesses = [λ => 1, y => 1])
         sol = solve(prob, FBDF())
         @test ≈(sol(5.000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
         @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1e-4)
@@ -1295,7 +1295,7 @@ if @isdefined(ModelingToolkit)
         # Implicit affect with Pre
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + y^2]
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
-        prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 10.0), guesses = [λ => 1])
+        prob = ODEProblem(pend, [x => 1, D(x) => 0, g => 1], (0.0, 10.0), guesses = [λ => 1,  y => 1])
         sol = solve(prob, FBDF())
         @test ≈(sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x),
             sol(5.000001, idxs = x), rtol = 1e-4)
