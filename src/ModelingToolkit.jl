@@ -88,12 +88,15 @@ import FillArrays
 using BipartiteGraphs
 import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
                     undef_blocks, blocks
-import StateSelection
-import StateSelection: CLIL
-import ModelingToolkitTearing as MTKTearing
-using ModelingToolkitTearing: TearingState, SystemStructure
 
-ModelingToolkitBase.complete(dg::StateSelection.DiffGraph) = BipartiteGraphs.complete(dg)
+@recompile_invalidations begin
+    import StateSelection
+    import StateSelection: CLIL
+    import ModelingToolkitTearing as MTKTearing
+    using ModelingToolkitTearing: TearingState, SystemStructure
+
+    ModelingToolkitBase.complete(dg::StateSelection.DiffGraph) = BipartiteGraphs.complete(dg)
+end
 
 macro import_mtkbase()
     allnames = names(MTKBase; all = true)
@@ -125,25 +128,27 @@ end
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
                            COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
-include("linearization.jl")
-include("systems/analysis_points.jl")
-include("systems/solver_nlprob.jl")
+@recompile_invalidations begin
+    include("linearization.jl")
+    include("systems/analysis_points.jl")
+    include("systems/solver_nlprob.jl")
 
-include("problems/docs.jl")
-include("systems/codegen.jl")
-include("problems/semilinearodeproblem.jl")
-include("problems/sccnonlinearproblem.jl")
+    include("problems/docs.jl")
+    include("systems/codegen.jl")
+    include("problems/semilinearodeproblem.jl")
+    include("problems/sccnonlinearproblem.jl")
 
-include("discretedomain.jl")
-include("systems/systemstructure.jl")
-include("initialization.jl")
-include("systems/systems.jl")
-include("systems/clock_inference.jl")
-include("systems/if_lifting.jl")
-include("systems/substitute_component.jl")
+    include("discretedomain.jl")
+    include("systems/systemstructure.jl")
+    include("initialization.jl")
+    include("systems/systems.jl")
+    include("systems/clock_inference.jl")
+    include("systems/if_lifting.jl")
+    include("systems/substitute_component.jl")
 
-include("systems/alias_elimination.jl")
-include("structural_transformation/StructuralTransformations.jl")
+    include("systems/alias_elimination.jl")
+    include("structural_transformation/StructuralTransformations.jl")
+end
 
 @reexport using .StructuralTransformations
 
@@ -165,4 +170,5 @@ function FMIComponent end
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
 
+include(pkgdir(ModelingToolkitBase, "src", "precompile.jl"))
 end # module
