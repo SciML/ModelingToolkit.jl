@@ -1564,9 +1564,12 @@ end
         X(t)[1:2] = [4.0, 4.0]
     end
     ps = @parameters begin
-        k(t)[1:2] = [1, 1]
         kup = 2.0
     end
+    discs = @discretes begin
+        k(t)[1:2] = [1, 1]
+    end
+    ps = [ps; discs]
     eqs = [
         D(X[1]) ~ -k[1]*X[1] + k[2]*X[2]
         D(X[2]) ~ k[1]*X[1] - k[2]*X[2]
