@@ -297,7 +297,10 @@ end
 
 function MTK.validate(eq::Union{Inequality, Equation}; info::String = "")
     if isconst(eq.lhs) && value(eq.lhs) isa Union{Connection, AnalysisPoint}
-        tmp = value(eq.lhs)::Union{Connection, AnalysisPoint}
+        tmp = value(eq.rhs)::Union{Connection, AnalysisPoint}
+        if tmp isa AnalysisPoint
+            tmp = value(MTK.to_connection(tmp).rhs)::Connection
+        end
         _validate(tmp; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
