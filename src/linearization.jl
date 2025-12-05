@@ -285,7 +285,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         for (k, v) in p
             if is_parameter(linfun, k)
                 v = fixpoint_sub(v, p)
-                setp(linfun, k)(newps, v)
+                setp(linfun, k)(newps, value(v))
             end
         end
         p = newps
@@ -508,7 +508,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     sts = unknowns(sys)
     t = get_iv(sys)
     ps = parameters(sys; initial_parameters = true)
-    p = reorder_parameters(sys, ps)
+    p = Tuple(reorder_parameters(sys, ps))
 
     fun_expr = generate_rhs(sys; expression = Val{true})[1]
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
@@ -611,60 +611,6 @@ function Base.showerror(io::IO, err::IONotFoundError)
         ```
         """)
     end
-end
-
-"""
-Modify the variable metadata of system variables to indicate which ones are inputs, outputs, and disturbances. Needed for `inputs`, `outputs`, `disturbances`, `unbound_inputs`, `unbound_outputs` to return the proper subsets.
-"""
-function markio!(state, orig_inputs, inputs, outputs, disturbances; check = true)
-    fullvars = get_fullvars(state)
-    inputset = Dict{Any, Bool}(i => false for i in inputs)
-    outputset = Dict{Any, Bool}(o => false for o in outputs)
-    disturbanceset = Dict{Any, Bool}(d => false for d in disturbances)
-    for (i, v) in enumerate(fullvars)
-        if v in keys(inputset)
-            if v in keys(outputset)
-                v = setio(v, true, true)
-                outputset[v] = true
-            else
-                v = setio(v, true, false)
-            end
-            inputset[v] = true
-            fullvars[i] = v
-        elseif v in keys(outputset)
-            v = setio(v, false, true)
-            outputset[v] = true
-            fullvars[i] = v
-        else
-            if isinput(v)
-                push!(orig_inputs, v)
-            end
-            v = setio(v, false, false)
-            fullvars[i] = v
-        end
-
-        if v in keys(disturbanceset)
-            v = setio(v, true, false)
-            v = setdisturbance(v, true)
-            disturbanceset[v] = true
-            fullvars[i] = v
-        end
-    end
-    if check
-        ikeys = keys(filter(!last, inputset))
-        if !isempty(ikeys)
-            throw(IONotFoundError("inputs", nameof(state.sys), ikeys))
-        end
-        dkeys = keys(filter(!last, disturbanceset))
-        if !isempty(dkeys)
-            throw(IONotFoundError("disturbance inputs", nameof(state.sys), dkeys))
-        end
-        okeys = keys(filter(!last, outputset))
-        if !isempty(okeys)
-            throw(IONotFoundError("outputs", nameof(state.sys), okeys))
-        end
-    end
-    state, orig_inputs
 end
 
 """
@@ -772,7 +718,7 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters())
     prob = LinearizationProblem(lin_fun, t)
-    op = anydict(op)
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
     for (k, v) in op
         v === nothing && continue

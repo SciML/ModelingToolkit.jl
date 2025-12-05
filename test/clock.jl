@@ -1,12 +1,16 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
+using OrderedCollections
 using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using Symbolics, SymbolicUtils
+using Symbolics: SymbolicT, VartypeT
+using SciCompDSL
+import ModelingToolkitTearing as MTKTearing
 
 function infer_clocks(sys)
     ts = TearingState(sys)
-    ci = ModelingToolkit.ClockInference(ts)
-    ModelingToolkit.infer_clocks!(ci), Dict(ci.ts.fullvars .=> ci.var_domain)
+    ci = MTKTearing.ClockInference(ts)
+    MTKTearing.infer_clocks!(ci), Dict(ci.ts.fullvars .=> ci.var_domain)
 end
 
 @info "Testing hybrid system"
@@ -65,12 +69,12 @@ By inference:
 
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
-tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
+tss, inputs, continuous_id = MTKTearing.split_system(deepcopy(ci))
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[continuous_id]), inputs = inputs[continuous_id], outputs = [])
+    deepcopy(tss[continuous_id]), inputs = OrderedSet{SymbolicT}(inputs[continuous_id]))
 @test equations(sss) == [D(x) ~ u - x]
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[1]), inputs = inputs[1], outputs = [])
+    deepcopy(tss[1]), inputs = OrderedSet{SymbolicT}(inputs[1]))
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
@@ -127,9 +131,9 @@ eqs = [yd ~ Sample(dt)(y)
     initialization_eqs = [y ~ z, x ~ 1]
     @named sys = System(eqs, t; initialization_eqs)
     ts = TearingState(sys)
-    ci = ModelingToolkit.ClockInference(ts)
+    ci = MTKTearing.ClockInference(ts)
     @test length(ci.init_eq_domain) == 2
-    ModelingToolkit.infer_clocks!(ci)
+    MTKTearing.infer_clocks!(ci)
     canonical_eqs = map(eqs) do eq
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             return eq
@@ -148,12 +152,12 @@ eqs = [yd ~ Sample(dt)(y)
 end
 
 struct ZeroArgOp <: Symbolics.Operator end
-(o::ZeroArgOp)() = Symbolics.Term{Bool}(o, Any[])
+(o::ZeroArgOp)() = SymbolicUtils.Term{VartypeT}(o, Any[]; type = Bool, shape = [])
 SymbolicUtils.promote_symtype(::ZeroArgOp, T) = Union{Bool, T}
 SymbolicUtils.isbinop(::ZeroArgOp) = false
 Base.nameof(::ZeroArgOp) = :ZeroArgOp
-ModelingToolkit.input_timedomain(::ZeroArgOp, _ = nothing) = ()
-ModelingToolkit.output_timedomain(::ZeroArgOp, _ = nothing) = Clock(0.1)
+MTKTearing.input_timedomain(::ZeroArgOp, _ = nothing) = MTKTearing.InputTimeDomainElT[]
+MTKTearing.output_timedomain(::ZeroArgOp, _ = nothing) = Clock(0.1)
 ModelingToolkit.validate_operator(::ZeroArgOp, args, iv; context = nothing) = nothing
 SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
 

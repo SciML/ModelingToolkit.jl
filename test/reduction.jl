@@ -1,12 +1,12 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
-using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D
+using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
 @variables x(t) y(t) z(t) k(t)
 eqs = [x ~ y + z
        z ~ 2
        y ~ 2z + k]
 
-sorted_eq = topsort_equations(eqs, [x, y, z, k])
+sorted_eq = topsort_equations(eqs, unwrap.([x, y, z, k]))
 
 ref_eq = [z ~ 2
           y ~ 2z + k
@@ -15,7 +15,7 @@ ref_eq = [z ~ 2
 
 @test_throws ArgumentError topsort_equations([x ~ y + z
                                               z ~ 2
-                                              y ~ 2z + x], [x, y, z, k])
+                                              y ~ 2z + x], unwrap.([x, y, z, k]))
 
 @parameters σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
@@ -189,16 +189,16 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
        E₀ ~ E + C]
 
 @named sys = System(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
-@test_throws ModelingToolkit.ExtraEquationsSystemException mtkcompile(sys)
+@test_throws ModelingToolkit.StateSelection.ExtraEquationsSystemException mtkcompile(sys)
 
 # Example 5 from Pantelides' original paper
-params = collect(@parameters y1(t) y2(t))
+params = collect(@parameters y1 y2)
 sts = collect(@variables x(t) u1(t) u2(t))
 eqs = [0 ~ x + sin(u1 + u2)
        D(x) ~ x + y1
        cos(x) ~ sin(y2)]
 @named sys = System(eqs, t, sts, params)
-@test_throws ModelingToolkit.InvalidSystemException mtkcompile(sys)
+@test_throws ModelingToolkit.StateSelection.InvalidSystemException mtkcompile(sys)
 
 # issue #963
 @variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)
@@ -277,8 +277,8 @@ eqs = [x ~ 0
 @named sys = System(eqs, t, [x, y], [])
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
-@test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
-                                      "xˍt(t) ~ 0.0"
+@test sort(string.(observed(ss))) == ["x(t) ~ 0"
+                                      "xˍt(t) ~ 0"
                                       "y(t) ~ xˍt(t) - x(t)"]
 
 eqs = [D(D(x)) ~ -x]

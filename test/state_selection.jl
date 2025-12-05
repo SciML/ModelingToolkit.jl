@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+import SymbolicUtils as SU
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) x2(t) x3(t) x4(t)
@@ -12,7 +13,7 @@ eqs = [x1 + x2 + u1 ~ 0
 let dd = dummy_derivative(sys)
     has_dx1 = has_dx2 = false
     for eq in equations(dd)
-        vars = ModelingToolkit.vars(eq)
+        vars = SU.search_variables(eq)
         has_dx1 |= D(x1) in vars || D(D(x1)) in vars
         has_dx2 |= D(x2) in vars || D(D(x2)) in vars
     end
@@ -251,7 +252,7 @@ let
     # ----------------------------------------------------------------------------
 
     # solution -------------------------------------------------------------------
-    @named catapult = System(eqs, t, vars, params, defaults = defs)
+    @named catapult = System(eqs, t, vars, params, initial_conditions = defs)
     sys = mtkcompile(catapult)
     prob = ODEProblem(sys, [l_2f => 0.55, damp => 1e7], (0.0, 0.1); jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success

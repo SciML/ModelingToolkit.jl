@@ -1,4 +1,5 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, SciCompDSL, OrdinaryDiffEq
+using Test
 
 t = only(@parameters(t))
 D = Differential(t)

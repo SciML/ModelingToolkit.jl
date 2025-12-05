@@ -1,13 +1,5 @@
-const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be applied to a completed system. Double simplification is not allowed."
-
-struct RepeatedStructuralSimplificationError <: Exception end
-
-function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
-    print(io, REPEATED_SIMPLIFICATION_MESSAGE)
-end
-
-"""
-$(SIGNATURES)
+@doc """
+    function mtkcompile(sys::System; kwargs...)
 
 Compile the given system into a form that ModelingToolkit can generate code for. Also
 performs a variety of symbolic-numeric enhancements. For ODEs, this includes processes
@@ -26,60 +18,17 @@ present in the equations of the system will be removed in this process.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
-"""
-function mtkcompile(
-        sys::AbstractSystem; additional_passes = [], simplify = false, split = true,
-        allow_symbolic = false, allow_parameter = true, conservative = false, fully_determined = true,
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[], array_hack = true,
-        kwargs...)
-    isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
-    reassemble_alg = get(kwargs, :reassemble_alg,
-        StructuralTransformations.DefaultReassembleAlgorithm(; simplify, array_hack))
-    newsys′ = __mtkcompile(sys;
-        allow_symbolic, allow_parameter, conservative, fully_determined,
-        inputs, outputs, disturbance_inputs, additional_passes, reassemble_alg,
-        kwargs...)
-    if newsys′ isa Tuple
-        @assert length(newsys′) == 2
-        newsys = newsys′[1]
-    else
-        newsys = newsys′
-    end
-    for pass in additional_passes
-        newsys = pass(newsys)
-    end
-    if has_parent(newsys)
-        @set! newsys.parent = complete(sys; split = false, flatten = false)
-    end
-    newsys = complete(newsys; split)
-    if newsys′ isa Tuple
-        idxs = [parameter_index(newsys, i) for i in io[1]]
-        return newsys, idxs
-    else
-        return newsys
-    end
-end
+""" mtkcompile
 
-function __mtkcompile(sys::AbstractSystem;
-        inputs = Any[], outputs = Any[],
-        disturbance_inputs = Any[],
+function MTKBase.__mtkcompile(sys::System;
+        inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         sort_eqs = true,
         kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
-    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
-        sys = noise_to_brownians(sys; names = :αₘₜₖ)
-    end
-    if !isempty(jumps(sys))
-        return sys
-    end
-    if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
-        return simplify_optimization_system(sys; kwargs..., sort_eqs)
-    end
-
     sys, statemachines = extract_top_level_statemachines(sys)
     sys = expand_connections(sys)
-    state = TearingState(sys)
+    state = TearingState(sys; sort_eqs)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
@@ -100,10 +49,11 @@ function __mtkcompile(sys::AbstractSystem;
     else
         Is = Int[]
         Js = Int[]
-        vals = Num[]
+        vals = SymbolicT[]
         make_eqs_zero_equals!(state)
         new_eqs = copy(equations(state))
-        dvar2eq = Dict{Any, Int}()
+        dvar2eq = Dict{SymbolicT, Int}()
+        eqs = equations(state)
         for (v, dv) in enumerate(var_to_diff)
             dv === nothing && continue
             deqs = 𝑑neighbors(graph, dv)
@@ -120,7 +70,7 @@ function __mtkcompile(sys::AbstractSystem;
             brown = fullvars[bj]
             (coeff, residual, islinear) = Symbolics.linear_expansion(eq, brown)
             islinear || error("$brown isn't linear in $eq")
-            new_eqs[i] = 0 ~ residual
+            new_eqs[i] = COMMON_ZERO ~ residual
             push!(vals, coeff)
         end
         g = Matrix(sparse(Is, Js, vals))
@@ -133,7 +83,7 @@ function __mtkcompile(sys::AbstractSystem;
         ode_sys = mtkcompile(
             sys; inputs, outputs, disturbance_inputs, kwargs...)
         eqs = equations(ode_sys)
-        sorted_g_rows = zeros(Num, length(eqs), size(g, 2))
+        sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
             dvar = eq.lhs
             # differential equations always precede algebraic equations
@@ -162,87 +112,21 @@ function __mtkcompile(sys::AbstractSystem;
 
         noise_eqs = substitute_observed(ode_sys, noise_eqs)
         ssys = System(Vector{Equation}(full_equations(ode_sys)),
-            get_iv(ode_sys), unknowns(ode_sys), parameters(ode_sys); noise_eqs,
-            name = nameof(ode_sys), observed = observed(ode_sys), defaults = defaults(sys),
+            get_iv(ode_sys), unknowns(ode_sys),
+            [parameters(ode_sys); collect(bound_parameters(ode_sys))]; noise_eqs,
+            name = nameof(ode_sys), observed = observed(ode_sys), bindings = bindings(sys),
+            initial_conditions = initial_conditions(sys),
             assertions = assertions(sys),
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
             gui_metadata = get_gui_metadata(sys))
-        @set! ssys.parameter_dependencies = get_parameter_dependencies(sys)
         return ssys
     end
 end
 
-function simplify_optimization_system(sys::System; split = true, kwargs...)
-    sys = flatten(sys)
-    cons = constraints(sys)
-    econs = Equation[]
-    icons = similar(cons, 0)
-    for e in cons
-        if e isa Equation
-            push!(econs, e)
-        else
-            push!(icons, e)
-        end
-    end
-    irreducible_subs = Dict()
-    dvs = mapreduce(Symbolics.scalarize, vcat, unknowns(sys))
-    if !(dvs isa Array)
-        dvs = [dvs]
-    end
-    for i in eachindex(dvs)
-        var = dvs[i]
-        if hasbounds(var)
-            irreducible_subs[var] = irrvar = setirreducible(var, true)
-            dvs[i] = irrvar
-        end
-    end
-    econs = fast_substitute.(econs, (irreducible_subs,))
-    nlsys = System(econs, dvs, parameters(sys); name = :___tmp_nlsystem)
-    snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)
-    obs = observed(snlsys)
-    seqs = equations(snlsys)
-    trueobs, _ = unhack_observed(obs, seqs)
-    subs = Dict(eq.lhs => eq.rhs for eq in trueobs)
-    cons_simplified = similar(cons, length(icons) + length(seqs))
-    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
-        cons_simplified[i] = fixpoint_sub(eq, subs)
-    end
-    newsts = setdiff(dvs, keys(subs))
-    @set! sys.constraints = cons_simplified
-    @set! sys.observed = [observed(sys); obs]
-    newcost = fixpoint_sub.(get_costs(sys), (subs,))
-    @set! sys.costs = newcost
-    @set! sys.unknowns = newsts
-    return sys
-end
-
-function __num_isdiag_noise(mat)
-    for i in axes(mat, 1)
-        nnz = 0
-        for j in axes(mat, 2)
-            if !isequal(mat[i, j], 0)
-                nnz += 1
-            end
-        end
-        if nnz > 1
-            return (false)
-        end
-    end
-    true
-end
-
-function __get_num_diag_noise(mat)
-    map(axes(mat, 1)) do i
-        for j in axes(mat, 2)
-            mij = mat[i, j]
-            if !isequal(mij, 0)
-                return mij
-            end
-        end
-        0
-    end
+function MTKBase.simplify_sde_system(sys::System; kwargs...)
+    __mtkcompile(sys; kwargs...)
 end
 
 """
@@ -283,9 +167,9 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
 
     graph = ts.structure.graph
     algvars = BitSet(findall(
-        Base.Fix1(StructuralTransformations.isalgvar, ts.structure), 1:ndsts(graph)))
+        Base.Fix1(StateSelection.isalgvar, ts.structure), 1:ndsts(graph)))
     algeqs = BitSet(findall(1:nsrcs(graph)) do eq
-        all(!Base.Fix1(isdervar, ts.structure), 𝑠neighbors(graph, eq))
+        all(!Base.Fix1(StateSelection.isdervar, ts.structure), 𝑠neighbors(graph, eq))
     end)
     alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
     for (i, eq) in enumerate(alge_var_eq_matching)

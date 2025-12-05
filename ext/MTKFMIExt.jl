@@ -137,7 +137,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         # CS FMUs do their own independent integration in a periodic callback, so their
         # unknowns are discrete variables in the `ODESystem`. A default of `missing` allows
         # them to be solved for during initialization.
-        @parameters __mtk_internal_u(t)[1:length(diffvars)]=missing [guess = diffvars]
+        @discretes __mtk_internal_u(t)[1:length(diffvars)]=missing [guess = diffvars]
         push!(observed, __mtk_internal_u ~ copy(diffvars))
     end
 
@@ -178,7 +178,7 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
         if isempty(outputs)
             __mtk_internal_o = Float64[]
         else
-            @parameters __mtk_internal_o(t)[1:length(outputs)]=missing [guess = zeros(length(outputs))]
+            @discretes __mtk_internal_o(t)[1:length(outputs)]=missing [guess = zeros(length(outputs))]
             push!(observed, __mtk_internal_o ~ outputs)
         end
     end
@@ -289,7 +289,8 @@ function MTK.FMIComponent(::Val{Ver}; fmu = nothing, tolerance = 1e-6,
     end
 
     eqs = [observed; diffeqs]
-    return System(eqs, t, states, params; parameter_dependencies, defaults = defs,
+    bindings = [eq.lhs => eq.rhs for eq in parameter_dependencies]
+    return System(eqs, t, states, params; bindings, initial_conditions = defs,
         discrete_events = [instance_management_callback], name, initialization_eqs)
 end
 

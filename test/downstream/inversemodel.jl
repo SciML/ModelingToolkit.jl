@@ -5,6 +5,7 @@ using OrdinaryDiffEqRosenbrock
 using OrdinaryDiffEqNonlinearSolve
 using SymbolicIndexingInterface
 using Test
+using SciCompDSL
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
 using ModelingToolkit: t_nounits as t, D_nounits as D
 # ==============================================================================

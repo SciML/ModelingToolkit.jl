@@ -1,4 +1,5 @@
 using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, NonlinearSolve, SciMLBase
+using SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
 
@@ -48,14 +49,14 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
 
     fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
     truesol = FMI.simulate(
-        fmu, (0.0, 8.0); saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"])
+        fmu, (0.0, 8.0); solver = Tsit5(), saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"], tstops = collect(0.0:0.1:8.0))
     @testset "v3, ME" begin
         fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
         @mtkcompile sys = MTK.FMIComponent(Val(3); fmu, type = :ME)
         test_no_inputs_outputs(sys)
         prob = ODEProblem{true, SciMLBase.FullSpecialize}(
             sys, [sys.mass__s => 0.5, sys.mass__v => 0.0], (0.0, 8.0))
-        sol = solve(prob, Tsit5(); reltol = 1e-8, abstol = 1e-8)
+        sol = solve(prob, Tsit5(); reltol = 1e-8, abstol = 1e-8, tstops=collect(0.0:0.1:8.0))
         @test SciMLBase.successful_retcode(sol)
 
         @test sol(0.0:0.1:8.0;

@@ -155,7 +155,7 @@ future when `ModelingToolkit` is extended to support eliminating `DynamicQuantit
 
 ## Other Restrictions
 
-`Unitful` provides non-scalar units such as `dBm`, `°C`, etc. At this time, `ModelingToolkit` only supports scalar quantities. Additionally, angular degrees (`°`) are not supported because trigonometric functions will treat plain numerical values as radians, which would lead systems validated using degrees to behave erroneously when being solved.
+`DynamicQuantities` provides non-scalar units such as `°C`, etc. At this time, `ModelingToolkit` only supports scalar quantities. Additionally, angular degrees (`°`) are not supported because trigonometric functions will treat plain numerical values as radians, which would lead systems validated using degrees to behave erroneously when being solved.
 
 ## Troubleshooting & Gotchas
 
@@ -169,7 +169,7 @@ Parameter and initial condition values are supplied to problem constructors as p
 
 ```julia
 function remove_units(p::Dict)
-    Dict(k => Unitful.ustrip(ModelingToolkit.get_unit(k), v) for (k, v) in p)
+    Dict(k => DynamicQuantities.ustrip(ModelingToolkit.get_unit(k), v) for (k, v) in p)
 end
 add_units(p::Dict) = Dict(k => v * ModelingToolkit.get_unit(k) for (k, v) in p)
 ```

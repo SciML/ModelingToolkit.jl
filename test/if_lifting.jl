@@ -1,5 +1,7 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
+import SymbolicUtils as SU
+using Test
 
 @testset "Simple `abs(x)`" begin
     @mtkmodel SimpleAbs begin
@@ -95,10 +97,10 @@ end
         args = arguments(eq.rhs)
         @test operation(args[1]) == Base.:<
         @test operation(args[2]) === ifelse
-        condvars = ModelingToolkit.vars(arguments(args[2])[1])
+        condvars = SU.search_variables(arguments(args[2])[1])
         @test length(condvars) == 1 && any(isequal(only(condvars)), ps)
         @test operation(args[3]) === ifelse
-        condvars = ModelingToolkit.vars(arguments(args[3])[1])
+        condvars = SU.search_variables(arguments(args[3])[1])
         @test length(condvars) == 1 && any(isequal(only(condvars)), ps)
     end
     @testset "Observed variables are modified" begin
