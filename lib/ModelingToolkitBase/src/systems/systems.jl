@@ -10,14 +10,15 @@ function canonicalize_io(iovars, type::String)
     iobuffer = OrderedSet{SymbolicT}()
     arrsyms = AtomicArrayDict{OrderedSet{SymbolicT}}()
     for var in iovars
-        if Symbolics.isarraysymbolic(var)
-            if !symbolic_has_known_size(var)
-                throw(ArgumentError("""
-                All $(type)s must have known shape. Found $var with unknown shape.
-                """))
+        sh = SU.shape(var)
+        if SU.is_array_shape(sh)
+            if sh isa SU.ShapeVecT
+                union!(iobuffer, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
+                continue
             end
-            union!(iobuffer, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
-            continue
+            throw(ArgumentError("""
+            All $(type)s must have known shape. Found $var with unknown shape.
+            """))
         end
         arr, isarr = split_indexed_var(var)
         if isarr
@@ -41,7 +42,7 @@ function canonicalize_io(iovars, type::String)
             or simply pass $k as an $type.
             """))
         end
-        if type != "output" && !isequal(vec(collect(k))::Vector{SymbolicT}, collect(v))
+        if type != "output" && !isequal(vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}, collect(v))
             throw(ArgumentError("""
             Elements of scalarized array variables must be in sorted order in $(type)s. \
             Either pass all scalarized elements in sorted order as $(type)s \
@@ -601,16 +602,17 @@ function __num_isdiag_noise(mat)
     true
 end
 
-function __get_num_diag_noise(mat)
-    map(axes(mat, 1)) do i
+function __get_num_diag_noise(mat::Matrix{SymbolicT})
+    result = fill(Symbolics.COMMON_ZERO, size(mat, 1))
+    for i in axes(mat, 1)
         for j in axes(mat, 2)
             mij = mat[i, j]
-            if !_iszero(mij)
-                return mij
-            end
+            _iszero(mij) && continue
+            result[i] = mij
+            break
         end
-        0
     end
+    return result
 end
 
 """

@@ -1043,13 +1043,13 @@ The `SymbolicDiscreteCallback`s in the returned vector are structs with two fiel
 See also `get_discrete_events`, which only returns the events of the top-level system.
 """
 function discrete_events(sys::AbstractSystem)
-    obs = get_discrete_events(sys)
+    cbs = get_discrete_events(sys)
     systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-               (map(cb -> namespace_callback(cb, s), discrete_events(s)) for s in systems),
-               init = SymbolicDiscreteCallback[])]
-    cbs
+    cbs = copy(cbs)
+    for s in systems
+        append!(cbs, map(Base.Fix2(namespace_callback, s), discrete_events(s)))
+    end
+    return cbs
 end
 
 """
@@ -1100,15 +1100,13 @@ The `SymbolicContinuousCallback`s in the returned vector are structs with two fi
 See also `get_continuous_events`, which only returns the events of the top-level system.
 """
 function continuous_events(sys::AbstractSystem)
-    obs = get_continuous_events(sys)
-    filter(!isempty, obs)
-
+    cbs = get_continuous_events(sys)
     systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-               (map(o -> namespace_callback(o, s), continuous_events(s)) for s in systems),
-               init = SymbolicContinuousCallback[])]
-    filter(!isempty, cbs)
+    cbs = copy(cbs)
+    for s in systems
+        append!(cbs, map(Base.Fix2(namespace_callback, s), continuous_events(s)))
+    end
+    return cbs
 end
 
 """
