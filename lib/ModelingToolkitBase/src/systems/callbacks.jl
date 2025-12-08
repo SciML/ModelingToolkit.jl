@@ -55,7 +55,6 @@ function (s::SymbolicUtils.Substituter)(aff::AffectSystem)
     @set! sys.unknowns = s(get_unknowns(sys))
     @set! sys.ps = s(get_ps(sys))
     AffectSystem(sys, s(aff.unknowns), s(aff.parameters), s(aff.discretes))
-    
 end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
@@ -154,14 +153,19 @@ function Base.show(iio::IO, aff::AffectSystem)
 end
 
 function Base.:(==)(a1::AffectSystem, a2::AffectSystem)
-    isequal(system(a1), system(a2)) &&
+    # Use isapprox for system comparison since System uses reference equality
+    # but we want semantic equality for AffectSystem comparison
+    isapprox(system(a1), system(a2)) &&
         isequal(discretes(a1), discretes(a2)) &&
         isequal(unknowns(a1), unknowns(a2)) &&
         isequal(parameters(a1), parameters(a2))
 end
 
 function Base.hash(a::AffectSystem, s::UInt)
-    s = hash(system(a), s)
+    # Hash based on semantic content rather than system identity
+    sys = system(a)
+    s = foldr(hash, get_eqs(sys), init = s)
+    s = foldr(hash, get_observed(sys), init = s)
     s = hash(unknowns(a), s)
     s = hash(parameters(a), s)
     hash(discretes(a), s)
@@ -574,8 +578,9 @@ function Base.hash(cb::AbstractCallback, s::UInt)
     s = hash(initialize_affects(cb), s)
     s = hash(finalize_affects(cb), s)
     !is_discrete(cb) && (s = hash(cb.rootfind, s))
-    hash(cb.reinitializealg, s)
-    !is_discrete(cb) && (s = hash(cb.zero_crossing_id, s))
+    s = hash(cb.reinitializealg, s)
+    # NOTE: zero_crossing_id is intentionally excluded from hash
+    # It is an internal identifier (gensym'd) and should not affect semantic equality
     return s
 end
 
@@ -622,7 +627,8 @@ function Base.:(==)(e1::AbstractCallback, e2::AbstractCallback)
     if !is_discrete(e1)
         isequal(e1.affect_neg, e2.affect_neg) || return false
         isequal(e1.rootfind, e2.rootfind) || return false
-        isequal(e1.zero_crossing_id, e2.zero_crossing_id) || return false
+        # NOTE: zero_crossing_id is intentionally excluded from equality comparison
+        # It is an internal identifier (gensym'd) and should not affect semantic equality
     end
     return true
 end
