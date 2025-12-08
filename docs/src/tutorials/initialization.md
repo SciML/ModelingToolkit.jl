@@ -477,10 +477,10 @@ In comparison, if we have a well-conditioned system:
 
 ```@example init
 iprob = ModelingToolkit.InitializationProblem(pend, 0.0,
-    [x => 1, y => 0.0, g => 1], guesses = [λ => 1])
+    [x => 1, D(x) => 0.0, g => 1], guesses = [λ => 1, y => 0])
 ```
 
-notice that we instead obtained a NonlinearSystem. In this case we have to use
+notice that we instead obtained a NonlinearProblem. In this case we can use
 different solvers which can take advantage of the fact that the Jacobian is square.
 
 ```@example init
