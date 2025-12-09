@@ -1009,12 +1009,12 @@ function _mtkcompile!(state::TearingState;
     state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs)
     ModelingToolkit.markio!(state, Set(), inputs, outputs, disturbance_inputs)
     state = ModelingToolkit.inputs_to_parameters!(state, [inputs; disturbance_inputs])
-    trivial_tearing!(state)
-    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
         fully_determined = ModelingToolkit.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing)
     end
+    trivial_tearing!(state)
+    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
             sys, state; mm, check_consistency, kwargs...)
