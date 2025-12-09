@@ -494,7 +494,8 @@ function OneFluidSystem(; name)
            connect(source_a.H, pipe_a.HA)
            connect(pipe_a.HB, volume_a.H)
            connect(source_b.H, pipe_b.HA)
-           connect(pipe_b.HB, volume_b.H)]
+           connect(pipe_b.HB, volume_b.H)
+           source_a.H.dm ~ 0]
 
     System(eqs, t, vars, pars; name, systems)
 end
