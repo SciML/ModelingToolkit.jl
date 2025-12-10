@@ -89,7 +89,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
         if !haspre(eq) && !(isconst(eq.lhs) && isconst(eq.rhs))
             @invokelatest warn_algebraic_equation(eq)
         end
-        collect_vars!(dvs, params, eq, iv; op = Pre)
+        collect_vars!(dvs, params, eq, iv, Pre)
         empty!(_varsbuf)
         SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Pre}())
         filter!(x -> iscall(x) && operation(x) === Pre(), _varsbuf)

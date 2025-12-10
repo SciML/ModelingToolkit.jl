@@ -172,12 +172,11 @@ end
 
 ##### MTK dispatches for Symbolic jumps #####
 eqtype_supports_collect_vars(j::MassActionJump) = true
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, j::MassActionJump, iv::Union{SymbolicT, Nothing}; depth = 0,
-        op = Differential)
-    collect_vars!(unknowns, parameters, j.scaled_rates, iv; depth, op)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, j::MassActionJump, iv::Union{SymbolicT, Nothing}, ::Type{op} = Differential; depth = 0) where {op}
+    collect_vars!(unknowns, parameters, j.scaled_rates, iv, op; depth)
     for field in (j.reactant_stoch, j.net_stoch)
         for el in field
-            collect_vars!(unknowns, parameters, el, iv; depth, op)
+            collect_vars!(unknowns, parameters, el, iv, op; depth)
         end
     end
     return nothing
@@ -185,10 +184,10 @@ end
 
 eqtype_supports_collect_vars(j::Union{ConstantRateJump, VariableRateJump}) = true
 function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, j::Union{ConstantRateJump, VariableRateJump},
-        iv::Union{SymbolicT, Nothing}; depth = 0, op = Differential)
-    collect_vars!(unknowns, parameters, j.rate, iv; depth, op)
+        iv::Union{SymbolicT, Nothing}, ::Type{op} = Differential; depth = 0) where {op}
+    collect_vars!(unknowns, parameters, j.rate, iv, op; depth)
     for eq in j.affect!
-        (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv; depth, op)
+        (eq isa Equation) && collect_vars!(unknowns, parameters, eq, iv, op; depth)
     end
     return nothing
 end

@@ -495,7 +495,7 @@ end
 """
 Check if all the LHS are unique
 """
-function check_operator_variables(eqs, op::T) where {T}
+function check_operator_variables(eqs, ::Type{op}) where {op}
     ops = Set{SymbolicT}()
     tmp = Set{SymbolicT}()
     for eq in eqs
@@ -599,26 +599,26 @@ Search through equations and parameter dependencies of `sys`, where sys is at a 
 recursively searches through all subsystems of `sys`, increasing the depth if it is not
 `-1`. A depth of `-1` indicates searching for variables with `GlobalScope`.
 """
-function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, sys::AbstractSystem, iv::Union{SymbolicT, Nothing}; depth = 1, op = Differential)
+function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, sys::AbstractSystem, iv::Union{SymbolicT, Nothing}, ::Type{op} = Differential; depth = 1) where {op}
     if has_eqs(sys)
         for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
             if eq isa Equation
                 symtype(eq.lhs) <: Number || continue
             end
-            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+            collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
     end
     if has_jumps(sys)
         for eq in jumps(sys)
             eqtype_supports_collect_vars(eq) || continue
-            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+            collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
     end
     if has_constraints(sys)
         for eq in constraints(sys)
             eqtype_supports_collect_vars(eq) || continue
-            collect_vars!(unknowns, parameters, eq, iv; depth, op)
+            collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
     end
 end
@@ -710,7 +710,7 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
     Moshi.Match.@match expr begin
         BSImpl.Const(;) => return
         BSImpl.Sym(;) => return collect_var!(unknowns, parameters, expr, iv; depth)
@@ -731,9 +731,9 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
     for var in expr
-        collect_vars!(unknowns, parameters, var, iv; depth, op)
+        collect_vars!(unknowns, parameters, var, iv, op; depth)
     end
     return nothing
 end
@@ -749,27 +749,27 @@ eqtype_supports_collect_vars(eq::Equation) = true
 eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing};
-        depth = 0, op = Symbolics.Operator)
-    collect_vars!(unknowns, parameters, eq.lhs, iv; depth, op)
-    collect_vars!(unknowns, parameters, eq.rhs, iv; depth, op)
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
+        depth = 0) where {op}
+    collect_vars!(unknowns, parameters, eq.lhs, iv, op; depth)
+    collect_vars!(unknowns, parameters, eq.rhs, iv, op; depth)
     return nothing
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
-    collect_vars!(unknowns, parameters, unwrap(ex), iv; depth, op)
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+    collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
-    collect_vars!(unknowns, parameters, p[1], iv; depth, op)
-    collect_vars!(unknowns, parameters, p[2], iv; depth, op)
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+    collect_vars!(unknowns, parameters, p[1], iv, op; depth)
+    collect_vars!(unknowns, parameters, p[2], iv, op; depth)
     return nothing
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}; depth = 0, op = Symbolics.Operator)
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
     return nothing
 end
 
@@ -806,7 +806,17 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
     end
     # Add also any parameters that appear only as defaults in the var
     if hasdefault(var) && (def = getdefault(var)) !== missing
-        collect_vars!(unknowns, parameters, def, iv)
+        if def isa SymbolicT
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Num
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Arr
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap
+            collect_vars!(unknowns, parameters, def, iv)
+        else
+            collect_vars!(unknowns, parameters, def, iv)
+        end
     end
     return nothing
 end
