@@ -288,7 +288,7 @@ function shift2term(var::SymbolicT)
                     newargs = copy(parent(args))
                     newargs[1] = shift2term(op(newargs[1]))
                     unshifted_args = copy(newargs)
-                    unshifted_args[1] = ModelingToolkitBase.getunshifted(newargs[1])
+                    unshifted_args[1] = ModelingToolkitBase.getunshifted(newargs[1])::SymbolicT
                     unshifted = BSImpl.Term{VartypeT}(getindex, unshifted_args; type, shape, metadata)
                     if metadata === nothing
                         metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
@@ -302,7 +302,7 @@ function shift2term(var::SymbolicT)
             unshifted = ModelingToolkitBase.getunshifted(arg)
             is_lowered = unshifted !== nothing
             backshift = op.steps + ModelingToolkitBase.getshift(arg)
-            iszero(backshift) && return unshifted
+            iszero(backshift) && return unshifted::SymbolicT
             io = IOBuffer()
             O = (is_lowered ? unshifted : arg)::SymbolicT
             write(io, getname(O))
