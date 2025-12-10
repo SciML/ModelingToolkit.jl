@@ -322,11 +322,7 @@ end
     @test length(ModelingToolkitBase.continuous_events(ball)) == 1
     cev = only(continuous_events(ball))
     @test isequal(only(equations(cev)), x ~ 0)
-    if @isdefined(ModelingToolkit)
-        @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
-    else
-        @test isequal(only(equations(cev.affect.system)), 0 ~ -Pre(v) - v)
-    end
+    @test isequal(only(observed(cev.affect.system)), v ~ -Pre(v))
 
     tspan = (0.0, 5.0)
     prob = ODEProblem(ball, Pair[], tspan)
@@ -358,13 +354,8 @@ end
     _cevs = getfield(ball, :continuous_events)
     @test isequal(only(equations(_cevs[1])), x ~ 0)
     @test issetequal(equations(_cevs[2]), [y ~ -1.5, y ~ 1.5])
-    if @isdefined(ModelingToolkit)
-        @test isequal(only(observed(_cevs[1].affect.system)), vx ~ -Pre(vx))
-        @test isequal(only(observed(_cevs[2].affect.system)), vy ~ -Pre(vy))
-    else
-        @test isequal(only(equations(_cevs[1].affect.system)), 0 ~ -Pre(vx) - vx)
-        @test isequal(only(equations(_cevs[2].affect.system)), 0 ~ -Pre(vy) - vy)
-    end
+    @test isequal(only(observed(_cevs[1].affect.system)), vx ~ -Pre(vx))
+    @test isequal(only(observed(_cevs[2].affect.system)), vy ~ -Pre(vy))
     cond = cb.condition
     out = [0.0, 0.0, 0.0]
     p0 = 0.0

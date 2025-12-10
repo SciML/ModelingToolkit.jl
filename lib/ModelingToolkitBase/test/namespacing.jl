@@ -32,7 +32,7 @@ nsys = toggle_namespacing(sys, false)
     @named inner = System([D(x) ~ x, y ~ 2x + 1], t)
     @test issetequal(unknowns(inner), [x, y])
     ss = mtkcompile(inner)
-    @test issetequal(unknowns(ss), [x, y])
+    @test issetequal(unknowns(ss), [x])
 
     @named sys = System(Equation[], t; systems = [inner])
     xx, yy = let sys = inner
@@ -42,5 +42,5 @@ nsys = toggle_namespacing(sys, false)
     end
     @test issetequal(unknowns(sys), [xx, yy])
     ss = mtkcompile(sys)
-    @test isequal(unknowns(ss), [xx, yy])
+    @test isequal(unknowns(ss), [xx])
 end

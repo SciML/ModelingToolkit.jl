@@ -572,9 +572,6 @@ let
 
     u0 = x .=> [0.5, 0]
     du0 = D.(x) .=> 0.0
-    if !@isdefined(ModelingToolkit)
-        push!(du0, D(y) => 0.0)
-    end
     prob = DAEProblem(sys, du0, (0, 50); guesses = u0)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
@@ -583,26 +580,20 @@ let
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0)
+    prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0, k => 2],
+    prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0, k => 2],
         (0, 50); guesses = u0)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 2
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 2, atol = 1e-3)
-
-    if !@isdefined(ModelingToolkit)
-        # no initial conditions for D(x[1]) and D(x[2]) provided
-        @test_throws ModelingToolkitBase.MissingVariablesError prob=DAEProblem(
-            sys, Pair[], (0, 50); guesses = u0)
-    end
 
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
@@ -760,13 +751,9 @@ end
 eqs = [D(Q) ~ 1 / sin(P), D(P) ~ log(-cos(Q))]
 @named sys = System(eqs, t, [P, Q], [])
 sys = complete(debug_system(sys))
-if @isdefined(ModelingToolkit)
-    prob = ODEProblem(sys, [], (0.0, 1.0))
-    @test_throws "log(-cos(Q(t))) errors" prob.f([1, 0], prob.p, 0.0)
-    @test_throws "/(1, sin(P(t))) output non-finite value" prob.f([0, 2], prob.p, 0.0)
-else
-    @test_throws "/(1, sin(P(t))) output non-finite value" ODEProblem(sys, [], (0.0, 1.0))
-end
+prob = ODEProblem(sys, [], (0.0, 1.0))
+@test_throws "log(-cos(Q(t))) errors" prob.f([1, 0], prob.p, 0.0)
+@test_throws "/(1, sin(P(t))) output non-finite value" prob.f([0, 2], prob.p, 0.0)
 
 let
     @variables x(t) = 1
@@ -996,11 +983,7 @@ end
     @variables x(t)[0:1] # 0-indexed variable array
     @named sys = System([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
     sys = @test_nowarn mtkcompile(sys)
-    if @isdefined(ModelingToolkit)
-        @test full_equations(sys) == [D(x[1]) ~ 0.0]
-    else
-        @test issetequal(full_equations(sys), [D(x[1]) ~ x[0], 0 ~ -x[0]])
-    end
+    @test full_equations(sys) == [D(x[1]) ~ 0.0]
 end
 
 # Namespacing of array variables

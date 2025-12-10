@@ -20,11 +20,7 @@ eqs = [D(x) ~ 1,
 @named sys = System(eqs, t)
 # Now eliminate the constants first
 simp = mtkcompile(sys)
-if @isdefined(ModelingToolkit)
-    @test equations(simp) == [D(x) ~ 1.0]
-else
-    @test equations(simp) == [D(x) ~ 1.0, 0 ~ a-w]
-end
+@test equations(simp) == [D(x) ~ 1.0]
 
 #Constant with units
 @constants β=1 [unit = u"m/s"]

@@ -79,7 +79,7 @@ include("common/rc_model.jl")
     @test !isempty(ModelingToolkitBase.bindings(sys))
     u0 = [capacitor.v => 0.0]
     prob = ODEProblem(sys, u0, (0, 10.0))
-    sol = solve(prob, Rodas4())
+    sol = solve(prob, Rodas4(); abstol = 1e-8, reltol = 1e-8)
     check_rc_sol(sol)
 end
 
