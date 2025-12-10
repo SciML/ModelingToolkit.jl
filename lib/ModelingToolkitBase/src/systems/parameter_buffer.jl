@@ -1,7 +1,7 @@
-symconvert(::Type{T}, x::V) where {T, V} = convert(promote_type(T, V), x)
-symconvert(::Type{T}, x::V) where {T <: Real, V} = convert(T, x)
-symconvert(::Type{Real}, x::Integer) = convert(Float16, x)
-symconvert(::Type{V}, x) where {V <: AbstractArray} = convert(V, symconvert.(eltype(V), x))
+symconvert(::Type{T}, ::Type{F}, x::V) where {T, F, V} = convert(promote_type(T, V), x)
+symconvert(::Type{T}, ::Type{F}, x::V) where {T <: Real, F, V} = convert(T, x)
+symconvert(::Type{Real}, ::Type{F}, x::Integer) where {F} = convert(F, x)
+symconvert(::Type{V}, ::Type{F}, x) where {V <: AbstractArray, F} = symconvert.(eltype(V), F, x)
 
 struct MTKParameters{T, I, D, C, N, H}
     tunable::T
@@ -165,7 +165,7 @@ function MTKParameters(
                 val = map(x -> x === COMMON_NOTHING ? false : unwrap_const(x), collect(val))
             end
         end
-        val = symconvert(ctype, unwrap_const(val))
+        val = symconvert(ctype, floatT, unwrap_const(val))
         set_value(sym, val)
     end
     tunable_buffer = narrow_buffer_type(tunable_buffer; p_constructor)
