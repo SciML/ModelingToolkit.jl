@@ -8,6 +8,9 @@ using PrecompileTools, Reexport
     using Symbolics
     # ONLY here for the invalidations
     import REPL
+    using OffsetArrays: Origin
+    import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
+                        undef_blocks, blocks
 end
 
 import SymbolicUtils
@@ -50,7 +53,6 @@ using Moshi.Data: @data
 import SCCNonlinearSolve
 using Reexport
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
-using OffsetArrays: Origin
 import CommonSolve
 
 using RuntimeGeneratedFunctions
@@ -86,8 +88,6 @@ import PreallocationTools
 import PreallocationTools: DiffCache
 import FillArrays
 using BipartiteGraphs
-import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-                    undef_blocks, blocks
 
 @recompile_invalidations begin
     import StateSelection
