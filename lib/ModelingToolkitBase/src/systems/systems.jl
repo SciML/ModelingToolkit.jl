@@ -175,9 +175,19 @@ function __mtkcompile(sys::AbstractSystem;
     end
     # Nonlinear system
     if !has_derivatives && !has_shifts
+        obseqs = Equation[]
+        get_trivial_observed_equations!(Equation[], eqs, obseqs, all_dvs, nothing)
+        add_array_observed!(obseqs)
+        obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
         map!(eq -> Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs), eqs, eqs)
+        observables = Set{SymbolicT}()
+        for eq in obseqs
+            push!(observables, eq.lhs)
+        end
+        setdiff!(flat_dvs, observables)
         @set! sys.eqs = eqs
         @set! sys.unknowns = flat_dvs
+        @set! sys.observed = obseqs
         return sys
     end
     iv = get_iv(sys)::SymbolicT
@@ -284,6 +294,9 @@ function __mtkcompile(sys::AbstractSystem;
             BSImpl.Term(; args) => args[1]
         end)
     end
+    get_trivial_observed_equations!(diffeqs, alg_eqs, obseqs, all_dvs, iv)
+    add_array_observed!(obseqs)
+    obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
     for i in eachindex(alg_eqs)
         eq = alg_eqs[i]
         alg_eqs[i] = 0 ~ subst(eq.rhs - eq.lhs)
@@ -329,6 +342,125 @@ function __mtkcompile(sys::AbstractSystem;
     @set! sys.schedule = schedule
     @set! sys.isscheduled = true
     return sys
+end
+
+"""
+    $TYPEDSIGNATURES
+
+For explicit algebraic equations in `algeqs`, find ones where the RHS is a function of
+differential variables or other observed variables. These equations are removed from
+`algeqs` and appended to `obseqs`. The process runs iteratively until a fixpoint is
+reached.
+"""
+function get_trivial_observed_equations!(diffeqs::Vector{Equation}, algeqs::Vector{Equation},
+                                        obseqs::Vector{Equation}, all_dvs::Set{SymbolicT},
+                                        @nospecialize(iv::Union{SymbolicT, Nothing}))
+    # Maximum number of times to loop over all algebraic equations
+    maxiters = 100
+    # Whether it's worth doing another loop, or we already reached a fixpoint
+    active = true
+
+    current_observed = Set{SymbolicT}()
+    for eq in obseqs
+        push!(current_observed, eq.lhs)
+    end
+    diffvars = Set{SymbolicT}()
+    for eq in diffeqs
+        push!(diffvars, Moshi.Match.@match eq.lhs begin
+            BSImpl.Term(; f, args) && if f isa Union{Shift, Differential} end => args[1]
+        end)
+    end
+    # Incidence information
+    vars_in_each_algeq = Set{SymbolicT}[]
+    sizehint!(vars_in_each_algeq, length(algeqs))
+    for eq in algeqs
+        buffer = Set{SymbolicT}()
+        SU.search_variables!(buffer, eq.rhs)
+        # We only care for variables
+        intersect!(buffer, all_dvs)
+        # If `eq.lhs` is only dependent on differential or other observed variables,
+        # we can tear it. So we don't care about those either.
+        setdiff!(buffer, diffvars)
+        setdiff!(buffer, current_observed)
+        if iv isa SymbolicT
+            delete!(buffer, iv)
+        end
+        push!(vars_in_each_algeq, buffer)
+    end
+    # Algebraic equations that we still consider for elimination
+    active_alg_eqs = trues(length(algeqs))
+    # The number of equations we're considering for elimination
+    candidate_eqs_count = length(algeqs)
+    # Algebraic equations that we still consider algebraic
+    alg_eqs_mask = trues(length(algeqs))
+    # Observed variables added by this process
+    new_observed_variables = Set{SymbolicT}()
+    while active && maxiters > 0 && candidate_eqs_count > 0
+        # We've reached a fixpoint unless the inner loop adds an observed equation
+        active = false
+        for i in eachindex(algeqs)
+            # Ignore if we're not considering this for elimination or it is already eliminated
+            active_alg_eqs[i] || continue
+            alg_eqs_mask[i] || continue
+            eq = algeqs[i]
+            candidate_var = eq.lhs
+            # LHS must be an unknown and must not be another observed
+            if !(candidate_var in all_dvs) || candidate_var in new_observed_variables
+                active_alg_eqs[i] = false
+                candidate_eqs_count -= 1
+                continue
+            end
+            # Remove newly added observed variables
+            vars_in_algeq = vars_in_each_algeq[i]
+            setdiff!(vars_in_algeq, new_observed_variables)
+            # If the incidence is empty, it is a function of observed and diffvars
+            isempty(vars_in_algeq) || continue
+
+            # We added an observed equation, so we haven't reached a fixpoint yet
+            active = true
+            push!(new_observed_variables, candidate_var)
+            push!(obseqs, eq)
+            # This is no longer considered for elimination
+            active_alg_eqs[i] = false
+            candidate_eqs_count -= 1
+            # And is no longer algebraic
+            alg_eqs_mask[i] = false
+        end
+        # Safeguard against infinite loops, because `while true` is potentially dangerous
+        maxiters -= 1
+    end
+
+    keepat!(algeqs, alg_eqs_mask)
+end
+
+function offset_array(origin, arr)
+    if all(isone, origin)
+        return arr
+    end
+    return Origin(origin)(arr)
+end
+
+@register_array_symbolic offset_array(origin::Any, arr::AbstractArray) begin
+    size = size(arr)
+    eltype = eltype(arr)
+    ndims = ndims(arr)
+end
+
+function add_array_observed!(obseqs::Vector{Equation})
+    array_obsvars = Set{SymbolicT}()
+    for eq in obseqs
+        arr, isarr = split_indexed_var(eq.lhs)
+        isarr && push!(array_obsvars, arr)
+    end
+    for var in array_obsvars
+        firstind = first(SU.stable_eachindex(var))::SU.StableIndex{Int}
+        firstind = Tuple(firstind.idxs)
+        scal = SymbolicT[]
+        for i in SU.stable_eachindex(var)
+            push!(scal, var[i])
+        end
+        push!(obseqs, var ~ offset_array(firstind, reshape(scal, size(var))))
+    end
 end
 
 function simplify_sde_system(sys::AbstractSystem; kwargs...)
