@@ -1,3 +1,214 @@
+# ModelingToolkit v11 Release Notes
+
+## Symbolics@7 and SymbolicUtils@4 compatibility
+
+SymbolicUtils version 4 involved a major overhaul of the core symbolic infrastructure, which
+propagated to Symbolics as Symbolics version 7. ModelingToolkit has now updated to these versions.
+This includes significant type-stability improvements, enabling precompilation of large parts
+of the symbolic infrastructure and faster TTFX. It is highly recommended to read the
+[Release Notes for SymbolicUtils@4](https://github.com/JuliaSymbolics/SymbolicUtils.jl/releases/tag/v4.0.0)
+and the [doc page](https://docs.sciml.ai/SymbolicUtils/dev/manual/variants/) describing the new
+variant structure before these release notes.
+
+As part of these changes, ModelingToolkit has changed how some data is represented to allow
+precompilation. Notably, `variable => value` mappings (such as guesses) are stored as an
+`AbstractDict{SymbolicT, SymbolicT}`. Here, `SymbolicT` is a type that comes from Symbolics.jl,
+and is the type for all unwrapped symbolic values. This means that any non-symbolic values
+are stored as `SymbolicUtils.Const` variants. Mutation such as `guesses(sys)[x] = 1.0` is still
+possible, and values are automatically converted. However, obtaining the value back requires
+usage of `SymbolicUtils.unwrap_const` or `Symbolics.value`.
+
+## Semantic separation of discretes
+
+ModelingToolkit has long overloaded the meaning of `@parameters` to the point that it means
+"anything that isn't `@variables`." This isn't a very intuitive or clear definition. This is
+now improved with the introduction of `@discretes`. Any quantities that vary on a different
+time-scale than those in `@variables` are now `@discretes`. `@parameters` can only be used to
+create "time-independent parameters". For clarity, the following continues to work:
+
+```julia
+@parameters p q[1:3] f(::Real, ::Real)
+```
+
+However, this is now disallowed:
+
+```julia
+@parameters value(t)
+```
+
+Instead, it must be declared as:
+
+```julia
+@discretes value(t)
+```
+
+And can be passed along with the `@variables`. Essentially, for time-varying systems
+the constructor syntax is
+
+```julia
+System(equations, independent_variable, time_varying_variables, constant_values, [brownians])
+```
+
+In the subsequent release notes and in documentation, "variables" refers to either `@variables`
+or `@discretes` unless explicitly mentioned otherwise.
+
+An important note is that while this is a difference in declaration, the semantics are defined
+by their usage in the system. More concretely, a variable declared via `@discretes` is only
+actually considered discrete if it is part of the variables updated in a callback in the system.
+Otherwise, it is treated identically to a variable declared via `@variables`.
+
+## Changes to `defaults` and initialization semantics
+
+The concept of `defaults` is a relic of earlier ModelingToolkit versions, from when initialization
+did not exist and they served as convenient initial conditions. The package has evolved greatly since then
+and `defaults` have taken on many different meanings in different contexts. This makes their usage
+complicated and unintuitive.
+
+`defaults` have now been removed. They are replaced by two new concepts, with simple and well-defined
+semantics. Firstly, `initial_conditions` is a variable-value mapping aimed solely at being a convenient
+way to provide initial conditions to `SciMLProblem`s constructed from the system. Specifying them is
+identical to providing initial values to the `ODEProblem` constructor. Secondly, `bindings` is an
+immutable variable-value mapping representing strong constraints between variables/parameters.
+A binding for a variable is a function of other variables/parameters that is enforced during initialization.
+A binding for a parameter is a function of other parameters that exclusively defines the value of that
+parameter. Bound variables or parameters cannot be given initial conditions, either through the
+`initial_conditions` keyword or by passing them to the problem constructor. In effect, bindings
+serve to mark specific variables as aliases of others during initialization, and parameters as aliases
+of other parameters. This supersedes the previous concept of parameter bindings, and explicit parameter
+equations passed along with the equations of the model. Since bound parameters are computed as functions
+of other parameters, they are treated akin to observed variables. They are not stored in the parameter
+object, and instead are computed on the fly as required.
+
+Sometimes, it is useful to enforce a relation between parameters while allowing them to be given initial
+values. For example, one might relate the radius `r` and area `A` of a pipe as `A ~ pi * r * r`. Users of
+the model should be able to provide a value for either `r` or `A`, and the other should be calculated
+automatically. This is done by providing the relation `A ~ pi * r * r` to the `initialization_eqs`
+keyword of the model and binding both `A` and `r` to `missing`. Similar to v10, the equation represents
+a constraint to be enforced. The bindings act similar to the `missing` defaults in v9 and v10, indicating
+that the parameters are to be solved for. They are part of bindings since a parameter to be solved for
+cannot be an alias for a different value. As such, the choice of parameters that can be solved for is
+an immutable property of the system. Note that making a parameter solvable no longer requires specifying a
+guess. If a guess is required to solve the initialization, ModelingToolkit will error with an informative
+message during problem construction. Note that since parameters can only be bound to other parameters,
+a parameter `x0` can be bound to the initial value of a variable `x` using the binding `x0 = Initial(x)`.
+
+The formulation of the initialization system can now be summarized succinctly. The system solves for:
+
+- Unknowns of the system.
+- Observables (observed variables) of the system.
+- All unknowns for which derivatives are known (differential variables, and ones for which derivative
+  information is available due to the index reduction process).
+- Discrete variables (created via `@discretes`).
+- Parameters with a binding of `missing`.
+
+It is composed of:
+
+- Algebraic equations.
+- Observed equations.
+- Initialization equations.
+- The `initial_conditions` of the system.
+- Initial conditions passed to the problem constructor. These override values in `initial_conditions`
+  for the same variable.
+
+Additionally, `Initial` parameters exist for the following variables:
+
+- Unknowns
+- Observables
+- First derivatives of all unknowns and observables
+- Discrete variables
+- Parameters with a binding of `missing`
+
+"Defaults" specified via variable metadata are now translated into either `initial_conditions` or
+`bindings` depending on the value. If the value is a constant, it is part of `initial_conditions`.
+If it is an expression involving other variables/parameters, it is part of `bindings`. For example,
+the following are `initial_conditions`:
+
+```julia
+@variables x(t) = 1 y(t)[1:3] = zeros(3)
+@parameters f(::Real) = sin
+```
+
+The following are bindings:
+
+```julia
+@variables z(t) = x w(t)[1:2] = [1.5, z]
+@parameters p[1:3] = f(3)
+```
+
+Notably, arrays are considered atomic. This means that if even one element of an array default is
+symbolic, the entire array variable is considered bound. Partial bindings can be constructed by
+destructuring the array:
+
+```julia
+@parameters par[1:3] = [par1, par2, par3]
+```
+
+Where `par1`, `par2` and `par3` can independently have initial conditions or bindings. In a
+similar vein, `guesses`, `initial_conditions` and `bindings` are all stored in special
+`AbstractDict` types that disallow scalarized keys. For example, `par[1]` cannot be a key
+of these dictionaries. `par` is allowed as a key. Initial values can still be given to the
+problem constructor in scalarized form.
+
+As mentioned previously, bindings cannot be mutated. To change the bindings of a system,
+the following pattern can be employed:
+
+```julia
+binds = bindings(sys)
+# the `ReadOnlyDict` wrapper uses `Base.parent` to get the underlying mutable container
+new_binds = parent(copy(binds))
+
+# mutate `new_binds`...
+
+using Setfield: @set!
+
+@set! sys.bindings = new_binds
+sys = complete(sys) # Important!
+```
+
+Mutation of bindings without copying them is undefined behavior and can lead to unpredictable bugs.
+
+## Array variables as inputs
+
+Previously, ModelingToolkit allowed part of an array variable to be an input. For example, the following
+used to be valid:
+
+```julia
+@variables u(t)[1:2] [input = true]
+@named sys = # Some system involving `u`
+
+sys = mtkcompile(sys; inputs = [u[1]])
+```
+
+This is now disallowed. `mtkcompile` will throw an informative error if part of an array is passed as an
+input.
+
+## Deprecation of `@mtkmodel`
+
+The `@mtkmodel` originated as a convenient DSL for creating models. However, it has not received the same
+level of support as other features due to the complexity of the parsing. It is also a major source of bugs,
+and is thus a tripping hazard for new and old users alike. The macro is now deprecated. It is moved to a new
+package, SciCompDSL.jl. Enough updates have been made to allow it to create systems in v11, but it will not
+receive more maintenance from the core developers. It is, however, still open to community contribution. For
+more details, please refer to the discussion in [this Discourse thread](https://discourse.julialang.org/t/using-mtk-when-i-import-modelingtoolkit/133681/12).
+
+## Splitting into `ModelingToolkitBase` and relicensing of parts of ModelingToolkit
+
+The advanced structural simplification algorithms in ModelingToolkit, such as index reduction, structural
+singularity removal and tearing, are now moved to the [StateSelection.jl](https://github.com/JuliaComputing/StateSelection.jl/)
+and ModelingToolkitTearing.jl (`lib/ModelingToolkitTearing` in the same repo) packages. These packages are
+AGPL licensed. ModelingToolkitBase.jl contains the `System` representation, callbacks, all of the code-generation
+targets (problem constructors), and initialization infrastructure. Items that depend on structural simplification
+and/or require highly specialized code generation (`SCCNonlinearProblem` prominent among them) have been moved
+to ModelingToolkit.jl, which depends on the aforementioned AGPL packages. ModelingToolkitBase still contains
+a simple version of `mtkcompile` suitable for most use cases. It does not perform index reduction and requires
+that all differential equations are explicit in the derivative. However, it does have a simpler tearing algorithm
+that is capable of identifying observed equations in many scenarios. In fact, it is also able to reduce many
+systems created using modular components and the `connect` infrastructure. Contributions to improve this
+are also welcome.
+
+For more information on the split and surrounding changes, please follow the discussion in
+[this Discourse thread](https://discourse.julialang.org/t/modelingtoolkit-v11-library-split-and-licensing-community-feedback-requested/134396).
+
 # ModelingToolkit v10 Release Notes
 
 ## Callbacks
