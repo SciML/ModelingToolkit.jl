@@ -18,6 +18,149 @@ are stored as `SymbolicUtils.Const` variants. Mutation such as `guesses(sys)[x] 
 possible, and values are automatically converted. However, obtaining the value back requires
 usage of `SymbolicUtils.unwrap_const` or `Symbolics.value`.
 
+Following is a before/after comparison of the TTFX for the most common operations in ModelingToolkit.jl.
+Further improvements are ongoing. Note that the timings do depend on many factors such as the exact system
+used, types passed to constructor functions, other packages currently loaded in the session, presence of
+array variables/equations, whether index reduction is required, and the behavior of various passes in
+`mtkcompile`. However, the numbers are good representations of the kinds of performance improvements
+that are possible due to the new infrastructure. There will continue to be improvements as this gets
+more extensive testing and we are better able to identify bottlenecks in compilation.
+
+### `System` constructor
+
+The time to call `System`, not including the time taken for `@variables` or building the equations.
+
+Before:
+
+```
+  0.243758 seconds (563.80 k allocations: 30.613 MiB, 99.48% compilation time: 3% of which was recompilation)
+elapsed time (ns):  2.43757958e8
+gc time (ns):       0
+bytes allocated:    32099616
+pool allocs:        563137
+non-pool GC allocs: 16
+malloc() calls:     651
+free() calls:       0
+minor collections:  0
+full collections:   0
+```
+
+After:
+
+```
+  0.000670 seconds (217 allocations: 10.641 KiB)
+elapsed time (ns):  669875.0
+gc time (ns):       0
+bytes allocated:    10896
+pool allocs:        217
+non-pool GC allocs: 0
+minor collections:  0
+full collections:   0
+```
+
+### `complete`
+
+Before:
+
+```
+  1.795140 seconds (9.76 M allocations: 506.143 MiB, 2.67% gc time, 99.75% compilation time: 71% of which was recompilation)
+elapsed time (ns):  1.795140083e9
+gc time (ns):       47998414
+bytes allocated:    530729216
+pool allocs:        9747214
+non-pool GC allocs: 111
+malloc() calls:     10566
+free() calls:       8069
+minor collections:  5
+full collections:   1
+```
+
+After:
+
+```
+  0.001191 seconds (1.08 k allocations: 2.554 MiB)
+elapsed time (ns):  1.190625e6
+gc time (ns):       0
+bytes allocated:    2678088
+pool allocs:        1077
+non-pool GC allocs: 0
+malloc() calls:     3
+free() calls:       0
+minor collections:  0
+full collections:   0
+```
+
+### `TearingState` constructor
+
+`TearingState` is an intermediary step in `mtkcompile`. It is significant enough for the impact
+to be worth measuring separately.
+
+Before:
+
+```
+  0.374312 seconds (527.01 k allocations: 32.318 MiB, 24.13% gc time, 99.60% compilation time: 85% of which was recompilation)
+elapsed time (ns):  3.74312e8
+gc time (ns):       90318708
+bytes allocated:    33888248
+pool allocs:        526440
+non-pool GC allocs: 11
+malloc() calls:     555
+free() calls:       2923
+minor collections:  1
+full collections:   0
+```
+
+After:
+
+```
+  0.002062 seconds (1.07 k allocations: 8.546 MiB, 50.24% compilation time)
+elapsed time (ns):  2.0618339999999998e6
+gc time (ns):       0
+bytes allocated:    8961560
+pool allocs:        1064
+non-pool GC allocs: 0
+malloc() calls:     6
+free() calls:       0
+minor collections:  0
+full collections:   0
+```
+
+### `mtkcompile`
+
+This measures the time taken by the first call to `mtkcompile`. This is run after the `TearingState`
+benchmark, and hence the compile time from that aspect of the process is not included (runtime is
+included).
+
+Before:
+
+```
+  1.772756 seconds (3.81 M allocations: 206.068 MiB, 0.63% gc time, 99.71% compilation time: 71% of which was recompilation)
+elapsed time (ns):  1.772755875e9
+gc time (ns):       11162292
+bytes allocated:    216077752
+pool allocs:        3808615
+non-pool GC allocs: 61
+malloc() calls:     4877
+free() calls:       4844
+minor collections:  2
+full collections:   0
+```
+
+After:
+
+```
+  0.018629 seconds (20.74 k allocations: 932.062 KiB, 89.89% compilation time)
+elapsed time (ns):  1.8628542e7
+gc time (ns):       0
+bytes allocated:    954432
+pool allocs:        20727
+non-pool GC allocs: 0
+malloc() calls:     13
+free() calls:       0
+minor collections:  0
+full collections:   0
+```
+
 ## Semantic separation of discretes
 
 ModelingToolkit has long overloaded the meaning of `@parameters` to the point that it means
