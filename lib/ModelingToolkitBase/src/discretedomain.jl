@@ -23,7 +23,7 @@ struct Shift <: Operator
     """Fixed Shift"""
     t::Union{Nothing, SymbolicT}
     steps::Int
-    Shift(t, steps = 1) = new(value(t), steps)
+    Shift(t, steps = 1) = new(unwrap(t), steps)
 end
 Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
