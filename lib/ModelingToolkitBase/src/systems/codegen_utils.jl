@@ -42,7 +42,7 @@ reconstruct array variables if they are present scalarized in `args`.
 """
 function array_variable_assignments(args...; argument_name = generated_argument_name)
     # map array symbolic to an identically sized array where each element is (buffer_idx, idx_in_buffer)
-    var_to_arridxs = Dict{BasicSymbolic, Array{Tuple{Int, Int}}}()
+    var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
     for (i, arg) in enumerate(args)
         # filter out non-arrays
         # any element of args which is not an array is assumed to not contain a
@@ -55,13 +55,12 @@ function array_variable_assignments(args...; argument_name = generated_argument_
         for (j, var) in enumerate(arg)
             var = unwrap(var)
             # filter out non-array-symbolics
-            iscall(var) || continue
-            operation(var) == getindex || continue
-            arrvar = arguments(var)[1]
+            arrvar, isarr = split_indexed_var(var)
+            isarr || continue
             # get and/or construct the buffer storing indexes
             idxbuffer = get!(
-                () -> map(Returns((0, 0)), eachindex(arrvar)), var_to_arridxs, arrvar)
-            Origin(first.(axes(arrvar))...)(idxbuffer)[arguments(var)[2:end]...] = (i, j)
+                () -> map(Returns((0, 0)), SU.stable_eachindex(arrvar)), var_to_arridxs, arrvar)
+            idxbuffer[SU.as_linear_idx(SU.shape(arrvar), get_stable_index(var))] = (i, j)
         end
     end
 
