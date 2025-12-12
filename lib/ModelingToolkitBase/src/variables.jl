@@ -359,29 +359,24 @@ Simplify multiple shifts: Shift(t, k1)(Shift(t, k2)(x)) becomes Shift(t, k1+k2)(
 """
 function simplify_shifts(var::SymbolicT)
     ModelingToolkitBase.hasshift(var) || return var
-    return SU.Rewriters.Postwalk(_simplify_shifts)(var)
+    return SU.Rewriters.Postwalk(_simplify_shifts)(var)::SymbolicT
 end
 
+distribute_shift(eq::Equation) = distribute_shift(eq.lhs) ~ distribute_shift(eq.rhs)
+distribute_shift(var::Union{Num, Arr}) = distribute_shift(unwrap(var))
 """
 Distribute a shift applied to a whole expression or equation. 
 Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
 Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
 """
-function distribute_shift(var)
-    var = unwrap(var)
-    var isa Equation && return distribute_shift(var.lhs) ~ distribute_shift(var.rhs)
-
-    ModelingToolkitBase.hasshift(var) || return var
-    shift = operation(var)
-    shift isa Shift || return var
-
-    shift = operation(var)
-    expr = only(arguments(var))
-    if expr isa Equation
-        return distribute_shift(shift(expr.lhs)) ~ distribute_shift(shift(expr.rhs))
+function distribute_shift(var::SymbolicT)
+    Moshi.Match.@match var begin
+        BSImpl.Term(; f, args) && if f isa Shift end => begin
+            shiftexpr = _distribute_shift(args[1], f)
+            return simplify_shifts(shiftexpr)
+        end
+        _ => return var
     end
-    shiftexpr = _distribute_shift(expr, shift)
-    return simplify_shifts(shiftexpr)
 end
 
 """
@@ -391,10 +386,10 @@ Whether `distribute_shift` should distribute shifts into the given operation.
 """
 distribute_shift_into_operator(_) = true
 
-function _distribute_shift(expr, shift)
+function _distribute_shift(expr::SymbolicT, shift)
     if iscall(expr)
         op = operation(expr)
-        distribute_shift_into_operator(op) || return expr
+        distribute_shift_into_operator(op)::Bool || return expr
         args = arguments(expr)
 
         if ModelingToolkitBase.isvariable(expr) && operation(expr) !== getindex &&
