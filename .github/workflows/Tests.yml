@@ -5,7 +5,7 @@ on:
     branches:
       - master
       - 'release-'
-      - v10
+      - backport-v10
     paths-ignore:
       - 'docs/**'
   push:
