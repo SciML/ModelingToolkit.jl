@@ -141,20 +141,19 @@ function IndexCache(sys::AbstractSystem)
                 error("Unhandled affect type $(typeof(affect))")
             end
         end
-
         for sym in discs
             if !is_parameter(sys, sym)
-                if iscall(sym) && operation(sym) === getindex &&
-                   is_parameter(sys, arguments(sym)[1])
-                    sym = arguments(sym)[1]
+                arr, isarr = split_indexed_var(sym)
+                if isarr && is_parameter(sys, arr)
+                    sym = arr
                 else
                     error("Expected discrete variable $sym in callback to be a parameter")
                 end
             end
 
             # Only `foo(t)`-esque parameters can be saved
-            if iscall(sym) && length(arguments(sym)) == 1 &&
-               isequal(only(arguments(sym)), get_iv(sys))
+            if iscall(sym) && (operation(sym) isa Union{Operator, BasicSymbolic} || length(arguments(sym)) == 1 &&
+               isequal(only(arguments(sym)), get_iv(sys)))
                 clocks = get!(() -> Set{Int}(), disc_param_callbacks, sym)
                 push!(clocks, i)
             elseif is_variable_floatingpoint(sym)
@@ -413,6 +412,22 @@ function IndexCache(sys::AbstractSystem)
         symbol_to_variable
     )
 end
+
+function split_indexed_var(x)
+    iscall(x) || return (x, false)
+    f = operation(x)
+    args = arguments(x)
+    if f === getindex
+        return args[1], true
+    end
+    if f isa Operator && length(args) == 1
+        arr, isarr = split_indexed_var(args[1])
+        isarr || return x, false
+        return f(arr), isarr
+    end
+    return x, false
+end
+
 
 function SymbolicIndexingInterface.is_variable(ic::IndexCache, sym)
     variable_index(ic, sym) !== nothing
