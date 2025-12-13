@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 version = "11.0.0"
+authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -47,15 +47,38 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 [weakdeps]
 FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 
-[sources]
-ModelingToolkitBase = {subdir = "lib/ModelingToolkitBase"}
-ModelingToolkitStandardLibrary = {rev = "as/mtk-v11", url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl"}
-ModelingToolkitTearing = {rev = "main", url = "https://github.com/JuliaComputing/StateSelection.jl/", subdir = "lib/ModelingToolkitTearing"}
-Optimization = {rev = "as/symbolics-v7", url = "https://github.com/AayushSabharwal/Optimization.jl"}
-OptimizationBase = { url = "https://github.com/AayushSabharwal/Optimization.jl", rev = "as/symbolics-v7", subdir = "lib/OptimizationBase" }
-OptimizationMOI = {rev = "as/symbolics-v7", subdir = "lib/OptimizationMOI", url = "https://github.com/AayushSabharwal/Optimization.jl"}
-SciCompDSL = {subdir = "lib/SciCompDSL"}
-StateSelection = {rev = "main", url = "https://github.com/JuliaComputing/StateSelection.jl/"}
+[sources.ModelingToolkitBase]
+subdir = "lib/ModelingToolkitBase"
+
+[sources.ModelingToolkitStandardLibrary]
+rev = "as/mtk-v11"
+url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl"
+
+[sources.ModelingToolkitTearing]
+rev = "main"
+subdir = "lib/ModelingToolkitTearing"
+url = "https://github.com/JuliaComputing/StateSelection.jl/"
+
+[sources.Optimization]
+rev = "as/symbolics-v7"
+url = "https://github.com/AayushSabharwal/Optimization.jl"
+
+[sources.OptimizationBase]
+rev = "as/symbolics-v7"
+subdir = "lib/OptimizationBase"
+url = "https://github.com/AayushSabharwal/Optimization.jl"
+
+[sources.OptimizationMOI]
+rev = "as/symbolics-v7"
+subdir = "lib/OptimizationMOI"
+url = "https://github.com/AayushSabharwal/Optimization.jl"
+
+[sources.SciCompDSL]
+subdir = "lib/SciCompDSL"
+
+[sources.StateSelection]
+rev = "main"
+url = "https://github.com/JuliaComputing/StateSelection.jl/"
 
 [extensions]
 MTKFMIExt = "FMI"
@@ -92,7 +115,7 @@ NonlinearSolve = "4.3"
 OffsetArrays = "1"
 OrderedCollections = "1"
 OrdinaryDiffEq = "6.82.0"
-OrdinaryDiffEqCore = "1.34.0"
+OrdinaryDiffEqCore = "1.34.0, 2"
 OrdinaryDiffEqDefault = "1.2"
 OrdinaryDiffEqNonlinearSolve = "1.5.0"
 PreallocationTools = "0.4.27"
