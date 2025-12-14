@@ -152,7 +152,7 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 
 All of the symbolic systems have a direct conversion to a numerical system, which
 can then be handled through the SciML interfaces. For example, after building a
-model and performing symbolic manipulations, an `System` can be converted into
+model and performing symbolic manipulations, a `System` can be converted into
 an `ODEProblem` to then be solved by a numerical ODE solver. Below is a list of
 the solver libraries which are the numerical targets of the ModelingToolkit
 system:
