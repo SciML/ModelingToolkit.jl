@@ -1261,18 +1261,18 @@ namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 namespace_guesses(sys::AbstractSystem) = namespace_expr(guesses(sys), sys)
 
 """
-    $(TYPEDSIGNATURES)
+    namespace_equations(sys::AbstractSystem)
 
 Return `equations(sys)`, namespaced by the name of `sys`.
 """
-function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
-    eqs = equations(sys)
+function namespace_equations(sys::AbstractSystem, visitor = NoVisitor())
+    eqs = equations(sys, visitor)
     isempty(eqs) && return eqs
     if eqs === get_eqs(sys)
         eqs = copy(eqs)
     end
     for i in eachindex(eqs)
-        eqs[i] = namespace_equation(eqs[i], sys; ivs)
+        eqs[i] = namespace_equation(eqs[i], sys)
     end
     return eqs
 end
@@ -1661,7 +1661,84 @@ end
 flatten(sys::AbstractSystem, args...) = sys
 
 """
-$(TYPEDSIGNATURES)
+    $TYPEDEF
+
+Abstract supertype for functors that can be passed to recursive functions such as
+[`equations`](@ref) to track additional information.
+"""
+abstract type AbstractRecursivePropertyVisitor end
+
+"""
+    descend_visitor!(visitor::AbstractRecursivePropertyVisitor, sys::AbstractSystem, f)
+
+Descend the `visitor` into system `sys`. Also provide the getter function `f` for the
+property the recursive function handles (e.g. `get_eqs` for `equations`).
+"""
+function descend_visitor! end
+
+"""
+    ascend_visitor!(visitor::AbstractRecursivePropertyVisitor, sys::AbstractSystem, f)
+
+Ascend the `visitor` from system `sys` into the parent, marking that all its subsystems
+have been explored. Also provide the getter function `f` for the property the recursive
+function handles (e.g. `get_eqs` for `equations`).
+"""
+function ascend_visitor! end
+
+"""
+    $TYPEDEF
+
+Dummy visitor
+"""
+struct NoVisitor <: AbstractRecursivePropertyVisitor end
+descend_visitor!(::NoVisitor, ::AbstractSystem, _) = nothing
+ascend_visitor!(::NoVisitor, ::AbstractSystem, _) = nothing
+
+"""
+    $TYPEDEF
+
+Visitor that tracks source information
+"""
+struct SourceInformationVisitor <: AbstractRecursivePropertyVisitor
+    """
+    List of names indicating the subsystem containing each value as a path from the root.
+    Names are in reverse order (root occurs last).
+    """
+    sources::Vector{Vector{Symbol}}
+    """
+    A stack of indices indicating the index where source entries belonging to each system
+    in the call stack start.
+    """
+    start_positions_stack::Vector{Int}
+end
+
+SourceInformationVisitor() = SourceInformationVisitor(Vector{Symbol}[], Int[])
+
+function descend_visitor!(vis::SourceInformationVisitor, sys::AbstractSystem, f)
+    (; sources, start_positions_stack) = vis
+    # The sources for equations in this system start from the next valid index
+    start = length(sources) + 1
+    push!(start_positions_stack, start)
+    # Add source information for the current system
+    for _ in f(sys)
+        push!(sources, Symbol[])
+    end
+end
+
+function ascend_visitor!(vis::SourceInformationVisitor, sys::AbstractSystem, f)
+    (; sources, start_positions_stack) = vis
+    # Get the start position for `sys`. We know we've explored all subsystems of `sys`.
+    cur_start = pop!(start_positions_stack)
+    # Since the search is DFS, all entries in `sources` from `cur_start` till the
+    # end are inside `sys`, so add the name to them.
+    name = nameof(sys)
+    for i in cur_start:lastindex(sources)
+        push!(sources[i], name)
+    end
+end
+
+"""
+    equations(sys::AbstractSystem)
 
 Get the flattened equations of the system `sys` and its subsystems.
 It may include some abbreviations and aliases of observables.
@@ -1669,15 +1746,38 @@ It is often the most useful way to inspect the equations of a system.
 
 See also [`full_equations`](@ref) and [`ModelingToolkitBase.get_eqs`](@ref).
 """
-function equations(sys::AbstractSystem)
+function equations(sys::AbstractSystem, visitor::AbstractRecursivePropertyVisitor = NoVisitor())
     eqs = get_eqs(sys)
     systems = get_systems(sys)
-    isempty(systems) && return eqs
+    descend_visitor!(visitor, sys, get_eqs)
+    if isempty(systems)
+        ascend_visitor!(visitor, sys, get_eqs)
+        return eqs
+    end
     eqs = copy(eqs)
     for subsys in systems
-        append!(eqs, namespace_equations(subsys))
+        append!(eqs, namespace_equations(subsys, visitor))
     end
+    ascend_visitor!(visitor, sys, get_eqs)
     return eqs
+end
+
+function equations_source(sys::AbstractSystem)
+    source = Vector{Symbol}[]
+    for _ in eachindex(get_eqs(sys))
+        push!(source, Symbol[])
+    end
+    systems = get_systems(sys)
+    isempty(systems) && return source
+
+    for subsys in systems
+        name = nameof(subsys)
+        sub_sources = equations_source(subsys)
+        for src in sub_sources
+            push!(src, name)
+        end
+        append!(source, name)
+    end
 end
 
 """
