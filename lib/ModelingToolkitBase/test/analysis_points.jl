@@ -6,6 +6,9 @@ using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkitBase as MTK
 import ControlSystemsBase as CS
+using SciCompDSL
+using ModelingToolkitStandardLibrary
+
 using Symbolics: NAMESPACE_SEPARATOR
 
 @testset "AnalysisPoint is lowered to `connect`" begin

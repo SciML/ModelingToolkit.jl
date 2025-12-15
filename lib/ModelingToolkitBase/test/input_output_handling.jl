@@ -324,7 +324,7 @@ eqs = [connect_sd(sd, mass1, mass2)
 
 f, dvs, ps, io_sys = ModelingToolkitBase.generate_control_function(
     model, [u]; simplify = true)
-@test length(dvs) == (@isdefined(ModelingToolkit) ? 4 : 8)
+@test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkitBase.varmap_to_vars(
     merge(ModelingToolkitBase.initial_conditions(model),

@@ -739,6 +739,15 @@ Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works w
 initialization.
 """
 function unhack_observed(obseqs, eqs)
+    mask = trues(length(obseqs))
+    for (i, eq) in enumerate(obseqs)
+        mask[i] = Moshi.Match.@match eq.rhs begin
+            BSImpl.Term(; f) => f !== offset_array
+            _ => true
+        end
+    end
+
+    obseqs = obseqs[mask]
     return obseqs, eqs
 end
 

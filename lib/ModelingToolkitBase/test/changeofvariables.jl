@@ -1,6 +1,7 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq
 using Test, LinearAlgebra
 import DiffEqNoiseProcess
+using Symbolics: unwrap
 
 common_alg = @isdefined(ModelingToolkit) ? Tsit5() : Rodas5P()
 
@@ -136,7 +137,7 @@ new_sys = change_of_variables(sys, t, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ μ - 1/2*σ^2)
 @test equations(new_sys)[2] == (D(w) ~ α^2)
 @test equations(new_sys)[3] == (D(v) ~ μ - 1/2*(α^2 + σ^2))
-col1 = @isdefined(ModelingToolkit) ? 1 : 2
+col1 = isequal(noise_eqs(new_sys)[1, 1], unwrap(σ))::Bool ? 1 : 2
 col2 = 3 - col1
 @test value(noise_eqs(new_sys)[1, col1]) === value(σ)
 @test value(noise_eqs(new_sys)[1,  col2]) === value(0)

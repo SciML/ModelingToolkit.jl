@@ -54,4 +54,4 @@ probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true}
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
 @show all_obs
-@test sol_obs[all_obs] == sol[all_obs] broken=!@isdefined(ModelingToolkit)
+@test sol_obs[all_obs] == sol[all_obs]

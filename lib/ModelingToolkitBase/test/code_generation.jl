@@ -78,12 +78,8 @@ end
         return [x, 2x]
     end
     @mtkcompile sys = System([D(x) ~ y[1] + y[2], y ~ foo(x)], t)
-    if @isdefined(ModelingToolkit)
-        @test length(equations(sys)) == 1
-        @test length(ModelingToolkitBase.observed(sys)) == 3
-    else
-        @test length(equations(sys)) == 3
-    end
+    @test length(equations(sys)) == 1
+    @test length(ModelingToolkitBase.observed(sys)) == 3
     prob = ODEProblem(sys, [x => 1.0, foo => _tmp_fn2], (0.0, 1.0))
     val[] = 0
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
