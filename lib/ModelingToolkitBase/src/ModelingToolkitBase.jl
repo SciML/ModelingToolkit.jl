@@ -10,6 +10,9 @@ using PrecompileTools, Reexport
     using JumpProcesses
     # ONLY here for the invalidations
     import REPL
+    using OffsetArrays: Origin
+    import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
+                        undef_blocks, blocks
 end
 
 import SymbolicUtils
@@ -60,9 +63,6 @@ using Moshi.Data: @data
 using Reexport
 using RecursiveArrayTools
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
-import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-                    undef_blocks, blocks
-using OffsetArrays: Origin
 import CommonSolve
 import EnumX
 import ReadOnlyDicts: ReadOnlyDict

@@ -381,12 +381,12 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{SymbolicT, String}(),
         metadata = MetadataT(), gui_metadata = nothing,
-        is_dde = nothing, tstops = [], inputs = OrderedSet{SymbolicT}(),
+        is_dde = nothing, @nospecialize(tstops = []), inputs = OrderedSet{SymbolicT}(),
         outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
-        preface = [], checks = true, __legacy_defaults__ = nothing)
+        @nospecialize(preface = nothing), checks = true, __legacy_defaults__ = nothing)
     name === nothing && throw(NoNameError())
 
     if __legacy_defaults__ !== nothing
@@ -480,14 +480,17 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
     if iv === nothing
-        filter!(bindings) do kvp
-            k = kvp[1]
-            if k in all_dvs
-                initial_conditions[k] = kvp[2]
-                return false
+        filterer = let initial_conditions = initial_conditions, all_dvs = all_dvs
+            function _filterer(kvp)
+                k = kvp[1]
+                if k in all_dvs
+                    initial_conditions[k] = kvp[2]
+                    return false
+                end
+                return true
             end
-            return true
         end
+        filter!(filterer, bindings)
     end
 
     check_bindings(ps, bindings)
@@ -683,19 +686,20 @@ Create a `System` with a single equation `eq`.
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
 function gather_array_params(ps)
-    new_ps = OrderedSet()
+    new_ps = OrderedSet{SymbolicT}()
     for p in ps
-        if iscall(p) && operation(p) === getindex
-            par = arguments(p)[begin]
-            if symbolic_has_known_size(par) && all(par[i] in ps for i in eachindex(par))
-                push!(new_ps, par)
+        arr, isarr = split_indexed_var(p)
+        sh = SU.shape(arr)
+        if isarr
+            if !(sh isa SU.Unknown) && all(in(ps) ∘ Base.Fix1(getindex, arr), SU.stable_eachindex(arr))
+                push!(new_ps, arr)
             else
                 push!(new_ps, p)
             end
         else
-            if symbolic_type(p) == ArraySymbolic() && symbolic_has_known_size(p)
-                for i in eachindex(p)
-                    delete!(new_ps, p[i])
+            if sh isa SU.ShapeVecT && !isempty(sh)
+                for i in SU.stable_eachindex(arr)
+                    delete!(new_ps, arr[i])
                 end
             end
             push!(new_ps, p)

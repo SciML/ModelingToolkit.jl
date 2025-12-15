@@ -20,6 +20,30 @@ function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
     invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
 end
 
+function safe_isinteger(@nospecialize(x::Number))
+    if x isa Int64
+        return true
+    elseif x isa Int32
+        return true
+    elseif x isa BigInt
+        return typemin(Int) <= x <= typemax(Int)
+    elseif x isa Float64
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    elseif x isa Float32
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    elseif x isa BigFloat
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    elseif x isa Rational{Int64}
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    elseif x isa Rational{Int32}
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    elseif x isa Rational{BigInt}
+        return isinteger(x) && typemin(Int) <= x <= typemax(Int)
+    else
+        return isinteger(x)::Bool && (typemin(Int) <= x)::Bool && (x <= typemax(Int))::Bool
+    end
+end
+
 """
     dummy_derivative(sys)
 
@@ -38,10 +62,8 @@ function dummy_derivative(sys, state = TearingState(sys);
                 el = _J[i]
                 Moshi.Match.@match el begin
                     BSImpl.Const(; val) && if val isa Number end => begin
-                        isinteger(val)::Bool || return nothing
-                        val = Int(val)
-                        typemin(Int) <= val <= typemax(Int) || return nothing
-                        J[i] = val
+                        safe_isinteger(val)|| return nothing
+                        J[i] = convert(Int, val)::Int
                     end
                     _ => return nothing
                 end

@@ -1460,6 +1460,14 @@ function unknowns_toplevel(sys::AbstractSystem)
     return get_unknowns(sys)
 end
 
+function __no_initial_params_pred(x::SymbolicT)
+    arr, _ = split_indexed_var(x)
+    Moshi.Match.@match arr begin
+        BSImpl.Term(; f) && if f isa Initial end => false
+        _ => true
+    end
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -1482,11 +1490,7 @@ function parameters(sys::AbstractSystem; initial_parameters = false)
     end
     result = collect(result)
     if !initial_parameters && !is_initializesystem(sys)
-        filter!(result) do sym
-            return !(isoperator(sym, Initial) ||
-                     iscall(sym) && operation(sym) === getindex &&
-                     isoperator(arguments(sym)[1], Initial))
-        end
+        filter!(__no_initial_params_pred, result)
     end
     return result
 end
@@ -1699,7 +1703,7 @@ Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expre
 if `simplify == true`.
 """
 function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
-    expr = Symbolics.fixpoint_sub(expr, dict; operator = Union{ModelingToolkitBase.Initial, Pre})
+    expr = Symbolics.fixpoint_sub(expr, dict, Union{Initial, Pre})
     simplify ? Symbolics.simplify(expr) : expr
 end
 

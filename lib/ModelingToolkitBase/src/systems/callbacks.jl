@@ -89,7 +89,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
         if !haspre(eq) && !(isconst(eq.lhs) && isconst(eq.rhs))
             @invokelatest warn_algebraic_equation(eq)
         end
-        collect_vars!(dvs, params, eq, iv; op = Pre)
+        collect_vars!(dvs, params, eq, iv, Pre)
         empty!(_varsbuf)
         SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Pre}())
         filter!(x -> iscall(x) && operation(x) === Pre(), _varsbuf)
@@ -125,7 +125,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     # This `@invokelatest` should not be necessary, but it works around the inference bug
     # in https://github.com/JuliaLang/julia/issues/59943. Remove it at your own risk, the
     # bug took weeks to reduce to an MWE.
-    affectsys = @invokelatest mtkcompile(affectsys; fully_determined = nothing)
+    affectsys = (@invokelatest mtkcompile(affectsys; fully_determined = nothing))::System
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)
@@ -133,10 +133,25 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     # add scalarized unknowns to the map.
     _obs, _ = unhack_observed(observed(affectsys), equations(affectsys))
     _dvs = vcat(unknowns(affectsys), map(eq -> eq.lhs, _obs))
-    _dvs = reduce(vcat, map(safe_vec ∘ scalarize, _dvs), init = SymbolicT[])
-    _discs = reduce(vcat, map(safe_vec ∘ scalarize, discretes); init = SymbolicT[])
+    _dvs = __safe_scalarize_vars(_dvs)
+    _discs = __safe_scalarize_vars(discretes)
     setdiff!(_dvs, _discs)
     AffectSystem(affectsys, _dvs, accessed_params, discrete_parameters)
+end
+
+function __safe_scalarize_vars(vars::Vector{SymbolicT})
+    _vars = SymbolicT[]
+    for v in vars
+        sh = SU.shape(v)::SU.ShapeVecT
+        if isempty(sh)
+            push!(_vars, v)
+            continue
+        end
+        for i in SU.stable_eachindex(v)
+            push!(_vars, v[i])
+        end
+    end
+    return _vars
 end
 
 safe_vec(@nospecialize(x)) = x isa SymbolicT ? [x] : vec(x::Array{SymbolicT})
@@ -1043,13 +1058,13 @@ The `SymbolicDiscreteCallback`s in the returned vector are structs with two fiel
 See also `get_discrete_events`, which only returns the events of the top-level system.
 """
 function discrete_events(sys::AbstractSystem)
-    obs = get_discrete_events(sys)
+    cbs = get_discrete_events(sys)
     systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-               (map(cb -> namespace_callback(cb, s), discrete_events(s)) for s in systems),
-               init = SymbolicDiscreteCallback[])]
-    cbs
+    cbs = copy(cbs)
+    for s in systems
+        append!(cbs, map(Base.Fix2(namespace_callback, s), discrete_events(s)))
+    end
+    return cbs
 end
 
 """
@@ -1100,15 +1115,13 @@ The `SymbolicContinuousCallback`s in the returned vector are structs with two fi
 See also `get_continuous_events`, which only returns the events of the top-level system.
 """
 function continuous_events(sys::AbstractSystem)
-    obs = get_continuous_events(sys)
-    filter(!isempty, obs)
-
+    cbs = get_continuous_events(sys)
     systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-               (map(o -> namespace_callback(o, s), continuous_events(s)) for s in systems),
-               init = SymbolicContinuousCallback[])]
-    filter(!isempty, cbs)
+    cbs = copy(cbs)
+    for s in systems
+        append!(cbs, map(Base.Fix2(namespace_callback, s), continuous_events(s)))
+    end
+    return cbs
 end
 
 """

@@ -12,6 +12,7 @@ PrecompileTools.@compile_workload begin
         x ^ 5
         6 ^ x
         x - y
+        x * x * q[1]
         -y
         2y
         z = 2
@@ -81,11 +82,22 @@ PrecompileTools.@compile_workload begin
         q[1]
         q'q
      using ModelingToolkitBase
-    @variables x(ModelingToolkitBase.t_nounits) y(ModelingToolkitBase.t_nounits)
-    isequal(ModelingToolkitBase.D_nounits.x, ModelingToolkitBase.t_nounits)
+    @parameters g
+    @variables x(ModelingToolkitBase.t_nounits)
+    @variables y(ModelingToolkitBase.t_nounits) [state_priority = 10]
+    @variables λ(ModelingToolkitBase.t_nounits)
+    eqs = [
+        ModelingToolkitBase.D_nounits(ModelingToolkitBase.D_nounits(x)) ~ λ * x
+        ModelingToolkitBase.D_nounits(ModelingToolkitBase.D_nounits(y)) ~ λ * y - g
+        x^2 + y^2 ~ 1
+    ]
+    dvs = Num[x, y, λ]
+    ps = Num[g]
     ics = Dict{SymbolicT, SymbolicT}()
-    ics[x] = 2.3
-    sys = System([ModelingToolkitBase.D_nounits(x) ~ x * y, y ~ 2x], ModelingToolkitBase.t_nounits, [x, y], Num[]; initial_conditions = ics, guesses = ics, name = :sys)
+    ics[y] = -1.0
+    ics[ModelingToolkitBase.D_nounits(x)] = 0.5
+    isequal(ModelingToolkitBase.D_nounits.x, ModelingToolkitBase.t_nounits)
+    sys = System(eqs, ModelingToolkitBase.t_nounits, dvs, ps; initial_conditions = ics, guesses = ics, name = :sys)
     complete(sys)
     @static if @isdefined(ModelingToolkit)
         TearingState(sys)

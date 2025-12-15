@@ -637,7 +637,7 @@ end
         ps = @parameters k=k Θ=0.5
         eqs = [D(x) ~ v, D(v) ~ -k * x + F]
         ev = [x ~ Θ] => [x ~ 1.0, v ~ 0.0]
-        System(eqs, t, sts, ps, continuous_events = [ev]; name)
+        System(eqs, t, sts, ps; continuous_events = [ev], name)
     end
 
     @named oscce = oscillator_ce()
