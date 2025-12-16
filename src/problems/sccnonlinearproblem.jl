@@ -238,7 +238,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; eval_expression = f
         u0_eltype = typeof(x)
         break
     end
-    if u0_eltype == Union{}
+    if u0_eltype === Union{} || u0_eltype === Nothing
         u0_eltype = Float64
     end
     u0_eltype = float(u0_eltype)
