@@ -968,13 +968,37 @@ function get_domain_bindings(
 end
 
 """
+    $TYPEDEF
+
+Struct that can optionally be returned from [`expand_connections`](@ref) and indicates
+where in the system the equations come from, along with other potentially useful source
+information.
+
+# Fields
+
+$TYPEDFIELDS
+"""
+struct EquationSourceInformation
+    """
+    For each equation, a `Vector{Symbol}` denoting the path from the root system to the
+    subsystem where this equation comes from. Includes the name of the root system. An
+    empty entry indicates unknown source (typically for connection equations).
+    """
+    eqs_source::Vector{Vector{Symbol}}
+    """
+    A mask indicating which equations arise from `connect` statements.
+    """
+    is_connection_equation::BitVector
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Given a hierarchical system with [`connect`](@ref) equations, expand the connection
 equations and return the new system. `tol` is the tolerance for handling the singularities
 in stream connection equations that happen when a flow variable approaches zero.
 """
-function expand_connections(sys::AbstractSystem; tol = 1e-10)
+function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(false); tol = 1e-10) where {with_source_info}
     # turn analysis points into standard connection equations
     sys = remove_analysis_points(sys)
     # generate the connection sets
@@ -983,7 +1007,31 @@ function expand_connections(sys::AbstractSystem; tol = 1e-10)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
     stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol)
 
-    eqs = [equations(sys); ceqs; stream_eqs]
+    if with_source_info
+        source_visitor = SourceInformationVisitor()
+        eqs = equations(sys, source_visitor)
+        N = length(eqs) + length(ceqs) + length(stream_eqs)
+        sources = source_visitor.sources
+        # Names are in reverse order
+        foreach(reverse!, sources)
+        is_connection_equation = falses(length(sources))
+        sizehint!(eqs, N)
+        sizehint!(sources, N)
+        sizehint!(is_connection_equation, N)
+        for eq in ceqs
+            push!(eqs, eq)
+            push!(sources, Symbol[])
+            push!(is_connection_equation, true)
+        end
+        for eq in stream_eqs
+            push!(eqs, eq)
+            push!(sources, Symbol[])
+            push!(is_connection_equation, true)
+        end
+        source_info = EquationSourceInformation(sources, is_connection_equation)
+    else
+        eqs = [equations(sys); ceqs; stream_eqs]
+    end
     if !isempty(instream_subs)
         # substitute `instream(..)` expressions with their new values
         for i in eachindex(eqs)
@@ -996,7 +1044,13 @@ function expand_connections(sys::AbstractSystem; tol = 1e-10)
     # build the new system
     sys = flatten(sys, true)
     @set! sys.eqs = eqs
-    @set sys.bindings = newbinds
+    @set! sys.bindings = newbinds
+
+    if with_source_info
+        return sys, source_info
+    else
+        return sys
+    end
 end
 
 """

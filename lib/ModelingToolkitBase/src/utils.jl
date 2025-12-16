@@ -1202,6 +1202,25 @@ end
 _eq_unordered(a, b) = isequal(a, b)
 
 """
+    $TYPEDSIGNATURES
+
+Given an equation that may be an array equation, return a `Vector{Equation}` representing
+its scalarized form.
+"""
+function flatten_equation(eq::Equation)::Vector{Equation}
+    if !SU.is_array_shape(SU.shape(eq.lhs))
+        return [eq]
+    end
+    lhs = vec(collect(eq.lhs)::Array{SymbolicT})::Vector{SymbolicT}
+    rhs = vec(collect(eq.rhs)::Array{SymbolicT})::Vector{SymbolicT}
+    result = Equation[]
+    for (l, r) in zip(lhs, rhs)
+        push!(result, l ~ r)
+    end
+    return result
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Given a list of equations where some may be array equations, flatten the array equations
@@ -1210,15 +1229,7 @@ without scalarizing occurrences of array variables and return the new list of eq
 function flatten_equations(eqs::Vector{Equation})
     _eqs = Equation[]
     for eq in eqs
-        if !SU.is_array_shape(SU.shape(eq.lhs))
-            push!(_eqs, eq)
-            continue
-        end
-        lhs = vec(collect(eq.lhs)::Array{SymbolicT})::Vector{SymbolicT}
-        rhs = vec(collect(eq.rhs)::Array{SymbolicT})::Vector{SymbolicT}
-        for (l, r) in zip(lhs, rhs)
-            push!(_eqs, l ~ r)
-        end
+        append!(_eqs, flatten_equation(eq))
     end
     return _eqs
 end

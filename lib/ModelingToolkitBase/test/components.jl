@@ -388,3 +388,35 @@ end
     # as opposed to `output.u ~ input.u`
     @test isequal(eq, comp1.input.u ~ comp2.output.u)
 end
+
+@testset "Source information propagation through `expand_connections`" begin
+    @named rc_model = RCModel()
+    sys, source_info = expand_connections(rc_model, Val(true))
+    @test source_info.eqs_source == [
+        [:rc_model, :resistor],
+        [:rc_model, :resistor],
+        [:rc_model, :resistor],
+        [:rc_model, :resistor],
+        [:rc_model, :capacitor],
+        [:rc_model, :capacitor],
+        [:rc_model, :capacitor],
+        [:rc_model, :capacitor],
+        [:rc_model, :shape],
+        [:rc_model, :source],
+        [:rc_model, :source],
+        [:rc_model, :source],
+        [:rc_model, :source],
+        [:rc_model, :ground],
+        Symbol[],
+        Symbol[],
+        Symbol[],
+        Symbol[],
+        Symbol[],
+        Symbol[],
+        Symbol[],
+        Symbol[]
+    ]
+    is_connect_truth = falses(22)
+    is_connect_truth[end-7:end] .= true
+    @test source_info.is_connection_equation == is_connect_truth
+end
