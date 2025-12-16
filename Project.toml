@@ -54,11 +54,6 @@ subdir = "lib/ModelingToolkitBase"
 rev = "as/mtk-v11"
 url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl"
 
-[sources.ModelingToolkitTearing]
-rev = "main"
-subdir = "lib/ModelingToolkitTearing"
-url = "https://github.com/JuliaComputing/StateSelection.jl/"
-
 [sources.Optimization]
 rev = "as/symbolics-v7"
 url = "https://github.com/AayushSabharwal/Optimization.jl"
@@ -75,10 +70,6 @@ url = "https://github.com/AayushSabharwal/Optimization.jl"
 
 [sources.SciCompDSL]
 subdir = "lib/SciCompDSL"
-
-[sources.StateSelection]
-rev = "main"
-url = "https://github.com/JuliaComputing/StateSelection.jl/"
 
 [extensions]
 MTKFMIExt = "FMI"
