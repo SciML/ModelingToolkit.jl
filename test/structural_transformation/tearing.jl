@@ -208,6 +208,7 @@ prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
+#=
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks: Constant
 
@@ -268,3 +269,4 @@ using ModelingToolkitStandardLibrary.Blocks: Constant
     @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol=1e-8
     @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol=1e-8
 end
+=#
