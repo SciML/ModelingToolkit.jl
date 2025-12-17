@@ -27,8 +27,8 @@ function MTKBase.__mtkcompile(sys::System;
         sort_eqs = true,
         kwargs...)
     sys, statemachines = extract_top_level_statemachines(sys)
-    sys = expand_connections(sys)
-    state = TearingState(sys; sort_eqs)
+    sys, source_info = expand_connections(sys, Val(true))
+    state = TearingState(sys, source_info; sort_eqs)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
