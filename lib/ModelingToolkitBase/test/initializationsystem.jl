@@ -1345,12 +1345,7 @@ end
     prob.ps[Initial(x)] = 0.5
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
-    if @isdefined(ModelingToolkit)
-        @test integ[y] ≈ [1.0, sqrt(2.75)]
-    else
-        # FIXME: There's something about this that makes it negative, but only in CI
-        @test integ[y] ≈ [1.0, -sqrt(2.75)]
-    end
+    @test integ[y] ≈ [1.0, sqrt(2.75)]
     prob.ps[Initial(y[1])] = 0.5
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
