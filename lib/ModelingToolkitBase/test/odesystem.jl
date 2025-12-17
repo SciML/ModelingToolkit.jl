@@ -1028,13 +1028,14 @@ end
 
     # the same, but with @mtkmodel
     @independent_variables x
-    @mtkmodel MyModel begin
-        @variables begin
+    @component function MyModel(; name)
+        vars = @variables begin
             y(x)
         end
-        @equations begin
+        eqs = [
             y ~ 0
-        end
+        ]
+        return System(eqs, t, vars, []; name)
     end
     @test_nowarn @mtkcompile sys = MyModel()
 
