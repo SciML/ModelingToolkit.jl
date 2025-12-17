@@ -2,7 +2,6 @@ using ModelingToolkitBase, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
 using Symbolics
 import SymbolicUtils as SU
 using Test
-using SciCompDSL
 MT = ModelingToolkitBase
 using ModelingToolkitBase: t, D
 @parameters τ [unit = u"s"] γ
@@ -169,50 +168,29 @@ maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], ModelingToolkitBase.t_nounits, [S], [β, γ])
 
-@mtkmodel ParamTest begin
-    @parameters begin
-        a, [unit = u"m"]
-    end
-    @variables begin
-        b(t), [unit = u"kg"]
-    end
-end
-
-@named sys = ParamTest()
-
-@named sys = ParamTest(a = 3.0u"cm")
-@test ModelingToolkitBase.getdefault(sys.a) ≈ 0.03
-
-@test_throws ErrorException ParamTest(; name = :t, a = 1.0)
-@test_throws ErrorException ParamTest(; name = :t, a = 1.0u"s")
-
-@mtkmodel ArrayParamTest begin
-    @parameters begin
-        a[1:2], [unit = u"m"]
-    end
-end
-
-@named sys = ArrayParamTest()
-
-@named sys = ArrayParamTest(a = [1.0, 3.0]u"cm")
-@test ModelingToolkitBase.getdefault(sys.a) ≈ [0.01, 0.03]
-
 @testset "Initialization checks" begin
-    @mtkmodel PendulumUnits begin
-        @parameters begin
-            g, [unit = u"m/s^2"]
-            L, [unit = u"m"]
+    @component function PendulumUnits(; name, g = nothing, L = nothing)
+        pars = @parameters begin
+            g = g, [unit = u"m/s^2"]
+            L = L, [unit = u"m"]
         end
-        @variables begin
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t), [unit = u"m"]
             y(t), [state_priority = 10, unit = u"m"]
             λ(t), [unit = u"s^-2"]
         end
-        @equations begin
+
+        equations = Equation[
             D(D(x)) ~ λ * x
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ L^2
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @mtkcompile pend = PendulumUnits()
     u0 = [pend.x => 1.0, pend.y => 0.0]

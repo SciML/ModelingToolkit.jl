@@ -6,7 +6,6 @@ analysis-point specific method for `generate_control_function`.
 using ModelingToolkit, OrdinaryDiffEqTsit5, LinearAlgebra, Test
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
-using SciCompDSL
 import NonlinearSolve
 using ModelingToolkit: connect
 # using Plots
@@ -16,30 +15,40 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
 ## Build the system model ======================================================
-@mtkmodel SystemModel begin
-    @parameters begin
-        m1 = 1
-        m2 = 1
-        k = 10 # Spring stiffness
-        c = 3  # Damping coefficient
+@component function SystemModel(; name, m1 = 1, m2 = 1, k = 10, c = 3)
+    pars = @parameters begin
+        m1 = m1
+        m2 = m2
+        k = k # Spring stiffness
+        c = c  # Damping coefficient
     end
-    @components begin
+
+    systems = @named begin
         inertia1 = Inertia(; J = m1, phi = 0, w = 0)
         inertia2 = Inertia(; J = m2, phi = 0, w = 0)
         spring = Spring(; c = k)
         damper = Damper(; d = c)
         torque = Torque(use_support = false)
     end
-    @equations begin
-        connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(torque.flange, inertia1.flange_a),
+        connect(inertia1.flange_b, spring.flange_a, damper.flange_a),
+        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 # The addition of disturbance inputs relies on the fact that the plant model has been constructed using connectors, we use these to connect the disturbance inputs from outside the plant-model definition
-@mtkmodel ModelWithInputs begin
-    @components begin
+@component function ModelWithInputs(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0) # We add an input signal that equals zero by default so that it has no effect during normal simulation
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -47,13 +56,19 @@ end
         disturbance_torque2 = Torque(use_support = false)
         system_model = SystemModel()
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau) # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them. 
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau), # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them.
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model = ModelWithInputs() # Model with load disturbance
@@ -75,8 +90,11 @@ lsys = named_ss(
 s = tf("s")
 dist(; name) = System(1 / s; name)
 
-@mtkmodel SystemModelWithDisturbanceModel begin
-    @components begin
+@component function SystemModelWithDisturbanceModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0)
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -85,14 +103,20 @@ dist(; name) = System(1 / s; name)
         disturbance_model = dist()
         system_model = SystemModel()
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_model.input)
-        connect(disturbance_model.output, disturbance_torque1.tau)
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_model.input),
+        connect(disturbance_model.output, disturbance_torque1.tau),
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
@@ -110,8 +134,11 @@ sol = solve(prob, Tsit5())
 
 dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
 
-@mtkmodel SystemModelWithDisturbanceModel begin
-    @components begin
+@component function SystemModelWithDisturbanceModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0)
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -124,18 +151,24 @@ dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
         angle_sensor = AngleSensor()
         output_disturbance = Blocks.Constant(k = 0)
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_model.input)
-        connect(disturbance_model.output, disturbance_torque1.tau)
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
 
-        connect(system_model.inertia1.flange_b, angle_sensor.flange)
-        connect(angle_sensor.phi, y.input1)
-        connect(output_disturbance.output, :dy, y.input2)
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_model.input),
+        connect(disturbance_model.output, disturbance_torque1.tau),
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b),
+
+        connect(system_model.inertia1.flange_b, angle_sensor.flange),
+        connect(angle_sensor.phi, y.input1),
+        connect(output_disturbance.output, :dy, y.input2)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()

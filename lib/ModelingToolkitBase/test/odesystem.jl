@@ -14,7 +14,6 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics
 using Symbolics: unwrap
 using DiffEqBase: isinplace
-using SciCompDSL
 
 # Define some variables
 @parameters σ ρ β
@@ -1026,7 +1025,7 @@ end
     @variables y(x)
     @test_nowarn @named sys = System([y ~ 0], x)
 
-    # the same, but with @mtkmodel
+    # the same, but with @component
     @independent_variables x
     @component function MyModel(; name)
         vars = @variables begin
@@ -1035,7 +1034,7 @@ end
         eqs = [
             y ~ 0
         ]
-        return System(eqs, t, vars, []; name)
+        return System(eqs, x, vars, []; name)
     end
     @test_nowarn @mtkcompile sys = MyModel()
 
@@ -1121,31 +1120,45 @@ end
 # https://github.com/SciML/ModelingToolkit.jl/issues/2969
 @testset "Constant substitution" begin
     make_model = function (c_a, c_b; name = nothing)
-        @mtkmodel ModelA begin
-            @constants begin
-                a = c_a
+        @component function ModelA(; name)
+            a = c_a
+
+            pars = @parameters begin
             end
-            @variables begin
+
+            systems = @named begin
+            end
+
+            vars = @variables begin
                 x(t)
             end
-            @equations begin
+
+            equations = Equation[
                 D(x) ~ -a * x
-            end
+            ]
+
+            return System(equations, t, vars, pars; name, systems)
         end
 
-        @mtkmodel ModelB begin
-            @constants begin
-                b = c_b
+        @component function ModelB(; name)
+            b = c_b
+
+            pars = @parameters begin
             end
-            @variables begin
-                y(t)
-            end
-            @components begin
+
+            systems = @named begin
                 modela = ModelA()
             end
-            @equations begin
-                D(y) ~ -b * y
+
+            vars = @variables begin
+                y(t)
             end
+
+            equations = Equation[
+                D(y) ~ -b * y
+            ]
+
+            return System(equations, t, vars, pars; name, systems)
         end
         return ModelB(; name = name)
     end
@@ -1309,25 +1322,32 @@ end
 
 @testset "`complete` expands connections" begin
     using ModelingToolkitStandardLibrary.Electrical
-    @mtkmodel RC begin
-        @parameters begin
-            R = 1.0
-            C = 1.0
-            V = 1.0
+    @component function RC(; name, R = 1.0, C = 1.0, V = 1.0)
+        pars = @parameters begin
+            R = R
+            C = C
+            V = V
         end
-        @components begin
+
+        systems = @named begin
             resistor = Resistor(R = R)
             capacitor = Capacitor(C = C, v = 0.0)
             source = Voltage()
             constant = Constant(k = V)
             ground = Ground()
         end
-        @equations begin
+
+        vars = @variables begin
+        end
+
+        equations = Equation[
             connect(constant.output, source.V)
             connect(source.p, resistor.p)
             connect(resistor.n, capacitor.p)
             connect(capacitor.n, source.n, ground.g)
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys = RC()
     total_eqs = length(equations(expand_connections(sys)))

@@ -1,5 +1,4 @@
 using ModelingToolkitBase, ModelingToolkitStandardLibrary.Blocks
-using SciCompDSL
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 
@@ -96,27 +95,44 @@ if @isdefined(ModelingToolkit)
 end
 
 @testset "Outside input to inside input connection" begin
-    @mtkmodel Inner begin
-        @variables begin
+    @component function Inner(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t), [input = true]
             y(t), [output = true]
         end
-        @equations begin
+
+        equations = Equation[
             y ~ x
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
-    @mtkmodel Outer begin
-        @variables begin
+
+    @component function Outer(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+            inner = Inner()
+        end
+
+        vars = @variables begin
             u(t), [input = true]
             v(t), [output = true]
         end
-        @components begin
-            inner = Inner()
-        end
-        @equations begin
+
+        equations = Equation[
             connect(u, inner.x)
             connect(inner.y, v)
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys = Outer()
     ss = toggle_namespacing(sys, false)

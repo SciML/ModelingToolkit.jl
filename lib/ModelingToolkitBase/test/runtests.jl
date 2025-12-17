@@ -2,21 +2,17 @@ using SafeTestsets, Pkg, Test
 # https://github.com/JuliaLang/julia/issues/54664
 import REPL
 
-const SciCompDSLPath = joinpath(dirname(dirname(@__DIR__)), "SciCompDSL")
-const SciCompDSLPkgSpec = PackageSpec(; path = SciCompDSLPath)
-Pkg.develop(SciCompDSLPkgSpec)
-
 const GROUP = get(ENV, "GROUP", "All")
 
 function activate_extensions_env()
     Pkg.activate("extensions")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__)), SciCompDSLPkgSpec])
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 
 function activate_downstream_env()
     Pkg.activate("downstream")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__)), SciCompDSLPkgSpec])
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
     Pkg.instantiate()
 end
 

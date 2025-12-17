@@ -12,7 +12,6 @@ using StableRNGs
 using ChainRulesCore
 using ChainRulesCore: NoTangent
 using ChainRulesTestUtils: test_rrule, rand_tangent
-using SciCompDSL
 
 @variables x(t)[1:3] y(t)
 @parameters p[1:3, 1:3] q
@@ -140,16 +139,23 @@ end
 end
 
 @testset "`p` provided to `solve` is respected" begin
-    @mtkmodel Linear begin
-        @variables begin
+    @component function Linear(; name, α = 1.5)
+        pars = @parameters begin
+            α = α
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t) = 1.0, [description = "Prey"]
         end
-        @parameters begin
-            α = 1.5
-        end
-        @equations begin
+
+        equations = Equation[
             D(x) ~ -α * x
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
     @mtkcompile linear = Linear()

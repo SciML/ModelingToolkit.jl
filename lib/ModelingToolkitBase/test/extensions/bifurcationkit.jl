@@ -1,4 +1,4 @@
-using BifurcationKit, ModelingToolkitBase, Test, SciCompDSL
+using BifurcationKit, ModelingToolkitBase, Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 # Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
 # Checks using `jac=false` option.
@@ -135,18 +135,25 @@ if @isdefined(ModelingToolkit)
 end
 
 if @isdefined(ModelingToolkit)
-    @mtkmodel FOL begin
-        @parameters begin
-            τ # parameters
+    @component function FOL(; name, τ = nothing)
+        pars = @parameters begin
+            τ = τ # parameters
         end
-        @variables begin
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t) # dependent variables
             RHS(t)
         end
-        @equations begin
+
+        equations = Equation[
             RHS ~ τ + x^2 - 0.1
             D(x) ~ RHS
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
     @mtkcompile fol = FOL()

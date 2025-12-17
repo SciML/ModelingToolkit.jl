@@ -1,6 +1,5 @@
 import ModelingToolkitStandardLibrary.Electrical as El
 import ModelingToolkitStandardLibrary.Blocks as Bl
-using SciCompDSL
 
 @component function RCModel(; name)
     pars = @parameters begin

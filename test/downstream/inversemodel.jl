@@ -5,7 +5,6 @@ using OrdinaryDiffEqRosenbrock
 using OrdinaryDiffEqNonlinearSolve
 using SymbolicIndexingInterface
 using Test
-using SciCompDSL
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
 using ModelingToolkit: t_nounits as t, D_nounits as D
 # ==============================================================================
@@ -16,30 +15,33 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 # ==============================================================================
 
 connect = ModelingToolkit.connect;
-rc = 0.25 # Reference concentration 
+rc = 0.25 # Reference concentration
 
-@mtkmodel MixingTank begin
-    @parameters begin
-        c0 = 0.8, [description = "Nominal concentration"]
-        T0 = 308.5, [description = "Nominal temperature"]
-        a1 = 0.2674
-        a21 = 1.815
-        a22 = 0.4682
-        b = 1.5476
-        k0 = 1.05e14
-        ϵ = 34.2894
+@component function MixingTank(; name, c0 = 0.8, T0 = 308.5, a1 = 0.2674, a21 = 1.815, a22 = 0.4682, b = 1.5476, k0 = 1.05e14, ϵ = 34.2894)
+    pars = @parameters begin
+        c0 = c0, [description = "Nominal concentration"]
+        T0 = T0, [description = "Nominal temperature"]
+        a1 = a1
+        a21 = a21
+        a22 = a22
+        b = b
+        k0 = k0
+        ϵ = ϵ
     end
-    @variables begin
+
+    systems = @named begin
+        T_c = RealInput()
+        c = RealOutput()
+        T = RealOutput()
+    end
+
+    vars = @variables begin
         gamma(t), [description = "Reaction speed"]
         xc(t) = c0, [description = "Concentration"]
         xT(t) = T0, [description = "Temperature"]
         xT_c(t), [description = "Cooling temperature"]
     end
-    @components begin
-        T_c = RealInput()
-        c = RealOutput()
-        T = RealOutput()
-    end
+
     begin
         τ0 = 60
         wk0 = k0 / c0
@@ -52,14 +54,17 @@ rc = 0.25 # Reference concentration
         wa23 = T0 * (a21 - b) / τ0
         wb = b / τ0
     end
-    @equations begin
-        gamma ~ xc * wk0 * exp(-wϵ / xT)
-        D(xc) ~ -wa11 * xc - wa12 * gamma + wa13
-        D(xT) ~ -wa21 * xT + wa22 * gamma + wa23 + wb * xT_c
-        xc ~ c.u
-        xT ~ T.u
+
+    equations = Equation[
+        gamma ~ xc * wk0 * exp(-wϵ / xT),
+        D(xc) ~ -wa11 * xc - wa12 * gamma + wa13,
+        D(xT) ~ -wa21 * xT + wa22 * gamma + wa23 + wb * xT_c,
+        xc ~ c.u,
+        xT ~ T.u,
         xT_c ~ T_c.u
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 begin
     Ftf = tf(1, [(100), 1])^2
@@ -72,7 +77,7 @@ begin
         return sys
     end
 end
-@mtkmodel InverseControlledTank begin
+@component function InverseControlledTank(; name)
     begin
         c0 = 0.8    #  "Nominal concentration
         T0 = 308.5 #  "Nominal temperature
@@ -84,7 +89,11 @@ end
         c_high_start = c0 * (1 - 0.72) # Reference concentration
         T_c_start = T0 * (1 + u0) # Initial cooling temperature
     end
-    @components begin
+
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         ref = Constant(k = 0.25) # Concentration reference
         ff_gain = Gain(k = 1) # To allow turning ff off
         controller = PI(gainPI.k = 10, T = 500)
@@ -95,21 +104,27 @@ end
         filter = RefFilter()
         noise_filter = FirstOrder(k = 1, T = 1, x = T_start)
         # limiter = Gain(k=1)
-        limiter = Limiter(y_max = 370, y_min = 250) # Saturate the control input 
+        limiter = Limiter(y_max = 370, y_min = 250) # Saturate the control input
     end
-    @equations begin
-        connect(ref.output, :r, filter.input)
-        connect(filter.output, inverse_tank.c)
-        connect(inverse_tank.T_c, ff_gain.input)
-        connect(ff_gain.output, :uff, limiter.input)
-        connect(limiter.output, add.input1)
-        connect(controller.ctr_output, :u, add.input2)
-        connect(add.output, :u_tot, tank.T_c)
-        connect(inverse_tank.T, feedback.input1)
-        connect(tank.T, :y, noise_filter.input)
-        connect(noise_filter.output, feedback.input2)
+
+    vars = @variables begin
+    end
+
+    equations = Equation[
+        connect(ref.output, :r, filter.input),
+        connect(filter.output, inverse_tank.c),
+        connect(inverse_tank.T_c, ff_gain.input),
+        connect(ff_gain.output, :uff, limiter.input),
+        connect(limiter.output, add.input1),
+        connect(controller.ctr_output, :u, add.input2),
+        connect(add.output, :u_tot, tank.T_c),
+        connect(inverse_tank.T, feedback.input1),
+        connect(tank.T, :y, noise_filter.input),
+        connect(noise_filter.output, feedback.input2),
         connect(feedback.output, :e, controller.err_input)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end;
 @named model = InverseControlledTank()
 ssys = mtkcompile(model)

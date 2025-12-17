@@ -1,5 +1,5 @@
 using ModelingToolkit, ADTypes, Test
-using NonlinearSolve, SciCompDSL
+using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
 
@@ -286,29 +286,36 @@ closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er]
 @test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
-@mtkmodel Tank_noi begin
+@component function Tank_noi(; name, ρ = 1, A = 5, K = 5, h_ς = 3)
     # Model parameters
-    @parameters begin
-        ρ = 1, [description = "Liquid density"]
-        A = 5, [description = "Cross sectional tank area"]
-        K = 5, [description = "Effluent valve constant"]
-        h_ς = 3, [description = "Scaling level in valve model"]
+    pars = @parameters begin
+        ρ = ρ, [description = "Liquid density"]
+        A = A, [description = "Cross sectional tank area"]
+        K = K, [description = "Effluent valve constant"]
+        h_ς = h_ς, [description = "Scaling level in valve model"]
     end
+
+    systems = @named begin
+    end
+
     # Model variables, with initial values needed
-    @variables begin
+    vars = @variables begin
         m(t), [description = "Liquid mass"]
         md_i(t), [description = "Influent mass flow rate"]
         md_e(t), [description = "Effluent mass flow rate"]
         V(t), [description = "Liquid volume"]
         h(t), [description = "level"]
     end
+
     # Providing model equations
-    @equations begin
-        D(m) ~ md_i - md_e
-        m ~ ρ * V
-        V ~ A * h
+    equations = Equation[
+        D(m) ~ md_i - md_e,
+        m ~ ρ * V,
+        V ~ A * h,
         md_e ~ K * sqrt(h / h_ς)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named tank_noi = Tank_noi()

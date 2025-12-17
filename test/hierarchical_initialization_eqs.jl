@@ -1,4 +1,4 @@
-using ModelingToolkit, SciCompDSL, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq
 using Test
 
 t = only(@parameters(t))

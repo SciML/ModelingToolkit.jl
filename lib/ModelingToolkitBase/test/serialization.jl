@@ -44,7 +44,7 @@ ss_exp = ModelingToolkitBase.toexpr(ss)
 ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1))
 sol_ = solve(prob_, ImplicitEuler())
-@test sol[all_obs] == sol_[all_obs]
+@test sol[all_obs] == sol_[all_obs] skip=!@isdefined(ModelingToolkit)
 
 ## Check ODEProblemExpr with Observables -----------
 

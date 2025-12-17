@@ -1,18 +1,27 @@
-using ModelingToolkit, OrdinaryDiffEq, SciCompDSL
+using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D, IfLifting, no_if_lift
 import SymbolicUtils as SU
 using Test
 
 @testset "Simple `abs(x)`" begin
-    @mtkmodel SimpleAbs begin
-        @variables begin
+    @component function SimpleAbs(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
             y(t)
         end
-        @equations begin
-            D(x) ~ abs(y)
+
+        equations = Equation[
+            D(x) ~ abs(y),
             y ~ sin(t)
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys = SimpleAbs()
     ss1 = mtkcompile(sys)
@@ -41,8 +50,15 @@ using Test
 end
 
 @testset "Big test case" begin
-    @mtkmodel BigModel begin
-        @variables begin
+    @component function BigModel(; name)
+        pars = @parameters begin
+            p
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
             y(t)
             z(t)
@@ -51,25 +67,25 @@ end
             q(t)
             r(t)
         end
-        @parameters begin
-            p
-        end
-        @equations begin
+
+        equations = Equation[
             # ifelse, max, min
-            D(x) ~ ifelse(c, max(x, y), min(x, y))
+            D(x) ~ ifelse(c, max(x, y), min(x, y)),
             # discrete observed
-            c ~ x <= y
+            c ~ x <= y,
             # observed should also get if-lifting
-            y ~ abs(sin(t))
+            y ~ abs(sin(t)),
             # should be ignored
-            D(z) ~ no_if_lift(ifelse(x < y, x, y))
+            D(z) ~ no_if_lift(ifelse(x < y, x, y)),
             # ignore time-independent ifelse
-            D(w) ~ ifelse(p < 3, 1.0, 2.0)
+            D(w) ~ ifelse(p < 3, 1.0, 2.0),
             # all the boolean operators
-            D(q) ~ ifelse((x < 1) & ((y < 0.5) | ifelse(y > 0.8, c, !c)), 1.0, 2.0)
+            D(q) ~ ifelse((x < 1) & ((y < 0.5) | ifelse(y > 0.8, c, !c)), 1.0, 2.0),
             # don't touch time-independent condition, but modify time-dependent branches
             D(r) ~ ifelse(p < 2, abs(x), max(y, 0.9))
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
     @named sys = BigModel()
@@ -114,37 +130,53 @@ end
 end
 
 @testset "`@mtkcompile` macro accepts `additional_passes`" begin
-    @mtkmodel SimpleAbs begin
-        @variables begin
+    @component function SimpleAbs(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
             y(t)
         end
-        @equations begin
-            D(x) ~ abs(y)
+
+        equations = Equation[
+            D(x) ~ abs(y),
             y ~ sin(t)
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @test_nowarn @mtkcompile sys=SimpleAbs() additional_passes=[IfLifting]
 end
 
 @testset "Nested conditions are handled properly" begin
-    @mtkmodel RampModel begin
-        @variables begin
+    @component function RampModel(; name, start_time = 1.0, duration = 1.0, height = 1.0)
+        pars = @parameters begin
+            start_time = start_time
+            duration = duration
+            height = height
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
             y(t)
         end
-        @parameters begin
-            start_time = 1.0
-            duration = 1.0
-            height = 1.0
-        end
-        @equations begin
+
+        equations = Equation[
             y ~ ifelse(start_time < t,
                 ifelse(t < start_time + duration,
                     (t - start_time) * height / duration, height),
-                0.0)
+                0.0),
             D(x) ~ y
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @mtkcompile sys = RampModel()
     @mtkcompile sys2=RampModel() additional_passes=[IfLifting]

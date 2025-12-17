@@ -9,7 +9,6 @@ using ModelingToolkitStandardLibrary.Thermal
 using SymbolicUtils: getmetadata
 using BipartiteGraphs
 import SymbolicUtils as SU
-using SciCompDSL
 include("common/rc_model.jl")
 
 @testset "Basics" begin
@@ -302,21 +301,39 @@ end
 end
 
 @testset "Issue#3016 Hierarchical indexing" begin
-    @mtkmodel Inner begin
-        @parameters begin
-            p
+    @component function Inner(; name, p = nothing)
+        pars = @parameters begin
+            p = p
         end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
+        end
+
+        equations = Equation[]
+
+        return System(equations, t, vars, pars; name, systems)
     end
-    @mtkmodel Outer begin
-        @components begin
+
+    @component function Outer(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             inner = Inner()
         end
-        @variables begin
+
+        vars = @variables begin
             x(t)
         end
-        @equations begin
+
+        equations = Equation[
             x ~ inner.p
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
     @named outer = Outer()
@@ -338,18 +355,38 @@ end
 end
 
 @testset "`getproperty` on `mtkcompile(complete(sys))`" begin
-    @mtkmodel Foo begin
-        @variables begin
+    @component function Foo(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
         end
+
+        equations = Equation[]
+
+        return System(equations, t, vars, pars; name, systems)
     end
-    @mtkmodel Bar begin
-        @components begin
+
+    @component function Bar(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             foo = Foo()
         end
-        @equations begin
-            D(foo.x) ~ foo.x
+
+        vars = @variables begin
         end
+
+        equations = Equation[
+            D(foo.x) ~ foo.x
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named bar = Bar()
     cbar = complete(bar)
