@@ -112,8 +112,11 @@ macro import_mtkbase()
         name in banned_names && continue
         startswith(string(name), '#') && continue
         push!(inner_using_expr.args, Expr(:., name))
-        if Base.ispublic(MTKBase, name) && !Base.isexported(MTKBase, name)
-            push!(inner_public_expr.args, name)
+        # Base.ispublic was added in Julia 1.11
+        @static if VERSION >= v"1.11"
+            if Base.ispublic(MTKBase, name) && !Base.isexported(MTKBase, name)
+                push!(inner_public_expr.args, name)
+            end
         end
     end
 
