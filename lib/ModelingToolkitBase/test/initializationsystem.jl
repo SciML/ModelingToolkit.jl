@@ -8,7 +8,6 @@ using DynamicQuantities
 using DiffEqBase: BrownFullBasicInit
 import DiffEqNoiseProcess
 using Setfield: @set!
-using SciCompDSL
 
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
 
@@ -94,56 +93,71 @@ sol = solve(prob, Rodas5P())
     guesses = [x => 1, y => 0.2, λ => 0.0],
     fully_determined = true)
 
-@connector Port begin
-    p(t)
-    dm(t) = 0, [connect = Flow]
+@connector function Port(; name, p = nothing, dm = 0)
+    vars = @variables begin
+        p(t) = p
+        dm(t) = dm, [connect = Flow]
+    end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector Flange begin
-    dx(t) = 0
-    f(t), [connect = Flow]
+@connector function Flange(; name, dx = 0, f = nothing)
+    vars = @variables begin
+        dx(t) = dx
+        f(t) = f, [connect = Flow]
+    end
+    System(Equation[], t, vars, []; name)
 end
 
 # Components ----
-@mtkmodel Orifice begin
-    @parameters begin
-        Cₒ = 2.7
-        Aₒ = 0.00094
-        ρ₀ = 1000
-        p′ = 0
+@component function Orifice(; name, Cₒ = 2.7, Aₒ = 0.00094, ρ₀ = 1000, p′ = 0)
+    pars = @parameters begin
+        Cₒ = Cₒ
+        Aₒ = Aₒ
+        ρ₀ = ρ₀
+        p′ = p′
     end
-    @variables begin
+
+    systems = @named begin
+        port₁ = Port(p = p′)
+        port₂ = Port(p = p′)
+    end
+
+    vars = @variables begin
         dm(t) = 0
         p₁(t) = p′
         p₂(t) = p′
     end
-    @components begin
-        port₁ = Port(p = p′)
-        port₂ = Port(p = p′)
-    end
-    begin
-        u = dm / (ρ₀ * Aₒ)
-    end
-    @equations begin
+
+    u = dm / (ρ₀ * Aₒ)
+
+    equations = Equation[
         dm ~ +port₁.dm
         dm ~ -port₂.dm
         p₁ ~ port₁.p
         p₂ ~ port₂.p
-
         p₁ - p₂ ~ (1 / 2) * ρ₀ * u^2 * Cₒ
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel Volume begin
-    @parameters begin
-        A = 0.1
-        ρ₀ = 1000
-        β = 2e9
-        direction = +1
-        p′
-        x′
+@component function Volume(; name, A = 0.1, ρ₀ = 1000, β = 2e9, direction = +1, p′ = nothing, x′ = nothing)
+    pars = @parameters begin
+        A = A
+        ρ₀ = ρ₀
+        β = β
+        direction = direction
+        p′ = p′
+        x′ = x′
     end
-    @variables begin
+
+    systems = @named begin
+        port = Port(p = p′)
+        flange = Flange(f = -p′ * A * direction)
+    end
+
+    vars = @variables begin
         p(t)
         x(t) = x′
         dm(t) = 0
@@ -152,40 +166,37 @@ end
         r(t), [guess = 1000]
         dr(t), [guess = 1000]
     end
-    @components begin
-        port = Port(p = p′)
-        flange = Flange(f = -p′ * A * direction)
-    end
-    @equations begin
+
+    equations = Equation[
         D(x) ~ dx
         D(r) ~ dr
-
         p ~ +port.p
         dm ~ +port.dm # mass is entering
         f ~ -flange.f * direction # force is leaving
         dx ~ flange.dx * direction
-
         r ~ ρ₀ * (1 + p / β)
         dm ~ (r * dx * A) + (dr * x * A)
         f ~ p * A
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel Mass begin
-    @parameters begin
-        m = 100
-        f′
+@component function Mass(; name, m = 100, f′ = nothing, f = f′, x = 0, dx = 0, ẍ = f′ / m)
+    pars = @parameters begin
+        m = m
+        f′ = f′
     end
-    @variables begin
-        f(t) = f′
-        x(t) = 0
-        dx(t) = 0
-        ẍ(t) = f′ / m
+    vars = @variables begin
+        f(t) = f
+        x(t) = x
+        dx(t) = dx
+        ẍ(t) = ẍ
     end
-    @components begin
+    systems = @named begin
         flange = Flange(f = f′)
     end
-    @equations begin
+    eqs = [
         D(x) ~ dx
         D(dx) ~ ẍ
 
@@ -193,19 +204,22 @@ end
         dx ~ flange.dx
 
         m * ẍ ~ f
-    end
+    ]
+    System(eqs, t, vars, pars; name, systems)
 end
 
-@mtkmodel Actuator begin
-    @parameters begin
-        p₁′
-        p₂′
+@component function Actuator(; name, p₁′ = nothing, p₂′ = nothing)
+    pars = @parameters begin
+        p₁′ = p₁′
+        p₂′ = p₂′
     end
+
     begin #constants
         x′ = 0.5
         A = 0.1
     end
-    @components begin
+
+    systems = @named begin
         port₁ = Port(p = p₁′)
         port₂ = Port(p = p₂′)
         vol₁ = Volume(p′ = p₁′, x′ = x′, direction = -1)
@@ -213,39 +227,62 @@ end
         mass = Mass(f′ = (p₂′ - p₁′) * A)
         flange = Flange(f = 0)
     end
-    @equations begin
+
+    vars = @variables begin
+    end
+
+    equations = Equation[
         connect(port₁, vol₁.port)
         connect(port₂, vol₂.port)
         connect(vol₁.flange, vol₂.flange, mass.flange, flange)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel Source begin
-    @parameters begin
-        p′
+@component function Source(; name, p′ = nothing)
+    pars = @parameters begin
+        p′ = p′
     end
-    @components begin
+
+    systems = @named begin
         port = Port(p = p′)
     end
-    @equations begin
-        port.p ~ p′
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        port.p ~ p′
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel Damper begin
-    @parameters begin
-        c = 1000
+@component function Damper(; name, c = 1000)
+    pars = @parameters begin
+        c = c
     end
-    @components begin
+
+    systems = @named begin
         flange = Flange(f = 0)
     end
-    @equations begin
-        flange.f ~ c * flange.dx
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        flange.f ~ c * flange.dx
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel HydraulicSystem begin
-    @components begin
+@component function HydraulicSystem(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         res₁ = Orifice(p′ = 300e5)
         res₂ = Orifice(p′ = 0)
         act = Actuator(p₁′ = 300e5, p₂′ = 0)
@@ -253,13 +290,19 @@ end
         snk = Source(p′ = 0)
         dmp = Damper()
     end
-    @equations begin
+
+    vars = @variables begin
+    end
+
+    equations = Equation[
         connect(src.port, res₁.port₁)
         connect(res₁.port₂, act.port₁)
         connect(act.port₂, res₂.port₁)
         connect(res₂.port₂, snk.port)
         connect(dmp.flange, act.flange)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @mtkcompile sys = HydraulicSystem()
@@ -302,61 +345,83 @@ if @isdefined(ModelingToolkit)
     @test maximum(abs.(initsol[conditions][1])) < 1e-14
 end
 
-@connector Flange begin
-    dx(t), [guess = 0]
-    f(t), [guess = 0, connect = Flow]
+@connector function Flange(; name, dx = nothing, f = nothing)
+    vars = @variables begin
+        dx(t) = dx, [guess = 0]
+        f(t) = f, [guess = 0, connect = Flow]
+    end
+    System(Equation[], t, vars, []; name)
 end
 
-@mtkmodel Mass begin
-    @parameters begin
-        m = 100
+@component function Mass(; name, m = 100, dx = nothing, f = nothing)
+    pars = @parameters begin
+        m = m
     end
-    @variables begin
-        dx(t)
-        f(t), [guess = 0]
-    end
-    @components begin
+
+    systems = @named begin
         flange = Flange()
     end
-    @equations begin
+
+    vars = @variables begin
+        dx(t) = dx
+        f(t) = f, [guess = 0]
+    end
+
+    equations = Equation[
         # connectors
         flange.dx ~ dx
         flange.f ~ -f
 
         # physics
         f ~ m * D(dx)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel Damper begin
-    @parameters begin
-        d = 1
+@component function Damper(; name, d = 1, dx = nothing, f = nothing)
+    pars = @parameters begin
+        d = d
     end
-    @variables begin
-        dx(t), [guess = 0]
-        f(t), [guess = 0]
-    end
-    @components begin
+
+    systems = @named begin
         flange = Flange()
     end
-    @equations begin
+
+    vars = @variables begin
+        dx(t) = dx, [guess = 0]
+        f(t) = f, [guess = 0]
+    end
+
+    equations = Equation[
         # connectors
         flange.dx ~ dx
         flange.f ~ -f
 
         # physics
         f ~ d * dx
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel MassDamperSystem begin
-    @components begin
+@component function MassDamperSystem(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         mass = Mass(; dx = 100, m = 10)
         damper = Damper(; d = 1)
     end
-    @equations begin
-        connect(mass.flange, damper.flange)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(mass.flange, damper.flange)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 if @isdefined(ModelingToolkit)
@@ -1345,12 +1410,7 @@ end
     prob.ps[Initial(x)] = 0.5
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
-    if @isdefined(ModelingToolkit)
-        @test integ[y] ≈ [1.0, sqrt(2.75)]
-    else
-        # FIXME: There's something about this that makes it negative, but only in CI
-        @test integ[y] ≈ [1.0, -sqrt(2.75)]
-    end
+    @test integ[y] ≈ [1.0, sqrt(2.75)]
     prob.ps[Initial(y[1])] = 0.5
     integ = init(prob, Tsit5(); abstol = 1e-6, reltol = 1e-6)
     @test integ[x] ≈ 0.5
@@ -1673,17 +1733,18 @@ end
 end
 
 @testset "Nonnumerics aren't narrowed" begin
-    @mtkmodel Foo begin
-        @variables begin
-            x(t) = 1.0
+    @component function Foo(; name, x = 1.0, p = nothing, r = 1.0)
+        vars = @variables begin
+            x(t) = x
         end
-        @parameters begin
-            p::AbstractString
-            r = 1.0
+        pars = @parameters begin
+            p::AbstractString = p
+            r = r
         end
-        @equations begin
+        eqs = [
             D(x) ~ r * x
-        end
+        ]
+        return System(eqs, t, vars, pars; name)
     end
     @mtkcompile sys = Foo(p = "a")
     prob = ODEProblem(sys, [], (0.0, 1.0))

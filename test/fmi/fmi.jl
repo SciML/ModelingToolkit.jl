@@ -1,5 +1,4 @@
 using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, NonlinearSolve, SciMLBase
-using SciCompDSL
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import ModelingToolkit as MTK
 
@@ -82,40 +81,42 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
     end
 end
 
-@mtkmodel SimpleAdder begin
-    @variables begin
+@component function SimpleAdder(; name)
+    vars = @variables begin
         a(t)
         b(t)
         c(t)
         out(t)
         out2(t)
     end
-    @parameters begin
+    pars = @parameters begin
         value = 1.0
     end
-    @equations begin
+    eqs = [
         out ~ a + b + value
         D(c) ~ out
         out2 ~ 2c
-    end
+    ]
+    System(eqs, t, vars, pars; name)
 end
 
-@mtkmodel StateSpace begin
-    @variables begin
+@component function StateSpace(; name)
+    vars = @variables begin
         x(t)
         y(t)
         u(t)
     end
-    @parameters begin
+    pars = @parameters begin
         A = 1.0
         B = 1.0
         C = 1.0
         _D = 1.0
     end
-    @equations begin
+    eqs = [
         D(x) ~ A * x + B * u
         y ~ C * x + _D * u
-    end
+    ]
+    System(eqs, t, vars, pars; name)
 end
 
 @testset "IO Model" begin

@@ -74,26 +74,16 @@ jobs:
           if PKG == "ModelingToolkitBase"
             @info "Testing ModelingToolkitBase"
             Pkg.activate("lib/ModelingToolkitBase")
-            @info "`dev`ing SciCompDSL"
-            Pkg.develop(; path = "lib/SciCompDSL")
             @info "Running tests" GROUP
             Pkg.test()
           elseif PKG == "ModelingToolkit"
             @info "Testing ModelingToolkit"
             Pkg.activate(".")
-            @info "`dev`ing ModelingToolkitBase"
-            Pkg.develop(; path = "lib/ModelingToolkitBase")
-            @info "`dev`ing SciCompDSL"
-            Pkg.develop(; path = "lib/SciCompDSL")
             @info "Running tests" GROUP
             Pkg.test()
           elseif PKG == "SciCompDSL"
             @info "Testing SciCompDSL"
             Pkg.activate("lib/SciCompDSL")
-            @info "`dev`ing ModelingToolkitBase"
-            Pkg.develop(; path = "lib/ModelingToolkitBase")
-            @info "`dev`ing ModelingToolkit"
-            Pkg.develop(; path = ".")
             @info "Running tests" GROUP
             Pkg.test()
           else

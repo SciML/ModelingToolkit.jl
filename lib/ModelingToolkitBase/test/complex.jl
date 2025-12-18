@@ -1,17 +1,25 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t
-using SciCompDSL
 using Test
 
-@mtkmodel ComplexModel begin
-    @variables begin
+@component function ComplexModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
+    end
+
+    vars = @variables begin
         x(t)
         y(t)
         z(t)::Complex{Real}
     end
-    @equations begin
-        z ~ x + im * y
-    end
+
+    equations = Equation[
+        z ~ x + im * y;
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 @named mixed = ComplexModel()
 @test length(equations(mixed)) == 2

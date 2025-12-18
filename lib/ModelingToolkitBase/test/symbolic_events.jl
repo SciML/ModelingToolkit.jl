@@ -6,7 +6,6 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
                        D_nounits as D,
                        affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
-using SciCompDSL
 
 using StableRNGs
 import SciMLBase
@@ -807,47 +806,62 @@ end
 
 if @isdefined(ModelingToolkit)
     @testset "Discrete event reinitialization (#3142)" begin
-        @connector LiquidPort begin
-            p(t)::Float64, [description = "Set pressure in bar",
+        @connector function LiquidPort(; name, p = nothing, Vdot = nothing)
+            vars = @variables begin
+                p(t)::Float64, [description = "Set pressure in bar",
                 guess = 1.01325]
-            Vdot(t)::Float64,
-            [description = "Volume flow rate in L/min",
-                guess = 0.0,
-                connect = Flow]
+                Vdot(t)::Float64,
+                [description = "Volume flow rate in L/min",
+                    guess = 0.0,
+                    connect = Flow]
+            end
+            System(Equation[], t, vars, []; name)
         end
 
-        @mtkmodel PressureSource begin
-            @components begin
+        @component function PressureSource(; name, p_set = 1.01325)
+            pars = @parameters begin
+                p_set::Float64 = p_set, [description = "Set pressure in bar"]
+            end
+
+            systems = @named begin
                 port = LiquidPort()
             end
-            @parameters begin
-                p_set::Float64 = 1.01325, [description = "Set pressure in bar"]
+
+            vars = @variables begin
             end
-            @equations begin
+
+            equations = Equation[
                 port.p ~ p_set
-            end
+            ]
+
+            return System(equations, t, vars, pars; name, systems)
         end
 
-        @mtkmodel BinaryValve begin
-            @constants begin
-                p_ref::Float64 = 1.0, [description = "Reference pressure drop in bar"]
-                ρ_ref::Float64 = 1000.0, [description = "Reference density in kg/m^3"]
+        @component function BinaryValve(; name, p_ref = 1.0, ρ_ref = 1000.0, k_V = 1.0, k_leakage = 1e-08, ρ = 1000.0, S = nothing, Δp = nothing, Vdot = nothing)
+            pars = @parameters begin
+                k_V::Float64 = k_V, [description = "Valve coefficient in L/min/bar"]
+                k_leakage::Float64 = k_leakage, [description = "Leakage coefficient in L/min/bar"]
+                ρ::Float64 = ρ, [description = "Density in kg/m^3"]
             end
-            @components begin
+
+            constants = @constants begin
+                p_ref::Float64 = p_ref, [description = "Reference pressure drop in bar"]
+                ρ_ref::Float64 = ρ_ref, [description = "Reference density in kg/m^3"]
+            end
+            append!(pars, constants)
+
+            systems = @named begin
                 port_in = LiquidPort()
                 port_out = LiquidPort()
             end
-            @parameters begin
-                k_V::Float64 = 1.0, [description = "Valve coefficient in L/min/bar"]
-                k_leakage::Float64 = 1e-08, [description = "Leakage coefficient in L/min/bar"]
-                ρ::Float64 = 1000.0, [description = "Density in kg/m^3"]
+
+            vars = @variables begin
+                S(t)::Float64 = S, [description = "Valve state", guess = 1.0, irreducible = true]
+                Δp(t)::Float64 = Δp, [description = "Pressure difference in bar", guess = 1.0]
+                Vdot(t)::Float64 = Vdot, [description = "Volume flow rate in L/min", guess = 1.0]
             end
-            @variables begin
-                S(t)::Float64, [description = "Valve state", guess = 1.0, irreducible = true]
-                Δp(t)::Float64, [description = "Pressure difference in bar", guess = 1.0]
-                Vdot(t)::Float64, [description = "Volume flow rate in L/min", guess = 1.0]
-            end
-            @equations begin
+
+            equations = Equation[
                 # Port handling
                 port_in.Vdot ~ -Vdot
                 port_out.Vdot ~ Vdot
@@ -855,27 +869,39 @@ if @isdefined(ModelingToolkit)
                 # System behavior
                 D(S) ~ 0.0
                 Vdot ~ S * k_V * sign(Δp) * sqrt(abs(Δp) / p_ref * ρ_ref / ρ) + k_leakage * Δp # softplus alpha function to avoid negative values under the sqrt
-            end
+            ]
+
+            return System(equations, t, vars, pars; name, systems)
         end
 
         # Test System
-        @mtkmodel TestSystem begin
-            @components begin
+        @component function TestSystem(; name)
+            pars = @parameters begin
+            end
+
+            systems = @named begin
                 pressure_source_1 = PressureSource(p_set = 2.0)
                 binary_valve_1 = BinaryValve(S = 1.0, k_leakage = 0.0)
                 binary_valve_2 = BinaryValve(S = 1.0, k_leakage = 0.0)
                 pressure_source_2 = PressureSource(p_set = 1.0)
             end
-            @equations begin
+
+            vars = @variables begin
+            end
+
+            equations = Equation[
                 connect(pressure_source_1.port, binary_valve_1.port_in)
                 connect(binary_valve_1.port_out, binary_valve_2.port_in)
                 connect(binary_valve_2.port_out, pressure_source_2.port)
-            end
-            @discrete_events begin
+            ]
+
+            discrete_events = [
                 [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
                 [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.Δp ~ 1.0]
                 [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
-            end
+            ]
+
+            return System(equations, t, vars, pars; name, systems, discrete_events)
         end
 
         # Test Simulation
@@ -1191,20 +1217,31 @@ end
 end
 
 @testset "Issue#3154 Array variable in discrete condition" begin
-    @mtkmodel DECAY begin
-        @parameters begin
-            unrelated[1:2] = zeros(2)
-            k(t) = 0.0
+    @component function DECAY(; name, unrelated = zeros(2), k = 0.0)
+        pars = @parameters begin
+            unrelated[1:2] = unrelated
         end
-        @variables begin
+        discs = @discretes begin
+            k(t) = k
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t) = 10.0
         end
-        @equations begin
+        vars = [vars; discs]
+
+        equations = Equation[
             D(x) ~ -k * x
-        end
-        @discrete_events begin
-            (t == 1.0) => [k ~ 1.0], [discrete_parameters = k]
-        end
+        ]
+
+        discrete_events = [
+            SymbolicDiscreteCallback((t == 1.0), [k ~ 1.0], discrete_parameters = [k])
+        ]
+
+        return System(equations, t, vars, pars; name, systems, discrete_events)
     end
     @mtkcompile decay = DECAY()
     prob = ODEProblem(decay, [], (0.0, 10.0))
@@ -1439,19 +1476,31 @@ end
 end
 
 @testset "Non-`Real` symtype parameters in callback with unknown" begin
-    @mtkmodel MWE begin
-        @variables begin
+    @component function MWE(; name, p = 1)
+        pars = @parameters begin
+        end
+
+        discretes = @discretes begin
+            p(t)::Int = p
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t) = 1.0
         end
-        @parameters begin
-            p(t)::Int = 1
-        end
-        @equations begin
+        append!(vars, discretes)
+
+        equations = Equation[
             D(x) ~ p * x
-        end
-        @discrete_events begin
-            1.0 => [x ~ p * Pre(x) * sin(x)]
-        end
+        ]
+
+        discrete_events = [
+            SymbolicDiscreteCallback(1.0, [x ~ p * Pre(x) * sin(x)]; discrete_parameters = [p])
+        ]
+
+        return System(equations, t, vars, pars; name, systems, discrete_events)
     end
     @mtkcompile sys = MWE()
     @test_nowarn ODEProblem(sys, [], (0.0, 1.0))

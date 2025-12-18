@@ -1,25 +1,32 @@
 using ModelingToolkitBase, InfiniteOpt, JuMP, Ipopt, Setfield
 using ModelingToolkitBase: D_nounits as D, t_nounits as t, varmap_to_vars
-using SciCompDSL
+using JuMP: @variables
 
-@mtkmodel Pendulum begin
-    @parameters begin
-        g = 9.8
-        L = 0.4
-        K = 1.2
-        m = 0.3
+@component function Pendulum(; name, g = 9.8, L = 0.4, K = 1.2, m = 0.3)
+    pars = @parameters begin
+        g = g
+        L = L
+        K = K
+        m = m
     end
-    @variables begin
+
+    systems = @named begin
+    end
+
+    vars = ModelingToolkitBase.@variables begin
         θ(t) # state
         ω(t) # state
         τ(t) = 0 # input
         y(t) # output
     end
-    @equations begin
+
+    equations = Equation[
         D(θ) ~ ω
         D(ω) ~ -g / L * sin(θ) - K / m * ω + τ / m / L^2
         y ~ θ * 180 / π
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 @named model = Pendulum()
 model = complete(model)

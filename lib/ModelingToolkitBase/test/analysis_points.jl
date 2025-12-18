@@ -6,7 +6,6 @@ using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkitBase as MTK
 import ControlSystemsBase as CS
-using SciCompDSL
 using ModelingToolkitStandardLibrary
 
 using Symbolics: NAMESPACE_SEPARATOR
@@ -693,17 +692,26 @@ using DynamicQuantities
 
 @testset "AnalysisPoint is ignored when verifying units" begin
     # no units first
-    @mtkmodel FirstOrderTest begin
-        @components begin
+    @component function FirstOrderTest(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             in = Step()
             fb = Feedback()
             fo = SecondOrder(k = 1, w = 1, d = 0.1)
         end
-        @equations begin
+
+        vars = @variables begin
+        end
+
+        equations = Equation[
             connect(in.output, :u, fb.input1)
             connect(fb.output, :e, fo.input)
             connect(fo.output, :y, fb.input2)
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named model = FirstOrderTest()
     @test model isa System
@@ -735,38 +743,48 @@ using DynamicQuantities
         ]
         return System(eqs, t, [], pars; systems, name)
     end
-    @mtkmodel TestAPAroundUnits begin
-        @components begin
+    @component function TestAPAroundUnits(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             input = UnitfulInput()
-        end
-        @variables begin
-            output(t), [output=true, unit=u"m^2"]
-        end
-        @components begin
             ub = UnitfulBlock()
         end
-        @equations begin
+
+        vars = @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+
+        equations = Equation[
             connect(ub.output, :ap, input)
             output ~ input.u^2
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys = TestAPAroundUnits()
     @test sys isa System
     
-    @mtkmodel TestAPWithNoOutputs begin
-        @components begin
+    @component function TestAPWithNoOutputs(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             input = UnitfulInput()
-        end
-        @variables begin
-            output(t), [output=true, unit=u"m^2"]
-        end
-        @components begin
             ub = UnitfulBlock()
         end
-        @equations begin
+
+        vars = @variables begin
+            output(t), [output=true, unit=u"m^2"]
+        end
+
+        equations = Equation[
             connect(ub.output, :ap, input)
             output ~ input.u^2
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys2 = TestAPWithNoOutputs()
     @test sys2 isa System

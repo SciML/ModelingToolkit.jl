@@ -1,9 +1,11 @@
 import ModelingToolkitStandardLibrary.Electrical as El
 import ModelingToolkitStandardLibrary.Blocks as Bl
-using SciCompDSL
 
-@mtkmodel LLModel begin
-    @components begin
+@component function LLModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         shape = Bl.Constant(k = 10.0)
         source = El.Voltage()
         resistor = El.Resistor(R = 1.0)
@@ -11,20 +13,29 @@ using SciCompDSL
         inductor2 = El.Inductor(L = 2.0e-2)
         ground = El.Ground()
     end
-    @equations begin
+
+    vars = @variables begin
+    end
+
+    equations = Equation[
         connect(shape.output, source.V)
         connect(source.p, resistor.p)
         connect(resistor.n, inductor1.p)
         connect(inductor1.n, inductor2.p)
         connect(source.n, inductor2.n)
         connect(inductor2.n, ground.g)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named ll_model = LLModel()
 
-@mtkmodel LL2Model begin
-    @components begin
+@component function LL2Model(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         shape = Bl.Constant(k = 10.0)
         source = El.Voltage()
         resistor1 = El.Resistor(R = 1.0)
@@ -33,7 +44,11 @@ end
         inductor2 = El.Inductor(L = 2.0e-2)
         ground = El.Ground()
     end
-    @equations begin
+
+    vars = @variables begin
+    end
+
+    equations = Equation[
         connect(shape.output, source.V)
         connect(source.p, inductor1.p)
         connect(inductor1.n, resistor1.p)
@@ -42,7 +57,9 @@ end
         connect(resistor2.n, inductor2.p)
         connect(source.n, inductor2.n)
         connect(inductor2.n, ground.g)
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named ll2_model = LL2Model()

@@ -1,51 +1,77 @@
 using ModelingToolkit, ModelingToolkitStandardLibrary, Test
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
-using OrdinaryDiffEq, SciCompDSL
+using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D, renamespace,
                        NAMESPACE_SEPARATOR as NS
 
-@mtkmodel SignalInterface begin
-    @components begin
+@component function SignalInterface(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         output = RealOutput()
     end
+
+    vars = @variables begin
+    end
+
+    equations = Equation[]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel TwoComponent begin
-    @components begin
+@component function TwoComponent(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         component1 = OnePort()
         component2 = OnePort()
         source = Voltage()
         signal = SignalInterface()
         ground = Ground()
     end
-    @equations begin
-        connect(signal.output.u, source.V.u)
-        connect(source.p, component1.p)
-        connect(component1.n, component2.p)
-        connect(component2.n, source.n, ground.g)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(signal.output.u, source.V.u),
+        connect(source.p, component1.p),
+        connect(component1.n, component2.p),
+        connect(component2.n, source.n, ground.g)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel RC begin
-    @parameters begin
-        R = 1.0
-        C = 1.0
-        V = 1.0
+@component function RC(; name, R = 1.0, C = 1.0, V = 1.0)
+    pars = @parameters begin
+        R = R
+        C = C
+        V = V
     end
-    @components begin
+
+    systems = @named begin
         component1 = Resistor(R = R)
         component2 = Capacitor(C = C, v = 0.0)
         source = Voltage()
         constant = Constant(k = V)
         ground = Ground()
     end
-    @equations begin
-        connect(constant.output, source.V)
-        connect(source.p, component1.p)
-        connect(component1.n, component2.p)
-        connect(component2.n, source.n, ground.g)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(constant.output, source.V),
+        connect(source.p, component1.p),
+        connect(component1.n, component2.p),
+        connect(component2.n, source.n, ground.g)
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @testset "Replacement with connections works" begin
@@ -72,148 +98,230 @@ end
     @test sol1.u≈sol2.u atol=1e-8
 end
 
-@mtkmodel BadOnePort1 begin
-    @components begin
+@component function BadOnePort1(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         p = Pin()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         i(t)
     end
-    @equations begin
-        0 ~ p.i + n.i
+
+    equations = Equation[
+        0 ~ p.i + n.i,
         i ~ p.i
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
+end
+
+@connector function BadPin1(; name, v = nothing)
+    vars = @variables begin
+        v(t) = v
     end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector BadPin1 begin
-    v(t)
-end
+@component function BadOnePort2(; name)
+    pars = @parameters begin
+    end
 
-@mtkmodel BadOnePort2 begin
-    @components begin
+    systems = @named begin
         p = BadPin1()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.v + n.v
+
+    equations = Equation[
+        0 ~ p.v + n.v,
         v ~ p.v
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
+end
+
+@connector function BadPin2(; name, v = nothing, i = nothing)
+    vars = @variables begin
+        v(t) = v
+        i(t) = i
     end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector BadPin2 begin
-    v(t)
-    i(t)
-end
+@component function BadOnePort3(; name)
+    pars = @parameters begin
+    end
 
-@mtkmodel BadOnePort3 begin
-    @components begin
+    systems = @named begin
         p = BadPin2()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.v + n.v
+
+    equations = Equation[
+        0 ~ p.v + n.v,
         v ~ p.v
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
+end
+
+@connector function BadPin3(; name, v = nothing, i = nothing)
+    vars = @variables begin
+        v(t) = v, [input = true]
+        i(t) = i, [connect = Flow]
     end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector BadPin3 begin
-    v(t), [input = true]
-    i(t), [connect = Flow]
-end
+@component function BadOnePort4(; name)
+    pars = @parameters begin
+    end
 
-@mtkmodel BadOnePort4 begin
-    @components begin
+    systems = @named begin
         p = BadPin3()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.v + n.v
+
+    equations = Equation[
+        0 ~ p.v + n.v,
         v ~ p.v
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
+end
+
+@connector function BadPin4(; name, v = nothing, i = nothing)
+    vars = @variables begin
+        v(t) = v, [output = true]
+        i(t) = i, [connect = Flow]
     end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector BadPin4 begin
-    v(t), [output = true]
-    i(t), [connect = Flow]
-end
+@component function BadOnePort5(; name)
+    pars = @parameters begin
+    end
 
-@mtkmodel BadOnePort5 begin
-    @components begin
+    systems = @named begin
         p = BadPin4()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.v + n.v
+
+    equations = Equation[
+        0 ~ p.v + n.v,
         v ~ p.v
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel BadPin5 begin
-    @variables begin
+@component function BadPin5(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
+    end
+
+    vars = @variables begin
         v(t)
         i(t), [connect = Flow]
     end
+
+    equations = Equation[]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel BadOnePort6 begin
-    @components begin
+@component function BadOnePort6(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         p = BadPin5()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.v + n.v
+
+    equations = Equation[
+        0 ~ p.v + n.v,
         v ~ p.v
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
+end
+
+@connector function BadPin6(; name, i = nothing)
+    vars = @variables begin
+        i(t) = i, [connect = Flow]
     end
+    System(Equation[], t, vars, []; name)
 end
 
-@connector BadPin6 begin
-    i(t), [connect = Flow]
-end
+@component function BadOnePort7(; name)
+    pars = @parameters begin
+    end
 
-@mtkmodel BadOnePort7 begin
-    @components begin
+    systems = @named begin
         p = BadPin6()
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
-    @equations begin
-        0 ~ p.i + n.i
+
+    equations = Equation[
+        0 ~ p.i + n.i,
         i ~ p.i
-    end
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
-@mtkmodel BadOnePort8 begin
-    @components begin
+@component function BadOnePort8(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         n = Pin()
     end
-    @variables begin
+
+    vars = @variables begin
         v(t)
         i(t)
     end
+
+    equations = Equation[]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @testset "Error checking" begin

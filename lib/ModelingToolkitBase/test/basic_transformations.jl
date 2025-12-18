@@ -3,7 +3,6 @@ using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
 using SymbolicUtils: symtype, _iszero
 using ModelingToolkitBase: SymbolicContinuousCallback
-using SciCompDSL
 
 @independent_variables t
 D = Differential(t)
@@ -256,26 +255,43 @@ end
 
 @testset "Change independent variable, no equations" begin
     # make this "look" like the standard library RealInput
-    @mtkmodel Input begin
-        @variables begin
+    @component function Input(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             u(t)
         end
+
+        equations = Equation[]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named input_sys = Input()
     input_sys = complete(input_sys)
     # test no failures
     @test change_independent_variable(input_sys, input_sys.u) isa System
 
-    @mtkmodel NestedInput begin
-        @components begin
+    @component function NestedInput(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             in = Input()
         end
-        @variables begin
+
+        vars = @variables begin
             x(t)
         end
-        @equations begin
+
+        equations = Equation[
             D(x) ~ in.u
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named nested_input_sys = NestedInput()
     nested_input_sys = complete(nested_input_sys; flatten = false)
@@ -283,21 +299,28 @@ end
 end
 
 @testset "Change of variables, connections" begin
-    @mtkmodel ConnectSys begin
-        @components begin
+    @component function ConnectSys(; name)
+        pars = @parameters begin
+        end
+
+        systems = @named begin
             in = RealInput()
             out = RealOutput()
         end
-        @variables begin
+
+        vars = @variables begin
             x(t)
             y(t)
         end
-        @equations begin
+
+        equations = Equation[
             connect(in, out)
             in.u ~ x
             D(x) ~ -out.u
             D(y) ~ 1
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
     @named sys = ConnectSys()
     sys = complete(sys; flatten = false)

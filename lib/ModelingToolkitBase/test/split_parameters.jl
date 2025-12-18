@@ -8,7 +8,6 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION
 using SciMLStructures: Tunable, Discrete, Constants, Initials
 using SymbolicIndexingInterface: is_parameter, getp
 using Symbolics
-using SciCompDSL
 
 x = [1, 2.0, false, [1, 2, 3], Parameter(1.0)]
 
@@ -261,31 +260,43 @@ end
 end
 
 @testset "" begin
-    @mtkmodel SubSystem begin
-        @parameters begin
-            c = 1
+    @component function SubSystem(; name, c = 1)
+        pars = @parameters begin
+            c = c
         end
-        @variables begin
+
+        systems = @named begin
+        end
+
+        vars = @variables begin
             x(t)
         end
-        @equations begin
+
+        equations = Equation[
             D(x) ~ c * x
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
-    @mtkmodel ApexSystem begin
-        @components begin
+    @component function ApexSystem(; name, k = 1)
+        pars = @parameters begin
+            k = k
+        end
+
+        systems = @named begin
             subsys = SubSystem()
         end
-        @parameters begin
-            k = 1
-        end
-        @variables begin
+
+        vars = @variables begin
             y(t)
         end
-        @equations begin
+
+        equations = Equation[
             D(y) ~ k * y + subsys.x
-        end
+        ]
+
+        return System(equations, t, vars, pars; name, systems)
     end
 
     @named sys = ApexSystem()
