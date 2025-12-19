@@ -207,3 +207,67 @@ end
 function contains_possibly_indexed_element(x::AtomicArraySet, k::SymbolicT)
     has_possibly_indexed_key(x.dd, k)
 end
+
+"""
+    $TYPEDEF
+
+A wrapper around `AtomicArrayDict{SymbolicT, D}` which makes it more amenable to
+substitution. This wrapper allows indexing with indexed arrays, invoking
+[`get_possibly_indexed`](@ref), [`has_possibly_indexed_key`](@ref) and
+[`write_possibly_indexed_array!`](@ref) as appropriate. More significantly,
+when `Base.get` (and `Base.getindex`) is called with an indexed array for which
+the corresponding array is present in the wrapped `dict` but the value is `default`,
+it will return the indexed array. For example, if the wrapped `dict` has
+`k => [default, other_var]` as a key-value pair and this wrapper is accessed at
+`k[1]`, it will return `k[1]` instead of `default`. This is useful since `default`
+is used to represent missing values. Substituting something like `sin(k[1])` will
+then not attempt to perform `sin(default)` but instead return `sin(k[1])`.
+"""
+struct AtomicArrayDictSubstitutionWrapper{D} <: AbstractDict{SymbolicT, SymbolicT}
+    dict::AtomicArrayDict{SymbolicT, D}
+    default::SymbolicT
+end
+
+function AtomicArrayDictSubstitutionWrapper(d::AtomicArrayDict{SymbolicT, D}) where {D}
+    AtomicArrayDictSubstitutionWrapper{D}(d, COMMON_NOTHING)
+end
+
+const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
+
+Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
+function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
+    arr, isarr = split_indexed_var(k)
+    res = get_possibly_indexed(dd.dict, k, dd.default)
+    if res === dd.default
+        isarr && haskey(dd.dict, arr) && return k
+        return def()
+    end
+    return res
+end
+function Base.get(f::Base.Callable, dd::AADSubWrapper, k::Union{Num, Arr, CallAndWrap})
+    return get(f, dd, unwrap(k))
+end
+Base.get(dd::AADSubWrapper, k, default) = get(Returns(default), dd, k)
+
+function Base.haskey(dd::AADSubWrapper, k::SymbolicT)
+    has_possibly_indexed_key(dd, k)
+end
+function Base.haskey(dd::AADSubWrapper, k::Union{Num, Arr, CallAndWrap})
+    haskey(dd, unwrap(k))
+end
+
+function Base.getindex(dd::AADSubWrapper, k)
+    res = get(dd, k, dd.default)
+    res === dd.default && throw(KeyError(k))
+    return res
+end
+
+function Base.setindex!(dd::AADSubWrapper, v, k)
+    write_possibly_indexed_array!(dd.dict, k, v, dd.default)
+end
+
+Base.isempty(dd::AADSubWrapper) = isempty(dd.dict)
+Base.length(dd::AADSubWrapper) = length(dd.dict)
+Base.iterate(dd::AADSubWrapper, args...) = Base.iterate(dd.dict, args...)
+Base.sizehint!(dd::AADSubWrapper, n; kw...) = sizehint!(dd.dict, n; kw...)
+Base.empty!(dd::AADSubWrapper) = empty!(dd.dict)
