@@ -355,6 +355,9 @@ function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSyste
     if !is_time_dependent(sys)
         return Set()
     end
+    if sym isa Int
+        return Set([ContinuousTimeseries()])
+    end
     ts_idxs = Set()
     _all_ts_idxs!(ts_idxs, sys, sym)
     return ts_idxs
