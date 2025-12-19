@@ -344,7 +344,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
             end
         end
     end
-    evaluate_varmap!(varmap, vars; limit = substitution_limit)
+    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit)
     vals = map(vars) do x
         x = unwrap(x)
         v = get_possibly_indexed(varmap, x, x)
@@ -456,7 +456,7 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AtomicArrayDict, vars; limit = 100)
+function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100)
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
         v = get(varmap, arr, COMMON_NOTHING)
