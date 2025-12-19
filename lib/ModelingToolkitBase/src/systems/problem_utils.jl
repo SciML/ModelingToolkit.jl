@@ -1376,7 +1376,8 @@ function process_SciMLProblem(
 
     add_initials!(sys, op)
 
-    obs, eqs = unhack_observed(observed(sys), eqs)
+    _sys = unhack_system(sys)
+    obs = observed(_sys)
 
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
@@ -1812,7 +1813,7 @@ function get_u0(sys::AbstractSystem, varmap; kwargs...)
     op = build_operating_point(sys, varmap)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
-    obs, _ = unhack_observed(observed(sys), equations(sys))
+    obs = observed(unhack_system(sys))
     add_observed_equations!(op, obs)
 
     return varmap_to_vars(op, unknowns(sys); kwargs...)
@@ -1830,7 +1831,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
     add_initials!(sys, op)
-    obs, _ = unhack_observed(observed(sys), equations(sys))
+    obs = observed(unhack_system(sys))
     add_observed_equations!(op, obs)
 
     if split
