@@ -737,6 +737,8 @@ end
 """
 Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
 initialization.
+
+DEPRECATED: use `unhack_system` instead.
 """
 function unhack_observed(obseqs, eqs)
     mask = trues(length(obseqs))
@@ -749,6 +751,20 @@ function unhack_observed(obseqs, eqs)
 
     obseqs = obseqs[mask]
     return obseqs, eqs
+end
+
+"""
+    unhack_system(sys::AbstractSystem)
+
+Given a system, remove any codegen oddities applied to it. This is typically used as a
+precursor to generating the initialization system. It is the successor of the now
+deprecated `unhack_observed`.
+"""
+function unhack_system(sys)
+    obs, eqs = unhack_observed(observed(sys), equations(sys))
+    @set! sys.observed = obs
+    @set! sys.eqs = eqs
+    return sys
 end
 
 function UnknownsInTimeIndependentInitializationError(eq, non_params)
