@@ -1349,7 +1349,7 @@ function process_SciMLProblem(
         u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
-        circular_dependency_max_cycles = 10,
+        circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
         allow_incomplete = false, is_initializeprob = false, kwargs...)
@@ -1390,7 +1390,7 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses;
+            op, t, guesses; initsys_mtkcompile_kwargs,
             warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,

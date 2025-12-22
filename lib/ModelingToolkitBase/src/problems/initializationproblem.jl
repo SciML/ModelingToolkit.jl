@@ -30,6 +30,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         allow_incomplete = false,
         algebraic_only = false,
         time_dependent_init = is_time_dependent(sys),
+        initsys_mtkcompile_kwargs = (;),
         kwargs...) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
@@ -67,7 +68,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         @set! isys.ps = mapreduce(collect, vcat, get_ps(isys))
     end
     if simplify_system
-        isys = mtkcompile(isys; fully_determined, split = is_split(sys))
+        isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
     end
 
     ts = get_tearing_state(isys)

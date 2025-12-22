@@ -1752,3 +1752,15 @@ end
     integ = init(prob)
     @test integ.p.nonnumeric[1] isa Vector{AbstractString}
 end
+
+@testset "`initsys_mtkcompile_kwargs` keyword to problem ctor" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ 2x + y, x * y ~ 3], t)
+    # `fully_determined` is also an `ODEProblem` kwarg but that's not what we're testing.
+    err = if @isdefined(ModelingToolkit)
+        ModelingToolkit.StateSelection.ExtraVariablesSystemException
+    else
+        ModelingToolkitBase.ExtraVariablesSystemException
+    end
+    @test_throws err ODEProblem(sys, [], (0.0, 1.0); initsys_mtkcompile_kwargs = (; fully_determined = true))
+end
