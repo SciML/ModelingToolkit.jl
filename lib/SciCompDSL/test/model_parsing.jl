@@ -157,7 +157,7 @@ res__R = 100u"Ω"
 prob = ODEProblem(rc, [], (0, 1e9))
 sol = solve(prob)
 defs = ModelingToolkitBase.initial_conditions(rc)
-@test sol[rc.capacitor.v, end] ≈ value(defs[rc.constant.k])
+@test sol[rc.capacitor.v][end] ≈ value(defs[rc.constant.k])
 resistor = getproperty(rc, :resistor; namespace = false)
 @test ModelingToolkitBase.description(rc) == "An RC circuit."
 @test getname(rc.resistor) === getname(resistor)

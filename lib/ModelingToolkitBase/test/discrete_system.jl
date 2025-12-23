@@ -283,7 +283,7 @@ end
         (0, 4))
     @test all(isone, prob.u0)
     sol = solve(prob, FunctionMap())
-    @test sol[[x..., y...], end] == 8ones(4)
+    @test sol[[x..., y...]][end] == 8ones(4)
 end
 
 @testset "initial conditionsare totermed appropriately" begin

@@ -577,8 +577,8 @@ end
     probmod = SDEProblem(demod, [u0map; parammap], (0.0, 1.0))
 
     ensemble_probmod = EnsembleProblem(probmod;
-        output_func = (sol, i) -> (g(sol[x, end]) *
-                                   sol[demod.weight, end],
+        output_func = (sol, i) -> (g(sol[x][end]) *
+                                   sol[demod.weight][end],
             false),
         prob_func = prob_func)
 

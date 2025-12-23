@@ -1436,7 +1436,7 @@ end
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
     @test sol[p2] ≈ [1.0, 0.5]
-    @test sol[x, end]≈0.75 atol=1e-6
+    @test sol[x][end]≈0.75 atol=1e-6
 end
 
 if @isdefined(ModelingToolkit)
