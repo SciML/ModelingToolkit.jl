@@ -48,6 +48,8 @@ $INITIALIZEPROB_KWARGS
   to attempt to arrive at a numeric value.
 - `missing_guess_value`: An instance of [`MissingGuessValue`](@ref) which indicates what
   happens when the initialization problem is missing guess values for variables.
+- `initsys_mtkcompile_kwargs`: A `NamedTuple` of keyword arguments to pass to `mtkcompile`
+  when it is called on the initialization system.
 """
 
 const TIME_DEPENDENT_PROBLEM_KWARGS = """

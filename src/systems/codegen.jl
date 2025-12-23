@@ -1,4 +1,4 @@
-function MTKBase.torn_system_jacobian_sparsity(sys)
+function MTKBase.torn_system_jacobian_sparsity(sys::System)
     state = get_tearing_state(sys)
     state isa TearingState || return nothing
     @unpack structure = state
@@ -6,8 +6,8 @@ function MTKBase.torn_system_jacobian_sparsity(sys)
 
     neqs = nsrcs(graph)
     nsts = ndsts(graph)
-    states_idxs = findall(!Base.Fix1(isdervar, structure), 1:nsts)
-    var2idx = uneven_invmap(nsts, states_idxs)
+    states_idxs = findall(!Base.Fix1(StateSelection.isdervar, structure), 1:nsts)
+    var2idx = StructuralTransformations.uneven_invmap(nsts, states_idxs)
     I = Int[]
     J = Int[]
     for ieq in 1:neqs

@@ -355,6 +355,9 @@ function SymbolicIndexingInterface.get_all_timeseries_indexes(sys::AbstractSyste
     if !is_time_dependent(sys)
         return Set()
     end
+    if sym isa Int
+        return Set([ContinuousTimeseries()])
+    end
     ts_idxs = Set()
     _all_ts_idxs!(ts_idxs, sys, sym)
     return ts_idxs
@@ -532,7 +535,9 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     # time-independent systems don't initialize unknowns
     # but may initialize parameters using guesses for unknowns
     eqs = equations(sys)
-    obs, eqs = unhack_observed(observed(sys), eqs)
+    _sys = unhack_system(sys)
+    obs = observed(_sys)
+    eqs = equations(_sys)
     for x in unknowns(sys)
         if !split
             push!(all_initialvars, x)

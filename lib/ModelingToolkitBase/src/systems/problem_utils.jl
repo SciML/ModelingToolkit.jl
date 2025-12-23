@@ -344,7 +344,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
             end
         end
     end
-    evaluate_varmap!(varmap, vars; limit = substitution_limit)
+    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit)
     vals = map(vars) do x
         x = unwrap(x)
         v = get_possibly_indexed(varmap, x, x)
@@ -456,7 +456,7 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AtomicArrayDict, vars; limit = 100)
+function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100)
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
         v = get(varmap, arr, COMMON_NOTHING)
@@ -1349,7 +1349,7 @@ function process_SciMLProblem(
         u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
-        circular_dependency_max_cycles = 10,
+        circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
         allow_incomplete = false, is_initializeprob = false, kwargs...)
@@ -1376,7 +1376,8 @@ function process_SciMLProblem(
 
     add_initials!(sys, op)
 
-    obs, eqs = unhack_observed(observed(sys), eqs)
+    _sys = unhack_system(sys)
+    obs = observed(_sys)
 
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
@@ -1389,7 +1390,7 @@ function process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses;
+            op, t, guesses; initsys_mtkcompile_kwargs,
             warn_initialize_determined, initialization_eqs,
             eval_expression, eval_module, fully_determined,
             warn_cyclic_dependency, check_units = check_initialization_units,
@@ -1812,7 +1813,7 @@ function get_u0(sys::AbstractSystem, varmap; kwargs...)
     op = build_operating_point(sys, varmap)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
-    obs, _ = unhack_observed(observed(sys), equations(sys))
+    obs = observed(unhack_system(sys))
     add_observed_equations!(op, obs)
 
     return varmap_to_vars(op, unknowns(sys); kwargs...)
@@ -1830,7 +1831,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
     add_initials!(sys, op)
-    obs, _ = unhack_observed(observed(sys), equations(sys))
+    obs = observed(unhack_system(sys))
     add_observed_equations!(op, obs)
 
     if split

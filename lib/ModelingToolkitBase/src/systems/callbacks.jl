@@ -131,7 +131,7 @@ function AffectSystem(affect::Vector{Equation}; discrete_parameters = SymbolicT[
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
-    _obs, _ = unhack_observed(observed(affectsys), equations(affectsys))
+    _obs = observed(unhack_system(affectsys))
     _dvs = vcat(unknowns(affectsys), map(eq -> eq.lhs, _obs))
     _dvs = __safe_scalarize_vars(_dvs)
     _discs = __safe_scalarize_vars(discretes)
@@ -931,7 +931,9 @@ function compile_equational_affect(
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
-    obseqs, eqs = unhack_observed(observed(affsys), equations(affsys))
+    _affsys = unhack_system(affsys)
+    obseqs = observed(_affsys)
+    eqs = equations(_affsys)
     if isempty(equations(affsys))
         update_eqs = substitute(
             obseqs, Dict([p => unPre(p) for p in parameters(affsys)]))

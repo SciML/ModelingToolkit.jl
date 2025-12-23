@@ -52,15 +52,16 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         algebraic_only = false,
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...)
-    eqs = equations(sys)
-    trueobs, eqs = unhack_observed(observed(sys), eqs)
+    _sys = unhack_system(sys)
+    trueobs = observed(_sys)
+    eqs = equations(_sys)
     # remove any observed equations that directly or indirectly contain
     # delayed unknowns
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
 
     # Firstly, all variables and observables are initialization unknowns
     init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
-    add_trivial_initsys_vars!(init_vars_set, unknowns(sys), trueobs)
+    add_trivial_initsys_vars!(init_vars_set, unknowns(_sys), trueobs)
 
     eqs_ics = Equation[]
 
@@ -103,7 +104,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     derivative_rules = DerivativeDict()
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
-    if has_schedule(sys) && (schedule = get_schedule(sys); schedule isa Schedule)
+    if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
             if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
@@ -208,13 +209,15 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         fast_path = false,
         name = nameof(sys), kwargs...)
     eqs = equations(sys)
-    trueobs, eqs = unhack_observed(observed(sys), eqs)
+    _sys = unhack_system(sys)
+    trueobs = observed(_sys)
+    eqs = equations(_sys)
     # remove any observed equations that directly or indirectly contain
     # delayed unknowns
     isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
 
-    og_dvs = as_atomic_array_set(unknowns(sys))
-    union!(og_dvs, as_atomic_array_set(observables(sys)))
+    og_dvs = as_atomic_array_set(unknowns(_sys))
+    union!(og_dvs, as_atomic_array_set(observables(_sys)))
 
     init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
 
@@ -737,6 +740,8 @@ end
 """
 Counteracts the CSE/array variable hacks in `symbolics_tearing.jl` so it works with
 initialization.
+
+DEPRECATED: use `unhack_system` instead.
 """
 function unhack_observed(obseqs, eqs)
     mask = trues(length(obseqs))
@@ -749,6 +754,20 @@ function unhack_observed(obseqs, eqs)
 
     obseqs = obseqs[mask]
     return obseqs, eqs
+end
+
+"""
+    unhack_system(sys::AbstractSystem)
+
+Given a system, remove any codegen oddities applied to it. This is typically used as a
+precursor to generating the initialization system. It is the successor of the now
+deprecated `unhack_observed`.
+"""
+function unhack_system(sys)
+    obs, eqs = unhack_observed(observed(sys), equations(sys))
+    @set! sys.observed = obs
+    @set! sys.eqs = eqs
+    return sys
 end
 
 function UnknownsInTimeIndependentInitializationError(eq, non_params)

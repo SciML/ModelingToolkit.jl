@@ -562,7 +562,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
     obs = observed(snlsys)
     seqs = equations(snlsys)
-    trueobs, _ = unhack_observed(obs, seqs)
+    trueobs = observed(unhack_system(snlsys))
     subs = Dict{SymbolicT, SymbolicT}()
     for eq in trueobs
         subs[eq.lhs] = eq.rhs

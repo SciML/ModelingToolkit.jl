@@ -6,6 +6,10 @@ struct Schedule
     dummy_sub::Dict{SymbolicT, SymbolicT}
 end
 
+function Base.copy(sched::Schedule)
+    Schedule(copy(sched.var_sccs), copy(sched.dummy_sub))
+end
+
 const MetadataT = Base.ImmutableDict{DataType, Any}
 
 abstract type MutableCacheKey end

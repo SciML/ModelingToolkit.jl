@@ -100,7 +100,7 @@ if @isdefined(ModelingToolkit)
     new_A = sortslices(new_A, dims = 1)
     @test isapprox(A, new_A, rtol = 1e-10)
 end
-@test isapprox(new_sol[x[1], end], sol[x[1], end], rtol = 1e-4)
+@test isapprox(new_sol[x[1]][end], sol[x[1]][end], rtol = 1e-4)
 
 # Change of variables for sde
 noise_eqs = ModelingToolkitBase.get_noise_eqs
