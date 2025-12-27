@@ -1,3 +1,17 @@
+"""
+    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+
+Generate the NLStep data for implicit ODE solvers. This is a stub that throws an error
+if called without ModelingToolkit loaded. The actual implementation is provided by
+ModelingToolkit when it is loaded.
+"""
+function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+    error("""
+        `nlstep=true` requires ModelingToolkit.jl to be loaded.
+        Please add `using ModelingToolkit` to your code before creating an ODEProblem with `nlstep=true`.
+        """)
+end
+
 @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
