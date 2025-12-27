@@ -49,25 +49,6 @@ FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 
 [sources.ModelingToolkitBase]
 subdir = "lib/ModelingToolkitBase"
-
-[sources.ModelingToolkitStandardLibrary]
-rev = "as/mtk-v11"
-url = "https://github.com/SciML/ModelingToolkitStandardLibrary.jl"
-
-[sources.Optimization]
-rev = "as/symbolics-v7"
-url = "https://github.com/AayushSabharwal/Optimization.jl"
-
-[sources.OptimizationBase]
-rev = "as/symbolics-v7"
-subdir = "lib/OptimizationBase"
-url = "https://github.com/AayushSabharwal/Optimization.jl"
-
-[sources.OptimizationMOI]
-rev = "as/symbolics-v7"
-subdir = "lib/OptimizationMOI"
-url = "https://github.com/AayushSabharwal/Optimization.jl"
-
 [sources.SciCompDSL]
 subdir = "lib/SciCompDSL"
 
