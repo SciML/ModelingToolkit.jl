@@ -1,4 +1,4 @@
-function generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys),
+function MTKBase.generate_ODENLStepData(sys::System, u0, p, mm = calculate_massmatrix(sys),
         nlstep_compile::Bool = true, nlstep_scc::Bool = false)
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
     state = ProblemState(; u = u0, p)
