@@ -181,8 +181,8 @@ end
 
 function PreparedJacobian{false}(f, autodiff, args...)
     prep = DI.prepare_jacobian(f, autodiff, args...; strict = Val(false))
-    return PreparedJacobian{true, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
-        prep, f, nothing)
+    return PreparedJacobian{false, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
+        prep, f, nothing, autodiff)
 end
 
 function (pj::PreparedJacobian{true})(args...)
@@ -311,7 +311,7 @@ function (linfun::LinearizationFunction)(u, p, t)
             DI.Constant(u), DI.Constant(p), DI.Constant(t))
     else
         linfun.num_states == 0 ||
-            error("Number of unknown variables (0) does not match the number of input unknowns ($(length(u)))")
+            error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
         h_xz = fg_u = zeros(0, length(linfun.inputs))
     end
@@ -510,7 +510,8 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     ps = parameters(sys; initial_parameters = true)
     p = Tuple(reorder_parameters(sys, ps))
 
-    fun_expr = generate_rhs(sys; expression = Val{true})[1]
+    fun_result = generate_rhs(sys; expression = Val{true})
+    fun_expr = fun_result isa Tuple ? fun_result[1] : fun_result
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
     
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)

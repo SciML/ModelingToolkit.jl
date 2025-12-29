@@ -46,7 +46,7 @@ function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     t = get_iv(sys)
     N = length(dvs)
     @assert length(eqs) == N
-    @assert mm == I || size(mm) == (N, N)
+    @assert mm isa UniformScaling || size(mm) == (N, N)
     rhss = [eq.rhs for eq in eqs]
     gamma1, gamma2, gamma3 = ODE_GAMMA
     c = ODE_C
