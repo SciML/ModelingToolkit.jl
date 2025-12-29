@@ -6,7 +6,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 using DocStringExtensions
 import ModelingToolkit as MTK
 import SciMLBase
-import FMI
+import FMIImport as FMI
 
 """
     $(TYPEDSIGNATURES)
