@@ -49,6 +49,7 @@ FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
 
 [sources.ModelingToolkitBase]
 subdir = "lib/ModelingToolkitBase"
+
 [sources.SciCompDSL]
 subdir = "lib/SciCompDSL"
 
@@ -90,7 +91,7 @@ OrdinaryDiffEq = "6.82.0"
 OrdinaryDiffEqCore = "1.34.0, 2"
 OrdinaryDiffEqDefault = "1.2"
 OrdinaryDiffEqNonlinearSolve = "1.5.0"
-PreallocationTools = "0.4.27"
+PreallocationTools = "0.4.27, 1"
 PrecompileTools = "1"
 REPL = "1"
 Reexport = "0.2, 1"
