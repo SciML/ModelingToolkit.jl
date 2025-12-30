@@ -395,7 +395,14 @@ function timevaring_initsys_process_op!(init_vars_set::AtomicArraySet{OrderedDic
         # At this point, not only is `k` solvable but it should also have
         # `Initial(k)` defined if required.
         ik = Initial(k)
-        @assert ik in init_ps
+        @assert ik in init_ps """
+        Expected an `Initial` parameter to exist for variable `$k`, but did not find one. \
+        This is likely because the problem constructor was passed an initial condition \
+        for `$k` but the variable does not exist in the system. Either ensure that `$k` \
+        is a variable/parameter of the system, or change the set of initial conditions \
+        provided to the problem constructor. In case this is not the issue, please open \
+        an issue in ModelingToolkit.jl with a reproducible example.
+        """
         subk = fixpoint_sub(k, derivative_rules; maxiters = get_maxiters(derivative_rules))
         # FIXME: DAEs can have initial conditions that require reducing the system
         # to index zero. If `isdifferential(y)`, an initial condition was given for the
