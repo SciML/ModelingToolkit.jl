@@ -27,9 +27,12 @@ A simple linear resistor model
            v ~ i * R]
     return System(eqs, t, vars, params; systems, name)
 end
-@connector Pin begin
-    v(t)
-    i(t), [connect = Flow]
+@connector function Pin(; name)
+    vars = @variables begin
+        v(t)
+        i(t), [connect = Flow]
+    end
+    System(Equation[], t, vars, []; name)
 end
 @component function ConstantVoltage(; name, V = 1.0)
     systems = @named begin
