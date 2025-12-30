@@ -45,7 +45,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [weakdeps]
-FMI = "14a09403-18e3-468f-ad8a-74f8dda2d9ac"
+FMIImport = "9fcbc62e-52a0-44e9-a616-1359a0008194"
 
 [sources.ModelingToolkitBase]
 subdir = "lib/ModelingToolkitBase"
@@ -54,7 +54,7 @@ subdir = "lib/ModelingToolkitBase"
 subdir = "lib/SciCompDSL"
 
 [extensions]
-MTKFMIExt = "FMI"
+MTKFMIExt = "FMIImport"
 
 [compat]
 ADTypes = "1.14.0"
@@ -70,7 +70,7 @@ DelayDiffEq = "5.61"
 DiffEqBase = "6.189.1"
 DifferentiationInterface = "0.6.47, 0.7"
 DocStringExtensions = "0.7, 0.8, 0.9"
-FMI = "0.14"
+FMIImport = "1"
 FillArrays = "1.13.0"
 FindFirstFunctions = "1"
 ForwardDiff = "0.10.3, 1"
