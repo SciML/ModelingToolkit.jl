@@ -1042,9 +1042,11 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     # set the bindingss for domain networks
     newbinds = get_domain_bindings(sys, domain_csets)
     # build the new system
+    _sys = sys
     sys = flatten(sys, true)
     @set! sys.eqs = eqs
     @set! sys.bindings = newbinds
+    @set! sys.parent = _sys
 
     if with_source_info
         return sys, source_info
