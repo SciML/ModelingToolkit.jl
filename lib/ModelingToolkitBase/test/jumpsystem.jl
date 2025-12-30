@@ -576,3 +576,13 @@ end
     jprob2 = remake(jprob; u0 = [:X => 10.0])
     @test jprob2[X] ≈ 10.0
 end
+
+@testset "Proper substitution in `JumpSysMajParamWrapper`" begin
+    @variables X(t)
+    @parameters p d
+    jump1 = MassActionJump(exp(p), Pair{Num,Real}[], [X => 1], nothing)
+    jump2 = ConstantRateJump(d * exp(X) * X, [X ~ Pre(X) - 1])
+    @named sys = JumpSystem([jump1, jump2], t, [X], [p, d])
+    sys = complete(sys)
+    @test_nowarn JumpProblem(sys, [:X => 0.1, :p => 1.0, :d => 2.0], (0.0, 1.0))
+end
