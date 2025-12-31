@@ -69,7 +69,6 @@ end
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
             @mtktestset("Code Generation Test", "code_generation.jl")
-            @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
             @mtktestset("Discrete System", "discrete_system.jl")
             @mtktestset("Implicit Discrete System", "implicit_discrete_system.jl")
             @mtktestset("SDESystem Test", "sdesystem.jl")
@@ -83,6 +82,7 @@ end
             @safetestset "Linearization Tests" include("linearize.jl")
             @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
             @safetestset "SemilinearODEProblem tests" include("semilinearodeproblem.jl")
+            @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
         end
     end
     
