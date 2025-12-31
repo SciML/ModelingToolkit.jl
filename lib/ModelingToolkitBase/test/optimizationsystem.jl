@@ -103,8 +103,8 @@ end
         grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.objective < 1.0
-    @test_broken sol.u≈[0.808, -0.064] atol=1e-3
-    @test sol[x]^2 + sol[y]^2 ≈ 1.0 broken=@isdefined(ModelingToolkit)
+    @test sol[[x, z]] ≈ [0.808, -0.064] atol=1e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
 @testset "rosenbrock" begin

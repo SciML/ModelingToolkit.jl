@@ -39,37 +39,36 @@ end
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
-            # @mtktestset("Input Output Test", "input_output_handling.jl")
-            # @safetestset "Clock Test" include("clock.jl")
-            # @mtktestset("Variable binding semantics", "binding_semantics.jl")
-            # @mtktestset("ODESystem Test", "odesystem.jl")
-            # @mtktestset("Dynamic Quantities Test", "dq_units.jl")
-            # @safetestset "Reduction Test" include("reduction.jl")
-            # @mtktestset("Split Parameters Test", "split_parameters.jl")
-            # @mtktestset("Components Test", "components.jl")
-            # @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
-            # @mtktestset("Basic transformations", "basic_transformations.jl")
-            # @mtktestset("Change of variables", "changeofvariables.jl")
-            # @safetestset "State Selection Test" include("state_selection.jl")
-            # @mtktestset("Symbolic Event Test", "symbolic_events.jl")
-            # @mtktestset("Stream Connect Test", "stream_connectors.jl")
-            # @mtktestset("Jacobian Sparsity", "jacobiansparsity.jl")
-            # @mtktestset("Modelingtoolkitize Test", "modelingtoolkitize.jl")
-            # @mtktestset("Constants Test", "constants.jl")
-            # @mtktestset("System Accessor Functions Test", "accessor_functions.jl")
+            @mtktestset("Input Output Test", "input_output_handling.jl")
+            @safetestset "Clock Test" include("clock.jl")
+            @mtktestset("Variable binding semantics", "binding_semantics.jl")
+            @mtktestset("ODESystem Test", "odesystem.jl")
+            @mtktestset("Dynamic Quantities Test", "dq_units.jl")
+            @safetestset "Reduction Test" include("reduction.jl")
+            @mtktestset("Split Parameters Test", "split_parameters.jl")
+            @mtktestset("Components Test", "components.jl")
+            @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
+            @mtktestset("Basic transformations", "basic_transformations.jl")
+            @mtktestset("Change of variables", "changeofvariables.jl")
+            @safetestset "State Selection Test" include("state_selection.jl")
+            @mtktestset("Symbolic Event Test", "symbolic_events.jl")
+            @mtktestset("Stream Connect Test", "stream_connectors.jl")
+            @mtktestset("Jacobian Sparsity", "jacobiansparsity.jl")
+            @mtktestset("Modelingtoolkitize Test", "modelingtoolkitize.jl")
+            @mtktestset("Constants Test", "constants.jl")
+            @mtktestset("System Accessor Functions Test", "accessor_functions.jl")
         end
     end
 
     if GROUP == "All" || GROUP == "Initialization"
-        # @mtktestset("Guess Propagation", "guess_propagation.jl")
-        # @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
+        @mtktestset("Guess Propagation", "guess_propagation.jl")
+        @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
         @mtktestset("InitializationSystem Test", "initializationsystem.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @testset "InterfaceII" begin
             @mtktestset("Code Generation Test", "code_generation.jl")
-            @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
             @mtktestset("Discrete System", "discrete_system.jl")
             @mtktestset("Implicit Discrete System", "implicit_discrete_system.jl")
             @mtktestset("SDESystem Test", "sdesystem.jl")
@@ -83,6 +82,7 @@ end
             @safetestset "Linearization Tests" include("linearize.jl")
             @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
             @safetestset "SemilinearODEProblem tests" include("semilinearodeproblem.jl")
+            @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
         end
     end
     
