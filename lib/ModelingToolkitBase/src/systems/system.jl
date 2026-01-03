@@ -549,7 +549,7 @@ end
     throw(NonUniqueSubsystemsError(sysnames, unique_sysnames))
 end
 
-SymbolicIndexingInterface.getname(x::System) = nameof(x)
+SymbolicIndexingInterface.getname(x::AbstractSystem) = nameof(x)
 
 """
     $(TYPEDSIGNATURES)
