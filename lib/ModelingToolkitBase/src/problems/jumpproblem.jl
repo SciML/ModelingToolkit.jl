@@ -113,8 +113,8 @@ function JumpSysMajParamMapper(js::System, p; jseqs = nothing, rateconsttype = F
     eqs = (jseqs === nothing) ? jumps(js) : jseqs
     majs = MassActionJump[x for x in eqs if x isa MassActionJump]
     paramexprs = [maj.scaled_rates for maj in majs]
-    psyms = reduce(vcat, reorder_parameters(js); init = [])
-    paramdict = Dict(value(k) => value(v) for (k, v) in zip(psyms, vcat(p...)))
+    psyms = reduce(vcat, reorder_parameters(js); init = SymbolicT[])
+    paramdict = Dict(unwrap(k) => unwrap(v) for (k, v) in zip(psyms, reduce(vcat, p; init = rateconsttype[])))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,
         paramdict)
@@ -152,7 +152,7 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparam
     for i in 1:get_num_majumps(maj)
         maj.scaled_rates[i] = convert(W,
             value(substitute(ratemap.paramexprs[i],
-                ratemap.subdict)))
+                ratemap.subdict; fold = Val(true))))
     end
     scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
     nothing
@@ -166,7 +166,7 @@ function (ratemap::JumpSysMajParamMapper{
 })(params) where {U <: AbstractArray,
         V <: AbstractArray, W}
     updateparams!(ratemap, params)
-    [convert(W, value(substitute(paramexpr, ratemap.subdict)))
+    [convert(W, value(substitute(paramexpr, ratemap.subdict; fold = Val(true))))
      for paramexpr in ratemap.paramexprs]
 end
 
