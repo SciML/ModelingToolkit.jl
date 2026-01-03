@@ -114,7 +114,7 @@ function JumpSysMajParamMapper(js::System, p; jseqs = nothing, rateconsttype = F
     majs = MassActionJump[x for x in eqs if x isa MassActionJump]
     paramexprs = [maj.scaled_rates for maj in majs]
     psyms = reduce(vcat, reorder_parameters(js); init = SymbolicT[])
-    paramdict = Dict(unwrap(k) => unwrap(v) for (k, v) in zip(psyms, reduce(vcat, p)))
+    paramdict = Dict(unwrap(k) => unwrap(v) for (k, v) in zip(psyms, reduce(vcat, p; init = rateconsttype[])))
     JumpSysMajParamMapper{typeof(paramexprs), typeof(psyms), rateconsttype}(paramexprs,
         psyms,
         paramdict)
