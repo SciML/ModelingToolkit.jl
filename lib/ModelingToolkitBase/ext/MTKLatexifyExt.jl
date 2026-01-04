@@ -11,7 +11,7 @@ using Latexify
 end
 
 function Base.show(io::IO, ::MIME"text/latex", ap::ModelingToolkitBase.Connection)
-    print(io, latexify(ap))
+    return print(io, latexify(ap))
 end
 
 @latexrecipe function f(sys::ModelingToolkitBase.AbstractSystem)
@@ -19,7 +19,7 @@ end
 end
 
 function Base.show(io::IO, ::MIME"text/latex", x::ModelingToolkitBase.AbstractSystem)
-    print(io, "\$\$ " * latexify(x) * " \$\$")
+    return print(io, "\$\$ " * latexify(x) * " \$\$")
 end
 
 @latexrecipe function f(ap::ModelingToolkitBase.AnalysisPoint)
@@ -32,7 +32,7 @@ end
 end
 
 function Base.show(io::IO, ::MIME"text/latex", ap::ModelingToolkitBase.AnalysisPoint)
-    print(io, latexify(ap))
+    return print(io, latexify(ap))
 end
 
 end

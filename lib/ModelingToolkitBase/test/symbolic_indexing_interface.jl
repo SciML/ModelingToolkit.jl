@@ -1,12 +1,12 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, ParameterIndex,
-                       SymbolicContinuousCallback
+    SymbolicContinuousCallback
 using SciMLStructures: Tunable
 using Test
 
 @testset "System" begin
     @parameters a b
-    @variables x(t)=1.0 y(t)=2.0 xy(t)
+    @variables x(t) = 1.0 y(t) = 2.0 xy(t)
     eqs = [D(x) ~ a * y + t, D(y) ~ b * t]
     @named odesys = System(eqs, t, [x, y], [a, b]; observed = [xy ~ x + y])
     odesys = complete(odesys)
@@ -14,7 +14,7 @@ using Test
     @test all(is_variable.((odesys,), [x, y, 1, 2, :x, :y]))
     @test all(.!is_variable.((odesys,), [a, b, t, 3, 0, :a, :b]))
     @test variable_index.((odesys,), [x, y, a, b, t, 1, 2, :x, :y, :a, :b]) ==
-          [1, 2, nothing, nothing, nothing, 1, 2, 1, 2, nothing, nothing]
+        [1, 2, nothing, nothing, nothing, 1, 2, 1, 2, nothing, nothing]
     @test isequal(variable_symbols(odesys), [x, y])
     @test all(is_parameter.((odesys,), [a, b, ParameterIndex(Tunable(), 1), :a, :b]))
     @test all(.!is_parameter.((odesys,), [x, y, t, 3, 0, :x, :y]))
@@ -23,11 +23,17 @@ using Test
     @test parameter_index(odesys, b) == parameter_index(odesys, :b)
     @test parameter_index(odesys, b) isa ParameterIndex{Tunable, Int}
     @test parameter_index.(
-        (odesys,), [x, y, t, ParameterIndex(Tunable(), 1), :x, :y]) ==
-          [nothing, nothing, nothing, ParameterIndex(Tunable(), 1), nothing, nothing]
+        (odesys,), [x, y, t, ParameterIndex(Tunable(), 1), :x, :y]
+    ) ==
+        [nothing, nothing, nothing, ParameterIndex(Tunable(), 1), nothing, nothing]
     @test isequal(
-        Set(parameter_symbols(odesys)), Set([a, b, Initial(x), Initial(y), Initial(xy),
-            Initial(D(x)), Initial(D(y)), Initial(D(xy))]))
+        Set(parameter_symbols(odesys)), Set(
+            [
+                a, b, Initial(x), Initial(y), Initial(xy),
+                Initial(D(x)), Initial(D(y)), Initial(D(xy)),
+            ]
+        )
+    )
     @test all(is_independent_variable.((odesys,), [t, :t]))
     @test all(.!is_independent_variable.((odesys,), [x, y, a, :x, :y, :a]))
     @test isequal(independent_variable_symbols(odesys), [t])
@@ -47,17 +53,20 @@ using Test
     @test_nowarn @inferred getter(prob)
 
     @named odesys = System(
-        eqs, t, [x, y], [a, b]; initial_conditions = [xy => 3.0], observed = [xy ~ x + y])
+        eqs, t, [x, y], [a, b]; initial_conditions = [xy => 3.0], observed = [xy ~ x + y]
+    )
     odesys = complete(odesys)
     @test default_values(odesys)[xy] == 3.0
     pobs = parameter_observed(odesys, a + b)
     @test isempty(get_all_timeseries_indexes(odesys, a + b))
     @test pobs(
-        ModelingToolkitBase.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0) ≈ 3.0
+        ModelingToolkitBase.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0
+    ) ≈ 3.0
     pobs = parameter_observed(odesys, [a + b, a - b])
     @test isempty(get_all_timeseries_indexes(odesys, [a + b, a - b]))
     @test pobs(
-        ModelingToolkitBase.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0) ≈ [3.0, -1.0]
+        ModelingToolkitBase.MTKParameters(odesys, [a => 1.0, b => 2.0]), 0.0
+    ) ≈ [3.0, -1.0]
 end
 
 # @testset "Clock system" begin
@@ -107,9 +116,11 @@ end
     @variables x y z
     @parameters σ ρ β
 
-    eqs = [0 ~ σ * (y - x),
+    eqs = [
+        0 ~ σ * (y - x),
         0 ~ x * (ρ - z) - y,
-        0 ~ x * y - β * z]
+        0 ~ x * y - β * z,
+    ]
     @named ns = System(eqs, [x, y, z], [σ, ρ, β])
     ns = complete(ns)
     @test SymbolicIndexingInterface.supports_tuple_observed(ns)
@@ -123,7 +134,8 @@ end
     @test pobs(ps) == [3.0, 5.0]
 
     prob = NonlinearProblem(
-        ns, [x => 1.0, y => 2.0, z => 3.0, σ => 1.0, ρ => 2.0, β => 3.0])
+        ns, [x => 1.0, y => 2.0, z => 3.0, σ => 1.0, ρ => 2.0, β => 3.0]
+    )
     getter = getu(ns, (x + 1, x + 2))
     @test getter(prob) isa Tuple
     @test_nowarn @inferred getter(prob)
@@ -144,14 +156,18 @@ end
     eq = Dtt(u(t, x)) ~ C^2 * Dxx(u(t, x))
 
     # Initial and boundary conditions
-    bcs = [u(t, 0) ~ 0.0,# for all t > 0
-        u(t, 1) ~ 0.0,# for all t > 0
+    bcs = [
+        u(t, 0) ~ 0.0, # for all t > 0
+        u(t, 1) ~ 0.0, # for all t > 0
         u(0, x) ~ x * (1.0 - x), #for all 0 < x < 1
-        Dt(u(0, x)) ~ 0.0] #for all  0 < x < 1]
+        Dt(u(0, x)) ~ 0.0,
+    ] #for all  0 < x < 1]
 
     # Space and time domains
-    domains = [t ∈ (0.0, 1.0),
-        x ∈ (0.0, 1.0)]
+    domains = [
+        t ∈ (0.0, 1.0),
+        x ∈ (0.0, 1.0),
+    ]
 
     @named pde_system = PDESystem(eq, bcs, domains, [t, x], [u])
 
@@ -164,11 +180,15 @@ end
     Dt = D
     Dxx = Differential(x)^2
     eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
-    bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
-        u(t, 0) ~ 0, u(t, 1) ~ 0]
+    bcs = [
+        u(0, x) ~ -h * x * (x - 1) * sin(x),
+        u(t, 0) ~ 0, u(t, 1) ~ 0,
+    ]
 
-    domains = [t ∈ (0.0, 1.0),
-        x ∈ (0.0, 1.0)]
+    domains = [
+        t ∈ (0.0, 1.0),
+        x ∈ (0.0, 1.0),
+    ]
 
     analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
     analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
@@ -181,12 +201,12 @@ end
 end
 
 @testset "Issue#2767" begin
-    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=[0.0, 0.0]
+    @parameters p1[1:2] = [1.0, 2.0] p2[1:2] = [0.0, 0.0]
     @variables x(t) = 0
 
     @named sys = System(
         [D(x) ~ sum(p1) * t + sum(p2)],
-        t;
+        t
     )
     prob = ODEProblem(complete(sys), [], (0.0, 1.0))
     get_dep = @test_nowarn getu(prob, 2p1)
@@ -198,7 +218,8 @@ end
     @parameters p1 p2[1:2, 1:2]
     @mtkcompile sys = System([D(x) ~ x * t + p1, y ~ 2x, D(z) ~ p2 * z], t)
     prob = ODEProblem(
-        sys, [x => 1.0, z => ones(2), p1 => 2.0, p2 => ones(2, 2)], (0.0, 1.0))
+        sys, [x => 1.0, z => ones(2), p1 => 2.0, p2 => ones(2, 2)], (0.0, 1.0)
+    )
     @test getu(prob, x)(prob) == getu(prob, :x)(prob)
     @test getu(prob, [x, y])(prob) == getu(prob, [:x, :y])(prob)
     @test getu(prob, z)(prob) == getu(prob, :z)(prob)
@@ -208,8 +229,8 @@ end
 
 @testset "Parameter dependencies as symbols" begin
     @variables x(t) = 1.0
-    @parameters a=1 b
-    @named model = System([D(x) ~ x + a - b], t; bindings = [b => a+1])
+    @parameters a = 1 b
+    @named model = System([D(x) ~ x + a - b], t; bindings = [b => a + 1])
     sys = complete(model)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     @test prob.ps[b] == prob.ps[:b]
@@ -230,10 +251,11 @@ end
     @variables x(t)[1:2]
     @discretes p(t)[1:2, 1:2]
     ev = SymbolicContinuousCallback(
-        [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p])
+        [x[1] ~ 2.0] => [p ~ -ones(2, 2)], discrete_parameters = [p]
+    )
     @mtkcompile sys = System(D(x) ~ p * x, t; continuous_events = [ev])
     p = ModelingToolkitBase.unwrap(p)
     @test timeseries_parameter_index(sys, p) === ParameterTimeseriesIndex(1, (1, 1))
     @test timeseries_parameter_index(sys, p[1, 1]) ===
-          ParameterTimeseriesIndex(1, (1, 1, 1, 1))
+        ParameterTimeseriesIndex(1, (1, 1, 1, 1))
 end

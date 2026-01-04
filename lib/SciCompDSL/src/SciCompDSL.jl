@@ -14,7 +14,7 @@ import ModelingToolkitBase: observed
 using Setfield
 
 let allnames = names(MTKBase; all = true),
-    banned_names = Set{Symbol}([:eval, :include, :Variable])
+        banned_names = Set{Symbol}([:eval, :include, :Variable])
 
     using_expr = Expr(:using, Expr(:(:), Expr(:., :ModelingToolkitBase)))
     inner_using_expr = using_expr.args[1]
@@ -28,7 +28,7 @@ let allnames = names(MTKBase; all = true),
 end
 
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
-                           COMMON_TRUE, COMMON_FALSE, COMMON_INF
+    COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
 @recompile_invalidations begin
     include("model_parsing.jl")

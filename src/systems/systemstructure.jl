@@ -56,7 +56,7 @@ function make_eqs_zero_equals!(ts::TearingState)
             return eq
         end
     end
-    copyto!(get_eqs(ts.sys), neweqs)
+    return copyto!(get_eqs(ts.sys), neweqs)
 end
 
 
@@ -123,16 +123,20 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     return state
 end
 
-function mtkcompile!(state::TearingState;
+function mtkcompile!(
+        state::TearingState;
         check_consistency = true, fully_determined = true,
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        kwargs...)
+        kwargs...
+    )
     if !is_time_dependent(state.sys)
-        return _mtkcompile!(state; check_consistency,
+        return _mtkcompile!(
+            state; check_consistency,
             inputs, outputs, disturbance_inputs,
-            fully_determined, kwargs...)
+            fully_determined, kwargs...
+        )
     end
     # split_system returns one or two systems and the inputs for each
     # mod clock inference to be binary
@@ -150,19 +154,25 @@ function mtkcompile!(state::TearingState;
             deleteat!(additional_passes, discrete_pass_idx)
             return discrete_compile(tss, clocked_inputs, ci)
         end
-        throw(HybridSystemNotSupportedException("""
-        Discrete systems with multiple clocks are not supported with the standard \
-        MTK compiler.
-        """))
+        throw(
+            HybridSystemNotSupportedException(
+                """
+                Discrete systems with multiple clocks are not supported with the standard \
+                MTK compiler.
+                """
+            )
+        )
     end
     if length(tss) > 1
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
-        sys = _mtkcompile!(tss[continuous_id]; simplify,
+        sys = _mtkcompile!(
+            tss[continuous_id]; simplify,
             inputs, outputs, disturbance_inputs,
             discrete_inputs = OrderedSet{SymbolicT}(clocked_inputs[continuous_id]),
             check_consistency, fully_determined,
-            kwargs...)
+            kwargs...
+        )
         additional_passes = get(kwargs, :additional_passes, nothing)
         if !isnothing(additional_passes) && any(discrete_compile_pass, additional_passes)
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
@@ -172,16 +182,21 @@ function mtkcompile!(state::TearingState;
             # and modifies discrete_subsystems to bea tuple of the io and anything else, while adding or manipulating the rest of sys as needed
             return discrete_compile(
                 sys, tss[[i for i in eachindex(tss) if i != continuous_id]],
-                clocked_inputs, ci, id_to_clock)
+                clocked_inputs, ci, id_to_clock
+            )
         end
-        throw(HybridSystemNotSupportedException("""
-        Hybrid continuous-discrete systems are currently not supported with \
-        the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-        see https://help.juliahub.com/juliasimcompiler/stable/
-        """))
+        throw(
+            HybridSystemNotSupportedException(
+                """
+                Hybrid continuous-discrete systems are currently not supported with \
+                the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
+                see https://help.juliahub.com/juliasimcompiler/stable/
+                """
+            )
+        )
     end
     if get_is_discrete(state.sys) ||
-       continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
+            continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
         state = MTKTearing.shift_discrete_system(state)
         sys = state.sys
@@ -189,20 +204,24 @@ function mtkcompile!(state::TearingState;
         state.sys = sys
     end
 
-    sys = _mtkcompile!(state; check_consistency,
+    sys = _mtkcompile!(
+        state; check_consistency,
         inputs, outputs, disturbance_inputs,
-        fully_determined, kwargs...)
+        fully_determined, kwargs...
+    )
     return sys
 end
 
-function _mtkcompile!(state::TearingState;
+function _mtkcompile!(
+        state::TearingState;
         check_consistency = true, fully_determined = true,
         dummy_derivative = true,
         discrete_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        kwargs...)
+        kwargs...
+    )
     if fully_determined isa Bool
         check_consistency &= fully_determined
     else
@@ -218,44 +237,52 @@ function _mtkcompile!(state::TearingState;
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency
         fully_determined = StateSelection.check_consistency(
-            state, orig_inputs; nothrow = fully_determined === nothing)
+            state, orig_inputs; nothrow = fully_determined === nothing
+        )
     end
     # This phrasing avoids making the `kwcall` dynamic dispatch due to the type of a
     # keyword (`mm`) being non-concrete
     if mm isa CLIL.SparseMatrixCLIL{BigInt, Int}
         sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
     else
-        sys =_mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
+        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
     end
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = MTKBase.topsort_equations(observed(sys), fullunknowns)
 
-    MTKBase.invalidate_cache!(sys)
+    return MTKBase.invalidate_cache!(sys)
 end
 
-function _mtkcompile_worker!(state::TearingState, sys::System, mm::CLIL.SparseMatrixCLIL{T, Int};
-                             fully_determined::Bool, dummy_derivative::Bool,
-                             kwargs...) where {T}
+function _mtkcompile_worker!(
+        state::TearingState, sys::System, mm::CLIL.SparseMatrixCLIL{T, Int};
+        fully_determined::Bool, dummy_derivative::Bool,
+        kwargs...
+    ) where {T}
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, kwargs...)
+            sys, state; mm, kwargs...
+        )
     elseif fully_determined
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
         sys, mm::CLIL.SparseMatrixCLIL{T, Int} = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, fully_determined, kwargs...)
+            sys, state; mm, fully_determined, kwargs...
+        )
     else
         sys = ModelingToolkit.tearing(
-            sys, state; mm, fully_determined, kwargs...)
+            sys, state; mm, fully_determined, kwargs...
+        )
     end
     return sys
 end
 
-function validate_io!(state::TearingState, orig_inputs::Set{SymbolicT}, inputs::OrderedSet{SymbolicT},
-                      discrete_inputs::OrderedSet{SymbolicT}, outputs::OrderedSet{SymbolicT},
-                      disturbance_inputs::OrderedSet{SymbolicT})
+function validate_io!(
+        state::TearingState, orig_inputs::Set{SymbolicT}, inputs::OrderedSet{SymbolicT},
+        discrete_inputs::OrderedSet{SymbolicT}, outputs::OrderedSet{SymbolicT},
+        disturbance_inputs::OrderedSet{SymbolicT}
+    )
     for v in state.fullvars
         isinput(v) && push!(orig_inputs, v)
     end
@@ -288,12 +315,16 @@ end
 function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
     undiff = err.undifferentiated
     diff = err.differentiated
-    print(io,
-        "Variable $undiff occurs differentiated as $diff but is not an unknown of the system.")
+    print(
+        io,
+        "Variable $undiff occurs differentiated as $diff but is not an unknown of the system."
+    )
     scope = getmetadata(undiff, SymScope, LocalScope())
     depth = expected_scope_depth(scope)
-    if depth > 0
-        print(io,
-            "\nVariable $undiff expects $depth more levels in the hierarchy to be an unknown.")
+    return if depth > 0
+        print(
+            io,
+            "\nVariable $undiff expects $depth more levels in the hierarchy to be an unknown."
+        )
     end
 end

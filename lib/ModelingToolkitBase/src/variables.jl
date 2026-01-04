@@ -72,8 +72,9 @@ ModelingToolkitBase.dump_variable_metadata(p)
 function dump_variable_metadata(var)
     uvar = unwrap(var)
     variable_source,
-    name = Symbolics.getmetadata(
-        uvar, VariableSource, (:unknown, :unknown))
+        name = Symbolics.getmetadata(
+        uvar, VariableSource, (:unknown, :unknown)
+    )
     type = symtype(uvar)
     if type <: AbstractArray
         shape = Symbolics.shape(var)
@@ -122,7 +123,7 @@ function dump_variable_metadata(var)
         tunable,
         dist,
         type,
-        default
+        default,
     )
 
     return NamedTuple(k => v for (k, v) in pairs(meta) if v !== nothing)
@@ -190,7 +191,7 @@ Determine whether variable `x` has a connect type. See also [`getconnect`](@ref)
 """
 hasconnect(x) = getconnect(x) !== nothing
 function setconnect(x, t::Type{T}) where {T <: AbstractConnectType}
-    setmetadata(x, VariableConnectType, t)
+    return setmetadata(x, VariableConnectType, t)
 end
 
 ### Input, Output, Irreducible
@@ -250,7 +251,7 @@ state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))
 
 function normalize_to_differential(@nospecialize(op))
     if op isa Shift && op.t isa SymbolicT
-        return Differential(op.t) ^ op.steps
+        return Differential(op.t)^op.steps
     else
         return op
     end
@@ -258,7 +259,7 @@ end
 
 default_toterm(x) = x
 function default_toterm(x::SymbolicT)
-    Moshi.Match.@match x begin
+    return Moshi.Match.@match x begin
         BSImpl.Term(; f, args, shape, type, metadata) && if f isa Operator end => begin
             if f isa Shift && f.steps < 0
                 return shift2term(x)
@@ -279,7 +280,7 @@ end
 Rename a Shift variable with negative shift, Shift(t, k)(x(t)) to xₜ₋ₖ(t).
 """
 function shift2term(var::SymbolicT)
-    Moshi.Match.@match var begin
+    return Moshi.Match.@match var begin
         BSImpl.Term(f, args) && if f isa Shift end => begin
             op = f
             arg = args[1]
@@ -315,7 +316,7 @@ function shift2term(var::SymbolicT)
             _backshift = backshift
             backshift = abs(backshift)
             N = ndigits(backshift)
-            den = 10 ^ (N - 1)
+            den = 10^(N - 1)
             for _ in 1:N
                 # subscripted number, e.g. ₁
                 write(io, Char(0x2080 + div(backshift, den) % 10))
@@ -334,7 +335,7 @@ end
 simplify_shifts(eq::Equation) = simplify_shifts(eq.lhs) ~ simplify_shifts(eq.rhs)
 
 function _simplify_shifts(var::SymbolicT)
-    Moshi.Match.@match var begin
+    return Moshi.Match.@match var begin
         BSImpl.Term(; f, args) && if f isa Shift && f.steps == 0 end => return args[1]
         BSImpl.Term(; f = op1, args) && if op1 isa Shift end => begin
             vv1 = args[1]
@@ -370,7 +371,7 @@ Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
 Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
 """
 function distribute_shift(var::SymbolicT)
-    Moshi.Match.@match var begin
+    return Moshi.Match.@match var begin
         BSImpl.Term(; f, args) && if f isa Shift end => begin
             shiftexpr = _distribute_shift(args[1], f)
             return simplify_shifts(shiftexpr)
@@ -393,15 +394,16 @@ function _distribute_shift(expr::SymbolicT, shift)
         args = arguments(expr)
 
         if ModelingToolkitBase.isvariable(expr) && operation(expr) !== getindex &&
-           !ModelingToolkitBase.iscalledparameter(expr)
+                !ModelingToolkitBase.iscalledparameter(expr)
             (length(args) == 1 && isequal(shift.t, only(args))) ? (return shift(expr)) :
-            (return expr)
+                (return expr)
         elseif op isa Shift
             return shift(expr)
         else
             return maketerm(
                 typeof(expr), operation(expr), Base.Fix2(_distribute_shift, shift).(args),
-                unwrap(expr).metadata)
+                unwrap(expr).metadata
+            )
         end
     else
         return expr
@@ -456,12 +458,12 @@ See also [`getbounds`](@ref).
 """
 function hasbounds(x)
     b = getbounds(x)::NTuple{2, Any}
-    any(isfinite.(b[1]) .|| isfinite.(b[2]))::Bool
+    return any(isfinite.(b[1]) .|| isfinite.(b[2]))::Bool
 end
 
 function setbounds(x::Num, bounds)
     (lb, ub) = bounds
-    setmetadata(x, VariableBounds, (lb, ub))
+    return setmetadata(x, VariableBounds, (lb, ub))
 end
 
 ## Disturbance =================================================================
@@ -476,13 +478,13 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
-    isvarkind(VariableDisturbance, x)::Bool
+    return isvarkind(VariableDisturbance, x)::Bool
 end
 
 setdisturbance(x, v) = setmetadata(x, VariableDisturbance, v)
 
 function disturbances(sys)
-    [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
+    return [filter(isdisturbance, unknowns(sys)); filter(isdisturbance, parameters(sys))]
 end
 
 ## Tunable =====================================================================
@@ -507,7 +509,7 @@ Create a tunable parameter by
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = true)
-    isvarkind(VariableTunable, x, default)::Bool
+    return isvarkind(VariableTunable, x, default)::Bool
 end
 
 ## Dist ========================================================================
@@ -531,7 +533,7 @@ getdist(u) # retrieve distribution
 ```
 """
 function getdist(x)
-    safe_getmetadata(VariableDistribution, x, nothing)
+    return safe_getmetadata(VariableDistribution, x, nothing)
 end
 
 """
@@ -541,7 +543,7 @@ Determine whether symbolic variable `x` has a probability distribution associate
 """
 function hasdist(x)
     b = getdist(x)
-    b !== nothing
+    return b !== nothing
 end
 
 ## System interface
@@ -567,8 +569,9 @@ call `Symbolics.scalarize(tunable_parameters(sys))` and concatenate the resultin
 See also [`getbounds`](@ref), [`istunable`](@ref), [`MTKParameters`](@ref), [`complete`](@ref)
 """
 function tunable_parameters(
-        sys, p = parameters(sys; initial_parameters = true); default = true)
-    filter(x -> istunable(x, default), p)
+        sys, p = parameters(sys; initial_parameters = true); default = true
+    )
+    return filter(x -> istunable(x, default), p)
 end
 
 """
@@ -584,7 +587,7 @@ Create parameters with bounds like this
 To obtain unknown variable bounds, call `getbounds(sys, unknowns(sys))`
 """
 function getbounds(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
-    Dict(p .=> getbounds.(p))
+    return Dict(p .=> getbounds.(p))
 end
 
 """
@@ -603,7 +606,7 @@ function getbounds(p::AbstractVector)
     bounds = getbounds.(p)
     lb = first.(bounds)
     ub = last.(bounds)
-    (; lb, ub)
+    return (; lb, ub)
 end
 
 ## Description =================================================================
@@ -623,7 +626,7 @@ getdescription(x::Symbolics.Arr) = getdescription(Symbolics.unwrap(x))
 Return any description attached to variables `x`. If no description is attached, an empty string is returned.
 """
 function getdescription(x)
-    safe_getmetadata(VariableDescription, x, "")
+    return safe_getmetadata(VariableDescription, x, "")
 end
 
 """
@@ -632,7 +635,7 @@ end
 Check if variable `x` has a non-empty attached description.
 """
 function hasdescription(x)
-    getdescription(x) != ""
+    return getdescription(x) != ""
 end
 
 ## Brownian
@@ -653,12 +656,15 @@ Define one or more Brownian variables.
 macro brownians(xs...)
     all(
         x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$ || Meta.isexpr(x, :$),
-        xs) ||
+        xs
+    ) ||
         error("@brownians only takes scalar expressions!")
-    Symbolics.parse_vars(:brownian,
+    return Symbolics.parse_vars(
+        :brownian,
         Real,
         xs,
-        tobrownian)
+        tobrownian
+    )
 end
 
 ## Guess ======================================================================
@@ -677,7 +683,7 @@ Create variables with a guess like this
 ```
 """
 function getguess(x)
-    Symbolics.getmetadata_maybe_indexed(x, VariableGuess, nothing)
+    return Symbolics.getmetadata_maybe_indexed(x, VariableGuess, nothing)
 end
 
 """
@@ -687,7 +693,7 @@ Set the guess for the initial value associated with symbolic variable `x` to `v`
 See also [`hasguess`](@ref).
 """
 function setguess(x, v)
-    Symbolics.setmetadata(x, VariableGuess, v)
+    return Symbolics.setmetadata(x, VariableGuess, v)
 end
 
 """
@@ -697,7 +703,7 @@ Determine whether symbolic variable `x` has a guess associated with it.
 See also [`getguess`](@ref).
 """
 function hasguess(x)
-    getguess(x) !== nothing
+    return getguess(x) !== nothing
 end
 
 function get_default_or_guess(x)
@@ -826,11 +832,11 @@ function (A::EvalAt)(x::SymbolicT)
 end
 
 function (A::EvalAt)(x::Union{Num, Symbolics.Arr})
-    wrap(A(unwrap(x)))
+    return wrap(A(unwrap(x)))
 end
 
 function (A::EvalAt)(x::CallAndWrap)
-    x(A.t)
+    return x(A.t)
 end
 
 SymbolicUtils.isbinop(::EvalAt) = false

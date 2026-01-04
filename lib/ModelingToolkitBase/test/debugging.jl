@@ -14,7 +14,8 @@ SEED = 42
 
 @testset "assertions are present in generated `f`" begin
     @testset "$(Problem)" for (Problem, sys, alg) in [
-        (ODEProblem, sys_ode, Tsit5()), (SDEProblem, sys_sde, ImplicitEM())]
+            (ODEProblem, sys_ode, Tsit5()), (SDEProblem, sys_sde, ImplicitEM()),
+        ]
         kwargs = Problem == SDEProblem ? (; seed = SEED) : (;)
         @test !is_parameter(sys, ASSERTION_LOG_VARIABLE)
         prob = Problem(sys, [x => 0.1], (0.0, 5.0); kwargs...)
@@ -26,32 +27,34 @@ end
 
 @testset "`debug_system` adds logging" begin
     @testset "$(Problem)" for (Problem, sys, alg) in [
-        (ODEProblem, sys_ode, Tsit5()), (SDEProblem, sys_sde, ImplicitEM())]
+            (ODEProblem, sys_ode, Tsit5()), (SDEProblem, sys_sde, ImplicitEM()),
+        ]
         kwargs = Problem == SDEProblem ? (; seed = SEED) : (;)
         dsys = debug_system(sys; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [x => 0.1], (0.0, 5.0); kwargs...)
-        sol = @test_logs (:error, r"ohno") match_mode=:any solve(prob, alg)
+        sol = @test_logs (:error, r"ohno") match_mode = :any solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
         prob.ps[ASSERTION_LOG_VARIABLE] = false
-        sol = @test_logs min_level=Logging.Error solve(prob, alg)
+        sol = @test_logs min_level = Logging.Error solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
     end
 end
 
 @testset "Hierarchical system" begin
     @testset "$(Problem)" for (ctor, Problem, inner, alg) in [
-        (System, ODEProblem, inner_ode, Tsit5()),
-        (System, SDEProblem, inner_sde, ImplicitEM())]
+            (System, ODEProblem, inner_ode, Tsit5()),
+            (System, SDEProblem, inner_sde, ImplicitEM()),
+        ]
         kwargs = Problem == SDEProblem ? (; seed = SEED) : (;)
         @mtkcompile outer = ctor(Equation[], t; systems = [inner])
         dsys = debug_system(outer; functions = [])
         @test is_parameter(dsys, ASSERTION_LOG_VARIABLE)
         prob = Problem(dsys, [inner.x => 0.1], (0.0, 5.0); kwargs...)
-        sol = @test_logs (:error, r"ohno") match_mode=:any solve(prob, alg)
+        sol = @test_logs (:error, r"ohno") match_mode = :any solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
         prob.ps[ASSERTION_LOG_VARIABLE] = false
-        sol = @test_logs min_level=Logging.Error solve(prob, alg)
+        sol = @test_logs min_level = Logging.Error solve(prob, alg)
         @test !SciMLBase.successful_retcode(sol)
     end
 end

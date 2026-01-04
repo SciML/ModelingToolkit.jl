@@ -1,7 +1,7 @@
 using ModelingToolkitBase
 using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback,
-                       SymbolicContinuousCallback
+    SymbolicContinuousCallback
 using OrdinaryDiffEq
 using StochasticDiffEq
 using JumpProcesses
@@ -52,7 +52,7 @@ import DiffEqNoiseProcess
 end
 
 @testset "vector parameter bindings" begin
-    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=2p1
+    @parameters p1[1:2] = [1.0, 2.0] p2[1:2] = 2p1
     @variables x(t) = 0
 
     @named sys = System(
@@ -70,14 +70,15 @@ end
 end
 
 @testset "extend" begin
-    @parameters p1=1.0 p2
+    @parameters p1 = 1.0 p2
     @variables x(t) = 0
 
     @mtkcompile sys1 = System(
         [D(x) ~ p1 * t + p2],
         t
     )
-    @named sys2 = System(Equation[],
+    @named sys2 = System(
+        Equation[],
         t, [], [];
         bindings = [p2 => 2p1]
     )
@@ -90,7 +91,7 @@ end
 end
 
 @testset "getu with parameter bindings" begin
-    @parameters p1=1.0 p2=2p1
+    @parameters p1 = 1.0 p2 = 2p1
     @variables x(t) = 0
 
     @named sys = System(
@@ -103,7 +104,7 @@ end
 end
 
 @testset "getu with vector parameter bindings" begin
-    @parameters p1[1:2]=[1.0, 2.0] p2[1:2]=2p1
+    @parameters p1[1:2] = [1.0, 2.0] p2[1:2] = 2p1
     @variables x(t) = 0
 
     @named sys = System(
@@ -116,7 +117,7 @@ end
 end
 
 @testset "composing systems with parameter bindings" begin
-    @parameters p1=1.0 p2
+    @parameters p1 = 1.0 p2
     @variables x(t) = 0
 
     @named sys1 = System(
@@ -161,7 +162,8 @@ end
     @parameters p1 = 1.0
     sys1 = System(
         Equation[], t, [], [p1];
-        bindings = [sys2.p2 => 2p1], name = :sys1, systems = [sys2])
+        bindings = [sys2.p2 => 2p1], name = :sys1, systems = [sys2]
+    )
 
     sys = mtkcompile(sys1)
 
@@ -171,11 +173,11 @@ end
 end
 
 @testset "Change Tunables" begin
-    @variables θ(t)=π/6 ω(t)=0.
-    @parameters g=9.81 L=1.0 b=0.1 errp=1
+    @variables θ(t) = π / 6 ω(t) = 0.0
+    @parameters g = 9.81 L = 1.0 b = 0.1 errp = 1
     eqs = [
         D(θ) ~ ω,
-        D(ω) ~ -(g/L)*sin(θ) - b*ω
+        D(ω) ~ -(g / L) * sin(θ) - b * ω,
     ]
     @named pendulum_sys = System(eqs, t, [θ, ω], [g, L, b])
     sys = mtkcompile(pendulum_sys)
@@ -210,7 +212,7 @@ end
 
 @testset "callable parameters" begin
     @variables y(t) = 1
-    @parameters p=2 (i::CallableFoo)(..)
+    @parameters p = 2 (i::CallableFoo)(..)
 
     eqs = [D(y) ~ i(t) + p]
     @named model = System(eqs, t, [y], [p, i]; bindings = [i => CallableFoo(p)])
@@ -226,13 +228,17 @@ end
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
 
-    eqs = [D(x) ~ σ * (y - x),
+    eqs = [
+        D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
-    noiseeqs = [0.1 * x,
+    noiseeqs = [
+        0.1 * x,
         0.1 * y,
-        0.1 * z]
+        0.1 * z,
+    ]
 
     @named sys = System(eqs, t)
     @named sdesys = SDESystem(sys, noiseeqs; bindings = [ρ => 2σ])
@@ -241,7 +247,8 @@ end
     @test ρ in Set(bound_parameters(sdesys))
 
     prob = SDEProblem(
-        sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0))
+        sdesys, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, β => 2.33], (0.0, 100.0)
+    )
     @test prob.ps[ρ] == 2prob.ps[σ]
     @test_nowarn solve(prob, SRIW1())
 end
@@ -258,7 +265,8 @@ end
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₃ = ConstantRateJump(rate₃, affect₃)
     @named js2 = JumpSystem(
-        [j₃], t, [S, I, R], [β, γ, h]; bindings = [β => 0.01γ])
+        [j₃], t, [S, I, R], [β, γ, h]; bindings = [β => 0.01γ]
+    )
     @test issetequal(parameters(js2), [β, γ, h])
     js2 = complete(js2)
     @test issetequal(parameters(js2), [γ, h])
@@ -266,15 +274,17 @@ end
     tspan = (0.0, 250.0)
     u₀map = [S => 999, I => 1, R => 0]
     parammap = [γ => 0.01]
-    jprob = JumpProblem(js2, [u₀map; parammap], tspan; aggregator = Direct(),
-        save_positions = (false, false), rng = rng)
+    jprob = JumpProblem(
+        js2, [u₀map; parammap], tspan; aggregator = Direct(),
+        save_positions = (false, false), rng = rng
+    )
     @test jprob.ps[γ] == 0.01
     @test jprob.ps[β] == 0.0001
     @test_nowarn solve(jprob, SSAStepper())
 end
 
 @testset "NonlinearSystem" begin
-    @parameters p1=1.0 p2
+    @parameters p1 = 1.0 p2
     @variables x(t)
     eqs = [0 ~ p1 * x * exp(x) + p2]
     @mtkcompile sys = System(eqs; bindings = [p2 => 2p1])
@@ -290,7 +300,7 @@ end
 end
 
 @testset "SciMLStructures interface" begin
-    @parameters p1=1.0 p2
+    @parameters p1 = 1.0 p2
     @variables x(t)
     cb1 = [x ~ 2.0] => [p1 ~ 2.0] # triggers at t=-2+√6
     function affect1!(integ, u, p, ctx)

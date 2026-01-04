@@ -1,6 +1,6 @@
 using ModelingToolkitBase, StaticArrays, LinearAlgebra
 using ModelingToolkitBase: get_metadata, MTKParameters, SymbolicDiscreteCallback,
-                       SymbolicContinuousCallback
+    SymbolicContinuousCallback
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
@@ -22,19 +22,25 @@ using DiffEqBase: isinplace
 @parameters k
 
 # Define a differential equation
-eqs = [D(x) ~ σ * (y - x),
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
+    D(z) ~ x * y - β * z * κ,
+]
 
 ModelingToolkitBase.toexpr.(eqs)[1]
 @named de = System(eqs, t; initial_conditions = Dict(x => 1))
 subed = substitute(de, [σ => k])
 ssort(eqs) = sort(eqs, by = string)
 @test isequal(ssort(parameters(subed)), [k, β, κ, ρ])
-@test isequal(equations(subed),
-    [D(x) ~ k * (y - x)
-     D(y) ~ (ρ - z) * x - y
-     D(z) ~ x * y - β * κ * z])
+@test isequal(
+    equations(subed),
+    [
+        D(x) ~ k * (y - x)
+        D(y) ~ (ρ - z) * x - y
+        D(z) ~ x * y - β * κ * z
+    ]
+)
 @named des[1:3] = System(eqs, t)
 @test length(unique(x -> ModelingToolkitBase.get_tag(x), des)) == 1
 
@@ -44,7 +50,7 @@ de2 = eval(toexpr(de))
 @test issetequal(parameters(de2), parameters(de))
 
 function test_diffeq_inference(name, sys, iv, dvs, ps)
-    @testset "System construction: $name" begin
+    return @testset "System construction: $name" begin
         @test isequal(independent_variables(sys)[1], value(iv))
         @test length(independent_variables(sys)) == 1
         @test isempty(setdiff(Set(unknowns(sys)), Set(value.(dvs))))
@@ -123,9 +129,11 @@ f = eval(ODEFunction(de, sparsity = true, expression = Val{true}))
 f = eval(ODEFunction(de, sparsity = false, expression = Val{true}))
 @test isnothing(f.sparsity)
 
-eqs = [D(x) ~ σ * (y - x),
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
-    D(z) ~ x * y - β * z * κ]
+    D(z) ~ x * y - β * z * κ,
+]
 @named de = System(eqs, t)
 de = complete(de)
 ModelingToolkitBase.calculate_tgrad(de)
@@ -140,9 +148,11 @@ tgrad_iip(du, u, p, t)
 @test du == [0.0, -u[2], 0.0]
 
 @parameters (σ::Function)(..)
-eqs = [D(x) ~ σ(t - 1) * (y - x),
+eqs = [
+    D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
+    D(z) ~ x * y - β * z * κ,
+]
 @named de = System(eqs, t, [x, y, z], [σ, ρ, β, κ])
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β, κ))
 f = generate_rhs(de, expression = Val{false}, wrap_gfw = Val{true})
@@ -161,9 +171,11 @@ f(du, [1.0], [t -> t + 2], 5.0)
 # Internal calculations
 @parameters σ
 a = y - x
-eqs = [D(x) ~ σ * a,
+eqs = [
+    D(x) ~ σ * a,
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z * κ]
+    D(z) ~ x * y - β * z * κ,
+]
 @named de = System(eqs, t)
 jac = calculate_jacobian(de)
 @test ModelingToolkitBase.jacobian_sparsity(de).colptr == sparse(Num.(jac)).colptr
@@ -173,8 +185,10 @@ f = ODEFunction(complete(de))
 
 @parameters A B C
 _x = y / C
-eqs = [D(x) ~ -A * x,
-    D(y) ~ A * x - B * _x]
+eqs = [
+    D(x) ~ -A * x,
+    D(y) ~ A * x - B * _x,
+]
 @named de = System(eqs, t)
 @test begin
     local f, du
@@ -189,8 +203,10 @@ end
     function lotka(u, p, t)
         x = u[1]
         y = u[2]
-        [p[1] * x - p[2] * x * y,
-            -p[3] * y + p[4] * x * y]
+        [
+            p[1] * x - p[2] * x * y,
+            -p[3] * y + p[4] * x * y,
+        ]
     end
 
     prob = ODEProblem(ODEFunction{false}(lotka), [1.0, 1.0], (0.0, 1.0), [1.5, 1.0, 3.0, 1.0])
@@ -216,43 +232,51 @@ end
 @parameters k₁ k₂ k₃
 @variables y₁(t) y₂(t) y₃(t)
 # reorder the system just to be a little spicier
-eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
+eqs = [
+    D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
     0 ~ y₁ + y₂ + y₃ - 1,
-    D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ]
-@named sys = System(eqs, t, initial_conditions = [k₁ => 100, k₂ => 3e7, y₁ => 1.0])
+    D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ,
+]
+@named sys = System(eqs, t, initial_conditions = [k₁ => 100, k₂ => 3.0e7, y₁ => 1.0])
 sys = complete(sys)
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
-p = [k₁ => 0.04,
-    k₃ => 1e4]
-p2 = [k₁ => 0.04,
-    k₂ => 3e7,
-    k₃ => 1e4]
+p = [
+    k₁ => 0.04,
+    k₃ => 1.0e4,
+]
+p2 = [
+    k₁ => 0.04,
+    k₂ => 3.0e7,
+    k₃ => 1.0e4,
+]
 tspan = (0.0, 100000.0)
 prob1 = ODEProblem(sys, [u0; p], tspan)
 @test prob1.f.sys == sys
-prob12 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4]], tspan)
-prob13 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3e7, k₃ => 1e4]], tspan)
+prob12 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3.0e7, k₃ => 1.0e4]], tspan)
+prob13 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3.0e7, k₃ => 1.0e4]], tspan)
 prob14 = ODEProblem(sys, [u0; p2], tspan)
 for p in [prob1, prob14]
     @test p.p isa MTKParameters
     p.ps[k₁] ≈ 0.04
-    p.ps[k₂] ≈ 3e7
-    p.ps[k₃] ≈ 1e-4
+    p.ps[k₂] ≈ 3.0e7
+    p.ps[k₃] ≈ 1.0e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
 # test remake with symbols
-p3 = [k₁ => 0.05,
-    k₂ => 2e7,
-    k₃ => 1.1e4]
+p3 = [
+    k₁ => 0.05,
+    k₂ => 2.0e7,
+    k₃ => 1.1e4,
+]
 u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
 prob_pmap = remake(prob14; p = p3, u0 = u01)
 prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
 for p in [prob_pmap, prob_dpmap]
     @test p.p isa MTKParameters
     p.ps[k₁] ≈ 0.05
-    p.ps[k₂] ≈ 2e7
+    p.ps[k₂] ≈ 2.0e7
     p.ps[k₃] ≈ 1.1e-4
     @test Set(Num.(unknowns(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
 end
@@ -281,8 +305,10 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
     sys = makecombinedsys()
     @unpack sys1, b = sys
     prob = ODEProblem(sys, Pair[], (0.0, 1.0))
-    prob_new = SciMLBase.remake(prob, p = Dict(sys1.a => 3.0, b => 4.0),
-        u0 = Dict(sys1.x => 1.0))
+    prob_new = SciMLBase.remake(
+        prob, p = Dict(sys1.a => 3.0, b => 4.0),
+        u0 = Dict(sys1.x => 1.0)
+    )
     @test prob_new.p isa MTKParameters
     @test prob_new.ps[b] ≈ 4.0
     @test prob_new.ps[sys1.a] ≈ 3.0
@@ -298,29 +324,33 @@ prob3 = ODEProblem(sys, [u0; p], tspan, jac = true, sparsity = true)
 @test prob3.f.sparsity isa SparseMatrixCSC
 # Symbolic initial conditions are disallowed
 @test_throws ArgumentError ODEProblem(sys, zeros(3), tspan)
-for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
+for (prob, atol) in [(prob1, 1.0e-12), (prob2, 1.0e-12), (prob3, 1.0e-12)]
     local sol
     sol = solve(prob, Rodas5())
     @test all(x -> ≈(sum(x), 1.0, atol = atol), sol.u)
 end
 
-du0 = [D(y₁) => -0.04
-       D(y₂) => 0.04
-       D(y₃) => 0.0]
+du0 = [
+    D(y₁) => -0.04
+    D(y₂) => 0.04
+    D(y₃) => 0.0
+]
 prob4 = DAEProblem(sys, [du0; [y₁ => nothing]; p2], tspan; guesses = u01)
 prob5 = eval(DAEProblem(sys, [du0; u0; p2], tspan; expression = Val{true}))
 for prob in [prob4, prob5]
     local sol
     @test prob.differential_vars == [true, true, false]
     sol = solve(prob, IDA())
-    @test all(x -> ≈(sum(x), 1.0, atol = 1e-12), sol.u)
+    @test all(x -> ≈(sum(x), 1.0, atol = 1.0e-12), sol.u)
 end
 
 @parameters σ β
 @variables x(t) y(t) z(t)
-eqs = [D(x) ~ σ * (y - x),
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x - β * y,
-    x + z ~ y]
+    x + z ~ y,
+]
 @named sys = System(eqs, t)
 @test issetequal(unknowns(sys), [x, y, z])
 @test issetequal(parameters(sys), [σ, β])
@@ -339,7 +369,7 @@ end
 
 eqs = [
     D(x1) ~ -x1,
-    0 ~ x1 - x2
+    0 ~ x1 - x2,
 ]
 @named sys = System(eqs, t)
 @test isequal(ModelingToolkitBase.get_iv(sys), t)
@@ -367,7 +397,8 @@ eq = D(x) ~ r * x
 
         @test_throws ModelingToolkitBase.NonUniqueSubsystemsError System(
             [sys2.f ~ sys1.x, D(sys1.f) ~ 0], t,
-            systems = [sys1, sys2], name = :foo)
+            systems = [sys1, sys2], name = :foo
+        )
     end
     issue808()
 end
@@ -376,7 +407,7 @@ end
 pars = []
 vars = @variables((u1,))
 eqs = [
-    D(u1) ~ 1
+    D(u1) ~ 1,
 ]
 @test_throws ArgumentError System(eqs, t, vars, pars, name = :foo)
 
@@ -388,7 +419,7 @@ vars = @variables((u1(t),))
 @parameters w
 der = Differential(w)
 eqs = [
-    der(u1) ~ t
+    der(u1) ~ t,
 ]
 @test_throws ArgumentError ModelingToolkitBase.System(eqs, t, vars, pars, name = :foo)
 
@@ -401,10 +432,12 @@ end
 # Array vars
 using Symbolics: unwrap, wrap
 using LinearAlgebra
-sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
+sts = @variables x(t)[1:3] = [1, 2, 3.0] y(t) = 1.0
 ps = @parameters p[1:3] = [1, 2, 3]
-eqs = [collect(D.(x) .~ x)
-       D(y) ~ norm(collect(x)) * y - x[1]]
+eqs = [
+    collect(D.(x) .~ x)
+    D(y) ~ norm(collect(x)) * y - x[1]
+]
 @named sys = System(eqs, t, sts, ps)
 sys = mtkcompile(sys)
 @test isequal(@nonamespace(sys.x), x)
@@ -417,11 +450,13 @@ sys = mtkcompile(sys)
 prob = ODEProblem(sys, [], (0, 1.0))
 sol = solve(prob, Tsit5())
 @test sol[2x[1] + 3x[3] + norm(x)] ≈
-      2sol[x[1]] + 3sol[x[3]] + sol[norm(x)]
-@test sol[x .+ [y, 2y, 3y]] ≈ map((x...) -> [x...],
+    2sol[x[1]] + 3sol[x[3]] + sol[norm(x)]
+@test sol[x .+ [y, 2y, 3y]] ≈ map(
+    (x...) -> [x...],
     map((x, y) -> x[1] .+ y, sol[x], sol[y]),
     map((x, y) -> x[2] .+ 2y, sol[x], sol[y]),
-    map((x, y) -> x[3] .+ 3y, sol[x], sol[y]))
+    map((x, y) -> x[3] .+ 3y, sol[x], sol[y])
+)
 
 using ModelingToolkitBase
 
@@ -429,7 +464,7 @@ function submodel(; name)
     @variables y(t)
     @parameters A[1:5]
     A = collect(A)
-    System(D(y) ~ sum(A) * y, t; name = name)
+    return System(D(y) ~ sum(A) * y, t; name = name)
 end
 
 # Build system
@@ -451,7 +486,8 @@ eqs = [D(x) ~ foo(x, ms); D(ms) ~ ones(3)]
 @named emptysys = System(Equation[], t)
 @mtkcompile outersys = compose(emptysys, sys)
 prob = ODEProblem(
-    outersys, [outersys.sys.x => 1.0; collect(outersys.sys.ms .=> 1:3)], (0, 1.0))
+    outersys, [outersys.sys.x => 1.0; collect(outersys.sys.ms .=> 1:3)], (0, 1.0)
+)
 @test_nowarn solve(prob, Tsit5())
 
 # array equations
@@ -466,10 +502,12 @@ eqs = [D(x) ~ foo(x, ms); D(ms) ~ bar(ms, p)]
 @named emptysys = System(Equation[], t)
 @mtkcompile outersys = compose(emptysys, sys)
 prob = ODEProblem(
-    outersys, [sys.x => 1.0, sys.ms => 1:3, sys.p => ones(3, 3)], (0.0, 1.0))
+    outersys, [sys.x => 1.0, sys.ms => 1:3, sys.p => ones(3, 3)], (0.0, 1.0)
+)
 sol = @test_nowarn solve(prob, Tsit5())
 obsfn = ModelingToolkitBase.build_explicit_observed_function(
-    outersys, bar(3outersys.sys.ms, 3outersys.sys.p))
+    outersys, bar(3outersys.sys.ms, 3outersys.sys.p)
+)
 @test_nowarn obsfn(sol.u[1], prob.p, sol.t[1])
 
 # x/x
@@ -495,7 +533,7 @@ RHS2 = RHS
 eqs = [
     D(x) ~ 0.1x + 0.9y,
     D(y) ~ 0.5x + 0.5y,
-    z ~ α * x - β * y
+    z ~ α * x - β * y,
 ]
 
 @named sys = System(eqs, t, [x, y, z], [α, β])
@@ -542,9 +580,11 @@ sys = complete(sys)
     vv = Iterators.flatten((u0, p0))
     defs = Dict{Any, Any}(s => v for (s, v) in zip(ss, vv))
 
-    preface = [Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
-               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
-               Assignment(buffer, term(wf, t))]
+    preface = [
+        Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
+        Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+        Assignment(buffer, term(wf, t))
+    ]
     eqs = map(1:length(us)) do i
         D(us[i]) ~ dummy_identity(buffer[i], us[i])
     end
@@ -563,9 +603,11 @@ let
     x = map(xx -> xx(t), Symbolics.variables(:x, 1:2, T = SymbolicUtils.FnType{Tuple, Real, Nothing}))
     @variables y(t)
     @parameters k = 1
-    eqs = [D(x[1]) ~ x[2]
-           D(x[2]) ~ -x[1] - 0.5 * x[2] + k
-           y ~ 0.9 * x[1] + x[2]]
+    eqs = [
+        D(x[1]) ~ x[2]
+        D(x[2]) ~ -x[1] - 0.5 * x[2] + k
+        y ~ 0.9 * x[1] + x[2]
+    ]
     @named sys = System(eqs, t, vcat(x, [y]), [k])
     sys = mtkcompile(sys)
 
@@ -577,26 +619,28 @@ let
     @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
-    @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
+    @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 
     prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
     sol = solve(prob, IDA())
-    @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
+    @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 
-    prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0, k => 2],
-        (0, 50); guesses = u0)
+    prob = DAEProblem(
+        sys, [D(x[1]) => 0, D(x[2]) => 0, k => 2],
+        (0, 50); guesses = u0
+    )
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 2
     sol = solve(prob, IDA())
-    @test isapprox(sol[x[1]][end], 2, atol = 1e-3)
+    @test isapprox(sol[x[1]][end], 2, atol = 1.0e-3)
 
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
-    @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
+    @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 end
 
 #issue 1475 (mixed numeric type for parameters)
@@ -618,9 +662,11 @@ if @isdefined(ModelingToolkit)
     @parameters C L R
     @variables q(t) p(t) F(t)
 
-    eqs = [D(q) ~ -p / L - F
-           D(p) ~ q / C
-           0 ~ q / C - R * F]
+    eqs = [
+        D(q) ~ -p / L - F
+        D(p) ~ q / C
+        0 ~ q / C - R * F
+    ]
 
     @named sys = System(eqs, t)
     @test length(equations(mtkcompile(sys))) == 2
@@ -629,12 +675,14 @@ end
 let
     vars = @variables sP(t) spP(t) spm(t) sph(t)
     pars = @parameters a b
-    eqs = [sP ~ 1
-           spP ~ sP
-           spm ~ a
-           sph ~ b
-           spm ~ 0
-           sph ~ a]
+    eqs = [
+        sP ~ 1
+        spP ~ sP
+        spm ~ a
+        sph ~ b
+        spm ~ 0
+        sph ~ a
+    ]
     @named sys = System(eqs, t, vars, pars)
     errmod = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
     @test_throws errmod.ExtraEquationsSystemException mtkcompile(sys)
@@ -644,9 +692,13 @@ end
 let
     vars = @variables x y
     arr = ModelingToolkitBase.varmap_to_vars(
-        Dict([x => 0.0, y => [0.0, 1.0]]), vars; use_union = true) #error
-    sol = Union{Float64, Vector{Float64}}[0.0, [
-        0.0, 1.0]]
+        Dict([x => 0.0, y => [0.0, 1.0]]), vars; use_union = true
+    ) #error
+    sol = Union{Float64, Vector{Float64}}[
+        0.0, [
+            0.0, 1.0,
+        ],
+    ]
     @test arr == sol
     @test typeof(arr) == typeof(sol)
 end
@@ -664,15 +716,15 @@ end
 
 let
     function sys1(; name)
-        vars = @variables x(t)=0.0 dx(t)=0.0
+        vars = @variables x(t) = 0.0 dx(t) = 0.0
 
-        System([D(x) ~ dx], t, vars, []; name, initial_conditions = [D(x) => x])
+        return System([D(x) ~ dx], t, vars, []; name, initial_conditions = [D(x) => x])
     end
 
     function sys2(; name)
         @named s1 = sys1()
 
-        System(Equation[], t, [], []; systems = [s1], name)
+        return System(Equation[], t, [], []; systems = [s1], name)
     end
 
     s1′ = sys1(; name = :s1)
@@ -705,7 +757,7 @@ if @isdefined(ModelingToolkit)
         @variables u(t) x(t) v(t)
 
         eqs = [u ~ kx * x + kv * v]
-        System(eqs, t; name)
+        return System(eqs, t; name)
     end
 
     @named ctrl = pd_ctrl()
@@ -716,7 +768,7 @@ if @isdefined(ModelingToolkit)
         @variables u(t) x(t) v(t)
 
         eqs = [D(x) ~ v, D(v) ~ u]
-        System(eqs, t; name)
+        return System(eqs, t; name)
     end
 
     @named sys = double_int()
@@ -729,8 +781,10 @@ if @isdefined(ModelingToolkit)
     @named sys_con = compose(connected, sys, ctrl)
 
     sys_simp = mtkcompile(sys_con)
-    true_eqs = [D(sys.x) ~ sys.v
-                D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
+    true_eqs = [
+        D(sys.x) ~ sys.v
+        D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
+    ]
     @test issetequal(full_equations(sys_simp), true_eqs)
 end
 
@@ -746,7 +800,7 @@ let
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
 
-@variables P(t)=NaN Q(t)=NaN
+@variables P(t) = NaN Q(t) = NaN
 eqs = [D(Q) ~ 1 / sin(P), D(P) ~ log(-cos(Q))]
 @named sys = System(eqs, t, [P, Q], [])
 sys = complete(debug_system(sys))
@@ -780,19 +834,25 @@ vars_sub2 = @variables s2(t)
 
 # no warnings for systems without events
 new_sys2 = @test_nowarn complete(substitute(sys2, Dict(:sub => sub)))
-Set(unknowns(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
-    new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
-    new_sys2.sub.s1, new_sys2.sub.s2])
+Set(unknowns(new_sys2)) == Set(
+    [
+        new_sys2.x1, new_sys2.sys1.x1,
+        new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
+        new_sys2.sub.s1, new_sys2.sub.s2,
+    ]
+)
 
 let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
-    @parameters a=10 b=a/10 c=a/20
+    @parameters a = 10 b = a / 10 c = a / 20
 
     Dt = D
 
-    @variables x(t)=1 z(t)
+    @variables x(t) = 1 z(t)
 
-    eqs = [Dt(x) ~ -b * (x - z),
-        0 ~ z - c * x]
+    eqs = [
+        Dt(x) ~ -b * (x - z),
+        0 ~ z - c * x,
+    ]
 
     sys = System(eqs, t; name = :kjshdf)
 
@@ -803,7 +863,7 @@ let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
     tspan = (0.0, 1)
     prob = ODEProblem(sys_simp, [], tspan)
     sol = solve(prob, Rodas4())
-    @test sol(1; idxs=x)≈0.6065307685451087 rtol=1e-4
+    @test sol(1; idxs = x) ≈ 0.6065307685451087 rtol = 1.0e-4
 end
 
 # Issue#2599
@@ -847,34 +907,43 @@ end
 @parameters g L
 @variables q₁(t) q₂(t) λ(t) θ(t)
 
-eqs = [D(D(q₁)) ~ -λ * q₁,
+eqs = [
+    D(D(q₁)) ~ -λ * q₁,
     D(D(q₂)) ~ -λ * q₂ - g,
     q₁ ~ L * sin(θ),
-    q₂ ~ L * cos(θ)]
+    q₂ ~ L * cos(θ),
+]
 
 @named pend = System(eqs, t)
 pend = complete(pend)
 @test_nowarn generate_initializesystem(
-    pend; op = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1])
+    pend; op = [q₁ => 1.0, q₂ => 0.0], guesses = [λ => 1]
+)
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2618
 @parameters σ ρ β
 @variables x(t) y(t) z(t)
 
-eqs = [D(D(x)) ~ σ * (y - x),
+eqs = [
+    D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z,
+]
 
 @mtkcompile sys = System(eqs, t)
 
-u0 = [D(x) => 2.0,
+u0 = [
+    D(x) => 2.0,
     x => 1.0,
     y => 0.0,
-    z => 0.0]
+    z => 0.0,
+]
 
-p = [σ => 28.0,
+p = [
+    σ => 28.0,
     ρ => 10.0,
-    β => 8 / 3]
+    β => 8 / 3,
+]
 
 prob = SteadyStateProblem(sys, [u0; p])
 @test prob isa SteadyStateProblem
@@ -895,9 +964,9 @@ function FML2(; name)
         x(t) = 0
     end
     eqs = [
-        D(x) ~ constant.output.u + k2[1]
+        D(x) ~ constant.output.u + k2[1],
     ]
-    System(eqs, t; systems, name)
+    return System(eqs, t; systems, name)
 end
 
 @mtkcompile model = FML2()
@@ -911,20 +980,20 @@ function RealExpression(; name, y)
         u(t)
     end
     eqns = [
-        u ~ y
+        u ~ y,
     ]
-    sys = System(eqns, t, vars, []; name)
+    return sys = System(eqns, t, vars, []; name)
 end
 
 function RealExpressionSystem(; name)
     vars = @variables begin
         x(t)
         z(t)[1:1]
-    end # doing a collect on z doesn't work either. 
-    @named e1 = RealExpression(y = x) # This works perfectly. 
-    @named e2 = RealExpression(y = z[1]) # This bugs. However, `full_equations(e2)` works as expected. 
+    end # doing a collect on z doesn't work either.
+    @named e1 = RealExpression(y = x) # This works perfectly.
+    @named e2 = RealExpression(y = z[1]) # This bugs. However, `full_equations(e2)` works as expected.
     systems = [e1, e2]
-    System(Equation[], t, Iterators.flatten(vars), []; systems, name)
+    return System(Equation[], t, Iterators.flatten(vars), []; systems, name)
 end
 
 if @isdefined(ModelingToolkit)
@@ -941,7 +1010,8 @@ end
 @variables x(t) y(t)
 @named sys = System(Equation[], t, [x], []; guesses = [x => 1.0])
 @named outer = System(
-    [D(y) ~ sys.x + t, 0 ~ t + y - sys.x * y], t, [y], []; systems = [sys])
+    [D(y) ~ sys.x + t, 0 ~ t + y - sys.x * y], t, [y], []; systems = [sys]
+)
 @test value(ModelingToolkitBase.guesses(outer)[sys.x]) == 1.0
 outer = mtkcompile(outer)
 @test value(ModelingToolkitBase.get_guesses(outer)[sys.x]) == 1.0
@@ -1012,7 +1082,8 @@ end
     @variables x(t)
     sys = mtkcompile(System([D(x) ~ P], t, [x], [P]; name = :sys))
     obsfn = ModelingToolkitBase.build_explicit_observed_function(
-        sys, [x + 1, x + P, x + t], return_inplace = true)[2]
+        sys, [x + 1, x + P, x + t], return_inplace = true
+    )[2]
     ps = ModelingToolkitBase.MTKParameters(sys, [P => 2.0])
     buffer = zeros(3)
     @test_nowarn obsfn(buffer, [1.0], ps, 3.0)
@@ -1032,7 +1103,7 @@ end
             y(x)
         end
         eqs = [
-            y ~ 0
+            y ~ 0,
         ]
         return System(eqs, x, vars, []; name)
     end
@@ -1104,7 +1175,8 @@ end
     @parameters p[1:2, 1:2] [tunable = false]
     @named sys = System(
         [D(u) ~ (sum(u) + sum(x) + sum(p) + sum(o)) * x, o ~ prod(u) * x],
-        t, [u..., x..., o...], [p...])
+        t, [u..., x..., o...], [p...]
+    )
     sys1 = mtkcompile(sys, inputs = [x...], outputs = [])
     fn1, = ModelingToolkitBase.generate_rhs(sys1; expression = Val{false})
     ps = MTKParameters(sys1, [x => 2ones(2), p => 3ones(2, 2)])
@@ -1134,7 +1206,7 @@ end
             end
 
             equations = Equation[
-                D(x) ~ -a * x
+                D(x) ~ -a * x,
             ]
 
             return System(equations, t, vars, pars; name, systems)
@@ -1155,7 +1227,7 @@ end
             end
 
             equations = Equation[
-                D(y) ~ -b * y
+                D(y) ~ -b * y,
             ]
 
             return System(equations, t, vars, pars; name, systems)
@@ -1186,8 +1258,10 @@ end
 @testset "Substituting preserves parameter dependencies, initial conditions, guesses" begin
     @parameters p1 p2
     @variables x(t) y(t)
-    @named sys = System([D(x) ~ y + p2 + p1], t;
-        initial_conditions = [p1 => 1.0], guesses = [p1 => 2.0, p2 => 3.0], bindings = [p2 => 2p1])
+    @named sys = System(
+        [D(x) ~ y + p2 + p1], t;
+        initial_conditions = [p1 => 1.0], guesses = [p1 => 2.0, p2 => 3.0], bindings = [p2 => 2p1]
+    )
     @parameters p3
     sys2 = substitute(sys, [p1 => p3])
     sys2 = complete(sys2)
@@ -1205,12 +1279,15 @@ end
 @testset "Substituting with nested systems" begin
     @parameters p1 p2
     @variables x(t) y(t)
-    @named innersys = System([D(x) ~ y + p2 + p1], t;
-        initial_conditions = [p1 => 1.0], guesses = [p1 => 2.0, p2 => 3.0], bindings = [p2 => 2p1])
+    @named innersys = System(
+        [D(x) ~ y + p2 + p1], t;
+        initial_conditions = [p1 => 1.0], guesses = [p1 => 2.0, p2 => 3.0], bindings = [p2 => 2p1]
+    )
     @parameters p3 p4
     @named outersys = System(
         [D(innersys.y) ~ innersys.y + p4 + p3], t;
-        initial_conditions = [p3 => 3.0], guesses = [p4 => 10.0], bindings = [p4 => 3p3], systems = [innersys])
+        initial_conditions = [p3 => 3.0], guesses = [p4 => 10.0], bindings = [p4 => 3p3], systems = [innersys]
+    )
     @test_nowarn mtkcompile(outersys)
     @parameters p5
     sys2 = substitute(outersys, [p4 => p5])
@@ -1231,10 +1308,12 @@ end
     @variables u(t)[1:2] x(t)[1:2] o(t)[1:2]
     @parameters p[1:4]
 
-    eqs = [D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
-           D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
-           o[1] ~ sum(p) * sum(u)
-           o[2] ~ sum(p) * sum(x)]
+    eqs = [
+        D(u[1]) ~ p[1] * u[1] - p[2] * u[1] * u[2] + x[1] + 0.1
+        D(u[2]) ~ p[4] * u[1] * u[2] - p[3] * u[2] - x[2]
+        o[1] ~ sum(p) * sum(u)
+        o[2] ~ sum(p) * sum(x)
+    ]
 
     @named sys = System(eqs, t, [u..., x..., o], [p...])
     sys1 = mtkcompile(sys, inputs = [x...], outputs = [o...], split = false)
@@ -1242,7 +1321,8 @@ end
     @test_nowarn ModelingToolkitBase.build_explicit_observed_function(sys1, u; inputs = [x...])
 
     obsfn = ModelingToolkitBase.build_explicit_observed_function(
-        sys1, u + x + p[1:2]; inputs = [x...])
+        sys1, u + x + p[1:2]; inputs = [x...]
+    )
 
     @test obsfn(ones(length(unknowns(sys))), 2ones(2), 3ones(12), 4.0) == 6ones(2)
 end
@@ -1265,7 +1345,7 @@ end
 end
 
 @testset "Issue #2597" begin
-    @variables x(t)[1:2]=ones(2) y(t)=1.0
+    @variables x(t)[1:2] = ones(2) y(t) = 1.0
 
     for eqs in [D(x) ~ x, collect(D(x) .~ x)]
         for dvs in [[x], collect(x)]
@@ -1275,8 +1355,10 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize"] ODEProblem(
-                    sys, [], (0.0, 1.0))
+                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
+                ] ODEProblem(
+                    sys, [], (0.0, 1.0)
+                )
             end
         end
     end
@@ -1288,8 +1370,10 @@ end
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
                 @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize"] ODEProblem(
-                    sys, [], (0.0, 1.0))
+                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
+                ] ODEProblem(
+                    sys, [], (0.0, 1.0)
+                )
             end
         end
     end
@@ -1314,7 +1398,8 @@ end
     @mtkcompile sys = System(D(x) ~ sum(p) * x + q * t, t)
     prob = ODEProblem(sys, [x => 1.0, p => ones(2), q => 2], (0.0, 1.0))
     obsfn = ModelingToolkitBase.build_explicit_observed_function(
-        sys, [p..., q], return_inplace = true)[2]
+        sys, [p..., q], return_inplace = true
+    )[2]
     buf = zeros(3)
     obsfn(buf, prob.u0, prob.p, 0.0)
     @test buf ≈ [1.0, 1.0, 2.0]
@@ -1369,12 +1454,17 @@ if @isdefined(ModelingToolkit)
     @testset "Observed variables dependent on discretes" begin
         @variables x(t) obs(t)
         @discretes c(t)
-        @mtkcompile sys = System([D(x) ~ c * cos(x), obs ~ c],
+        @mtkcompile sys = System(
+            [D(x) ~ c * cos(x), obs ~ c],
             t,
             [x, obs, c],
             [];
-            discrete_events = [SymbolicDiscreteCallback(
-                1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c])])
+            discrete_events = [
+                SymbolicDiscreteCallback(
+                    1.0 => [c ~ Pre(c) + 1], discrete_parameters = [c]
+                ),
+            ]
+        )
         prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
         sol = solve(prob, Tsit5())
         @test sol[obs] ≈ 1:7
@@ -1382,40 +1472,44 @@ if @isdefined(ModelingToolkit)
 end
 
 @testset "DAEProblem with array parameters" begin
-    @variables x(t)=1.0 y(t) [guess = 1.0]
+    @variables x(t) = 1.0 y(t) [guess = 1.0]
     @parameters p[1:2] = [1.0, 2.0]
     @mtkcompile sys = System([D(x) ~ x, y^2 ~ x + sum(p)], t)
     prob = DAEProblem(sys, [D(x) => x, D(y) => D(x) / 2y], (0.0, 1.0))
-    sol = solve(prob, DFBDF(), abstol = 1e-8, reltol = 1e-8)
-    @test sol[x]≈sol[y ^ 2 - sum(p)] atol=1e-5
+    sol = solve(prob, DFBDF(), abstol = 1.0e-8, reltol = 1.0e-8)
+    @test sol[x] ≈ sol[y^2 - sum(p)] atol = 1.0e-5
 end
 
 @testset "Symbolic tstops" begin
     @variables x(t) = 1.0
-    @parameters p=0.15 q=0.25 r[1:2]=[0.35, 0.45]
+    @parameters p = 0.15 q = 0.25 r[1:2] = [0.35, 0.45]
     @mtkcompile sys = System(
-        [D(x) ~ p * x + q * t + sum(r)], t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+        [D(x) ~ p * x + q * t + sum(r)], t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r]
+    )
     prob = ODEProblem(sys, [], (0.0, 5.0))
     sol = solve(prob)
     expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
-    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    @test all(x -> any(isapprox(x, atol = 1.0e-6), sol.t), expected_tstops)
     prob2 = remake(prob; tspan = (0.0, 10.0))
     sol2 = solve(prob2)
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
-    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+    @test all(x -> any(isapprox(x, atol = 1.0e-6), sol2.t), expected_tstops)
 
     @variables y(t) [guess = 1.0]
-    @mtkcompile sys = System([D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
-        t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r])
+    @mtkcompile sys = System(
+        [D(x) ~ p * x + q * t + sum(r), y^3 ~ 2x + 1],
+        t; tstops = [0.5p, [0.1, 0.2], [p + 2q], r]
+    )
     prob = DAEProblem(
-        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], (0.0, 5.0))
+        sys, [D(y) => 2D(x) / 3y^2, D(x) => p * x + q * t + sum(r)], (0.0, 5.0)
+    )
     sol = solve(prob, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:5.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
-    @test all(x -> any(isapprox(x, atol = 1e-6), sol.t), expected_tstops)
+    @test all(x -> any(isapprox(x, atol = 1.0e-6), sol.t), expected_tstops)
     prob2 = remake(prob; tspan = (0.0, 10.0))
     sol2 = solve(prob2, DImplicitEuler())
     expected_tstops = unique!(sort!(vcat(0.0:0.075:10.0, 0.1, 0.2, 0.65, 0.35, 0.45)))
-    @test all(x -> any(isapprox(x, atol = 1e-6), sol2.t), expected_tstops)
+    @test all(x -> any(isapprox(x, atol = 1.0e-6), sol2.t), expected_tstops)
 
     @mtkcompile sys = System([D(x) ~ x + p], t; tstops = [[p]])
     prob = ODEProblem(sys, [], (0.0, 1.0))
@@ -1427,11 +1521,13 @@ end
     @variables X(t)::Int64
     eq = D(X) ~ p - d * X
     @test_throws ModelingToolkitBase.ContinuousOperatorDiscreteArgumentError @mtkcompile osys = System(
-        [eq], t)
+        [eq], t
+    )
     @variables Y(t)[1:3]::String
     eq = D(Y) ~ [p, p, p]
     @test_throws ModelingToolkitBase.ContinuousOperatorDiscreteArgumentError @mtkcompile osys = System(
-        [eq], t)
+        [eq], t
+    )
 
     @variables X(t)::Complex
     eqs = D(X) ~ p - d * X
@@ -1474,11 +1570,13 @@ end
 
     # Test array variables
     @variables x(..)[1:5]
-    mat = [1 2 0 3 2
-           0 0 3 2 0
-           0 1 3 0 4
-           2 0 0 2 1
-           0 0 2 0 5]
+    mat = [
+        1 2 0 3 2
+        0 0 3 2 0
+        0 1 3 0 4
+        2 0 0 2 1
+        0 0 2 0 5
+    ]
     eqs = D(x(t)) ~ mat * x(t)
     cons = [x(3) ~ [2, 3, 3, 5, 4]]
     @mtkcompile ode = System(D(x(t)) ~ mat * x(t), t; constraints = cons)
@@ -1489,11 +1587,13 @@ end
     @variables x(t)
     @mtkcompile sys = System(D(x) ~ 2x, t)
     obsfn_expr = ModelingToolkitBase.build_explicit_observed_function(
-        sys, 2x + 1, expression = true)
+        sys, 2x + 1, expression = true
+    )
     @test obsfn_expr isa Expr
     obsfn_expr_oop,
-    obsfn_expr_iip = ModelingToolkitBase.build_explicit_observed_function(
-        sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true)
+        obsfn_expr_iip = ModelingToolkitBase.build_explicit_observed_function(
+        sys, [x + 1, x + 2, x + t], return_inplace = true, expression = true
+    )
     @test obsfn_expr_oop isa Expr
     @test obsfn_expr_iip isa Expr
 end
@@ -1502,20 +1602,26 @@ end
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
 
-    eqs = [D(D(x)) ~ σ * (y - x),
+    eqs = [
+        D(D(x)) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
-    @mtkcompile sys=System(eqs, t) split=false
+    @mtkcompile sys = System(eqs, t) split = false
 
-    u0 = SA[D(x) => 2.0f0,
-    x => 1.0f0,
-    y => 0.0f0,
-    z => 0.0f0]
+    u0 = SA[
+        D(x) => 2.0f0,
+        x => 1.0f0,
+        y => 0.0f0,
+        z => 0.0f0,
+    ]
 
-    p = SA[σ => 28.0f0,
-    ρ => 10.0f0,
-    β => 8.0f0 / 3.0f0]
+    p = SA[
+        σ => 28.0f0,
+        ρ => 10.0f0,
+        β => 8.0f0 / 3.0f0,
+    ]
 
     tspan = (0.0f0, 100.0f0)
     prob = ODEProblem{false}(sys, [u0; p], tspan)
@@ -1578,7 +1684,8 @@ end
 @testset "`ProblemTypeCtx`" begin
     @variables x(t)
     @mtkcompile sys = System(
-        [D(x) ~ x], t; metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"])
+        [D(x) ~ x], t; metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"]
+    )
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     @test prob.problem_type == "A"
 end
@@ -1592,10 +1699,12 @@ end
     struct TestMeta end
 
     eq = [
-        D(x) ~ p
+        D(x) ~ p,
     ]
-    @named sys = System(eq, t, [x, p], [], discrete_events = [event],
-        continuous_events = [event2], metadata = Dict(TestMeta => "test"))
+    @named sys = System(
+        eq, t, [x, p], [], discrete_events = [event],
+        continuous_events = [event2], metadata = Dict(TestMeta => "test")
+    )
 
     @variables x2(t) = 0.0
     sys2 = substitute(sys, [x => x2])
@@ -1624,11 +1733,11 @@ end
 
 # ensure `@mtkbuild` works when `@mtkcompile` is not imported
 module MtkbuildTestModule
-import ModelingToolkitBase: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
-import Test: @test
-@variables x(t)
-@mtkbuild sys = System(D(x) ~ t, t)
-@test sys isa System
+    import ModelingToolkitBase: @variables, System, t_nounits as t, D_nounits as D, @mtkbuild
+    import Test: @test
+    @variables x(t)
+    @mtkbuild sys = System(D(x) ~ t, t)
+    @test sys isa System
 end
 
 @testset "Empty system can be simplified" begin

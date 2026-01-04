@@ -10,7 +10,7 @@ simplified and has a `schedule`.
 """
 function sorted_incidence_matrix(sys::AbstractSystem)
     if !iscomplete(sys) || get_tearing_state(sys) === nothing ||
-       get_schedule(sys) === nothing
+            get_schedule(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
     sched = get_schedule(sys)
@@ -20,20 +20,20 @@ function sorted_incidence_matrix(sys::AbstractSystem)
     imat = Graphs.incidence_matrix(ts.structure.graph)
     buffer = similar(imat)
     permute!(buffer, imat, 1:size(imat, 2), reduce(vcat, var_sccs))
-    buffer
+    return buffer
 end
 
 ###
 ### Structural and symbolic utilities
 ###
 function highest_order_variable_mask(ts)
-    let v2d = ts.structure.var_to_diff
+    return let v2d = ts.structure.var_to_diff
         v -> isempty(outneighbors(v2d, v))
     end
 end
 
 function lowest_order_variable_mask(ts)
-    let v2d = ts.structure.var_to_diff
+    return let v2d = ts.structure.var_to_diff
         v -> isempty(inneighbors(v2d, v))
     end
 end
@@ -60,7 +60,7 @@ function but_ordered_incidence(ts::TearingState, varmask = highest_order_variabl
     end
     mm = incidence_matrix(graph)
     reverse!(vordering)
-    mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
+    return mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
 end
 
 """
@@ -99,8 +99,11 @@ function reordered_matrix(sys::System, torn_matching)
         end
 
         e_residual = setdiff(
-            [max_matching[v]
-             for v in vars if max_matching[v] !== unassigned], e_solved)
+            [
+                max_matching[v]
+                    for v in vars if max_matching[v] !== unassigned
+            ], e_solved
+        )
         for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
@@ -110,7 +113,7 @@ function reordered_matrix(sys::System, torn_matching)
         end
     end
     # only plot algebraic variables and equations
-    sparse(I, J, true)
+    return sparse(I, J, true)
 end
 
 """

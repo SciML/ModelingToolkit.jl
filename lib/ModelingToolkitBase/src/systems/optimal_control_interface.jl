@@ -12,7 +12,7 @@ function Base.show(io::IO, sol::DynamicOptSolution)
     println("Optimal control solution for following model:\n")
     show(sol.model)
 
-    print("\n\nPlease query the model using sol.model, the solution trajectory for the system using sol.sol, or the solution trajectory for the controllers using sol.input_sol.")
+    return print("\n\nPlease query the model using sol.model, the solution trajectory for the system using sol.sol, or the solution trajectory for the controllers using sol.input_sol.")
 end
 
 """
@@ -91,7 +91,7 @@ function PyomoCollocation end
 function warn_overdetermined(sys, op)
     cstrs = constraints(sys)
     init_conds = filter(x -> value(x) ∈ Set(unknowns(sys)), [k for (k, v) in op])
-    if !isempty(cstrs)
+    return if !isempty(cstrs)
         (length(cstrs) + length(init_conds) > length(unknowns(sys))) &&
             @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
     end
@@ -102,21 +102,24 @@ Default ODE Tableau: RadauIIA5
 """
 function constructDefault(T::Type = Float64)
     sq6 = sqrt(6)
-    A = [11 // 45-7sq6 / 360 37 // 225-169sq6 / 1800 -2 // 225+sq6 / 75
-         37 // 225+169sq6 / 1800 11 // 45+7sq6 / 360 -2 // 225-sq6 / 75
-         4 // 9-sq6 / 36 4 // 9+sq6 / 36 1//9]
+    A = [
+        11 // 45 - 7sq6 / 360 37 // 225 - 169sq6 / 1800 -2 // 225 + sq6 / 75
+        37 // 225 + 169sq6 / 1800 11 // 45 + 7sq6 / 360 -2 // 225 - sq6 / 75
+        4 // 9 - sq6 / 36 4 // 9 + sq6 / 36 1 // 9
+    ]
     c = [2 // 5 - sq6 / 10; 2 / 5 + sq6 / 10; 1]
     α = [4 // 9 - sq6 / 36; 4 // 9 + sq6 / 36; 1 // 9]
     A = map(T, A)
     α = map(T, α)
     c = map(T, c)
 
-    DiffEqBase.ImplicitRKTableau(A, c, α, 5)
+    return DiffEqBase.ImplicitRKTableau(A, c, α, 5)
 end
 
 is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
-@fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(sys::System;
+@fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(
+        sys::System;
         inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys),
         u0 = nothing, tgrad = false,
@@ -131,40 +134,48 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         analytic = nothing,
         initialization_data = nothing,
         cse = true,
-        kwargs...) where {iip, specialize}
+        kwargs...
+    ) where {iip, specialize}
     f, _,
-    _ = generate_control_function(
-        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...)
+        _ = generate_control_function(
+        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...
+    )
     f = f[1]
 
     if tgrad
-        _tgrad = generate_tgrad(sys;
+        _tgrad = generate_tgrad(
+            sys;
             simplify = simplify,
             expression = Val{true},
             wrap_gfw = Val{true},
             expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...)
+            checkbounds = checkbounds, kwargs...
+        )
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(sys;
+        _jac = generate_jacobian(
+            sys;
             simplify = simplify, sparse = sparse,
             expression = Val{true},
             wrap_gfw = Val{true},
             expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...)
+            checkbounds = checkbounds, kwargs...
+        )
     else
         _jac = nothing
     end
 
     if controljac
-        _cjac = generate_control_jacobian(sys;
+        _cjac = generate_control_jacobian(
+            sys;
             simplify = simplify, sparse = sparse,
             expression = Val{true}, wrap_gfw = Val{true},
             expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...)
+            checkbounds = checkbounds, kwargs...
+        )
     else
         _cjac = nothing
     end
@@ -173,7 +184,8 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse)
+        sys; steady_state, eval_expression, eval_module, checkbounds, cse
+    )
 
     _W_sparsity = W_sparsity(sys)
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
@@ -184,7 +196,8 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         controljac_prototype = nothing
     end
 
-    ODEInputFunction{iip, specialize}(f;
+    ODEInputFunction{iip, specialize}(
+        f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
         controljac = _cjac === nothing ? nothing : _cjac,
@@ -195,7 +208,8 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
-        initialization_data)
+        initialization_data
+    )
 end
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
@@ -207,7 +221,7 @@ function process_tspan(tspan, dt, steps)
     if isnothing(dt) && isnothing(steps)
         error("Must provide either the dt or the number of intervals to the collocation solvers (JuMP, InfiniteOpt, CasADi).")
     elseif symbolic_type(tspan[1]) === ScalarSymbolic() ||
-           symbolic_type(tspan[2]) === ScalarSymbolic()
+            symbolic_type(tspan[2]) === ScalarSymbolic()
         isnothing(steps) &&
             error("Free final time problems require specifying the number of steps using the keyword arg `steps`, rather than dt.")
         isnothing(dt) ||
@@ -252,21 +266,23 @@ function get_discrete_time_evaluations(expr)
 end
 
 function check_collocation_time_mismatch(sys, expected_tsteps, tsteps)
-    if collect(expected_tsteps)≠tsteps
+    return if collect(expected_tsteps) ≠ tsteps
         eval_times = get_discrete_time_evaluations(cost(sys))
         for (var, ts) in eval_times
             tdiff = setdiff(ts, expected_tsteps)
             @info tdiff
             if !isempty(tdiff)
-                error("$var is evaluated inside the cost function at $(length(tdiff)) points " *
-                    "that are not in the $(length(expected_tsteps)) collocation points. " *
-                    "Cost evaluation points must align with the collocation grid. "*
-                    "Adjust the dt to match the time points used in the cost function.")
+                error(
+                    "$var is evaluated inside the cost function at $(length(tdiff)) points " *
+                        "that are not in the $(length(expected_tsteps)) collocation points. " *
+                        "Cost evaluation points must align with the collocation grid. " *
+                        "Adjust the dt to match the time points used in the cost function."
+                )
             end
         end
         if length(expected_tsteps) ≠ length(tsteps)
             error("Found extra $(abs(length(expected_tsteps) - length(tsteps))) collocation points.")
-        elseif maximum(abs.(expected_tsteps .- tsteps)) > 1e-10
+        elseif maximum(abs.(expected_tsteps .- tsteps)) > 1.0e-10
             error("The collocation points differ from the expected ones by more than 1e-10.")
         end
     end
@@ -280,7 +296,8 @@ function process_DynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...)
+        guesses = Dict(), kwargs...
+    )
     warn_overdetermined(sys, op)
     ctrls = unbound_inputs(sys)
     states = unknowns(sys)
@@ -289,12 +306,14 @@ function process_DynamicOptProblem(
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
-              [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
+        [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
 
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
     f, u0,
-    p = process_SciMLProblem(ODEInputFunction, sys, _op;
-        t = tspan !== nothing ? tspan[1] : tspan, kwargs...)
+        p = process_SciMLProblem(
+        ODEInputFunction, sys, _op;
+        t = tspan !== nothing ? tspan[1] : tspan, kwargs...
+    )
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
     warn_overdetermined(sys, op)
 
@@ -333,7 +352,7 @@ function process_DynamicOptProblem(
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    prob_type(f, u0, tspan, p, fullmodel, kwargs...), pmap
+    return prob_type(f, u0, tspan, p, fullmodel, kwargs...), pmap
 end
 
 function generate_time_variable! end
@@ -354,7 +373,7 @@ function f_wrapper(f, Uₙ, Vₙ, p, P, t)
         # no tunable parameters
         return f(Uₙ, Vₙ, p, t)
     end
-    if SciMLStructures.isscimlstructure(p)
+    return if SciMLStructures.isscimlstructure(p)
         _, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
         p′ = repack(P)
         f(Uₙ, Vₙ, p′, t)
@@ -382,7 +401,7 @@ function set_variable_bounds!(m, sys, pmap, tf)
             add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
         end
     end
-    if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
+    return if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
         lo, hi = getbounds(tf)
         set_lower_bound(tₛ, Symbolics.fixpoint_sub(lo, pmap))
         set_upper_bound(tₛ, Symbolics.fixpoint_sub(hi, pmap))
@@ -403,7 +422,7 @@ function add_cost_function!(model, sys, tspan, pmap)
     get_param_substitution_rules!(rules, pmap)
     get_integral_substitution_rules!(rules, model, jcosts, tspan)
     jcosts = substitute(jcosts, rules; fold = Val(true), filterer = Returns(true))
-    set_objective!(model, value(jcosts))
+    return set_objective!(model, value(jcosts))
 end
 
 function get_integral_substitution_rules!(rules::Dict{Any, Any}, model, expr, tspan)
@@ -415,10 +434,11 @@ function get_integral_substitution_rules!(rules::Dict{Any, Any}, model, expr, ts
         arg = substitute(arg, rules; fold = Val(true), filterer = Returns(true))
         rules[int] = lowered_integral(model, arg, lo, hi)
     end
+    return
 end
 
 function process_integral_bounds(model, integral_span, tspan)
-    if is_free_final(model) && isequal(integral_span, tspan)
+    return if is_free_final(model) && isequal(integral_span, tspan)
         integral_span = (0, 1)
     elseif is_free_final(model)
         error("Free final time problems cannot handle partial timespans.")
@@ -447,20 +467,32 @@ end
 
 """Mappings for variables that depend on the final time parameter, x(tf)."""
 function free_t_map(m, tf, x_ops, c_ops)
-    Dict([[x(tf) => lowered_var(m, :U, i, 1) for (i, x) in enumerate(x_ops)];
-          [c(tf) => lowered_var(m, :V, i, 1) for (i, c) in enumerate(c_ops)]])
+    return Dict(
+        [
+            [x(tf) => lowered_var(m, :U, i, 1) for (i, x) in enumerate(x_ops)];
+            [c(tf) => lowered_var(m, :V, i, 1) for (i, c) in enumerate(c_ops)]
+        ]
+    )
 end
 
 """Mappings for variables that cover the whole timespan, x(t)."""
 function whole_t_map(m, t, x_ops, c_ops)
-    Dict([[v(t) => lowered_var(m, :U, i, t) for (i, v) in enumerate(x_ops)];
-          [v(t) => lowered_var(m, :V, i, t) for (i, v) in enumerate(c_ops)]])
+    return Dict(
+        [
+            [v(t) => lowered_var(m, :U, i, t) for (i, v) in enumerate(x_ops)];
+            [v(t) => lowered_var(m, :V, i, t) for (i, v) in enumerate(c_ops)]
+        ]
+    )
 end
 
 """Mappings for variables that cover the whole timespan, x(t)."""
 function fixed_t_map(m, x_ops, c_ops)
-    Dict([[v => (t -> lowered_var(m, :U, i, t)) for (i, v) in enumerate(x_ops)];
-          [v => (t -> lowered_var(m, :V, i, t)) for (i, v) in enumerate(c_ops)]])
+    return Dict(
+        [
+            [v => (t -> lowered_var(m, :U, i, t)) for (i, v) in enumerate(x_ops)];
+            [v => (t -> lowered_var(m, :V, i, t)) for (i, v) in enumerate(c_ops)]
+        ]
+    )
 end
 
 function process_integral_bounds end
@@ -473,8 +505,9 @@ function add_user_constraints!(model, sys, tspan, pmap)
     jconstraints = get_constraints(sys)
     (isnothing(jconstraints) || isempty(jconstraints)) && return nothing
     cons_dvs,
-    cons_ps = process_constraint_system(
-        jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false)
+        cons_ps = process_constraint_system(
+        jconstraints, Set(unknowns(sys)), parameters(sys), get_iv(sys); validate = false
+    )
 
     is_free_final(model) && check_constraint_vars(cons_dvs)
 
@@ -488,6 +521,7 @@ function add_user_constraints!(model, sys, tspan, pmap)
     for c in jconstraints
         add_constraint!(model, c)
     end
+    return
 end
 
 function add_equational_constraints!(model, sys, pmap, tspan)
@@ -504,6 +538,7 @@ function add_equational_constraints!(model, sys, pmap, tspan)
     for eq in alg_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs)
     end
+    return
 end
 
 function set_objective! end
@@ -512,8 +547,12 @@ objective_value(sol::DynamicOptSolution) = objective_value(sol.model)
 function get_differential_substitution_rules!(rules::Dict{Any, Any}, model, sys)
     t = get_iv(sys)
     D = Differential(t)
-    diffsubmap = Dict([D(unk) => lowered_derivative(model, i)
-                       for (i, unk) in enumerate(unknowns(sys))])
+    diffsubmap = Dict(
+        [
+            D(unk) => lowered_derivative(model, i)
+                for (i, unk) in enumerate(unknowns(sys))
+        ]
+    )
     merge!(rules, diffsubmap)
     return nothing
 end
@@ -523,10 +562,11 @@ function get_toterm_substitution_rules!(rules::Dict{Any, Any}, vars)
         ttu = default_toterm(unwrap(u))
         isequal(u, ttu) || (rules[u] = ttu)
     end
+    return
 end
 
 function get_param_substitution_rules!(rules::Dict{Any, Any}, pmap)
-    left_merge!(rules, pmap)
+    return left_merge!(rules, pmap)
 end
 
 function check_constraint_vars(vars)
@@ -537,6 +577,7 @@ function check_constraint_vars(vars)
             error("Provided specific time constraint in a free final time problem. This is not supported by the collocation solvers at the moment. The offending variable is $u. Specific-time user constraints can only be specified at the end of the timespan.")
         end
     end
+    return
 end
 
 ########################
@@ -557,8 +598,10 @@ function successful_solve end
 
 - kwargs are used for other options. For example, the `plugin_options` and `solver_options` will propagated to the Opti object in CasADi.
 """
-function CommonSolve.solve(prob::SciMLBase.AbstractDynamicOptProblem,
-        solver::AbstractCollocation; verbose = false, kwargs...)
+function CommonSolve.solve(
+        prob::SciMLBase.AbstractDynamicOptProblem,
+        solver::AbstractCollocation; verbose = false, kwargs...
+    )
     solved_model = prepare_and_optimize!(prob, solver; verbose, kwargs...)
 
     ts = get_t_values(solved_model)
@@ -570,7 +613,7 @@ function CommonSolve.solve(prob::SciMLBase.AbstractDynamicOptProblem,
     # update the parameters with the ones in the solved_model
     if !isempty(Ps)
         new_p = SciMLStructures.replace(SciMLStructures.Tunable(), prob.p, Ps)
-        new_prob = remake(prob, p=new_p)
+        new_prob = remake(prob, p = new_p)
     else
         new_prob = prob
     end
@@ -579,9 +622,13 @@ function CommonSolve.solve(prob::SciMLBase.AbstractDynamicOptProblem,
 
     if !successful_solve(solved_model)
         ode_sol = SciMLBase.solution_new_retcode(
-            ode_sol, SciMLBase.ReturnCode.ConvergenceFailure)
-        !isnothing(input_sol) && (input_sol = SciMLBase.solution_new_retcode(
-            input_sol, SciMLBase.ReturnCode.ConvergenceFailure))
+            ode_sol, SciMLBase.ReturnCode.ConvergenceFailure
+        )
+        !isnothing(input_sol) && (
+            input_sol = SciMLBase.solution_new_retcode(
+                input_sol, SciMLBase.ReturnCode.ConvergenceFailure
+            )
+        )
     end
-    DynamicOptSolution(solved_model, ode_sol, input_sol)
+    return DynamicOptSolution(solved_model, ode_sol, input_sol)
 end

@@ -46,7 +46,7 @@ end
 Maps the variable to a parameter.
 """
 function toparam(s)
-    if s isa Symbolics.Arr
+    return if s isa Symbolics.Arr
         Symbolics.wrap(toparam(Symbolics.unwrap(s)))
     elseif s isa AbstractArray
         map(toparam, s)
@@ -66,15 +66,17 @@ tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 
 function toparam_validate(s::SymbolicT)
     if iscall(s)
-        error("""
-        `@parameters` cannot create time-dependent parameters. Encountered $s. Use \
-        `@discretes` for this purpose.
-        """)
+        error(
+            """
+            `@parameters` cannot create time-dependent parameters. Encountered $s. Use \
+            `@discretes` for this purpose.
+            """
+        )
     end
-    toparam(s)
+    return toparam(s)
 end
 function toparam_validate(s::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
-    typeof(s)(toparam_validate(unwrap(s)))
+    return typeof(s)(toparam_validate(unwrap(s)))
 end
 
 """
@@ -86,10 +88,12 @@ in the model.
 See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
 macro parameters(xs...)
-    Symbolics.parse_vars(:parameters,
+    return Symbolics.parse_vars(
+        :parameters,
         Real,
         xs,
-        toparam_validate)
+        toparam_validate
+    )
 end
 
 function find_types(array)
@@ -129,9 +133,13 @@ function subset_tunables(sys, new_tunables)
     diff_params = setdiff(cur_tunables, new_tunables)
 
     if !isempty(setdiff(new_tunables, cur_tunables))
-        throw(ArgumentError("""New tunable parameters must be a subset of the current tunable parameters. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables)).
-        Note that array parameters can only be set as tunable or non-tunable, not partially tunable. They should be specified in the un-scalarized form.
-        """))
+        throw(
+            ArgumentError(
+                """New tunable parameters must be a subset of the current tunable parameters. Found tunable parameters not in the system: $(setdiff(new_tunables, cur_tunables)).
+                Note that array parameters can only be set as tunable or non-tunable, not partially tunable. They should be specified in the un-scalarized form.
+                """
+            )
+        )
     end
     cur_ps = copy(get_ps(sys))
     const_ps = toconstant.(diff_params)
@@ -145,5 +153,5 @@ function subset_tunables(sys, new_tunables)
         end
     end
     @set! sys.ps = cur_ps
-    complete(sys)
+    return complete(sys)
 end

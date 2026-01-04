@@ -4,23 +4,26 @@ using Test
 
 @testset "`generate_custom_function`" begin
     @variables x(t) y(t)[1:3]
-    @parameters p1=1.0 p2[1:3]=[1.0, 2.0, 3.0] p3::Int=1 p4::Bool=false
+    @parameters p1 = 1.0 p2[1:3] = [1.0, 2.0, 3.0] p3::Int = 1 p4::Bool = false
 
     sys = complete(System(Equation[], t, [x; y], [p1, p2, p3, p4]; name = :sys))
     u0 = [1.0, 2.0, 3.0, 4.0]
     p = ModelingToolkitBase.MTKParameters(sys, [])
 
     fn1 = generate_custom_function(
-        sys, x + y[1] + p1 + p2[1] + p3 * t; expression = Val(false))
+        sys, x + y[1] + p1 + p2[1] + p3 * t; expression = Val(false)
+    )
     @test fn1(u0, p, 0.0) == 5.0
 
     fn2 = generate_custom_function(
-        sys, x + y[1] + p1 + p2[1] + p3 * t, [x], [p1, p2, p3]; expression = Val(false))
+        sys, x + y[1] + p1 + p2[1] + p3 * t, [x], [p1, p2, p3]; expression = Val(false)
+    )
     @test fn1(u0, p, 0.0) == 5.0
 
     fn3_oop,
-    fn3_iip = generate_custom_function(
-        sys, [x + y[2], y[3] + p2[2], p1 + p3, 3t]; expression = Val(false))
+        fn3_iip = generate_custom_function(
+        sys, [x + y[2], y[3] + p2[2], p1 + p3, 3t]; expression = Val(false)
+    )
 
     buffer = zeros(4)
     fn3_iip(buffer, u0, p, 1.0)
@@ -40,12 +43,14 @@ using Test
     @test fn1(u0, p) == 6.0
 
     fn2 = generate_custom_function(
-        sys, x + y[1] + p1 + p2[1] + p3, [x], [p1, p2, p3]; expression = Val(false))
+        sys, x + y[1] + p1 + p2[1] + p3, [x], [p1, p2, p3]; expression = Val(false)
+    )
     @test fn1(u0, p) == 6.0
 
     fn3_oop,
-    fn3_iip = generate_custom_function(
-        sys, [x + y[2], y[3] + p2[2], p1 + p3]; expression = Val(false))
+        fn3_iip = generate_custom_function(
+        sys, [x + y[2], y[3] + p2[2], p1 + p3]; expression = Val(false)
+    )
 
     buffer = zeros(3)
     fn3_iip(buffer, u0, p)
@@ -89,11 +94,13 @@ end
         val[] = 0
         @variables z(t)[1:2]
         @mtkcompile sys = System(
-            [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t)
+            [D(y) ~ foo(x), D(x) ~ sum(y), zeros(2) ~ foo(prod(z))], t
+        )
         @test length(equations(sys)) == 5
         @test length(ModelingToolkitBase.observed(sys)) == 0
         prob = ODEProblem(
-            sys, [y => ones(2), z => 2ones(2), x => 3.0, foo => _tmp_fn2], (0.0, 1.0))
+            sys, [y => ones(2), z => 2ones(2), x => 3.0, foo => _tmp_fn2], (0.0, 1.0)
+        )
         val[] = 0
         @test_nowarn prob.f(prob.u0, prob.p, 0.0)
         @test val[] == 2

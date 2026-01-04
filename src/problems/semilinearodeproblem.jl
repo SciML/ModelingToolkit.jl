@@ -5,7 +5,8 @@
         eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, sparse = false, check_compatibility = true,
         jac = false, checkbounds = false, cse = true, initialization_data = nothing,
-        analytic = nothing, kwargs...) where {iip, specialize}
+        analytic = nothing, kwargs...
+    ) where {iip, specialize}
     check_complete(sys, SemilinearODEFunction)
     check_compatibility && check_compatible_system(SemilinearODEFunction, sys)
 
@@ -20,18 +21,21 @@
     dvs = unknowns(sys)
 
     f1,
-    f2 = generate_semiquadratic_functions(
+        f2 = generate_semiquadratic_functions(
         sys, A, B, C; stiff_linear, stiff_quadratic,
         stiff_nonlinear, expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, kwargs...)
+        eval_expression, eval_module, kwargs...
+    )
 
     if jac
         Cjac = (C === nothing || !stiff_nonlinear) ? nothing : Symbolics.jacobian(C, dvs)
         _jac = generate_semiquadratic_jacobian(
             sys, A, B, C, Cjac; sparse, expression,
-            wrap_gfw = Val{true}, eval_expression, eval_module, kwargs...)
+            wrap_gfw = Val{true}, eval_expression, eval_module, kwargs...
+        )
         _W_sparsity = get_semiquadratic_W_sparsity(
-            sys, A, B, C, Cjac; stiff_linear, stiff_quadratic, stiff_nonlinear, mm = M)
+            sys, A, B, C, Cjac; stiff_linear, stiff_quadratic, stiff_nonlinear, mm = M
+        )
         W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
     else
         _jac = nothing
@@ -39,7 +43,8 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds, cse)
+        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds, cse
+    )
 
     args = (; f1)
     kwargs = (; jac = _jac, jac_prototype = W_prototype)
@@ -53,24 +58,30 @@
         jac_prototype = W_prototype,
         observed = observedfun,
         analytic,
-        initialization_data)
+        initialization_data,
+    )
 
     return maybe_codegen_scimlfn(
-        expression, SplitFunction{iip, specialize}, args; kwargs...)
+        expression, SplitFunction{iip, specialize}, args; kwargs...
+    )
 end
 
 @fallback_iip_specialize function SemilinearODEProblem{iip, spec}(
         sys::System, op, tspan; check_compatibility = true, u0_eltype = nothing,
         expression = Val{false}, callback = nothing, sparse = false,
         stiff_linear = true, stiff_quadratic = false, stiff_nonlinear = false,
-        jac = false, kwargs...) where {
-        iip, spec}
+        jac = false, kwargs...
+    ) where {
+        iip, spec,
+    }
     check_complete(sys, SemilinearODEProblem)
     check_compatibility && check_compatible_system(SemilinearODEProblem, sys)
     if sparse
-        error("""
-        The sparse form for `SemilinearODEProblem` is currently unavailable.
-        """)
+        error(
+            """
+            The sparse form for `SemilinearODEProblem` is currently unavailable.
+            """
+        )
     end
 
     A, B, C = semiquadratic_form = calculate_semiquadratic_form(sys; sparse)
@@ -84,8 +95,10 @@ end
         linear_matrix_param = nothing
     end
     if B !== nothing
-        quadratic_forms = [unwrap(getproperty(sys, get_quadratic_form_name(i)))
-                           for i in 1:length(eqs)]
+        quadratic_forms = [
+            unwrap(getproperty(sys, get_quadratic_form_name(i)))
+                for i in 1:length(eqs)
+        ]
         diffcache_par = unwrap(getproperty(sys, DIFFCACHE_PARAM_NAME))
     else
         quadratic_forms = diffcache_par = nothing
@@ -113,9 +126,11 @@ end
     @set! sys.initial_conditions = defs
 
     f, u0,
-    p = process_SciMLProblem(SemilinearODEFunction{iip, spec}, sys, op;
+        p = process_SciMLProblem(
+        SemilinearODEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, expression, check_compatibility,
-        semiquadratic_form, sparse, u0_eltype, stiff_linear, stiff_quadratic, stiff_nonlinear, jac, kwargs...)
+        semiquadratic_form, sparse, u0_eltype, stiff_linear, stiff_quadratic, stiff_nonlinear, jac, kwargs...
+    )
 
     kwargs = process_kwargs(sys; expression, callback, kwargs...)
 
@@ -158,12 +173,13 @@ end
 
 function MTKBase.check_compatible_system(
         T::Union{Type{SemilinearODEFunction}, Type{SemilinearODEProblem}},
-        sys::System)
+        sys::System
+    )
     check_time_dependent(sys, T)
     check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
-    check_is_continuous(sys, T)
+    return check_is_continuous(sys, T)
 end

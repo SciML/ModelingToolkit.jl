@@ -63,7 +63,7 @@ Turn any `Symbol` keys in `varmap` to the appropriate symbolic variables in `sys
 symbols that cannot be converted are ignored.
 """
 function symbols_to_symbolics!(sys::AbstractSystem, varmap::AbstractDict)
-    if is_split(sys)
+    return if is_split(sys)
         ic = get_index_cache(sys)
         for k in collect(keys(varmap))
             k isa Symbol || continue
@@ -111,7 +111,8 @@ Return the list of variables in `varlist` not present in `varmap`. Uses the same
 for missing array variables and `toterm` forms as [`add_fallbacks!`](@ref).
 """
 function missingvars(
-        varmap::AtomicArrayDict, varlist::Vector; toterm = default_toterm)
+        varmap::AtomicArrayDict, varlist::Vector; toterm = default_toterm
+    )
     missings = Set{SymbolicT}()
     for var in varlist
         var = unwrap(var)
@@ -150,7 +151,7 @@ symbolic values, all of which need to be unwrapped. Specializes when `x isa Abst
 to unwrap keys and values, returning an `AnyDict`.
 """
 function recursive_unwrap(x::AbstractArray)
-    symbolic_type(x) == ArraySymbolic() ? value(x) : recursive_unwrap.(x)
+    return symbolic_type(x) == ArraySymbolic() ? value(x) : recursive_unwrap.(x)
 end
 
 function recursive_unwrap(x::SparseMatrixCSC)
@@ -181,7 +182,7 @@ function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector
             bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
-                BSImpl.Sym(;) => nothing
+                BSImpl.Sym() => nothing
                 _ => continue
             end
             write_possibly_indexed_array!(varmap, eq.rhs, eq.lhs, COMMON_NOTHING)
@@ -189,6 +190,7 @@ function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector
             write_possibly_indexed_array!(varmap, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
+    return
 end
 
 """
@@ -197,7 +199,7 @@ end
 Add all equations in `observed(sys)` to `varmap` using [`add_observed_equations!`](@ref).
 """
 function add_observed!(sys::AbstractSystem, varmap::AbstractDict)
-    add_observed_equations!(varmap, observed(sys))
+    return add_observed_equations!(varmap, observed(sys))
 end
 
 struct UnexpectedSymbolicValueInVarmap <: Exception
@@ -206,7 +208,8 @@ struct UnexpectedSymbolicValueInVarmap <: Exception
 end
 
 function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
-    println(io,
+    return println(
+        io,
         """
         Found symbolic value $(err.val) for variable $(err.sym). You may be missing an \
         initial condition or have cyclic initial conditions. If this is intended, pass \
@@ -216,7 +219,8 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         `warn_cyclic_dependency = true`. If the cycles are still not reported, you \
         may need to pass a larger value for `circular_dependency_max_cycle_length` \
         or `circular_dependency_max_cycles`.
-        """)
+        """
+    )
 end
 
 struct MissingGuessError <: Exception
@@ -225,23 +229,27 @@ struct MissingGuessError <: Exception
 end
 
 function Base.showerror(io::IO, err::MissingGuessError)
-    println(io,
+    println(
+        io,
         """
         Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
-        """)
+        """
+    )
     for (sym, val) in zip(err.syms, err.vals)
         println(io, "$sym  => $val")
     end
-    println(io,
+    return println(
+        io,
         """
-        In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """)
+        In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """
+    )
 end
 
 const MISSING_VARIABLES_MESSAGE = """
-                                Initial condition underdefined. Some are missing from the variable map.
-                                Please provide a default (`u0`), initialization equation, or guess
-                                for the following variables:
-                                """
+Initial condition underdefined. Some are missing from the variable map.
+Please provide a default (`u0`), initialization equation, or guess
+for the following variables:
+"""
 
 struct MissingVariablesError <: Exception
     vars::Any
@@ -249,7 +257,7 @@ end
 
 function Base.showerror(io::IO, e::MissingVariablesError)
     println(io, MISSING_VARIABLES_MESSAGE)
-    println(io, join(e.vars, ", "))
+    return println(io, join(e.vars, ", "))
 end
 
 """
@@ -298,10 +306,12 @@ Keyword arguments:
 - `substitution_limit`: The maximum number of times to recursively substitute `varmap` into
   itself to get a numeric value for each variable in `vars`.
 """
-function varmap_to_vars(varmap::AbstractDict, vars::Vector;
+function varmap_to_vars(
+        varmap::AbstractDict, vars::Vector;
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
-        is_initializeprob = false, substitution_limit = 100, missing_values = MissingGuessValue.Error())
+        is_initializeprob = false, substitution_limit = 100, missing_values = MissingGuessValue.Error()
+    )
     isempty(vars) && return nothing
 
     if !(varmap isa SymmapT)
@@ -375,7 +385,7 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
 
         if !isempty(missingsyms)
             is_initializeprob ? throw(MissingGuessError(missingsyms, missingvals)) :
-            throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
+                throw(UnexpectedSymbolicValueInVarmap(missingsyms[1], missingvals[1]))
         end
         if buffer_eltype == Nothing
             vals = promote_to_concrete(vals; tofloat, use_union)
@@ -393,8 +403,10 @@ function varmap_to_vars(varmap::AbstractDict, vars::Vector;
     elseif container_type <: Tuple
         return (vals...,)
     else
-        return SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),
-            Val(length(vals)), vals...)
+        return SymbolicUtils.Code.create_array(
+            container_type, eltype(vals), Val{1}(),
+            Val(length(vals)), vals...
+        )
     end
 end
 
@@ -410,7 +422,8 @@ Keyword arguments:
 - `max_cycles`: The maximum number of cycles to report.
 """
 function check_substitution_cycles(
-        varmap::AbstractDict, vars; max_cycle_length = length(varmap), max_cycles = 10)
+        varmap::AbstractDict, vars; max_cycle_length = length(varmap), max_cycles = 10
+    )
     # ordered set so that `vars` are the first `k` in the list
     allvars = OrderedSet{Any}(vars)
     union!(allvars, keys(varmap))
@@ -444,7 +457,7 @@ function check_substitution_cycles(
     # only count those which contain variables in `vars`
     filter!(Base.Fix1(any, <=(length(vars))), cycles)
 
-    map(cycles) do cycle
+    return map(cycles) do cycle
         map(Base.Fix1(getindex, allvars), cycle)
     end
 end
@@ -464,6 +477,7 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
         SU.isconst(v) && continue
         varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
     end
+    return
 end
 
 """
@@ -475,7 +489,7 @@ If `missing_values` is not `nothing`, it is assumed to be a collection and all r
 keys will be added to it.
 """
 function filter_missing_values!(varmap::AbstractDict; missing_values = nothing)
-    filter!(varmap) do kvp
+    return filter!(varmap) do kvp
         if kvp[2] !== nothing
             return true
         end
@@ -518,6 +532,7 @@ function scalarize_vars_in_varmap!(varmap::AbstractDict, vars)
             varmap[var[i]] = varmap[var][i]
         end
     end
+    return
 end
 
 function get_temporary_value(p, floatT = Float64)
@@ -562,15 +577,18 @@ function add_initials!(sys::AbstractSystem, op::SymmapT)
         haskey(op, p) && continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
-                write_possibly_indexed_array!(op, p, if Symbolics.isarraysymbolic(p)
-                    BSImpl.Const{VartypeT}(fill(false, size(p)))
-                else
-                    COMMON_FALSE
-                end, COMMON_FALSE)
+                write_possibly_indexed_array!(
+                    op, p, if Symbolics.isarraysymbolic(p)
+                        BSImpl.Const{VartypeT}(fill(false, size(p)))
+                    else
+                        COMMON_FALSE
+                    end, COMMON_FALSE
+                )
             end
             _ => nothing
         end
     end
+    return
 end
 
 """
@@ -610,11 +628,11 @@ end
 ObservedWrapper{TD}(f::F) where {TD, F} = ObservedWrapper{TD, F}(f)
 
 function (ow::ObservedWrapper{true})(prob)
-    ow.f(state_values(prob), parameter_values(prob), current_time(prob))
+    return ow.f(state_values(prob), parameter_values(prob), current_time(prob))
 end
 
 function (ow::ObservedWrapper{false})(prob)
-    ow.f(state_values(prob), parameter_values(prob))
+    return ow.f(state_values(prob), parameter_values(prob))
 end
 
 """
@@ -629,7 +647,8 @@ function. It does NOT work for solutions.
 Base.@nospecializeinfer function concrete_getu(indp, syms; eval_expression, eval_module)
     @nospecialize
     obsfn = build_explicit_observed_function(
-        indp, syms; wrap_delays = false, eval_expression, eval_module)
+        indp, syms; wrap_delays = false, eval_expression, eval_module
+    )
     return ObservedWrapper{is_time_dependent(indp)}(obsfn)
 end
 
@@ -645,27 +664,27 @@ struct PConstructorApplicator{F}
 end
 
 function (pca::PConstructorApplicator)(x::AbstractArray)
-    pca.p_constructor(x)
+    return pca.p_constructor(x)
 end
 
 function (pca::PConstructorApplicator)(x::AbstractArray{Bool})
-    pca.p_constructor(BitArray(x))
+    return pca.p_constructor(BitArray(x))
 end
 
 function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray)
-    collect(x)
+    return collect(x)
 end
 
 function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{Bool})
-    BitArray(x)
+    return BitArray(x)
 end
 
 function (pca::PConstructorApplicator{typeof(identity)})(x::SubArray{<:AbstractArray})
-    collect(pca.(x))
+    return collect(pca.(x))
 end
 
 function (pca::PConstructorApplicator)(x::AbstractArray{<:AbstractArray})
-    pca.p_constructor(pca.(x))
+    return pca.p_constructor(pca.(x))
 end
 
 """
@@ -682,15 +701,18 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
   unwrapped.
 - `p_constructor`: The `p_constructor` argument to `process_SciMLProblem`.
 """
-function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::AbstractSystem;
+function get_mtkparameters_reconstructor(
+        srcsys::AbstractSystem, dstsys::AbstractSystem;
         initials = false, unwrap_initials = false, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__)
+        eval_expression = false, eval_module = @__MODULE__
+    )
     _p_constructor = p_constructor
     p_constructor = PConstructorApplicator(p_constructor)
     # if we call `getu` on this (and it were able to handle empty tuples) we get the
     # fields of `MTKParameters` except caches.
     syms = reorder_parameters(
-        dstsys, parameters(dstsys; initial_parameters = initials); flatten = false)
+        dstsys, parameters(dstsys; initial_parameters = initials); flatten = false
+    )
     # `dstsys` is an initialization system, do basically everything is a tunable
     # and tunables are a mix of different types in `srcsys`. No initials. Constants
     # are going to be constants in `srcsys`, as are `nonnumeric`.
@@ -727,19 +749,21 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         Returns(())
     else
         ic = get_index_cache(dstsys)
-        blockarrsizes = Tuple(map(ic.discrete_buffer_sizes) do bufsizes
-            p_constructor(map(x -> x.length, bufsizes))
-        end)
+        blockarrsizes = Tuple(
+            map(ic.discrete_buffer_sizes) do bufsizes
+                p_constructor(map(x -> x.length, bufsizes))
+            end
+        )
         # discretes need to be blocked arrays
         # the `getu` returns a tuple of arrays corresponding to `p.discretes`
         # `Base.Fix1(...)` applies `p_constructor` to each of the arrays in the tuple
         # `Base.Fix2(...)` does `BlockedArray.(tuple_of_arrs, blockarrsizes)` returning a
         # tuple of `BlockedArray`s
         Base.Fix2(Broadcast.BroadcastFunction(BlockedArray), blockarrsizes) ∘
-        Base.Fix1(broadcast, p_constructor) ∘
-        # This `broadcast.(collect, ...)` avoids `ReshapedArray`/`SubArray`s from
-        # appearing in the result.
-        concrete_getu(srcsys, Tuple(broadcast.(collect, syms[3])); eval_expression, eval_module)
+            Base.Fix1(broadcast, p_constructor) ∘
+            # This `broadcast.(collect, ...)` avoids `ReshapedArray`/`SubArray`s from
+            # appearing in the result.
+            concrete_getu(srcsys, Tuple(broadcast.(collect, syms[3])); eval_expression, eval_module)
     end
     const_getter = if syms[4] == ()
         Returns(())
@@ -750,22 +774,27 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
         Returns(())
     else
         ic = get_index_cache(dstsys)
-        buftypes = Tuple(map(ic.nonnumeric_buffer_sizes) do bufsize
-            Vector{bufsize.type}
-        end)
+        buftypes = Tuple(
+            map(ic.nonnumeric_buffer_sizes) do bufsize
+                Vector{bufsize.type}
+            end
+        )
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
-        Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
-        concrete_getu(srcsys, Tuple(syms[5]); eval_expression, eval_module)
+            Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
+            concrete_getu(srcsys, Tuple(syms[5]); eval_expression, eval_module)
     end
     getters = (
-        tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter)
+        tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter,
+    )
     getter = let getters = getters
         function _getter(valp, initprob)
             oldcache = parameter_values(initprob).caches
-            MTKParameters(getters[1](valp), getters[2](valp), getters[3](valp),
+            return MTKParameters(
+                getters[1](valp), getters[2](valp), getters[3](valp),
                 getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
-                                                    copy.(oldcache))
+                    copy.(oldcache)
+            )
         end
     end
 
@@ -773,7 +802,7 @@ function get_mtkparameters_reconstructor(srcsys::AbstractSystem, dstsys::Abstrac
 end
 
 function call(f, args...)
-    f(args...)
+    return f(args...)
 end
 
 """
@@ -784,20 +813,22 @@ with values from `srcsys`.
 """
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem; u0_constructor = identity, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__)
+        eval_expression = false, eval_module = @__MODULE__
+    )
     @assert is_initializesystem(dstsys)
     ugetter = u0_constructor ∘
-              concrete_getu(srcsys, unknowns(dstsys); eval_expression, eval_module)
+        concrete_getu(srcsys, unknowns(dstsys); eval_expression, eval_module)
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
-            srcsys, dstsys; p_constructor, eval_expression, eval_module)
+            srcsys, dstsys; p_constructor, eval_expression, eval_module
+        )
     else
         syms = parameters(dstsys)
         pgetter = let inner = concrete_getu(srcsys, syms; eval_expression, eval_module),
-            p_constructor = p_constructor
+                p_constructor = p_constructor
 
             function _getter2(valp, initprob)
-                p_constructor(inner(valp))
+                return p_constructor(inner(valp))
             end
         end
     end
@@ -859,20 +890,23 @@ Given `sys` and its corresponding initialization system `initsys`, return the
 `initializeprobpmap` function in `OverrideInitData` for the systems.
 """
 function construct_initializeprobpmap(
-        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module)
+        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module
+    )
     @assert is_initializesystem(initsys)
     if is_split(sys)
         return let getter = get_mtkparameters_reconstructor(
                 initsys, sys; initials = true, unwrap_initials = true, p_constructor,
-                eval_expression, eval_module)
+                eval_expression, eval_module
+            )
             function initprobpmap_split(prob, initsol)
-                getter(initsol, prob)
+                return getter(initsol, prob)
             end
         end
     else
         return let getter = concrete_getu(
                 initsys, parameters(sys; initial_parameters = true);
-                eval_expression, eval_module), p_constructor = p_constructor
+                eval_expression, eval_module
+            ), p_constructor = p_constructor
 
             function initprobpmap_nosplit(prob, initsol)
                 return p_constructor(getter(initsol))
@@ -884,7 +918,7 @@ end
 function get_scimlfn(valp)
     valp isa SciMLBase.AbstractSciMLFunction && return valp
     if hasmethod(symbolic_container, Tuple{typeof(valp)}) &&
-       (sc = symbolic_container(valp)) !== valp
+            (sc = symbolic_container(valp)) !== valp
         return get_scimlfn(sc)
     end
     throw(ArgumentError("SciMLFunction not found. This should never happen."))
@@ -1048,7 +1082,8 @@ function maybe_build_initialization_problem(
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
-        implicit_dae = false, kwargs...)
+        implicit_dae = false, kwargs...
+    )
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -1058,7 +1093,8 @@ function maybe_build_initialization_problem(
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
         sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...)
+        use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...
+    )
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
         if ArrayInterface.ismutable(_u0)
@@ -1099,8 +1135,10 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
-            p_constructor, eval_expression, eval_module),
-        get_initial_unknowns, SetInitialUnknowns(sys))
+            p_constructor, eval_expression, eval_module
+        ),
+        get_initial_unknowns, SetInitialUnknowns(sys)
+    )
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
@@ -1109,20 +1147,23 @@ function maybe_build_initialization_problem(
             initializeprobmap = Returns(nothing)
         else
             initializeprobmap = u0_constructor ∘ safe_float ∘
-                                getu(initializeprob, solved_unknowns)
+                getu(initializeprob, solved_unknowns)
         end
     else
         initializeprobmap = nothing
     end
 
-    punknowns = [p
-                 for p in all_variable_symbols(initializeprob)
-                 if is_parameter(sys, p)]
+    punknowns = [
+        p
+            for p in all_variable_symbols(initializeprob)
+            if is_parameter(sys, p)
+    ]
     if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module)
+            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module
+        )
     end
 
     # we still want the `initialization_data` because it helps with `remake`
@@ -1150,16 +1191,16 @@ function maybe_build_initialization_problem(
                 v = Differential(get_iv(sys))(v)
                 ttv = default_toterm(v)
                 if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING &&
-                    get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
-                    # FIXME: Derivatives of algebraic variables aren't present
-                    (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
+                        get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
+                        # FIXME: Derivatives of algebraic variables aren't present
+                        (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
                     push_as_atomic_array!(missingvars, ttv)
                 end
             end
         end
     end
     for v in get_all_discretes_fast(sys)
-            has_possibly_indexed_key(parent(binds), v) && continue
+        has_possibly_indexed_key(parent(binds), v) && continue
         has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
     end
     for (k, v) in bindings(sys)
@@ -1183,8 +1224,10 @@ function maybe_build_initialization_problem(
 
     return (;
         initialization_data = SciMLBase.OverrideInitData(
-        initializeprob, update_initializeprob!, initializeprobmap,
-        initializeprobpmap; metadata = meta, is_update_oop = Val(true)))
+            initializeprob, update_initializeprob!, initializeprobmap,
+            initializeprobpmap; metadata = meta, is_update_oop = Val(true)
+        ),
+    )
 end
 
 rm_union(::Type{Union{T, Nothing}}) where {T} = T
@@ -1237,7 +1280,8 @@ function calculate_resid_prototype(N::Int, u0, p)
     if SciMLStructures.isscimlstructure(p)
         u0ElType = promote_type(
             eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-            u0ElType)
+            u0ElType
+        )
     end
     return zeros(u0ElType, N)
 end
@@ -1258,7 +1302,7 @@ function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic
         else
             floatT
         end
-        SymbolicUtils.Code.create_array(u0Type, elT, Val(1), Val(length(vals)), vals...)
+        return SymbolicUtils.Code.create_array(u0Type, elT, Val(1), Val(length(vals)), vals...)
     end
 end
 
@@ -1272,8 +1316,9 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
     p_constructor === identity || return p_constructor
     pType <: StaticArray || return p_constructor
     return function (vals)
-        SymbolicUtils.Code.create_array(
-            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...)
+        return SymbolicUtils.Code.create_array(
+            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...
+        )
     end
 end
 
@@ -1281,9 +1326,13 @@ abstract type ProblemConstructionHook end
 
 function operating_point_preprocess(sys::AbstractSystem, op)
     if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
-        throw(ArgumentError("""
-        The operating point passed to the problem constructor must be a symbolic map.
-        """))
+        throw(
+            ArgumentError(
+                """
+                The operating point passed to the problem constructor must be a symbolic map.
+                """
+            )
+        )
     end
     op = recursive_unwrap(anydict(op))
     symbols_to_symbolics!(sys, op)
@@ -1352,7 +1401,8 @@ function process_SciMLProblem(
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
-        allow_incomplete = false, is_initializeprob = false, kwargs...)
+        allow_incomplete = false, is_initializeprob = false, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -1396,7 +1446,8 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init, missing_guess_value, implicit_dae)
+            time_dependent_init, missing_guess_value, implicit_dae
+        )
 
         kwargs = merge(kwargs, kws)
     end
@@ -1422,7 +1473,8 @@ function process_SciMLProblem(
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
             op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
-            max_cycles = circular_dependency_max_cycles)
+            max_cycles = circular_dependency_max_cycles
+        )
         if !isempty(cycles)
             buffer = IOBuffer()
             for cycle in cycles
@@ -1437,11 +1489,13 @@ function process_SciMLProblem(
         u0 = varmap_to_vars(
             op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
-            missing_values = missing_guess_value)
+            missing_values = missing_guess_value
+        )
     else
         u0 = varmap_to_vars(
             op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
-            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit)
+            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
+        )
     end
     if u0 !== nothing
         u0 = u0_constructor(u0)
@@ -1452,7 +1506,8 @@ function process_SciMLProblem(
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
             op, ps; max_cycle_length = circular_dependency_max_cycle_length,
-            max_cycles = circular_dependency_max_cycles)
+            max_cycles = circular_dependency_max_cycles
+        )
         if !isempty(cycles)
             buffer = IOBuffer()
             for cycle in cycles
@@ -1475,8 +1530,10 @@ function process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
-        du0 = varmap_to_vars(op, ddvs; toterm = default_toterm,
-            tofloat)
+        du0 = varmap_to_vars(
+            op, ddvs; toterm = default_toterm,
+            tofloat
+        )
         kwargs = merge(kwargs, (; ddvs))
     else
         du0 = nothing
@@ -1488,22 +1545,31 @@ function process_SciMLProblem(
             t0 = zero(floatT)
         end
         initialization_data = @invokelatest SciMLBase.remake_initialization_data(
-            sys, kwargs, u0, t0, p, u0, p)
+            sys, kwargs, u0, t0, p, u0, p
+        )
         kwargs = merge(kwargs, (; initialization_data))
     end
 
     if constructor <: NonlinearFunction && length(dvs) != length(eqs)
-        kwargs = merge(kwargs,
+        kwargs = merge(
+            kwargs,
             (;
-                resid_prototype = u0_constructor(calculate_resid_prototype(
-                length(eqs), u0, p))))
+                resid_prototype = u0_constructor(
+                    calculate_resid_prototype(
+                        length(eqs), u0, p
+                    )
+                ),
+            )
+        )
     end
 
-    f = constructor(sys; u0 = u0, p = p,
+    f = constructor(
+        sys; u0 = u0, p = p,
         eval_expression = eval_expression,
         eval_module = eval_module,
-        kwargs...)
-    implicit_dae ? (f, du0, u0, p) : (f, u0, p)
+        kwargs...
+    )
+    return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
 
 # Check that the keys of a u0map or pmap are valid
@@ -1516,15 +1582,15 @@ function check_inputmap_keys(sys, op)
         end
     end
 
-    if !isempty(badvarkeys)
+    return if !isempty(badvarkeys)
         throw(InvalidKeyError(collect(badvarkeys)))
     end
 end
 
 const BAD_KEY_MESSAGE = """
-                        Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned.
-                        The following keys are invalid:
-                        """
+Undefined keys found in the parameter or initial condition maps. Check if symbolic variable names have been reassigned.
+The following keys are invalid:
+"""
 
 struct InvalidKeyError <: Exception
     vars::Any
@@ -1532,7 +1598,7 @@ end
 
 function Base.showerror(io::IO, e::InvalidKeyError)
     println(io, BAD_KEY_MESSAGE)
-    println(io, join(e.vars, ", "))
+    return println(io, join(e.vars, ", "))
 end
 
 function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, vars)
@@ -1542,8 +1608,10 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
-function process_kwargs(sys::System; expression = Val{false}, callback = nothing,
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+function process_kwargs(
+        sys::System; expression = Val{false}, callback = nothing,
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
@@ -1569,7 +1637,7 @@ function filter_kwargs(kwargs)
     for key in keys(kwargs)
         key in DiffEqBase.allowedkeywords || delete!(kwargs, key)
     end
-    pairs(NamedTuple(kwargs))
+    return pairs(NamedTuple(kwargs))
 end
 
 struct SymbolicTstops{F}
@@ -1587,7 +1655,8 @@ end
 
 function SymbolicTstops(
         sys::AbstractSystem; expression = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__)
+        eval_module = @__MODULE__
+    )
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
     t0 = gensym(:t0)
@@ -1601,14 +1670,17 @@ function SymbolicTstops(
     end
     rps = reorder_parameters(sys)
     tstops,
-    _ = build_function_wrapper(sys, tstops,
+        _ = build_function_wrapper(
+        sys, tstops,
         rps...,
         t0,
         t1;
         expression = Val{true},
-        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true)
+        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true
+    )
     tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
-        expression, tstops, nothing; eval_expression, eval_module)
+        expression, tstops, nothing; eval_expression, eval_module
+    )
 
     if expression == Val{true}
         return :($SymbolicTstops($tstops))
@@ -1665,7 +1737,8 @@ macro fallback_iip_specialize(ex)
 
     # callexpr_iip is `ODEProblem{iip, FullSpecialize}(call_args...)`
     callexpr_iip = Expr(
-        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), call_args...)
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.FullSpecialize), call_args...
+    )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])
     # `ODEProblem{iip}(args...)`
@@ -1716,11 +1789,13 @@ the head of the `Expr` used to create the assignment. `filter` is a function tha
 key and returns whether or not to include it in the assignments.
 """
 function namedtuple_to_assignments!(
-        block, kws::NamedTuple; head = :(=), filter = Returns(true))
+        block, kws::NamedTuple; head = :(=), filter = Returns(true)
+    )
     for (k, v) in pairs(kws)
         filter(k) || continue
         push!(block.args, Expr(head, k, v))
     end
+    return
 end
 
 """
@@ -1770,7 +1845,7 @@ Return an expression constructing SciMLFunction `T` with positional arguments `a
 and keywords `kwargs`.
 """
 function maybe_codegen_scimlfn(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
-    build_scimlfn_expr(T, args; kwargs...)
+    return build_scimlfn_expr(T, args; kwargs...)
 end
 
 """
@@ -1779,7 +1854,7 @@ end
 Construct SciMLFunction `T` with positional arguments `args` and keywords `kwargs`.
 """
 function maybe_codegen_scimlfn(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
-    T(args...; kwargs...)
+    return T(args...; kwargs...)
 end
 
 """
@@ -1789,7 +1864,7 @@ Return an expression constructing SciMLProblem `T` with positional arguments `ar
 and keywords `kwargs`.
 """
 function maybe_codegen_scimlproblem(::Type{Val{true}}, T, args::NamedTuple; kwargs...)
-    build_scimlproblem_expr(T, args; kwargs...)
+    return build_scimlproblem_expr(T, args; kwargs...)
 end
 
 """
@@ -1800,7 +1875,7 @@ Construct SciMLProblem `T` with positional arguments `args` and keywords `kwargs
 function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
     # Call `remake` so it runs initialization if it is trivial
     # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
-    @invokelatest remake(T(args...; kwargs...))
+    return @invokelatest remake(T(args...; kwargs...))
 end
 
 """
@@ -1834,7 +1909,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     obs = observed(unhack_system(sys))
     add_observed_equations!(op, obs)
 
-    if split
+    return if split
         MTKParameters(sys, op; kwargs...)
     else
         varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)

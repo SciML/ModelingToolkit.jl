@@ -119,12 +119,14 @@ d = FakeNormal()
 ## System interface
 @independent_variables t
 Dₜ = Differential(t)
-@variables x(t)=0 [bounds=(-10, 10)] u(t)=0 [input=true] y(t)=0 [output=true]
+@variables x(t) = 0 [bounds = (-10, 10)] u(t) = 0 [input = true] y(t) = 0 [output = true]
 @parameters T [bounds = (0, Inf)]
 @parameters k [tunable = true, bounds = (0, Inf)]
 @parameters k2 [tunable = false]
-eqs = [Dₜ(x) ~ (-k2 * x + k * u) / T
-       y ~ x]
+eqs = [
+    Dₜ(x) ~ (-k2 * x + k * u) / T
+    y ~ x
+]
 sys = System(eqs, t, name = :tunable_first_order)
 unk_meta = ModelingToolkitBase.dump_unknowns(sys)
 @test length(unk_meta) == 3
@@ -176,11 +178,13 @@ sp = Set(p)
 @test_nowarn show(stdout, "text/plain", sys)
 
 # Defaults, guesses overridden by system, parameter dependencies
-@variables x(t)=1.0 y(t) [guess = 1.0]
-@parameters p=2.0 q
-@named sys = System(Equation[], t, [x, y], [p, q];
-                    bindings = [q => 2p], initial_conditions = Dict(x => 2.0, p => 3.0),
-                    guesses = Dict(y => 2.0))
+@variables x(t) = 1.0 y(t) [guess = 1.0]
+@parameters p = 2.0 q
+@named sys = System(
+    Equation[], t, [x, y], [p, q];
+    bindings = [q => 2p], initial_conditions = Dict(x => 2.0, p => 3.0),
+    guesses = Dict(y => 2.0)
+)
 sys = complete(sys)
 unks_meta = ModelingToolkitBase.dump_unknowns(sys)
 unks_meta = Dict([ModelingToolkitBase.getname(meta.var) => meta for meta in unks_meta])

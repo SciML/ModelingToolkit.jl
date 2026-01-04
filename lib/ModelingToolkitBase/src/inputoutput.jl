@@ -50,7 +50,7 @@ See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@re
 unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 
 function _is_atomic_inside_operator(ex::SymbolicT)
-    SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+    return SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => false
         _ => true
     end
@@ -108,8 +108,8 @@ function (ibv::IsBoundValidator)(u::SymbolicT)
             push!(ibv.stack, u)
             isbound = ibv(var)
             pop!(ibv.stack)
-             # The variable we are comparing to can not come from an inner namespace,
-             # binding only counts outwards
+            # The variable we are comparing to can not come from an inner namespace,
+            # binding only counts outwards
             isbound && !inner_namespace(u, var) && return true
         end
     end
@@ -139,7 +139,7 @@ Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an u
 function same_or_inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
-    nu == nv ||           # namespaces are the same
+    return nu == nv ||           # namespaces are the same
         startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
         !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
@@ -149,7 +149,7 @@ function inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv && return false
-    startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
+    return startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
         !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
@@ -165,7 +165,7 @@ function get_namespace(x)
     if length(parts) == 1
         return ""
     end
-    join(parts[1:(end - 1)], NAMESPACE_SEPARATOR)
+    return join(parts[1:(end - 1)], NAMESPACE_SEPARATOR)
 end
 
 """
@@ -174,7 +174,7 @@ end
 Determine whether an equation or expression contains variable `x`.
 """
 function has_var(eq::Equation, x)
-    has_var(eq.rhs, x) || has_var(eq.lhs, x)
+    return has_var(eq.rhs, x) || has_var(eq.lhs, x)
 end
 
 has_var(ex, x) = x ∈ Set(get_variables(ex))
@@ -221,7 +221,8 @@ t = 0
 f[1](x, inputs, p, t)
 ```
 """
-function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(sys),
+function generate_control_function(
+        sys::AbstractSystem, inputs = unbound_inputs(sys),
         disturbance_inputs = disturbances(sys);
         known_disturbance_inputs = nothing,
         disturbance_argument = false,
@@ -230,15 +231,18 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         eval_expression = false,
         eval_module = @__MODULE__,
         split = true,
-        kwargs...)
+        kwargs...
+    )
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     # Handle backward compatibility for disturbance_argument
     if disturbance_argument
-        Base.depwarn("The `disturbance_argument` keyword argument is deprecated. Use `known_disturbance_inputs` instead. " *
-                     "For `disturbance_argument=true`, pass `known_disturbance_inputs=disturbance_inputs, disturbance_inputs=nothing`. " *
-                     "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
-                     :generate_control_function)
+        Base.depwarn(
+            "The `disturbance_argument` keyword argument is deprecated. Use `known_disturbance_inputs` instead. " *
+                "For `disturbance_argument=true`, pass `known_disturbance_inputs=disturbance_inputs, disturbance_inputs=nothing`. " *
+                "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
+            :generate_control_function
+        )
         if known_disturbance_inputs !== nothing
             error("Cannot specify both `disturbance_argument=true` and `known_disturbance_inputs`")
         end
@@ -253,7 +257,7 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     )
 
     if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs=all_disturbances, split)
+        sys = mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split)
     end
 
     # Add all disturbances to inputs for the purposes of io processing
@@ -286,7 +290,7 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
     check_operator_variables(eqs, Differential)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
-           [eq.rhs for eq in eqs]
+        [eq.rhs for eq in eqs]
 
     # TODO: add an optional check on the ordering of observed equations
     p = reorder_parameters(sys, ps)
@@ -302,12 +306,17 @@ function generate_control_function(sys::AbstractSystem, inputs = unbound_inputs(
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
-    f = build_function_wrapper(sys, rhss, args...; p_start = 3 + implicit_dae,
-        p_end = length(p) + 2 + implicit_dae, kwargs...)
+    f = build_function_wrapper(
+        sys, rhss, args...; p_start = 3 + implicit_dae,
+        p_end = length(p) + 2 + implicit_dae, kwargs...
+    )
     f = eval_or_rgf.(f; eval_expression, eval_module)
-    f = GeneratedFunctionWrapper{(
-        3 + implicit_dae, length(args) - length(p) + 1, is_split(sys))}(f...)
+    f = GeneratedFunctionWrapper{
+        (
+            3 + implicit_dae, length(args) - length(p) + 1, is_split(sys),
+        ),
+    }(f...)
     # Return parameters excluding both control inputs and all disturbances
     ps = setdiff(parameters(sys), inputs, all_disturbances)
-    (; f = (f, f), dvs, ps, io_sys = sys)
+    return (; f = (f, f), dvs, ps, io_sys = sys)
 end

@@ -33,7 +33,7 @@ end
     eqs = [
         D(x) ~ y - x,
         D(y) ~ -x * z + b * abs(z),
-        D(z) ~ x * y - a
+        D(z) ~ x * y - a,
     ]
     @named modlorenz = System(eqs, t)
     sys = mtkcompile(modlorenz)

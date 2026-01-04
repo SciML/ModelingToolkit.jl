@@ -6,47 +6,47 @@
 # TEST: Function registration in a module.
 # ------------------------------------------------
 module MyModule
-using ModelingToolkitBase, DiffEqBase, LinearAlgebra, Test
-using ModelingToolkitBase: t_nounits as t, D_nounits as Dt
-@parameters x
-@variables u(t)
+    using ModelingToolkitBase, DiffEqBase, LinearAlgebra, Test
+    using ModelingToolkitBase: t_nounits as t, D_nounits as Dt
+    @parameters x
+    @variables u(t)
 
-function do_something(a)
-    a + 10
-end
-@register_symbolic do_something(a)
+    function do_something(a)
+        return a + 10
+    end
+    @register_symbolic do_something(a)
 
-eq = Dt(u) ~ do_something(x) + MyModule.do_something(x)
-@named sys = System([eq], t, [u], [x])
-sys = complete(sys)
-fun = ODEFunction(sys)
+    eq = Dt(u) ~ do_something(x) + MyModule.do_something(x)
+    @named sys = System([eq], t, [u], [x])
+    sys = complete(sys)
+    fun = ODEFunction(sys)
 
-u0 = 5.0
-@test fun([0.5], u0, 0.0) == [do_something(u0) * 2]
+    u0 = 5.0
+    @test fun([0.5], u0, 0.0) == [do_something(u0) * 2]
 end
 
 # TEST: Function registration in a nested module.
 # ------------------------------------------------
 module MyModule2
-module MyNestedModule
-using ModelingToolkitBase, DiffEqBase, LinearAlgebra, Test
-using ModelingToolkitBase: t_nounits as t, D_nounits as Dt
-@parameters x
-@variables u(t)
+    module MyNestedModule
+        using ModelingToolkitBase, DiffEqBase, LinearAlgebra, Test
+        using ModelingToolkitBase: t_nounits as t, D_nounits as Dt
+        @parameters x
+        @variables u(t)
 
-function do_something_2(a)
-    a + 20
-end
-@register_symbolic do_something_2(a)
+        function do_something_2(a)
+            return a + 20
+        end
+        @register_symbolic do_something_2(a)
 
-eq = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
-@named sys = System([eq], t, [u], [x])
-sys = complete(sys)
-fun = ODEFunction(sys)
+        eq = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
+        @named sys = System([eq], t, [u], [x])
+        sys = complete(sys)
+        fun = ODEFunction(sys)
 
-u0 = 3.0
-@test fun([0.5], u0, 0.0) == [do_something_2(u0) * 2]
-end
+        u0 = 3.0
+        @test fun([0.5], u0, 0.0) == [do_something_2(u0) * 2]
+    end
 end
 
 # TEST: Function registration outside any modules.
@@ -57,7 +57,7 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as Dt
 @variables u(t)
 
 function do_something_3(a)
-    a + 30
+    return a + 30
 end
 @register_symbolic do_something_3(a)
 
@@ -92,7 +92,7 @@ expr = value(foo(x, y))
 # Might be useful in cases where someone wants to define functions that build
 # up and use ODEFunctions given some parameters.
 function do_something_4(a)
-    a + 30
+    return a + 30
 end
 @register_symbolic do_something_4(a)
 function build_ode()
@@ -101,12 +101,12 @@ function build_ode()
     eq = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
     @named sys = System([eq], t, [u], [x])
     sys = complete(sys)
-    fun = ODEFunction(sys, eval_expression = false)
+    return fun = ODEFunction(sys, eval_expression = false)
 end
 function run_test()
     fun = build_ode()
     u0 = 10.0
-    @test fun([0.5], u0, 0.0) == [do_something_4(u0) * 2]
+    return @test fun([0.5], u0, 0.0) == [do_something_4(u0) * 2]
 end
 run_test()
 

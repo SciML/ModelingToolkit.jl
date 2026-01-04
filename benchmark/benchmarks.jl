@@ -69,7 +69,8 @@ N = 25
 
 defval = collect(x) * collect(x)'
 @mtkcompile model = System(
-    [D(x) ~ x], t, [x], [A]; defaults = [A => defval], guesses = [A => fill(NaN, N, N)])
+    [D(x) ~ x], t, [x], [A]; defaults = [A => defval], guesses = [A => fill(NaN, N, N)]
+)
 
 u0 = [x => rand(N)]
 prob = ODEProblem(model, u0, tspan)
@@ -79,7 +80,7 @@ large_param_init["init"] = @benchmarkable init($prob)
 
 sparse_analytical_jacobian = SUITE["sparse_analytical_jacobian"]
 
-eqs = [D(x[i]) ~ prod(x[j] for j in 1:N if (i+j) % 3 == 0) for i in 1:N]
+eqs = [D(x[i]) ~ prod(x[j] for j in 1:N if (i + j) % 3 == 0) for i in 1:N]
 @mtkcompile model = System(eqs, t)
 u0 = collect(x .=> 1.0)
 tspan = (0.0, 1.0)

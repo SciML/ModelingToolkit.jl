@@ -12,23 +12,31 @@ limit(a, N) = ModelingToolkitBase.ifelse(a == N + 1, 1, ModelingToolkitBase.ifel
 function brusselator_2d_loop(du, u, p, t)
     A, B, alpha, dx = p
     alpha = alpha / dx^2
-    @inbounds for I in CartesianIndices((N, N))
+    return @inbounds for I in CartesianIndices((N, N))
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1,
-        jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
-        limit(j - 1, N)
-        du[i,
-        j,
-        1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
-                       4u[i, j, 1]) +
-                      B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
-                      brusselator_f(x, y, t)
-        du[i,
-        j,
-        2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
-                       4u[i, j, 2]) +
-                      A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
+            jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
+            limit(j - 1, N)
+        du[
+            i,
+            j,
+            1,
+        ] = alpha * (
+            u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
+                4u[i, j, 1]
+        ) +
+            B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
+            brusselator_f(x, y, t)
+        du[
+            i,
+            j,
+            2,
+        ] = alpha * (
+            u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
+                4u[i, j, 2]
+        ) +
+            A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
     end
 end
 
@@ -44,13 +52,15 @@ function init_brusselator_2d(xyd)
         u[I, 1] = 22 * (y * (1 - y))^(3 / 2)
         u[I, 2] = 27 * (x * (1 - x))^(3 / 2)
     end
-    u
+    return u
 end
 u0 = init_brusselator_2d(xyd_brusselator)
 
 # Test with 3-tensor inputs
-prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-    u0, (0.0, 11.5), p)
+prob_ode_brusselator_2d = ODEProblem(
+    brusselator_2d_loop,
+    u0, (0.0, 11.5), p
+)
 
 modelingtoolkitize(prob_ode_brusselator_2d)
 
@@ -64,15 +74,16 @@ prob = OptimizationProblem(rosenbrock, x0, p)
 sys = complete(modelingtoolkitize(prob)) # symbolicitize me captain!
 
 prob = OptimizationProblem(
-    sys, [unknowns(sys) .=> x0; parameters(sys) .=> p], grad = true, hess = true)
+    sys, [unknowns(sys) .=> x0; parameters(sys) .=> p], grad = true, hess = true
+)
 sol = solve(prob, NelderMead())
-@test sol.objective < 1e-8
+@test sol.objective < 1.0e-8
 
 sol = solve(prob, BFGS())
-@test sol.objective < 1e-8
+@test sol.objective < 1.0e-8
 
 sol = solve(prob, Newton())
-@test sol.objective < 1e-8
+@test sol.objective < 1.0e-8
 
 prob = OptimizationProblem(ones(3); lb = [-Inf, 0.0, 1.0], ub = [Inf, 0.0, 2.0]) do u, p
     sum(abs2, u)
@@ -86,7 +97,7 @@ sys = complete(modelingtoolkitize(prob))
 
 ## SIR System Regression Test
 
-β = 0.01# infection rate
+β = 0.01 # infection rate
 λ_R = 0.05 # inverse of transition time from  infected to recovered
 λ_D = 0.83 # inverse of transition time from  infected to dead
 i₀ = 0.075 # fraction of initial infected people in every age class
@@ -95,10 +106,12 @@ i₀ = 0.075 # fraction of initial infected people in every age class
 # regional contact matrix and regional population
 
 ## regional contact matrix
-regional_all_contact_matrix = [3.45536 0.485314 0.506389 0.123002;
-                               0.597721 2.11738 0.911374 0.323385;
-                               0.906231 1.35041 1.60756 0.67411;
-                               0.237902 0.432631 0.726488 0.979258] # 4x4 contact matrix
+regional_all_contact_matrix = [
+    3.45536 0.485314 0.506389 0.123002;
+    0.597721 2.11738 0.911374 0.323385;
+    0.906231 1.35041 1.60756 0.67411;
+    0.237902 0.432631 0.726488 0.979258
+] # 4x4 contact matrix
 
 ## regional population stratified by age
 N = [723208, 874150, 1330993, 1411928] # array of 4 elements, each of which representing the absolute amount of population in the corresponding age class.
@@ -122,12 +135,12 @@ function SIRD_ac!(du, u, p, t)
     # initialize this parameter (death probability stratified by age, taken from literature)
 
     δ₁, δ₂,
-    δ₃,
-    δ₄ = [
+        δ₃,
+        δ₄ = [
         0.003 / 100,
         0.004 / 100,
-        (0.015 + 0.030 + 0.064 + 0.213 + 0.718) / (5 * 100),
-        (2.384 + 8.466 + 12.497 + 1.117) / (4 * 100)
+        (0.015 + 0.03 + 0.064 + 0.213 + 0.718) / (5 * 100),
+        (2.384 + 8.466 + 12.497 + 1.117) / (4 * 100),
     ]
     δ = vcat(repeat([δ₁], 1), repeat([δ₂], 1), repeat([δ₃], 1), repeat([δ₄], 4 - 1 - 1 - 1))
 
@@ -155,7 +168,7 @@ function SIRD_ac!(du, u, p, t)
     @. dI = Λ * S - ((1 - δ) * λ_R + δ * λ_D) * I
     @. dR = λ_R * (1 - δ) * I
     @. dD = λ_D * δ * I
-    @. dD_tot = dD[1] + dD[2] + dD[3] + dD[4]
+    return @. dD_tot = dD[1] + dD[2] + dD[3] + dD[4]
 end;
 
 # create problem and check it works
@@ -169,7 +182,7 @@ fast_problem = ODEProblem(sys, [unknowns(sys) .=> ℬ; parameters(sys) .=> 𝒫]
 
 ## Issue #778
 
-r0 = [1131.340, -2282.343, 6672.423]
+r0 = [1131.34, -2282.343, 6672.423]
 v0 = [-5.64305, 4.30333, 2.42879]
 Δt = 86400.0 * 365
 μ = 398600.4418
@@ -178,7 +191,7 @@ rv0 = ArrayPartition(r0, v0)
 f = function (dy, y, μ, t)
     r = sqrt(sum(y[1, :] .^ 2))
     dy[1, :] = y[2, :]
-    dy[2, :] .= -μ .* y[1, :] / r^3
+    return dy[2, :] .= -μ .* y[1, :] / r^3
 end
 
 prob = ODEProblem(f, rv0, (0.0, Δt), μ)
@@ -235,7 +248,7 @@ sys = modelingtoolkitize(prob)
 
 function ode_prob(du, u, p::NamedTuple, t)
     du[1] = u[1] + p.α * u[2]
-    du[2] = u[2] + p.β * u[1]
+    return du[2] = u[2] + p.β * u[1]
 end
 params = (α = 1, β = 1)
 prob = ODEProblem(ode_prob, [1 1], (0, 1), params)
@@ -245,7 +258,7 @@ sys = modelingtoolkitize(prob)
 function ode_prob(du, u, p::Tuple, t)
     α, β = p
     du[1] = u[1] + α * u[2]
-    du[2] = u[2] + β * u[1]
+    return du[2] = u[2] + β * u[1]
 end
 
 params = (1, 1)
@@ -256,7 +269,7 @@ sys = modelingtoolkitize(prob)
 function ode_prob_dict(du, u, p, t)
     du[1] = u[1] + p[:a]
     du[2] = u[2] + p[:b]
-    nothing
+    return nothing
 end
 params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
@@ -265,16 +278,20 @@ sys = modelingtoolkitize(prob)
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]
 
-@parameters sig=10 rho=28.0 beta=8/3
-@variables x(t)=100 y(t)=1.0 z(t)=1
+@parameters sig = 10 rho = 28.0 beta = 8 / 3
+@variables x(t) = 100 y(t) = 1.0 z(t) = 1
 
-eqs = [D(x) ~ sig * (y - x),
+eqs = [
+    D(x) ~ sig * (y - x),
     D(y) ~ x * (rho - z) - y,
-    D(z) ~ x * y - beta * z]
+    D(z) ~ x * y - beta * z,
+]
 
-noiseeqs = [0.1 * x,
+noiseeqs = [
+    0.1 * x,
     0.1 * y,
-    0.1 * z]
+    0.1 * z,
+]
 
 @named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta])
 prob = SDEProblem(complete(sys), nothing, (0.0, 1.0))
@@ -322,24 +339,26 @@ sys = modelingtoolkitize(prob)
         @test is_variable(sys, :b)
 
         @test_throws ["unknowns", "2", "does not match", "names", "3"] modelingtoolkitize(
-            prob, u_names = [:a, :b, :c])
+            prob, u_names = [:a, :b, :c]
+        )
         for (pvals, pnames) in [
-            ([1, 2], [:p, :q]),
-            ((1, 2), [:p, :q]),
-            ([1, 2], Dict(1 => :p, 2 => :q)),
-            ((1, 2), Dict(1 => :p, 2 => :q)),
-            (1.0, :p),
-            (1.0, [:p]),
-            (1.0, Dict(1 => :p)),
-            (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q)),
-            ((a = 1, b = 2), (a = :p, b = :q)),
-            ((a = 1, b = 2), Dict(:a => :p, :b => :q))
-        ]
+                ([1, 2], [:p, :q]),
+                ((1, 2), [:p, :q]),
+                ([1, 2], Dict(1 => :p, 2 => :q)),
+                ((1, 2), Dict(1 => :p, 2 => :q)),
+                (1.0, :p),
+                (1.0, [:p]),
+                (1.0, Dict(1 => :p)),
+                (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q)),
+                ((a = 1, b = 2), (a = :p, b = :q)),
+                ((a = 1, b = 2), Dict(:a => :p, :b => :q)),
+            ]
             if pvals isa NamedTuple && prob isa OptimizationProblem
                 continue
             end
             sys = modelingtoolkitize(
-                remake(prob, p = pvals, interpret_symbolicmap = false), p_names = pnames)
+                remake(prob, p = pvals, interpret_symbolicmap = false), p_names = pnames
+            )
             if pnames isa Symbol
                 @test is_parameter(sys, pnames)
                 continue
@@ -350,20 +369,22 @@ sys = modelingtoolkitize(prob)
         end
 
         for (pvals, pnames) in [
-            ([1, 2], [:p, :q, :r]),
-            ((1, 2), [:p, :q, :r]),
-            ([1, 2], Dict(1 => :p, 2 => :q, 3 => :r)),
-            ((1, 2), Dict(1 => :p, 2 => :q, 3 => :r)),
-            (1.0, [:p, :q]),
-            (1.0, Dict(1 => :p, 2 => :q)),
-            (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q, :c => :r)),
-            ((a = 1, b = 2), (a = :p, b = :q, c = :r)),
-            ((a = 1, b = 2), Dict(:a => :p, :b => :q, :c => :r))
-        ]
+                ([1, 2], [:p, :q, :r]),
+                ((1, 2), [:p, :q, :r]),
+                ([1, 2], Dict(1 => :p, 2 => :q, 3 => :r)),
+                ((1, 2), Dict(1 => :p, 2 => :q, 3 => :r)),
+                (1.0, [:p, :q]),
+                (1.0, Dict(1 => :p, 2 => :q)),
+                (Dict(:a => 2, :b => 4), Dict(:a => :p, :b => :q, :c => :r)),
+                ((a = 1, b = 2), (a = :p, b = :q, c = :r)),
+                ((a = 1, b = 2), Dict(:a => :p, :b => :q, :c => :r)),
+            ]
             newprob = remake(prob, p = pvals, interpret_symbolicmap = false)
             @test_throws [
-                "parameters", "$(length(pvals))", "does not match", "$(length(pnames))"] modelingtoolkitize(
-                newprob, p_names = pnames)
+                "parameters", "$(length(pvals))", "does not match", "$(length(pnames))",
+            ] modelingtoolkitize(
+                newprob, p_names = pnames
+            )
         end
 
         sc = SymbolCache([:a, :b], [:p, :q])
@@ -382,8 +403,8 @@ sys = modelingtoolkitize(prob)
 
     @testset "From MTK model" begin
         @testset "ODE" begin
-            @variables x(t)=1.0 y(t)=2.0
-            @parameters p=3.0 q=4.0
+            @variables x(t) = 1.0 y(t) = 2.0
+            @parameters p = 3.0 q = 4.0
             @mtkcompile sys = System([D(x) ~ p * y, D(y) ~ q * x], t)
             prob1 = ODEProblem(sys, [], (0.0, 5.0))
             newsys = complete(modelingtoolkitize(prob1))
@@ -398,8 +419,8 @@ sys = modelingtoolkitize(prob)
             @test sol1 ≈ sol2
         end
         @testset "Nonlinear" begin
-            @variables x=1.0 y=2.0
-            @parameters p=3.0 q=4.0
+            @variables x = 1.0 y = 2.0
+            @parameters p = 3.0 q = 4.0
             @mtkcompile nlsys = System([0 ~ p * y^2 + x, 0 ~ x + exp(x) * q])
             prob1 = NonlinearProblem(nlsys, [])
             newsys = complete(modelingtoolkitize(prob1))
@@ -418,7 +439,7 @@ sys = modelingtoolkitize(prob)
                 x = 1.0, [bounds = (-2.0, 10.0)]
                 y = 2.0, [bounds = (-1.0, 10.0)]
             end
-            @parameters p=3.0 q=4.0
+            @parameters p = 3.0 q = 4.0
             loss = (p - x)^2 + q * (y - x^2)^2
             @mtkcompile optsys = OptimizationSystem(loss, [x, y], [p, q])
             prob1 = OptimizationProblem(optsys, [], grad = true, hess = true)
@@ -442,14 +463,15 @@ end
 function nlls!(du, u, p)
     du[1] = 2u[1] - 2
     du[2] = u[1] - 4u[2]
-    du[3] = 0
+    return du[3] = 0
 end
 u0 = [0.0, 0.0]
 prob = NonlinearLeastSquaresProblem(
-    NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0)
+    NonlinearFunction(nlls!, resid_prototype = zeros(3)), u0
+)
 sys = modelingtoolkitize(prob)
 @test length(equations(sys)) == 2
-@test length(equations(mtkcompile(sys; fully_determined = false))) == 0 broken=!@isdefined(ModelingToolkit)
+@test length(equations(mtkcompile(sys; fully_determined = false))) == 0 broken = !@isdefined(ModelingToolkit)
 
 @testset "`modelingtoolkitize(::SDEProblem)` sets initial conditions" begin
     function sdeg!(du, u, p, t)

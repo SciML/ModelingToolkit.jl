@@ -20,11 +20,13 @@ A simple linear resistor model
     params = @parameters begin
         R = R, [description = "Resistance of this Resistor"]
     end
-    eqs = [v ~ p.v - n.v
-           i ~ p.i
-           p.i + n.i ~ 0
-           # Ohm's Law
-           v ~ i * R]
+    eqs = [
+        v ~ p.v - n.v
+        i ~ p.i
+        p.i + n.i ~ 0
+        # Ohm's Law
+        v ~ i * R
+    ]
     return System(eqs, t, vars, params; systems, name)
 end
 @connector function Pin(; name)
@@ -46,10 +48,12 @@ end
     params = @parameters begin
         V = 10
     end
-    eqs = [v ~ p.v - n.v
-           i ~ p.i
-           p.i + n.i ~ 0
-           v ~ V]
+    eqs = [
+        v ~ p.v - n.v
+        i ~ p.i
+        p.i + n.i ~ 0
+        v ~ V
+    ]
     return System(eqs, t, vars, params; systems, name)
 end
 
@@ -66,12 +70,14 @@ end
         C = C
     end
     initialization_eqs = [
-        v ~ 0
+        v ~ 0,
     ]
-    eqs = [v ~ p.v - n.v
-           i ~ p.i
-           p.i + n.i ~ 0
-           C * D(v) ~ i]
+    eqs = [
+        v ~ p.v - n.v
+        i ~ p.i
+        p.i + n.i ~ 0
+        C * D(v) ~ i
+    ]
     return System(eqs, t, vars, params; systems, name, initialization_eqs)
 end
 
@@ -80,7 +86,7 @@ end
         g = Pin()
     end
     eqs = [
-        g.v ~ 0
+        g.v ~ 0,
     ]
     return System(eqs, t, [], []; systems, name)
 end
@@ -97,10 +103,12 @@ end
     params = @parameters begin
         (L = L)
     end
-    eqs = [v ~ p.v - n.v
-           i ~ p.i
-           p.i + n.i ~ 0
-           L * D(i) ~ v]
+    eqs = [
+        v ~ p.v - n.v
+        i ~ p.i
+        p.i + n.i ~ 0
+        L * D(i) ~ v
+    ]
     return System(eqs, t, vars, params; systems, name)
 end
 
@@ -117,11 +125,13 @@ HTML as well.
         ground = Ground()
     end
     initialization_eqs = [
-        inductor.i ~ 0
+        inductor.i ~ 0,
     ]
-    eqs = [connect(source.p, inductor.n)
-           connect(inductor.p, resistor.p, capacitor.p)
-           connect(resistor.n, ground.g, capacitor.n, source.n)]
+    eqs = [
+        connect(source.p, inductor.n)
+        connect(inductor.p, resistor.p, capacitor.p)
+        connect(resistor.n, ground.g, capacitor.n, source.n)
+    ]
     return System(eqs, t, [], []; systems, name, initialization_eqs)
 end
 """Run model RLCModel from 0 to 10"""
@@ -129,7 +139,7 @@ function simple()
     @mtkcompile model = RLCModel()
     u0 = []
     prob = ODEProblem(model, u0, (0.0, 10.0))
-    sol = solve(prob)
+    return sol = solve(prob)
 end
 @test SciMLBase.successful_retcode(simple())
 

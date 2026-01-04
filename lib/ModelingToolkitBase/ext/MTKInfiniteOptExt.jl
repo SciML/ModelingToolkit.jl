@@ -22,7 +22,7 @@ struct InfiniteOptModel
 end
 
 struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
+    SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -31,13 +31,15 @@ struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     kwargs::K
 
     function JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
-        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
-            typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+        return new{
+            typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
+            typeof(p), typeof(f), typeof(kwargs),
+        }(f, u0, tspan, p, model, kwargs)
     end
 end
 
 struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
+    SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -46,23 +48,25 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     kwargs::K
 
     function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
-        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
-            typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+        return new{
+            typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
+            typeof(p), typeof(f), typeof(kwargs),
+        }(f, u0, tspan, p, model, kwargs)
     end
 end
 
 MTK.generate_internal_model(m::Type{InfiniteOptModel}) = InfiniteModel()
 function MTK.generate_time_variable!(m::InfiniteModel, tspan, tsteps)
-    @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
+    return @infinite_parameter(m, t in [tspan[1], tspan[2]], num_supports = length(tsteps))
 end
 function MTK.generate_state_variable!(m::InfiniteModel, u0::Vector, ns, ts)
-    @variable(m, U[i = 1:ns], Infinite(m[:t]), start=u0[i])
+    return @variable(m, U[i = 1:ns], Infinite(m[:t]), start = u0[i])
 end
 function MTK.generate_input_variable!(m::InfiniteModel, c0, nc, ts)
-    @variable(m, V[i = 1:nc], Infinite(m[:t]), start=c0[i])
+    return @variable(m, V[i = 1:nc], Infinite(m[:t]), start = c0[i])
 end
 function MTK.generate_tunable_params!(m::InfiniteModel, p0, np)
-    @variable(m, P[i=1:np], start=p0[i])
+    return @variable(m, P[i = 1:np], start = p0[i])
 end
 
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
@@ -71,11 +75,11 @@ function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
         fix(tₛ, 1, force = true)
         set_start_value(tₛ, 1)
     end
-    tₛ
+    return tₛ
 end
 
 function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequality})
-    if expr isa Equation
+    return if expr isa Equation
         @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) == 0)
     elseif expr.relational_op === Symbolics.geq
         @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≥ 0)
@@ -85,36 +89,44 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, SymbolicUtils.unwrap_const(expr))
 
-function MTK.JuMPDynamicOptProblem(sys::System, op, tspan;
+function MTK.JuMPDynamicOptProblem(
+        sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...)
+        guesses = Dict(), kwargs...
+    )
     prob,
-    _ = MTK.process_DynamicOptProblem(JuMPDynamicOptProblem, InfiniteOptModel, sys,
-        op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
-    prob
+        _ = MTK.process_DynamicOptProblem(
+        JuMPDynamicOptProblem, InfiniteOptModel, sys,
+        op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+    )
+    return prob
 end
 
-function MTK.InfiniteOptDynamicOptProblem(sys::System, op, tspan;
+function MTK.InfiniteOptDynamicOptProblem(
+        sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...)
+        guesses = Dict(), kwargs...
+    )
     prob,
-    pmap = MTK.process_DynamicOptProblem(InfiniteOptDynamicOptProblem, InfiniteOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
+        pmap = MTK.process_DynamicOptProblem(
+        InfiniteOptDynamicOptProblem, InfiniteOptModel,
+        sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+    )
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
-    prob
+    return prob
 end
 
 function MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi)
-    model.tₛ * InfiniteOpt.∫(SymbolicUtils.unwrap_const(expr), model.model[:t], lo, hi)
+    return model.tₛ * InfiniteOpt.∫(SymbolicUtils.unwrap_const(expr), model.model[:t], lo, hi)
 end
 MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
 
 function MTK.process_integral_bounds(model::InfiniteOptModel, integral_span, tspan)
-    if MTK.is_free_final(model) && isequal(integral_span, tspan)
+    return if MTK.is_free_final(model) && isequal(integral_span, tspan)
         integral_span = (0, 1)
     elseif MTK.is_free_final(model)
         error("Free final time problems cannot handle partial timespans.")
@@ -127,11 +139,12 @@ function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
         fix(m.U[i](0), u0[i], force = true)
     end
+    return
 end
 
 function MTK.lowered_var(m::InfiniteOptModel, uv, i, t)
     X = getfield(m, uv)
-    t isa Union{Num, SymbolicT} ? X[i] : X[i](t)
+    return t isa Union{Num, SymbolicT} ? X[i] : X[i](t)
 end
 
 function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
@@ -149,7 +162,7 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
 
     nᵤ = length(U)
     nᵥ = length(V)
-    if MTK.is_explicit(tableau)
+    return if MTK.is_explicit(tableau)
         K = Any[]
         for τ in tsteps[1:(end - 1)]
             for (i, h) in enumerate(c)
@@ -160,8 +173,10 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
                 push!(K, Kₙ)
             end
             ΔU = dt * sum([α[i] * K[i] for i in 1:length(α)])
-            @constraint(model, [n = 1:nᵤ], U[n](τ) + ΔU[n]==U[n](τ + dt),
-                base_name="solve_time_$τ")
+            @constraint(
+                model, [n = 1:nᵤ], U[n](τ) + ΔU[n] == U[n](τ + dt),
+                base_name = "solve_time_$τ"
+            )
             empty!(K)
         end
     else
@@ -172,12 +187,16 @@ function add_solve_constraints!(prob::JuMPDynamicOptProblem, tableau)
             for (i, h) in enumerate(c)
                 ΔU = @view ΔUs[i, :]
                 Uₙ = U + ΔU * dt
-                @constraint(model, [j = 1:nᵤ], K[i, j]==(tₛ * MTK.f_wrapper(f, Uₙ, V, p, P, τ + h * dt)[j]),
-                    DomainRestriction(==(τ), t), base_name="solve_K$i($τ)")
+                @constraint(
+                    model, [j = 1:nᵤ], K[i, j] == (tₛ * MTK.f_wrapper(f, Uₙ, V, p, P, τ + h * dt)[j]),
+                    DomainRestriction(==(τ), t), base_name = "solve_K$i($τ)"
+                )
             end
-            @constraint(model,
-                [n = 1:nᵤ], U[n](τ) + ΔU_tot[n]==U[n](min(τ + dt, tsteps[end])),
-                DomainRestriction(==(τ), t), base_name="solve_U($τ)")
+            @constraint(
+                model,
+                [n = 1:nᵤ], U[n](τ) + ΔU_tot[n] == U[n](min(τ + dt, tsteps[end])),
+                DomainRestriction(==(τ), t), base_name = "solve_U($τ)"
+            )
         end
     end
 end
@@ -187,7 +206,7 @@ struct JuMPCollocation <: AbstractCollocation
     tableau::DiffEqBase.ODERKTableau
 end
 function MTK.JuMPCollocation(solver, tableau = MTK.constructDefault())
-    JuMPCollocation(solver, tableau)
+    return JuMPCollocation(solver, tableau)
 end
 
 struct InfiniteOptCollocation <: AbstractCollocation
@@ -195,12 +214,14 @@ struct InfiniteOptCollocation <: AbstractCollocation
     derivative_method::InfiniteOpt.AbstractDerivativeMethod
 end
 function MTK.InfiniteOptCollocation(
-        solver, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward()))
-    InfiniteOptCollocation(solver, derivative_method)
+        solver, derivative_method = InfiniteOpt.FiniteDifference(InfiniteOpt.Backward())
+    )
+    return InfiniteOptCollocation(solver, derivative_method)
 end
 
 function MTK.prepare_and_optimize!(
-        prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...)
+        prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...
+    )
     model = prob.wrapped_model.model
     verbose || set_silent(model)
     # Unregister current solver constraints
@@ -220,22 +241,24 @@ function MTK.prepare_and_optimize!(
     add_solve_constraints!(prob, solver.tableau)
     set_optimizer(model, solver.solver)
     optimize!(model)
-    model
+    return model
 end
 
-function MTK.prepare_and_optimize!(prob::InfiniteOptDynamicOptProblem,
-        solver::InfiniteOptCollocation; verbose = false, kwargs...)
+function MTK.prepare_and_optimize!(
+        prob::InfiniteOptDynamicOptProblem,
+        solver::InfiniteOptCollocation; verbose = false, kwargs...
+    )
     model = prob.wrapped_model.model
     verbose || set_silent(model)
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)
     optimize!(model)
-    model
+    return model
 end
 
 function MTK.get_V_values(m::InfiniteModel)
     nt = length(supports(m[:t]))
-    if !isempty(m[:V])
+    return if !isempty(m[:V])
         V_vals = value.(m[:V])
         V_vals = [[V_vals[i][j] for i in 1:length(V_vals)] for j in 1:nt]
     else
@@ -245,7 +268,7 @@ end
 function MTK.get_U_values(m::InfiniteModel)
     nt = length(supports(m[:t]))
     U_vals = value.(m[:U])
-    U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
+    return U_vals = [[U_vals[i][j] for i in 1:length(U_vals)] for j in 1:nt]
 end
 MTK.get_P_values(m::InfiniteModel) = value(m[:P])
 MTK.get_t_values(m::InfiniteModel) = value(m[:tₛ]) * supports(m[:t])
@@ -257,9 +280,11 @@ function MTK.successful_solve(model::InfiniteModel)
     !has_values(model) &&
         error("Model not solvable; please report this to github.com/SciML/ModelingToolkitBase.jl with a MWE.")
 
-    pstatus === FEASIBLE_POINT &&
-        (tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL ||
-         tstatus === ALMOST_LOCALLY_SOLVED)
+    return pstatus === FEASIBLE_POINT &&
+        (
+        tstatus === OPTIMAL || tstatus === LOCALLY_SOLVED || tstatus === ALMOST_OPTIMAL ||
+            tstatus === ALMOST_LOCALLY_SOLVED
+    )
 end
 
 import InfiniteOpt: JuMP, GeneralVariableRef
@@ -271,13 +296,16 @@ for ff in [acos, log1p, acosh, log2, asin, tan, atanh, cos, log, sin, log10, sqr
 end
 
 # JuMP variables and Symbolics variables never compare equal. When tracing through dynamics, a function argument can be either a JuMP variable or A Symbolics variable, it can never be both.
-function Base.isequal(::SymbolicT,
-        ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, JuMP.GenericNonlinearExpr})
-    false
+function Base.isequal(
+        ::SymbolicT,
+        ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, JuMP.GenericNonlinearExpr}
+    )
+    return false
 end
 function Base.isequal(
         ::Union{JuMP.GenericAffExpr, JuMP.GenericQuadExpr, JuMP.GenericNonlinearExpr},
-        ::SymbolicT)
-    false
+        ::SymbolicT
+    )
+    return false
 end
 end

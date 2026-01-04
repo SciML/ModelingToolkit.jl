@@ -1,14 +1,19 @@
-name: "Format Check"
+name: format-check
 
 on:
   push:
     branches:
       - 'master'
-      - v10
+      - 'main'
+      - 'release-'
     tags: '*'
   pull_request:
 
 jobs:
-  format-check:
-    name: "Format Check"
-    uses: "SciML/.github/.github/workflows/format-check.yml@v1"
+  runic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fredrikekre/runic-action@v1
+        with:
+          version: '1'

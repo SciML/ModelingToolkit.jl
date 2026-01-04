@@ -24,24 +24,30 @@ using ModelingToolkitStandardLibrary.Blocks
 @parameters σ ρ β
 @variables x(t) y(t) z(t)
 
-eqs = [D(x) ~ σ * (y - x) * D(x - y) / D(z),
+eqs = [
+    D(x) ~ σ * (y - x) * D(x - y) / D(z),
     0 ~ σ * x * (ρ - z) / 10 - y,
-    D(z) ~ x * y^(2 // 3) - β * z]
+    D(z) ~ x * y^(2 // 3) - β * z,
+]
 
 # Latexify.@generate_test latexify(eqs)
 @test_reference "latexify/10.tex" latexify(eqs)
 
 @variables u(t)[1:3]
 @parameters p[1:3]
-eqs = [D(u[1]) ~ p[3] * (u[2] - u[1]),
+eqs = [
+    D(u[1]) ~ p[3] * (u[2] - u[1]),
     0 ~ p[2] * p[3] * u[1] * (p[1] - u[1]) / 10 - u[2],
-    D(u[3]) ~ u[1] * u[2]^(2 // 3) - p[3] * u[3]]
+    D(u[3]) ~ u[1] * u[2]^(2 // 3) - p[3] * u[3],
+]
 
 @test_reference "latexify/20.tex" latexify(eqs)
 
-eqs = [D(u[1]) ~ p[3] * (u[2] - u[1]),
+eqs = [
+    D(u[1]) ~ p[3] * (u[2] - u[1]),
     D(u[2]) ~ p[2] * p[3] * u[1] * (p[1] - u[1]) / 10 - u[2],
-    D(u[3]) ~ u[1] * u[2]^(2 // 3) - p[3] * u[3]]
+    D(u[3]) ~ u[1] * u[2]^(2 // 3) - p[3] * u[3],
+]
 
 @test_reference "latexify/30.tex" latexify(eqs)
 @variables x(t)
@@ -53,8 +59,10 @@ eqs = [D(x) ~ (1 + cos(t)) / (1 + 2 * x)]
 @named C = Gain(; k = -1)
 
 ap = AnalysisPoint(:plant_input)
-eqs = [connect(P.output, C.input)
-       connect(C.output, ap, P.input)]
+eqs = [
+    connect(P.output, C.input)
+    connect(C.output, ap, P.input)
+]
 sys_ap = System(eqs, t, systems = [P, C], name = :hej)
 
 @test_reference "latexify/50.tex" latexify(sys_ap)

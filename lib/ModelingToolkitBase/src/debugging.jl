@@ -7,9 +7,9 @@ struct LoggedFun{F}
     error_nonfinite::Bool
 end
 function LoggedFunctionException(lf::LoggedFun, args, msg)
-    LoggedFunctionException(
+    return LoggedFunctionException(
         "Function $(lf.f)($(join(lf.args, ", "))) " * msg * " with input" *
-        join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
+            join("\n  " .* string.(lf.args .=> args)) # one line for each "var => val" for readability
     )
 end
 Base.showerror(io::IO, err::LoggedFunctionException) = print(io, err.msg)
@@ -29,18 +29,18 @@ end
 
 function logged_fun(f, args...; error_nonfinite = true) # remember to update error_nonfinite in debug_system() docstring
     # Currently we don't really support complex numbers
-    term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
+    return term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
 end
 
 function debug_sub(eq::Equation, funcs; kw...)
-    debug_sub(eq.lhs, funcs; kw...) ~ debug_sub(eq.rhs, funcs; kw...)
+    return debug_sub(eq.lhs, funcs; kw...) ~ debug_sub(eq.rhs, funcs; kw...)
 end
 function debug_sub(ex, funcs; kw...)
     iscall(ex) || return ex
     f = operation(ex)
     args = map(ex -> debug_sub(ex, funcs; kw...), arguments(ex))
-    f in funcs ? logged_fun(f, args...; kw...) :
-    maketerm(typeof(ex), f, args, metadata(ex))
+    return f in funcs ? logged_fun(f, args...; kw...) :
+        maketerm(typeof(ex), f, args, metadata(ex))
 end
 
 """
@@ -49,7 +49,7 @@ end
 A function which returns `NaN` if `condition` fails, and `0.0` otherwise.
 """
 function _nan_condition(condition::Bool)
-    condition ? 0.0 : NaN
+    return condition ? 0.0 : NaN
 end
 
 @register_symbolic _nan_condition(condition::Bool)

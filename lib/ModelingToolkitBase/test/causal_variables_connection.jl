@@ -33,8 +33,10 @@ end
     @named P = FirstOrder(k = 1, T = 1)
     @named C = Gain(; k = -1)
 
-    eqs = [connect(P.output.u, C.input.u)
-           connect(C.output.u, P.input.u)]
+    eqs = [
+        connect(P.output.u, C.input.u)
+        connect(C.output.u, P.input.u)
+    ]
     sys1 = System(eqs, t, systems = [P, C], name = :hej)
     sys = expand_connections(sys1)
     @test any(isequal(C.input.u ~ P.output.u), equations(sys))
@@ -60,7 +62,7 @@ if @isdefined(ModelingToolkit)
             ("inner", sys, sys.plant_input),
             ("nested", nested_sys, nested_sys.hej.plant_input),
             ("inner - Symbol", sys, :plant_input),
-            ("nested - Symbol", nested_sys, nameof(sys.plant_input))
+            ("nested - Symbol", nested_sys, nameof(sys.plant_input)),
         ]
 
         @testset "get_sensitivity - $name" for (name, sys, ap) in test_cases
@@ -108,7 +110,7 @@ end
         end
 
         equations = Equation[
-            y ~ x
+            y ~ x,
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -137,7 +139,11 @@ end
     @named sys = Outer()
     ss = toggle_namespacing(sys, false)
     eqs = equations(expand_connections(sys))
-    @test issetequal(eqs, [ss.inner.x ~ ss.u
-                           ss.inner.y ~ ss.inner.x
-                           ss.v ~ ss.inner.y])
+    @test issetequal(
+        eqs, [
+            ss.inner.x ~ ss.u
+            ss.inner.y ~ ss.inner.x
+            ss.v ~ ss.inner.y
+        ]
+    )
 end

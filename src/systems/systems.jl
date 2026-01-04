@@ -20,12 +20,14 @@ present in the equations of the system will be removed in this process.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
 """ mtkcompile
 
-function MTKBase.__mtkcompile(sys::System;
+function MTKBase.__mtkcompile(
+        sys::System;
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         sort_eqs = true,
-        kwargs...)
+        kwargs...
+    )
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     state = TearingState(sys, source_info; sort_eqs)
@@ -45,7 +47,8 @@ function MTKBase.__mtkcompile(sys::System;
     end
     if isempty(brown_vars)
         return mtkcompile!(
-            state; inputs, outputs, disturbance_inputs, kwargs...)
+            state; inputs, outputs, disturbance_inputs, kwargs...
+        )
     else
         Is = Int[]
         Js = Int[]
@@ -76,12 +79,15 @@ function MTKBase.__mtkcompile(sys::System;
         g = Matrix(sparse(Is, Js, vals))
         sys = state.sys
         @set! sys.eqs = new_eqs
-        @set! sys.unknowns = [v
-                              for (i, v) in enumerate(fullvars)
-                              if !iszero(new_idxs[i]) &&
-                                 invview(var_to_diff)[i] === nothing]
+        @set! sys.unknowns = [
+            v
+                for (i, v) in enumerate(fullvars)
+                if !iszero(new_idxs[i]) &&
+                invview(var_to_diff)[i] === nothing
+        ]
         ode_sys = mtkcompile(
-            sys; inputs, outputs, disturbance_inputs, kwargs...)
+            sys; inputs, outputs, disturbance_inputs, kwargs...
+        )
         eqs = equations(ode_sys)
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
@@ -111,7 +117,8 @@ function MTKBase.__mtkcompile(sys::System;
         end
 
         noise_eqs = substitute_observed(ode_sys, noise_eqs)
-        ssys = System(Vector{Equation}(full_equations(ode_sys)),
+        ssys = System(
+            Vector{Equation}(full_equations(ode_sys)),
             get_iv(ode_sys), unknowns(ode_sys),
             [parameters(ode_sys); collect(bound_parameters(ode_sys))]; noise_eqs,
             name = nameof(ode_sys), observed = observed(ode_sys), bindings = bindings(sys),
@@ -120,13 +127,14 @@ function MTKBase.__mtkcompile(sys::System;
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
-            gui_metadata = get_gui_metadata(sys))
+            gui_metadata = get_gui_metadata(sys)
+        )
         return ssys
     end
 end
 
 function MTKBase.simplify_sde_system(sys::System; kwargs...)
-    __mtkcompile(sys; kwargs...)
+    return __mtkcompile(sys; kwargs...)
 end
 
 """
@@ -166,11 +174,16 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     end
 
     graph = ts.structure.graph
-    algvars = BitSet(findall(
-        Base.Fix1(StateSelection.isalgvar, ts.structure), 1:ndsts(graph)))
-    algeqs = BitSet(findall(1:nsrcs(graph)) do eq
-        all(!Base.Fix1(StateSelection.isdervar, ts.structure), 𝑠neighbors(graph, eq))
-    end)
+    algvars = BitSet(
+        findall(
+            Base.Fix1(StateSelection.isalgvar, ts.structure), 1:ndsts(graph)
+        )
+    )
+    algeqs = BitSet(
+        findall(1:nsrcs(graph)) do eq
+            all(!Base.Fix1(StateSelection.isdervar, ts.structure), 𝑠neighbors(graph, eq))
+        end
+    )
     alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
     for (i, eq) in enumerate(alge_var_eq_matching)
         eq isa Unassigned && continue

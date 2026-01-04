@@ -9,22 +9,30 @@ lim(a, N) = ModelingToolkitBase.ifelse(a == N + 1, 1, ModelingToolkitBase.ifelse
 function brusselator_2d_loop(du, u, p, t)
     A, B, alpha, dx = p
     alpha = alpha / dx^2
-    @inbounds for I in CartesianIndices((N, N))
+    return @inbounds for I in CartesianIndices((N, N))
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1, jm1 = lim(i + 1, N), lim(i - 1, N), lim(j + 1, N),
-        lim(j - 1, N)
-        du[i,
-        j,
-        1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
-                       4u[i, j, 1]) +
-                      B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
-                      brusselator_f(x, y, t)
-        du[i,
-        j,
-        2] = alpha * (u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
-                       4u[i, j, 2]) +
-                      A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
+            lim(j - 1, N)
+        du[
+            i,
+            j,
+            1,
+        ] = alpha * (
+            u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
+                4u[i, j, 1]
+        ) +
+            B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
+            brusselator_f(x, y, t)
+        du[
+            i,
+            j,
+            2,
+        ] = alpha * (
+            u[im1, j, 2] + u[ip1, j, 2] + u[i, jp1, 2] + u[i, jm1, 2] -
+                4u[i, j, 2]
+        ) +
+            A * u[i, j, 1] - u[i, j, 1]^2 * u[i, j, 2]
     end
 end
 
@@ -40,26 +48,32 @@ function init_brusselator_2d(xyd)
         u[I, 1] = 22 * (y * (1 - y))^(3 / 2)
         u[I, 2] = 27 * (x * (1 - x))^(3 / 2)
     end
-    u
+    return u
 end
 
 u0 = init_brusselator_2d(xyd_brusselator)
-prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-    u0, (0.0, 11.5), p)
+prob_ode_brusselator_2d = ODEProblem(
+    brusselator_2d_loop,
+    u0, (0.0, 11.5), p
+)
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 # test sparse jacobian pattern only.
 prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = false)
 JP = prob.f.jac_prototype
-@test findnz(Symbolics.jacobian_sparsity(map(x -> x.rhs, equations(sys)),
-    unknowns(sys)))[1:2] ==
-      findnz(JP)[1:2]
+@test findnz(
+    Symbolics.jacobian_sparsity(
+        map(x -> x.rhs, equations(sys)),
+        unknowns(sys)
+    )
+)[1:2] ==
+    findnz(JP)[1:2]
 
 # test sparse jacobian
 prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = true)
 #@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
-      findnz(prob.f.jac_prototype)[1:2]
+    findnz(prob.f.jac_prototype)[1:2]
 out = similar(prob.f.jac_prototype)
 @test (@ballocated $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), 0.0)) == 0 # should not allocate
 
@@ -87,8 +101,10 @@ out = sparse([1.0 0.0; 0.0 1.0]) # choose a wrong size on purpose
 
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
-prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-    u0, (0.0, 11.5), p)
+prob_ode_brusselator_2d = ODEProblem(
+    brusselator_2d_loop,
+    u0, (0.0, 11.5), p
+)
 sys = complete(modelingtoolkitize(prob_ode_brusselator_2d))
 
 prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = false)
@@ -103,14 +119,17 @@ if @isdefined(ModelingToolkit)
         D = ModelingToolkitBase.D_nounits
         @parameters g
         @variables x(t) y(t) λ(t)
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         @mtkcompile pend = System(eqs, t)
 
         u0 = [x => 1, y => 0]
         prob = ODEProblem(
-            pend, [u0; [g => 1]], (0, 11.5), guesses = [λ => 1], sparse = true, jac = true)
+            pend, [u0; [g => 1]], (0, 11.5), guesses = [λ => 1], sparse = true, jac = true
+        )
         jac, jac! = generate_jacobian(pend; expression = Val{false}, sparse = true, checkbounds = true)
         jac_prototype = ModelingToolkitBase.jacobian_sparsity(pend)
         W_prototype = ModelingToolkitBase.W_sparsity(pend)
@@ -129,7 +148,7 @@ if @isdefined(ModelingToolkit)
         M = sparse(calculate_massmatrix(pend))
         @test_throws AssertionError W!(similar(jac_prototype, Float64), u, p, γ, t)
         @test W!(similar(W_prototype, Float64), u, p, γ, t) ==
-              0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
+            0.1 * M + jac!(similar(W_prototype, Float64), u, p, t)
     end
 
     @testset "Issue#3556: Numerical accuracy" begin
@@ -137,12 +156,16 @@ if @isdefined(ModelingToolkit)
         D = ModelingToolkitBase.D_nounits
         @parameters g
         @variables x(t) y(t) [state_priority = 10] λ(t)
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         @mtkcompile pend = System(eqs, t)
-        prob = ODEProblem(pend, [x => 0.0, D(x) => 1.0, g => 1.0], (0.0, 1.0);
-            guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true)
+        prob = ODEProblem(
+            pend, [x => 0.0, D(x) => 1.0, g => 1.0], (0.0, 1.0);
+            guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true
+        )
         J = deepcopy(prob.f.jac_prototype)
         prob.f.jac(J, prob.u0, prob.p, 1.0)
         # this currently works but may not continue to do so
@@ -159,7 +182,7 @@ if @isdefined(ModelingToolkit)
         @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t)
         @test ModelingToolkitBase.jacobian_sparsity(sys) == [1 1; 1 1] # all nonzero
         J1 = calculate_jacobian(sys)
-        J2 = isequal(unknowns(sys)[1], x) ? [2x-y -x; 1 -1] : [-1 1; -x 2x-y] # analytical result
+        J2 = isequal(unknowns(sys)[1], x) ? [2x - y -x; 1 -1] : [-1 1; -x 2x - y] # analytical result
         @test isequal(J1, J2)
         prob = ODEProblem(sys, [x => 1.0, y => 0.0], (0.0, 1.0); jac = true, sparse = true)
         sol = solve(prob, FBDF())

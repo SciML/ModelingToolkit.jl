@@ -61,7 +61,7 @@ rc = 0.25 # Reference concentration
         D(xT) ~ -wa21 * xT + wa22 * gamma + wa23 + wb * xT_c,
         xc ~ c.u,
         xT ~ T.u,
-        xT_c ~ T_c.u
+        xT_c ~ T_c.u,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -69,7 +69,7 @@ end
 begin
     Ftf = tf(1, [(100), 1])^2
     Fss = ss(Ftf)
-    # Create an MTK-compatible constructor 
+    # Create an MTK-compatible constructor
     function RefFilter(; name)
         sys = System(Fss; name)
         "Compute initial state that yields y0 as output"
@@ -121,7 +121,7 @@ end
         connect(inverse_tank.T, feedback.input1),
         connect(tank.T, :y, noise_filter.input),
         connect(noise_filter.output, feedback.input2),
-        connect(feedback.output, :e, controller.err_input)
+        connect(feedback.output, :e, controller.err_input),
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -144,7 +144,7 @@ sol = solve(prob, Rodas5P())
 # plot(sol, idxs=[model.tank.xc, model.tank.xT, model.controller.ctr_output.u], layout=3, sp=[1 2 3])
 # hline!([prob[cm.ref.k]], label="ref", sp=1)
 
-@test sol(tspan[2], idxs = cm.tank.xc)≈getp(prob, cm.ref.k)(prob) atol=1e-2 # Test that the inverse model led to the correct reference
+@test sol(tspan[2], idxs = cm.tank.xc) ≈ getp(prob, cm.ref.k)(prob) atol = 1.0e-2 # Test that the inverse model led to the correct reference
 
 # we need to provide `op` so the initialization system knows what to hold constant
 # the values don't matter

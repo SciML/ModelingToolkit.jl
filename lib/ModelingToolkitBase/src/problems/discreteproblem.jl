@@ -3,13 +3,16 @@
         eval_expression = false, eval_module = @__MODULE__, expression = Val{false},
         checkbounds = false, analytic = nothing, simplify = false, cse = true,
         initialization_data = nothing, check_compatibility = true,
-        kwargs...) where {iip, spec}
+        kwargs...
+    ) where {iip, spec}
     check_complete(sys, DiscreteFunction)
     check_compatibility && check_compatible_system(DiscreteFunction, sys)
 
-    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
+    f = generate_rhs(
+        sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...)
+        kwargs...
+    )
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -24,13 +27,15 @@
 
     observedfun = ObservedFunctionCache(
         sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse)
+        cse
+    )
 
     kwargs = (;
         sys = sys,
         observed = observedfun,
         analytic = analytic,
-        initialization_data)
+        initialization_data,
+    )
     args = (; f)
 
     return maybe_codegen_scimlfn(expression, DiscreteFunction{iip, spec}, args; kwargs...)
@@ -38,7 +43,8 @@ end
 
 @fallback_iip_specialize function SciMLBase.DiscreteProblem{iip, spec}(
         sys::System, op, tspan;
-        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...
+    ) where {iip, spec}
     check_complete(sys, DiscreteProblem)
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
@@ -46,9 +52,11 @@ end
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,
-    p = process_SciMLProblem(DiscreteFunction{iip, spec}, sys, op;
+        p = process_SciMLProblem(
+        DiscreteFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
-        kwargs...)
+        kwargs...
+    )
 
     if expression == Val{true}
         u0 = :(f($u0, p, tspan[1]))
@@ -63,7 +71,8 @@ end
 end
 
 function check_compatible_system(
-        T::Union{Type{DiscreteFunction}, Type{DiscreteProblem}}, sys::System)
+        T::Union{Type{DiscreteFunction}, Type{DiscreteProblem}}, sys::System
+    )
     check_time_dependent(sys, T)
     check_not_dde(sys)
     check_no_cost(sys, T)
@@ -71,7 +80,7 @@ function check_compatible_system(
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
     check_is_discrete(sys, T)
-    check_is_explicit(sys, T, ImplicitDiscreteProblem)
+    return check_is_explicit(sys, T, ImplicitDiscreteProblem)
 end
 
 function shift_u0map_forward(sys::System, u0map, defs)

@@ -28,14 +28,18 @@ non-`nothing`. In other words, both of the functions in the split form must be n
 """
 
 for (mod, prob, func, istd, kws) in [
-    (SciMLBase, :SCCNonlinearProblem, NonlinearFunction, false, (; init = false)),
-    (ModelingToolkit,
-        :SemilinearODEProblem,
-        :SemilinearODEFunction,
-        true,
-        (; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
-            extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))
-]
+        (SciMLBase, :SCCNonlinearProblem, NonlinearFunction, false, (; init = false)),
+        (
+            ModelingToolkit,
+            :SemilinearODEProblem,
+            :SemilinearODEFunction,
+            true,
+            (;
+                extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
+                extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT,
+            ),
+        ),
+    ]
     kwexpr = Expr(:parameters)
     for (k, v) in pairs(kws)
         push!(kwexpr.args, Expr(:kw, k, v))
@@ -44,13 +48,17 @@ for (mod, prob, func, istd, kws) in [
 end
 
 for (mod, func, istd, optionals, kws) in [
-    (ModelingToolkit,
-        :SemilinearODEFunction,
-        true,
-        [:jac],
-        (; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
-            extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))
-]
+        (
+            ModelingToolkit,
+            :SemilinearODEFunction,
+            true,
+            [:jac],
+            (;
+                extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS,
+                extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT,
+            ),
+        ),
+    ]
     kwexpr = Expr(:parameters)
     for (k, v) in pairs(kws)
         push!(kwexpr.args, Expr(:kw, k, v))

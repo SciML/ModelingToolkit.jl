@@ -12,7 +12,7 @@ struct AtomicArrayDict{V, D <: AbstractDict{SymbolicT, V}} <: AbstractDict{Symbo
         for k in keys(dict)
             validate_atomic_array_key(k)
         end
-        new{V, typeof(dict)}(dict)
+        return new{V, typeof(dict)}(dict)
     end
 end
 
@@ -29,19 +29,21 @@ struct IndexedArrayKeyError <: Exception
 end
 
 function Base.showerror(io::IO, err::IndexedArrayKeyError)
-    print(io, """
-    `AtomicArrayDict` treats symbolic arrays as atomic. It does not allow keys to be \
-    indexed array symbolics. Got key $(err.k).
-    """)
+    return print(
+        io, """
+        `AtomicArrayDict` treats symbolic arrays as atomic. It does not allow keys to be \
+        indexed array symbolics. Got key $(err.k).
+        """
+    )
 end
 
 function validate_atomic_array_key(k::SymbolicT)
-    split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
+    return split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
 end
 
 Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict))
 function Base.empty(dd::AtomicArrayDict, ::Type{K}, ::Type{V}) where {K, V}
-    AtomicArrayDict(empty(dd.dict, K, V))
+    return AtomicArrayDict(empty(dd.dict, K, V))
 end
 
 Base.get(def::Base.Callable, dd::AtomicArrayDict, k) = def()
@@ -58,7 +60,7 @@ Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
     validate_atomic_array_key(unwrap(k))
-    setindex!(dd.dict, v, k)
+    return setindex!(dd.dict, v, k)
 end
 
 Base.isempty(dd::AtomicArrayDict) = isempty(dd.dict)
@@ -158,7 +160,7 @@ struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{Symb
     dd::AtomicArrayDict{Nothing, D}
 
     function AtomicArraySet{D}(dd::AtomicArrayDict{Nothing, D}) where {D}
-        new{D}(dd)
+        return new{D}(dd)
     end
 end
 
@@ -187,7 +189,7 @@ end
 Add `item` to `x`. If `item` is an indexed array, add the array instead.
 """
 function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
-    push!(x, split_indexed_var(item)[1])
+    return push!(x, split_indexed_var(item)[1])
 end
 
 """
@@ -205,7 +207,7 @@ function as_atomic_array_set(::Type{D}, vars::Vector{SymbolicT}) where {D}
 end
 
 function contains_possibly_indexed_element(x::AtomicArraySet, k::SymbolicT)
-    has_possibly_indexed_key(x.dd, k)
+    return has_possibly_indexed_key(x.dd, k)
 end
 
 """
@@ -229,7 +231,7 @@ struct AtomicArrayDictSubstitutionWrapper{D} <: AbstractDict{SymbolicT, Symbolic
 end
 
 function AtomicArrayDictSubstitutionWrapper(d::AtomicArrayDict{SymbolicT, D}) where {D}
-    AtomicArrayDictSubstitutionWrapper{D}(d, COMMON_NOTHING)
+    return AtomicArrayDictSubstitutionWrapper{D}(d, COMMON_NOTHING)
 end
 
 const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
@@ -250,10 +252,10 @@ end
 Base.get(dd::AADSubWrapper, k, default) = get(Returns(default), dd, k)
 
 function Base.haskey(dd::AADSubWrapper, k::SymbolicT)
-    has_possibly_indexed_key(dd, k)
+    return has_possibly_indexed_key(dd, k)
 end
 function Base.haskey(dd::AADSubWrapper, k::Union{Num, Arr, CallAndWrap})
-    haskey(dd, unwrap(k))
+    return haskey(dd, unwrap(k))
 end
 
 function Base.getindex(dd::AADSubWrapper, k)
@@ -263,7 +265,7 @@ function Base.getindex(dd::AADSubWrapper, k)
 end
 
 function Base.setindex!(dd::AADSubWrapper, v, k)
-    write_possibly_indexed_array!(dd.dict, k, v, dd.default)
+    return write_possibly_indexed_array!(dd.dict, k, v, dd.default)
 end
 
 Base.isempty(dd::AADSubWrapper) = isempty(dd.dict)

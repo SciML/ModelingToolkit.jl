@@ -116,7 +116,7 @@ struct ZeroVariablesIfFullyDetermined!
 end
 
 function (zvifd::ZeroVariablesIfFullyDetermined!)(structure::SystemStructure, ils::CLIL.SparseMatrixCLIL, v::Int)
-    zvifd.fully_determined ? StateSelection.force_var_to_zero!(structure, ils, v) : ils
+    return zvifd.fully_determined ? StateSelection.force_var_to_zero!(structure, ils, v) : ils
 end
 
 function exactdiv(a::Integer, b)

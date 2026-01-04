@@ -15,12 +15,18 @@ using ChainRulesTestUtils: test_rrule, rand_tangent
 
 @variables x(t)[1:3] y(t)
 @parameters p[1:3, 1:3] q
-eqs = [D(x) ~ p * x
-       D(y) ~ sum(p) + q * y]
-u0 = [x => zeros(3),
-    y => 1.0]
-ps = [p => zeros(3, 3),
-    q => 1.0]
+eqs = [
+    D(x) ~ p * x
+    D(y) ~ sum(p) + q * y
+]
+u0 = [
+    x => zeros(3),
+    y => 1.0,
+]
+ps = [
+    p => zeros(3, 3),
+    q => 1.0,
+]
 tspan = (0.0, 10.0)
 @mtkcompile sys = System(eqs, t)
 prob = ODEProblem(sys, [u0; ps], tspan)
@@ -38,7 +44,8 @@ end
 @testset "Issue#2997" begin
     pars = @parameters y0 mh Tγ0 Th0 h ργ0
     vars = @variables x(t)
-    @named sys = System([D(x) ~ y0],
+    @named sys = System(
+        [D(x) ~ y0],
         t,
         vars,
         pars;
@@ -46,8 +53,9 @@ end
             y0 => mh * 3.1 / (2.3 * Th0),
             mh => 123.4,
             Th0 => (4 / 11)^(1 / 3) * Tγ0,
-            Tγ0 => (15 / π^2 * ργ0 * (2 * h)^2 / 7)^(1 / 4) / 5
-        ])
+            Tγ0 => (15 / π^2 * ργ0 * (2 * h)^2 / 7)^(1 / 4) / 5,
+        ]
+    )
     sys = mtkcompile(sys)
 
     function x_at_0(θ)
@@ -61,29 +69,37 @@ end
 @parameters a b[1:3] c(t) d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = System(
     Equation[], t, [], [a, b, c, d, e, f, g, h],
-    continuous_events = [ModelingToolkitBase.SymbolicContinuousCallback(
-        [a ~ 0] => [c ~ 0], discrete_parameters = c, iv = t)])
+    continuous_events = [
+        ModelingToolkitBase.SymbolicContinuousCallback(
+            [a ~ 0] => [c ~ 0], discrete_parameters = c, iv = t
+        ),
+    ]
+)
 sys = complete(sys)
 
-ivs = Dict(c => 3a, b => ones(3), a => 1.0, d => 4, e => [5.0, 6.0, 7.0],
-    f => ones(Int, 3, 3), g => [0.1, 0.2, 0.3], h => "foo")
+ivs = Dict(
+    c => 3a, b => ones(3), a => 1.0, d => 4, e => [5.0, 6.0, 7.0],
+    f => ones(Int, 3, 3), g => [0.1, 0.2, 0.3], h => "foo"
+)
 
 ps = MTKParameters(sys, ivs)
 
-varmap = Dict(a => 1.0f0, b => 3ones(Float32, 3), c => 2.0,
-    e => Float32[0.4, 0.5, 0.6], g => ones(Float32, 4))
+varmap = Dict(
+    a => 1.0f0, b => 3ones(Float32, 3), c => 2.0,
+    e => Float32[0.4, 0.5, 0.6], g => ones(Float32, 4)
+)
 get_values = getp(sys, [a, b..., c, e...])
 get_g = getp(sys, g)
 for (_idxs, vals) in [
-    # all portions
-    (collect(keys(varmap)), collect(values(varmap))),
-    # non-arrays
-    (keys(varmap), values(varmap)),
-    # tunable only
-    ([a], [varmap[a]]),
-    ([a, b], (varmap[a], varmap[b])),
-    ([a, b[2]], (varmap[a], varmap[b][2]))
-]
+        # all portions
+        (collect(keys(varmap)), collect(values(varmap))),
+        # non-arrays
+        (keys(varmap), values(varmap)),
+        # tunable only
+        ([a], [varmap[a]]),
+        ([a, b], (varmap[a], varmap[b])),
+        ([a, b[2]], (varmap[a], varmap[b][2])),
+    ]
     for idxs in [_idxs, map(i -> parameter_index(sys, i), collect(_idxs))]
         loss = function (p)
             newps = remake_buffer(sys, ps, idxs, p)
@@ -152,7 +168,7 @@ end
         end
 
         equations = Equation[
-            D(x) ~ -α * x
+            D(x) ~ -α * x,
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -165,7 +181,7 @@ end
     data = (;
         t = solution.t,
         # [[y, x], :]
-        measurements = Array(solution)
+        measurements = Array(solution),
     )
     data.measurements .+= 0.05 * randn(rng, size(data.measurements))
 
@@ -179,11 +195,11 @@ end
         end
     end
 
-    # Check 0.0031677344878386607 
+    # Check 0.0031677344878386607
     @test_nowarn objective(p0, data)
 
     fd = ForwardDiff.gradient(Base.Fix2(objective, data), p0)
     zg = Zygote.gradient(Base.Fix2(objective, data), p0)
 
-    @test fd≈zg[1] atol=1e-6
+    @test fd ≈ zg[1] atol = 1.0e-6
 end

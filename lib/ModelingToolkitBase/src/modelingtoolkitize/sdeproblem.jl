@@ -16,7 +16,8 @@ Convert an `SDEProblem` to a `ModelingToolkitBase.System`.
 All other keyword arguments are forwarded to the created `System`.
 """
 function modelingtoolkitize(
-        prob::SDEProblem; u_names = nothing, p_names = nothing, kwargs...)
+        prob::SDEProblem; u_names = nothing, p_names = nothing, kwargs...
+    )
     if prob.f isa DiffEqBase.AbstractParameterizedFunction
         return prob.f.sys
     end
@@ -24,12 +25,14 @@ function modelingtoolkitize(
     # just create the equivalent ODEProblem, `modelingtoolkitize` that
     # and add on the noise
     odefn = ODEFunction{SciMLBase.isinplace(prob)}(
-        prob.f.f; mass_matrix = prob.f.mass_matrix, sys = prob.f.sys)
+        prob.f.f; mass_matrix = prob.f.mass_matrix, sys = prob.f.sys
+    )
     odeprob = ODEProblem(odefn, prob.u0, prob.tspan, prob.p)
     sys, vars,
-    params = modelingtoolkitize(
+        params = modelingtoolkitize(
         odeprob; u_names, p_names, return_symbolic_u0_p = true,
-        name = gensym(:MTKizedSDE), kwargs...)
+        name = gensym(:MTKizedSDE), kwargs...
+    )
     t = get_iv(sys)
 
     if SciMLBase.isinplace(prob)

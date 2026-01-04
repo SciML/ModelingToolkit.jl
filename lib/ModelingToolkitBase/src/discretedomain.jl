@@ -31,11 +31,11 @@ Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
 
 function (D::Shift)(x::Equation, allow_zero = false)
-    D(x.lhs, allow_zero) ~ D(x.rhs, allow_zero)
+    return D(x.lhs, allow_zero) ~ D(x.rhs, allow_zero)
 end
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
-    term(D, x; type = symtype(x), shape = SU.shape(x))
+    return term(D, x; type = symtype(x), shape = SU.shape(x))
 end
 function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
@@ -50,7 +50,7 @@ function (D::Shift)(x::Union{Num, Symbolics.Arr}, allow_zero = false)
             end
         end
     end
-    wrap(D(vt, allow_zero))
+    return wrap(D(vt, allow_zero))
 end
 SymbolicUtils.promote_symtype(::Shift, ::Type{T}) where {T} = T
 SymbolicUtils.promote_shape(::Shift, @nospecialize(x::SU.ShapeT)) = x
@@ -65,9 +65,11 @@ Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.step
 
 function validate_operator(op::Shift, args, iv; context = nothing)
     isequal(op.t, iv) || throw(OperatorIndepvarMismatchError(op, iv, context))
-    op.steps <= 0 || error("""
-    Only non-positive shifts are allowed. Found shift of $(op.steps) in $context.
-    """)
+    return op.steps <= 0 || error(
+        """
+        Only non-positive shifts are allowed. Found shift of $(op.steps) in $context.
+        """
+    )
 end
 
 hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
@@ -142,7 +144,7 @@ function (xn::Num)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    Shift(t, steps)(xn) # a shift of k steps
+    return Shift(t, steps)(xn) # a shift of k steps
 end
 
 function (xn::Symbolics.Arr)(k::ShiftIndex)
@@ -172,7 +174,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
-    Shift(t, steps)(xn) # a shift of k steps
+    return Shift(t, steps)(xn) # a shift of k steps
 end
 
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
@@ -248,10 +250,14 @@ function validate_operator(op::Sample, args, iv; context = nothing)
     if !is_variable_floatingpoint(arg)
         throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
     end
-    if isparameter(arg)
-        throw(ArgumentError("""
-        Expected argument of $op to be an unknown, found $arg which is a parameter.
-        """))
+    return if isparameter(arg)
+        throw(
+            ArgumentError(
+                """
+                Expected argument of $op to be an unknown, found $arg which is a parameter.
+                """
+            )
+        )
     end
 end
 
@@ -301,7 +307,8 @@ function ZeroCrossing(expr; name = gensym(), up = true, down = true, kwargs...)
     return SymbolicContinuousCallback(
         [expr ~ 0], up ? ImperativeAffect(Returns(nothing)) : nothing;
         affect_neg = down ? ImperativeAffect(Returns(nothing)) : nothing,
-        kwargs..., zero_crossing_id = name)
+        kwargs..., zero_crossing_id = name
+    )
 end
 
 function SciMLBase.Clocks.EventClock(cb::SymbolicContinuousCallback)

@@ -12,14 +12,14 @@ using PrecompileTools, Reexport
     import REPL
     using OffsetArrays: Origin
     import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-                        undef_blocks, blocks
+        undef_blocks, blocks
 end
 
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
-                      @rule, Rewriters, substitute, metadata, BasicSymbolic
+    isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
+    @rule, Rewriters, substitute, metadata, BasicSymbolic
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -56,8 +56,8 @@ using SciMLStructures
 using Compat
 using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-                 NoInit
+    PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
+    NoInit
 import Moshi
 using Moshi.Data: @data
 using Reexport
@@ -72,23 +72,23 @@ using RuntimeGeneratedFunctions: drop_expr
 
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-                 VariableSource, getname, variable,
-                 NAMESPACE_SEPARATOR, setdefaultval, Arr,
-                 hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
+    exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
+    VariableSource, getname, variable,
+    NAMESPACE_SEPARATOR, setdefaultval, Arr,
+    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-                  tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-                  BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-                  ParallelForm, SerialForm, MultithreadedForm, build_function,
-                  rhss, lhss, gradient, linear_expansion,
-                  jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  scalarize, hasderiv
+    jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+    tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+    BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+    ParallelForm, SerialForm, MultithreadedForm, build_function,
+    rhss, lhss, gradient, linear_expansion,
+    jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+    scalarize, hasderiv
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, bound_parameters,
-       continuous_events, discrete_events
+    continuous_events, discrete_events
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -107,11 +107,11 @@ export @derivatives
 for fun in [:toexpr]
     @eval begin
         function $fun(eq::Equation; kw...)
-            Expr(:call, :(==), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
+            return Expr(:call, :(==), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
         end
 
         function $fun(ineq::Inequality; kw...)
-            if ineq.relational_op == Symbolics.leq
+            return if ineq.relational_op == Symbolics.leq
                 Expr(:call, :(<=), $fun(ineq.lhs; kw...), $fun(ineq.rhs; kw...))
             else
                 Expr(:call, :(>=), $fun(ineq.lhs; kw...), $fun(ineq.rhs; kw...))
@@ -234,7 +234,7 @@ end
 const D_nounits = Differential(t_nounits)
 
 export ODEFunction, convert_system_indepvar,
-       System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
+    System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
 export SDEFunction
 export DiscreteProblem, DiscreteFunction
 export ImplicitDiscreteProblem, ImplicitDiscreteFunction
@@ -248,17 +248,17 @@ export SteadyStateProblem
 export JumpProblem
 export flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
-       instream
+    instream
 export @component, @mtkcompile, @mtkbuild
 export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
-       istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription,
-       hasunit, getunit, hasconnect, getconnect,
-       hasmisc, getmisc, state_priority,
-       subset_tunables
+    istunable, getdist, hasdist,
+    tunable_parameters, isirreducible, getdescription, hasdescription,
+    hasunit, getunit, hasconnect, getconnect,
+    hasmisc, getmisc, state_priority,
+    subset_tunables
 export liouville_transform, change_independent_variable,
-       add_accumulations, noise_to_brownians, Girsanov_transform, change_of_variables,
-       fractional_to_ordinary, linear_fractional_to_ordinary
+    add_accumulations, noise_to_brownians, Girsanov_transform, change_of_variables,
+    fractional_to_ordinary, linear_fractional_to_ordinary
 export respecialize
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -266,14 +266,14 @@ export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
-       brownians
+    brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export mtkcompile, expand_connections, structural_simplify
 export solve
 export Pre
 
 export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_function,
-       generate_W, calculate_hessian
+    generate_W, calculate_hessian
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
@@ -295,7 +295,7 @@ export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
-       @discretes
+    @discretes
 export @named, @nonamespace, @namespace, extend, compose, complete, toggle_namespacing
 export debug_system
 
@@ -316,9 +316,9 @@ include("systems/optimal_control_interface.jl")
 
 using SciMLBase: AbstractDynamicOptProblem
 export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptProblem,
-       CasADiDynamicOptProblem, PyomoDynamicOptProblem
+    CasADiDynamicOptProblem, PyomoDynamicOptProblem
 export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
-       CasADiCollocation, PyomoCollocation
+    CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
 
 const set_scalar_metadata = setmetadata
@@ -351,7 +351,7 @@ function __init__()
     SU.hashcons(COMMON_TRUE, true)
     SU.hashcons(COMMON_FALSE, true)
     SU.hashcons(COMMON_SENTINEL, true)
-    SU.hashcons(COMMON_INF, true)
+    return SU.hashcons(COMMON_INF, true)
 end
 
 include("precompile.jl")

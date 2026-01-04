@@ -47,7 +47,7 @@ function liouville_transform(sys::System; kwargs...)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
     vars = [unknowns(sys); trJ]
-    System(
+    return System(
         neweqs, t, vars, parameters(sys);
         checks = false, name = nameof(sys), kwargs...
     )
@@ -96,7 +96,7 @@ new_sol = solve(new_prob, Tsit5())
 function change_of_variables(
         sys::System, iv, forward_subs, backward_subs;
         simplify = true, t0 = missing, isSDE = false
-)
+    )
     t = iv
 
     old_vars = first.(backward_subs)
@@ -135,8 +135,10 @@ function change_of_variables(
 
     # df/dt = ∂f/∂x dx/dt + ∂f/∂t
     dfdt = Symbolics.derivative(first.(forward_subs), t)
-    ∂f∂x = [Symbolics.derivative(first(f_sub), old_var)
-            for (f_sub, old_var) in zip(forward_subs, old_vars)]
+    ∂f∂x = [
+        Symbolics.derivative(first(f_sub), old_var)
+            for (f_sub, old_var) in zip(forward_subs, old_vars)
+    ]
     ∂2f∂x2 = Symbolics.derivative.(∂f∂x, old_vars)
     new_eqs = Equation[]
 
@@ -146,7 +148,7 @@ function change_of_variables(
                 ex = substitute(ex, eqs.lhs => eqs.rhs)
                 if isSDE
                     for (noise, B) in zip(neq, brownvars)
-                        ex = ex + 1/2 * noise^2 * second + noise*first*B
+                        ex = ex + 1 / 2 * noise^2 * second + noise * first * B
                     end
                 end
             end
@@ -207,18 +209,18 @@ sol = solve(prob, radau5(), abstol = 1e-10, reltol = 1e-10)
 """
 function fractional_to_ordinary(
         eqs, variables, alphas, epsilon, T;
-        initials = 0, additional_eqs = [], iv = only(@independent_variables t), matrix=false
-)
+        initials = 0, additional_eqs = [], iv = only(@independent_variables t), matrix = false
+    )
     D = Differential(iv)
     i = 0
     all_eqs = Equation[]
     all_def = Pair[]
-    
-    function fto_helper(sub_eq, sub_var, α; initial=0)
+
+    function fto_helper(sub_eq, sub_var, α; initial = 0)
         alpha_0 = α
 
         if (α > 1)
-            coeff = 1/(α - 1)
+            coeff = 1 / (α - 1)
             m = 2
             while (α - m > 0)
                 coeff /= α - m
@@ -227,21 +229,21 @@ function fractional_to_ordinary(
             alpha_0 = α - m + 1
         end
 
-        δ = (gamma(alpha_0+1) * epsilon)^(1/alpha_0)
-        a = pi/2*(1-(1-alpha_0)/((2-alpha_0) * log(epsilon^-1)))
-        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(alpha_0 - 1)))
+        δ = (gamma(alpha_0 + 1) * epsilon)^(1 / alpha_0)
+        a = pi / 2 * (1 - (1 - alpha_0) / ((2 - alpha_0) * log(epsilon^-1)))
+        h = 2 * pi * a / log(1 + (2 / epsilon * (cos(a))^(alpha_0 - 1)))
 
-        x_sub = (gamma(2-alpha_0) * epsilon)^(1/(1-alpha_0))
-        x_sup = -log(gamma(1-alpha_0) * epsilon)
+        x_sub = (gamma(2 - alpha_0) * epsilon)^(1 / (1 - alpha_0))
+        x_sup = -log(gamma(1 - alpha_0) * epsilon)
         M = floor(Int, log(x_sub / T) / h)
         N = ceil(Int, log(x_sup / δ) / h)
 
         function c_i(index)
-            h * sin(pi * alpha_0) / pi * exp((1-alpha_0)*h*index)
+            return h * sin(pi * alpha_0) / pi * exp((1 - alpha_0) * h * index)
         end
 
         function γ_i(index)
-            exp(h * index)
+            return exp(h * index)
         end
 
         new_eqs = Equation[]
@@ -250,55 +252,55 @@ function fractional_to_ordinary(
         if matrix
             new_z = Symbol(:ʐ, :_, i)
             i += 1
-            γs = diagm([γ_i(index) for index in M:N-1])
-            cs = [c_i(index) for index in M:N-1]
+            γs = diagm([γ_i(index) for index in M:(N - 1)])
+            cs = [c_i(index) for index in M:(N - 1)]
 
             if (α < 1)
-                new_z = only(@variables $new_z(iv)[1:N-M])
-                new_eq = D(new_z) ~ -γs*new_z .+ sub_eq
+                new_z = only(@variables $new_z(iv)[1:(N - M)])
+                new_eq = D(new_z) ~ -γs * new_z .+ sub_eq
                 rhs = dot(cs, new_z) + initial
-                push!(def, new_z=>zeros(N-M))
+                push!(def, new_z => zeros(N - M))
             else
-                new_z = only(@variables $new_z(iv)[1:N-M, 1:m])
-                new_eq = D(new_z) ~ -γs*new_z + BS{VartypeT}[fill(sub_eq, N-M, 1);; collect(new_z[:, 1:m-1]*diagm(1:m-1))]
-                rhs = coeff*sum(cs[i]*new_z[i, m] for i in 1:N-M)
+                new_z = only(@variables $new_z(iv)[1:(N - M), 1:m])
+                new_eq = D(new_z) ~ -γs * new_z + BS{VartypeT}[fill(sub_eq, N - M, 1);; collect(new_z[:, 1:(m - 1)] * diagm(1:(m - 1)))]
+                rhs = coeff * sum(cs[i] * new_z[i, m] for i in 1:(N - M))
                 for (index, value) in enumerate(initial)
                     rhs += value * iv^(index - 1) / gamma(index)
                 end
-                push!(def, new_z=>zeros(N-M, m))
+                push!(def, new_z => zeros(N - M, m))
             end
             push!(new_eqs, new_eq)
         else
-            if (α < 1)  
+            if (α < 1)
                 rhs = initial
-                for index in range(M, N-1; step=1)
+                for index in range(M, N - 1; step = 1)
                     new_z = Symbol(:ʐ, :_, i)
                     i += 1
                     new_z = ModelingToolkitBase.unwrap(only(@variables $new_z(iv)))
-                    new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+                    new_eq = D(new_z) ~ sub_eq - γ_i(index) * new_z
                     push!(new_eqs, new_eq)
-                    push!(def, new_z=>0)
-                    rhs += c_i(index)*new_z
+                    push!(def, new_z => 0)
+                    rhs += c_i(index) * new_z
                 end
             else
                 rhs = 0
                 for (index, value) in enumerate(initial)
                     rhs += value * iv^(index - 1) / gamma(index)
                 end
-                for index in range(M, N-1; step=1)
+                for index in range(M, N - 1; step = 1)
                     new_z = Symbol(:ʐ, :_, i)
                     i += 1
                     γ = γ_i(index)
                     base = sub_eq
-                    for k in range(1, m; step=1)
-                        new_z = Symbol(:ʐ, :_, index-M, :_, k)
+                    for k in range(1, m; step = 1)
+                        new_z = Symbol(:ʐ, :_, index - M, :_, k)
                         new_z = ModelingToolkitBase.unwrap(only(@variables $new_z(iv)))
-                        new_eq = D(new_z) ~ base - γ*new_z
+                        new_eq = D(new_z) ~ base - γ * new_z
                         base = k * new_z
                         push!(new_eqs, new_eq)
-                        push!(def, new_z=>0)
+                        push!(def, new_z => 0)
                     end
-                    rhs += coeff*c_i(index)*new_z
+                    rhs += coeff * c_i(index) * new_z
                 end
             end
         end
@@ -307,12 +309,12 @@ function fractional_to_ordinary(
     end
 
     for (eq, cur_var, alpha, init) in zip(eqs, variables, alphas, initials)
-        (new_eqs, def) = fto_helper(eq, cur_var, alpha; initial=init)
+        (new_eqs, def) = fto_helper(eq, cur_var, alpha; initial = init)
         append!(all_eqs, new_eqs)
         append!(all_def, def)
     end
     append!(all_eqs, additional_eqs)
-    @named sys = System(all_eqs, iv; initial_conditions=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions = all_def)
     return mtkcompile(sys)
 end
 
@@ -338,8 +340,8 @@ sol = solve(prob, radau5(), abstol = 1e-5, reltol = 1e-5)
 """
 function linear_fractional_to_ordinary(
         degrees, coeffs, rhs, epsilon, T;
-        initials = 0, symbol = :x, iv = only(@independent_variables t), matrix=false
-)
+        initials = 0, symbol = :x, iv = only(@independent_variables t), matrix = false
+    )
     previous = Symbol(symbol, :_, 0)
     previous = ModelingToolkitBase.unwrap(only(@variables $previous(iv)))
     @variables x_0(iv)
@@ -349,21 +351,21 @@ function linear_fractional_to_ordinary(
     all_def = Pair[]
 
     function fto_helper(sub_eq, α)
-        δ = (gamma(α+1) * epsilon)^(1/α)
-        a = pi/2*(1-(1-α)/((2-α) * log(epsilon^-1)))
-        h = 2*pi*a / log(1 + (2/epsilon * (cos(a))^(α - 1)))
+        δ = (gamma(α + 1) * epsilon)^(1 / α)
+        a = pi / 2 * (1 - (1 - α) / ((2 - α) * log(epsilon^-1)))
+        h = 2 * pi * a / log(1 + (2 / epsilon * (cos(a))^(α - 1)))
 
-        x_sub = (gamma(2-α) * epsilon)^(1/(1-α))
-        x_sup = -log(gamma(1-α) * epsilon)
+        x_sub = (gamma(2 - α) * epsilon)^(1 / (1 - α))
+        x_sup = -log(gamma(1 - α) * epsilon)
         M = floor(Int, log(x_sub / T) / h)
         N = ceil(Int, log(x_sup / δ) / h)
 
         function c_i(index)
-            h * sin(pi * α) / pi * exp((1-α)*h*index)
+            return h * sin(pi * α) / pi * exp((1 - α) * h * index)
         end
 
         function γ_i(index)
-            exp(h * index)
+            return exp(h * index)
         end
 
         new_eqs = Equation[]
@@ -371,30 +373,30 @@ function linear_fractional_to_ordinary(
         if matrix
             new_z = Symbol(:ʐ, :_, i)
             i += 1
-            γs = diagm([γ_i(index) for index in M:N-1])
-            cs = [c_i(index) for index in M:N-1]
+            γs = diagm([γ_i(index) for index in M:(N - 1)])
+            cs = [c_i(index) for index in M:(N - 1)]
 
-            new_z = only(@variables $new_z(iv)[1:N-M])
-            new_eq = D(new_z) ~ -γs*new_z .+ sub_eq
+            new_z = only(@variables $new_z(iv)[1:(N - M)])
+            new_eq = D(new_z) ~ -γs * new_z .+ sub_eq
             sum = dot(cs, new_z)
-            push!(def, new_z=>zeros(N-M))
+            push!(def, new_z => zeros(N - M))
             push!(new_eqs, new_eq)
         else
             sum = 0
-            for index in range(M, N-1; step=1)
+            for index in range(M, N - 1; step = 1)
                 new_z = Symbol(:ʐ, :_, i)
                 i += 1
                 new_z = ModelingToolkitBase.unwrap(only(@variables $new_z(iv)))
-                new_eq = D(new_z) ~ sub_eq - γ_i(index)*new_z
+                new_eq = D(new_z) ~ sub_eq - γ_i(index) * new_z
                 push!(new_eqs, new_eq)
-                push!(def, new_z=>0)
-                sum += c_i(index)*new_z
+                push!(def, new_z => 0)
+                sum += c_i(index) * new_z
             end
         end
         return (new_eqs, def, sum)
     end
 
-    for i in range(1, ceil(Int, degrees[1]); step=1)
+    for i in range(1, ceil(Int, degrees[1]); step = 1)
         new_x = Symbol(symbol, :_, i)
         new_x = ModelingToolkitBase.unwrap(only(@variables $new_x(iv)))
         push!(all_eqs, D(previous) ~ new_x)
@@ -417,7 +419,7 @@ function linear_fractional_to_ordinary(
         end
     end
     push!(all_eqs, 0 ~ new_rhs)
-    @named sys = System(all_eqs, iv; initial_conditions=all_def)
+    @named sys = System(all_eqs, iv; initial_conditions = all_def)
     return mtkcompile(sys)
 end
 
@@ -479,7 +481,7 @@ julia> unknowns(M)
 function change_independent_variable(
         sys::System, iv, eqs = [];
         add_old_diff = false, simplify = true, fold = Val(false)
-)
+    )
     iv2_of_iv1 = unwrap(iv) # e.g. u(t)
     iv1 = get_iv(sys) # e.g. t
 
@@ -587,10 +589,14 @@ function change_independent_variable(
         ps = filter(!isinitial, ps) # remove Initial(...) # TODO: shouldn't have to touch this
         observed = map(transform, get_observed(sys))
         initialization_eqs = map(transform, get_initialization_eqs(sys))
-        bindings = Dict(transform(var) => transform(val)
-        for (var, val) in get_bindings(sys))
-        initial_conditions = Dict(transform(var) => transform(val)
-        for (var, val) in get_initial_conditions(sys))
+        bindings = Dict(
+            transform(var) => transform(val)
+                for (var, val) in get_bindings(sys)
+        )
+        initial_conditions = Dict(
+            transform(var) => transform(val)
+                for (var, val) in get_initial_conditions(sys)
+        )
         guesses = Dict(transform(var) => transform(val) for (var, val) in get_guesses(sys))
         connector_type = get_connector_type(sys)
         assertions = Dict(transform(ass) => msg for (ass, msg) in get_assertions(sys))
@@ -621,11 +627,15 @@ function stochastic_integral_transform(sys::System, correction_factor)
         throw(ArgumentError("The system must be flattened."))
     end
     if get_noise_eqs(sys) === nothing
-        throw(ArgumentError("""
-        `$stochastic_integral_transform` expects a system with noise_eqs. If your \
-        noise is specified using brownian variables, consider calling \
-        `mtkcompile`.
-        """))
+        throw(
+            ArgumentError(
+                """
+                `$stochastic_integral_transform` expects a system with noise_eqs. If your \
+                noise is specified using brownian variables, consider calling \
+                `mtkcompile`.
+                """
+            )
+        )
     end
     name = nameof(sys)
     noise_eqs = get_noise_eqs(sys)
@@ -647,17 +657,23 @@ function stochastic_integral_transform(sys::System, correction_factor)
         jac = calculate_jacobian(de, sparse = false, simplify = false)
         ∇σσ′ = simplify.(jac * noise_eqs[:, 1])
         for k in 2:m
-            __eqs = reduce(vcat,
-                [eqs[i].lhs ~ noise_eqs[Int(i + (k - 1) * dimunknowns)]
-                 for i in eachindex(dvs)])
+            __eqs = reduce(
+                vcat,
+                [
+                    eqs[i].lhs ~ noise_eqs[Int(i + (k - 1) * dimunknowns)]
+                        for i in eachindex(dvs)
+                ]
+            )
             de = System(__eqs, get_iv(sys), dvs, dvs, name = name, checks = false)
 
             jac = calculate_jacobian(de, sparse = false, simplify = false)
             ∇σσ′ = ∇σσ′ + simplify.(jac * noise_eqs[:, k])
         end
     end
-    deqs = reduce(vcat,
-        [eqs[i].lhs ~ eqs[i].rhs + correction_factor * ∇σσ′[i] for i in eachindex(dvs)])
+    deqs = reduce(
+        vcat,
+        [eqs[i].lhs ~ eqs[i].rhs + correction_factor * ∇σσ′[i] for i in eachindex(dvs)]
+    )
 
     # reduce(vcat, [1]) == 1 for some reason
     if deqs isa Equation
@@ -746,7 +762,8 @@ function Girsanov_transform(sys::System, u; θ0 = 1.0)
     # drift function for unknowns is modified
     # θ has zero drift
     deqs = reduce(
-        vcat, [eqs[i].lhs ~ eqs[i].rhs - drift_correction[i] for i in eachindex(dvs)])
+        vcat, [eqs[i].lhs ~ eqs[i].rhs - drift_correction[i] for i in eachindex(dvs)]
+    )
     if deqs isa Equation
         deqs = [deqs]
     end
@@ -860,11 +877,15 @@ function noise_to_brownians(sys::System; names::Union{Symbol, Vector{Symbol}} = 
         end
         names = _names
     elseif names isa Vector{Symbol} && length(names) != nbrownians
-        throw(ArgumentError("""
-        The system has $nbrownians brownian variables. Received $(length(names)) names \
-        for the brownian variables. Provide $nbrownians names or a single `Symbol` to use \
-        an array variable of the appropriately length.
-        """))
+        throw(
+            ArgumentError(
+                """
+                The system has $nbrownians brownian variables. Received $(length(names)) names \
+                for the brownian variables. Provide $nbrownians names or a single `Symbol` to use \
+                an array variable of the appropriately length.
+                """
+            )
+        )
     end
     names = names::Vector{Symbol}
     brownvars = SymbolicT[]
@@ -905,10 +926,14 @@ system.
 """
 function convert_system_indepvar(sys::System, t; name = nameof(sys))
     isempty(observed(sys)) ||
-        throw(ArgumentError("""
-        `convert_system_indepvar` cannot handle reduced model (i.e. observed(sys) is non-\
-        empty).
-        """))
+        throw(
+        ArgumentError(
+            """
+            `convert_system_indepvar` cannot handle reduced model (i.e. observed(sys) is non-\
+            empty).
+            """
+        )
+    )
     t = value(t)
     varmap = Dict()
     sts = unknowns(sys)
@@ -923,8 +948,10 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
                 newsts[i] = s
                 continue
             end
-            ns = maketerm(typeof(s), operation(s), Any[t],
-                SymbolicUtils.metadata(s))
+            ns = maketerm(
+                typeof(s), operation(s), Any[t],
+                SymbolicUtils.metadata(s)
+            )
             newsts[i] = ns
             varmap[s] = ns
         else
@@ -988,16 +1015,20 @@ This operation can only be performed on `complete`d systems.
 """
 function respecialize(sys::AbstractSystem, mapping; all = false)
     if !iscomplete(sys)
-        error("""
-        This operation can only be performed on completed systems. Use `complete(sys)` or
-        `mtkcompile(sys)`.
-        """)
+        error(
+            """
+            This operation can only be performed on completed systems. Use `complete(sys)` or
+            `mtkcompile(sys)`.
+            """
+        )
     end
     if !is_split(sys)
-        error("""
-        This operation can only be performed on split systems. Use `complete(sys)` or
-        `mtkcompile(sys)` with the `split = true` keyword argument.
-        """)
+        error(
+            """
+            This operation can only be performed on split systems. Use `complete(sys)` or
+            `mtkcompile(sys)` with the `split = true` keyword argument.
+            """
+        )
     end
 
     new_ps = copy(get_ps(sys))
@@ -1007,8 +1038,8 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     if all
         for x in filter(!is_variable_numeric, get_ps(sys))
             if any(y -> isequal(x, y) || y isa Pair && isequal(x, y[1]), mapping) ||
-               symbolic_type(x) === ArraySymbolic() ||
-               iscall(x) && operation(x) === getindex
+                    symbolic_type(x) === ArraySymbolic() ||
+                    iscall(x) && operation(x) === getindex
                 continue
             end
             push!(extras, x)
@@ -1086,16 +1117,20 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
             map(substituter, cev.conditions), substituter(cev.affect),
             substituter(cev.affect_neg), substituter(cev.initialize),
             substituter(cev.finalize), cev.rootfind,
-            cev.reinitializealg, cev.zero_crossing_id)
+            cev.reinitializealg, cev.zero_crossing_id
+        )
     end
     @set! sys.discrete_events = map(get_discrete_events(sys)) do dev
-        SymbolicDiscreteCallback(map(substituter, dev.conditions), substituter(dev.affect),
-            substituter(dev.initialize), substituter(dev.finalize), dev.reinitializealg)
+        SymbolicDiscreteCallback(
+            map(substituter, dev.conditions), substituter(dev.affect),
+            substituter(dev.initialize), substituter(dev.finalize), dev.reinitializealg
+        )
     end
     if get_schedule(sys) !== nothing
         sched = get_schedule(sys)
         @set! sys.schedule = Schedule(
-            sched.var_sccs, AnyDict(k => substituter(v) for (k, v) in sched.dummy_sub))
+            sched.var_sccs, AnyDict(k => substituter(v) for (k, v) in sched.dummy_sub)
+        )
     end
     @set! sys.constraints = map(substituter, get_constraints(sys))
     @set! sys.tstops = map(substituter, get_tstops(sys))

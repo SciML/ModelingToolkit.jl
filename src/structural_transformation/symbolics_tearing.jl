@@ -1,9 +1,11 @@
-function tearing(state::TearingState;
-                 tearing_alg::StateSelection.TearingAlgorithm = StateSelection.DummyDerivativeTearing(),
-                 kwargs...)
+function tearing(
+        state::TearingState;
+        tearing_alg::StateSelection.TearingAlgorithm = StateSelection.DummyDerivativeTearing(),
+        kwargs...
+    )
     state.structure.solvable_graph === nothing && StateSelection.find_solvables!(state; kwargs...)
     StateSelection.complete!(state.structure)
-    tearing_alg(state.structure)
+    return tearing_alg(state.structure)
 end
 
 """
@@ -13,11 +15,13 @@ Tear the nonlinear equations in system. When `simplify=true`, we simplify the
 new residual equations after tearing. End users are encouraged to call [`mtkcompile`](@ref)
 instead, which calls this function internally.
 """
-function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
+function tearing(
+        sys::AbstractSystem, state = TearingState(sys); mm = nothing,
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        fully_determined = true, kwargs...)
+        fully_determined = true, kwargs...
+    )
     tearing_result, extras = tearing(state; kwargs...)
-    invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
+    return invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
 end
 
 function safe_isinteger(@nospecialize(x::Number))
@@ -50,9 +54,11 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys);
+function dummy_derivative(
+        sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        mm = nothing, fully_determined = true, kwargs...)
+        mm = nothing, fully_determined = true, kwargs...
+    )
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = equations(state)[eqs]
@@ -87,6 +93,7 @@ function dummy_derivative(sys, state = TearingState(sys);
         end
     end
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
-        state, jac; state_priority, kwargs...)
-    reassemble_alg(state, tearing_result, mm; fully_determined)
+        state, jac; state_priority, kwargs...
+    )
+    return reassemble_alg(state, tearing_result, mm; fully_determined)
 end

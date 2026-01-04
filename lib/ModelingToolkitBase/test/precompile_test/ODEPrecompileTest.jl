@@ -9,9 +9,11 @@ function system(; kwargs...)
     D = Differential(t)
 
     # Define a differential equation
-    eqs = [D(x) ~ σ * (y - x),
+    eqs = [
+        D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
     @named de = System(eqs, t)
     de = complete(de)
@@ -45,13 +47,15 @@ function problem(; kwargs...)
     D = Differential(t)
 
     # Define a differential equation
-    eqs = [D(x) ~ σ * (y - x),
+    eqs = [
+        D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
     @named de = System(eqs, t)
     de = complete(de)
-    return ODEProblem(de, [x => 1, y => 0, z => 0, σ => 10, ρ => 28, β => 8/3], (0.0, 5.0); kwargs...)
+    return ODEProblem(de, [x => 1, y => 0, z => 0, σ => 10, ρ => 28, β => 8 / 3], (0.0, 5.0); kwargs...)
 end
 
 const prob_eval = problem(; eval_expression = true, eval_module = @__MODULE__)

@@ -16,8 +16,10 @@ Convert an `ODEProblem` to a `ModelingToolkitBase.System`.
 
 All other keyword arguments are forwarded to the created `System`.
 """
-function modelingtoolkitize(prob::ODEProblem; u_names = nothing, p_names = nothing,
-        return_symbolic_u0_p = false, kwargs...)
+function modelingtoolkitize(
+        prob::ODEProblem; u_names = nothing, p_names = nothing,
+        return_symbolic_u0_p = false, kwargs...
+    )
     if prob.f isa DiffEqBase.AbstractParameterizedFunction
         return prob.f.sys
     end
@@ -46,10 +48,12 @@ function modelingtoolkitize(prob::ODEProblem; u_names = nothing, p_names = nothi
     filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
     filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), initial_conditions)
 
-    sys = System(eqs, t, sts, params;
+    sys = System(
+        eqs, t, sts, params;
         initial_conditions,
         name = gensym(:MTKizedODE),
-        kwargs...)
+        kwargs...
+    )
 
     if return_symbolic_u0_p
         return sys, vars, _params

@@ -105,8 +105,11 @@ Return a symbolic variable representing a `PreallocationTools.DiffCache` with
 floating-point type `T`.
 """
 function get_diffcache_param(::Type{T}) where {T}
-    toconstant(Symbolics.variable(
-        DIFFCACHE_PARAM_NAME; T = DiffCache{Vector{T}, Vector{T}}))
+    return toconstant(
+        Symbolics.variable(
+            DIFFCACHE_PARAM_NAME; T = DiffCache{Vector{T}, Vector{T}}
+        )
+    )
 end
 
 const LINEAR_MATRIX_PARAM_NAME = :linear_Aₘₜₖ
@@ -119,7 +122,7 @@ Return a symbolic variable representing the `A` matrix returned from
 """
 function get_linear_matrix_param(size::NTuple{2, Int})
     m, n = size
-    unwrap(only(@constants $LINEAR_MATRIX_PARAM_NAME[1:m, 1:n]))
+    return unwrap(only(@constants $LINEAR_MATRIX_PARAM_NAME[1:m, 1:n]))
 end
 
 """
@@ -141,7 +144,7 @@ Return a symbolic variable representing the `i`th matrix in `B` returned from
 function get_quadratic_form_param(sz::NTuple{2, Int}, i::Int)
     m, n = sz
     name = get_quadratic_form_name(i)
-    unwrap(only(@constants $name[1:m, 1:n]))
+    return unwrap(only(@constants $name[1:m, 1:n]))
 end
 
 """
@@ -200,19 +203,21 @@ $SEMILINEAR_A_B_C_CONSTRAINT
 
 $(MTKBase.EXPERIMENTAL_WARNING)
 """
-function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = true,
+function generate_semiquadratic_functions(
+        sys::System, A, B, C; stiff_linear = true,
         stiff_quadratic = false, stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     if A === nothing && B === nothing
         throw(ArgumentError("Cannot generate split form for the system - it has no linear or quadratic part."))
     end
 
     if (stiff_linear || A === nothing) && (stiff_quadratic || B === nothing) &&
-       stiff_nonlinear
+            stiff_nonlinear
         throw(ArgumentError("All of `A`, `B` and `C` cannot be stiff at the same time."))
     end
     if (!stiff_linear || A === nothing) && (!stiff_quadratic || B === nothing) &&
-       !stiff_nonlinear
+            !stiff_nonlinear
         throw(ArgumentError("All of `A`, `B` and `C` cannot be non-stiff at the same time."))
     end
     linear_matrix_param = get_linear_matrix_param_from_sys(sys, A)
@@ -244,23 +249,34 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
             B[i] === nothing && return nothing
             tmp_buf = term(
                 PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM;
-                type = Vector{Real}, shape)
+                type = Vector{Real}, shape
+            )
             tmp_buf = term(view, tmp_buf, 1:length(dvs); type = Vector{Real}, shape)
 
-            result = term(*, term(transpose, iip_x; type = Matrix{Real}, shape),
-                          :__tmp_B_1; type = Vector{Real}, shape)
+            result = term(
+                *, term(transpose, iip_x; type = Matrix{Real}, shape),
+                :__tmp_B_1; type = Vector{Real}, shape
+            )
             # if both write to the same buffer, don't overwrite
             if stiff_quadratic == stiff_nonlinear && C !== nothing
-                result = term(+, result, term(getindex, Symbolics.DEFAULT_OUTSYM, i;
-                                              type = Real, shape);
-                              type = Real, shape)
+                result = term(
+                    +, result, term(
+                        getindex, Symbolics.DEFAULT_OUTSYM, i;
+                        type = Real, shape
+                    );
+                    type = Real, shape
+                )
             end
             intermediates = [
                 Assignment(:__tmp_B_buffer, tmp_buf),
-                Assignment(:__tmp_B_1,
-                    term(mul!, :__tmp_B_buffer,
+                Assignment(
+                    :__tmp_B_1,
+                    term(
+                        mul!, :__tmp_B_buffer,
                         term(UpperTriangular, quadratic_forms[i]; type = Matrix{Real}, shape),
-                        iip_x; type = Any, shape))
+                        iip_x; type = Any, shape
+                    )
+                ),
             ]
             return AtIndex(i, Let(intermediates, result))
         end
@@ -271,18 +287,26 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
     if A !== nothing
         A_ir = stiff_linear ? f1_iip_ir : f2_iip_ir
         retain_old = stiff_linear == stiff_quadratic && B !== nothing ||
-                     stiff_linear == stiff_nonlinear && C !== nothing
-        push!(A_ir,
-            Assignment(:__tmp_A,
-                term(mul!, Symbolics.DEFAULT_OUTSYM,
-                    linear_matrix_param, iip_x, true, retain_old; type = Any, shape)))
+            stiff_linear == stiff_nonlinear && C !== nothing
+        push!(
+            A_ir,
+            Assignment(
+                :__tmp_A,
+                term(
+                    mul!, Symbolics.DEFAULT_OUTSYM,
+                    linear_matrix_param, iip_x, true, retain_old; type = Any, shape
+                )
+            )
+        )
     end
     ## oop
     f1_terms = []
     f2_terms = []
     if A !== nothing
-        push!(stiff_linear ? f1_terms : f2_terms,
-              term(*, linear_matrix_param, oop_x; type = Vector{Real}, shape))
+        push!(
+            stiff_linear ? f1_terms : f2_terms,
+            term(*, linear_matrix_param, oop_x; type = Vector{Real}, shape)
+        )
     end
     if B !== nothing
         B_elems = map(eachindex(eqs)) do i
@@ -290,7 +314,8 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
             term(
                 *, term(transpose, oop_x; type = Matrix{Real}, shape),
                 term(UpperTriangular, quadratic_forms[i]; type = Matrix{Real}, shape),
-                oop_x; type = Matrix{Real}, shape)
+                oop_x; type = Matrix{Real}, shape
+            )
         end
         push!(stiff_quadratic ? f1_terms : f2_terms, MakeArray(B_elems, oop_x))
     end
@@ -310,25 +335,33 @@ function generate_semiquadratic_functions(sys::System, A, B, C; stiff_linear = t
 
     f1_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f1_iip_ir, expression = Val{true}, kwargs...)
+        extra_assignments = f1_iip_ir, expression = Val{true}, kwargs...
+    )
     f2_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...)
+        extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...
+    )
     f1_oop = build_function_wrapper(
-        sys, f1_expr, dvs, ps..., iv; expression = Val{true}, kwargs...)
+        sys, f1_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
+    )
     if f1_oop isa NTuple{2, Expr}
         f1_oop = f1_oop[1]
     end
     f2_oop = build_function_wrapper(
-        sys, f2_expr, dvs, ps..., iv; expression = Val{true}, kwargs...)
+        sys, f2_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
+    )
     if f2_oop isa NTuple{2, Expr}
         f2_oop = f2_oop[1]
     end
 
-    f1 = maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
-        (f1_oop, f1_iip); eval_expression, eval_module)
-    f2 = maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
-        (f2_oop, f2_iip); eval_expression, eval_module)
+    f1 = maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)),
+        (f1_oop, f1_iip); eval_expression, eval_module
+    )
+    f2 = maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)),
+        (f2_oop, f2_iip); eval_expression, eval_module
+    )
 
     return f1, f2
 end
@@ -355,7 +388,8 @@ $EXPERIMENTAL_WARNING
 function generate_semiquadratic_jacobian(
         sys::System, A, B, C, Cjac; sparse = false, stiff_linear = true, stiff_quadratic = false,
         stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     if sparse
         error("Sparse analytical jacobians for split ODEs is not implemented.")
     end
@@ -364,11 +398,11 @@ function generate_semiquadratic_jacobian(
     end
 
     if (stiff_linear || A === nothing) && (stiff_quadratic || B === nothing) &&
-       stiff_nonlinear
+            stiff_nonlinear
         throw(ArgumentError("All of `A`, `B` and `C` cannot be stiff at the same time."))
     end
     if (!stiff_linear || A === nothing) && (!stiff_quadratic || B === nothing) &&
-       !stiff_nonlinear
+            !stiff_nonlinear
         throw(ArgumentError("All of `A`, `B` and `C` cannot be non-stiff at the same time."))
     end
     linear_matrix_param = get_linear_matrix_param_from_sys(sys, A)
@@ -389,19 +423,29 @@ function generate_semiquadratic_jacobian(
     # iip
     iip_ir = Assignment[]
     if A !== nothing && stiff_linear
-        push!(iip_ir,
+        push!(
+            iip_ir,
             Assignment(
-                :__A_jac, term(copyto!, Symbolics.DEFAULT_OUTSYM, linear_matrix_param)))
+                :__A_jac, term(copyto!, Symbolics.DEFAULT_OUTSYM, linear_matrix_param)
+            )
+        )
     end
     if B !== nothing && stiff_quadratic
         cachebuf_name = :__B_cache
         cachelen = M * N
-        push!(iip_ir,
-            Assignment(cachebuf_name,
-                term(PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM)))
-        push!(iip_ir,
+        push!(
+            iip_ir,
             Assignment(
-                cachebuf_name, term(reshape, term(view, cachebuf_name, 1:cachelen), M, N)))
+                cachebuf_name,
+                term(PreallocationTools.get_tmp, diffcache_par, Symbolics.DEFAULT_OUTSYM)
+            )
+        )
+        push!(
+            iip_ir,
+            Assignment(
+                cachebuf_name, term(reshape, term(view, cachebuf_name, 1:cachelen), M, N)
+            )
+        )
         for (i, quadpar) in enumerate(quadratic_forms)
             B[i] === nothing && continue
             coeffvar = Symbol(:__B_matrix_, i)
@@ -409,19 +453,28 @@ function generate_semiquadratic_jacobian(
             push!(iip_ir, Assignment(coeffvar, term(UpperTriangular, quadpar)))
             push!(iip_ir, Assignment(:__tmp_B_1, term(copyto!, cachebuf_name, coeffvar)))
             # mul! with scalar `B` does addition
-            push!(iip_ir,
-                Assignment(:__tmp_B_2,
-                    term(mul!, cachebuf_name, true, term(transpose, coeffvar), true, true)))
+            push!(
+                iip_ir,
+                Assignment(
+                    :__tmp_B_2,
+                    term(mul!, cachebuf_name, true, term(transpose, coeffvar), true, true)
+                )
+            )
             # view the row of the jacobian this will write to
             target_name = Symbol(:__jac_row_, i)
             push!(
-                iip_ir, Assignment(target_name, term(view, Symbolics.DEFAULT_OUTSYM, i, :)))
+                iip_ir, Assignment(target_name, term(view, Symbolics.DEFAULT_OUTSYM, i, :))
+            )
             # (B + B') * x, written directly to the jacobian. Retain the value in the jacobian if we've already
             # written to it.
             retain_old = A !== nothing && stiff_linear
-            push!(iip_ir,
-                Assignment(:__tmp_B_3,
-                    term(mul!, target_name, cachebuf_name, iip_x, true, retain_old)))
+            push!(
+                iip_ir,
+                Assignment(
+                    :__tmp_B_3,
+                    term(mul!, target_name, cachebuf_name, iip_x, true, retain_old)
+                )
+            )
         end
     end
     if C !== nothing && stiff_nonlinear
@@ -431,12 +484,16 @@ function generate_semiquadratic_jacobian(
             idxs = map(eachindex(Cjac)) do idx
                 _iszero(Cjac[idx]) && return nothing
                 AtIndex(
-                    idx, term(+, term(getindex, Symbolics.DEFAULT_OUTSYM, idx), Cjac[idx]))
+                    idx, term(+, term(getindex, Symbolics.DEFAULT_OUTSYM, idx), Cjac[idx])
+                )
             end
             filter!(x -> x !== nothing, idxs)
-            push!(iip_ir,
+            push!(
+                iip_ir,
                 Assignment(
-                    :__tmp_C, SetArray(false, Symbolics.DEFAULT_OUTSYM, idxs, false)))
+                    :__tmp_C, SetArray(false, Symbolics.DEFAULT_OUTSYM, idxs, false)
+                )
+            )
         end
     end
 
@@ -461,12 +518,16 @@ function generate_semiquadratic_jacobian(
 
     j_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = iip_ir, expression = Val{true}, kwargs...)
+        extra_assignments = iip_ir, expression = Val{true}, kwargs...
+    )
     j_oop,
-    _ = build_function_wrapper(
-        sys, oop_expr, dvs, ps..., iv; expression = Val{true}, kwargs...)
-    return maybe_compile_function(expression, wrap_gfw, (2, 3, is_split(sys)),
-        (j_oop, j_iip); eval_expression, eval_module)
+        _ = build_function_wrapper(
+        sys, oop_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
+    )
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 3, is_split(sys)),
+        (j_oop, j_iip); eval_expression, eval_module
+    )
 end
 
 """
@@ -490,7 +551,8 @@ $EXPERIMENTAL_WARNING
 """
 function get_semiquadratic_W_sparsity(
         sys::System, A, B, C, Cjac; stiff_linear = true, stiff_quadratic = false,
-        stiff_nonlinear = false, mm = calculate_massmatrix(sys))
+        stiff_nonlinear = false, mm = calculate_massmatrix(sys)
+    )
     eqs = equations(sys)
     dvs = unknowns(sys)
     M = length(eqs)
@@ -510,7 +572,6 @@ function get_semiquadratic_W_sparsity(
         jac .+= Cjac
     end
     M_sparsity = mm isa UniformScaling ? sparse(I, M, N) :
-                 SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
+        SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end
-

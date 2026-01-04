@@ -34,7 +34,7 @@ y = ModelingToolkitBase.promote_to_concrete(x)
 
 # ------------------------ Mixed Single Values and Vector
 
-dt = 4e-4
+dt = 4.0e-4
 t_end = 10.0
 time = 0:dt:t_end
 x = @. time^2 + 1.0
@@ -68,27 +68,30 @@ eqs = [
 sys = mtkcompile(sys)
 prob = ODEProblem(
     sys, [sys.interpolator => Interpolator(x, dt)], (0.0, t_end);
-    tofloat = false)
-sol = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8, tstops=time);
+    tofloat = false
+)
+sol = solve(prob, Rodas5P(); abstol = 1.0e-8, reltol = 1.0e-8, tstops = time);
 @test sol.retcode == ReturnCode.Success
-@test sol[y][end] ≈ 688.6707200416254 rtol=1e-6
+@test sol[y][end] ≈ 688.6707200416254 rtol = 1.0e-6
 
 #TODO: remake becomes more complicated now, how to improve?
 defs = ModelingToolkitBase.initial_conditions(sys)
 defs[sys.interpolator] = Interpolator(2x, dt)
 p′ = ModelingToolkitBase.MTKParameters(sys, defs)
 prob′ = remake(prob; p = p′)
-sol = solve(prob′, Rodas5P(); abstol = 1e-8, reltol = 1e-8, tstops=time);
+sol = solve(prob′, Rodas5P(); abstol = 1.0e-8, reltol = 1.0e-8, tstops = time);
 @test sol.retcode == ReturnCode.Success
-@test sol[y][end] ≈ 1375.3416088550855 rtol=1e-6
+@test sol[y][end] ≈ 1375.3416088550855 rtol = 1.0e-6
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
-vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-pars = @parameters a=1.0 b=2.0 c=3
-eqs = [D(y) ~ dy * a
-       D(dy) ~ ddy * b
-       ddy ~ sin(t) * c]
+vars = @variables y(t) = 1 dy(t) = 0 ddy(t) = 0
+pars = @parameters a = 1.0 b = 2.0 c = 3
+eqs = [
+    D(y) ~ dy * a
+    D(dy) ~ ddy * b
+    ddy ~ sin(t) * c
+]
 
 @named model = System(eqs, t, vars, pars)
 sys = mtkcompile(model; split = false)
@@ -103,7 +106,8 @@ sol = solve(prob, ImplicitEuler());
 # ------------------------ Mixed Type Conserved
 
 prob = ODEProblem(
-    sys, [], tspan; tofloat = false, build_initializeprob = false)
+    sys, [], tspan; tofloat = false, build_initializeprob = false
+)
 
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
@@ -118,7 +122,7 @@ if @isdefined(ModelingToolkit)
 
     "A wrapper function to make symbolic indexing easier"
     function wr(sys)
-        System(Equation[], ModelingToolkitBase.get_iv(sys), systems = [sys], name = :a_wrapper)
+        return System(Equation[], ModelingToolkitBase.get_iv(sys), systems = [sys], name = :a_wrapper)
     end
     indexof(sym, syms) = findfirst(isequal(sym), syms)
 
@@ -135,17 +139,23 @@ if @isdefined(ModelingToolkit)
     @named torque = Torque(use_support = false)
 
     function SystemModel(u = nothing; name = :model)
-        eqs = [connect(torque.flange, inertia1.flange_a)
-               connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-               connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+        eqs = [
+            connect(torque.flange, inertia1.flange_a)
+            connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+            connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+        ]
         if u !== nothing
             push!(eqs, connect(torque.tau, u.output))
-            return @named model = System(eqs,
+            return @named model = System(
+                eqs,
                 t;
-                systems = [torque, inertia1, inertia2, spring, damper, u])
+                systems = [torque, inertia1, inertia2, spring, damper, u]
+            )
         end
-        System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-            name, guesses = [spring.flange_a.phi => 0.0])
+        return System(
+            eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+            name, guesses = [spring.flange_a.phi => 0.0]
+        )
     end
 
     model = SystemModel() # Model with load disturbance
@@ -154,14 +164,17 @@ if @isdefined(ModelingToolkit)
     inputs = [model.torque.tau.u]
     op = [model.torque.tau.u => 0.0]
     matrices, ssys = ModelingToolkit.linearize(
-        wr(model), inputs, model_outputs; op)
+        wr(model), inputs, model_outputs; op
+    )
 
     # Design state-feedback gain using LQR
     # Define cost matrices
-    x_costs = [model.inertia1.w => 1.0
-               model.inertia2.w => 1.0
-               model.inertia1.phi => 1.0
-               model.inertia2.phi => 1.0]
+    x_costs = [
+        model.inertia1.w => 1.0
+        model.inertia2.w => 1.0
+        model.inertia1.phi => 1.0
+        model.inertia2.phi => 1.0
+    ]
     L = randn(1, 4) # Post-multiply by `C` to get the correct input to the controller
 
     # This old definition of MatrixGain will work because the parameter space does not include K (an Array term)
@@ -176,21 +189,27 @@ if @isdefined(ModelingToolkit)
     @named state_feedback = MatrixGain(K = -L) # Build negative feedback into the feedback matrix
     @named add = Add(; k1 = 1.0, k2 = 1.0) # To add the control signal and the disturbance
 
-    connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
-                   connect(d.output, :d, add.input1)
-                   connect(add.input2, state_feedback.output)
-                   connect(add.output, :u, model.torque.tau)]
+    connections = [
+        [state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
+        connect(d.output, :d, add.input1)
+        connect(add.input2, state_feedback.output)
+        connect(add.output, :u, model.torque.tau)
+    ]
     @named closed_loop = System(connections, t, systems = [model, state_feedback, add, d])
     S = get_sensitivity(closed_loop, :u)
 end
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
-    ps = MTKParameters(collect(1.0:10.0), collect(11.0:20.0),
-        (BlockedArray([true, false, false, true], [2, 2]),
-            BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1])),
+    ps = MTKParameters(
+        collect(1.0:10.0), collect(11.0:20.0),
+        (
+            BlockedArray([true, false, false, true], [2, 2]),
+            BlockedArray([[1 2; 3 4], [2 4; 6 8]], [1, 1]),
+        ),
         # (BlockedArray([[true, false], [false, true]]), BlockedArray([[[1 2; 3 4]], [[2 4; 6 8]]])),
         ([5, 6],),
-        (["hi", "bye"], [:lie, :die]), ())
+        (["hi", "bye"], [:lie, :die]), ()
+    )
     @test ps[ParameterIndex(Tunable(), 1)] == 1.0
     @test ps[ParameterIndex(Tunable(), 2:4)] == collect(2.0:4.0)
     @test ps[ParameterIndex(Tunable(), reshape(4:7, 2, 2))] == reshape(4.0:7.0, 2, 2)
@@ -230,20 +249,21 @@ end
         @inferred getter(prob)
         # cannot be inferred better since `FunctionWrapper` is only known to return `Real`
         @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
-        sol = solve(prob, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
         @test sol.u[end][] ≈ 2.0
 
         prob = ODEProblem(sys, [x => 1.0, fn => Foo()], (0.0, 1.0))
         @inferred getter(prob)
         @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
-        sol = solve(prob; abstol = 1e-10, reltol = 1e-10)
+        sol = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10)
         @test sol.u[end][] ≈ 2.5
     end
 
     @testset "Concrete function type" begin
         ts = 0.0:0.1:1.0
         interp = LinearInterpolation(
-            ts .^ 2, ts; extrapolation = ExtrapolationType.Extension)
+            ts .^ 2, ts; extrapolation = ExtrapolationType.Extension
+        )
         @variables x(t)
         @parameters (fn::typeof(interp))(..)
         @mtkcompile sys = System(D(x) ~ fn(x), t)
@@ -254,7 +274,8 @@ end
         @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
         @test_nowarn sol = solve(prob, Tsit5())
         @test_nowarn prob.ps[fn] = LinearInterpolation(
-            ts .^ 3, ts; extrapolation = ExtrapolationType.Extension)
+            ts .^ 3, ts; extrapolation = ExtrapolationType.Extension
+        )
         @test_nowarn sol = solve(prob)
     end
 end
@@ -273,7 +294,7 @@ end
         end
 
         equations = Equation[
-            D(x) ~ c * x
+            D(x) ~ c * x,
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -293,7 +314,7 @@ end
         end
 
         equations = Equation[
-            D(y) ~ k * y + subsys.x
+            D(y) ~ k * y + subsys.x,
         ]
 
         return System(equations, t, vars, pars; name, systems)

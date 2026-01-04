@@ -3,15 +3,20 @@
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, cse = true, initialization_data = nothing,
-        check_compatibility = true, expression = Val{false}, kwargs...) where {iip, spec}
+        check_compatibility = true, expression = Val{false}, kwargs...
+    ) where {iip, spec}
     check_complete(sys, SDEFunction)
     check_compatibility && check_compatible_system(SDEFunction, sys)
 
-    f = generate_rhs(sys; expression, wrap_gfw = Val{true},
+    f = generate_rhs(
+        sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...)
-    g = generate_diffusion_function(sys; expression,
-        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...)
+        kwargs...
+    )
+    g = generate_diffusion_function(
+        sys; expression,
+        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...
+    )
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -25,17 +30,21 @@
     end
 
     if tgrad
-        _tgrad = generate_tgrad(sys; expression,
+        _tgrad = generate_tgrad(
+            sys; expression,
             wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
-            kwargs...)
+            kwargs...
+        )
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(sys; expression,
+        _jac = generate_jacobian(
+            sys; expression,
             wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
-            checkbounds, kwargs...)
+            checkbounds, kwargs...
+        )
     else
         _jac = nothing
     end
@@ -44,7 +53,8 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse)
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+    )
 
     _W_sparsity = W_sparsity(sys)
     W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
@@ -58,7 +68,8 @@
         observed = observedfun,
         sparsity = sparsity ? _W_sparsity : nothing,
         analytic = analytic,
-        initialization_data)
+        initialization_data,
+    )
     args = (; f, g)
 
     return maybe_codegen_scimlfn(expression, SDEFunction{iip, spec}, args; kwargs...)
@@ -68,14 +79,17 @@ end
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
-        sparsenoise = sparse, expression = Val{false}, kwargs...) where {iip, spec}
+        sparsenoise = sparse, expression = Val{false}, kwargs...
+    ) where {iip, spec}
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
 
     f, u0,
-    p = process_SciMLProblem(SDEFunction{iip, spec}, sys, op;
+        p = process_SciMLProblem(
+        SDEFunction{iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, sparse, expression, kwargs...)
+        eval_module, check_compatibility, sparse, expression, kwargs...
+    )
 
     # Only calculate noise and noise_rate_prototype if not provided by user
     if !haskey(kwargs, :noise) && !haskey(kwargs, :noise_rate_prototype)
@@ -91,8 +105,10 @@ end
         noise_rate_prototype = kwargs[:noise_rate_prototype]
     end
 
-    kwargs = process_kwargs(sys; expression, callback, eval_expression, eval_module,
-        op, kwargs...)
+    kwargs = process_kwargs(
+        sys; expression, callback, eval_expression, eval_module,
+        op, kwargs...
+    )
 
     args = (; f, u0, tspan, p)
     kwargs = (; noise, noise_rate_prototype, kwargs...)
@@ -107,7 +123,7 @@ function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, 
     check_no_constraints(sys, T)
     check_no_jumps(sys, T)
     check_has_noise(sys, T)
-    check_is_continuous(sys, T)
+    return check_is_continuous(sys, T)
 end
 
 function calculate_noise_and_rate_prototype(sys::System, u0; sparsenoise = false)
@@ -134,8 +150,10 @@ end
 __default_wiener_process() = __default_wiener_process(nothing)
 
 function __default_wiener_process(_)
-    error("""
-    Generating code for this problem requires loading DiffEqNoiseProcess.jl. Please run
-    `import DiffEqNoiseProcess` to proceed.
-    """)
+    error(
+        """
+        Generating code for this problem requires loading DiffEqNoiseProcess.jl. Please run
+        `import DiffEqNoiseProcess` to proceed.
+        """
+    )
 end

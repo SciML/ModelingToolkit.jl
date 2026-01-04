@@ -6,37 +6,42 @@ using StaticArrays
 using SymbolicIndexingInterface
 using Test
 
-@variables x(t)[1:3]=[1.0, 2.0, 3.0] y(t) z(t)[1:2]
+@variables x(t)[1:3] = [1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
-@mtkcompile sys=System([D(x)~t*x], t) simplify=false
+@mtkcompile sys = System([D(x) ~ t * x], t) simplify = false
 reorderer = getsym(sys, x)
 @test reorderer(get_u0(sys, [])) == [1.0, 2.0, 3.0]
 @test reorderer(get_u0(sys, [x => [2.0, 3.0, 4.0]])) == [2.0, 3.0, 4.0]
 @test reorderer(get_u0(sys, [x[1] => 2.0, x[2] => 3.0, x[3] => 4.0])) == [2.0, 3.0, 4.0]
 
-@mtkcompile sys=System([
-        D(x)~3x,
-        D(y)~t,
-        D(z[1])~z[2]+t,
-        D(z[2])~y+z[1]
-    ], t) simplify=false
+@mtkcompile sys = System(
+    [
+        D(x) ~ 3x,
+        D(y) ~ t,
+        D(z[1]) ~ z[2] + t,
+        D(z[2]) ~ y + z[1],
+    ], t
+) simplify = false
 
 @test_throws ModelingToolkitBase.MissingVariablesError get_u0(sys, [])
 getter = getu(sys, [x..., y, z...])
 @test getter(get_u0(sys, [y => 4.0, z => [5.0, 6.0]])) == collect(1.0:6.0)
 @test getter(get_u0(sys, [y => 4.0, z => [3y, 4y]])) == [1.0, 2.0, 3.0, 4.0, 12.0, 16.0]
 @test getter(get_u0(sys, [y => 3.0, z[1] => 3y, z[2] => 2x[1]])) ==
-      [1.0, 2.0, 3.0, 3.0, 9.0, 2.0]
+    [1.0, 2.0, 3.0, 3.0, 9.0, 2.0]
 
 @variables w(t)
 @parameters p1 p2
 
 @test getter(get_u0(sys, [y => 2p1, z => [3y, 2p2], p1 => 5.0, p2 => 6.0])) ==
-      [1.0, 2.0, 3.0, 10.0, 30.0, 12.0]
+    [1.0, 2.0, 3.0, 10.0, 30.0, 12.0]
 @test_throws Any getter(get_u0(sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2]))
-@test getter(get_u0(
-    sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2, p1 => 3.0, p2 => 4.0])) ==
-      [1.0, 2.0, 3.0, 6.0, 6.0, 12.0]
+@test getter(
+    get_u0(
+        sys, [y => 2w, w => 3.0, z[1] => 2p1, z[2] => 3p2, p1 => 3.0, p2 => 4.0]
+    )
+) ==
+    [1.0, 2.0, 3.0, 6.0, 6.0, 12.0]
 
 # Issue#2566
 @variables X(t)
@@ -54,7 +59,7 @@ vals = ModelingToolkitBase.varmap_to_vars(merge(defaults, Dict(var_vals)), desir
 # Issue#2565
 # Create ODESystem.
 @variables X1(t) X2(t)
-@parameters k1 k2 Γ[1:1]=missing
+@parameters k1 k2 Γ[1:1] = missing
 eq = D(X1) ~ -k1 * X1 + k2 * (-X1 + Γ[1])
 obs = X2 ~ Γ[1] - X1
 @mtkcompile osys_m = System([eq, obs], t, [X1, X2], [k1, k2, Γ])
@@ -63,7 +68,7 @@ obs = X2 ~ Γ[1] - X1
 u0 = [X1 => 1.0, X2 => 2.0]
 tspan = (0.0, 1.0)
 ps = [k1 => 1.0, k2 => 5.0]
-oprob=ODEProblem(osys_m, [u0; ps], tspan; guesses = [Γ[1] => 1.0])
+oprob = ODEProblem(osys_m, [u0; ps], tspan; guesses = [Γ[1] => 1.0])
 @test SciMLBase.successful_retcode(solve(oprob))
 
 # Initialization of ODEProblem with dummy derivatives of multidimensional arrays
@@ -75,7 +80,7 @@ eqs = [D(D(z)) ~ ones(2, 2)]
 
 @testset "binding=nothing is skipped" begin
     @parameters p = nothing
-    @variables x(t)=nothing y(t)
+    @variables x(t) = nothing y(t)
     @named sys = System(Equation[], t, [x, y], [p]; bindings = [y => nothing])
     @test isempty(ModelingToolkitBase.bindings(sys))
 end
@@ -100,8 +105,8 @@ end
 
 @testset "split=false systems with all parameter initial conditions" begin
     @variables x(t) = 1.0
-    @parameters p=1.0 q=2.0 r=3.0
-    @mtkcompile sys=System(D(x)~p*x+q*t+r, t) split=false
+    @parameters p = 1.0 q = 2.0 r = 3.0
+    @mtkcompile sys = System(D(x) ~ p * x + q * t + r, t) split = false
     prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     @test prob.p isa Vector{Float64}
 end
@@ -109,8 +114,10 @@ end
 @testset "Issue#3153" begin
     @variables x(t) y(t)
     @parameters c1 c2 c3
-    eqs = [D(x) ~ y,
-        y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3))]
+    eqs = [
+        D(x) ~ y,
+        y ~ ifelse(t < c1, 0.0, (-c1 + t)^(c3)),
+    ]
     sps = [x, y]
     ps = [c1, c2, c3]
     @mtkcompile osys = System(eqs, t, sps, ps)
@@ -123,18 +130,23 @@ end
     @variables x(t) y(t)
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
-        guesses = [x => 2y, y => 2x])
+        guesses = [x => 2y, y => 2x]
+    )
     @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
     @test_throws ModelingToolkitBase.UnexpectedSymbolicValueInVarmap ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
-        substitution_limit = 10)
+        substitution_limit = 10
+    )
 
     @parameters p q
     @mtkcompile sys = System(
-        [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0])
+        [D(x) ~ x * p, D(y) ~ y * q], t; guesses = [p => 1.0, q => 2.0]
+    )
     # "unknowns" because they are initialization unknowns
-    @test_warn ["Cycle", "parameters", "p", "q"] ODEProblem(sys, [x => 1, y => 2, p => 2q, q => 3p],
-            (0.0, 1.0); warn_cyclic_dependency = true)
+    @test_warn ["Cycle", "parameters", "p", "q"] ODEProblem(
+        sys, [x => 1, y => 2, p => 2q, q => 3p],
+        (0.0, 1.0); warn_cyclic_dependency = true
+    )
 end
 
 @testset "`add_fallbacks!` checks scalarized array parameters correctly" begin
@@ -143,7 +155,8 @@ end
     @mtkcompile sys = System(D(x) ~ p * x, t)
     # used to throw a `MethodError` complaining about `getindex(::Nothing, ::CartesianIndex{2})`
     @test_throws "Could not evaluate" ODEProblem(
-        sys, [x => ones(2)], (0.0, 1.0))
+        sys, [x => ones(2)], (0.0, 1.0)
+    )
 end
 
 @testset "Unscalarized default for scalarized observed variable" begin
@@ -152,7 +165,7 @@ end
     eqs = [
         D(x) ~ x,
         y[1] ~ x[3],
-        y[2] ~ x[4]
+        y[2] ~ x[4],
     ]
     @mtkcompile sys = System(eqs, t; bindings = [x => vcat(ones(2), y), y => x[1:2] ./ 2])
     prob = ODEProblem(sys, [], (0.0, 1.0))
@@ -168,11 +181,11 @@ function index_reduced_pend(; name)
     eqs = [
         0 ~ 1 - y^2 - x^2
         D(y) ~ yˍt
-        0 ~ -yˍt*y - xˍt*x
-        D(yˍt) ~ -g + y*λ
-        0 ~ -yˍt^2 - xˍt^2 - x*xˍtt - y*(-g + y*λ)
+        0 ~ -yˍt * y - xˍt * x
+        D(yˍt) ~ -g + y * λ
+        0 ~ -yˍt^2 - xˍt^2 - x * xˍtt - y * (-g + y * λ)
     ]
-    System(eqs, t, [xˍt, y, x, yˍt, λ], [g]; observed = [xˍtt ~ λ*x], name)
+    return System(eqs, t, [xˍt, y, x, yˍt, λ], [g]; observed = [xˍtt ~ λ * x], name)
 end
 
 @testset "Missing/cyclic guesses throws error" begin
@@ -182,7 +195,8 @@ end
     pend = complete(pend)
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-        pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => y + 1])
+        pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => y + 1]
+    )
     ODEProblem(pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => 0.5])
 
     # Throw multiple if multiple are missing
@@ -190,7 +204,8 @@ end
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
     @test_throws ["d(t)", "c(t)"] ODEProblem(
-        sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1))
+        sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1)
+    )
 end
 
 @testset "Issue#3490: `remake` works with callable parameters" begin
@@ -214,7 +229,7 @@ end
     @parameters p[1:2]
     eqs = [
         0 ~ p[1] - X[1],
-        0 ~ p[2] - X[2]
+        0 ~ p[2] - X[2],
     ]
     @named nlsys = System(eqs)
     nlsys = complete(nlsys)
@@ -241,7 +256,7 @@ end
 @testset "Array initials and scalar parameters with `split = false`" begin
     @variables x(t)[1:2]
     @parameters p
-    @mtkcompile sys=System([D(x[1])~x[1], D(x[2])~x[2]+p], t) split=false
+    @mtkcompile sys = System([D(x[1]) ~ x[1], D(x[2]) ~ x[2] + p], t) split = false
     ps = Set(parameters(sys; initial_parameters = true))
     @test length(ps) == 5
     for i in 1:2
@@ -255,29 +270,36 @@ end
 end
 
 @testset "Temporary values for solved variables are guesses" begin
-    @parameters σ ρ β=missing [guess = 8 / 3]
+    @parameters σ ρ β = missing [guess = 8 / 3]
     @variables x(t) y(t) z(t) w(t) w2(t)
 
-    eqs = [D(D(x)) ~ σ * (y - x),
+    eqs = [
+        D(D(x)) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
         D(z) ~ x * y - β * z,
         w ~ x + y + z + 2 * β,
-        0 ~ x^2 + y^2 - w2^2
+        0 ~ x^2 + y^2 - w2^2,
     ]
 
     @mtkcompile sys = System(eqs, t)
 
-    u0 = [D(x) => 2.0,
+    u0 = [
+        D(x) => 2.0,
         x => 1.0,
         y => 0.0,
-        z => 0.0]
+        z => 0.0,
+    ]
 
-    p = [σ => 28.0,
-        ρ => 10.0]
+    p = [
+        σ => 28.0,
+        ρ => 10.0,
+    ]
 
     tspan = (0.0, 100.0)
-    prob = ODEProblem(sys, [u0; p], tspan, jac = true, guesses = [w2 => -1.0],
-        warn_initialize_determined = false)
+    prob = ODEProblem(
+        sys, [u0; p], tspan, jac = true, guesses = [w2 => -1.0],
+        warn_initialize_determined = false
+    )
     @test prob[w2] ≈ -1.0
     @test prob.ps[β] ≈ 8 / 3
 end
@@ -286,20 +308,26 @@ end
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
 
-    eqs = [D(D(x)) ~ σ * (y - x),
+    eqs = [
+        D(D(x)) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
     @mtkcompile sys = System(eqs, t)
 
-    u0 = SA[D(x) => 2.0f0,
-    x => 1.0f0,
-    y => 0.0f0,
-    z => 0.0f0]
+    u0 = SA[
+        D(x) => 2.0f0,
+        x => 1.0f0,
+        y => 0.0f0,
+        z => 0.0f0,
+    ]
 
-    p = SA[σ => 28.0f0,
-    ρ => 10.0f0,
-    β => 8.0f0 / 3]
+    p = SA[
+        σ => 28.0f0,
+        ρ => 10.0f0,
+        β => 8.0f0 / 3,
+    ]
 
     tspan = (0.0f0, 100.0f0)
     prob = ODEProblem(sys, [u0; p], tspan)
@@ -327,7 +355,7 @@ end
     @test state_values(initdata.initializeprob) isa SVector
     @test parameter_values(initdata.initializeprob).tunable isa SVector
 
-    pend = complete(pend; split=false)
+    pend = complete(pend; split = false)
     prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
     @test prob.p isa SVector
     initdata = prob.f.initialization_data

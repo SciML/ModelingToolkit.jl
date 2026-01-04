@@ -24,7 +24,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
         vi = out_vars[varidx]
-        @assert vi!==ModelingToolkit.COMMON_NOTHING "Something went wrong on reconstructing unknowns from variable association list"
+        @assert vi !== ModelingToolkit.COMMON_NOTHING "Something went wrong on reconstructing unknowns from variable association list"
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
@@ -56,16 +56,22 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
         rhs = substitute(rhs, state.param_derivative_map)
-        substitution_dict = Dict(x.lhs => x.rhs
-        for x in out_eqs if x !== NOTHING_EQ && !SU.isconst(x.lhs))
+        substitution_dict = Dict(
+            x.lhs => x.rhs
+                for x in out_eqs if x !== NOTHING_EQ && !SU.isconst(x.lhs)
+        )
         sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[diff] = lhs ~ sub_rhs
     end
 
     final_vars = unique(filter(x -> !(operation(x) isa Differential), fullvars))
-    final_eqs = map(identity,
-        filter(x -> x.lhs !== ModelingToolkit.COMMON_NOTHING,
-            out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
+    final_eqs = map(
+        identity,
+        filter(
+            x -> x.lhs !== ModelingToolkit.COMMON_NOTHING,
+            out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]
+        )
+    )
 
     @set! sys.eqs = final_eqs
     @set! sys.unknowns = final_vars

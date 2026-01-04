@@ -36,8 +36,10 @@ equation_dependencies(jumpsys)
 equation_dependencies(jumpsys, variables = parameters(jumpsys))
 ```
 """
-function equation_dependencies(sys::AbstractSystem; variables = unknowns(sys),
-        eqs = equations(sys))
+function equation_dependencies(
+        sys::AbstractSystem; variables = unknowns(sys),
+        eqs = equations(sys)
+    )
     deps = Set()
     depeqs_to_vars = Vector{Vector}(undef, length(eqs))
 
@@ -47,7 +49,7 @@ function equation_dependencies(sys::AbstractSystem; variables = unknowns(sys),
         empty!(deps)
     end
 
-    depeqs_to_vars
+    return depeqs_to_vars
 end
 
 """
@@ -84,7 +86,7 @@ function asgraph(eqdeps, vtois)
         ne += length(vidxs)
     end
 
-    BipartiteGraph(ne, fadjlist, badjlist)
+    return BipartiteGraph(ne, fadjlist, badjlist)
 end
 
 # could be made to directly generate graph and save memory
@@ -113,10 +115,12 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(jumpsys)
 ```
 """
-function asgraph(sys::AbstractSystem; variables = unknowns(sys),
+function asgraph(
+        sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = Dict(v => i for (i, v) in enumerate(variables)),
-        eqs = equations(sys))
-    asgraph(equation_dependencies(sys; variables, eqs), variablestoids)
+        eqs = equations(sys)
+    )
+    return asgraph(equation_dependencies(sys; variables, eqs), variablestoids)
 end
 
 """
@@ -141,10 +145,12 @@ Continuing the example of [`equation_dependencies`](@ref)
 variable_dependencies(jumpsys)
 ```
 """
-function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
-        variablestoids = nothing, eqs = equations(sys))
+function variable_dependencies(
+        sys::AbstractSystem; variables = unknowns(sys),
+        variablestoids = nothing, eqs = equations(sys)
+    )
     vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
-            variablestoids
+        variablestoids
 
     deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
@@ -161,7 +167,7 @@ function variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
         ne += length(vidxs)
     end
 
-    BipartiteGraph(ne, fadjlist, badjlist)
+    return BipartiteGraph(ne, fadjlist, badjlist)
 end
 
 """
@@ -192,8 +198,10 @@ Continuing the example in [`asgraph`](@ref)
 dg = asdigraph(digr, jumpsys)
 ```
 """
-function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
-        equationsfirst = true, eqs = equations(sys))
+function asdigraph(
+        g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
+        equationsfirst = true, eqs = equations(sys)
+    )
     neqs = length(eqs)
     nvars = length(variables)
     fadjlist = deepcopy(g.fadjlist)
@@ -209,7 +217,7 @@ function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(
     append!(fadjlist, [Vector{Int}() for i in 1:(equationsfirst ? nvars : neqs)])
     prepend!(badjlist, [Vector{Int}() for i in 1:(equationsfirst ? neqs : nvars)])
 
-    SimpleDiGraph(g.ne, fadjlist, badjlist)
+    return SimpleDiGraph(g.ne, fadjlist, badjlist)
 end
 
 """
@@ -234,8 +242,10 @@ Continuing the example of `equation_dependencies`
 eqeqdep = eqeq_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys))
 ```
 """
-function eqeq_dependencies(eqdeps::BipartiteGraph{T},
-        vardeps::BipartiteGraph{T}) where {T <: Integer}
+function eqeq_dependencies(
+        eqdeps::BipartiteGraph{T},
+        vardeps::BipartiteGraph{T}
+    ) where {T <: Integer}
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
 
     for (eqidx, sidxs) in enumerate(vardeps.badjlist)
@@ -246,7 +256,7 @@ function eqeq_dependencies(eqdeps::BipartiteGraph{T},
         end
     end
 
-    g
+    return g
 end
 
 """
@@ -273,7 +283,9 @@ Continuing the example of `equation_dependencies`
 varvardep = varvar_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys))
 ```
 """
-function varvar_dependencies(eqdeps::BipartiteGraph{T},
-        vardeps::BipartiteGraph{T}) where {T <: Integer}
-    eqeq_dependencies(vardeps, eqdeps)
+function varvar_dependencies(
+        eqdeps::BipartiteGraph{T},
+        vardeps::BipartiteGraph{T}
+    ) where {T <: Integer}
+    return eqeq_dependencies(vardeps, eqdeps)
 end

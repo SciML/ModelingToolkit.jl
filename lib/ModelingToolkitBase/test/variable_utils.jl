@@ -19,7 +19,7 @@ new = (((1 / β - 1) + δ) / γ)^(1 / (γ - 1))
 
 # Continuous
 using ModelingToolkitBase: isdifferential, collect_differential_variables,
-                       collect_ivs
+    collect_ivs
 @independent_variables t
 @variables u(t) y(t)
 D = Differential(t)
@@ -50,9 +50,12 @@ ts = collect_ivs([eq])
             β
         end
         sys = System(
-            [D(D(x)) ~ σ * (y - x)
-             D(y) ~ x * (ρ - z) - y
-             D(z) ~ x * y - β * z], iv; name)
+            [
+                D(D(x)) ~ σ * (y - x)
+                D(y) ~ x * (ρ - z) - y
+                D(z) ~ x * y - β * z
+            ], iv; name
+        )
     end
     function ArrSys(; name)
         @variables begin
@@ -71,70 +74,70 @@ ts = collect_ivs([eq])
 
     @mtkcompile sys = Outer()
     for (str, var) in [
-        # unicode system, scalar variable
-        ("😄.x", sys.😄.x),
-        ("😄.x($iv)", sys.😄.x),
-        ("😄₊x", sys.😄.x),
-        ("😄₊x($iv)", sys.😄.x),
-        # derivative
-        ("D(😄.x)", D(sys.😄.x)),
-        ("D(😄.x($iv))", D(sys.😄.x)),
-        ("D(😄₊x)", D(sys.😄.x)),
-        ("D(😄₊x($iv))", D(sys.😄.x)),
-        ("Differential($iv)(😄.x)", D(sys.😄.x)),
-        ("Differential($iv)(😄.x($iv))", D(sys.😄.x)),
-        ("Differential($iv)(😄₊x)", D(sys.😄.x)),
-        ("Differential($iv)(😄₊x($iv))", D(sys.😄.x)),
-        # other derivative
-        ("😄.xˍ$iv", D(sys.😄.x)),
-        ("😄.x($iv)ˍ$iv", D(sys.😄.x)),
-        ("😄₊xˍ$iv", D(sys.😄.x)),
-        ("😄₊x($iv)ˍ$iv", D(sys.😄.x)),
-        # scalar parameter
-        ("😄.σ", sys.😄.σ),
-        ("😄₊σ", sys.😄.σ),
-        # array variable
-        ("arr.x", sys.arr.x),
-        ("arr₊x", sys.arr.x),
-        ("arr.x($iv)", sys.arr.x),
-        ("arr₊x($iv)", sys.arr.x),
-        # getindex
-        ("arr.x[1]", sys.arr.x[1]),
-        ("arr₊x[1]", sys.arr.x[1]),
-        ("arr.x($iv)[1]", sys.arr.x[1]),
-        ("arr₊x($iv)[1]", sys.arr.x[1]),
-        # derivative
-        ("D(arr.x($iv))", D(sys.arr.x)),
-        ("D(arr₊x($iv))", D(sys.arr.x)),
-        ("D(arr.x[1])", D(sys.arr.x[1])),
-        ("D(arr₊x[1])", D(sys.arr.x[1])),
-        ("D(arr.x($iv)[1])", D(sys.arr.x[1])),
-        ("D(arr₊x($iv)[1])", D(sys.arr.x[1])),
-        ("Differential($iv)(arr.x($iv))", D(sys.arr.x)),
-        ("Differential($iv)(arr₊x($iv))", D(sys.arr.x)),
-        ("Differential($iv)(arr.x[1])", D(sys.arr.x[1])),
-        ("Differential($iv)(arr₊x[1])", D(sys.arr.x[1])),
-        ("Differential($iv)(arr.x($iv)[1])", D(sys.arr.x[1])),
-        ("Differential($iv)(arr₊x($iv)[1])", D(sys.arr.x[1])),
-        # other derivative
-        ("arr.xˍ$iv", D(sys.arr.x)),
-        ("arr₊xˍ$iv", D(sys.arr.x)),
-        ("arr.xˍ$iv($iv)", D(sys.arr.x)),
-        ("arr₊xˍ$iv($iv)", D(sys.arr.x)),
-        ("arr.xˍ$iv[1]", D(sys.arr.x[1])),
-        ("arr₊xˍ$iv[1]", D(sys.arr.x[1])),
-        ("arr.xˍ$iv($iv)[1]", D(sys.arr.x[1])),
-        ("arr₊xˍ$iv($iv)[1]", D(sys.arr.x[1])),
-        ("arr.x($iv)ˍ$iv", D(sys.arr.x)),
-        ("arr₊x($iv)ˍ$iv", D(sys.arr.x)),
-        ("arr.x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
-        ("arr₊x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
-        # array parameter
-        ("arr.p", sys.arr.p),
-        ("arr₊p", sys.arr.p),
-        ("arr.p[1, 2]", sys.arr.p[1, 2]),
-        ("arr₊p[1, 2]", sys.arr.p[1, 2])
-    ]
+            # unicode system, scalar variable
+            ("😄.x", sys.😄.x),
+            ("😄.x($iv)", sys.😄.x),
+            ("😄₊x", sys.😄.x),
+            ("😄₊x($iv)", sys.😄.x),
+            # derivative
+            ("D(😄.x)", D(sys.😄.x)),
+            ("D(😄.x($iv))", D(sys.😄.x)),
+            ("D(😄₊x)", D(sys.😄.x)),
+            ("D(😄₊x($iv))", D(sys.😄.x)),
+            ("Differential($iv)(😄.x)", D(sys.😄.x)),
+            ("Differential($iv)(😄.x($iv))", D(sys.😄.x)),
+            ("Differential($iv)(😄₊x)", D(sys.😄.x)),
+            ("Differential($iv)(😄₊x($iv))", D(sys.😄.x)),
+            # other derivative
+            ("😄.xˍ$iv", D(sys.😄.x)),
+            ("😄.x($iv)ˍ$iv", D(sys.😄.x)),
+            ("😄₊xˍ$iv", D(sys.😄.x)),
+            ("😄₊x($iv)ˍ$iv", D(sys.😄.x)),
+            # scalar parameter
+            ("😄.σ", sys.😄.σ),
+            ("😄₊σ", sys.😄.σ),
+            # array variable
+            ("arr.x", sys.arr.x),
+            ("arr₊x", sys.arr.x),
+            ("arr.x($iv)", sys.arr.x),
+            ("arr₊x($iv)", sys.arr.x),
+            # getindex
+            ("arr.x[1]", sys.arr.x[1]),
+            ("arr₊x[1]", sys.arr.x[1]),
+            ("arr.x($iv)[1]", sys.arr.x[1]),
+            ("arr₊x($iv)[1]", sys.arr.x[1]),
+            # derivative
+            ("D(arr.x($iv))", D(sys.arr.x)),
+            ("D(arr₊x($iv))", D(sys.arr.x)),
+            ("D(arr.x[1])", D(sys.arr.x[1])),
+            ("D(arr₊x[1])", D(sys.arr.x[1])),
+            ("D(arr.x($iv)[1])", D(sys.arr.x[1])),
+            ("D(arr₊x($iv)[1])", D(sys.arr.x[1])),
+            ("Differential($iv)(arr.x($iv))", D(sys.arr.x)),
+            ("Differential($iv)(arr₊x($iv))", D(sys.arr.x)),
+            ("Differential($iv)(arr.x[1])", D(sys.arr.x[1])),
+            ("Differential($iv)(arr₊x[1])", D(sys.arr.x[1])),
+            ("Differential($iv)(arr.x($iv)[1])", D(sys.arr.x[1])),
+            ("Differential($iv)(arr₊x($iv)[1])", D(sys.arr.x[1])),
+            # other derivative
+            ("arr.xˍ$iv", D(sys.arr.x)),
+            ("arr₊xˍ$iv", D(sys.arr.x)),
+            ("arr.xˍ$iv($iv)", D(sys.arr.x)),
+            ("arr₊xˍ$iv($iv)", D(sys.arr.x)),
+            ("arr.xˍ$iv[1]", D(sys.arr.x[1])),
+            ("arr₊xˍ$iv[1]", D(sys.arr.x[1])),
+            ("arr.xˍ$iv($iv)[1]", D(sys.arr.x[1])),
+            ("arr₊xˍ$iv($iv)[1]", D(sys.arr.x[1])),
+            ("arr.x($iv)ˍ$iv", D(sys.arr.x)),
+            ("arr₊x($iv)ˍ$iv", D(sys.arr.x)),
+            ("arr.x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
+            ("arr₊x($iv)ˍ$iv[1]", D(sys.arr.x[1])),
+            # array parameter
+            ("arr.p", sys.arr.p),
+            ("arr₊p", sys.arr.p),
+            ("arr.p[1, 2]", sys.arr.p[1, 2]),
+            ("arr₊p[1, 2]", sys.arr.p[1, 2]),
+        ]
         @test isequal(parse_variable(sys, str), var)
     end
 end

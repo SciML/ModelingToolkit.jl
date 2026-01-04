@@ -24,27 +24,32 @@ rng = StableRNG(22525)
 
     prob = ImplicitDiscreteProblem(sys, [x(k - 1) => 3.0], tspan)
     @test prob.u0 == [3.0, 1.0]
-    prob = ImplicitDiscreteProblem(sys, [], tspan; guesses = [x(k-1) => 3.0])
+    prob = ImplicitDiscreteProblem(sys, [], tspan; guesses = [x(k - 1) => 3.0])
     @test prob.u0 == [3.0, 1.0]
     @variables x(t)
     @mtkcompile sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
     if @isdefined(ModelingToolkit)
-        @test_throws ModelingToolkitBase.MissingGuessError prob=ImplicitDiscreteProblem(
-            sys, [], tspan)
+        @test_throws ModelingToolkitBase.MissingGuessError prob = ImplicitDiscreteProblem(
+            sys, [], tspan
+        )
     end
 end
 
 @testset "System with algebraic equations" begin
     @variables x(t) y(t)
-    eqs = [x(k) ~ x(k - 1) + x(k - 2),
-        x^2 ~ 1 - y^2]
+    eqs = [
+        x(k) ~ x(k - 1) + x(k - 2),
+        x^2 ~ 1 - y^2,
+    ]
     @mtkcompile sys = System(eqs, t)
     f = ImplicitDiscreteFunction(sys)
 
     function correct_f(u_next, u, p, t)
-        [u[2] - u_next[1],
+        [
+            u[2] - u_next[1],
             u[1] + u[2] - u_next[2],
-            1 - (u_next[1] + u_next[2])^2 - u_next[3]^2]
+            1 - (u_next[1] + u_next[2])^2 - u_next[3]^2,
+        ]
     end
 
     reorderer = getu(sys, [x(k - 2), x(k - 1), y])
@@ -57,7 +62,8 @@ end
 
     # Initialization is satisfied.
     prob = ImplicitDiscreteProblem(
-        sys, [x(k - 1) => 0.3, x(k - 2) => 0.4], (0, 10), guesses = [y => 1])
+        sys, [x(k - 1) => 0.3, x(k - 2) => 0.4], (0, 10), guesses = [y => 1]
+    )
     if @isdefined(ModelingToolkit)
         @test length(equations(prob.f.initialization_data.initializeprob.f.sys)) == 1
     end
@@ -66,19 +72,26 @@ end
 @testset "Handle observables in function codegen" begin
     # Observable appears in differential equation
     @variables x(t) y(t) z(t)
-    eqs = [x(k) ~ x(k - 1) + x(k - 2),
+    eqs = [
+        x(k) ~ x(k - 1) + x(k - 2),
         y(k) ~ x(k) + x(k - 2) * z(k - 1),
-        z ~ 2 - x - y]
+        z ~ 2 - x - y,
+    ]
     @mtkcompile sys = System(eqs, t)
     @test length(unknowns(sys)) == length(equations(sys)) == 3
     @test occursin(
-        "var\"y(t)\"", string(ImplicitDiscreteFunction(sys; expression = Val{true})))
+        "var\"y(t)\"", string(ImplicitDiscreteFunction(sys; expression = Val{true}))
+    )
 
     # Shifted observable that appears in algebraic equation is properly handled.
-    eqs = [z(k) ~ x(k) + sin(x(k)),
+    eqs = [
+        z(k) ~ x(k) + sin(x(k)),
         y(k) ~ x(k - 1) + x(k - 2),
-        z(k) * x(k) ~ 3]
+        z(k) * x(k) ~ 3,
+    ]
     @mtkcompile sys = System(eqs, t)
-    @test occursin("var\"Shift(t, 1)(z(t))\"",
-        string(ImplicitDiscreteFunction(sys; expression = Val{true})))
+    @test occursin(
+        "var\"Shift(t, 1)(z(t))\"",
+        string(ImplicitDiscreteFunction(sys; expression = Val{true}))
+    )
 end

@@ -36,20 +36,26 @@ eq8 = -0.1 ~ D(Z) + X
 @test is_diff_equation(eq8)
 
 # Creates systems.
-eqs1 = [X * Y + a ~ Z^3 - X * log(b + Y)
-        X ~ Z * Y * X + a + b
-        c * sin(X) + sin(Y) ~ d * (a + X * (b + Y * (c + Z)))]
-eqs2 = [X + Y + c ~ b * X^(X + Z + a)
-        D(X) ~ a * Y + b * X + c * Z
-        D(Z) + Z * Y ~ X - log(Z)]
-eqs3 = [D(X) ~ sqrt(X + b) + sqrt(Z + c)
-        2Z * (Z + Y) ~ D(Y) * log(a)
-        D(Z) + c * X ~ b / (X + Y^d) + D(Z)]
+eqs1 = [
+    X * Y + a ~ Z^3 - X * log(b + Y)
+    X ~ Z * Y * X + a + b
+    c * sin(X) + sin(Y) ~ d * (a + X * (b + Y * (c + Z)))
+]
+eqs2 = [
+    X + Y + c ~ b * X^(X + Z + a)
+    D(X) ~ a * Y + b * X + c * Z
+    D(Z) + Z * Y ~ X - log(Z)
+]
+eqs3 = [
+    D(X) ~ sqrt(X + b) + sqrt(Z + c)
+    2Z * (Z + Y) ~ D(Y) * log(a)
+    D(Z) + c * X ~ b / (X + Y^d) + D(Z)
+]
 @named osys1 = System(eqs1, t)
 @named osys2 = System(eqs2, t)
 @named osys3 = System(eqs3, t)
 
-# Test `has...` for non-composed systems. 
+# Test `has...` for non-composed systems.
 @test has_alg_equations(osys1)
 @test has_alg_equations(osys2)
 @test !has_alg_equations(osys3)

@@ -18,11 +18,13 @@ const ST = StructuralTransformations
 @variables x(t) y(t) w(t) z(t) T(t)
 
 # Simple pendulum in cartesian coordinates
-eqs = [D(x) ~ w,
+eqs = [
+    D(x) ~ w,
     D(y) ~ z,
     D(w) ~ T * x,
     D(z) ~ T * y - g,
-    0 ~ x^2 + y^2 - L^2]
+    0 ~ x^2 + y^2 - L^2,
+]
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
 StateSelection.find_solvables!(state)
@@ -54,7 +56,8 @@ end
     @parameters foo(::AbstractVector)[1:2]
     _tmp_fn(x) = 2x
     @mtkcompile sys = System(
-        [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+        [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t
+    )
     @test length(equations(sys)) == 1
     @test length(observed(sys)) == 6
     @test any(obs -> isequal(obs, y), observables(sys))
@@ -77,7 +80,8 @@ end
         @parameters foo(::AbstractVector)[1:2]
         _tmp_fn(x) = 2x
         @named sys = System(
-            [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+            [D(x) ~ z[1] + z[2] + foo(z)[1], y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t
+        )
 
         sys2 = mtkcompile(sys; reassemble_alg)
         @test length(observed(sys2)) == 4
@@ -91,7 +95,8 @@ end
         @parameters foo(::AbstractVector)[1:2]
         _tmp_fn(x) = 2x
         @named sys = System(
-            [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t)
+            [D(x) ~ z[1] + z[2] + foo(z)[1] + w, y[1] ~ 2t, y[2] ~ 3t, z ~ foo(y)], t
+        )
 
         sys2 = mtkcompile(sys; reassemble_alg, fully_determined = false)
         @test length(observed(sys2)) == 4
@@ -117,17 +122,22 @@ end
 
     # Expand shifts
     @test isequal(
-        ST.distribute_shift(Shift(t, -1)(x + y)), Shift(t, -1)(x) + Shift(t, -1)(y))
+        ST.distribute_shift(Shift(t, -1)(x + y)), Shift(t, -1)(x) + Shift(t, -1)(y)
+    )
 
     expr = a * Shift(t, -2)(x) + Shift(t, 2)(y) + b
-    @test isequal(ST.simplify_shifts(ST.distribute_shift(Shift(t, 2)(expr))),
-        a * x + Shift(t, 4)(y) + b)
+    @test isequal(
+        ST.simplify_shifts(ST.distribute_shift(Shift(t, 2)(expr))),
+        a * x + Shift(t, 4)(y) + b
+    )
     @test isequal(ST.distribute_shift(Shift(t, 2)(exp(z))), exp(Shift(t, 2)(z)))
     @test isequal(ST.distribute_shift(Shift(t, 2)(exp(a) + b)), exp(a) + b)
 
     expr = a^x - log(b * y) + z * x
-    @test isequal(ST.distribute_shift(Shift(t, -3)(expr)),
-        a^(Shift(t, -3)(x)) - log(b * Shift(t, -3)(y)) + Shift(t, -3)(z) * Shift(t, -3)(x))
+    @test isequal(
+        ST.distribute_shift(Shift(t, -3)(expr)),
+        a^(Shift(t, -3)(x)) - log(b * Shift(t, -3)(y)) + Shift(t, -3)(z) * Shift(t, -3)(x)
+    )
 
     expr = x(k + 1) ~ x + x(k - 1)
     @test isequal(ST.distribute_shift(Shift(t, -1)(expr)), x ~ x(k - 1) + x(k - 2))
@@ -152,9 +162,11 @@ end
         @testset "With dummy derivatives" begin
             @parameters g
             @variables x(t) y(t) [state_priority = 10] λ(t)
-            eqs = [D(D(x)) ~ λ * x
-                   D(D(y)) ~ λ * y - g
-                   x^2 + y^2 ~ 1]
+            eqs = [
+                D(D(x)) ~ λ * x
+                D(D(y)) ~ λ * y - g
+                x^2 + y^2 ~ 1
+            ]
             @mtkcompile sys = System(eqs, t)
             mapping = map_variables_to_equations(sys)
 
@@ -181,11 +193,13 @@ end
         end
         @testset "DDEs" begin
             function oscillator(; name, k = 1.0, τ = 0.01)
-                @parameters k=k τ=τ
-                @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
-                eqs = [D(x(t)) ~ y,
+                @parameters k = k τ = τ
+                @variables x(..) = 0.1 y(t) = 0.1 jcn(t) = 0.0 delx(t)
+                eqs = [
+                    D(x(t)) ~ y,
                     D(y) ~ -k * x(t - τ) + jcn,
-                    delx ~ x(t - τ)]
+                    delx ~ x(t - τ),
+                ]
                 return System(eqs, t; name = name)
             end
 
@@ -193,8 +207,10 @@ end
                 osc1 = oscillator(k = 1.0, τ = 0.01)
                 osc2 = oscillator(k = 2.0, τ = 0.04)
             end
-            eqs = [osc1.jcn ~ osc2.delx,
-                osc2.jcn ~ osc1.delx]
+            eqs = [
+                osc1.jcn ~ osc2.delx,
+                osc2.jcn ~ osc1.delx,
+            ]
             @named coupledOsc = System(eqs, t)
             @mtkcompile sys = compose(coupledOsc, systems)
             mapping = map_variables_to_equations(sys)
@@ -236,9 +252,11 @@ end
             ddx(t)
         end
         systems = []
-        eqs = [D(x) ~ dx
-               D(dx) ~ ddx
-               dx ~ (k - x) / T]
+        eqs = [
+            D(x) ~ dx
+            D(dx) ~ ddx
+            dx ~ (k - x) / T
+        ]
         evt = SymbolicDiscreteCallback([1.0], [k ~ x]; discrete_parameters = [k])
         return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
@@ -256,10 +274,12 @@ end
             ddx(t)
         end
         systems = []
-        eqs = [D(x) ~ dx
-               D(dx) ~ ddx
-               D(k[1]) ~ 1.0
-               dx ~ (k[1] - x) / T]
+        eqs = [
+            D(x) ~ dx
+            D(dx) ~ ddx
+            D(k[1]) ~ 1.0
+            dx ~ (k[1] - x) / T
+        ]
         evt = SymbolicDiscreteCallback([1.0], [k[1] ~ x]; discrete_parameters = [k])
         return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
@@ -277,10 +297,12 @@ end
             ddx(t)
         end
         systems = []
-        eqs = [D(x) ~ dx
-               D(dx) ~ ddx
-               dx ~ (k - x) / T
-               D(k) ~ missing]
+        eqs = [
+            D(x) ~ dx
+            D(dx) ~ ddx
+            dx ~ (k - x) / T
+            D(k) ~ missing
+        ]
         evt = SymbolicDiscreteCallback([1.0], [k ~ x]; discrete_parameters = [k])
         return System(eqs, t, [vars; discs], params; systems, name, discrete_events = [evt])
     end
@@ -320,9 +342,11 @@ end
                 ddx(t)
             end
             systems = []
-            eqs = [D(x) ~ dx
-                   D(dx) ~ ddx
-                   dx ~ (k(t) - x) / T]
+            eqs = [
+                D(x) ~ dx
+                D(dx) ~ ddx
+                dx ~ (k(t) - x) / T
+            ]
             return System(eqs, t, vars, params; systems, name)
         end
 
@@ -344,23 +368,27 @@ end
         @variables x(t) p
         @parameters q
         @discretes y(t)
-        @mtkcompile sys = System([D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
+        @mtkcompile sys = System(
+            [D(x) ~ x * q, x^2 + y^2 ~ p], t, [x, y],
             [p, q]; initialization_eqs = [p + q ~ 3],
-            bindings = [p => missing], guesses = [p => 1.0, y => 1.0])
+            bindings = [p => missing], guesses = [p => 1.0, y => 1.0]
+        )
         @test length(equations(sys)) == 2
         @test length(parameters(sys)) == 2
         prob = ODEProblem(sys, [x => 1.0, q => 2.0], (0.0, 1.0))
-        integ = init(prob, Rodas5P(); abstol = 1e-10, reltol = 1e-8)
-        @test integ.ps[p]≈1.0 atol=1e-6
-        @test integ[y]≈0.0 atol=1e-5
+        integ = init(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-8)
+        @test integ.ps[p] ≈ 1.0 atol = 1.0e-6
+        @test integ[y] ≈ 0.0 atol = 1.0e-5
     end
 
     @testset "NonlinearSystem" begin
         @variables x p
         @parameters y q
-        @mtkcompile sys = System([0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
+        @mtkcompile sys = System(
+            [0 ~ p * x + y, x^3 + y^3 ~ q], [x, y],
             [p, q]; initialization_eqs = [p ~ q + 1],
-            guesses = [p => 1.0], bindings = [p => missing])
+            guesses = [p => 1.0], bindings = [p => missing]
+        )
         @test length(equations(sys)) == length(unknowns(sys)) == 1
         @test length(observed(sys)) == 1
         @test observed(sys)[1].lhs in Set([x, y])
@@ -375,9 +403,11 @@ end
         @parameters q b
         @discretes y(t)
         @brownians c
-        @mtkcompile sys = System([D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
+        @mtkcompile sys = System(
+            [D(x) ~ x + q * a, D(y) ~ y + p * b + c], t, [x, y],
             [p, q], [a, b, c]; initialization_eqs = [p + q ~ 4],
-            guesses = [p => 1.0], bindings = [p => missing])
+            guesses = [p => 1.0], bindings = [p => missing]
+        )
         @test length(equations(sys)) == 2
         @test issetequal(unknowns(sys), [x, y])
         @test issetequal(parameters(sys), [p, q])

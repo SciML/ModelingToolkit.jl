@@ -3,7 +3,7 @@ Test whether `x` is a constant-type Sym.
 """
 function isconstant(x)
     x = unwrap(x)
-    x isa SymbolicT && !getmetadata(x, VariableTunable, true)
+    return x isa SymbolicT && !getmetadata(x, VariableTunable, true)
 end
 
 """
@@ -13,7 +13,7 @@ Maps the parameter to a constant. The parameter must have a default.
 """
 function toconstant(s)
     s = toparam(s)
-    setmetadata(s, VariableTunable, false)
+    return setmetadata(s, VariableTunable, false)
 end
 
 toconstant(s::Union{Num, Symbolics.Arr}) = wrap(toconstant(value(s)))
@@ -26,8 +26,10 @@ Define one or more constants.
 See also [`@independent_variables`](@ref), [`@parameters`](@ref) and [`@variables`](@ref).
 """
 macro constants(xs...)
-    Symbolics.parse_vars(:constants,
+    return Symbolics.parse_vars(
+        :constants,
         Real,
         xs,
-        toconstant)
+        toconstant
+    )
 end

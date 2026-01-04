@@ -6,13 +6,15 @@ get_iv(D::Differential) = D.x
 Turn `x(t)` into `x`
 """
 function detime_dvs(op)
-    if !iscall(op)
+    return if !iscall(op)
         op
     elseif issym(operation(op))
         SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
     else
-        maketerm(typeof(op), operation(op), detime_dvs.(arguments(op)),
-            metadata(op))
+        maketerm(
+            typeof(op), operation(op), detime_dvs.(arguments(op)),
+            metadata(op)
+        )
     end
 end
 
@@ -23,19 +25,21 @@ Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
     issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
-    iscall(op) ?
-    maketerm(typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
-        metadata(op)) :
-    op
+    return iscall(op) ?
+        maketerm(
+            typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
+            metadata(op)
+        ) :
+        op
 end
 
 function modified_unknowns!(munknowns, e::Equation, unknownlist = nothing)
-    get_variables!(munknowns, e.lhs, unknownlist)
+    return get_variables!(munknowns, e.lhs, unknownlist)
 end
 
 function todict(d)
     eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
-    d isa Dict ? d : Dict(d)
+    return d isa Dict ? d : Dict(d)
 end
 
 function _readable_code(ex)
@@ -54,7 +58,7 @@ function _readable_code(ex)
     for a in ex.args
         push!(expr.args, _readable_code(a))
     end
-    expr
+    return expr
 end
 
 function rec_remove_macro_linenums!(expr)
@@ -68,7 +72,7 @@ function rec_remove_macro_linenums!(expr)
             end
         end
     end
-    expr
+    return expr
 end
 function readable_code(expr)
     expr = Base.remove_linenums!(_readable_code(expr))
@@ -108,10 +112,11 @@ function check_independent_variables(ivs)
     for iv in ivs
         isparameter(iv) || @invokelatest warn_indepvar(iv)
     end
+    return
 end
 
 @noinline function warn_indepvar(iv::SymbolicT)
-    @warn "Independent variable $iv should be defined with @independent_variables $iv."
+    return @warn "Independent variable $iv should be defined with @independent_variables $iv."
 end
 
 function check_parameters(ps, iv)
@@ -119,10 +124,11 @@ function check_parameters(ps, iv)
         isequal(iv, p) &&
             throw(ArgumentError("Independent variable $iv not allowed in parameters."))
     end
+    return
 end
 
 function is_delay_var(iv::SymbolicT, var::SymbolicT)
-    Moshi.Match.@match var begin
+    return Moshi.Match.@match var begin
         BSImpl.Term(; f, args) => begin
             length(args) > 1 && return false
             arg = args[1]
@@ -140,6 +146,7 @@ function check_variables(dvs, iv)
         (is_delay_var(iv, dv) || SU.query(isequal(iv), dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
+    return
 end
 
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
@@ -153,6 +160,7 @@ function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
     for eq in eqs
         check_lhs(eq, Differential, dvs)
     end
+    return
 end
 
 """
@@ -180,7 +188,7 @@ struct IndepvarCheckPredicate
 end
 
 function (icp::IndepvarCheckPredicate)(ex::SymbolicT)
-    Moshi.Match.@match ex begin
+    return Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Differential end => begin
             f = f::Differential
             isequal(f.x, icp.iv) || throw_multiple_iv(icp.iv, f.x)
@@ -205,6 +213,7 @@ function check_equations(eqs::Vector{Equation}, iv::SymbolicT)
         SU.query(icp, eq.lhs)
         SU.query(icp, eq.rhs)
     end
+    return
 end
 
 """
@@ -214,7 +223,7 @@ Assert that the subsystems have the appropriate namespacing behavior.
 """
 function check_subsystems(systems)
     idxs = findall(!does_namespacing, systems)
-    isempty(idxs) || throw_bad_namespacing(systems, idxs)
+    return isempty(idxs) || throw_bad_namespacing(systems, idxs)
 end
 
 @noinline function throw_bad_namespacing(systems, idxs)
@@ -230,7 +239,7 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
         return
     end
     op = operation(unwrap(x))
-    if op isa target_op
+    return if op isa target_op
         push!(ivs, get_iv(op))
         x = if target_op <: Differential
             op.x
@@ -242,12 +251,12 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if iscall(x) &&
-       (operation(x) == getindex || operation(x) == real || operation(x) == imag)
+    return if iscall(x) &&
+            (operation(x) == getindex || operation(x) == real || operation(x) == imag)
         iv_from_nested_derivative(arguments(x)[1], op)
     elseif iscall(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
-        arguments(x)[1]
+            arguments(x)[1]
     elseif issym(x)
         x
     else
@@ -266,11 +275,11 @@ function check_bindings(ps::Vector{SymbolicT}, bindings::SymmapT)
     for p in ps
         push_as_atomic_array!(atomic_ps, p)
     end
-    check_bindings(atomic_ps, bindings)
+    return check_bindings(atomic_ps, bindings)
 end
 
 function check_bindings_is_atomic(x::SymbolicT)
-    SU.default_is_atomic(x) && Moshi.Match.@match x begin
+    return SU.default_is_atomic(x) && Moshi.Match.@match x begin
         BSImpl.Term(; f) && if f isa Operator end => f isa Initial
         BSImpl.Term(; f) && if f === getindex end => false
         _ => true
@@ -290,11 +299,15 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
         val === COMMON_NOTHING && continue
         if val === COMMON_MISSING
             if !is_variable_floatingpoint(p)
-                throw(ArgumentError("""
-                `missing` bindings are only valid for solvable parameters! Non-floating \
-                point parameters cannot be solved for, and thus do not accept a binding \
-                of `missing`. Found invalid parameter $p of symtype $(symtype(p)).
-                """))
+                throw(
+                    ArgumentError(
+                        """
+                        `missing` bindings are only valid for solvable parameters! Non-floating \
+                        point parameters cannot be solved for, and thus do not accept a binding \
+                        of `missing`. Found invalid parameter $p of symtype $(symtype(p)).
+                        """
+                    )
+                )
             end
         end
         empty!(varsbuf)
@@ -304,16 +317,21 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
         filter!(!isinitial, varsbuf)
         isempty(varsbuf) && continue
 
-        throw(ArgumentError("""
-        Bindings for parameters can only be functions of other parameters. For parameter \
-        $p, encountered binding $val which contains non-parameter symbolics $varsbuf. If \
-        you intended $p to be a discrete variable, pass it as an unknown of the system.
-        """))
+        throw(
+            ArgumentError(
+                """
+                Bindings for parameters can only be functions of other parameters. For parameter \
+                $p, encountered binding $val which contains non-parameter symbolics $varsbuf. If \
+                you intended $p to be a discrete variable, pass it as an unknown of the system.
+                """
+            )
+        )
     end
+    return
 end
 
 function check_no_parameter_equations_recurse(ex::SymbolicT)
-    iscall(ex) && !check_bindings_is_atomic(ex)
+    return iscall(ex) && !check_bindings_is_atomic(ex)
 end
 
 """
@@ -336,12 +354,14 @@ function check_no_parameter_equations(sys::AbstractSystem)
         isempty(varsbuf) && push!(pareqs, eq)
     end
 
-    if !isempty(pareqs)
-        error("""
-        The equations of a system must involve the unknowns/observables. The following \
-        equations were found to have no unknowns/observables:
-        $(join(string.(pareqs), "\n"))
-        """)
+    return if !isempty(pareqs)
+        error(
+            """
+            The equations of a system must involve the unknowns/observables. The following \
+            equations were found to have no unknowns/observables:
+            $(join(string.(pareqs), "\n"))
+            """
+        )
     end
 end
 
@@ -355,7 +375,7 @@ function check_no_bound_initial_conditions(sys::AbstractSystem)
     bound_ps = (get_parameter_bindings_graph(sys)::ParameterBindingsGraph).bound_ps
     ics = initial_conditions(sys)
     bound_ics = intersect(bound_ps, keys(ics))
-    isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
+    return isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
 end
 
 struct BoundInitialConditionsError <: Exception
@@ -363,11 +383,13 @@ struct BoundInitialConditionsError <: Exception
 end
 
 function Base.showerror(io::IO, err::BoundInitialConditionsError)
-    print(io, """
-    Bound parameters cannot have initial conditions. The following bound parameters \
-    were found to have initial conditions:
-    $(join(string.(collect(err.bound_pars)), "\n"))
-    """)
+    return print(
+        io, """
+        Bound parameters cannot have initial conditions. The following bound parameters \
+        were found to have initial conditions:
+        $(join(string.(collect(err.bound_pars)), "\n"))
+        """
+    )
 end
 
 """
@@ -388,7 +410,7 @@ getdefault(v) = value(Symbolics.getdefaultval(v))
 Set the default value of symbolic variable `v` to `val`.
 """
 function setdefault(v, val)
-    val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
+    return val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
 function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
@@ -408,8 +430,8 @@ function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::Sy
     if hasname(v) && occursin(NAMESPACE_SEPARATOR, string(getname(v)))
         return
     end
-    Moshi.Match.@match v begin
-        BSImpl.Const(;) => return
+    return Moshi.Match.@match v begin
+        BSImpl.Const() => return
         BSImpl.Term(; f, args) && if f === getindex end => begin
             collect_defaults!(initial_conditions, bindings, args[1])
         end
@@ -421,7 +443,7 @@ function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::Sy
             Moshi.Match.@match def begin
                 # `get!` here is just shorthand for "if the key doesn't exist, add this
                 # value".
-                BSImpl.Const(;) => if def === COMMON_MISSING
+                BSImpl.Const() => if def === COMMON_MISSING
                     get!(bindings, v, def)
                 else
                     get!(initial_conditions, v, def)
@@ -436,11 +458,12 @@ function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, vars:
     for v in vars
         collect_defaults!(initial_conditions, bindings, v)
     end
+    return
 end
 
 function collect_guesses!(guesses::SymmapT, v::SymbolicT)
-    Moshi.Match.@match v begin
-        BSImpl.Const(;) => return
+    return Moshi.Match.@match v begin
+        BSImpl.Const() => return
         BSImpl.Term(; f, args) && if f === getindex end => begin
             collect_guesses!(guesses, args[1])
         end
@@ -455,18 +478,20 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     for v in vars
         collect_guesses!(guesses, v)
     end
+    return
 end
 
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         x = Moshi.Match.@match x begin
-            BSImpl.Const(;) => continue
+            BSImpl.Const() => continue
             BSImpl.Term(; f, args) && if f === getindex end => args[1]
             _ => x
         end
         hasname(x) || continue
         vars[getname(x)] = x
     end
+    return
 end
 
 """
@@ -477,7 +502,7 @@ Throw error when difference/derivative operation occurs in the R.H.S.
         optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-          "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
+        "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
 end
 
@@ -489,8 +514,10 @@ function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
-    foreach(expr -> _check_operator_variables(eq, op, expr),
-        SymbolicUtils.arguments(expr))
+    return foreach(
+        expr -> _check_operator_variables(eq, op, expr),
+        SymbolicUtils.arguments(expr)
+    )
 end
 """
 Check if all the LHS are unique
@@ -521,12 +548,13 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
         end
         empty!(tmp)
     end
+    return
 end
 
 isoperator(::Any, ::Type{T}) where {T} = false
 isoperator(ex::Union{Num, Arr, CallAndWrap}, ::Type{op}) where {op} = isoperator(unwrap(ex), op)
 function isoperator(expr::SymbolicT, ::Type{op}) where {op <: SU.Operator}
-    Moshi.Match.@match expr begin
+    return Moshi.Match.@match expr begin
         BSImpl.Term(; f) => f isa op
         _ => false
     end
@@ -539,14 +567,14 @@ isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
     x isa SymbolicT || return false
-    hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])::Bool
+    return hasmetadata(x, VariableSource) || iscall(x) && operation(x) === getindex && isvariable(arguments(x)[1])::Bool
 end
 
 function collect_operator_variables(sys::AbstractSystem, args...)
-    collect_operator_variables(equations(sys), args...)
+    return collect_operator_variables(equations(sys), args...)
 end
 function collect_operator_variables(eq::Equation, args...)
-    collect_operator_variables([eq], args...)
+    return collect_operator_variables([eq], args...)
 end
 
 """
@@ -615,7 +643,7 @@ function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::Order
             collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
     end
-    if has_constraints(sys)
+    return if has_constraints(sys)
         for eq in constraints(sys)
             eqtype_supports_collect_vars(eq) || continue
             collect_vars!(unknowns, parameters, eq, iv, op; depth)
@@ -642,7 +670,7 @@ end
 function validate_operator(op::Differential, args, iv; context = nothing)
     isequal(op.x, iv) || throw(OperatorIndepvarMismatchError(op, iv, context))
     arg = unwrap(only(args))
-    if !is_variable_floatingpoint(arg)
+    return if !is_variable_floatingpoint(arg)
         throw(ContinuousOperatorDiscreteArgumentError(op, arg, context))
     end
 end
@@ -654,11 +682,13 @@ struct ContinuousOperatorDiscreteArgumentError <: Exception
 end
 
 function Base.showerror(io::IO, err::ContinuousOperatorDiscreteArgumentError)
-    print(io, """
-    Operator $(err.op) expects continuous arguments, with a `symtype` such as `Number`,
-    `Real`, `Complex` or a subtype of `AbstractFloat`. Found $(err.arg) with a symtype of
-    $(symtype(err.arg))$(err.context === nothing ? "." : "in $(err.context).")
-    """)
+    return print(
+        io, """
+        Operator $(err.op) expects continuous arguments, with a `symtype` such as `Number`,
+        `Real`, `Complex` or a subtype of `AbstractFloat`. Found $(err.arg) with a symtype of
+        $(symtype(err.arg))$(err.context === nothing ? "." : "in $(err.context).")
+        """
+    )
 end
 
 struct OperatorIndepvarMismatchError <: Exception
@@ -668,11 +698,13 @@ struct OperatorIndepvarMismatchError <: Exception
 end
 
 function Base.showerror(io::IO, err::OperatorIndepvarMismatchError)
-    print(io, """
-    Encountered operator `$(err.op)` which has different independent variable than the \
-    one used in the system `$(err.iv)`.
-    """)
-    if err.context !== nothing
+    print(
+        io, """
+        Encountered operator `$(err.op)` which has different independent variable than the \
+        one used in the system `$(err.iv)`.
+        """
+    )
+    return if err.context !== nothing
         println(io)
         print(io, "Context:\n$(err.context)")
     end
@@ -681,7 +713,7 @@ end
 struct OnlyOperatorIsAtomic{O} end
 
 function (::OnlyOperatorIsAtomic{O})(ex::SymbolicT) where {O}
-    Moshi.Match.@match ex begin
+    return Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa O end => true
         _ => false
     end
@@ -690,7 +722,7 @@ end
 struct OperatorIsAtomic{O} end
 
 function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
-    SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+    return SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => f isa O
         _ => true
     end
@@ -712,8 +744,8 @@ This function should return `nothing`.
 """
 function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
     Moshi.Match.@match expr begin
-        BSImpl.Const(;) => return
-        BSImpl.Sym(;) => return collect_var!(unknowns, parameters, expr, iv; depth)
+        BSImpl.Const() => return
+        BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
         _ => nothing
     end
     vars = OrderedSet{SymbolicT}()
@@ -749,27 +781,32 @@ eqtype_supports_collect_vars(eq::Equation) = true
 eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
-        depth = 0) where {op}
+function collect_vars!(
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
+        depth = 0
+    ) where {op}
     collect_vars!(unknowns, parameters, eq.lhs, iv, op; depth)
     collect_vars!(unknowns, parameters, eq.rhs, iv, op; depth)
     return nothing
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
-    collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+    ) where {op}
+    return collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+    ) where {op}
     collect_vars!(unknowns, parameters, p[1], iv, op; depth)
     collect_vars!(unknowns, parameters, p[2], iv, op; depth)
     return nothing
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+    ) where {op}
     return nothing
 end
 
@@ -783,15 +820,17 @@ in known metadata of `var` using `collect_vars!`.
 function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, var::SymbolicT, iv::Union{SymbolicT, Nothing}; depth = 0)
     isequal(var, iv) && return nothing
     if Symbolics.iswrapped(var)
-        error("""
-        Internal Error. Please open an issue with an MWE.
+        error(
+            """
+            Internal Error. Please open an issue with an MWE.
 
-        Encountered a wrapped value in `collect_var!`. This function should only ever \
-        receive unwrapped symbolic variables. This is likely a bug in the code generating \
-        an expression passed to `collect_vars!` or `collect_scoped_vars!`. A common cause \
-        is using `substitute` with rules where the values are \
-        wrapped symbolic variables.
-        """)
+            Encountered a wrapped value in `collect_var!`. This function should only ever \
+            receive unwrapped symbolic variables. This is likely a bug in the code generating \
+            an expression passed to `collect_vars!` or `collect_scoped_vars!`. A common cause \
+            is using `substitute` with rules where the values are \
+            wrapped symbolic variables.
+            """
+        )
     end
     check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
@@ -845,7 +884,7 @@ isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 Check if any variables were eliminated from the system as part of `mtkcompile`.
 """
 function empty_substitutions(sys)
-    isempty(observed(sys))
+    return isempty(observed(sys))
 end
 
 """
@@ -856,7 +895,7 @@ expressions used to calculate them.
 """
 function get_substitutions(sys)
     obs = observed(unhack_system(sys))
-    Dict([eq.lhs => eq.rhs for eq in obs])
+    return Dict([eq.lhs => eq.rhs for eq in obs])
 end
 
 @noinline function throw_missingvars_in_sys(vars)
@@ -934,7 +973,7 @@ Check if `sym` represents a symbolic floating point number or array of such numb
 function is_variable_floatingpoint(sym)
     sym = unwrap(sym)
     T = symtype(sym)
-    is_floatingpoint_symtype(T)
+    return is_floatingpoint_symtype(T)
 end
 
 """
@@ -945,7 +984,7 @@ point number or array of such numbers.
 """
 function is_floatingpoint_symtype(T)
     return T === Real || T === Number || T === Complex || T <: AbstractFloat ||
-           T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
+        T <: AbstractArray && is_floatingpoint_symtype(eltype(T))
 end
 
 """
@@ -956,7 +995,7 @@ Check if `sym` represents a symbolic number or array of numbers.
 function is_variable_numeric(sym)
     sym = unwrap(sym)
     T = symtype(sym)
-    is_numeric_symtype(T)
+    return is_numeric_symtype(T)
 end
 
 """
@@ -988,8 +1027,10 @@ end
 abstract type ObservedGraphCacheKey end
 
 struct ObservedGraphCache
-    graph::DiCMOBiGraph{false, Int, BipartiteGraph{Int, Nothing},
-        Matching{Unassigned, Vector{Union{Unassigned, Int}}}}
+    graph::DiCMOBiGraph{
+        false, Int, BipartiteGraph{Int, Nothing},
+        Matching{Unassigned, Vector{Union{Unassigned, Int}}},
+    }
     obsvar_to_idx::Dict{Any, Int}
 end
 
@@ -1011,8 +1052,10 @@ Keyword arguments:
   requiring them to be obtained from the equation for `x`. Any variable present in
   `available_vars` will not be searched for in the observed equations.
 """
-function observed_equations_used_by(sys::AbstractSystem, exprs;
-        involved_vars = nothing, obs = observed(sys), available_vars = Set{SymbolicT}())
+function observed_equations_used_by(
+        sys::AbstractSystem, exprs;
+        involved_vars = nothing, obs = observed(sys), available_vars = Set{SymbolicT}()
+    )
     if involved_vars === nothing
         involved_vars = Set{SymbolicT}()
         SU.search_variables!(involved_vars, exprs; is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial}}())
@@ -1039,9 +1082,11 @@ function observed_equations_used_by(sys::AbstractSystem, exprs;
     for sym in involved_vars
         sym in available_vars && continue
         arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
-        idx = @something(get(obsvar_to_idx, sym, nothing),
+        idx = @something(
+            get(obsvar_to_idx, sym, nothing),
             get(obsvar_to_idx, arrsym, nothing),
-            Some(nothing))
+            Some(nothing)
+        )
         idx === nothing && continue
         idx in obsidxs && continue
         parents = dfs_parents(graph, idx)
@@ -1102,7 +1147,7 @@ function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
     # OR
     # none of `vars` are involved in `expr`
     if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
-       (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
+            (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
         sym = gensym(:subexpr)
         var = similar_variable(expr, sym)
         state[expr] = var
@@ -1239,9 +1284,11 @@ const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 struct NotPossibleError <: Exception end
 
 function Base.showerror(io::IO, ::NotPossibleError)
-    print(io, """
-    This should not be possible. Please open an issue in ModelingToolkitBase.jl with an MWE.
-    """)
+    return print(
+        io, """
+        This should not be possible. Please open an issue in ModelingToolkitBase.jl with an MWE.
+        """
+    )
 end
 
 """
@@ -1258,11 +1305,11 @@ function underscore_to_D(v::AbstractVector, sys)
         push!(get!(() -> valtype(inv_maps)[], inv_maps, v), k)
     end
     iv = get_iv(sys)
-    map(x -> underscore_to_D(x, iv, inv_maps), v)
+    return map(x -> underscore_to_D(x, iv, inv_maps), v)
 end
 
 function underscore_to_D(v, iv, inv_map)
-    if haskey(inv_map, v)
+    return if haskey(inv_map, v)
         only(get(inv_map, v, [v]))
     else
         v = ModelingToolkitBase.detime_dvs(v)
@@ -1296,7 +1343,7 @@ Given a symbolic variable `x`, check whether it is an indexed array symbolic. If
 return the array and `true`. Otherwise, return `x, false`.
 """
 function split_indexed_var(x::SymbolicT)
-    Moshi.Match.@match x begin
+    return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f === getindex end => (args[1], true)
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
             arr, isarr = split_indexed_var(args[1])
@@ -1314,7 +1361,7 @@ Given a symbolic variable `x`, assume `split_indexed_var(x)[2]` is `true`. Retur
 corresponding `SymbolicUtils.StableIndex`.
 """
 function get_stable_index(x::SymbolicT)
-    Moshi.Match.@match x begin
+    return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
         _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
@@ -1359,7 +1406,7 @@ Merge `b` into `a`, modifying `a`. For all keys common to `a` and `b`,
 prefer the value in `a`.
 """
 function left_merge!(a::AbstractDict, b::AbstractDict)
-    mergewith!(first ∘ tuple, a, b)
+    return mergewith!(first ∘ tuple, a, b)
 end
 
 function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT})
@@ -1379,5 +1426,5 @@ function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT
         end
         a[k] = BSImpl.Const{VartypeT}(reshape(new_v, size(v_a)))
     end
-    mergewith!(first ∘ tuple, a, b)
+    return mergewith!(first ∘ tuple, a, b)
 end

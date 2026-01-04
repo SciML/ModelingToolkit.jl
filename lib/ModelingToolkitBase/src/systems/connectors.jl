@@ -35,7 +35,7 @@ function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSyste
         push!(sysnames, nameof(sys))
     end
     allunique(sysnames) || error("connect takes distinct systems!")
-    Equation(Connection(), Connection(syss)) # the RHS are connected systems
+    return Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
 
 const _debug_mode = Base.JLOptions().check_bounds == 1
@@ -51,7 +51,7 @@ function Base.show(io::IO, c::Connection)
             i != n && print(io, ", ")
         end
     end
-    print(io, ")")
+    return print(io, ")")
 end
 
 isconnection(_) = false
@@ -75,7 +75,7 @@ function domain_connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::Abstra
         push!(sysnames, nameof(sys))
     end
     allunique(sysnames) || error("connect takes distinct systems!")
-    Equation(Connection(:domain), Connection(syss)) # the RHS are connected systems
+    return Equation(Connection(:domain), Connection(syss)) # the RHS are connected systems
 end
 
 """
@@ -85,7 +85,7 @@ Get the connection type of symbolic variable `s` from the `VariableConnectType` 
 Defaults to `Equality` if not present.
 """
 function get_connection_type(s::SymbolicT)
-    safe_getmetadata(VariableConnectType, s, Equality)::DataType
+    return safe_getmetadata(VariableConnectType, s, Equality)::DataType
 end
 
 """
@@ -121,7 +121,7 @@ information.
 See also: [`@component`](@ref).
 """
 macro connector(expr)
-    esc(component_post_processing(expr, true))
+    return esc(component_post_processing(expr, true))
 end
 
 function __mtkmodel_connector(_...)
@@ -129,7 +129,7 @@ function __mtkmodel_connector(_...)
 end
 
 macro connector(name, body)
-    esc(__mtkmodel_connector(__module__, name, body))
+    return esc(__mtkmodel_connector(__module__, name, body))
 end
 
 abstract type AbstractConnectorType end
@@ -168,11 +168,11 @@ function connector_type(sys::AbstractSystem)
     end
     if n_flow != n_regular && !isframe(sys)
         @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
-              "(non-flow, non-stream, non-input, non-output) variables. " *
-              "This could lead to imbalanced model that are difficult to debug. " *
-              "Consider marking some of the regular variables as input/output variables."
+            "(non-flow, non-stream, non-input, non-output) variables. " *
+            "This could lead to imbalanced model that are difficult to debug. " *
+            "Consider marking some of the regular variables as input/output variables."
     end
-    n_stream > 0 ? StreamConnector() : RegularConnector()
+    return n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
 is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConnector()
@@ -189,7 +189,7 @@ Refer to the [Connection semantics](@ref connect_semantics) section of the docs 
 information.
 """
 function instream(a::SymbolicT)
-    BSImpl.Term{VartypeT}(instream, SArgsT((unwrap(a),)); type = symtype(a), shape = SU.shape(a))
+    return BSImpl.Term{VartypeT}(instream, SArgsT((unwrap(a),)); type = symtype(a), shape = SU.shape(a))
 end
 instream(a::Num) = Num(instream(unwrap(a)))
 instream(a::Symbolics.Arr{T, N}) where {T, N} = Symbolics.Arr{T, N}(instream(unwrap(a)))
@@ -199,21 +199,23 @@ isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) 
 
 is_causal_variable_connection(c) = false
 function is_causal_variable_connection(c::Connection)
-    get_systems(c) isa Vector{SymbolicT}
+    return get_systems(c) isa Vector{SymbolicT}
 end
 
 const ConnectableSymbolicT = Union{BasicSymbolic, Num, Symbolics.Arr}
 
 function NonCausalVariableError(vars)
     names = join(map(var -> "  " * string(var), vars), "\n")
-    ArgumentError("""
-    Only causal variables can be used in a `connect` statement. Each variable must be \
-    either an input or an output. Mark a variable as input using the `[input = true]` \
-    variable metadata or as an output using the `[output = true]` variable metadata.
+    return ArgumentError(
+        """
+        Only causal variables can be used in a `connect` statement. Each variable must be \
+        either an input or an output. Mark a variable as input using the `[input = true]` \
+        variable metadata or as an output using the `[output = true]` variable metadata.
 
-    The following variables were found to be non-causal:
-    $names
-    """)
+        The following variables were found to be non-causal:
+        $names
+        """
+    )
 end
 
 """
@@ -252,7 +254,7 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
         (isinput(x) || isoutput(x)) && continue
         push!(non_causal_variables, x)
     end
-    isempty(non_causal_variables) || throw(NonCausalVariableError(non_causal_variables))
+    return isempty(non_causal_variables) || throw(NonCausalVariableError(non_causal_variables))
 end
 
 """
@@ -267,8 +269,10 @@ var1 ~ var3
 # ...
 ```
 """
-function connect(var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
-        vars::ConnectableSymbolicT...)
+function connect(
+        var1::ConnectableSymbolicT, var2::ConnectableSymbolicT,
+        vars::ConnectableSymbolicT...
+    )
     allvars = SymbolicT[]
     push!(allvars, unwrap(var1))
     push!(allvars, unwrap(var2))
@@ -285,7 +289,7 @@ end
 Add all `instream(..)` expressions to `set`.
 """
 function collect_instream!(set, eq::Equation)
-    collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
+    return collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
 end
 
 function collect_instream!(set, expr, occurs = false)
@@ -302,7 +306,7 @@ end
 #_positivemax(m, tol) = ifelse((-tol <= m) & (m <= tol), ((3 * tol - m) * (tol + m)^3)/(16 * tol^3) + tol, max(m, tol))
 function _positivemax(m, si)
     T = typeof(m)
-    relativeTolerance = 1e-4
+    relativeTolerance = 1.0e-4
     nominal = one(T)
     eps = relativeTolerance * nominal
     alpha = if si > eps
@@ -314,16 +318,16 @@ function _positivemax(m, si)
             zero(T)
         end
     end
-    alpha * max(m, 0) + (1 - alpha) * eps
+    return alpha * max(m, 0) + (1 - alpha) * eps
 end
 @register_symbolic _positivemax(m, tol)
 positivemax(m, ::Any; tol = nothing) = _positivemax(m, tol)
 mydiv(num, den) =
-    if den == 0
-        error()
-    else
-        num / den
-    end
+if den == 0
+    error()
+else
+    num / den
+end
 @register_symbolic mydiv(n, d)
 
 struct IsOuter
@@ -331,7 +335,7 @@ struct IsOuter
 end
 
 function (io::IsOuter)(name::Symbol)
-    name in io.outer_connectors
+    return name in io.outer_connectors
 end
 
 function (io::IsOuter)(sys)
@@ -370,7 +374,7 @@ abstract type IsFrame end
 
 "Return true if the system is a 3D multibody frame, otherwise return false."
 function isframe(sys)
-    getmetadata(sys, IsFrame, false)::Bool
+    return getmetadata(sys, IsFrame, false)::Bool
 end
 
 abstract type FrameOrientation end
@@ -380,14 +384,14 @@ struct RotationMatrix
     w::Vector{SymbolicT}
 
     function RotationMatrix(R::AbstractMatrix, w::AbstractVector)
-        new(unwrap_vars(R), unwrap_vars(w))
+        return new(unwrap_vars(R), unwrap_vars(w))
     end
 
 end
 
 "Return orientation object of a multibody frame."
 function ori(sys)
-    getmetadata(sys, FrameOrientation, nothing)::Union{RotationMatrix, Nothing}
+    return getmetadata(sys, FrameOrientation, nothing)::Union{RotationMatrix, Nothing}
 end
 
 """
@@ -439,7 +443,7 @@ function variable_from_vertex(sys::AbstractSystem, vert::ConnectionVertex)
     vert.type === InputVar{CartesianIndex()} && return value
     vert.type === OutputVar{CartesianIndex()} && return value
     # index possibly array causal variable
-    value[index_from_type(vert.type)]::SymbolicT
+    return value[index_from_type(vert.type)]::SymbolicT
 end
 
 """
@@ -454,8 +458,10 @@ function returned from [`generate_isouter`](@ref) for the system referred to by
 
 `namespace` must not contain the name of the root system.
 """
-function generate_connectionsets!(connection_state::AbstractConnectionState,
-        namespace::Vector{Symbol}, connected, isouter::IsOuter)
+function generate_connectionsets!(
+        connection_state::AbstractConnectionState,
+        namespace::Vector{Symbol}, connected, isouter::IsOuter
+    )
     initial_len = length(namespace)
     _generate_connectionsets!(connection_state, namespace, connected, isouter)
     # Enforce postcondition as a sanity check that the namespacing is implemented correctly
@@ -465,20 +471,30 @@ end
 
 @noinline function throw_both_input_output(var::SymbolicT, connected_vars::Vector{SymbolicT})
     names = join(string.(connected_vars), ", ")
-    throw(ArgumentError("""
-    Variable $var in connection `connect($names)` is both input and output.
-    """))
+    throw(
+        ArgumentError(
+            """
+            Variable $var in connection `connect($names)` is both input and output.
+            """
+        )
+    )
 end
 @noinline function throw_not_input_output(var::SymbolicT, connected_vars::Vector{SymbolicT})
     names = join(string.(connected_vars), ", ")
-    throw(ArgumentError("""
-    Variable $var in connection `connect($names)` is neither input nor output.
-    """))
+    throw(
+        ArgumentError(
+            """
+            Variable $var in connection `connect($names)` is neither input nor output.
+            """
+        )
+    )
 end
 
-function _generate_connectionsets_with_idxs!(connection_state::AbstractConnectionState,
-    namespace::Vector{Symbol}, connected_vars::Vector{SymbolicT}, isouter::IsOuter,
-    idxs::CartesianIndices{N, NTuple{N, UnitRange{Int}}}) where {N}
+function _generate_connectionsets_with_idxs!(
+        connection_state::AbstractConnectionState,
+        namespace::Vector{Symbol}, connected_vars::Vector{SymbolicT}, isouter::IsOuter,
+        idxs::CartesianIndices{N, NTuple{N, UnitRange{Int}}}
+    ) where {N}
     # all of them have the same size, but may have different axes/shape
     # so we iterate over `eachindex(eachindex(..))` since that is identical for all
     for sz_i in eachindex(idxs)
@@ -502,7 +518,8 @@ function _generate_connectionsets_with_idxs!(connection_state::AbstractConnectio
                 throw_not_input_output(var, connected_vars)
             end
             vert = ConnectionVertex(
-                [namespace; var_ns], length(var_ns) == 1 || isouter(var_ns[1]), type)
+                [namespace; var_ns], length(var_ns) == 1 || isouter(var_ns[1]), type
+            )
             push!(hyperedge, vert)
         end
         add_connection_edge!(connection_state, hyperedge)
@@ -517,37 +534,50 @@ function _generate_connectionsets_with_idxs!(connection_state::AbstractConnectio
             add_connection_edge!(connection_state, hyperedge)
         end
     end
+    return
 end
 
-function _generate_connectionsets!(connection_state::AbstractConnectionState,
+function _generate_connectionsets!(
+        connection_state::AbstractConnectionState,
         namespace::Vector{Symbol},
         connected_vars::Vector{SymbolicT},
-        isouter::IsOuter)
+        isouter::IsOuter
+    )
     # NOTE: variable connections don't populate the domain network
 
     representative = first(connected_vars)
     idxs = eachindex(representative)
     # Manual dispatch for common cases
-    if idxs isa CartesianIndices{0, Tuple{}}
-        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
-                                            isouter, idxs)
+    return if idxs isa CartesianIndices{0, Tuple{}}
+        _generate_connectionsets_with_idxs!(
+            connection_state, namespace, connected_vars,
+            isouter, idxs
+        )
     elseif idxs isa CartesianIndices{1, Tuple{UnitRange{Int}}}
-        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
-                                            isouter, idxs)
+        _generate_connectionsets_with_idxs!(
+            connection_state, namespace, connected_vars,
+            isouter, idxs
+        )
     elseif idxs isa CartesianIndices{2, NTuple{2, UnitRange{Int}}}
-        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
-                                            isouter, idxs)
+        _generate_connectionsets_with_idxs!(
+            connection_state, namespace, connected_vars,
+            isouter, idxs
+        )
     else
         # Dynamic dispatch
-        _generate_connectionsets_with_idxs!(connection_state, namespace, connected_vars,
-                                            isouter, idxs)
+        _generate_connectionsets_with_idxs!(
+            connection_state, namespace, connected_vars,
+            isouter, idxs
+        )
     end
 end
 
-function _generate_connectionsets!(connection_state::AbstractConnectionState,
+function _generate_connectionsets!(
+        connection_state::AbstractConnectionState,
         namespace::Vector{Symbol},
         systems::Vector{T},
-        isouter::IsOuter) where {T <: AbstractSystem}
+        isouter::IsOuter
+    ) where {T <: AbstractSystem}
     systems = systems::Vector{System}
     regular_systems = System[]
     domain_system::Union{Nothing, System} = nothing
@@ -641,7 +671,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         # Error if any subsequent systems do not have the same number of unknowns
         # or have unknowns not in the others.
         if i != 1 &&
-           (num_unknowns != length(unknown_vars) || any(!in(sys1_dvs_set), unknown_vars))
+                (num_unknowns != length(unknown_vars) || any(!in(sys1_dvs_set), unknown_vars))
             connection_error(systems)
         end
         # add this system to the namespace so all vertices created from its unknowns
@@ -667,7 +697,7 @@ function _generate_connectionsets!(connection_state::AbstractConnectionState,
         # add edges
         add_connection_edge!(connection_state, var_set)
     end
-    add_domain_connection_edge!(connection_state, domain_hyperedge)
+    return add_domain_connection_edge!(connection_state, domain_hyperedge)
 end
 
 """
@@ -684,7 +714,8 @@ function generate_connection_set(sys::AbstractSystem)
     # the root system isn't added to the namespace, which we handle by not namespacing it
     sys = toggle_namespacing(sys, false)
     sys = generate_connection_set!(
-        connection_state, negative_connection_state, sys, Symbol[])
+        connection_state, negative_connection_state, sys, Symbol[]
+    )
     remove_negative_connections!(connection_state, negative_connection_state)
 
     return sys, connectionsets(connection_state)
@@ -699,8 +730,10 @@ can be pushed, unmodified. Connection equations update the given `state`. The eq
 present at the path in the hierarchical system given by `namespace`. `isouter` is the
 function returned from `generate_isouter`.
 """
-function handle_maybe_connect_equation!(eqs::Vector{Equation}, state::AbstractConnectionState,
-        eq::Equation, namespace::Vector{Symbol}, isouter::IsOuter)
+function handle_maybe_connect_equation!(
+        eqs::Vector{Equation}, state::AbstractConnectionState,
+        eq::Equation, namespace::Vector{Symbol}, isouter::IsOuter
+    )
     lhs = value(eq.lhs)
     rhs = value(eq.rhs)
 
@@ -711,11 +744,13 @@ function handle_maybe_connect_equation!(eqs::Vector{Equation}, state::AbstractCo
     end
     lhs = lhs::Connection
     rhs = rhs::Connection
-    handle_maybe_connect_equation!(state, lhs, rhs, namespace, isouter)
+    return handle_maybe_connect_equation!(state, lhs, rhs, namespace, isouter)
 end
 
-function handle_maybe_connect_equation!(state::AbstractConnectionState,
-        lhs::Connection, rhs::Connection, namespace::Vector{Symbol}, isouter::IsOuter)
+function handle_maybe_connect_equation!(
+        state::AbstractConnectionState,
+        lhs::Connection, rhs::Connection, namespace::Vector{Symbol}, isouter::IsOuter
+    )
     if get_systems(lhs) === :domain
         # This is a domain connection, so we only update the domain connection graph
         syss = get_systems(rhs)::Vector{System}
@@ -755,20 +790,25 @@ should be empty. It is essential that the traversal is preorder.
 - `namespace`: The path of names from the root system to the current system. This should
   not include the name of the root system.
 """
-function generate_connection_set!(connection_state::ConnectionState,
+function generate_connection_set!(
+        connection_state::ConnectionState,
         negative_connection_state::NegativeConnectionState,
-        sys::AbstractSystem, namespace::Vector{Symbol})
+        sys::AbstractSystem, namespace::Vector{Symbol}
+    )
     initial_len = length(namespace)
     res = _generate_connection_set!(
-        connection_state, negative_connection_state, sys, namespace)
+        connection_state, negative_connection_state, sys, namespace
+    )
     # Enforce postcondition as a sanity check that the recursion is implemented correctly
     length(namespace) == initial_len || throw(NotPossibleError())
     return res
 end
 
-function _generate_connection_set!(connection_state::ConnectionState,
+function _generate_connection_set!(
+        connection_state::ConnectionState,
         negative_connection_state::NegativeConnectionState,
-        sys::AbstractSystem, namespace::Vector{Symbol})
+        sys::AbstractSystem, namespace::Vector{Symbol}
+    )
     # This function recurses down the system tree. Each system adds its name and pops
     # it before returning. We don't add the root system, which is handled by assuming
     # it doesn't do namespacing.
@@ -833,6 +873,7 @@ function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, 
         rhs = SU.add_worker(VartypeT, add_buffer)
         push!(eqs, Symbolics.COMMON_ZERO ~ rhs)
     end
+    return
 end
 
 """
@@ -842,7 +883,8 @@ Generate connection equations for the connection sets given by `csets`. This doe
 handle stream connections. Return the generated equations and the stream connection sets.
 """
 function generate_connection_equations_and_stream_connections(
-        sys::AbstractSystem, csets::Vector{Vector{ConnectionVertex}})
+        sys::AbstractSystem, csets::Vector{Vector{ConnectionVertex}}
+    )
     eqs = Equation[]
     stream_connections = Vector{ConnectionVertex}[]
 
@@ -857,18 +899,22 @@ function generate_connection_equations_and_stream_connections(
             for cvert in cset
                 if cvert.isouter && cvert.type <: InputVar
                     if outer_input !== nothing
-                        error("""
-                        Found two outer input connectors `$outer_input` and `$cvert` in the
-                        same connection set.
-                        """)
+                        error(
+                            """
+                            Found two outer input connectors `$outer_input` and `$cvert` in the
+                            same connection set.
+                            """
+                        )
                     end
                     outer_input = cvert
                 elseif !cvert.isouter && cvert.type <: OutputVar
                     if inner_output !== nothing
-                        error("""
-                        Found two inner output connectors `$inner_output` and `$cvert` in
-                        the same connection set.
-                        """)
+                        error(
+                            """
+                            Found two inner output connectors `$inner_output` and `$cvert` in
+                            the same connection set.
+                            """
+                        )
                     end
                     inner_output = cvert
                 end
@@ -925,7 +971,7 @@ function generate_connection_equations_and_stream_connections(
             end
         end
     end
-    eqs, stream_connections
+    return eqs, stream_connections
 end
 
 """
@@ -934,7 +980,8 @@ end
 Generate the bindings for parameters in the domain sets given by `domain_csets`.
 """
 function get_domain_bindings(
-        sys::AbstractSystem, domain_csets::Vector{Vector{ConnectionVertex}})
+        sys::AbstractSystem, domain_csets::Vector{Vector{ConnectionVertex}}
+    )
     binds = SymmapT()
     for cset in domain_csets
         systems = System[]
@@ -951,13 +998,19 @@ function get_domain_bindings(
         for (j, csys) in enumerate(systems)
             j == idx && continue
             if is_domain_connector(csys)
-                throw(ArgumentError("""
-                Domain sources $(nameof(domain_sys)) and $(nameof(csys)) are connected!
-                """))
+                throw(
+                    ArgumentError(
+                        """
+                        Domain sources $(nameof(domain_sys)) and $(nameof(csys)) are connected!
+                        """
+                    )
+                )
             end
             for par in parameters(csys)
-                defval = @something(get(domain_binds, par, nothing),
-                                    get(domain_ics, par, nothing), Some(nothing))
+                defval = @something(
+                    get(domain_binds, par, nothing),
+                    get(domain_ics, par, nothing), Some(nothing)
+                )
                 defval === nothing && continue
                 binds[renamespace(csys, par)] = renamespace(domain_sys, par)
             end
@@ -998,7 +1051,7 @@ Given a hierarchical system with [`connect`](@ref) equations, expand the connect
 equations and return the new system. `tol` is the tolerance for handling the singularities
 in stream connection equations that happen when a flow variable approaches zero.
 """
-function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(false); tol = 1e-10) where {with_source_info}
+function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(false); tol = 1.0e-10) where {with_source_info}
     # turn analysis points into standard connection equations
     sys = remove_analysis_points(sys)
     # generate the connection sets
@@ -1036,7 +1089,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
         # substitute `instream(..)` expressions with their new values
         for i in eachindex(eqs)
             eqs[i] = fixpoint_sub(
-                eqs[i], instream_subs; maxiters = max(length(instream_subs), 10))
+                eqs[i], instream_subs; maxiters = max(length(instream_subs), 10)
+            )
         end
     end
     # set the bindingss for domain networks
@@ -1074,7 +1128,7 @@ function get_flowvar(sys::AbstractSystem, cvert::ConnectionVertex)
 end
 
 function instream_is_atomic(ex::SymbolicT)
-    Moshi.Match.@match ex begin
+    return Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f === instream end => true
         _ => false
     end
@@ -1088,8 +1142,10 @@ to the system and the substitutions to make to handle `instream(..)` expressions
 the tolerance for handling singularities in stream connection equations when the flow
 variable approaches zero.
 """
-function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractSystem;
-        tol = 1e-8)
+function expand_instream(
+        csets::Vector{Vector{ConnectionVertex}}, sys::AbstractSystem;
+        tol = 1.0e-8
+    )
     eqs = equations(sys)
     # collect all `instream` terms in the equations
     instream_exprs = Set{SymbolicT}()
@@ -1119,9 +1175,11 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
     # for all the newly added `instream(x)[i]`, add `instream(x)` to `instream_exprs`
     # also remove all `instream(x[i])`
     for (k, v) in instream_subs
-        push!(instream_exprs, Moshi.Match.@match v begin
+        push!(
+            instream_exprs, Moshi.Match.@match v begin
                 BSImpl.Term(; args) => args[1]
-            end)
+            end
+        )
         delete!(instream_exprs, k)
     end
 
@@ -1155,8 +1213,10 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
             cvert1, cvert2 = cset
             stream_var1 = variable_from_vertex(sys, cvert1)::SymbolicT
             stream_var2 = variable_from_vertex(sys, cvert2)::SymbolicT
-            push!(additional_eqs, (stream_var1 ~ instream(stream_var2)),
-                (stream_var2 ~ instream(stream_var1)))
+            push!(
+                additional_eqs, (stream_var1 ~ instream(stream_var2)),
+                (stream_var2 ~ instream(stream_var1))
+            )
         else
             # Currently just implements the "else" case for `instream(..)` in the suggested
             # implementation of stream connectors in the Modelica spec v3.6 section 15.2.
@@ -1183,17 +1243,19 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
                 push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
                 push!(args, SU.Const{VartypeT}(Val(n_outer)))
                 for i in eachindex(inner_cverts)
-                     i == inner_i && continue
-                     push!(args, inner_flowvars[i])
+                    i == inner_i && continue
+                    push!(args, inner_flowvars[i])
                 end
                 for i in eachindex(inner_cverts)
-                     i == inner_i && continue
-                     push!(args, inner_streamvars[i])
+                    i == inner_i && continue
+                    push!(args, inner_streamvars[i])
                 end
                 append!(args, outer_flowvars)
                 append!(args, outer_streamvars)
-                expr = BSImpl.Term{VartypeT}(instream_rt, args;
-                                             type = Real, shape = SU.ShapeVecT())
+                expr = BSImpl.Term{VartypeT}(
+                    instream_rt, args;
+                    type = Real, shape = SU.ShapeVecT()
+                )
                 instream_subs[instream(svar)] = expr
             end
 
@@ -1236,24 +1298,28 @@ function expand_instream(csets::Vector{Vector{ConnectionVertex}}, sys::AbstractS
 end
 
 # instream runtime
-@generated function _instream_split(::Val{inner_n}, ::Val{outer_n},
-        vars::NTuple{N, Any}) where {inner_n, outer_n, N}
+@generated function _instream_split(
+        ::Val{inner_n}, ::Val{outer_n},
+        vars::NTuple{N, Any}
+    ) where {inner_n, outer_n, N}
     #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
     ret = Expr(:tuple)
     # mj.c.m_flow
-    inner_f = :(Base.@ntuple $inner_n i->vars[i])
+    inner_f = :(Base.@ntuple $inner_n i -> vars[i])
     offset = inner_n
-    inner_s = :(Base.@ntuple $inner_n i->vars[$offset + i])
+    inner_s = :(Base.@ntuple $inner_n i -> vars[$offset + i])
     offset += inner_n
     # ck.m_flow
-    outer_f = :(Base.@ntuple $outer_n i->vars[$offset + i])
+    outer_f = :(Base.@ntuple $outer_n i -> vars[$offset + i])
     offset += outer_n
-    outer_s = :(Base.@ntuple $outer_n i->vars[$offset + i])
-    Expr(:tuple, inner_f, inner_s, outer_f, outer_s)
+    outer_s = :(Base.@ntuple $outer_n i -> vars[$offset + i])
+    return Expr(:tuple, inner_f, inner_s, outer_f, outer_s)
 end
 
-function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
-        vars::Vararg{Any, N}) where {inner_n, outer_n, N}
+function instream_rt(
+        ins::Val{inner_n}, outs::Val{outer_n},
+        vars::Vararg{Any, N}
+    ) where {inner_n, outer_n, N}
     @assert N == 2 * (inner_n + outer_n)
 
     # inner: mj.c.m_flow

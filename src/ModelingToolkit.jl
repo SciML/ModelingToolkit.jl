@@ -10,15 +10,15 @@ using PrecompileTools, Reexport
     import REPL
     using OffsetArrays: Origin
     import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-                        undef_blocks, blocks
+        undef_blocks, blocks
 end
 
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-                      isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
-                      @rule, Rewriters, substitute, metadata, BasicSymbolic,
-                      symtype
+    isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
+    @rule, Rewriters, substitute, metadata, BasicSymbolic,
+    symtype
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -46,8 +46,8 @@ using DocStringExtensions
 using Base: RefValue
 using Combinatorics
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-                 PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-                 NoInit
+    PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
+    NoInit
 import Moshi
 using Moshi.Data: @data
 import SCCNonlinearSolve
@@ -60,19 +60,19 @@ using RuntimeGeneratedFunctions: drop_expr
 
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-                 VariableSource, getname, variable, COMMON_ZERO,
-                 NAMESPACE_SEPARATOR, setdefaultval, Arr,
-                 hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
+    exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
+    VariableSource, getname, variable, COMMON_ZERO,
+    NAMESPACE_SEPARATOR, setdefaultval, Arr,
+    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-                  tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-                  BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-                  ParallelForm, SerialForm, MultithreadedForm, build_function,
-                  rhss, lhss, gradient,
-                  jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  scalarize, hasderiv
+    jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+    tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+    BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+    ParallelForm, SerialForm, MultithreadedForm, build_function,
+    rhss, lhss, gradient,
+    jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+    scalarize, hasderiv
 import ModelingToolkitBase as MTKBase
 
 import DiffEqBase: @add_kwonly
@@ -120,7 +120,7 @@ macro import_mtkbase()
         end
     end
 
-    quote
+    return quote
         $using_expr
         $(esc(public_expr))
     end
@@ -129,7 +129,7 @@ end
 @import_mtkbase
 
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
-                           COMMON_TRUE, COMMON_FALSE, COMMON_INF
+    COMMON_TRUE, COMMON_FALSE, COMMON_INF
 
 @recompile_invalidations begin
     include("linearization.jl")
@@ -158,7 +158,7 @@ end
 export SemilinearODEFunction, SemilinearODEProblem
 export alias_elimination
 export linearize, linearization_function,
-       LinearizationProblem, linearization_ap_transform
+    LinearizationProblem, linearization_ap_transform
 export solve
 export map_variables_to_equations, substitute_component
 
@@ -166,7 +166,7 @@ export TearingState
 
 export Clock, SolverStepClock, TimeDomain
 export get_sensitivity_function, get_comp_sensitivity_function,
-       get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer
+    get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer
 
 function FMIComponent end
 

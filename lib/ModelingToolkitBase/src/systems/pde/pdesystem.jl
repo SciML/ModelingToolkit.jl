@@ -89,7 +89,8 @@ struct PDESystem <: AbstractSystem
     Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
-    @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
+    @add_kwonly function PDESystem(
+            eqs, bcs, domain, ivs, dvs,
             ps = SciMLBase.NullParameters();
             initial_conditions = Dict(),
             systems = [],
@@ -101,7 +102,8 @@ struct PDESystem <: AbstractSystem
             eval_module = @__MODULE__,
             checks::Union{Bool, Int} = true,
             description = "",
-            name)
+            name
+        )
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ivs, ps)
             check_units(u, eqs)
@@ -121,8 +123,11 @@ struct PDESystem <: AbstractSystem
                     p = ps isa SciMLBase.NullParameters ? [] : ps
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
-                    eq.lhs => drop_expr(RuntimeGeneratedFunction(
-                        eval_module, eval_module, ex))
+                    eq.lhs => drop_expr(
+                        RuntimeGeneratedFunction(
+                            eval_module, eval_module, ex
+                        )
+                    )
                 end
             end
         end
@@ -131,8 +136,10 @@ struct PDESystem <: AbstractSystem
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
 
-        new(eqs, bcs, domain, ivs, dvs, ps, initial_conditions, connector_type, systems, analytic,
-            analytic_func, name, description, metadata, gui_metadata)
+        new(
+            eqs, bcs, domain, ivs, dvs, ps, initial_conditions, connector_type, systems, analytic,
+            analytic_func, name, description, metadata, gui_metadata
+        )
     end
 end
 
@@ -141,13 +148,15 @@ function Base.getproperty(x::PDESystem, sym::Symbol)
         return getfield(x, :ivs)
         Base.depwarn(
             "`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
-            force = true)
+            force = true
+        )
 
     elseif sym == :depvars
         return getfield(x, :dvs)
         Base.depwarn(
             "`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
-            force = true)
+            force = true
+        )
 
     else
         return getfield(x, sym)

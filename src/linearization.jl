@@ -30,12 +30,13 @@ The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring in
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
-function linearization_function(sys::AbstractSystem, inputs,
+function linearization_function(
+        sys::AbstractSystem, inputs,
         outputs; simplify = false,
         initialize = true,
         initializealg = nothing,
-        initialization_abstol = 1e-5,
-        initialization_reltol = 1e-3,
+        initialization_abstol = 1.0e-5,
+        initialization_reltol = 1.0e-3,
         op = Dict(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
@@ -46,7 +47,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         guesses = Dict(),
         warn_empty_op = true,
         t = 0.0,
-        kwargs...)
+        kwargs...
+    )
     op = Dict(op)
     if isempty(op) && warn_empty_op
         @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
@@ -75,7 +77,8 @@ function linearization_function(sys::AbstractSystem, inputs,
 
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses)
+        algebraic_only = true, guesses
+    )
     u0 = state_values(prob)
 
     ps = parameters(sys)
@@ -83,7 +86,8 @@ function linearization_function(sys::AbstractSystem, inputs,
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
-        nlsolve_alg = initialization_solver_alg)
+        nlsolve_alg = initialization_solver_alg,
+    )
 
     p = parameter_values(prob)
     t0 = current_time(prob)
@@ -101,35 +105,43 @@ function linearization_function(sys::AbstractSystem, inputs,
         T = p isa MTKParameters ? eltype(p.tunable) : eltype(p)
         hp_jac = PreparedJacobian{true}(
             hp_fun, zeros(T, size(outputs)), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+        )
     else
         uf_fun = let fun = prob.f
             function uff(du, u, p, t)
-                SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
+                return SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
             end
         end
         uf_jac = PreparedJacobian{true}(
-            uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0))
+            uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0)
+        )
         # observed function is a `GeneratedFunctionWrapper` with iip component
-        h_jac = PreparedJacobian{true}(h, similar(prob.u0, size(outputs)), autodiff,
-            prob.u0, DI.Constant(p), DI.Constant(t0))
+        h_jac = PreparedJacobian{true}(
+            h, similar(prob.u0, size(outputs)), autodiff,
+            prob.u0, DI.Constant(p), DI.Constant(t0)
+        )
         pf_fun = let fun = prob.f, setter = setp_oop(sys, inputs)
             function pff(du, input, u, p, t)
                 p = setter(p, input)
-                SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
+                return SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
             end
         end
-        pf_jac = PreparedJacobian{true}(pf_fun, similar(prob.u0), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+        pf_jac = PreparedJacobian{true}(
+            pf_fun, similar(prob.u0), autodiff, inputvals,
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+        )
         hp_jac = PreparedJacobian{true}(
             hp_fun, similar(prob.u0, size(outputs)), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0))
+            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+        )
     end
 
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
-        hp_jac, initializealg, initialization_kwargs)
+        hp_jac, initializealg, initialization_kwargs
+    )
     return lin_fun, sys
 end
 
@@ -141,7 +153,7 @@ function eq_idxs(sys::AbstractSystem)
     alge_idxs = findall(!isdiffeq, eqs)
     diff_idxs = setdiff(1:length(eqs), alge_idxs)
 
-    diff_idxs, alge_idxs
+    return diff_idxs, alge_idxs
 end
 
 """
@@ -176,21 +188,23 @@ end
 function PreparedJacobian{true}(f, buf, autodiff, args...)
     prep = DI.prepare_jacobian(f, buf, autodiff, args...; strict = Val(false))
     return PreparedJacobian{true, typeof(prep), typeof(f), typeof(buf), typeof(autodiff)}(
-        prep, f, buf, autodiff)
+        prep, f, buf, autodiff
+    )
 end
 
 function PreparedJacobian{false}(f, autodiff, args...)
     prep = DI.prepare_jacobian(f, autodiff, args...; strict = Val(false))
     return PreparedJacobian{false, typeof(prep), typeof(f), Nothing, typeof(autodiff)}(
-        prep, f, nothing, autodiff)
+        prep, f, nothing, autodiff
+    )
 end
 
 function (pj::PreparedJacobian{true})(args...)
-    DI.jacobian(pj.f, pj.buf, pj.prep, pj.autodiff, args...)
+    return DI.jacobian(pj.f, pj.buf, pj.prep, pj.autodiff, args...)
 end
 
 function (pj::PreparedJacobian{false})(args...)
-    DI.jacobian(pj.f, pj.prep, pj.autodiff, args...)
+    return DI.jacobian(pj.f, pj.prep, pj.autodiff, args...)
 end
 
 """
@@ -203,8 +217,9 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
-    DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
-    H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK}
+        DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
+        H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK,
+    }
     """
     The indexes of differential equations in the linearized system.
     """
@@ -263,14 +278,14 @@ end
 SymbolicIndexingInterface.symbolic_container(f::LinearizationFunction) = f.prob
 SymbolicIndexingInterface.state_values(f::LinearizationFunction) = state_values(f.prob)
 function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
-    parameter_values(f.prob)
+    return parameter_values(f.prob)
 end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
 
 function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)
     printstyled(io, "LinearizationFunction"; bold = true, color = :blue)
     println(io, " which wraps:")
-    show(io, mime, lf.prob)
+    return show(io, mime, lf.prob)
 end
 
 """
@@ -299,25 +314,31 @@ function (linfun::LinearizationFunction)(u, p, t)
         integ_cache = (linfun.caches,)
         integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
         u, p,
-        success = SciMLBase.get_initial_values(
+            success = SciMLBase.get_initial_values(
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
-            linfun.initialize_kwargs...)
+            linfun.initialize_kwargs...
+        )
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
-        fg_u = linfun.pf_jac(input_vals,
-            DI.Constant(u), DI.Constant(p), DI.Constant(t))
+        fg_u = linfun.pf_jac(
+            input_vals,
+            DI.Constant(u), DI.Constant(p), DI.Constant(t)
+        )
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
         h_xz = fg_u = zeros(0, length(linfun.inputs))
     end
-    h_u = linfun.hp_jac(input_vals,
-        DI.Constant(u), DI.Constant(p), DI.Constant(t))
-    (f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
+    h_u = linfun.hp_jac(
+        input_vals,
+        DI.Constant(u), DI.Constant(p), DI.Constant(t)
+    )
+    return (
+        f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
         g_x = fg_xz[linfun.alge_idxs, linfun.diff_idxs],
         g_z = fg_xz[linfun.alge_idxs, linfun.alge_idxs],
@@ -328,7 +349,8 @@ function (linfun::LinearizationFunction)(u, p, t)
         h_u = h_u,
         x = u,
         p,
-        t)
+        t,
+    )
 end
 
 """
@@ -369,7 +391,8 @@ struct MockIntegrator{iip, U, P, T, F, C, O} <: SciMLBase.DEIntegrator{Nothing, 
 end
 
 function MockIntegrator{iip}(
-        u::U, p::P, t::T, f::F, cache::C, opts::O) where {iip, U, P, T, F, C, O}
+        u::U, p::P, t::T, f::F, cache::C, opts::O
+    ) where {iip, U, P, T, F, C, O}
     return MockIntegrator{iip, U, P, T, F, C, O}(u, p, t, f, cache, opts)
 end
 
@@ -396,7 +419,7 @@ end
 function Base.show(io::IO, mime::MIME"text/plain", prob::LinearizationProblem)
     printstyled(io, "LinearizationProblem"; bold = true, color = :blue)
     println(io, " at time ", prob.t, " which wraps:")
-    show(io, mime, prob.f.prob)
+    return show(io, mime, prob.f.prob)
 end
 
 """
@@ -422,11 +445,11 @@ SymbolicIndexingInterface.parameter_values(p::LinearizationProblem) = parameter_
 SymbolicIndexingInterface.current_time(p::LinearizationProblem) = p.t
 
 function Base.getindex(prob::LinearizationProblem, idx)
-    getu(prob, idx)(prob)
+    return getu(prob, idx)(prob)
 end
 
 function Base.setindex!(prob::LinearizationProblem, val, idx)
-    setu(prob, idx)(prob, val)
+    return setu(prob, idx)(prob, val)
 end
 
 function Base.getproperty(prob::LinearizationProblem, x::Symbol)
@@ -461,10 +484,14 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         issuccess(gz) ||
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
-        A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
-        B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+        A = [
+            f_x f_z
+            gzgx * f_x gzgx * f_z
+        ]
+        B = [
+            f_u
+            gzgx * f_u
+        ] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
@@ -478,7 +505,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         end
     end
 
-    (; A, B, C, D), (; x, p, t)
+    return (; A, B, C, D), (; x, p, t)
 end
 
 """
@@ -499,10 +526,12 @@ y &= h(x, z, u)
 ```
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
-function linearize_symbolic(sys::AbstractSystem, inputs,
+function linearize_symbolic(
+        sys::AbstractSystem, inputs,
         outputs; simplify = false, allow_input_derivatives = false,
         eval_expression = false, eval_module = @__MODULE__, split = true,
-        kwargs...)
+        kwargs...
+    )
     sys = mtkcompile(sys; inputs, outputs, simplify, split, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
@@ -513,7 +542,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     fun_result = generate_rhs(sys; expression = Val{true})
     fun_expr = fun_result isa Tuple ? fun_result[1] : fun_result
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
-    
+
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
     if split
         dx = fun(sts, p, t)
@@ -551,10 +580,14 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         issuccess(gz) ||
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
-        A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
-        B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+        A = [
+            f_x f_z
+            gzgx * f_x gzgx * f_z
+        ]
+        B = [
+            f_u
+            gzgx * f_u
+        ] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
@@ -568,7 +601,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
         end
     end
 
-    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
+    return (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
 struct IONotFoundError <: Exception
@@ -586,31 +619,33 @@ function Base.showerror(io::IO, err::IONotFoundError)
             maybe_namespace_issue = true
         end
     end
-    if maybe_namespace_issue
-        println(io, """
-        Some of the missing variables are namespaced with the name of the system \
-        `$(err.sysname)` passed to `mtkcompile`. This may be indicative of a namespacing \
-        issue. `mtkcompile` requires that the $(err.variant) provided are not namespaced \
-        with the name of the root system. This issue can occur when using `getproperty` \
-        to access the variables passed as $(err.variant). For example:
+    return if maybe_namespace_issue
+        println(
+            io, """
+            Some of the missing variables are namespaced with the name of the system \
+            `$(err.sysname)` passed to `mtkcompile`. This may be indicative of a namespacing \
+            issue. `mtkcompile` requires that the $(err.variant) provided are not namespaced \
+            with the name of the root system. This issue can occur when using `getproperty` \
+            to access the variables passed as $(err.variant). For example:
 
-        ```julia
-        @named sys = MyModel()
-        inputs = [sys.input_var]
-        mtkcompile(sys; inputs)
-        ```
+            ```julia
+            @named sys = MyModel()
+            inputs = [sys.input_var]
+            mtkcompile(sys; inputs)
+            ```
 
-        Here, `mtkcompile` expects the input to be named `input_var`, but since `sys`
-        performs namespacing, it will be named `sys$(NAMESPACE_SEPARATOR)input_var`. To \
-        fix this issue, namespacing can be temporarily disabled:
+            Here, `mtkcompile` expects the input to be named `input_var`, but since `sys`
+            performs namespacing, it will be named `sys$(NAMESPACE_SEPARATOR)input_var`. To \
+            fix this issue, namespacing can be temporarily disabled:
 
-        ```julia
-        @named sys = MyModel()
-        sys_nns = toggle_namespacing(sys, false)
-        inputs = [sys_nns.input_var]
-        mtkcompile(sys; inputs)
-        ```
-        """)
+            ```julia
+            @named sys = MyModel()
+            sys_nns = toggle_namespacing(sys, false)
+            inputs = [sys_nns.input_var]
+            mtkcompile(sys; inputs)
+            ```
+            """
+        )
     end
 end
 
@@ -715,9 +750,11 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
 ```
 """
-function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
+function linearize(
+        sys, lin_fun::LinearizationFunction; t = 0.0,
         op = Dict(), allow_input_derivatives = false,
-        p = DiffEqBase.NullParameters())
+        p = DiffEqBase.NullParameters()
+    )
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
@@ -739,19 +776,23 @@ function linearize(sys, lin_fun::LinearizationFunction; t = 0.0,
     return solve(prob; allow_input_derivatives)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+function linearize(
+        sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
-        kwargs...)
+        kwargs...
+    )
     lin_fun,
-    ssys = linearization_function(sys,
+        ssys = linearization_function(
+        sys,
         inputs,
         outputs;
         zero_dummy_der,
         op, t,
-        kwargs...)
+        kwargs...
+    )
     mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
-    mats, ssys, extras
+    return mats, ssys, extras
 end
 
 """
@@ -779,7 +820,7 @@ function similarity_transform(sys::NamedTuple, T; unitary = false)
     end
     C = sys.C * T
     D = sys.D
-    (; A, B, C, D)
+    return (; A, B, C, D)
 end
 
 """
@@ -805,5 +846,5 @@ function reorder_unknowns(sys::NamedTuple, old, new)
     for i in 1:nx # Build permutation matrix
         P[perm[i], i] = 1
     end
-    similarity_transform(sys, P; unitary = true)
+    return similarity_transform(sys, P; unitary = true)
 end

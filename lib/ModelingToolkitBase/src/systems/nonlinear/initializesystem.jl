@@ -30,8 +30,9 @@ only solve for solvable parameters of the system.
 All other keyword arguments are forwarded to the [`System`](@ref) constructor.
 """
 function generate_initializesystem(
-        sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...)
-    if time_dependent_init
+        sys::AbstractSystem; time_dependent_init = is_time_dependent(sys), kwargs...
+    )
+    return if time_dependent_init
         generate_initializesystem_timevarying(sys; kwargs...)
     else
         generate_initializesystem_timeindependent(sys; kwargs...)
@@ -43,7 +44,8 @@ $(TYPEDSIGNATURES)
 
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
 """
-function generate_initializesystem_timevarying(sys::AbstractSystem;
+function generate_initializesystem_timevarying(
+        sys::AbstractSystem;
         op = SymmapT(),
         initialization_eqs = Equation[],
         guesses = SymmapT(),
@@ -51,7 +53,8 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         fast_path = false,
         algebraic_only = false,
         check_units = true, check_defguess = false,
-        name = nameof(sys), kwargs...)
+        name = nameof(sys), kwargs...
+    )
     _sys = unhack_system(sys)
     trueobs = observed(_sys)
     eqs = equations(_sys)
@@ -97,7 +100,7 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
     newbinds = SymmapT()
     # All bound parameters are solvable. The corresponding equation comes from the binding
     for v in bound_parameters(sys)
-         push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
+        push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
     initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, guesses)
 
@@ -181,7 +184,8 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
 
     vars = collect(init_vars_set)
     pars = collect(init_ps)
-    System(Vector{Equation}(eqs_ics),
+    return System(
+        Vector{Equation}(eqs_ics),
         vars,
         pars;
         bindings = newbinds,
@@ -190,7 +194,8 @@ function generate_initializesystem_timevarying(sys::AbstractSystem;
         name,
         is_initializesystem = true,
         discover_from_metadata = false,
-        kwargs...)
+        kwargs...
+    )
 end
 
 get_maxiters(subrules::AbstractDict) = max(3, min(1000, length(subrules)))
@@ -200,14 +205,16 @@ $(TYPEDSIGNATURES)
 
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-independent `AbstractSystem`.
 """
-function generate_initializesystem_timeindependent(sys::AbstractSystem;
+function generate_initializesystem_timeindependent(
+        sys::AbstractSystem;
         op = Dict(),
         initialization_eqs = [],
         guesses = Dict(),
         algebraic_only = false,
         check_units = true, check_defguess = false,
         fast_path = false,
-        name = nameof(sys), kwargs...)
+        name = nameof(sys), kwargs...
+    )
     eqs = equations(sys)
     _sys = unhack_system(sys)
     trueobs = observed(_sys)
@@ -237,7 +244,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     for v in bound_parameters(sys)
         # Edge case for `NonlinearSystem(::ODE)` where `t` is bound to `Inf`
         binds[v] === COMMON_INF && continue
-         push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
+        push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
@@ -266,7 +273,7 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
     valid_initial_parameters = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
     for (k, v) in op
         if is_variable(sys, k) || has_observed_with_lhs(sys, k) ||
-            Moshi.Match.@match k begin
+                Moshi.Match.@match k begin
                 BSImpl.Term(; f, args) && if f isa Differential end => is_variable(sys, args[1])
                 _ => false
             end
@@ -326,7 +333,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
 
     vars = collect(init_vars_set)
     pars = collect(init_ps)
-    System(Vector{Equation}(eqs_ics),
+    return System(
+        Vector{Equation}(eqs_ics),
         vars,
         pars;
         initial_conditions = guesses,
@@ -334,7 +342,8 @@ function generate_initializesystem_timeindependent(sys::AbstractSystem;
         name,
         is_initializesystem = true,
         discover_from_metadata = false,
-        kwargs...)
+        kwargs...
+    )
 end
 
 function add_trivial_initsys_vars!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}}, dvs::Vector{SymbolicT}, trueobs::Vector{Equation})
@@ -344,22 +353,28 @@ function add_trivial_initsys_vars!(init_vars_set::AtomicArraySet{OrderedDict{Sym
     for eq in trueobs
         push!(init_vars_set, split_indexed_var(eq.lhs)[1])
     end
+    return
 end
 
-function initsys_sort_system_parameters!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                         ps::Vector{SymbolicT})
+function initsys_sort_system_parameters!(
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        ps::Vector{SymbolicT}
+    )
     for v in ps
         arr, _ = split_indexed_var(v)
         arr in init_vars_set && continue
         push!(init_ps, arr)
     end
+    return
 end
 
-function initsys_sort_system_bindings!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                       init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                       eqs_ics::Vector{Equation}, binds::ROSymmapT,
-                                       newbinds::SymmapT, guesses::SymmapT)
+function initsys_sort_system_bindings!(
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        eqs_ics::Vector{Equation}, binds::ROSymmapT,
+        newbinds::SymmapT, guesses::SymmapT
+    )
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
         if v === COMMON_MISSING
@@ -374,12 +389,15 @@ function initsys_sort_system_bindings!(init_vars_set::AtomicArraySet{OrderedDict
             newbinds[k] = v
         end
     end
+    return
 end
 
-function timevaring_initsys_process_op!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                        init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
-                                        eqs_ics::Vector{Equation}, op::SymmapT,
-                                        derivative_rules::DerivativeDict, guesses::SymmapT)
+function timevaring_initsys_process_op!(
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        eqs_ics::Vector{Equation}, op::SymmapT,
+        derivative_rules::DerivativeDict, guesses::SymmapT
+    )
     for (k, v) in op
         # Late binding `missing` also makes the key solvable
         if v === COMMON_MISSING
@@ -451,6 +469,7 @@ function timevaring_initsys_process_op!(init_vars_set::AtomicArraySet{OrderedDic
             isequal(subk, v) || push!(eqs_ics, subk ~ v)
         end
     end
+    return
 end
 
 """
@@ -493,14 +512,15 @@ function _has_delays(sys::AbstractSystem, ex, banned)
         return any(x -> _has_delays(sys, x, banned), args)
     end
     if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
-       iscall(args[1]) && get_iv(sys) in SU.search_variables(args[1])
+            iscall(args[1]) && get_iv(sys) in SU.search_variables(args[1])
         return true
     end
     return any(x -> _has_delays(sys, x, banned), args)
 end
 
 function SciMLBase.remake_initialization_data(
-        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp)
+        sys::AbstractSystem, odefn, u0, t0, p, newu0, newp
+    )
     if u0 === missing && p === missing
         return odefn.initialization_data
     end
@@ -524,14 +544,18 @@ function SciMLBase.remake_initialization_data(
         # state values.
         history_fn = is_time_dependent(sys) && !is_markovian(sys) ? Returns(newu0) : nothing
         new_initu0,
-        new_initp = reconstruct_fn(
-            ProblemState(; u = newu0, p = newp, t = t0, h = history_fn), oldinitprob)
+            new_initp = reconstruct_fn(
+            ProblemState(; u = newu0, p = newp, t = t0, h = history_fn), oldinitprob
+        )
         if oldinitprob.f.resid_prototype === nothing
             newf = oldinitprob.f
         else
-            newf = remake(oldinitprob.f;
+            newf = remake(
+                oldinitprob.f;
                 resid_prototype = calculate_resid_prototype(
-                    length(oldinitprob.f.resid_prototype), new_initu0, new_initp))
+                    length(oldinitprob.f.resid_prototype), new_initu0, new_initp
+                )
+            )
         end
         initprob = remake(oldinitprob; f = newf, u0 = new_initu0, p = new_initp)
         return @set oldinitdata.initializeprob = initprob
@@ -587,7 +611,8 @@ function SciMLBase.remake_initialization_data(
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, guesses;
         time_dependent_init, use_scc, initialization_eqs, floatT, fast_path = true,
-        u0_constructor, p_constructor, allow_incomplete = true, check_units = false)
+        u0_constructor, p_constructor, allow_incomplete = true, check_units = false
+    )
 
     odefn = remake(odefn; kws...)
     return SciMLBase.remake_initialization_data(sys, odefn, newu0, t0, newp, newu0, newp)
@@ -596,10 +621,10 @@ end
 promote_type_with_nothing(::Type{T}, ::Nothing) where {T} = T
 promote_type_with_nothing(::Type{T}, ::StaticVector{0}) where {T} = T
 function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
-    promote_type(T, T2)
+    return promote_type(T, T2)
 end
 function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
-    promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
+    return promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
 end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
@@ -634,7 +659,8 @@ function promote_u0_p(u0, p, t0)
 end
 
 function SciMLBase.late_binding_update_u0_p(
-        prob, sys::AbstractSystem, u0, p, t0, newu0, newp)
+        prob, sys::AbstractSystem, u0, p, t0, newu0, newp
+    )
     supports_initialization(sys) || return newu0, newp
     prob isa IntervalNonlinearProblem && return newu0, newp
     prob isa LinearProblem && return newu0, newp
@@ -706,7 +732,8 @@ end
 
 function DiffEqBase.get_updated_symbolic_problem(
         sys::AbstractSystem, prob; u0 = state_values(prob),
-        p = parameter_values(prob), kw...)
+        p = parameter_values(prob), kw...
+    )
     supports_initialization(sys) || return prob
     initdata = prob.f.initialization_data
     initdata isa SciMLBase.OverrideInitData || return prob
@@ -741,7 +768,7 @@ end
 Check if the given system is an initialization system.
 """
 function is_initializesystem(sys::AbstractSystem)
-    has_is_initializesystem(sys) && get_is_initializesystem(sys)
+    return has_is_initializesystem(sys) && get_is_initializesystem(sys)
 end
 
 """
@@ -778,9 +805,11 @@ function unhack_system(sys)
 end
 
 function UnknownsInTimeIndependentInitializationError(eq, non_params)
-    ArgumentError("""
-    Initialization equations for time-independent systems can only contain parameters. \
-    Found $non_params in $eq. If the equations refer to the initial guess for unknowns, \
-    use the `Initial` operator.
-    """)
+    return ArgumentError(
+        """
+        Initialization equations for time-independent systems can only contain parameters. \
+        Found $non_params in $eq. If the equations refer to the initial guess for unknowns, \
+        use the `Initial` operator.
+        """
+    )
 end

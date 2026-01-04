@@ -8,9 +8,11 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @variables x(t) y(t) z(t)
 
 # Define a differential equation
-eqs = [D(x) ~ σ * (y - x),
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ t * x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z,
+]
 
 @named de = System(eqs, t)
 de = complete(de)
@@ -69,7 +71,7 @@ function SIR!(du, u, p, t)
     du[1] = (μ * N - λ * S - μ * S + ω * R)
     du[2] = (λ * S - σ * I - μ * I)
     du[3] = (σ * I - μ * R - ω * R)
-    du[4] = (σ * I) # cumulative incidence
+    return du[4] = (σ * I) # cumulative incidence
 end
 
 # Solver settings
@@ -87,6 +89,8 @@ u0 = @LArray [9998.0, 1.0, 1.0, 1.0] (:S, :I, :R, :C)
 problem = ODEProblem(SIR!, u0, tspan, p)
 sys = complete(modelingtoolkitize(problem))
 
-@test all(any(isequal(x), parameters(sys))
-for x in ModelingToolkitBase.unwrap.(@variables(β, η, ω, φ, σ, μ)))
+@test all(
+    any(isequal(x), parameters(sys))
+        for x in ModelingToolkitBase.unwrap.(@variables(β, η, ω, φ, σ, μ))
+)
 @test all(isequal.(Symbol.(unknowns(sys)), Symbol.(@variables(S(t), I(t), R(t), C(t)))))

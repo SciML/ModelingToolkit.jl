@@ -44,7 +44,8 @@ $DOC_SYS_MODIFIER
 All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_linear_analysis_function(
-        sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...)
+        sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...
+    )
     dus = []
     us = []
     sys = handle_loop_openings(sys, loop_openings)
@@ -54,7 +55,7 @@ function get_linear_analysis_function(
         push!(dus, du)
         push!(us, u)
     end
-    linearization_function(system_modifier(sys), dus, us; kwargs...)
+    return linearization_function(system_modifier(sys), dus, us; kwargs...)
 end
 """
     $(TYPEDSIGNATURES)
@@ -70,7 +71,7 @@ $DOC_SYS_MODIFIER
 All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_sensitivity_function(sys::AbstractSystem, aps; kwargs...)
-    get_linear_analysis_function(sys, SensitivityTransform, aps; kwargs...)
+    return get_linear_analysis_function(sys, SensitivityTransform, aps; kwargs...)
 end
 
 """
@@ -87,7 +88,7 @@ $DOC_SYS_MODIFIER
 All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_comp_sensitivity_function(sys::AbstractSystem, aps; kwargs...)
-    get_linear_analysis_function(sys, ComplementarySensitivityTransform, aps; kwargs...)
+    return get_linear_analysis_function(sys, ComplementarySensitivityTransform, aps; kwargs...)
 end
 
 """
@@ -104,19 +105,21 @@ $DOC_SYS_MODIFIER
 All other keyword arguments are forwarded to `linearization_function`.
 """
 function get_looptransfer_function(sys::AbstractSystem, aps; kwargs...)
-    get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
+    return get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
 end
 
 for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
     utility_fun = Symbol(f, :_function)
     @eval function $f(
             sys, ap, args...; loop_openings = [], system_modifier = identity,
-            allow_input_derivatives = true, kwargs...)
+            allow_input_derivatives = true, kwargs...
+        )
         lin_fun,
-        ssys = $(utility_fun)(
-            sys, ap, args...; loop_openings, system_modifier, kwargs...)
+            ssys = $(utility_fun)(
+            sys, ap, args...; loop_openings, system_modifier, kwargs...
+        )
         mats, extras = ModelingToolkit.linearize(ssys, lin_fun; allow_input_derivatives)
-        mats, ssys, extras
+        return mats, ssys, extras
     end
 end
 
@@ -130,9 +133,11 @@ Returns
 - `input_vars`: A vector of input variables corresponding to the input analysis points.
 - `output_vars`: A vector of output variables corresponding to the output analysis points.
 """
-function linearization_ap_transform(sys,
+function linearization_ap_transform(
+        sys,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
-        outputs, loop_openings)
+        outputs, loop_openings
+    )
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
     outputs = canonicalize_ap(sys, outputs)
@@ -161,12 +166,15 @@ function linearization_ap_transform(sys,
     return sys, input_vars, output_vars
 end
 
-function linearization_function(sys::AbstractSystem,
+function linearization_function(
+        sys::AbstractSystem,
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
-        outputs; loop_openings = [], system_modifier = identity, kwargs...)
+        outputs; loop_openings = [], system_modifier = identity, kwargs...
+    )
     sys, input_vars,
-    output_vars = linearization_ap_transform(
-        sys, inputs, outputs, loop_openings)
+        output_vars = linearization_ap_transform(
+        sys, inputs, outputs, loop_openings
+    )
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 
@@ -212,4 +220,3 @@ Compute the (linearized) loop-transfer function in analysis point `ap`, from `ap
 
 See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`open_loop`](@ref).
 """ get_looptransfer
-

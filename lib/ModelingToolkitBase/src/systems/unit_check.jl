@@ -11,13 +11,14 @@ struct PleaseImportDynamicQuantities end
 global t::Union{PleaseImportDynamicQuantities, Num} = PleaseImportDynamicQuantities()
 
 function Base.show(io::IO, ::PleaseImportDynamicQuantities)
-    __import_dynamic_quantities()
+    return __import_dynamic_quantities()
 end
 
 function __import_dynamic_quantities(_...)
-    error("""
-    Please import DynamicQuantites.jl to use this `t` and `D`.
-    """)
+    error(
+        """
+        Please import DynamicQuantites.jl to use this `t` and `D`.
+        """
+    )
 end
 global D::Union{typeof(__import_dynamic_quantities), Differential} = __import_dynamic_quantities
-
