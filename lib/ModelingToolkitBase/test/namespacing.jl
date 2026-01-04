@@ -1,6 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, iscomplete, does_namespacing,
-                       renamespace
+    renamespace
 using Test
 
 @variables x(t)
@@ -25,7 +25,8 @@ nsys = toggle_namespacing(sys, false)
 @test !isequal(p, sys.p)
 
 @test_throws ["namespacing", "inner"] System(
-    Equation[], t; systems = [nsys], name = :a)
+    Equation[], t; systems = [nsys], name = :a
+)
 
 @testset "Variables of variables" begin
     @variables x(t) y(x)

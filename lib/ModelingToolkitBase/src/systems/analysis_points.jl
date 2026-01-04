@@ -93,7 +93,7 @@ end
 
 function ap_warning(arg::Int, name::Symbol, should_be_output)
     causality = should_be_output ? "output" : "input"
-    @warn """
+    return @warn """
     The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
     order to handle inverse models, but may not be what you intended.
 
@@ -121,9 +121,11 @@ function Base.show(io::IO, ::MIME"text/plain", ap::AnalysisPoint)
         print(io, "0")
         return
     end
-    if get(io, :compact, false)
-        print(io,
-            "AnalysisPoint($(ap_var(ap.input)), $(ap_var.(ap.outputs)); name=$(ap.name))")
+    return if get(io, :compact, false)
+        print(
+            io,
+            "AnalysisPoint($(ap_var(ap.input)), $(ap_var.(ap.outputs)); name=$(ap.name))"
+        )
     else
         print(io, "AnalysisPoint(")
         printstyled(io, ap.name, color = :cyan)
@@ -223,7 +225,8 @@ end
 
 function connect(
         in::ConnectableSymbolicT, name::Symbol, out::ConnectableSymbolicT,
-        outs::ConnectableSymbolicT...; verbose = true)
+        outs::ConnectableSymbolicT...; verbose = true
+    )
     allvars = SymbolicT[]
     push!(allvars, unwrap(in))
     push!(allvars, unwrap(out))
@@ -232,7 +235,8 @@ function connect(
     end
     validate_causal_variables_connection(allvars)
     return AnalysisPoint() ~ AnalysisPoint(
-        allvars[1], name, allvars[2:end]; verbose)
+        allvars[1], name, allvars[2:end]; verbose
+    )
 end
 
 """
@@ -242,8 +246,9 @@ Return all the namespaces in `name`. Namespaces should be separated by `.` or
 `$NAMESPACE_SEPARATOR`.
 """
 function namespace_hierarchy(name::Symbol)
-    map(
-        Symbol, split(string(name), ('.', NAMESPACE_SEPARATOR)))
+    return map(
+        Symbol, split(string(name), ('.', NAMESPACE_SEPARATOR))
+    )
 end
 
 """
@@ -322,8 +327,9 @@ by `fn`.
 of the extra variables added.
 """
 function modify_nested_subsystem(fn, root::AbstractSystem, target::AbstractSystem)
-    modify_nested_subsystem(
-        fn, root, nameof(target))
+    return modify_nested_subsystem(
+        fn, root, nameof(target)
+    )
 end
 """
     $(TYPEDSIGNATURES)
@@ -331,8 +337,9 @@ end
 Apply the modification to the system containing the namespaced analysis point `target`.
 """
 function modify_nested_subsystem(fn, root::AbstractSystem, target::AnalysisPoint)
-    modify_nested_subsystem(
-        fn, root, @view namespace_hierarchy(nameof(target))[1:(end - 1)])
+    return modify_nested_subsystem(
+        fn, root, @view namespace_hierarchy(nameof(target))[1:(end - 1)]
+    )
 end
 """
     $(TYPEDSIGNATURES)
@@ -342,8 +349,9 @@ the provided name `target`. The namespace separator in `target` should be `.` or
 `$NAMESPACE_SEPARATOR`. The `target` may include `nameof(root)` as the first namespace.
 """
 function modify_nested_subsystem(fn, root::AbstractSystem, target::Symbol)
-    modify_nested_subsystem(
-        fn, root, namespace_hierarchy(target))
+    return modify_nested_subsystem(
+        fn, root, namespace_hierarchy(target)
+    )
 end
 
 """
@@ -357,19 +365,22 @@ ignored. For example, `hierarchy = [:root, :a, :b, :c]` also searches for `root.
 An empty `hierarchy` will apply the modification to `root`.
 """
 function modify_nested_subsystem(
-        fn, root::AbstractSystem, hierarchy::AbstractVector{Symbol})
+        fn, root::AbstractSystem, hierarchy::AbstractVector{Symbol}
+    )
     # no hierarchy, so just apply to the root
     if isempty(hierarchy)
         return fn(root)
     end
     # ignore the name of the root
     if nameof(root) != hierarchy[1]
-        error("""
-        Invalid analysis point name `$(join(hierarchy, NAMESPACE_SEPARATOR))`. The name
-        must include the name of the root system `$(nameof(root))`. This typically happens
-        when  using an analysis point obtained by calling `getproperty` on a system marked
-        as `complete` to linearize a system that is not marked as `complete`.
-        """)
+        error(
+            """
+            Invalid analysis point name `$(join(hierarchy, NAMESPACE_SEPARATOR))`. The name
+            must include the name of the root system `$(nameof(root))`. This typically happens
+            when  using an analysis point obtained by calling `getproperty` on a system marked
+            as `complete` to linearize a system that is not marked as `complete`.
+            """
+        )
     end
     hierarchy = @view hierarchy[2:end]
 
@@ -384,7 +395,7 @@ function modify_nested_subsystem(
             cur = hierarchy[i]
             idx = findfirst(subsys -> nameof(subsys) == cur, get_systems(sys))
             idx === nothing &&
-                error("System $(join([nameof(root); hierarchy[1:i-1]], '.')) does not have a subsystem named $cur.")
+                error("System $(join([nameof(root); hierarchy[1:(i - 1)]], '.')) does not have a subsystem named $cur.")
 
             # recurse into new subsystem
             newsys, vars = _helper(get_systems(sys)[idx], i + 1)
@@ -410,8 +421,9 @@ Given a system `sys` and analysis point `ap`, return the index in `get_eqs(sys)`
 containing an equation which has as it's RHS an analysis point with name `nameof(ap)`.
 """
 function analysis_point_index(sys::AbstractSystem, ap::AnalysisPoint)
-    analysis_point_index(
-        sys, nameof(ap))
+    return analysis_point_index(
+        sys, nameof(ap)
+    )
 end
 """
     $(TYPEDSIGNATURES)
@@ -420,7 +432,7 @@ Search for the analysis point with the given `name` in `get_eqs(sys)`.
 """
 function analysis_point_index(sys::AbstractSystem, name::Symbol)
     name = namespace_hierarchy(name)[end]
-    findfirst(get_eqs(sys)) do eq
+    return findfirst(get_eqs(sys)) do eq
         value(eq.lhs) isa AnalysisPoint && nameof(value(eq.rhs)::AnalysisPoint) == name
     end
 end
@@ -470,13 +482,13 @@ end
 #### PRIMITIVE TRANSFORMATIONS
 
 const DOC_WILL_REMOVE_AP = """
-    Note that this transformation will remove `ap`, causing any subsequent transformations \
-    referring to it to fail.\
-    """
+Note that this transformation will remove `ap`, causing any subsequent transformations \
+referring to it to fail.\
+"""
 
 const DOC_ADDED_VARIABLE = """
-    The added variable(s) will have a default of zero, of the appropriate type and size.\
-    """
+The added variable(s) will have a default of zero, of the appropriate type and size.\
+"""
 
 """
     $(TYPEDEF)
@@ -520,11 +532,11 @@ end
 `Break` the given analysis point `ap`.
 """
 function Break(ap::AnalysisPoint, add_input::Bool = false, default_outputs_to_input = false)
-    Break(ap, add_input, default_outputs_to_input, false)
+    return Break(ap, add_input, default_outputs_to_input, false)
 end
 
 function apply_transformation(tf::Break, sys::AbstractSystem)
-    modify_nested_subsystem(sys, tf.ap) do breaksys
+    return modify_nested_subsystem(sys, tf.ap) do breaksys
         # get analysis point
         ap_idx = analysis_point_index(breaksys, tf.ap)
         ap_idx === nothing &&
@@ -583,7 +595,7 @@ struct GetInput <: AnalysisPointTransformation
 end
 
 function apply_transformation(tf::GetInput, sys::AbstractSystem)
-    modify_nested_subsystem(sys, tf.ap) do ap_sys
+    return modify_nested_subsystem(sys, tf.ap) do ap_sys
         # get the analysis point
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
@@ -637,7 +649,7 @@ Add an input without an additional output variable.
 PerturbOutput(ap::AnalysisPoint) = PerturbOutput(ap, false)
 
 function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
-    modify_nested_subsystem(sys, tf.ap) do ap_sys
+    return modify_nested_subsystem(sys, tf.ap) do ap_sys
         # get analysis point
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
@@ -669,8 +681,9 @@ function apply_transformation(tf::PerturbOutput, sys::AbstractSystem)
 
         # add output variable, equation, default
         out_var,
-        out_def = get_analysis_variable(
-            ap_ivar, nameof(ap), get_iv(sys); perturb = false)
+            out_def = get_analysis_variable(
+            ap_ivar, nameof(ap), get_iv(sys); perturb = false
+        )
         push!(ap_sys_eqs, out_var ~ ap_ivar + wrap(new_var))
         push!(unks, out_var)
 
@@ -709,7 +722,7 @@ analysis point.
 AddVariable(ap::AnalysisPoint) = AddVariable(ap, nameof(ap))
 
 function apply_transformation(tf::AddVariable, sys::AbstractSystem)
-    modify_nested_subsystem(sys, tf.ap) do ap_sys
+    return modify_nested_subsystem(sys, tf.ap) do ap_sys
         # get analysis point
         ap_idx = analysis_point_index(ap_sys, tf.ap)
         ap_idx === nothing &&
@@ -720,8 +733,9 @@ function apply_transformation(tf::AddVariable, sys::AbstractSystem)
         # add equations involving new variable
         ap_ivar = ap_var(ap.input)
         new_var,
-        new_def = get_analysis_variable(
-            ap_ivar, tf.name, get_iv(sys); perturb = false)
+            new_def = get_analysis_variable(
+            ap_ivar, tf.name, get_iv(sys); perturb = false
+        )
         # add variable
         unks = copy(get_unknowns(ap_sys))
         push!(unks, new_var)
@@ -770,10 +784,12 @@ end
 function apply_transformation(cst::ComplementarySensitivityTransform, sys::AbstractSystem)
     sys, (u,) = apply_transformation(GetInput(cst.ap), sys)
     sys,
-    (du,) = apply_transformation(
+        (du,) = apply_transformation(
         AddVariable(
-            cst.ap, Symbol(namespace_hierarchy(nameof(cst.ap))[end], :_comp_sens_du)),
-        sys)
+            cst.ap, Symbol(namespace_hierarchy(nameof(cst.ap))[end], :_comp_sens_du)
+        ),
+        sys
+    )
     sys, (_du,) = apply_transformation(PerturbOutput(cst.ap), sys)
 
     # `PerturbOutput` adds the equation `input + _du ~ output`
@@ -834,7 +850,7 @@ function canonicalize_ap(sys::AbstractSystem, ap::AnalysisPoint)
 end
 canonicalize_ap(sys::AbstractSystem, ap) = [ap]
 function canonicalize_ap(sys::AbstractSystem, aps::Vector)
-    mapreduce(Base.Fix1(canonicalize_ap, sys), vcat, aps; init = [])
+    return mapreduce(Base.Fix1(canonicalize_ap, sys), vcat, aps; init = [])
 end
 
 """
@@ -862,11 +878,14 @@ When called with analysis points as input arguments, we assume that all analysis
 """
 function generate_control_function(
         sys::ModelingToolkitBase.AbstractSystem, input_ap_name::Union{
-            Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+            Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint},
+        },
         dist_ap_name::Union{
-            Nothing, Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}} = nothing;
+            Nothing, Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint},
+        } = nothing;
         system_modifier = identity,
-        kwargs...)
+        kwargs...
+    )
     input_ap_name = canonicalize_ap(sys, input_ap_name)
     u = []
     for input_ap in input_ap_name
@@ -884,5 +903,5 @@ function generate_control_function(
         push!(d, du)
     end
 
-    ModelingToolkitBase.generate_control_function(system_modifier(sys), u, d; kwargs...)
+    return ModelingToolkitBase.generate_control_function(system_modifier(sys), u, d; kwargs...)
 end

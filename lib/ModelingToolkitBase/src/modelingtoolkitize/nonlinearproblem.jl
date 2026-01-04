@@ -18,7 +18,8 @@ All other keyword arguments are forwarded to the created `System`.
 """
 function modelingtoolkitize(
         prob::Union{NonlinearProblem, NonlinearLeastSquaresProblem};
-        u_names = nothing, p_names = nothing, kwargs...)
+        u_names = nothing, p_names = nothing, kwargs...
+    )
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 
@@ -43,8 +44,10 @@ function modelingtoolkitize(
     filter!(x -> !iscall(x) || !(operation(x) isa Initial), params)
     filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), initial_conditions)
 
-    return System(eqs, sts, params;
+    return System(
+        eqs, sts, params;
         initial_conditions,
         name = gensym(:MTKizedNonlin),
-        kwargs...)
+        kwargs...
+    )
 end

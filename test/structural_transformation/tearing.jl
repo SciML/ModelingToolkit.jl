@@ -19,7 +19,7 @@ eqs = [
     0 ~ u2 - cos(u1),
     0 ~ u3 - hypot(u1, u2),
     0 ~ u4 - hypot(u2, u3),
-    0 ~ u5 - hypot(u4, u1)
+    0 ~ u5 - hypot(u4, u1),
 ]
 @named sys = System(eqs, [u1, u2, u3, u4, u5], [h])
 state = TearingState(sys)
@@ -103,11 +103,13 @@ newsys = tearing(sys)
 let state = TearingState(sys)
     result, = tearing(state)
     S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
-    @test S == [1 0 0 0 1
-                1 1 0 0 0
-                1 1 1 0 0
-                0 1 1 1 0
-                1 0 0 1 1]
+    @test S == [
+        1 0 0 0 1
+        1 1 0 0 0
+        1 1 1 0 0
+        0 1 1 1 0
+        1 0 0 1 1
+    ]
 end
 
 # unknowns: u5
@@ -125,7 +127,7 @@ tornsys = complete(tearing(sys))
 @test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)])
 prob = NonlinearProblem(tornsys, [u5 => 1.0])
 sol = solve(prob, NewtonRaphson())
-@test norm(prob.f(sol.u, sol.prob.p)) < 1e-10
+@test norm(prob.f(sol.u, sol.prob.p)) < 1.0e-10
 
 ###
 ### Simple test (edge case)
@@ -134,7 +136,7 @@ sol = solve(prob, NewtonRaphson())
 eqs = [
     0 ~ x - y,
     0 ~ z + y,
-    0 ~ x + z
+    0 ~ x + z,
 ]
 @named nlsys = System(eqs, [x, y, z], [])
 
@@ -147,14 +149,17 @@ newsys = tearing(nlsys)
 using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @parameters p
 @variables x(t) y(t) z(t)
-eqs = [D(x) ~ z * h
-       0 ~ x - y
-       0 ~ sin(z) + y - p * t]
+eqs = [
+    D(x) ~ z * h
+    0 ~ x - y
+    0 ~ sin(z) + y - p * t
+]
 @named daesys = System(eqs, t)
 newdaesys = mtkcompile(daesys)
 @test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ y + sin(z) - p * t])
 @test issetequal(
-    equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t])
+    equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
+)
 @test issetequal(unknowns(newdaesys), [x, z])
 prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π, p => 0.2], (0, 1.0))
 du = [0.0, 0.0];
@@ -165,8 +170,8 @@ tt = 0.1;
 prob.f(du, u, pr, tt)
 xgetter = getsym(prob, x)
 zgetter = getsym(prob, z)
-@test xgetter(du)≈zgetter(u) atol=1e-5
-@test zgetter(du)≈xgetter(u) + sin(zgetter(u)) - prob.ps[p] * tt atol=1e-5
+@test xgetter(du) ≈ zgetter(u) atol = 1.0e-5
+@test zgetter(du) ≈ xgetter(u) + sin(zgetter(u)) - prob.ps[p] * tt atol = 1.0e-5
 
 # test the initial guess is respected
 @named sys = System(eqs, t, initial_conditions = Dict(z => NaN))
@@ -179,10 +184,12 @@ function Translational_Mass(; name, m = 1.0)
     sts = @variables s(t) v(t) a(t)
     ps = @parameters m = m
     D = Differential(t)
-    eqs = [D(s) ~ v
-           D(v) ~ a
-           m * a ~ 0.0]
-    System(eqs, t, sts, ps; name = name)
+    eqs = [
+        D(s) ~ v
+        D(v) ~ a
+        m * a ~ 0.0
+    ]
+    return System(eqs, t, sts, ps; name = name)
 end
 
 m = 1.0
@@ -191,15 +198,19 @@ m = 1.0
 ms_eqs = Equation[]
 
 @named _ms_model = System(ms_eqs, t)
-@named ms_model = compose(_ms_model,
-    [mass])
+@named ms_model = compose(
+    _ms_model,
+    [mass]
+)
 
 calculate_jacobian(ms_model)
 calculate_tgrad(ms_model)
 
 # Mass starts with velocity = 1
-u0 = [mass.s => 0.0
-      mass.v => 1.0]
+u0 = [
+    mass.s => 0.0
+    mass.v => 1.0
+]
 
 sys = mtkcompile(ms_model)
 # @test ModelingToolkit.get_jac(sys)[] === ModelingToolkit.EMPTY_JAC

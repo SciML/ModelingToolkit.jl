@@ -6,9 +6,9 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 @named sys = System([D(x) ~ -0.5 * x], t, initial_conditions = Dict(x => 1.0))
 sys = complete(sys)
 for prob in [
-    eval(ModelingToolkitBase.ODEProblem{false}(sys, nothing, nothing)),
-    eval(ModelingToolkitBase.ODEProblem{false}(sys, nothing, nothing; expression = Val{true}))
-]
+        eval(ModelingToolkitBase.ODEProblem{false}(sys, nothing, nothing)),
+        eval(ModelingToolkitBase.ODEProblem{false}(sys, nothing, nothing; expression = Val{true})),
+    ]
     _fn = tempname()
 
     open(_fn, "w") do f
@@ -44,7 +44,7 @@ ss_exp = ModelingToolkitBase.toexpr(ss)
 ss_ = complete(eval(ss_exp))
 prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1))
 sol_ = solve(prob_, ImplicitEuler())
-@test sol[all_obs] == sol_[all_obs] skip=!@isdefined(ModelingToolkit)
+@test sol[all_obs] == sol_[all_obs] skip = !@isdefined(ModelingToolkit)
 
 ## Check ODEProblemExpr with Observables -----------
 

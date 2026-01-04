@@ -1,8 +1,8 @@
 function MTKTearing.input_timedomain(::Sample, _::MTKTearing.IOTimeDomainArgsT = nothing)
-    MTKTearing.InputTimeDomainElT[ContinuousClock()]
+    return MTKTearing.InputTimeDomainElT[ContinuousClock()]
 end
 function MTKTearing.output_timedomain(s::Sample, _::MTKTearing.IOTimeDomainArgsT = nothing)
-    s.clock
+    return s.clock
 end
 
 function MTKTearing.input_timedomain(::Hold, args::MTKTearing.IOTimeDomainArgsT = nothing)
@@ -12,9 +12,9 @@ function MTKTearing.input_timedomain(::Hold, args::MTKTearing.IOTimeDomainArgsT 
             return MTKTearing.InputTimeDomainElT[MTKTearing.get_time_domain(arg)]
         end
     end
-    MTKTearing.InputTimeDomainElT[MTKTearing.InferredDiscrete()] # the Hold accepts any discrete
+    return MTKTearing.InputTimeDomainElT[MTKTearing.InferredDiscrete()] # the Hold accepts any discrete
 end
 
 function MTKTearing.output_timedomain(::Hold, _::MTKTearing.IOTimeDomainArgsT = nothing)
-    ContinuousClock()
+    return ContinuousClock()
 end

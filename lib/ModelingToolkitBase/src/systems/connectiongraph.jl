@@ -45,7 +45,8 @@ Create a `ConnectionVertex` given
 use for this connection.
 """
 function ConnectionVertex(
-        namespace::Vector{Symbol}, var::Union{SymbolicT, AbstractSystem}, isouter::Bool)
+        namespace::Vector{Symbol}, var::Union{SymbolicT, AbstractSystem}, isouter::Bool
+    )
     if var isa SymbolicT
         name = getname(var)
     else
@@ -74,7 +75,8 @@ Create a connection vertex for the given path `name` using the provided `isouter
 `type`. `alias` denotes whether `name` can be stored by this vertex without copying.
 """
 function ConnectionVertex(
-        name::Vector{Symbol}, isouter::Bool, type::DataType; alias = false)
+        name::Vector{Symbol}, isouter::Bool, type::DataType; alias = false
+    )
     if !alias
         name = copy(name)
     end
@@ -94,9 +96,11 @@ function Base.:(==)(a::ConnectionVertex, b::ConnectionVertex)
     a.isouter == b.isouter || return false
     a.type == b.type || return false
     if a.hash != b.hash
-        error("""
-        This should never happen. Please open an issue in ModelingToolkitBase.jl with an MWE.
-        """)
+        error(
+            """
+            This should never happen. Please open an issue in ModelingToolkitBase.jl with an MWE.
+            """
+        )
     end
     return true
 end
@@ -105,7 +109,7 @@ function Base.show(io::IO, vert::ConnectionVertex)
     for name in @view(vert.name[1:(end - 1)])
         print(io, name, ".")
     end
-    print(io, vert.name[end], "::", vert.isouter ? "outer" : "inner")
+    return print(io, vert.name[end], "::", vert.isouter ? "outer" : "inner")
 end
 
 const ConnectionGraph = HyperGraph{ConnectionVertex}
@@ -119,7 +123,7 @@ function BipartiteGraphs.print_hyperedge_hint(io::IO, ::Type{ConnectionVertex}, 
         # otherwise it prints `ModelingToolkitBase.Equality`
         type = "Equality"
     end
-    printstyled(io, type; bold = true, color = :yellow)
+    return printstyled(io, type; bold = true, color = :yellow)
 end
 
 const ConnectionGraphEdge = BipartiteGraphs.HyperGraphEdge{ConnectionVertex}
@@ -170,7 +174,7 @@ function Base.show(io::IO, state::AbstractConnectionState)
     println(io, "And")
     println(io)
     ctx2 = IOContext(io, :cgraph_name => "Domain Network", :compact => true)
-    show(ctx2, state.domain_connection_graph)
+    return show(ctx2, state.domain_connection_graph)
 end
 
 """
@@ -234,7 +238,7 @@ end
 Create an empty `NegativeConnectionState` with empty graphs.
 """
 function NegativeConnectionState()
-    NegativeConnectionState(ConnectionGraph(), ConnectionGraph(), Int[], Int[])
+    return NegativeConnectionState(ConnectionGraph(), ConnectionGraph(), Int[], Int[])
 end
 
 """
@@ -258,7 +262,8 @@ Add the given edge to the domain network. Does not affect the connection network
 that the first vertex in `edge` is the input.
 """
 function add_domain_connection_edge!(
-        state::NegativeConnectionState, edge::ConnectionGraphEdge)
+        state::NegativeConnectionState, edge::ConnectionGraphEdge
+    )
     i = Graphs.add_edge!(state.domain_connection_graph, edge)
     j = state.domain_connection_graph.labels[first(edge)]
     push!(state.domain_hyperedge_inputs, j)
@@ -282,7 +287,8 @@ ordering of vertices, and thus all comparisons should be done by comparing the
 `ConnectionVertex`.
 """
 function remove_negative_connections!(
-        graph::ConnectionGraph, neg_graph::ConnectionGraph, neg_edge_inputs::Vector{Int})
+        graph::ConnectionGraph, neg_graph::ConnectionGraph, neg_edge_inputs::Vector{Int}
+    )
     # _i means index in neg_graph
     # _j means index in graph
 
@@ -343,6 +349,7 @@ function remove_negative_connections!(
             Graphs.rem_edge!(graph.graph, edge_j, vert_j)
         end
     end
+    return
 end
 
 """
@@ -352,12 +359,16 @@ Remove negative hyperedges given by `neg_state` from the connection and domain n
 `state`.
 """
 function remove_negative_connections!(
-        state::ConnectionState, neg_state::NegativeConnectionState)
-    remove_negative_connections!(state.connection_graph, neg_state.connection_graph,
-        neg_state.connection_hyperedge_inputs)
+        state::ConnectionState, neg_state::NegativeConnectionState
+    )
     remove_negative_connections!(
+        state.connection_graph, neg_state.connection_graph,
+        neg_state.connection_hyperedge_inputs
+    )
+    return remove_negative_connections!(
         state.domain_connection_graph, neg_state.domain_connection_graph,
-        neg_state.domain_hyperedge_inputs)
+        neg_state.domain_hyperedge_inputs
+    )
 end
 
 """
@@ -375,5 +386,5 @@ Return the connection sets of the connection graph and domain network.
 """
 function connectionsets(state::ConnectionState)
     return connectionsets(state.connection_graph),
-    connectionsets(state.domain_connection_graph)
+        connectionsets(state.domain_connection_graph)
 end

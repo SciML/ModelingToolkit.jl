@@ -24,11 +24,13 @@ struct ObservableRecordFromSolution{S, T}
     # A Vector of pairs (Symbolic => value) with the default values of all system variables and parameters.
     subs_vals::T
 
-    function ObservableRecordFromSolution(nsys::System,
+    function ObservableRecordFromSolution(
+            nsys::System,
             plot_var,
             bif_idx,
             u0_vals,
-            p_vals)
+            p_vals
+        )
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
         state_end_idxs = length(unknowns(nsys))
@@ -40,23 +42,33 @@ struct ObservableRecordFromSolution{S, T}
         # Gets the (base) substitution values for parameters.
         subs_vals_params = Pair.(parameters(nsys), p_vals)
         # Gets the (base) substitution values for observables.
-        subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-                             [subs_vals_states; subs_vals_params])
-                         for obs in observed(nsys)]
+        subs_vals_obs = [
+            obs.lhs => substitute(
+                    obs.rhs,
+                    [subs_vals_states; subs_vals_params]
+                )
+                for obs in observed(nsys)
+        ]
         # Sometimes observables depend on other observables, hence we make a second update to this vector.
-        subs_vals_obs = [obs.lhs => substitute(obs.rhs,
-                             [subs_vals_states; subs_vals_params; subs_vals_obs])
-                         for obs in observed(nsys)]
+        subs_vals_obs = [
+            obs.lhs => substitute(
+                    obs.rhs,
+                    [subs_vals_states; subs_vals_params; subs_vals_obs]
+                )
+                for obs in observed(nsys)
+        ]
         # During the bifurcation process, the value of some states, parameters, and observables may vary (and are calculated in each step). Those that are not are stored in this vector
         subs_vals = [subs_vals_states; subs_vals_params; subs_vals_obs]
 
         param_end_idxs = state_end_idxs + length(parameters(nsys))
-        new{typeof(obs_eqs), typeof(subs_vals)}(obs_eqs,
+        return new{typeof(obs_eqs), typeof(subs_vals)}(
+            obs_eqs,
             target_obs_idx,
             state_end_idxs,
             param_end_idxs,
             bif_par_idx,
-            subs_vals)
+            subs_vals
+        )
     end
 end
 # Functor function that computes the value.
@@ -73,7 +85,8 @@ function (orfs::ObservableRecordFromSolution)(x, p; k...)
     for (obs_idx, obs_eq) in enumerate(orfs.obs_eqs)
         orfs.subs_vals[orfs.param_end_idxs + obs_idx] = orfs.subs_vals[orfs.param_end_idxs + obs_idx][1] => substitute(
             obs_eq.rhs,
-            orfs.subs_vals)
+            orfs.subs_vals
+        )
     end
 
     # Substitutes in the value for all states, parameters, and observables into the equation for the designated observable.
@@ -83,7 +96,8 @@ end
 ### Creates BifurcationProblem Overloads ###
 
 # When input is a NonlinearSystem.
-function BifurcationKit.BifurcationProblem(nsys::System,
+function BifurcationKit.BifurcationProblem(
+        nsys::System,
         u0_bif,
         ps,
         bif_par,
@@ -91,16 +105,19 @@ function BifurcationKit.BifurcationProblem(nsys::System,
         plot_var = nothing,
         record_from_solution = BifurcationKit.record_sol_default,
         jac = true,
-        kwargs...)
+        kwargs...
+    )
     if !ModelingToolkitBase.iscomplete(nsys)
         error("A completed `System` is required. Call `complete` or `structural_simplify` on the system before creating a `BifurcationProblem`")
     end
     if is_time_dependent(nsys)
-        nsys = System([0 ~ eq.rhs for eq in full_equations(nsys)],
+        nsys = System(
+            [0 ~ eq.rhs for eq in full_equations(nsys)],
             unknowns(nsys),
             parameters(nsys);
             observed = observed(nsys),
-            name = nameof(nsys))
+            name = nameof(nsys)
+        )
         nsys = complete(nsys)
     end
     @set! nsys.index_cache = nothing # force usage of a parameter vector instead of `MTKParameters`
@@ -130,11 +147,13 @@ function BifurcationKit.BifurcationProblem(nsys::System,
 
             # If the plot var is an observed state.
         elseif any(isequal(plot_var, eq.lhs) for eq in observed(nsys))
-            record_from_solution = ObservableRecordFromSolution(nsys,
+            record_from_solution = ObservableRecordFromSolution(
+                nsys,
                 plot_var,
                 bif_idx,
                 u0_bif_vals,
-                p_vals)
+                p_vals
+            )
 
             # If neither an variable nor observable, throw an error.
         else
@@ -142,7 +161,8 @@ function BifurcationKit.BifurcationProblem(nsys::System,
         end
     end
 
-    return BifurcationKit.BifurcationProblem(F,
+    return BifurcationKit.BifurcationProblem(
+        F,
         u0_bif_vals,
         p_vals,
         (BifurcationKit.@optic _[bif_idx]),
@@ -150,7 +170,8 @@ function BifurcationKit.BifurcationProblem(nsys::System,
         record_from_solution = record_from_solution,
         J = J,
         inplace = true,
-        kwargs...)
+        kwargs...
+    )
 end
 
 end # module

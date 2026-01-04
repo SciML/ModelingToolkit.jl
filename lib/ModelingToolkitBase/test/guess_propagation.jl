@@ -8,12 +8,12 @@ using Test
     @variables y(t)
     eqs = [D(x) ~ 1]
     initialization_eqs = [1 ~ exp(1 + x)]
-    
+
     @named sys = System(eqs, t; initialization_eqs, observed = [y ~ x])
     sys = complete(sys)
     tspan = (0.0, 0.2)
     prob = ODEProblem(sys, [], tspan)
-    
+
     @test prob.f.initializeprob[y] == 2.0
     @test prob.f.initializeprob[x] == 2.0
     sol = solve(prob.f.initializeprob; show_trace = Val(true))

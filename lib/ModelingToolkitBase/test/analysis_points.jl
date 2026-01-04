@@ -15,15 +15,19 @@ using Symbolics: NAMESPACE_SEPARATOR
     @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
 
     ap = AnalysisPoint(:plant_input)
-    eqs = [connect(P.output, C.input)
-           connect(C.output, ap, P.input)]
+    eqs = [
+        connect(P.output, C.input)
+        connect(C.output, ap, P.input)
+    ]
     sys_ap = System(eqs, t, systems = [P, C], name = :hej)
     sys_ap2 = @test_nowarn expand_connections(sys_ap)
 
     @test all(eq -> !(eq.lhs isa AnalysisPoint), equations(sys_ap2))
 
-    eqs = [connect(P.output, C.input)
-           connect(C.output, P.input)]
+    eqs = [
+        connect(P.output, C.input)
+        connect(C.output, P.input)
+    ]
     sys_normal = System(eqs, t, systems = [P, C], name = :hej)
     sys_normal2 = @test_nowarn expand_connections(sys_normal)
 
@@ -36,7 +40,8 @@ end
 
     ap = AnalysisPoint(:plant_input)
     @test_warn ["1-th argument", "plant_input", "not a output"] connect(
-        P.input, ap, C.output)
+        P.input, ap, C.output
+    )
     @test_nowarn connect(P.input, ap, C.output; verbose = false)
 end
 
@@ -76,7 +81,7 @@ if @isdefined(ModelingToolkit)
         prob = ODEProblem(ssys, [P.x => 1], (0, 10))
         sol = solve(prob, Rodas5())
         @test norm(sol.u[1]) >= 1
-        @test norm(sol.u[end]) < 1e-6 # This fails without the feedback through C
+        @test norm(sol.u[end]) < 1.0e-6 # This fails without the feedback through C
     end
 
     test_cases = [
@@ -84,7 +89,7 @@ if @isdefined(ModelingToolkit)
         ("nested", nested_sys, nested_sys.hej.plant_input),
         ("nonamespace", nonamespace_sys, nonamespace_sys.hej.plant_input),
         ("inner - Symbol", sys, :plant_input),
-        ("nested - Symbol", nested_sys, nameof(sys.plant_input))
+        ("nested - Symbol", nested_sys, nameof(sys.plant_input)),
     ]
 
     @testset "get_sensitivity - $name" for (name, sys, ap) in test_cases
@@ -135,8 +140,10 @@ if @isdefined(ModelingToolkit)
 
     # Multiple analysis points
 
-    eqs = [connect(P.output, :plant_output, C.input)
-           connect(C.output, :plant_input, P.input)]
+    eqs = [
+        connect(P.output, :plant_output, C.input)
+        connect(C.output, :plant_input, P.input)
+    ]
     sys = System(eqs, t, systems = [P, C], name = :hej)
     @named nested_sys = System(Equation[], t; systems = [sys])
 
@@ -144,7 +151,7 @@ if @isdefined(ModelingToolkit)
         ("inner", sys, sys.plant_input),
         ("nested", nested_sys, nested_sys.hej.plant_input),
         ("inner - Symbol", sys, :plant_input),
-        ("nested - Symbol", nested_sys, nameof(sys.plant_input))
+        ("nested - Symbol", nested_sys, nameof(sys.plant_input)),
     ]
 
     @testset "get_sensitivity - $name" for (name, sys, ap) in test_cases
@@ -155,23 +162,29 @@ if @isdefined(ModelingToolkit)
     end
 
     @testset "linearize - $name" for (name, sys, inputap, outputap) in [
-        ("inner", sys, sys.plant_input, sys.plant_output),
-        ("nested", nested_sys, nested_sys.hej.plant_input, nested_sys.hej.plant_output)
-    ]
-        inputname = Symbol(join(
-            MTK.namespace_hierarchy(nameof(inputap))[2:end], NAMESPACE_SEPARATOR))
-        outputname = Symbol(join(
-            MTK.namespace_hierarchy(nameof(outputap))[2:end], NAMESPACE_SEPARATOR))
-        @testset "input - $(typeof(input)), output - $(typeof(output))" for (input, output) in [
-            (inputap, outputap),
-            (inputname, outputap),
-            (inputap, outputname),
-            (inputname, outputname),
-            (inputap, [outputap]),
-            (inputname, [outputap]),
-            (inputap, [outputname]),
-            (inputname, [outputname])
+            ("inner", sys, sys.plant_input, sys.plant_output),
+            ("nested", nested_sys, nested_sys.hej.plant_input, nested_sys.hej.plant_output),
         ]
+        inputname = Symbol(
+            join(
+                MTK.namespace_hierarchy(nameof(inputap))[2:end], NAMESPACE_SEPARATOR
+            )
+        )
+        outputname = Symbol(
+            join(
+                MTK.namespace_hierarchy(nameof(outputap))[2:end], NAMESPACE_SEPARATOR
+            )
+        )
+        @testset "input - $(typeof(input)), output - $(typeof(output))" for (input, output) in [
+                (inputap, outputap),
+                (inputname, outputap),
+                (inputap, outputname),
+                (inputname, outputname),
+                (inputap, [outputap]),
+                (inputname, [outputap]),
+                (inputap, [outputname]),
+                (inputname, [outputname]),
+            ]
             matrices, _ = linearize(sys, input, output)
             # Result should be the same as feedpack(P, 1), i.e., the closed-loop transfer function from plant input to plant output
             @test matrices.A[] == -2
@@ -181,9 +194,9 @@ if @isdefined(ModelingToolkit)
     end
 
     @testset "linearize - variable output - $name" for (name, sys, input, output) in [
-        ("inner", sys, sys.plant_input, P.output.u),
-        ("nested", nested_sys, nested_sys.hej.plant_input, sys.P.output.u)
-    ]
+            ("inner", sys, sys.plant_input, P.output.u),
+            ("nested", nested_sys, nested_sys.hej.plant_input, sys.P.output.u),
+        ]
         matrices, _ = linearize(sys, input, [output])
         @test matrices.A[] == -2
         @test matrices.B[] * matrices.C[] == 1 # both positive
@@ -203,21 +216,25 @@ if @isdefined(ModelingToolkit)
         @named torque = Torque()
 
         function SystemModel(u = nothing; name = :model)
-            eqs = [connect(torque.flange, inertia1.flange_a)
-                   connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-                   connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+            eqs = [
+                connect(torque.flange, inertia1.flange_a)
+                connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+                connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+            ]
             if u !== nothing
                 push!(eqs, connect(torque.tau, u.output))
-                return System(eqs, t;
+                return System(
+                    eqs, t;
                     systems = [
                         torque,
                         inertia1,
                         inertia2,
                         spring,
                         damper,
-                        u
+                        u,
                     ],
-                    name)
+                    name
+                )
             end
             System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
         end
@@ -229,33 +246,37 @@ if @isdefined(ModelingToolkit)
         @named sensor = AngleSensor()
         @named er = Add(k2 = -1)
 
-        connections = [connect(r.output, :r, filt.input)
-                       connect(filt.output, er.input1)
-                       connect(pid.ctr_output, :u, model.torque.tau)
-                       connect(model.inertia2.flange_b, sensor.flange)
-                       connect(sensor.phi, :y, er.input2)
-                       connect(er.output, :e, pid.err_input)]
+        connections = [
+            connect(r.output, :r, filt.input)
+            connect(filt.output, er.input1)
+            connect(pid.ctr_output, :u, model.torque.tau)
+            connect(model.inertia2.flange_b, sensor.flange)
+            connect(sensor.phi, :y, er.input2)
+            connect(er.output, :e, pid.err_input)
+        ]
 
-        closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
+        closed_loop = System(
+            connections, t, systems = [model, pid, filt, sensor, r, er],
             name = :closed_loop, initial_conditions = [
                 model.inertia1.phi => 0.0,
                 model.inertia2.phi => 0.0,
                 model.inertia1.w => 0.0,
                 model.inertia2.w => 0.0,
                 filt.x => 0.0,
-                filt.xd => 0.0
-            ])
+                filt.xd => 0.0,
+            ]
+        )
 
         sys = mtkcompile(closed_loop)
         prob = ODEProblem(sys, unknowns(sys) .=> 0.0, (0.0, 4.0))
-        sol = solve(prob, Rodas5P(), reltol = 1e-6, abstol = 1e-9)
+        sol = solve(prob, Rodas5P(), reltol = 1.0e-6, abstol = 1.0e-9)
 
         matrices, ssys = linearize(closed_loop, :r, :y)
         lsys = ss(matrices...) |> sminreal
         @test lsys.nx == 8
 
         stepres = ControlSystemsBase.step(c2d(lsys, 0.001), 4)
-        @test Array(stepres.y[:])≈Array(sol(0:0.001:4, idxs = model.inertia2.phi)) rtol=1e-4
+        @test Array(stepres.y[:]) ≈ Array(sol(0:0.001:4, idxs = model.inertia2.phi)) rtol = 1.0e-4
 
         matrices, ssys = get_sensitivity(closed_loop, :y)
         So = ss(matrices...)
@@ -271,19 +292,23 @@ if @isdefined(ModelingToolkit)
         @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
         @named add = Blocks.Add(k2 = -1)
 
-        eqs = [connect(P.output, :plant_output, add.input2)
-               connect(add.output, C.input)
-               connect(C.output, P.input)]
+        eqs = [
+            connect(P.output, :plant_output, add.input2)
+            connect(add.output, C.input)
+            connect(C.output, P.input)
+        ]
 
         sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
         @named r = Constant(k = 1)
         @named F = FirstOrder(k = 1, T = 3)
 
-        eqs = [connect(r.output, F.input)
-               connect(sys_inner.P.output, sys_inner.add.input2)
-               connect(sys_inner.C.output, :plant_input, sys_inner.P.input)
-               connect(F.output, sys_inner.add.input1)]
+        eqs = [
+            connect(r.output, F.input)
+            connect(sys_inner.P.output, sys_inner.add.input2)
+            connect(sys_inner.C.output, :plant_input, sys_inner.P.input)
+            connect(F.output, sys_inner.add.input1)
+        ]
         sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
         # test first that the mtkcompile works correctly
@@ -307,19 +332,23 @@ if @isdefined(ModelingToolkit)
         @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
         @named add = Blocks.Add(k2 = -1)
 
-        eqs = [connect(P.output.u, :plant_output, add.input2.u)
-               connect(add.output, C.input)
-               connect(C.output.u, P.input.u)]
+        eqs = [
+            connect(P.output.u, :plant_output, add.input2.u)
+            connect(add.output, C.input)
+            connect(C.output.u, P.input.u)
+        ]
 
         sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
         @named r = Constant(k = 1)
         @named F = FirstOrder(k = 1, T = 3)
 
-        eqs = [connect(r.output, F.input)
-               connect(sys_inner.P.output.u, sys_inner.add.input2.u)
-               connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
-               connect(F.output, sys_inner.add.input1)]
+        eqs = [
+            connect(r.output, F.input)
+            connect(sys_inner.P.output.u, sys_inner.add.input2.u)
+            connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
+            connect(F.output, sys_inner.add.input1)
+        ]
         sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
         # test first that the mtkcompile works correctly
@@ -343,19 +372,23 @@ if @isdefined(ModelingToolkit)
         @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
         @named add = Blocks.Add(k2 = -1)
 
-        eqs = [connect(P.output.u, :plant_output, add.input2.u)
-               connect(add.output, C.input)
-               connect(C.output, P.input)]
+        eqs = [
+            connect(P.output.u, :plant_output, add.input2.u)
+            connect(add.output, C.input)
+            connect(C.output, P.input)
+        ]
 
         sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
         @named r = Constant(k = 1)
         @named F = FirstOrder(k = 1, T = 3)
 
-        eqs = [connect(r.output, F.input)
-               connect(sys_inner.P.output, sys_inner.add.input2)
-               connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
-               connect(F.output, sys_inner.add.input1)]
+        eqs = [
+            connect(r.output, F.input)
+            connect(sys_inner.P.output, sys_inner.add.input2)
+            connect(sys_inner.C.output.u, :plant_input, sys_inner.P.input.u)
+            connect(F.output, sys_inner.add.input1)
+        ]
         sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
         # test first that the mtkcompile works correctly
@@ -379,11 +412,14 @@ if @isdefined(ModelingToolkit)
         @named feedback = Feedback()
         @named ref = Step()
         @named sys_inner = System(
-            [connect(P_inner.output, :y, feedback.input2)
-             connect(feedback.output, :u, P_inner.input)
-             connect(ref.output, :r, feedback.input1)],
+            [
+                connect(P_inner.output, :y, feedback.input2)
+                connect(feedback.output, :u, P_inner.input)
+                connect(ref.output, :r, feedback.input1)
+            ],
             t,
-            systems = [P_inner, feedback, ref])
+            systems = [P_inner, feedback, ref]
+        )
 
         P_not_broken, _ = linearize(sys_inner, :u, :y)
         @test P_not_broken.A[] == -2
@@ -397,23 +433,34 @@ if @isdefined(ModelingToolkit)
         Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))
 
         @named sys_inner = System(
-            [connect(P_inner.output, :y, feedback.input2)
-             connect(feedback.output, :u, P_inner.input)],
+            [
+                connect(P_inner.output, :y, feedback.input2)
+                connect(feedback.output, :u, P_inner.input)
+            ],
             t,
-            systems = [P_inner, feedback])
+            systems = [P_inner, feedback]
+        )
 
         @named P_outer = FirstOrder(k = rand(), T = rand())
 
         @named sys_outer = System(
-            [connect(sys_inner.P_inner.output, :y2, P_outer.input)
-             connect(P_outer.output, :u2, sys_inner.feedback.input1)],
+            [
+                connect(sys_inner.P_inner.output, :y2, P_outer.input)
+                connect(P_outer.output, :u2, sys_inner.feedback.input1)
+            ],
             t,
-            systems = [P_outer, sys_inner])
+            systems = [P_outer, sys_inner]
+        )
 
         Souter = sminreal(ss(get_sensitivity(sys_outer, sys_outer.sys_inner.u)[1]...))
 
-        Sinner2 = sminreal(ss(get_sensitivity(
-            sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2])[1]...))
+        Sinner2 = sminreal(
+            ss(
+                get_sensitivity(
+                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2]
+                )[1]...
+            )
+        )
 
         @test Sinner.nx == 1
         @test Sinner == Sinner2
@@ -435,8 +482,10 @@ if @isdefined(ModelingToolkit)
         @named K = Blocks.StateSpace(A, B, C, D)
         Kss = CS.ss(A, B, C, D)
 
-        eqs = [connect(P.output, :plant_output, K.input)
-               connect(K.output, :plant_input, P.input)]
+        eqs = [
+            connect(P.output, :plant_output, K.input)
+            connect(K.output, :plant_input, P.input)
+        ]
         sys = System(eqs, t, systems = [P, K], name = :hej)
 
         matrices, _ = get_sensitivity(sys, :plant_input)
@@ -451,7 +500,8 @@ if @isdefined(ModelingToolkit)
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(T)
 
         matrices, _ = get_looptransfer(
-            sys, :plant_input)
+            sys, :plant_input
+        )
         L = Kss * Pss
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(L)
 
@@ -465,22 +515,27 @@ if @isdefined(ModelingToolkit)
         @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = 1)
         @named add = Blocks.Add(k2 = -1)
 
-        eqs = [connect(P.output, :plant_output, add.input2)
-               connect(add.output, C.input)
-               connect(C.output, :plant_input, P.input)]
+        eqs = [
+            connect(P.output, :plant_output, add.input2)
+            connect(add.output, C.input)
+            connect(C.output, :plant_input, P.input)
+        ]
 
         sys_inner = System(eqs, t, systems = [P, C, add], name = :inner)
 
         @named r = Constant(k = 1)
         @named F = FirstOrder(k = 1, T = 3)
 
-        eqs = [connect(r.output, F.input)
-               connect(F.output, sys_inner.add.input1)]
+        eqs = [
+            connect(r.output, F.input)
+            connect(F.output, sys_inner.add.input1)
+        ]
         sys_outer = System(eqs, t, systems = [F, sys_inner, r], name = :outer)
 
         matrices,
-        _ = get_sensitivity(
-            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
+            _ = get_sensitivity(
+            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output]
+        )
 
         Ps = tf(1, [1, 1]) |> ss
         Cs = tf(1) |> ss
@@ -495,8 +550,9 @@ if @isdefined(ModelingToolkit)
         @test tf(G[2, 1]) ≈ tf(CS.feedback(Ps, Cs))
 
         matrices,
-        _ = get_comp_sensitivity(
-            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
+            _ = get_comp_sensitivity(
+            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output]
+        )
 
         G = CS.ss(matrices...) |> sminreal
         Ti = CS.feedback(Cs * Ps)
@@ -518,8 +574,9 @@ if @isdefined(ModelingToolkit)
 
         # Calling looptransfer like below is not the intended way, but we can work out what it should return if we did so it remains a valid test
         matrices,
-        _ = get_looptransfer(
-            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output])
+            _ = get_looptransfer(
+            sys_outer, [sys_outer.inner.plant_input, sys_outer.inner.plant_output]
+        )
         L = CS.ss(matrices...) |> sminreal
         @test tf(L[1, 1]) ≈ tf(0)
         @test tf(L[2, 2]) ≈ tf(0)
@@ -527,8 +584,9 @@ if @isdefined(ModelingToolkit)
         @test tf(L[2, 1]) ≈ tf(Ps)
 
         matrices,
-        _ = linearize(
-            sys_outer, [sys_outer.inner.plant_input], [nameof(sys_inner.plant_output)])
+            _ = linearize(
+            sys_outer, [sys_outer.inner.plant_input], [nameof(sys_inner.plant_output)]
+        )
         G = CS.ss(matrices...) |> sminreal
         @test tf(G) ≈ tf(CS.feedback(Ps, Cs))
     end
@@ -539,18 +597,20 @@ if @isdefined(ModelingToolkit)
         @named add = Blocks.Add(k1 = 1, k2 = 2)
         @named back = Feedback()
 
-        eqs_normal = [connect(back.output, :ap, F1.input)
-                      connect(back.output, F2.input)
-                      connect(F1.output, add.input1)
-                      connect(F2.output, add.input2)
-                      connect(add.output, back.input2)]
+        eqs_normal = [
+            connect(back.output, :ap, F1.input)
+            connect(back.output, F2.input)
+            connect(F1.output, add.input1)
+            connect(F2.output, add.input2)
+            connect(add.output, back.input2)
+        ]
         @named normal_inner = System(eqs_normal, t; systems = [F1, F2, add, back])
 
         @named step = Step()
         eqs2_normal = [
-            connect(step.output, normal_inner.back.input1)
+            connect(step.output, normal_inner.back.input1),
         ]
-        @named sys_normal = System(eqs2_normal, t; systems = [normal_inner, step])
+        return @named sys_normal = System(eqs2_normal, t; systems = [normal_inner, step])
     end
 
     sys_normal = normal_test_system()
@@ -565,15 +625,19 @@ if @isdefined(ModelingToolkit)
         @named add = Blocks.Add(k1 = 1, k2 = 2)
         @named back = Feedback()
 
-        eqs = [connect(back.output, F1.input, F2.input)
-               connect(F1.output, add.input1)
-               connect(F2.output, add.input2)
-               connect(add.output, back.input2)]
+        eqs = [
+            connect(back.output, F1.input, F2.input)
+            connect(F1.output, add.input1)
+            connect(F2.output, add.input2)
+            connect(add.output, back.input2)
+        ]
         @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
         @named step = Step()
-        eqs2 = [connect(step.output, inner.back.input1)
-                connect(inner.back.output, :ap, inner.F1.input)]
+        eqs2 = [
+            connect(step.output, inner.back.input1)
+            connect(inner.back.output, :ap, inner.F1.input)
+        ]
         @named sys = System(eqs2, t; systems = [inner, step])
 
         prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
@@ -589,15 +653,19 @@ if @isdefined(ModelingToolkit)
         @named add = Blocks.Add(k1 = 1, k2 = 2)
         @named back = Feedback()
 
-        eqs = [connect(back.output.u, F1.input.u, F2.input.u)
-               connect(F1.output, add.input1)
-               connect(F2.output, add.input2)
-               connect(add.output, back.input2)]
+        eqs = [
+            connect(back.output.u, F1.input.u, F2.input.u)
+            connect(F1.output, add.input1)
+            connect(F2.output, add.input2)
+            connect(add.output, back.input2)
+        ]
         @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
         @named step = Step()
-        eqs2 = [connect(step.output, inner.back.input1)
-                connect(inner.back.output.u, :ap, inner.F1.input.u)]
+        eqs2 = [
+            connect(step.output, inner.back.input1)
+            connect(inner.back.output.u, :ap, inner.F1.input.u)
+        ]
         @named sys = System(eqs2, t; systems = [inner, step])
 
         prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
@@ -613,15 +681,19 @@ if @isdefined(ModelingToolkit)
         @named add = Blocks.Add(k1 = 1, k2 = 2)
         @named back = Feedback()
 
-        eqs = [connect(back.output, F1.input, F2.input)
-               connect(F1.output, add.input1)
-               connect(F2.output, add.input2)
-               connect(add.output, back.input2)]
+        eqs = [
+            connect(back.output, F1.input, F2.input)
+            connect(F1.output, add.input1)
+            connect(F2.output, add.input2)
+            connect(add.output, back.input2)
+        ]
         @named inner = System(eqs, t; systems = [F1, F2, add, back])
 
         @named step = Step()
-        eqs2 = [connect(step.output, inner.back.input1)
-                connect(inner.back.output.u, :ap, inner.F1.input.u)]
+        eqs2 = [
+            connect(step.output, inner.back.input1)
+            connect(inner.back.output.u, :ap, inner.F1.input.u)
+        ]
         @named sys = System(eqs2, t; systems = [inner, step])
 
         prob = ODEProblem(mtkcompile(sys), [], (0.0, 10.0))
@@ -646,13 +718,16 @@ if @isdefined(ModelingToolkit)
         @named torque = Torque(use_support = false)
 
         function SystemModel(u = nothing; name = :model)
-            eqs = [connect(torque.flange, inertia1.flange_a)
-                   connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-                   connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+            eqs = [
+                connect(torque.flange, inertia1.flange_a)
+                connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+                connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+            ]
             if u !== nothing
                 push!(eqs, connect(torque.tau, u.output))
                 return @named model = System(
-                    eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
+                    eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u]
+                )
             end
             System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
         end
@@ -665,25 +740,31 @@ if @isdefined(ModelingToolkit)
         model = SystemModel()
         @named inverse_model = SystemModel()
         @named inverse_sensor = AngleSensor()
-        connections = [connect(r.output, :r, filt.input) # Name connection r to form an analysis point
-                       connect(inverse_model.inertia1.flange_b, inverse_sensor.flange) # Attach the inverse sensor to the inverse model
-                       connect(filt.output, pid.reference, inverse_sensor.phi) # the filtered reference now goes to both the PID controller and the inverse model input
-                       connect(inverse_model.torque.tau, add.input1)
-                       connect(pid.ctr_output, add.input2)
-                       connect(add.output, :u, model.torque.tau) # Name connection u to form an analysis point
-                       connect(model.inertia1.flange_b, sensor.flange)
-                       connect(sensor.phi, :y, pid.measurement)]
-        closed_loop = System(connections, t,
+        connections = [
+            connect(r.output, :r, filt.input) # Name connection r to form an analysis point
+            connect(inverse_model.inertia1.flange_b, inverse_sensor.flange) # Attach the inverse sensor to the inverse model
+            connect(filt.output, pid.reference, inverse_sensor.phi) # the filtered reference now goes to both the PID controller and the inverse model input
+            connect(inverse_model.torque.tau, add.input1)
+            connect(pid.ctr_output, add.input2)
+            connect(add.output, :u, model.torque.tau) # Name connection u to form an analysis point
+            connect(model.inertia1.flange_b, sensor.flange)
+            connect(sensor.phi, :y, pid.measurement)
+        ]
+        closed_loop = System(
+            connections, t,
             systems = [model, inverse_model, pid, filt, sensor, inverse_sensor, r, add],
-            name = :closed_loop)
+            name = :closed_loop
+        )
         # just ensure the system simplifies
         mats, _ = get_sensitivity(closed_loop, :y)
         S = CS.ss(mats...)
         fr = CS.freqrespv(S, [0.01, 1, 100])
         # https://github.com/SciML/ModelingToolkit.jl/pull/3469
-        reference_fr = ComplexF64[-1.2505330104772838e-11 - 2.500062613816021e-9im,
-        -0.0024688370221621625 - 0.002279011866413123im,
-        1.8100018764334602 + 0.3623845793211718im]
+        reference_fr = ComplexF64[
+            -1.2505330104772838e-11 - 2.500062613816021e-9im,
+            -0.0024688370221621625 - 0.002279011866413123im,
+            1.8100018764334602 + 0.3623845793211718im,
+        ]
         @test isapprox(fr, reference_fr)
     end
 end
@@ -718,28 +799,28 @@ using DynamicQuantities
 
     @connector function UnitfulOutput(; name)
         vars = @variables begin
-            u(t), [unit=u"m", output=true]
+            u(t), [unit = u"m", output = true]
         end
         return System(Equation[], t, vars, []; name)
     end
     @connector function UnitfulInput(; name)
         vars = @variables begin
-            u(t), [unit=u"m", input=true]
+            u(t), [unit = u"m", input = true]
         end
         return System(Equation[], t, vars, []; name)
     end
     @component function UnitfulBlock(; name)
         pars = @parameters begin
-            offset, [unit=u"m"]
+            offset, [unit = u"m"]
             start_time
-            height, [unit=u"m"]
+            height, [unit = u"m"]
             duration
         end
         systems = @named begin
             output = UnitfulOutput()
         end
         eqs = [
-            output.u ~ offset + height*(0.5 + (1/pi)*atan(1e5*(t - start_time)))
+            output.u ~ offset + height * (0.5 + (1 / pi) * atan(1.0e5 * (t - start_time))),
         ]
         return System(eqs, t, [], pars; systems, name)
     end
@@ -753,7 +834,7 @@ using DynamicQuantities
         end
 
         vars = @variables begin
-            output(t), [output=true, unit=u"m^2"]
+            output(t), [output = true, unit = u"m^2"]
         end
 
         equations = Equation[
@@ -765,7 +846,7 @@ using DynamicQuantities
     end
     @named sys = TestAPAroundUnits()
     @test sys isa System
-    
+
     @component function TestAPWithNoOutputs(; name)
         pars = @parameters begin
         end
@@ -776,7 +857,7 @@ using DynamicQuantities
         end
 
         vars = @variables begin
-            output(t), [output=true, unit=u"m^2"]
+            output(t), [output = true, unit = u"m^2"]
         end
 
         equations = Equation[
@@ -789,4 +870,3 @@ using DynamicQuantities
     @named sys2 = TestAPWithNoOutputs()
     @test sys2 isa System
 end
-

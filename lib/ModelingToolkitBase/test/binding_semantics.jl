@@ -22,9 +22,11 @@ end
 @testset "Prefer keyword over metadata" begin
     @variables x(t) = 1 y(t) = x
     @parameters p = 1 q = p
-    @named sys = System([D(x) ~ p * x, D(y) ~ q * y], t;
-                        bindings = [x => y, p => q, y => nothing, q => nothing],
-                        initial_conditions = [y => 2, q => 2, x => nothing, p => nothing])
+    @named sys = System(
+        [D(x) ~ p * x, D(y) ~ q * y], t;
+        bindings = [x => y, p => q, y => nothing, q => nothing],
+        initial_conditions = [y => 2, q => 2, x => nothing, p => nothing]
+    )
     @test isequal(bindings(sys), Dict(x => y, p => q))
     @test isequal(initial_conditions(sys), Dict(y => SConst(2), q => SConst(2)))
 end
@@ -70,21 +72,21 @@ end
 
 function SubComp(; k, name)
     @parameters k = k
-    System(Equation[], t, [], [k]; name)
+    return System(Equation[], t, [], [k]; name)
 end
 
 function Comp(; name)
     @parameters k
     @variables x(t)
     @named sub = SubComp(; k)
-    System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
+    return System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
 end
 
 function BadComp(; name)
     @parameters k
     @variables x(t)
     @named sub = SubComp(; k = x)
-    System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
+    return System([D(x) ~ sub.k * x + k], t; systems = [sub], name)
 end
 
 

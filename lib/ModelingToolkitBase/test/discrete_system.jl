@@ -13,7 +13,7 @@ k = ShiftIndex(t)
 @test_throws ErrorException @mtkcompile sys = System([x(k + 1) ~ x + x(k - 1)], t)
 
 @inline function rate_to_proportion(r, t)
-    1 - exp(-r * t)
+    return 1 - exp(-r * t)
 end;
 
 # Independent and dependent variables and parameters
@@ -21,13 +21,16 @@ end;
 @constants h = 1
 @variables S(t) I(t) R(t)
 infection = rate_to_proportion(
-    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h) * S(k - 1)
+    β * c * I(k - 1) / (S(k - 1) * h + I(k - 1) + R(k - 1)), δt * h
+) * S(k - 1)
 recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 
 # Equations
-eqs = [S ~ S(k - 1) - infection * h,
+eqs = [
+    S ~ S(k - 1) - infection * h,
     I ~ I(k - 1) + infection - recovery,
-    R ~ R(k - 1) + recovery]
+    R ~ R(k - 1) + recovery,
+]
 
 # System
 @named sys = System(eqs, t, [S, I, R], [c, nsteps, δt, β, γ, h])
@@ -38,7 +41,8 @@ df = DiscreteFunction(syss)
 # iip
 du = zeros(3)
 u = ModelingToolkitBase.varmap_to_vars(
-    Dict([S(k - 1) => 1, I(k - 1) => 2, R(k - 1) => 3]), unknowns(syss))
+    Dict([S(k - 1) => 1, I(k - 1) => 2, R(k - 1) => 3]), unknowns(syss)
+)
 p = MTKParameters(syss, [c, nsteps, δt, β, γ] .=> collect(1:5))
 df.f(du, u, p, 0)
 reorderer = getu(syss, [S(k - 1), I(k - 1), R(k - 1)])
@@ -46,14 +50,15 @@ reorderer = getu(syss, [S(k - 1), I(k - 1), R(k - 1)])
 
 # oop
 @test reorderer(df.f(u, p, 0)) ≈
-      [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+    [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkitBase.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
 prob_map = DiscreteProblem(
-    syss, [u0; p], tspan; guesses = [S(k - 1) => 1.0, I(k - 1) => 1.0, R(k - 1) => 1.0])
+    syss, [u0; p], tspan; guesses = [S(k - 1) => 1.0, I(k - 1) => 1.0, R(k - 1) => 1.0]
+)
 @test prob_map.f.sys === syss
 
 # Solution
@@ -63,33 +68,36 @@ sol_map = solve(prob_map, FunctionMap());
 @test sol_map[S(k - 1)] isa Vector
 
 # Using defaults constructor
-@parameters c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
-@variables S(t)=990.0 I(t)=10.0 R(t)=0.0 R2(t)
+@parameters c = 10.0 nsteps = 400 δt = 0.1 β = 0.05 γ = 0.25
+@variables S(t) = 990.0 I(t) = 10.0 R(t) = 0.0 R2(t)
 
 infection2 = rate_to_proportion(β * c * I(k - 1) / (S(k - 1) + I(k - 1) + R(k - 1)), δt) *
-             S(k - 1)
+    S(k - 1)
 recovery2 = rate_to_proportion(γ, δt) * I(k - 1)
 
-eqs2 = [S ~ S(k - 1) - infection2,
+eqs2 = [
+    S ~ S(k - 1) - infection2,
     I ~ I(k - 1) + infection2 - recovery2,
-    R ~ R(k - 1) + recovery2]
+    R ~ R(k - 1) + recovery2,
+]
 
 @mtkcompile sys = System(
-    eqs2, t, [S, I, R], [c, nsteps, δt, β, γ])
+    eqs2, t, [S, I, R], [c, nsteps, δt, β, γ]
+)
 push!(ModelingToolkitBase.get_observed(sys), R2 ~ R)
 sys = complete(sys)
 @test ModelingToolkitBase.initial_conditions(sys) != Dict()
 
-prob_map2 = DiscreteProblem(sys, [], tspan; guesses = [S(k-1) => 1.0, R(k-1) => 1.0, I(k-1) => 1.0])
+prob_map2 = DiscreteProblem(sys, [], tspan; guesses = [S(k - 1) => 1.0, R(k - 1) => 1.0, I(k - 1) => 1.0])
 # prob_map2 = DiscreteProblem(sys, [S(k - 1) => S, I(k - 1) => I, R(k - 1) => R], tspan)
 sol_map2 = solve(prob_map2, FunctionMap());
 
-@test sol_map[[S(k-1), I(k-1), R(k-1)]] ≈ sol_map2[[S(k-1), I(k-1), R(k-1)]]
+@test sol_map[[S(k - 1), I(k - 1), R(k - 1)]] ≈ sol_map2[[S(k - 1), I(k - 1), R(k - 1)]]
 for p in parameters(sys)
     @test sol_map.prob.ps[p] ≈ sol_map2.prob.ps[p]
 end
 @test sol_map2[R2][begin:(end - 1)] == sol_map2[R(k - 1)][(begin + 1):end] ==
-      sol_map2[R][begin:(end - 1)]
+    sol_map2[R][begin:(end - 1)]
 # Direct Implementation
 
 function sir_map!(u_diff, u, p, t)
@@ -103,7 +111,7 @@ function sir_map!(u_diff, u, p, t)
         u_diff[2] = I + infection - recovery
         u_diff[3] = R + recovery
     end
-    nothing
+    return nothing
 end;
 u0 = sol_map2[[S, I, R], 1];
 p = [0.05, 10.0, 0.25, 0.1];
@@ -149,7 +157,8 @@ sol_map2 = solve(prob_map, FunctionMap());
 @variables x(t) RHS(t)
 @parameters τ
 @named fol = System(
-    [x ~ (1 - x(k - 1)) / τ], t, [x, RHS], [τ]; observed = [RHS ~ (1 - x) / τ * h])
+    [x ~ (1 - x(k - 1)) / τ], t, [x, RHS], [τ]; observed = [RHS ~ (1 - x) / τ * h]
+)
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -211,11 +220,11 @@ RHS2 = RHS
 
 @variables x(t) y(t) u(t)
 if @isdefined(ModelingToolkit)
-    eqs = [x ~ x(k-1) + u, u ~ 1, y ~ x + u]
+    eqs = [x ~ x(k - 1) + u, u ~ 1, y ~ x + u]
     @mtkcompile de = System(eqs, t)
 else
     eqs = [x ~ x(k - 1) + u]
-    @mtkcompile de = System(eqs, t) inputs=[u]
+    @mtkcompile de = System(eqs, t) inputs = [u]
     @set! de.observed = [u ~ 1; ModelingToolkitBase.get_observed(de); y ~ x + u]
     filter!(!isequal(u), ModelingToolkitBase.get_ps(de))
     empty!(ModelingToolkitBase.get_inputs(de))
@@ -237,8 +246,10 @@ if @isdefined(ModelingToolkit)
             buffer[1:L] = buffer
         end
         @variables output(t) time(t)
-        eqs = [time ~ time(k - 1) + 1
-               output ~ getdata(buffer, time)]
+        eqs = [
+            time ~ time(k - 1) + 1
+            output ~ getdata(buffer, time)
+        ]
         return System(eqs, t; name)
     end
     function System(; name, buffer)
@@ -247,13 +258,15 @@ if @isdefined(ModelingToolkit)
             α = 0.5, [description = "alpha"]
             β = 0.5, [description = "beta"]
         end
-        vars = @variables y(t)=0.0 y_shk(t)=0.0
+        vars = @variables y(t) = 0.0 y_shk(t) = 0.0
 
-        eqs = [y_shk ~ y_sys.output
-               # y[t] = 0.5 * y[t - 1] + 0.5 * y[t + 1] + y_shk[t]
-               y(k - 1) ~ α * y(k - 2) + (β * y(k) + y_shk(k - 1))]
+        eqs = [
+            y_shk ~ y_sys.output
+            # y[t] = 0.5 * y[t - 1] + 0.5 * y[t + 1] + y_shk[t]
+            y(k - 1) ~ α * y(k - 2) + (β * y(k) + y_shk(k - 1))
+        ]
 
-        System(eqs, t, vars, pars; systems = [y_sys], name = name)
+        return System(eqs, t, vars, pars; systems = [y_sys], name = name)
     end
 
     @test_nowarn @mtkcompile sys = System(; buffer = ones(10))
@@ -274,13 +287,17 @@ end
     eqs = [
         x(k) ~ x(k - 1) + x(k - 2),
         y[1](k) ~ y[1](k - 1) + y[1](k - 2),
-        y[2](k) ~ y[2](k - 1) + y[2](k - 2)
+        y[2](k) ~ y[2](k - 1) + y[2](k - 2),
     ]
     @mtkcompile sys = System(eqs, t)
-    prob = DiscreteProblem(sys,
-        [x(k - 1) => ones(2), x(k - 2) => zeros(2), y[1](k - 1) => 1.0,
-            y[1](k - 2) => 0.0, y[2](k - 1) => 1.0, y[2](k - 2) => 0.0],
-        (0, 4))
+    prob = DiscreteProblem(
+        sys,
+        [
+            x(k - 1) => ones(2), x(k - 2) => zeros(2), y[1](k - 1) => 1.0,
+            y[1](k - 2) => 0.0, y[2](k - 1) => 1.0, y[2](k - 2) => 0.0,
+        ],
+        (0, 4)
+    )
     @test all(isone, prob.u0)
     sol = solve(prob, FunctionMap())
     @test sol[[x..., y...]][end] == 8ones(4)
@@ -290,15 +307,22 @@ end
     @parameters σ ρ β q
     @variables x(t) y(t) z(t)
     k = ShiftIndex(t)
-    p = [σ => 28.0,
+    p = [
+        σ => 28.0,
         ρ => 10.0,
-        β => 8 / 3]
+        β => 8 / 3,
+    ]
 
     @mtkcompile discsys = System(
-        [x ~ x(k - 1) * ρ + y(k - 2), y ~ y(k - 1) * σ - z(k - 2),
-            z ~ z(k - 1) * β + x(k - 2)],
-        t; initial_conditions = [x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
-            y(k - 1) => 1.0, z(k - 1) => 1.0])
+        [
+            x ~ x(k - 1) * ρ + y(k - 2), y ~ y(k - 1) * σ - z(k - 2),
+            z ~ z(k - 1) * β + x(k - 2),
+        ],
+        t; initial_conditions = [
+            x => 1.0, y => 1.0, z => 1.0, x(k - 1) => 1.0,
+            y(k - 1) => 1.0, z(k - 1) => 1.0,
+        ]
+    )
     discprob = DiscreteProblem(discsys, p, (0, 10))
     sol = solve(discprob, FunctionMap())
     @test SciMLBase.successful_retcode(sol)

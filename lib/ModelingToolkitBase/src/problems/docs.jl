@@ -81,7 +81,7 @@ $INTERNAL_INITIALIZEPROB_KWARGS
 """
 
 function problem_ctors(prob, istd)
-    if istd
+    return if istd
         """
             SciMLBase.$prob(sys::System, op, tspan::NTuple{2}; kwargs...)
             SciMLBase.$prob{iip}(sys::System, op, tspan::NTuple{2}; kwargs...)
@@ -107,8 +107,10 @@ function prob_fun_common_kwargs(T, istd)
     """
 end
 
-function problem_docstring(prob, func, istd; init = true, extra_body = "",
-        extra_kwargs = "", extra_kwargs_desc = "")
+function problem_docstring(
+        prob, func, istd; init = true, extra_body = "",
+        extra_kwargs = "", extra_kwargs_desc = ""
+    )
     if func isa DataType
         func = "`$func`"
     end
@@ -193,21 +195,23 @@ If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 """
 
 for (mod, prob, func, istd, kws) in [
-    (SciMLBase, :ODEProblem, ODEFunction, true, (;)),
-    (SciMLBase, :SteadyStateProblem, ODEFunction, false, (;)),
-    (SciMLBase, :BVProblem, ODEFunction, true,
-        (; init = false, extra_body = BV_EXTRA_BODY)),
-    (SciMLBase, :DAEProblem, DAEFunction, true, (;)),
-    (SciMLBase, :DDEProblem, DDEFunction, true, (;)),
-    (SciMLBase, :SDEProblem, SDEFunction, true, (;)),
-    (SciMLBase, :SDDEProblem, SDDEFunction, true, (;)),
-    (JumpProcesses, :JumpProblem, "inner SciMLFunction", true, (; init = false)),
-    (SciMLBase, :DiscreteProblem, DiscreteFunction, true, (;)),
-    (SciMLBase, :ImplicitDiscreteProblem, ImplicitDiscreteFunction, true, (;)),
-    (SciMLBase, :NonlinearProblem, NonlinearFunction, false, (;)),
-    (SciMLBase, :NonlinearLeastSquaresProblem, NonlinearFunction, false, (;)),
-    (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false)),
-]
+        (SciMLBase, :ODEProblem, ODEFunction, true, (;)),
+        (SciMLBase, :SteadyStateProblem, ODEFunction, false, (;)),
+        (
+            SciMLBase, :BVProblem, ODEFunction, true,
+            (; init = false, extra_body = BV_EXTRA_BODY),
+        ),
+        (SciMLBase, :DAEProblem, DAEFunction, true, (;)),
+        (SciMLBase, :DDEProblem, DDEFunction, true, (;)),
+        (SciMLBase, :SDEProblem, SDEFunction, true, (;)),
+        (SciMLBase, :SDDEProblem, SDDEFunction, true, (;)),
+        (JumpProcesses, :JumpProblem, "inner SciMLFunction", true, (; init = false)),
+        (SciMLBase, :DiscreteProblem, DiscreteFunction, true, (;)),
+        (SciMLBase, :ImplicitDiscreteProblem, ImplicitDiscreteFunction, true, (;)),
+        (SciMLBase, :NonlinearProblem, NonlinearFunction, false, (;)),
+        (SciMLBase, :NonlinearLeastSquaresProblem, NonlinearFunction, false, (;)),
+        (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false)),
+    ]
     kwexpr = Expr(:parameters)
     for (k, v) in pairs(kws)
         push!(kwexpr.args, Expr(:kw, k, v))
@@ -216,7 +220,8 @@ for (mod, prob, func, istd, kws) in [
 end
 
 function function_docstring(
-        func, istd, optionals; extra_body = "", extra_kwargs = "", extra_kwargs_desc = "")
+        func, istd, optionals; extra_body = "", extra_kwargs = "", extra_kwargs_desc = ""
+    )
     return """
         $func(sys::System; kwargs...)
         $func{iip}(sys::System; kwargs...)
@@ -340,22 +345,22 @@ function process_optional_function_kwargs(choices::Vector{Symbol})
     if !isdisjoint(choices, CONS_SPARSITY_OPTIONALS)
         push!(choices, :cons_sparse)
     end
-    join(map(Base.Fix1(getindex, OPTIONAL_FN_KWARGS_DICT), choices), "\n")
+    return join(map(Base.Fix1(getindex, OPTIONAL_FN_KWARGS_DICT), choices), "\n")
 end
 
 for (mod, func, istd, optionals, kws) in [
-    (SciMLBase, :ODEFunction, true, [:jac, :tgrad], (;)),
-    (SciMLBase, :ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac], (;)),
-    (SciMLBase, :DAEFunction, true, [:jac, :tgrad], (;)),
-    (SciMLBase, :DDEFunction, true, Symbol[], (;)),
-    (SciMLBase, :SDEFunction, true, [:jac, :tgrad], (;)),
-    (SciMLBase, :SDDEFunction, true, Symbol[], (;)),
-    (SciMLBase, :DiscreteFunction, true, Symbol[], (;)),
-    (SciMLBase, :ImplicitDiscreteFunction, true, Symbol[], (;)),
-    (SciMLBase, :NonlinearFunction, false, [:resid_prototype, :jac], (;)),
-    (SciMLBase, :IntervalNonlinearFunction, false, Symbol[], (;)),
-    (SciMLBase, :OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j], (;)),
-]
+        (SciMLBase, :ODEFunction, true, [:jac, :tgrad], (;)),
+        (SciMLBase, :ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac], (;)),
+        (SciMLBase, :DAEFunction, true, [:jac, :tgrad], (;)),
+        (SciMLBase, :DDEFunction, true, Symbol[], (;)),
+        (SciMLBase, :SDEFunction, true, [:jac, :tgrad], (;)),
+        (SciMLBase, :SDDEFunction, true, Symbol[], (;)),
+        (SciMLBase, :DiscreteFunction, true, Symbol[], (;)),
+        (SciMLBase, :ImplicitDiscreteFunction, true, Symbol[], (;)),
+        (SciMLBase, :NonlinearFunction, false, [:resid_prototype, :jac], (;)),
+        (SciMLBase, :IntervalNonlinearFunction, false, Symbol[], (;)),
+        (SciMLBase, :OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j], (;)),
+    ]
     kwexpr = Expr(:parameters)
     for (k, v) in pairs(kws)
         push!(kwexpr.args, Expr(:kw, k, v))

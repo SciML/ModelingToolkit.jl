@@ -31,7 +31,8 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         algebraic_only = false,
         time_dependent_init = is_time_dependent(sys),
         initsys_mtkcompile_kwargs = (;),
-        kwargs...) where {iip, specialize}
+        kwargs...
+    ) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
@@ -48,12 +49,14 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     elseif !has_u0_ics && get_initializesystem(sys) === nothing
         isys = generate_initializesystem(
             sys; initialization_eqs, check_units, op, guesses, algebraic_only,
-            fast_path)
+            fast_path
+        )
         simplify_system = true
     else
         isys = generate_initializesystem(
             sys; op, initialization_eqs, check_units, time_dependent_init,
-            guesses, algebraic_only, fast_path)
+            guesses, algebraic_only, fast_path
+        )
         simplify_system = true
     end
 
@@ -104,13 +107,15 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         op[get_iv(sys)] = t
     end
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
-    TProb = get_initialization_problem_type(sys, isys; warn_initialize_determined,
-                                            kwargs...)
+    TProb = get_initialization_problem_type(
+        sys, isys; warn_initialize_determined,
+        kwargs...
+    )
     TProb{iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
 end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
-    """
+    return """
     Initialization system is overdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
 
@@ -120,7 +125,7 @@ function overdetermined_initialization_message(neqs::Integer, nunknown::Integer,
 end
 
 function underdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
-    """
+    return """
     Initialization system is underdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
 
@@ -135,8 +140,10 @@ end
 Get the type of the initialization problem (Nonlinear problem) to use, given the system
 `sys`, initialization system `isys` and arbitrary keyword arguments.
 """
-function get_initialization_problem_type(sys::AbstractSystem, isys::AbstractSystem;
-                                         warn_initialize_determined = true, kwargs...)
+function get_initialization_problem_type(
+        sys::AbstractSystem, isys::AbstractSystem;
+        warn_initialize_determined = true, kwargs...
+    )
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
 
@@ -147,7 +154,7 @@ function get_initialization_problem_type(sys::AbstractSystem, isys::AbstractSyst
         @warn underdetermined_initialization_message(neqs, nunknown, "")
     end
 
-    if neqs == nunknown
+    return if neqs == nunknown
         NonlinearProblem
     else
         NonlinearLeastSquaresProblem
@@ -162,10 +169,10 @@ Return a list of possibly singular variables, given `get_tearing_state(sys)`.
 singular_check(::Nothing) = SymbolicT[]
 
 const INCOMPLETE_INITIALIZATION_MESSAGE = """
-                                Initialization incomplete. Not all of the state variables of the
-                                DAE system can be determined by the initialization. Missing
-                                variables:
-                                """
+Initialization incomplete. Not all of the state variables of the
+DAE system can be determined by the initialization. Missing
+variables:
+"""
 
 struct IncompleteInitializationError <: Exception
     uninit::Any
@@ -174,5 +181,5 @@ end
 
 function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
-    println(io, underscore_to_D(collect(e.uninit), e.sys))
+    return println(io, underscore_to_D(collect(e.uninit), e.sys))
 end

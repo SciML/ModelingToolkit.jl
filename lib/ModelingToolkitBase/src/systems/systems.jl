@@ -3,7 +3,7 @@ const REPEATED_SIMPLIFICATION_MESSAGE = "Structural simplification cannot be app
 struct RepeatedStructuralSimplificationError <: Exception end
 
 function Base.showerror(io::IO, e::RepeatedStructuralSimplificationError)
-    print(io, REPEATED_SIMPLIFICATION_MESSAGE)
+    return print(io, REPEATED_SIMPLIFICATION_MESSAGE)
 end
 
 function canonicalize_io(iovars, type::String)
@@ -16,9 +16,13 @@ function canonicalize_io(iovars, type::String)
                 union!(iobuffer, vec(collect(var)::Array{SymbolicT})::Vector{SymbolicT})
                 continue
             end
-            throw(ArgumentError("""
-            All $(type)s must have known shape. Found $var with unknown shape.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    All $(type)s must have known shape. Found $var with unknown shape.
+                    """
+                )
+            )
         end
         arr, isarr = split_indexed_var(var)
         if isarr
@@ -30,24 +34,36 @@ function canonicalize_io(iovars, type::String)
 
     for (k, v) in arrsyms
         if !symbolic_has_known_size(k)
-            throw(ArgumentError("""
-            All $(type)s must have known shape. Found $k with unknown shape.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    All $(type)s must have known shape. Found $k with unknown shape.
+                    """
+                )
+            )
         end
         if type != "output" && length(k) != length(v)
-            throw(ArgumentError("""
-            Part of an array variable cannot be made an $type. The entire array must be \
-            an $type. Found $k which has $(length(v)) elements out of $(length(k)) in \
-            the $(type)s. Either pass all scalarized elements in sorted order as $(type)s \
-            or simply pass $k as an $type.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    Part of an array variable cannot be made an $type. The entire array must be \
+                    an $type. Found $k which has $(length(v)) elements out of $(length(k)) in \
+                    the $(type)s. Either pass all scalarized elements in sorted order as $(type)s \
+                    or simply pass $k as an $type.
+                    """
+                )
+            )
         end
         if type != "output" && !isequal(vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}, collect(v))
-            throw(ArgumentError("""
-            Elements of scalarized array variables must be in sorted order in $(type)s. \
-            Either pass all scalarized elements in sorted order as $(type)s \
-            or simply pass $k as an $type.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    Elements of scalarized array variables must be in sorted order in $(type)s. \
+                    Either pass all scalarized elements in sorted order as $(type)s \
+                    or simply pass $k as an $type.
+                    """
+                )
+            )
         end
     end
 
@@ -69,15 +85,18 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, kwargs...)
+        split = true, kwargs...
+    )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
     inputs = canonicalize_io(unwrap_vars(inputs), "input")
     outputs = canonicalize_io(unwrap_vars(outputs), "output")
     disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
-    newsys = _mtkcompile(sys;
+    newsys = _mtkcompile(
+        sys;
         inputs, outputs, disturbance_inputs, additional_passes,
-        kwargs...)
+        kwargs...
+    )
     for pass in additional_passes
         newsys = pass(newsys)
     end
@@ -117,12 +136,14 @@ function _mtkcompile(sys::AbstractSystem; kwargs...)
     return __mtkcompile(sys; kwargs...)
 end
 
-function __mtkcompile(sys::AbstractSystem;
+function __mtkcompile(
+        sys::AbstractSystem;
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         fully_determined = true,
-        kwargs...)
+        kwargs...
+    )
     sys = expand_connections(sys)
     sys = discrete_unknowns_to_parameters(sys)
     sys = discover_globalscoped(sys)
@@ -152,27 +173,39 @@ function __mtkcompile(sys::AbstractSystem;
         fully_determined = false
     end
     if fully_determined && length(eqs) > length(all_dvs)
-        throw(ExtraEquationsSystemException("""
-        The system is unbalanced. There are $(length(eqs)) equations and \
-        $(length(all_dvs)) unknowns.
-        """))
+        throw(
+            ExtraEquationsSystemException(
+                """
+                The system is unbalanced. There are $(length(eqs)) equations and \
+                $(length(all_dvs)) unknowns.
+                """
+            )
+        )
     elseif fully_determined && length(eqs) < length(all_dvs)
-        throw(ExtraVariablesSystemException("""
-        The system is unbalanced. There are $(length(eqs)) equations and \
-        $(length(all_dvs)) unknowns. This may also be a high-index DAE, which \
-        ModelingToolkitBase.jl cannot handle. Consider using ModelingToolkit.jl to \
-        simplify this system.
-        """))
+        throw(
+            ExtraVariablesSystemException(
+                """
+                The system is unbalanced. There are $(length(eqs)) equations and \
+                $(length(all_dvs)) unknowns. This may also be a high-index DAE, which \
+                ModelingToolkitBase.jl cannot handle. Consider using ModelingToolkit.jl to \
+                simplify this system.
+                """
+            )
+        )
     end
 
     flat_dvs = collect(all_dvs)
     has_derivatives = any(hasderiv, eqs)
     has_shifts = any(hasshift, eqs)
     if has_derivatives && has_shifts
-        throw(HybridSystemNotSupportedException("""
-        ModelingToolkitBase.jl cannot simplify systems with both `Shift` and \
-        `Differential` operators.
-        """))
+        throw(
+            HybridSystemNotSupportedException(
+                """
+                ModelingToolkitBase.jl cannot simplify systems with both `Shift` and \
+                `Differential` operators.
+                """
+            )
+        )
     end
     # Nonlinear system
     if !has_derivatives && !has_shifts
@@ -209,7 +242,7 @@ function __mtkcompile(sys::AbstractSystem;
             @assert order >= 1
             # Simple order reduction
             cur = var
-            for i in 1:order-1
+            for i in 1:(order - 1)
                 lhs = D(cur)
                 rhs = default_toterm(lhs)
                 push!(diffeqs, lhs ~ rhs)
@@ -233,9 +266,13 @@ function __mtkcompile(sys::AbstractSystem;
             Moshi.Match.@match v begin
                 BSImpl.Term(; f, args) && if f isa Shift end => begin
                     if f.steps > 0
-                        throw(ArgumentError("""
-                        Positive shifts are disallowed in unsimplified equations. Found $v.
-                        """))
+                        throw(
+                            ArgumentError(
+                                """
+                                Positive shifts are disallowed in unsimplified equations. Found $v.
+                                """
+                            )
+                        )
                     end
                     var = args[1]
                     lowest_shift[var] = min(get(lowest_shift, var, 0), f.steps)
@@ -264,7 +301,7 @@ function __mtkcompile(sys::AbstractSystem;
             # history.
             for i in 1:order
                 lhs = Shift(iv, 1)(default_toterm(Shift(iv, -i)(var)))
-                rhs = default_toterm(Shift(iv, -i+1)(var))
+                rhs = default_toterm(Shift(iv, -i + 1)(var))
                 push!(diffeqs, lhs ~ rhs)
                 total_sub[Shift(iv, -i)(var)] = default_toterm(Shift(iv, -i)(var))
             end
@@ -291,9 +328,11 @@ function __mtkcompile(sys::AbstractSystem;
     # Store fixpoint subbed mapping
     for eq in diffeqs
         total_sub[eq.lhs] = eq.rhs
-        push!(diffvars, Moshi.Match.@match eq.lhs begin
-            BSImpl.Term(; args) => args[1]
-        end)
+        push!(
+            diffvars, Moshi.Match.@match eq.lhs begin
+                BSImpl.Term(; args) => args[1]
+            end
+        )
     end
     get_trivial_observed_equations!(diffeqs, alg_eqs, obseqs, all_dvs, iv)
     add_array_observed!(obseqs)
@@ -319,11 +358,15 @@ function __mtkcompile(sys::AbstractSystem;
                     _ => false
                 end
             end
-            throw(ArgumentError("""
-            ModelingToolkitBase.jl is unable to simplify such systems. Encountered \
-            derivative in RHS of equation $eq. Please consider using ModelingToolkit.jl \
-            for such systems.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    ModelingToolkitBase.jl is unable to simplify such systems. Encountered \
+                    derivative in RHS of equation $eq. Please consider using ModelingToolkit.jl \
+                    for such systems.
+                    """
+                )
+            )
         end
     end
 
@@ -353,9 +396,11 @@ differential variables or other observed variables. These equations are removed 
 `algeqs` and appended to `obseqs`. The process runs iteratively until a fixpoint is
 reached.
 """
-function get_trivial_observed_equations!(diffeqs::Vector{Equation}, algeqs::Vector{Equation},
-                                        obseqs::Vector{Equation}, all_dvs::Set{SymbolicT},
-                                        @nospecialize(iv::Union{SymbolicT, Nothing}))
+function get_trivial_observed_equations!(
+        diffeqs::Vector{Equation}, algeqs::Vector{Equation},
+        obseqs::Vector{Equation}, all_dvs::Set{SymbolicT},
+        @nospecialize(iv::Union{SymbolicT, Nothing})
+    )
     # Maximum number of times to loop over all algebraic equations
     maxiters = 100
     # Whether it's worth doing another loop, or we already reached a fixpoint
@@ -367,9 +412,11 @@ function get_trivial_observed_equations!(diffeqs::Vector{Equation}, algeqs::Vect
     end
     diffvars = Set{SymbolicT}()
     for eq in diffeqs
-        push!(diffvars, Moshi.Match.@match eq.lhs begin
-            BSImpl.Term(; f, args) && if f isa Union{Shift, Differential} end => args[1]
-        end)
+        push!(
+            diffvars, Moshi.Match.@match eq.lhs begin
+                BSImpl.Term(; f, args) && if f isa Union{Shift, Differential} end => args[1]
+            end
+        )
     end
     # Incidence information
     vars_in_each_algeq = Set{SymbolicT}[]
@@ -431,7 +478,7 @@ function get_trivial_observed_equations!(diffeqs::Vector{Equation}, algeqs::Vect
         maxiters -= 1
     end
 
-    keepat!(algeqs, alg_eqs_mask)
+    return keepat!(algeqs, alg_eqs_mask)
 end
 
 function offset_array(origin, arr)
@@ -462,6 +509,7 @@ function add_array_observed!(obseqs::Vector{Equation})
         end
         push!(obseqs, var ~ offset_array(firstind, reshape(scal, size(var))))
     end
+    return
 end
 
 function simplify_sde_system(sys::AbstractSystem; kwargs...)
@@ -478,10 +526,14 @@ function simplify_sde_system(sys::AbstractSystem; kwargs...)
         for (j, bvar) in enumerate(brown_vars)
             coeff, resid, islin = Symbolics.linear_expansion(resid, bvar)
             if !islin
-                throw(ArgumentError("""
-                Expected brownian variables to appear linearly in equations. Brownian $bvar \
-                appears non-linearly in equation $eq.
-                """))
+                throw(
+                    ArgumentError(
+                        """
+                        Expected brownian variables to appear linearly in equations. Brownian $bvar \
+                        appears non-linearly in equation $eq.
+                        """
+                    )
+                )
             end
             _iszero(coeff) && continue
 
@@ -599,7 +651,7 @@ function __num_isdiag_noise(mat)
             return (false)
         end
     end
-    true
+    return true
 end
 
 function __get_num_diag_noise(mat::Matrix{SymbolicT})
@@ -721,4 +773,3 @@ function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; c
 
     return ordered_eqs
 end
-

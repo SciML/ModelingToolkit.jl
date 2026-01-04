@@ -11,23 +11,23 @@ const GROUP = get(ENV, "GROUP", "All")
 function activate_fmi_env()
     Pkg.activate("fmi")
     Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
-    Pkg.instantiate()
+    return Pkg.instantiate()
 end
 
 function activate_extensions_env()
     Pkg.activate(joinpath(MTKBasePath, "test", "extensions"))
     Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
-    Pkg.instantiate()
+    return Pkg.instantiate()
 end
 
 function activate_downstream_env()
     Pkg.activate("downstream")
     Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
-    Pkg.instantiate()
+    return Pkg.instantiate()
 end
 
 macro mtktestset(name, file)
-    quote
+    return quote
         @safetestset $name begin
             using ModelingToolkit
             import ModelingToolkitBase
@@ -85,7 +85,7 @@ end
             @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
         end
     end
-    
+
     if GROUP == "All" || GROUP == "SymbolicIndexingInterface"
         @mtktestset("SciML Problem Input Test", "sciml_problem_inputs.jl")
         @mtktestset("MTKParameters Test", "mtkparameters.jl")

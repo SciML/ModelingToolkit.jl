@@ -1,4 +1,3 @@
-
 """
     $(TYPEDSIGNATURES)
 
@@ -7,10 +6,14 @@ given by `names`. `is_unknowns` denotes whether the variable are unknowns or par
 """
 function varnames_length_check(vars, names; is_unknowns = false)
     length(names) == length(vars) && return
-    throw(ArgumentError("""
-        Number of $(is_unknowns ? "unknowns" : "parameters") ($(length(vars))) \
-        does not match number of names ($(length(names))).
-    """))
+    throw(
+        ArgumentError(
+            """
+                Number of $(is_unknowns ? "unknowns" : "parameters") ($(length(vars))) \
+            does not match number of names ($(length(names))).
+            """
+        )
+    )
 end
 
 """
@@ -36,11 +39,11 @@ Define an array of symbolic unknowns of the appropriate type and size for `u` wi
 independent variable `t`.
 """
 function define_vars(u, t)
-    [_defvaridx(:x, i)(t) for i in eachindex(u)]
+    return [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
 function define_vars(u, ::Nothing)
-    [variable(:x, i) for i in eachindex(u)]
+    return [variable(:x, i) for i in eachindex(u)]
 end
 
 """
@@ -76,7 +79,8 @@ function construct_vars(prob, t, u_names = nothing)
             for (i, sym) in enumerate(variable_symbols(prob.f.sys))
                 if hasbounds(sym)
                     _vars[i] = Symbolics.setmetadata(
-                        _vars[i], VariableBounds, getbounds(sym))
+                        _vars[i], VariableBounds, getbounds(sym)
+                    )
                 end
             end
         end
@@ -104,7 +108,7 @@ function define_params(p, t, _ = nothing)
 end
 
 function define_params(p::AbstractArray, t, names = nothing)
-    if names === nothing
+    return if names === nothing
         [toparam(variable(:α, i)) for i in eachindex(p)]
     else
         varnames_length_check(p, names)
@@ -113,7 +117,7 @@ function define_params(p::AbstractArray, t, names = nothing)
 end
 
 function define_params(p::Number, t, names = nothing)
-    if names === nothing
+    return if names === nothing
         [toparam(variable(:α))]
     elseif names isa Union{AbstractArray, AbstractDict}
         varnames_length_check(p, names)
@@ -124,7 +128,7 @@ function define_params(p::Number, t, names = nothing)
 end
 
 function define_params(p::AbstractDict, t, names = nothing)
-    if names === nothing
+    return if names === nothing
         OrderedDict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
     else
         varnames_length_check(p, names)
@@ -133,7 +137,7 @@ function define_params(p::AbstractDict, t, names = nothing)
 end
 
 function define_params(p::Tuple, t, names = nothing)
-    if names === nothing
+    return if names === nothing
         tuple((toparam(variable(:α, i)) for i in eachindex(p))...)
     else
         varnames_length_check(p, names)
@@ -142,7 +146,7 @@ function define_params(p::Tuple, t, names = nothing)
 end
 
 function define_params(p::NamedTuple, t, names = nothing)
-    if names === nothing
+    return if names === nothing
         NamedTuple(x => toparam(variable(x)) for x in keys(p))
     else
         varnames_length_check(p, names)
@@ -222,11 +226,11 @@ Given a parameter object `p` containing symbolic variables instead of values, re
 a vector of the symbolic variables.
 """
 function to_paramvec(p)
-    vec(collect(values(p)))
+    return vec(collect(values(p)))
 end
 
 function to_paramvec(p::MTKParameters)
-    reduce(vcat, collect(p); init = [])
+    return reduce(vcat, collect(p); init = [])
 end
 
 """
@@ -299,8 +303,10 @@ function construct_params(prob, t, p_names = nothing)
     if has_p
         if p_names === nothing && SciMLBase.has_sys(prob.f)
             # get names from the system
-            p_names = Dict(parameter_index(prob.f.sys, sym) => sym
-            for sym in parameter_symbols(prob.f.sys))
+            p_names = Dict(
+                parameter_index(prob.f.sys, sym) => sym
+                    for sym in parameter_symbols(prob.f.sys)
+            )
         end
         params = define_params(p, t, p_names)
         if p isa Number
@@ -360,7 +366,7 @@ function trace_rhs(prob, vars, params, t; prototype = nothing)
         end
         fill!(rhs, 0)
         if prob.f isa SciMLBase.AbstractSciMLFunction &&
-           prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
+                prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
             prob.f.f.fw[1].obj[](rhs, args...)
         else
             prob.f(rhs, args...)
@@ -385,9 +391,11 @@ function defaults_from_u0_p(prob, vars, paramobj, paramvec)
         if p isa Union{NamedTuple, AbstractDict}
             merge!(defaults, Dict(v => p[k] for (k, v) in pairs(paramobj)))
         elseif p isa MTKParameters
-            pvals = [p.tunable; reduce(vcat, p.discrete; init = []);
-                     reduce(vcat, p.constant; init = []);
-                     reduce(vcat, p.nonnumeric; init = [])]
+            pvals = [
+                p.tunable; reduce(vcat, p.discrete; init = []);
+                reduce(vcat, p.constant; init = []);
+                reduce(vcat, p.nonnumeric; init = [])
+            ]
             merge!(defaults, Dict(paramvec .=> pvals))
         else
             merge!(defaults, Dict(paramvec .=> vec(collect(p))))

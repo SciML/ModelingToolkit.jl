@@ -43,7 +43,7 @@ using Symbolics: SymbolicT
         eq_eq_ne = 6,
         # var to vars that depend on them
         var_vardeps = [[1, 2, 3], [1, 2, 3], [3]],
-        var_var_ne = 3
+        var_var_ne = 3,
     )
     # testing when ignoring VariableRateJumps
     test_case_2 = (;
@@ -66,11 +66,12 @@ using Symbolics: SymbolicT
         eq_eq_ne = 5,
         # var to vars that depend on them
         var_vardeps = [[1, 2, 3], [1, 2, 3], [3]],
-        var_var_ne = 3
+        var_var_ne = 3,
     )
 
     @testset "Case $i" for (i, test_case) in enumerate([test_case_1, test_case_2])
-        (;         # filter out vrjs in making graphs
+        (;
+            # filter out vrjs in making graphs
             eqs,         # eq to vars they depend on
             eq_sdeps,
             eq_sidepsf,
@@ -84,7 +85,7 @@ using Symbolics: SymbolicT
             eq_eqdeps,
             eq_eq_ne,         # var to vars that depend on them
             var_vardeps,
-            var_var_ne
+            var_var_ne,
         ) = test_case
         deps = equation_dependencies(js; eqs)
         @test length(deps) == length(eq_sdeps)
@@ -133,9 +134,11 @@ end
 @testset "ODEs, SDEs" begin
     @parameters k1 k2
     @variables S(t) I(t) R(t)
-    eqs = [D(S) ~ k1 - k1 * S - k2 * S * I - k1 * k2 / (1 + t) * S
-           D(I) ~ k2 * S * I
-           D(R) ~ -k2 * S^2 * R / 2 + k1 * I + k1 * k2 * S / (1 + t)]
+    eqs = [
+        D(S) ~ k1 - k1 * S - k2 * S * I - k1 * k2 / (1 + t) * S
+        D(I) ~ k2 * S * I
+        D(R) ~ -k2 * S^2 * R / 2 + k1 * I + k1 * k2 * S / (1 + t)
+    ]
     @named os = System(eqs, t, [S, I, R], [k1, k2])
     deps = equation_dependencies(os)
     S = value(S)
@@ -163,9 +166,11 @@ end
     @variables x y z
     @parameters σ ρ β
 
-    eqs = [0 ~ σ * (y - x),
+    eqs = [
+        0 ~ σ * (y - x),
         0 ~ ρ - y,
-        0 ~ y - β * z]
+        0 ~ y - β * z,
+    ]
     @named ns = System(eqs, [x, y, z], [σ, ρ, β])
     deps = equation_dependencies(ns)
     eq_sdeps = [[x, y], [y], [y, z]]

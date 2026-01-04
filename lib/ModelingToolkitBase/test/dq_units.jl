@@ -16,8 +16,10 @@ const unitless = MT.get_unit(0.5)
 @test MT.get_unit(γ) == unitless
 @test MT.get_unit(MT.SciMLBase.NullParameters()) == unitless
 
-eqs = [D(E) ~ P - E / τ
-       0 ~ P]
+eqs = [
+    D(E) ~ P - E / τ
+    0 ~ P
+]
 @test MT.validate(eqs)
 @named sys = System(eqs, t)
 
@@ -27,33 +29,45 @@ eqs = [D(E) ~ P - E / τ
 # Disabling unit validation/checks selectively
 @test_throws MT.ArgumentError System(eqs, t, [E, P, t], [τ], name = :sys)
 System(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
-eqs = [D(E) ~ P - E / τ
-       0 ~ P + E * τ]
+eqs = [
+    D(E) ~ P - E / τ
+    0 ~ P + E * τ
+]
 @test_throws MT.ValidationError System(eqs, t, name = :sys, checks = MT.CheckAll)
 @test_throws MT.ValidationError System(eqs, t, name = :sys, checks = true)
 System(eqs, t, name = :sys, checks = MT.CheckNone)
 System(eqs, t, name = :sys, checks = false)
-@test_throws MT.ValidationError System(eqs, t, name = :sys,
-    checks = MT.CheckComponents | MT.CheckUnits)
+@test_throws MT.ValidationError System(
+    eqs, t, name = :sys,
+    checks = MT.CheckComponents | MT.CheckUnits
+)
 @named sys = System(eqs, t, checks = MT.CheckComponents)
-@test_throws MT.ValidationError System(eqs, t, [E, P, t], [τ], name = :sys,
-    checks = MT.CheckUnits)
+@test_throws MT.ValidationError System(
+    eqs, t, [E, P, t], [τ], name = :sys,
+    checks = MT.CheckUnits
+)
 
 # connection validation
 @connector function Pin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"V"],
-        i(t)=1.0, [unit=u"A", connect=Flow])
+    sts = @variables(
+        v(t) = 1.0, [unit = u"V"],
+        i(t) = 1.0, [unit = u"A", connect = Flow]
+    )
     System(Equation[], t, sts, []; name = name)
 end
 @connector function OtherPin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"mV"],
-        i(t)=1.0, [unit=u"mA", connect=Flow])
+    sts = @variables(
+        v(t) = 1.0, [unit = u"mV"],
+        i(t) = 1.0, [unit = u"mA", connect = Flow]
+    )
     System(Equation[], t, sts, []; name = name)
 end
 @connector function LongPin(; name)
-    sts = @variables(v(t)=1.0, [unit=u"V"],
-        i(t)=1.0, [unit=u"A", connect=Flow],
-        x(t)=1.0)
+    sts = @variables(
+        v(t) = 1.0, [unit = u"V"],
+        i(t) = 1.0, [unit = u"A", connect = Flow],
+        x(t) = 1.0
+    )
     System(Equation[], t, sts, []; name = name)
 end
 @named p1 = Pin()
@@ -73,7 +87,7 @@ good_eqs = [connect(op, op2)]
 
 # Array variables
 @variables x(t)[1:3] [unit = u"m"]
-@parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
+@parameters v[1:3] = [1, 2, 3] [unit = u"m/s"]
 eqs = [D(x) ~ v]
 System(eqs, t, name = :sys)
 
@@ -81,62 +95,80 @@ System(eqs, t, name = :sys)
 @parameters a [unit = u"kg"^-1]
 @variables x [unit = u"kg"]
 eqs = [
-    0 ~ a * x
+    0 ~ a * x,
 ]
 @named nls = System(eqs, [x], [a])
 
 # SDE test w/ noise vector
 @parameters τ [unit = u"s"] Q [unit = u"W"]
 @variables E(t) [unit = u"J"] P(t) [unit = u"W"]
-eqs = [D(E) ~ P - E / τ
-       P ~ Q]
+eqs = [
+    D(E) ~ P - E / τ
+    P ~ Q
+]
 
-noiseeqs = [0.1us"W",
-    0.1us"W"]
+noiseeqs = [
+    0.1us"W",
+    0.1us"W",
+]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
-noiseeqs = [0.1u"W",
-    0.1u"W"]
+noiseeqs = [
+    0.1u"W",
+    0.1u"W",
+]
 @test_throws MT.ValidationError @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # With noise matrix
-noiseeqs = [0.1us"W" 0.1us"W"
-            0.1us"W" 0.1us"W"]
+noiseeqs = [
+    0.1us"W" 0.1us"W"
+    0.1us"W" 0.1us"W"
+]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
 # Invalid noise matrix
-noiseeqs = [0.1us"W" 0.1us"W"
-            0.1us"W" 0.1us"s"]
+noiseeqs = [
+    0.1us"W" 0.1us"W"
+    0.1us"W" 0.1us"s"
+]
 @test !MT.validate(eqs, noiseeqs)
 
 # Non-trivial simplifications
 @variables V(t) [unit = u"m"^3] L(t) [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
-eqs = [D(L) ~ v,
-    V ~ L^3]
+eqs = [
+    D(L) ~ v,
+    V ~ L^3,
+]
 @named sys = System(eqs, t)
 sys_simple = mtkcompile(sys)
 
-eqs = [D(V) ~ r,
-    V ~ L^3]
+eqs = [
+    D(V) ~ r,
+    V ~ L^3,
+]
 @named sys = System(eqs, t)
 sys_simple = mtkcompile(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit = u"m"^3 / u"s"]
-eqs = [V ~ r * t,
-    V ~ L^3]
+eqs = [
+    V ~ r * t,
+    V ~ L^3,
+]
 @named sys = System(eqs, [V, L], [t, r])
 sys_simple = mtkcompile(sys)
 
-eqs = [L ~ v * t,
-    V ~ L^3]
+eqs = [
+    L ~ v * t,
+    V ~ L^3,
+]
 @named sys = System(eqs, [V, L], [t, r, v])
 sys_simple = mtkcompile(sys)
 
 #Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] jumpmol [
-    unit = u"mol"
+    unit = u"mol",
 ]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁ = β * S * I
@@ -200,7 +232,8 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
     p = [pend.g => 1.0, pend.L => 1.0]
     guess = [pend.λ => 0.0]
     @test prob = ODEProblem(
-        pend, [u0; p], (0.0, 1.0); guesses = guess, check_units = false) isa Any
+        pend, [u0; p], (0.0, 1.0); guesses = guess, check_units = false
+    ) isa Any
 end
 
 @parameters p [unit = u"L/s"] d [unit = u"s^(-1)"]

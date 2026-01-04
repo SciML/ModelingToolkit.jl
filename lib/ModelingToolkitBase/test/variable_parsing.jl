@@ -56,7 +56,7 @@ using ModelingToolkitBase: VariableConnectType, VariableUnit, rename
 using DynamicQuantities
 
 vals = [1, 2, 3, 4]
-@variables x=1 xs[1:4]=vals ys[1:5]=ones(5)
+@variables x = 1 xs[1:4] = vals ys[1:5] = ones(5)
 
 @test getmetadata(x, VariableDefaultValue) === 1
 @test getdefaultval(xs) == vals
@@ -73,7 +73,7 @@ end
 @test getmetadata(x, VariableUnit) == u
 @test getmetadata(y, VariableDefaultValue) === 2
 
-@variables x=[1, 2] [connect=Flow, unit=u] y=2
+@variables x = [1, 2] [connect = Flow, unit = u] y = 2
 
 @test getmetadata(x, VariableDefaultValue) == [1, 2]
 @test getmetadata(x, VariableConnectType) == Flow
@@ -99,7 +99,7 @@ a = rename(value(x), :a)
 @test getmetadata(a, VariableUnit) == u
 
 @independent_variables t
-@variables x(t)=1 [connect = Flow, unit = u]
+@variables x(t) = 1 [connect = Flow, unit = u]
 
 @test getmetadata(x, VariableDefaultValue) == 1
 @test getmetadata(x, VariableConnectType) == Flow
@@ -110,16 +110,15 @@ a = rename(value(x), :a)
 @test getmetadata(a, VariableConnectType) == Flow
 @test getmetadata(a, VariableUnit) == u
 
-@parameters p=2 [unit = u"m"]
+@parameters p = 2 [unit = u"m"]
 @test getmetadata(p, VariableDefaultValue) == 2
 @test !hasmetadata(p, VariableConnectType)
 @test getmetadata(p, VariableUnit) == u"m"
 @test ModelingToolkitBase.isparameter(p)
 
-@test_throws Any (@macroexpand @parameters p=2 [unit = u"m", abc = 2])
+@test_throws Any (@macroexpand @parameters p = 2 [unit = u"m", abc = 2])
 
 @testset "Parameters cannot be dependent" begin
     @test_throws ["cannot create time-dependent"] @parameters p(t)
     @test_throws ["cannot create time-independent"] @discretes p
 end
-

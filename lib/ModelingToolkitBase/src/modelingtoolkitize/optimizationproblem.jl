@@ -17,7 +17,8 @@ All other keyword arguments are forwarded to the created `System`.
 """
 function modelingtoolkitize(
         prob::OptimizationProblem; u_names = nothing, p_names = nothing,
-        kwargs...)
+        kwargs...
+    )
     num_cons = isnothing(prob.lcons) ? 0 : length(prob.lcons)
     p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
@@ -68,7 +69,7 @@ function modelingtoolkitize(
         end
 
         if (isnothing(prob.lcons) || all(isinf, prob.lcons)) &&
-           (isnothing(prob.ucons) || all(isinf, prob.ucons))
+                (isnothing(prob.ucons) || all(isinf, prob.ucons))
             throw(ArgumentError("Constraints passed have no proper bounds defined.
             Ensure you pass equal bounds (the scalar that the constraint should evaluate to) for equality constraints
             or pass the lower and upper bounds for inequality constraints."))
@@ -87,9 +88,11 @@ function modelingtoolkitize(
     filter!(x -> !iscall(x[1]) || !(operation(x[1]) isa Initial), initial_conditions)
 
     sts = vec(collect(vars))
-    sys = OptimizationSystem(objective, sts, params;
+    return sys = OptimizationSystem(
+        objective, sts, params;
         initial_conditions,
         constraints = cons,
         name = gensym(:MTKizedOpt),
-        kwargs...)
+        kwargs...
+    )
 end

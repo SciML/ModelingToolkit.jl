@@ -9,7 +9,7 @@ import ModelingToolkitTearing as MTKTearing
 function infer_clocks(sys)
     ts = TearingState(sys)
     ci = MTKTearing.ClockInference(ts)
-    MTKTearing.infer_clocks!(ci), Dict(ci.ts.fullvars .=> ci.var_domain)
+    return MTKTearing.infer_clocks!(ci), Dict(ci.ts.fullvars .=> ci.var_domain)
 end
 
 @info "Testing hybrid system"
@@ -18,14 +18,16 @@ dt = 0.1
 @parameters kp
 # u(n + 1) := f(u(n))
 
-eqs = [yd ~ Sample(dt)(y)
-       ud ~ kp * (r - yd)
-       r ~ 1.0
+eqs = [
+    yd ~ Sample(dt)(y)
+    ud ~ kp * (r - yd)
+    r ~ 1.0
 
-       # plant (time continuous part)
-       u ~ Hold(ud)
-       D(x) ~ -x + u
-       y ~ x]
+    # plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x
+]
 @named sys = System(eqs, t)
 # compute equation and variables' time domains
 #TODO: test linearize
@@ -70,16 +72,22 @@ ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs, continuous_id = MTKTearing.split_system(deepcopy(ci))
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[continuous_id]), inputs = OrderedSet{SymbolicT}(inputs[continuous_id]))
+    deepcopy(tss[continuous_id]), inputs = OrderedSet{SymbolicT}(inputs[continuous_id])
+)
 @test equations(sss) == [D(x) ~ u - x]
 sss = ModelingToolkit._mtkcompile!(
-    deepcopy(tss[1]), inputs = OrderedSet{SymbolicT}(inputs[1]))
+    deepcopy(tss[1]), inputs = OrderedSet{SymbolicT}(inputs[1])
+)
 @test isempty(equations(sss))
 d = Clock(dt)
 k = ShiftIndex(d)
-@test issetequal(observed(sss),
-    [yd ~ Sample(dt)(y); r ~ 1.0;
-     ud ~ kp * (r - yd)])
+@test issetequal(
+    observed(sss),
+    [
+        yd ~ Sample(dt)(y); r ~ 1.0;
+        ud ~ kp * (r - yd)
+    ]
+)
 
 canonical_eqs = map(eqs) do eq
     if iscall(eq.lhs) && operation(eq.lhs) isa Differential
@@ -112,21 +120,23 @@ dt = 0.1
 d = Clock(dt)
 k = ShiftIndex(d)
 
-eqs = [yd ~ Sample(dt)(y)
-       ud ~ kp * yd + ud(k - 2)
+eqs = [
+    yd ~ Sample(dt)(y)
+    ud ~ kp * yd + ud(k - 2)
 
-       # plant (time continuous part)
-       u ~ Hold(ud)
-       D(x) ~ -x + u
-       y ~ x]
+    # plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x
+]
 @named sys = System(eqs, t)
-@test_throws ModelingToolkit.HybridSystemNotSupportedException ss=mtkcompile(sys);
+@test_throws ModelingToolkit.HybridSystemNotSupportedException ss = mtkcompile(sys);
 
 @testset "Clock inference uses and splits initialization equations" begin
     @variables x(t) y(t) z(t)
     k = ShiftIndex()
     clk = Clock(0.1)
-    eqs = [D(x) ~ x, y ~ Sample(clk)(x), z ~ z(k-1) + 1]
+    eqs = [D(x) ~ x, y ~ Sample(clk)(x), z ~ z(k - 1) + 1]
     initialization_eqs = [y ~ z, x ~ 1]
     @named sys = System(eqs, t; initialization_eqs)
     ts = TearingState(sys)
@@ -163,8 +173,10 @@ SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
 @testset "Zero-argument clock operators" begin
     @variables x(t) y(t)
     clk = Clock(0.1)
-    eqs = [D(x) ~ x
-           y ~ ZeroArgOp()()]
+    eqs = [
+        D(x) ~ x
+        y ~ ZeroArgOp()()
+    ]
     @named sys = System(eqs, t)
     @test issetequal(unknowns(sys), [x, y])
     ts = TearingState(sys)

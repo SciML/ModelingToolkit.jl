@@ -1,14 +1,16 @@
 function todiscrete_validate(s::SymbolicT)
     if !iscall(s)
-        error("""
-        `@discretes` cannot create time-independent variables. Encountered $s. Use \
-        `@parameters` for this purpose.
-        """)
+        error(
+            """
+            `@discretes` cannot create time-independent variables. Encountered $s. Use \
+            `@parameters` for this purpose.
+            """
+        )
     end
-    toparam(s)
+    return toparam(s)
 end
 function todiscrete_validate(s::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap})
-    typeof(s)(todiscrete_validate(unwrap(s)))
+    return typeof(s)(todiscrete_validate(unwrap(s)))
 end
 
 """
@@ -20,9 +22,10 @@ symbolics declare with this macro must be dependent variables.
 See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
 """
 macro discretes(xs...)
-    Symbolics.parse_vars(:discretes,
+    return Symbolics.parse_vars(
+        :discretes,
         Real,
         xs,
-        todiscrete_validate)
+        todiscrete_validate
+    )
 end
-

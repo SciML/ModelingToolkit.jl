@@ -7,7 +7,7 @@ struct Schedule
 end
 
 function Base.copy(sched::Schedule)
-    Schedule(copy(sched.var_sccs), copy(sched.dummy_sub))
+    return Schedule(copy(sched.var_sccs), copy(sched.dummy_sub))
 end
 
 const MetadataT = Base.ImmutableDict{DataType, Any}
@@ -281,12 +281,17 @@ struct System <: IntermediateDeprecationSystem
             ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, isscheduled = false,
-            schedule = nothing; checks::Union{Bool, Int} = true)
+            schedule = nothing; checks::Union{Bool, Int} = true
+        )
         if is_initializesystem && iv !== nothing
-            throw(ArgumentError("""
-            Expected initialization system to be time-independent. Found independent
-            variable $iv.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    Expected initialization system to be time-independent. Found independent
+                    variable $iv.
+                    """
+                )
+            )
         end
         @assert iv === nothing || symtype(iv) === Real
         if (checks isa Bool && checks === true || checks isa Int && (checks & CheckComponents) > 0) && iv !== nothing
@@ -320,7 +325,8 @@ struct System <: IntermediateDeprecationSystem
             end
             isempty(constraints) || check_units(u, constraints)
         end
-        new(tag, eqs, noise_eqs, jumps, constraints, costs,
+        return new(
+            tag, eqs, noise_eqs, jumps, constraints, costs,
             consolidate, unknowns, ps, brownians, iv,
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
@@ -328,7 +334,8 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            isscheduled, schedule)
+            isscheduled, schedule
+        )
     end
 end
 
@@ -377,7 +384,8 @@ for time-independent systems, unknowns `dvs`, parameters `ps` and brownian varia
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
 """
-function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
+function System(
+        eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
@@ -390,14 +398,17 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         ignored_connections = nothing, parent = nothing,
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
-        @nospecialize(preface = nothing), checks = true, __legacy_defaults__ = nothing)
+        @nospecialize(preface = nothing), checks = true, __legacy_defaults__ = nothing
+    )
     name === nothing && throw(NoNameError())
 
     if __legacy_defaults__ !== nothing
-        Base.depwarn("""
+        Base.depwarn(
+            """
             The `@mtkmodel` macro is deprecated. Please use the functional form with \
             `@components` instead.
-            """, :mtkmodel)
+            """, :mtkmodel
+        )
         initial_conditions = __legacy_defaults__
     end
 
@@ -448,19 +459,23 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     if iv === nothing
         for k in keys(bindings)
             k in all_dvs || continue
-            throw(ArgumentError("""
-            Bindings for variables are enforced during initialization. Since \
-            time-independent systems only perform parameter initialization, \
-            bindings for variables in such systems are invalid. $k was found to have \
-            a binding in the system $name.
-            """))
+            throw(
+                ArgumentError(
+                    """
+                    Bindings for variables are enforced during initialization. Since \
+                    time-independent systems only perform parameter initialization, \
+                    bindings for variables in such systems are invalid. $k was found to have \
+                    a binding in the system $name.
+                    """
+                )
+            )
         end
     end
     let initial_conditions = discover_from_metadata ? initial_conditions : SymmapT(),
-        bindings = discover_from_metadata ? bindings : SymmapT(),
-        guesses = discover_from_metadata ? guesses : SymmapT(),
-        inputs = discover_from_metadata ? inputs : OrderedSet{SymbolicT}(),
-        outputs = discover_from_metadata ? outputs : OrderedSet{SymbolicT}()
+            bindings = discover_from_metadata ? bindings : SymmapT(),
+            guesses = discover_from_metadata ? guesses : SymmapT(),
+            inputs = discover_from_metadata ? inputs : OrderedSet{SymbolicT}(),
+            outputs = discover_from_metadata ? outputs : OrderedSet{SymbolicT}()
 
         process_variables!(var_to_name, initial_conditions, bindings, guesses, dvs)
         process_variables!(var_to_name, initial_conditions, bindings, guesses, ps)
@@ -504,8 +519,9 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         nonunique_subsystems(systems)
     end
     continuous_events,
-    discrete_events = create_symbolic_events(
-        continuous_events, discrete_events)
+        discrete_events = create_symbolic_events(
+        continuous_events, discrete_events
+    )
 
     if iv === nothing && (!isempty(continuous_events) || !isempty(discrete_events))
         throw(EventsInTimeIndependentSystemError(continuous_events, discrete_events))
@@ -534,13 +550,15 @@ function System(eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
     end
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
-    System(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
+    return System(
+        Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem, is_discrete; checks)
+        initializesystem, is_initializesystem, is_discrete; checks
+    )
 end
 
 @noinline function nonunique_subsystems(systems)
@@ -558,7 +576,7 @@ Create a time-independent [`System`](@ref) with the given equations `eqs`, unkno
 and parameters `ps`.
 """
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
-    System(eqs, nothing, dvs, ps; kwargs...)
+    return System(eqs, nothing, dvs, ps; kwargs...)
 end
 
 """
@@ -582,10 +600,14 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             var, _ = var_from_nested_derivative(eq.lhs)
             if var in diffvars
-                throw(ArgumentError("""
-                    The differential variable $var is not unique in the system of \
-                    equations.
-                """))
+                throw(
+                    ArgumentError(
+                        """
+                            The differential variable $var is not unique in the system of \
+                        equations.
+                        """
+                    )
+                )
             end
             # this check ensures var is correctly scoped, since `collect_vars!` won't pick
             # it up if it belongs to an ancestor system.
@@ -646,7 +668,8 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     end
 
     return System(
-        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...)
+        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...
+    )
 end
 
 """
@@ -716,7 +739,8 @@ end
 Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
-        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true)
+        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true
+    )
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
     constraintsts = OrderedSet{SymbolicT}()
@@ -745,7 +769,7 @@ function process_costs(costs::Vector, sts, ps, iv)
     end
 
     validate_vars_and_find_ps!(coststs, costps, sts, iv)
-    coststs, costps
+    return coststs, costps
 end
 
 """
@@ -762,8 +786,10 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
 
     for var in auxvars
         if !iscall(var)
-            SU.query(isequal(iv), var) && (var ∈ sts ||
-             throw(ArgumentError("Time-dependent variable $var is not an unknown of the system.")))
+            SU.query(isequal(iv), var) && (
+                var ∈ sts ||
+                    throw(ArgumentError("Time-dependent variable $var is not an unknown of the system."))
+            )
         elseif length(arguments(var)) > 1
             throw(ArgumentError("Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
@@ -783,6 +809,7 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
                 @warn "Variable $var has no argument. It will be interpreted as $var($iv), and the constraint will apply to the entire interval."
         end
     end
+    return
 end
 
 """
@@ -793,7 +820,7 @@ callbacks, so checking if any LHS is shifted is sufficient. If a variable is shi
 the input equations there _will_ be a `Shift` equation in the simplified system.
 """
 function is_discrete_system(sys::System)
-    get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
+    return get_is_discrete(sys) || any(eq -> isoperator(eq.lhs, Shift), equations(sys))
 end
 
 SymbolicIndexingInterface.is_time_dependent(sys::System) = get_iv(sys) !== nothing
@@ -836,7 +863,8 @@ function flatten(sys::System, noeqs = false)
     # connection expansion inherently requires the hierarchy structure. If the system
     # is being flattened, then we no longer want to expand connections (or have already
     # done so) and thus don't care about `ignored_connections`.
-    return System(noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
+    return System(
+        noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
@@ -852,7 +880,8 @@ function flatten(sys::System, noeqs = false)
         # retain `initial_conditions(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
         gui_metadata = get_gui_metadata(sys),
-        description = description(sys), name = nameof(sys))
+        description = description(sys), name = nameof(sys)
+    )
 end
 
 has_massactionjumps(js::System) = any(x -> x isa MassActionJump, jumps(js))
@@ -925,12 +954,12 @@ metadata values.
 function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
-    @set sys.metadata = meta
+    return @set sys.metadata = meta
 end
 
 function SymbolicUtils.hasmetadata(sys::AbstractSystem, k::DataType)
     meta = get_metadata(sys)
-    haskey(meta, k)
+    return haskey(meta, k)
 end
 
 """
@@ -947,7 +976,7 @@ struct ProblemTypeCtx end
     $(TYPEDSIGNATURES)
 """
 function check_complete(sys::System, obj)
-    iscomplete(sys) || throw(SystemNotCompleteError(obj))
+    return iscomplete(sys) || throw(SystemNotCompleteError(obj))
 end
 
 """
@@ -986,11 +1015,13 @@ function NonlinearSystem(sys::System)
     if iscomplete(sys)
         append!(new_ps, collect(bound_parameters(sys)))
     end
-    nsys = System(eqs, unknowns(sys), new_ps;
+    nsys = System(
+        eqs, unknowns(sys), new_ps;
         bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
         initial_conditions = initial_conditions(sys), guesses = guesses(sys),
         initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs, systems = map(NonlinearSystem, get_systems(sys)))
+        observed = obs, systems = map(NonlinearSystem, get_systems(sys))
+    )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
@@ -1108,8 +1139,10 @@ will automatically perform this conversion.
 
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
-function SDESystem(eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
-        kwargs...)
+function SDESystem(
+        eqs::Vector{Equation}, noise, iv; is_scalar_noise = false,
+        kwargs...
+    )
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
@@ -1128,7 +1161,8 @@ Identical to the 3-argument `SDESystem` constructor, but uses the explicitly pro
 """
 function SDESystem(
         eqs::Vector{Equation}, noise, iv, dvs, ps; is_scalar_noise = false,
-        kwargs...)
+        kwargs...
+    )
     if is_scalar_noise
         if !(noise isa Vector)
             throw(ArgumentError("Expected noise to be a vector if `is_scalar_noise`"))
@@ -1144,7 +1178,7 @@ end
 Attach the given noise matrix `noise` to the system `sys`.
 """
 function SDESystem(sys::System, noise; kwargs...)
-    SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
+    return SDESystem(equations(sys), noise, get_iv(sys); kwargs...)
 end
 
 struct SystemNotCompleteError <: Exception
@@ -1152,10 +1186,12 @@ struct SystemNotCompleteError <: Exception
 end
 
 function Base.showerror(io::IO, err::SystemNotCompleteError)
-    print(io, """
-    A completed system is required. Call `complete` or `mtkcompile` on the \
-    system before creating a `$(err.obj)`.
-    """)
+    return print(
+        io, """
+        A completed system is required. Call `complete` or `mtkcompile` on the \
+        system before creating a `$(err.obj)`.
+        """
+    )
 end
 
 struct IllFormedNoiseEquationsError <: Exception
@@ -1164,17 +1200,21 @@ struct IllFormedNoiseEquationsError <: Exception
 end
 
 function Base.showerror(io::IO, err::IllFormedNoiseEquationsError)
-    print(io, """
-    Noise equations are ill-formed. The number of rows must match the number of drift \
-    equations. `size(neqs, 1) == $(err.noise_eqs_rows) != length(eqs) == \
-    $(err.eqs_length)`.
-    """)
+    return print(
+        io, """
+        Noise equations are ill-formed. The number of rows must match the number of drift \
+        equations. `size(neqs, 1) == $(err.noise_eqs_rows) != length(eqs) == \
+        $(err.eqs_length)`.
+        """
+    )
 end
 
 function NoNameError()
-    ArgumentError("""
-    The `name` keyword must be provided. Please consider using the `@named` macro.
-    """)
+    return ArgumentError(
+        """
+        The `name` keyword must be provided. Please consider using the `@named` macro.
+        """
+    )
 end
 
 struct NonUniqueSubsystemsError <: Exception
@@ -1194,6 +1234,7 @@ function Base.showerror(io::IO, err::NonUniqueSubsystemsError)
     for n in dupes
         println(io, "  ", n)
     end
+    return
 end
 
 struct EventsInTimeIndependentSystemError <: Exception
@@ -1202,22 +1243,23 @@ struct EventsInTimeIndependentSystemError <: Exception
 end
 
 function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
-    println(
+    return println(
         io, """
-Events are not supported in time-independent systems. Provide an independent variable to \
-make the system time-dependent or remove the events.
+        Events are not supported in time-independent systems. Provide an independent variable to \
+        make the system time-dependent or remove the events.
 
-The following continuous events were provided:
-$(err.cevents)
+        The following continuous events were provided:
+        $(err.cevents)
 
-The following discrete events were provided:
-$(err.devents)
-""")
+        The following discrete events were provided:
+        $(err.devents)
+        """
+    )
 end
 
 function supports_initialization(sys::System)
     return isempty(get_systems(sys)) && isempty(jumps(sys)) &&
-           isempty(get_costs(sys)) && isempty(get_constraints(sys))
+        isempty(get_costs(sys)) && isempty(get_constraints(sys))
 end
 
 safe_eachrow(::Nothing) = nothing
@@ -1239,34 +1281,35 @@ If this returns `false`, the systems are very likely to be different.
 function Base.isapprox(sysa::System, sysb::System)
     sysa === sysb && return true
     return nameof(sysa) == nameof(sysb) &&
-           isequal(get_iv(sysa), get_iv(sysb)) &&
-           issetequal(get_eqs(sysa), get_eqs(sysb)) &&
-           safe_issetequal(
-               safe_eachrow(get_noise_eqs(sysa)), safe_eachrow(get_noise_eqs(sysb))) &&
-           issetequal(get_jumps(sysa), get_jumps(sysb)) &&
-           issetequal(get_constraints(sysa), get_constraints(sysb)) &&
-           issetequal(get_costs(sysa), get_costs(sysb)) &&
-           isequal(get_consolidate(sysa), get_consolidate(sysb)) &&
-           issetequal(get_unknowns(sysa), get_unknowns(sysb)) &&
-           issetequal(get_ps(sysa), get_ps(sysb)) &&
-           issetequal(get_brownians(sysa), get_brownians(sysb)) &&
-           issetequal(get_observed(sysa), get_observed(sysb)) &&
-           isequal(get_description(sysa), get_description(sysb)) &&
-           isequal(get_bindings(sysa), get_bindings(sysb)) &&
-           isequal(get_initial_conditions(sysa), get_initial_conditions(sysb)) &&
-           isequal(get_guesses(sysa), get_guesses(sysb)) &&
-           issetequal(get_initialization_eqs(sysa), get_initialization_eqs(sysb)) &&
-           issetequal(get_continuous_events(sysa), get_continuous_events(sysb)) &&
-           issetequal(get_discrete_events(sysa), get_discrete_events(sysb)) &&
-           isequal(get_connector_type(sysa), get_connector_type(sysb)) &&
-           isequal(get_assertions(sysa), get_assertions(sysb)) &&
-           isequal(get_metadata(sysa), get_metadata(sysb)) &&
-           isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
-           issetequal(get_tstops(sysa), get_tstops(sysb)) &&
-           issetequal(get_inputs(sysa), get_inputs(sysb)) &&
-           issetequal(get_outputs(sysa), get_outputs(sysb)) &&
-           safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
-           isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
-           isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
-           isequal(get_isscheduled(sysa), get_isscheduled(sysb))
+        isequal(get_iv(sysa), get_iv(sysb)) &&
+        issetequal(get_eqs(sysa), get_eqs(sysb)) &&
+        safe_issetequal(
+        safe_eachrow(get_noise_eqs(sysa)), safe_eachrow(get_noise_eqs(sysb))
+    ) &&
+        issetequal(get_jumps(sysa), get_jumps(sysb)) &&
+        issetequal(get_constraints(sysa), get_constraints(sysb)) &&
+        issetequal(get_costs(sysa), get_costs(sysb)) &&
+        isequal(get_consolidate(sysa), get_consolidate(sysb)) &&
+        issetequal(get_unknowns(sysa), get_unknowns(sysb)) &&
+        issetequal(get_ps(sysa), get_ps(sysb)) &&
+        issetequal(get_brownians(sysa), get_brownians(sysb)) &&
+        issetequal(get_observed(sysa), get_observed(sysb)) &&
+        isequal(get_description(sysa), get_description(sysb)) &&
+        isequal(get_bindings(sysa), get_bindings(sysb)) &&
+        isequal(get_initial_conditions(sysa), get_initial_conditions(sysb)) &&
+        isequal(get_guesses(sysa), get_guesses(sysb)) &&
+        issetequal(get_initialization_eqs(sysa), get_initialization_eqs(sysb)) &&
+        issetequal(get_continuous_events(sysa), get_continuous_events(sysb)) &&
+        issetequal(get_discrete_events(sysa), get_discrete_events(sysb)) &&
+        isequal(get_connector_type(sysa), get_connector_type(sysb)) &&
+        isequal(get_assertions(sysa), get_assertions(sysb)) &&
+        isequal(get_metadata(sysa), get_metadata(sysb)) &&
+        isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
+        issetequal(get_tstops(sysa), get_tstops(sysb)) &&
+        issetequal(get_inputs(sysa), get_inputs(sysb)) &&
+        issetequal(get_outputs(sysa), get_outputs(sysb)) &&
+        safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
+        isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
+        isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
+        isequal(get_isscheduled(sysa), get_isscheduled(sysb))
 end

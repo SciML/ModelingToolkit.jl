@@ -5,7 +5,7 @@ const DQ = DynamicQuantities
 
 using ModelingToolkitBase, Symbolics, SymbolicUtils, JumpProcesses
 using ModelingToolkitBase: get_unit, check_units, __get_unit_type, validate, VariableUnit,
-                       JumpType, setdefault, ValidationError
+    JumpType, setdefault, ValidationError
 using SymbolicUtils: isconst, issym, isadd, ismul, ispow, unwrap
 using Symbolics: SymbolicT, value
 import SciMLBase
@@ -17,7 +17,7 @@ function __init__()
         only(@independent_variables t [unit = DQ.u"s"])
     end
     SymbolicUtils.hashcons(unwrap(MTK.t), true)
-    MTK.D = Differential(MTK.t)
+    return MTK.D = Differential(MTK.t)
 end
 #For dispatching get_unit
 const Conditional = Union{typeof(ifelse)}
@@ -34,7 +34,7 @@ function __get_literal_unit(x)
     end
     v = value(x)
     u = getmetadata(v, VariableUnit, nothing)
-    u isa DQ.AbstractQuantity ? screen_unit(u) : u
+    return u isa DQ.AbstractQuantity ? screen_unit(u) : u
 end
 
 function __get_scalar_unit_type(v)
@@ -73,13 +73,13 @@ MTK.get_unit(x::Real) = unitless
 MTK.get_unit(x::AbstractArray) = map(get_unit, x)
 MTK.get_unit(x::Num) = get_unit(unwrap(x))
 MTK.get_unit(x::Symbolics.Arr) = get_unit(unwrap(x))
-MTK.get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x) ^ op.order
+MTK.get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)^op.order
 MTK.get_unit(op::typeof(getindex), args) = get_unit(args[1])
 MTK.get_unit(x::SciMLBase.NullParameters) = unitless
 MTK.get_unit(op::typeof(instream), args) = get_unit(args[1])
 
 function screen_unit(result)
-    if result isa DQ.AbstractQuantity
+    return if result isa DQ.AbstractQuantity
         d = DQ.dimension(result)
         if d isa DQ.Dimensions
             return result
@@ -95,7 +95,7 @@ end
 
 function MTK.get_unit(op, args) # Fallback
     result = oneunit(op(get_unit.(args)...))
-    try
+    return try
         get_unit(result)
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
@@ -132,7 +132,7 @@ function MTK.get_unit(op::Conditional, args)
 end
 
 function MTK.get_unit(op::typeof(mapreduce), args)
-    if args[2] == +
+    return if args[2] == +
         get_unit(args[3])
     else
         throw(ValidationError("Unsupported array operation $op"))
@@ -197,14 +197,14 @@ function safe_get_unit(term, info)
         if err isa DQ.DimensionError
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
-            @warn(info*err.message)
+            @warn(info * err.message)
         elseif err isa MethodError
             @warn("$info: no method matching $(err.f) for arguments $(typeof.(err.args)).")
         else
             rethrow()
         end
     end
-    side
+    return side
 end
 
 function _validate(terms::Vector, labels::Vector{String}; info::String = "")
@@ -229,7 +229,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
             end
         end
     end
-    valid
+    return valid
 end
 
 function _validate(conn::Connection; info::String = "")
@@ -264,14 +264,18 @@ function _validate(conn::Connection; info::String = "")
             end
         end
     end
-    valid
+    return valid
 end
 
-function MTK.validate(jump::Union{VariableRateJump,
-            ConstantRateJump}, t::SymbolicT;
-        info::String = "")
+function MTK.validate(
+        jump::Union{
+            VariableRateJump,
+            ConstantRateJump,
+        }, t::SymbolicT;
+        info::String = ""
+    )
     newinfo = replace(info, "eq." => "jump")
-    _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
+    return _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
@@ -282,8 +286,10 @@ function MTK.validate(jump::MassActionJump, t::SymbolicT; info::String = "")
     allgood = _validate(all_symbols, string.(all_symbols); info)
     n = sum(x -> x[2], jump.reactant_stoch, init = 0)
     base_unitful = all_symbols[1] #all same, get first
-    allgood && _validate([jump.scaled_rates, 1 / (t * base_unitful^n)],
-        ["scaled_rates", "1/(t*reactants^$n))"]; info)
+    return allgood && _validate(
+        [jump.scaled_rates, 1 / (t * base_unitful^n)],
+        ["scaled_rates", "1/(t*reactants^$n))"]; info
+    )
 end
 
 function MTK.validate(jumps::Vector{JumpType}, t::SymbolicT)
@@ -292,11 +298,11 @@ function MTK.validate(jumps::Vector{JumpType}, t::SymbolicT)
     crjs = filter(x -> x isa ConstantRateJump, jumps)
     vrjs = filter(x -> x isa VariableRateJump, jumps)
     splitjumps = [majs, crjs, vrjs]
-    all([validate(js, t; info) for (js, info) in zip(splitjumps, labels)])
+    return all([validate(js, t; info) for (js, info) in zip(splitjumps, labels)])
 end
 
 function MTK.validate(eq::Union{Inequality, Equation}; info::String = "")
-    if isconst(eq.lhs) && value(eq.lhs) isa Union{Connection, AnalysisPoint}
+    return if isconst(eq.lhs) && value(eq.lhs) isa Union{Connection, AnalysisPoint}
         tmp = value(eq.rhs)::Union{Connection, AnalysisPoint}
         if tmp isa AnalysisPoint
             tmp = value(MTK.to_connection(tmp).rhs)::Connection
@@ -306,31 +312,43 @@ function MTK.validate(eq::Union{Inequality, Equation}; info::String = "")
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
 end
-function MTK.validate(eq::Equation,
-        term::Union{SymbolicT, DQ.AbstractQuantity, Num}; info::String = "")
-    _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
+function MTK.validate(
+        eq::Equation,
+        term::Union{SymbolicT, DQ.AbstractQuantity, Num}; info::String = ""
+    )
+    return _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
 function MTK.validate(eq::Equation, terms::Vector; info::String = "")
-    _validate(vcat([eq.lhs, eq.rhs], terms),
-        vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
+    return _validate(
+        vcat([eq.lhs, eq.rhs], terms),
+        vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info
+    )
 end
 
 """
 Returns true iff units of equations are valid.
 """
 function MTK.validate(eqs::Vector; info::String = "")
-    all([validate(eqs[idx], info = info * " in eq. #$idx") for idx in 1:length(eqs)])
+    return all([validate(eqs[idx], info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
 function MTK.validate(eqs::Vector, noise::Vector; info::String = "")
-    all([validate(eqs[idx], noise[idx], info = info * " in eq. #$idx")
-         for idx in 1:length(eqs)])
+    return all(
+        [
+            validate(eqs[idx], noise[idx], info = info * " in eq. #$idx")
+                for idx in 1:length(eqs)
+        ]
+    )
 end
 function MTK.validate(eqs::Vector, noise::Matrix; info::String = "")
-    all([validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
-         for idx in 1:length(eqs)])
+    return all(
+        [
+            validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
+                for idx in 1:length(eqs)
+        ]
+    )
 end
 function MTK.validate(eqs::Vector, term::SymbolicT; info::String = "")
-    all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
+    return all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
 MTK.validate(term::SymbolicT) = safe_get_unit(term, "") !== nothing
 
@@ -338,7 +356,7 @@ MTK.validate(term::SymbolicT) = safe_get_unit(term, "") !== nothing
 Throws error if units of equations are invalid.
 """
 function MTK.check_units(::Val{:DynamicQuantities}, eqs...)
-    validate(eqs...) ||
+    return validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
 

@@ -1,7 +1,7 @@
 using ModelingToolkitBase, Symbolics, Test
 using ModelingToolkitBase: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
-                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
-                       ExtraVariablesSystemException
+    unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
+    ExtraVariablesSystemException
 using NonlinearSolve
 using SymbolicIndexingInterface: is_parameter
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
@@ -127,30 +127,38 @@ if @isdefined(ModelingToolkit)
     @named damper = Rotational.Damper(; d = 3)
     @named torque = Torque(; use_support = false)
     @variables y(t) = 0
-    eqs = [connect(torque.flange, inertia1.flange_a)
-           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
-           y ~ inertia2.w + torque.tau.u]
-    model = System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
-        name = :name, guesses = [spring.flange_a.phi => 0.0])
+    eqs = [
+        connect(torque.flange, inertia1.flange_a)
+        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+        y ~ inertia2.w + torque.tau.u
+    ]
+    model = System(
+        eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+        name = :name, guesses = [spring.flange_a.phi => 0.0]
+    )
     model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
     model_inputs = [torque.tau.u]
     op = Dict(torque.tau.u => 0.0)
     matrices, ssys = linearize(
-        model, model_inputs, model_outputs; op);
+        model, model_inputs, model_outputs; op
+    )
     @test length(ModelingToolkit.outputs(ssys)) == 4
 
     let # Just to have a local scope for D
         matrices, ssys = linearize(model, model_inputs, [y]; op)
         A, B, C, D = matrices
-        obsf = ModelingToolkit.build_explicit_observed_function(ssys,
+        obsf = ModelingToolkit.build_explicit_observed_function(
+            ssys,
             [y],
-            inputs = [torque.tau.u])
+            inputs = [torque.tau.u]
+        )
         x = randn(size(A, 1))
         u = randn(size(B, 2))
         p = getindex.(
             Ref(ModelingToolkit.initial_conditions_and_guesses(ssys)),
-            parameters(ssys))
+            parameters(ssys)
+        )
         y1 = obsf(x, u, p, 0)
         y2 = C * x + D * u
         @test y1[] ≈ y2[]
@@ -162,15 +170,16 @@ end
     for split in [true, false]
         simplify = true
 
-        @variables x(t)=0 u(t)=0 [input=true]
+        @variables x(t) = 0 u(t) = 0 [input = true]
         eqs = [
-            D(x) ~ -x + u
+            D(x) ~ -x + u,
         ]
 
         @named sys = System(eqs, t)
         f, dvs,
-        ps, io_sys = ModelingToolkitBase.generate_control_function(
-            sys, [u]; simplify, split)
+            ps, io_sys = ModelingToolkitBase.generate_control_function(
+            sys, [u]; simplify, split
+        )
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -181,16 +190,17 @@ end
         @test f[1](x, u, p, 1) ≈ -x + u
 
         # With disturbance inputs
-        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        @variables x(t) = 0 u(t) = 0 [input = true] d(t) = 0
         eqs = [
-            D(x) ~ -x + u + d^2
+            D(x) ~ -x + u + d^2,
         ]
 
         @named sys = System(eqs, t)
         f, dvs,
-        ps,
-        io_sys = ModelingToolkitBase.generate_control_function(
-            sys, [u], [d]; simplify, split)
+            ps,
+            io_sys = ModelingToolkitBase.generate_control_function(
+            sys, [u], [d]; simplify, split
+        )
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -201,17 +211,18 @@ end
         @test f[1](x, u, p, 1) ≈ -x + u
 
         ## With added d argument
-        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        @variables x(t) = 0 u(t) = 0 [input = true] d(t) = 0
         eqs = [
-            D(x) ~ -x + u + d^2
+            D(x) ~ -x + u + d^2,
         ]
 
         @named sys = System(eqs, t)
         f, dvs,
-        ps,
-        io_sys = ModelingToolkitBase.generate_control_function(
+            ps,
+            io_sys = ModelingToolkitBase.generate_control_function(
             sys, [u], [d];
-            simplify, split, disturbance_argument = true)
+            simplify, split, disturbance_argument = true
+        )
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -223,18 +234,19 @@ end
         @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
 
         ## Test new known_disturbance_inputs parameter (equivalent to disturbance_argument=true)
-        @variables x(t)=0 u(t)=0 [input=true] d(t)=0
+        @variables x(t) = 0 u(t) = 0 [input = true] d(t) = 0
         eqs = [
-            D(x) ~ -x + u + d^2
+            D(x) ~ -x + u + d^2,
         ]
 
         @named sys = System(eqs, t)
         f, dvs,
-        ps,
-        io_sys = ModelingToolkitBase.generate_control_function(
+            ps,
+            io_sys = ModelingToolkitBase.generate_control_function(
             sys, [u];
             known_disturbance_inputs = [d],
-            simplify, split)
+            simplify, split
+        )
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -246,18 +258,19 @@ end
         @test f[1](x, u, p, t, d) ≈ -x + u + [d[]^2]
 
         ## Test mixed known and unknown disturbances
-        @variables x(t)=0 u(t)=0 [input=true] d1(t)=0 d2(t)=0
+        @variables x(t) = 0 u(t) = 0 [input = true] d1(t) = 0 d2(t) = 0
         eqs = [
-            D(x) ~ -x + u + d1^2 + d2^3
+            D(x) ~ -x + u + d1^2 + d2^3,
         ]
 
         @named sys = System(eqs, t)
         f, dvs,
-        ps,
-        io_sys = ModelingToolkitBase.generate_control_function(
+            ps,
+            io_sys = ModelingToolkitBase.generate_control_function(
             sys, [u], [d1];           # d1 is unknown (set to zero)
             known_disturbance_inputs = [d2],     # d2 is known (function argument)
-            simplify, split)
+            simplify, split
+        )
 
         @test isequal(dvs[], x)
         @test isempty(ps)
@@ -276,31 +289,35 @@ end
 @variables u(t) [input = true]
 
 function Mass(; name, m = 1.0, p = 0, v = 0)
-    @variables y(t)=0 [output = true]
+    @variables y(t) = 0 [output = true]
     ps = @parameters m = m
-    sts = @variables pos(t)=p vel(t)=v
-    eqs = [D(pos) ~ vel
-           y ~ pos]
-    System(eqs, t, [pos, vel, y], ps; name)
+    sts = @variables pos(t) = p vel(t) = v
+    eqs = [
+        D(pos) ~ vel
+        y ~ pos
+    ]
+    return System(eqs, t, [pos, vel, y], ps; name)
 end
 
-function MySpring(; name, k = 1e4)
+function MySpring(; name, k = 1.0e4)
     ps = @parameters k = k
     @variables x(t) = 0 # Spring deflection
-    System(Equation[], t, [x], ps; name)
+    return System(Equation[], t, [x], ps; name)
 end
 
 function MyDamper(; name, c = 10)
     ps = @parameters c = c
     @variables vel(t) = 0
-    System(Equation[], t, [vel], ps; name)
+    return System(Equation[], t, [vel], ps; name)
 end
 
 function SpringDamper(; name, k = false, c = false)
     spring = MySpring(; name = :spring, k)
     damper = MyDamper(; name = :damper, c)
-    compose(System(Equation[], t; name),
-        spring, damper)
+    return compose(
+        System(Equation[], t; name),
+        spring, damper
+    )
 end
 
 connect_sd(sd, m1, m2) = [sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
@@ -316,19 +333,25 @@ c = 10
 @named mass2 = Mass(; m = m2)
 @named sd = SpringDamper(; k, c)
 
-eqs = [connect_sd(sd, mass1, mass2)
-       D(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-       D(mass2.vel) ~ (-sd_force(sd)) / mass2.m]
+eqs = [
+    connect_sd(sd, mass1, mass2)
+    D(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+    D(mass2.vel) ~ (-sd_force(sd)) / mass2.m
+]
 @named _model = System(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
 f, dvs, ps, io_sys = ModelingToolkitBase.generate_control_function(
-    model, [u]; simplify = true)
+    model, [u]; simplify = true
+)
 @test length(dvs) == 4
 p = MTKParameters(io_sys, [io_sys.u => NaN])
 x = ModelingToolkitBase.varmap_to_vars(
-    merge(ModelingToolkitBase.initial_conditions(model),
-        Dict(D.(unknowns(model)) .=> 0.0)), dvs)
+    merge(
+        ModelingToolkitBase.initial_conditions(model),
+        Dict(D.(unknowns(model)) .=> 0.0)
+    ), dvs
+)
 u = [rand()]
 out = f[1](x, u, p, 1)
 i = findfirst(isequal(u[1]), out)
@@ -346,9 +369,11 @@ eqs = [D(x) ~ u]
     y₁, y₂, y₃ = x
     u1, u2 = u
     k₁, k₂, k₃ = 1, 1, 1
-    eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
-           D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
-           y₁ + y₂ + y₃ ~ 1]
+    eqs = [
+        D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
+        D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
+        y₁ + y₂ + y₃ ~ 1
+    ]
 
     @named sys = System(eqs, t)
 
@@ -368,18 +393,19 @@ if @isdefined(ModelingToolkit)
     @testset "Issue#1577" begin
         # https://github.com/SciML/ModelingToolkit.jl/issues/1577
         @named c = Constant(; k = 2)
-        @named gain = Gain(1;)
+        @named gain = Gain(1)
         @named int = Integrator(; k = 1)
-        @named fb = Feedback(;)
+        @named fb = Feedback()
         @named model = System(
             [
                 connect(c.output, fb.input1),
                 connect(fb.input2, int.output),
                 connect(fb.output, gain.input),
-                connect(gain.output, int.input)
+                connect(gain.output, int.input),
             ],
             t,
-            systems = [int, gain, c, fb])
+            systems = [int, gain, c, fb]
+        )
         sys = mtkcompile(model)
         @test length(unknowns(sys)) == length(equations(sys)) == 1
     end
@@ -391,16 +417,18 @@ end
 # @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
 
 @testset "Observed functions with inputs" begin
-    @variables x(t)=0 u(t)=0 [input=true]
+    @variables x(t) = 0 u(t) = 0 [input = true]
     eqs = [
-        D(x) ~ -x + u
+        D(x) ~ -x + u,
     ]
 
     @named sys = System(eqs, t)
-    (; io_sys,) = ModelingToolkitBase.generate_control_function(
-        sys, [u]; simplify = true)
+    (; io_sys) = ModelingToolkitBase.generate_control_function(
+        sys, [u]; simplify = true
+    )
     obsfn = ModelingToolkitBase.build_explicit_observed_function(
-        io_sys, [x + u * t]; inputs = [u])
+        io_sys, [x + u * t]; inputs = [u]
+    )
     @test obsfn([1.0], [2.0], MTKParameters(io_sys, []), 3.0) ≈ [7.0]
 end
 
@@ -416,7 +444,7 @@ end
 end
 
 @testset "With callable symbolic" begin
-    @variables x(t)=0 u(t)=0 [input=true]
+    @variables x(t) = 0 u(t) = 0 [input = true]
     @parameters p(::Real) = (x -> 2x)
     eqs = [D(x) ~ -x + p(u)]
     @named sys = System(eqs, t)
@@ -429,8 +457,10 @@ end
 
 @testset "Observed inputs and outputs" begin
     @variables x(t) y(t) [input = true] z(t) [output = true]
-    eqs = [D(x) ~ x + y + z
-           y ~ z]
+    eqs = [
+        D(x) ~ x + y + z
+        y ~ z
+    ]
     @named sys = System(eqs, t)
     @test issetequal(ModelingToolkitBase.inputs(sys), [y])
     @test issetequal(ModelingToolkitBase.outputs(sys), [z])
@@ -445,7 +475,7 @@ end
 end
 
 @testset "Retain inputs when composing systems" begin
-    @variables x(t) y(t) [input=true]
+    @variables x(t) y(t) [input = true]
     @named sys = System([D(x) ~ y * x], t)
     csys = compose(System(Equation[], t; name = :outer), sys)
     @test issetequal(ModelingToolkitBase.inputs(csys), [sys.y])

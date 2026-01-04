@@ -33,10 +33,12 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_rhs(sys::System; implicit_dae = false,
+function generate_rhs(
+        sys::System; implicit_dae = false,
         scalar = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        kwargs...)
+        kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     eqs = equations(sys)
@@ -62,9 +64,13 @@ function generate_rhs(sys::System; implicit_dae = false,
             obsidxs = observed_equations_used_by(sys, rhss; obs = shifted_obs)
             ddvs = map(D, dvs)
 
-            append!(extra_assignments,
-                [Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
-                 for i in obsidxs])
+            append!(
+                extra_assignments,
+                [
+                    Assignment(shifted_obs[i].lhs, shifted_obs[i].rhs)
+                        for i in obsidxs
+                ]
+            )
         else
             D = Differential(t)
             ddvs = map(D, dvs)
@@ -98,8 +104,10 @@ function generate_rhs(sys::System; implicit_dae = false,
         p_start += 1
     end
 
-    res = build_function_wrapper(sys, rhss, args...; p_start, extra_assignments,
-        expression = Val{true}, expression_module = eval_module, kwargs...)
+    res = build_function_wrapper(
+        sys, rhss, args...; p_start, extra_assignments,
+        expression = Val{true}, expression_module = eval_module, kwargs...
+    )
     nargs = length(args) - length(p) + 1
     if is_dde(sys)
         p_start += 1
@@ -107,7 +115,8 @@ function generate_rhs(sys::System; implicit_dae = false,
     end
     return maybe_compile_function(
         expression, wrap_gfw, (p_start, nargs, is_split(sys)),
-        res; eval_expression, eval_module)
+        res; eval_expression, eval_module
+    )
 end
 
 """
@@ -121,9 +130,11 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_diffusion_function(sys::System; expression = Val{true},
+function generate_diffusion_function(
+        sys::System; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+        eval_module = @__MODULE__, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     eqs = get_noise_eqs(sys)
@@ -144,7 +155,8 @@ function generate_diffusion_function(sys::System; expression = Val{true},
         nargs += 1
     end
     return maybe_compile_function(
-        expression, wrap_gfw, (p_start, nargs, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (p_start, nargs, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -178,8 +190,10 @@ Calculate the jacobian of the equations of `sys`.
 - `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
 - `dvs`: The variables with respect to which the jacobian should be computed.
 """
-function calculate_jacobian(sys::System;
-        sparse = false, simplify = false, dvs = unknowns(sys))
+function calculate_jacobian(
+        sys::System;
+        sparse = false, simplify = false, dvs = unknowns(sys)
+    )
     obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
     rhs = map(eq -> fixpoint_sub(eq.rhs - eq.lhs, obs), equations(sys))
 
@@ -216,10 +230,12 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_jacobian(sys::System;
+function generate_jacobian(
+        sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        checkbounds = false, kwargs...)
+        checkbounds = false, kwargs...
+    )
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
@@ -235,19 +251,28 @@ function generate_jacobian(sys::System;
         args = (args..., t)
         nargs = 3
     end
-    res = build_function_wrapper(sys, jac, args...; wrap_code, expression = Val{true},
-        expression_module = eval_module, checkbounds, kwargs...)
+    res = build_function_wrapper(
+        sys, jac, args...; wrap_code, expression = Val{true},
+        expression_module = eval_module, checkbounds, kwargs...
+    )
     return maybe_compile_function(
-        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
-    identity,
-    function add_header(expr)
-        Func(expr.args, [], expr.body,
-            [:(@assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
-                       $(findnz(W)[1:2]))])
+    return identity,
+        function add_header(expr)
+            return Func(
+                expr.args, [], expr.body,
+                [
+                    :(
+                        @assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
+                        $(findnz(W)[1:2])
+                    )
+                ]
+            )
     end
 end
 
@@ -266,21 +291,25 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_tgrad(
         sys::System;
         simplify = false, eval_expression = false, eval_module = @__MODULE__,
-        expression = Val{true}, wrap_gfw = Val{false}, kwargs...)
+        expression = Val{true}, wrap_gfw = Val{false}, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, tgrad,
+    res = build_function_wrapper(
+        sys, tgrad,
         dvs,
         p...,
         get_iv(sys);
         expression = Val{true},
         expression_module = eval_module,
-        kwargs...)
+        kwargs...
+    )
 
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -333,9 +362,11 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_W(sys::System;
+function generate_W(
+        sys::System;
         simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
@@ -352,10 +383,13 @@ function generate_W(sys::System;
     end
 
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        p_end = 1 + length(p), checkbounds, kwargs...)
+    res = build_function_wrapper(
+        sys, W, dvs, p..., W_GAMMA, t; wrap_code,
+        p_end = 1 + length(p), checkbounds, kwargs...
+    )
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -372,23 +406,30 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_dae_jacobian(sys::System; simplify = false, sparse = false,
+function generate_dae_jacobian(
+        sys::System; simplify = false, sparse = false,
         expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...)
+        eval_module = @__MODULE__, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     t = get_iv(sys)
     derivatives = Differential(t).(unknowns(sys))
-    jac_du = calculate_jacobian(sys; simplify = simplify, sparse = sparse,
-        dvs = derivatives)
+    jac_du = calculate_jacobian(
+        sys; simplify = simplify, sparse = sparse,
+        dvs = derivatives
+    )
     dvs = unknowns(sys)
     jac = W_GAMMA * jac_du + jac_u
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, jac, derivatives, dvs, p..., W_GAMMA, t;
-        p_start = 3, p_end = 2 + length(p), kwargs...)
+    res = build_function_wrapper(
+        sys, jac, derivatives, dvs, p..., W_GAMMA, t;
+        p_start = 3, p_end = 2 + length(p), kwargs...
+    )
     return maybe_compile_function(
-        expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -403,14 +444,19 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_history(sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+function generate_history(
+        sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     p = reorder_parameters(sys)
-    res = build_function_wrapper(sys, u0, p..., get_iv(sys); expression = Val{true},
+    res = build_function_wrapper(
+        sys, u0, p..., get_iv(sys); expression = Val{true},
         expression_module = eval_module, p_start = 1, p_end = length(p),
-        similarto = typeof(u0), wrap_delays = false, kwargs...)
+        similarto = typeof(u0), wrap_delays = false, kwargs...
+    )
     return maybe_compile_function(
-        expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -438,7 +484,7 @@ function calculate_massmatrix(sys::System; simplify = false)
         M = Diagonal(M)
     end
     # M should only contain concrete numbers
-    M == I ? I : M
+    return M == I ? I : M
 end
 
 """
@@ -448,7 +494,7 @@ Return a modified version of mass matrix `M` which is of a similar type to `u0`.
 controls whether the mass matrix should be a sparse matrix.
 """
 function concrete_massmatrix(M; sparse = false, u0 = nothing)
-    if sparse && !(u0 === nothing || M === I)
+    return if sparse && !(u0 === nothing || M === I)
         SparseArrays.sparse(M)
     elseif u0 === nothing || M === I
         M
@@ -475,8 +521,10 @@ function jacobian_sparsity(sys::System)
     sparsity = torn_system_jacobian_sparsity(sys)
     sparsity === nothing || return sparsity
 
-    Symbolics.jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
-        [dv for dv in unknowns(sys)])
+    return Symbolics.jacobian_sparsity(
+        [eq.rhs for eq in full_equations(sys)],
+        [dv for dv in unknowns(sys)]
+    )
 end
 
 """
@@ -487,12 +535,16 @@ Return the sparsity pattern of the DAE jacobian of `sys` as a matrix.
 See also: [`generate_dae_jacobian`](@ref).
 """
 function jacobian_dae_sparsity(sys::System)
-    J1 = jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
-        [dv for dv in unknowns(sys)])
+    J1 = jacobian_sparsity(
+        [eq.rhs for eq in full_equations(sys)],
+        [dv for dv in unknowns(sys)]
+    )
     derivatives = Differential(get_iv(sys)).(unknowns(sys))
-    J2 = jacobian_sparsity([eq.rhs for eq in full_equations(sys)],
-        [dv for dv in derivatives])
-    J1 + J2
+    J2 = jacobian_sparsity(
+        [eq.rhs for eq in full_equations(sys)],
+        [dv for dv in derivatives]
+    )
+    return J1 + J2
 end
 
 """
@@ -507,8 +559,8 @@ function W_sparsity(sys::System)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) :
-                 SparseMatrixCSC{Bool, Int64}((!iszero).(M))
-    jac_sparsity .| M_sparsity
+        SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+    return jac_sparsity .| M_sparsity
 end
 
 """
@@ -530,11 +582,11 @@ end
 
 function isautonomous(sys::System)
     tgrad = calculate_tgrad(sys; simplify = true)
-    all(iszero, tgrad)
+    return all(iszero, tgrad)
 end
 
 function get_bv_solution_symbol(ns)
-    only(@variables BV_SOLUTION(..)[1:ns])
+    return only(@variables BV_SOLUTION(..)[1:ns])
 end
 
 function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, iv, sol)
@@ -548,6 +600,7 @@ function get_constraint_unknown_subs!(subs::Dict, cons::Vector, stidxmap::Dict, 
         haskey(stidxmap, newv) || continue
         subs[v] = sol(args[1])[stidxmap[newv]]
     end
+    return
 end
 
 """
@@ -562,9 +615,11 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression = Val{true},
+function generate_boundary_conditions(
+        sys::System, u0, u0_idxs, t0; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        kwargs...)
+        kwargs...
+    )
     iv = get_iv(sys)
     sts = unknowns(sys)
     ps = parameters(sys)
@@ -589,11 +644,14 @@ function generate_boundary_conditions(sys::System, u0, u0_idxs, t0; expression =
     exprs = vcat(init_conds, cons)
     _p = reorder_parameters(sys, ps)
 
-    res = build_function_wrapper(sys, exprs, _p..., iv; output_type = Array,
+    res = build_function_wrapper(
+        sys, exprs, _p..., iv; output_type = Array,
         p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
-        histfn_symbolic = BVP_SOLUTION, wrap_delays = true, kwargs...)
+        histfn_symbolic = BVP_SOLUTION, wrap_delays = true, kwargs...
+    )
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -607,8 +665,10 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+function generate_cost(
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
@@ -628,13 +688,15 @@ function generate_cost(sys::System; expression = Val{true}, wrap_gfw = Val{false
     end
     res = build_function_wrapper(
         sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays,
-        histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...)
+        histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...
+    )
     if expression == Val{true}
         return res
     end
     f_oop = eval_or_rgf(res; eval_expression, eval_module)
     return maybe_compile_function(
-        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -663,14 +725,16 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_cost_gradient(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...)
+        eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...
+    )
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
     res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -716,7 +780,8 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_cost_hessian(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, simplify = false,
-        sparse = false, return_sparsity = false, kwargs...)
+        sparse = false, return_sparsity = false, kwargs...
+    )
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
@@ -727,7 +792,8 @@ function generate_cost_hessian(
     end
     res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
 
     return return_sparsity ? (fn, sparsity) : fn
 end
@@ -749,14 +815,17 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cons(sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...)
+function generate_cons(
+        sys::System; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     res = build_function_wrapper(sys, cons, dvs, ps...; expression = Val{true}, kwargs...)
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 """
@@ -769,8 +838,10 @@ Return the jacobian of the constraints of `sys` with respect to unknowns.
 - `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
 - `return_sparsity`: Whether to also return the sparsity pattern of the jacobian.
 """
-function calculate_constraint_jacobian(sys::System; simplify = false, sparse = false,
-        return_sparsity = false)
+function calculate_constraint_jacobian(
+        sys::System; simplify = false, sparse = false,
+        return_sparsity = false
+    )
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     sparsity = nothing
@@ -800,15 +871,18 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_constraint_jacobian(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...)
+        simplify = false, sparse = false, kwargs...
+    )
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     jac,
-    sparsity = calculate_constraint_jacobian(
-        sys; simplify, sparse, return_sparsity = true)
+        sparsity = calculate_constraint_jacobian(
+        sys; simplify, sparse, return_sparsity = true
+    )
     res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
     return return_sparsity ? (fn, sparsity) : fn
 end
 
@@ -823,7 +897,8 @@ Return the hessian of the constraints of `sys` with respect to unknowns.
 - `return_sparsity`: Whether to also return the sparsity pattern of the hessian.
 """
 function calculate_constraint_hessian(
-        sys::System; simplify = false, sparse = false, return_sparsity = false)
+        sys::System; simplify = false, sparse = false, return_sparsity = false
+    )
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     sparsity = nothing
@@ -855,15 +930,18 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_constraint_hessian(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...)
+        simplify = false, sparse = false, kwargs...
+    )
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     hess,
-    sparsity = calculate_constraint_hessian(
-        sys; simplify, sparse, return_sparsity = true)
+        sparsity = calculate_constraint_hessian(
+        sys; simplify, sparse, return_sparsity = true
+    )
     res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
-        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
     return return_sparsity ? (fn, sparsity) : fn
 end
 
@@ -876,8 +954,10 @@ Calculate the jacobian of the equations of `sys` with respect to the inputs.
 
 - `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
 """
-function calculate_control_jacobian(sys::AbstractSystem;
-        sparse = false, simplify = false)
+function calculate_control_jacobian(
+        sys::AbstractSystem;
+        sparse = false, simplify = false
+    )
     rhs = [eq.rhs for eq in full_equations(sys)]
     ctrls = unbound_inputs(sys)
 
@@ -902,54 +982,61 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_control_jacobian(sys::AbstractSystem;
+function generate_control_jacobian(
+        sys::AbstractSystem;
         expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...)
+        eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...
+    )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module)
+        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
+    )
 end
 
 function generate_rate_function(js::System, rate)
     p = reorder_parameters(js)
-    build_function_wrapper(js, rate, unknowns(js), p...,
+    return build_function_wrapper(
+        js, rate, unknowns(js), p...,
         get_iv(js),
-        expression = Val{true})
+        expression = Val{true}
+    )
 end
 
 function generate_affect_function(js::System, affect; kwargs...)
-    compile_equational_affect(affect, js; checkvars = false, kwargs...)
+    return compile_equational_affect(affect, js; checkvars = false, kwargs...)
 end
 
 function assemble_vrj(
-        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+        js, vrj, unknowntoid; eval_expression = false, eval_module = @__MODULE__
+    )
     rate = eval_or_rgf(generate_rate_function(js, vrj.rate); eval_expression, eval_module)
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = generate_affect_function(js, vrj.affect!; eval_expression, eval_module)
-    VariableRateJump(rate, affect; save_positions = vrj.save_positions)
+    return VariableRateJump(rate, affect; save_positions = vrj.save_positions)
 end
 
 function assemble_crj(
-        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__)
+        js, crj, unknowntoid; eval_expression = false, eval_module = @__MODULE__
+    )
     rate = eval_or_rgf(generate_rate_function(js, crj.rate); eval_expression, eval_module)
     rate = GeneratedFunctionWrapper{(2, 3, is_split(js))}(rate, nothing)
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [unknowntoid[var] for var in outputvars]
     affect = generate_affect_function(js, crj.affect!; eval_expression, eval_module)
-    ConstantRateJump(rate, affect)
+    return ConstantRateJump(rate, affect)
 end
 
 # assemble a numeric MassActionJump from a MT symbolics MassActionJumps
 function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
-    MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
+    return MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
 end
 
 function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
@@ -963,7 +1050,7 @@ function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
         end
     end
     sort!(rs)
-    rs
+    return rs
 end
 
 function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
@@ -974,11 +1061,11 @@ function numericnstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
             error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, unknowntoid[spec] => stoich)
     end
-    sort!(ns)
+    return sort!(ns)
 end
 
 function is_atomic_inside_indexed(x::SymbolicT)
-    SU.default_is_atomic(x) && isequal(split_indexed_var(x)[1], x)
+    return SU.default_is_atomic(x) && isequal(split_indexed_var(x)[1], x)
 end
 
 struct CheckInvalidAndTrackNamespaced
@@ -1069,7 +1156,8 @@ The signatures will be of the form `g(...)` with arguments:
 For example, a function `g(op, unknowns, p..., inputs, t, known_disturbances)` will be the in-place function generated if `return_inplace` is true, `ts` is a vector,
 an array of inputs `inputs` is given, `known_disturbance_inputs` is provided, and `param_only` is false for a time-dependent system.
 """
-function build_explicit_observed_function(sys, ts;
+function build_explicit_observed_function(
+        sys, ts;
         inputs = nothing,
         disturbance_inputs = nothing,
         known_disturbance_inputs = nothing,
@@ -1085,7 +1173,8 @@ function build_explicit_observed_function(sys, ts;
         throw = true,
         cse = true,
         mkarray = nothing,
-        wrap_delays = is_dde(sys) && !param_only)
+        wrap_delays = is_dde(sys) && !param_only
+    )
     if inputs === nothing
         inputs = ()
     else
@@ -1157,8 +1246,10 @@ function build_explicit_observed_function(sys, ts;
             dervals[ttk] = eq.rhs
         end
     end
-    pred = CheckInvalidAndTrackNamespaced(allsyms, dervars, ns_map, namespace_subs,
-                                          Set{SymbolicT}(), get_iv(sys), throw)
+    pred = CheckInvalidAndTrackNamespaced(
+        allsyms, dervars, ns_map, namespace_subs,
+        Set{SymbolicT}(), get_iv(sys), throw
+    )
     iv = has_iv(sys) ? get_iv(sys) : nothing
     if ts isa SymbolicT
         SU.query(pred, ts)
@@ -1195,10 +1286,12 @@ function build_explicit_observed_function(sys, ts;
     end
     # Handle backward compatibility for disturbance_argument
     if disturbance_argument
-        Base.depwarn("The `disturbance_argument` keyword argument is deprecated. Use `known_disturbance_inputs` instead. " *
-                     "For `disturbance_argument=true`, pass `known_disturbance_inputs=disturbance_inputs, disturbance_inputs=nothing`. " *
-                     "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
-                     :build_explicit_observed_function)
+        Base.depwarn(
+            "The `disturbance_argument` keyword argument is deprecated. Use `known_disturbance_inputs` instead. " *
+                "For `disturbance_argument=true`, pass `known_disturbance_inputs=disturbance_inputs, disturbance_inputs=nothing`. " *
+                "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
+            :build_explicit_observed_function
+        )
         if known_disturbance_inputs !== nothing
             error("Cannot specify both `disturbance_argument=true` and `known_disturbance_inputs`")
         end
@@ -1227,24 +1320,33 @@ function build_explicit_observed_function(sys, ts;
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays, extra_assignments)
+        wrap_delays, extra_assignments
+    )
     if fns isa Tuple
         if expression
             return return_inplace ? fns : fns[1]
         end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
-        f = GeneratedFunctionWrapper{(
-            p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys))}(
-            oop, iip)
+        f = GeneratedFunctionWrapper{
+            (
+                p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
+            ),
+        }(
+            oop, iip
+        )
         return return_inplace ? (f, f) : f
     else
         if expression
             return fns
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
-        f = GeneratedFunctionWrapper{(
-            p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys))}(
-            f, nothing)
+        f = GeneratedFunctionWrapper{
+            (
+                p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
+            ),
+        }(
+            f, nothing
+        )
         return f
     end
 end
@@ -1304,15 +1406,20 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_update_A(sys::System, A::AbstractMatrix; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...)
+function generate_update_A(
+        sys::System, A::AbstractMatrix; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
     ps = reorder_parameters(sys)
 
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), kwargs...)
-    return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        eval_expression, eval_module)
+        similarto = typeof(A), kwargs...
+    )
+    return maybe_compile_function(
+        expression, wrap_gfw, (1, 1, is_split(sys)), res;
+        eval_expression, eval_module
+    )
 end
 
 """
@@ -1327,13 +1434,18 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_update_b(sys::System, b::AbstractVector; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...)
+function generate_update_b(
+        sys::System, b::AbstractVector; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
     ps = reorder_parameters(sys)
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), kwargs...)
-    return maybe_compile_function(expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        eval_expression, eval_module)
+        similarto = typeof(b), kwargs...
+    )
+    return maybe_compile_function(
+        expression, wrap_gfw, (1, 1, is_split(sys)), res;
+        eval_expression, eval_module
+    )
 end

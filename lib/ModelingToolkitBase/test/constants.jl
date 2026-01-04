@@ -15,15 +15,17 @@ prob = ODEProblem(complete(sys), [x => 0], [0.0, 1.0])
 sol = solve(prob, Tsit5())
 
 # Test mtkcompile substitutions & observed values
-eqs = [D(x) ~ 1,
-    w ~ a]
+eqs = [
+    D(x) ~ 1,
+    w ~ a,
+]
 @named sys = System(eqs, t)
 # Now eliminate the constants first
 simp = mtkcompile(sys)
 @test equations(simp) == [D(x) ~ 1.0]
 
 #Constant with units
-@constants β=1 [unit = u"m/s"]
+@constants β = 1 [unit = u"m/s"]
 MT.get_unit(β)
 @test MT.isconstant(β)
 @test !MT.istunable(β)

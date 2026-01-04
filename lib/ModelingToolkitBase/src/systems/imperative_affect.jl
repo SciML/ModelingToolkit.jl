@@ -1,4 +1,3 @@
-
 """
     ImperativeAffect(f::Function; modified::NamedTuple, observed::NamedTuple, ctx)
 
@@ -38,47 +37,62 @@ struct ImperativeAffect
     skip_checks::Bool
 end
 
-function ImperativeAffect(f;
+function ImperativeAffect(
+        f;
         observed::NamedTuple = NamedTuple{()}(()),
         modified::NamedTuple = NamedTuple{()}(()),
         ctx = nothing,
-        skip_checks = false)
-    ImperativeAffect(f,
+        skip_checks = false
+    )
+    return ImperativeAffect(
+        f,
         collect(values(observed)), collect(keys(observed)),
         collect(values(modified)), collect(keys(modified)),
-        ctx, skip_checks)
-end
-function ImperativeAffect(f, modified::NamedTuple;
-        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks = false)
-    ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        ctx, skip_checks
+    )
 end
 function ImperativeAffect(
-        f, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false)
-    ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        f, modified::NamedTuple;
+        observed::NamedTuple = NamedTuple{()}(()), ctx = nothing, skip_checks = false
+    )
+    return ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+    )
 end
 function ImperativeAffect(
-        f, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false)
-    ImperativeAffect(
-        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks)
+        f, modified::NamedTuple, observed::NamedTuple; ctx = nothing, skip_checks = false
+    )
+    return ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+    )
+end
+function ImperativeAffect(
+        f, modified::NamedTuple, observed::NamedTuple, ctx; skip_checks = false
+    )
+    return ImperativeAffect(
+        f, observed = observed, modified = modified, ctx = ctx, skip_checks = skip_checks
+    )
 end
 function ImperativeAffect(; f, kwargs...)
-    ImperativeAffect(f; kwargs...)
+    return ImperativeAffect(f; kwargs...)
 end
 
 function (s::SymbolicUtils.Substituter)(aff::ImperativeAffect)
-    ImperativeAffect(aff.f, s(aff.obs), aff.obs_syms,
-        s(aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks)
-    
+    return ImperativeAffect(
+        aff.f, s(aff.obs), aff.obs_syms,
+        s(aff.modified), aff.mod_syms, aff.ctx, aff.skip_checks
+    )
+
 end
 
 function Base.show(io::IO, mfa::ImperativeAffect)
     obs_vals = join(map((ob, nm) -> "$ob => $nm", mfa.obs, mfa.obs_syms), ", ")
     mod_vals = join(map((md, nm) -> "$md => $nm", mfa.modified, mfa.mod_syms), ", ")
     affect = mfa.f
-    print(io,
-        "ImperativeAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)")
+    return print(
+        io,
+        "ImperativeAffect(observed: [$obs_vals], modified: [$mod_vals], affect:$affect)"
+    )
 end
 func(f::ImperativeAffect) = f.f
 context(a::ImperativeAffect) = a.ctx
@@ -100,7 +114,7 @@ modified(a::ImperativeAffect) = a.modified
 modified_syms(a::ImperativeAffect) = a.mod_syms
 
 function Base.:(==)(a1::ImperativeAffect, a2::ImperativeAffect)
-    isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) &&
+    return isequal(a1.f, a2.f) && isequal(a1.obs, a2.obs) && isequal(a1.modified, a2.modified) &&
         isequal(a1.obs_syms, a2.obs_syms) && isequal(a1.mod_syms, a2.mod_syms) &&
         isequal(a1.ctx, a2.ctx)
 end
@@ -111,7 +125,7 @@ function Base.hash(a::ImperativeAffect, s::UInt)
     s = hash(a.obs_syms, s)
     s = hash(a.modified, s)
     s = hash(a.mod_syms, s)
-    hash(a.ctx, s)
+    return hash(a.ctx, s)
 end
 
 namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
@@ -128,31 +142,40 @@ function namespace_affect(affect::ImperativeAffect, s)
             push!(rmn, renamespace(s, modded))
         end
     end
-    ImperativeAffect(func(affect),
+    return ImperativeAffect(
+        func(affect),
         namespace_expr.(observed(affect), (s,)),
         observed_syms(affect),
         rmn,
         modified_syms(affect),
         context(affect),
-        affect.skip_checks)
+        affect.skip_checks
+    )
 end
 
 function invalid_variables(sys, expr)
-    setdiff!(SU.search_variables(expr), all_symbols(sys))
+    return setdiff!(SU.search_variables(expr), all_symbols(sys))
 end
 
 function unassignable_variables(sys, expr)
     assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(vcat(
-            unknowns(sys), parameters(sys; initial_parameters = true)));
-        init = [])
+        vcat, Symbolics.scalarize.(
+            vcat(
+                unknowns(sys), parameters(sys; initial_parameters = true)
+            )
+        );
+        init = []
+    )
     written = reduce(vcat, Symbolics.scalarize.(collect(SU.search_variables(expr))); init = [])
     return filter(
-        x -> !any(isequal(x), assignable_syms), written)
+        x -> !any(isequal(x), assignable_syms), written
+    )
 end
 
-@generated function _generated_writeback(integ, setters::NamedTuple{NS1, <:Tuple},
-        values::NamedTuple{NS2, <:Tuple}) where {NS1, NS2}
+@generated function _generated_writeback(
+        integ, setters::NamedTuple{NS1, <:Tuple},
+        values::NamedTuple{NS2, <:Tuple}
+    ) where {NS1, NS2}
     setter_exprs = []
     for name in NS2
         if !(name in NS1)
@@ -161,13 +184,15 @@ end
         end
         push!(setter_exprs, :(setters.$name(integ, values.$name)))
     end
-    return :(begin
-        $(setter_exprs...)
-    end)
+    return :(
+        begin
+            $(setter_exprs...)
+        end
+    )
 end
 
 function check_assignable(sys, sym)
-    if symbolic_type(sym) == ScalarSymbolic()
+    return if symbolic_type(sym) == ScalarSymbolic()
         is_variable(sys, sym) || is_parameter(sys, sym)
     elseif symbolic_type(sym) == ArraySymbolic()
         is_variable(sys, sym) || is_parameter(sys, sym) ||
@@ -180,7 +205,8 @@ function check_assignable(sys, sym)
 end
 
 function compile_functional_affect(
-        affect::ImperativeAffect, sys; reset_jumps = false, kwargs...)
+        affect::ImperativeAffect, sys; reset_jumps = false, kwargs...
+    )
     #=
     Implementation sketch:
         generate observed function (oop), should save to a component array under obs_syms
@@ -241,14 +267,15 @@ function compile_functional_affect(
 
     # sanity checks done! now build the data and update function for observed values
     mkzero(sz) =
-        if sz === ()
-            0.0
-        else
-            zeros(sz)
-        end
+    if sz === ()
+        0.0
+    else
+        zeros(sz)
+    end
     obs_fun = build_explicit_observed_function(
         sys, Symbolics.scalarize.(obs_exprs);
-        mkarray = (es, _) -> MakeTuple(es))
+        mkarray = (es, _) -> MakeTuple(es)
+    )
     obs_sym_tuple = (obs_syms...,)
 
     # okay so now to generate the stuff to assign it back into the system
@@ -256,19 +283,23 @@ function compile_functional_affect(
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
         sys, Symbolics.scalarize.(first.(mod_pairs));
-        mkarray = (es, _) -> MakeTuple(es))
+        mkarray = (es, _) -> MakeTuple(es)
+    )
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    let user_affect = func(affect), ctx = context(affect), reset_jumps = reset_jumps
+    return let user_affect = func(affect), ctx = context(affect), reset_jumps = reset_jumps
         @inline function (integ)
             # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
             modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
             upd_component_array = NamedTuple{mod_names}(modvals)
 
             # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(obs_fun(
-                integ.u, integ.p, integ.t))
+            obs_component_array = NamedTuple{obs_sym_tuple}(
+                obs_fun(
+                    integ.u, integ.p, integ.t
+                )
+            )
 
             # let the user do their thing
             upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
@@ -278,7 +309,7 @@ function compile_functional_affect(
                 _generated_writeback(integ, upd_funs, upd_vals)
             end
 
-            reset_jumps && reset_aggregated_jumps!(integ)
+            return reset_jumps && reset_aggregated_jumps!(integ)
         end
     end
 end
@@ -291,4 +322,5 @@ function SU.search_variables!(vars, aff::ImperativeAffect; kwargs...)
             SU.search_variables!(vars, v; kwargs...)
         end
     end
+    return
 end

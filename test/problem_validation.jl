@@ -11,14 +11,14 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     p = "I accidentally renamed p"
     u0 = [X => 1.0]
     ps = [p => 1.0, d => 0.5]
-    @test_throws MissingParametersError oprob=ODEProblem(osys, u0, (0.0, 1.0), ps)
+    @test_throws MissingParametersError oprob = ODEProblem(osys, u0, (0.0, 1.0), ps)
 
     @parameters p d
     ps = [p => 1.0, d => 0.5, "Random stuff" => 3.0]
-    @test_throws InvalidKeyError oprob=ODEProblem(osys, u0, (0.0, 1.0), ps)
+    @test_throws InvalidKeyError oprob = ODEProblem(osys, u0, (0.0, 1.0), ps)
 
     u0 = [:X => 1.0, "random" => 3.0]
-    @test_throws InvalidKeyError oprob=ODEProblem(osys, u0, (0.0, 1.0), ps)
+    @test_throws InvalidKeyError oprob = ODEProblem(osys, u0, (0.0, 1.0), ps)
 
     @variables x(t) y(t) z(t)
     @parameters a b c d

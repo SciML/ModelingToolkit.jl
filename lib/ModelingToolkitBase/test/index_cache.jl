@@ -79,7 +79,8 @@ end
     sys = complete(sys)
     # and the arrays must have matching size
     @test_throws ArgumentError reorder_dimension_by_tunables!(
-        zeros(2, 4), sys, src, [p, q, r])
+        zeros(2, 4), sys, src, [p, q, r]
+    )
 
     ps = MTKParameters(sys, [p => 1.0, q => 3ones(3), r => 4ones(2, 2), s => 0.0])
     src = ps.tunable
@@ -111,8 +112,9 @@ end
 
     event1 = [1.0, 2, 3] => (f = update_affect!, modified = (; p_1))
 
-    @named sys = System([
-            ModelingToolkitBase.D_nounits(x) ~ p_1(x)
+    @named sys = System(
+        [
+            ModelingToolkitBase.D_nounits(x) ~ p_1(x),
         ],
         ModelingToolkitBase.t_nounits;
         discrete_events = [event1]

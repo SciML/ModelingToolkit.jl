@@ -17,16 +17,18 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 @variables x y z
 
 function test_nlsys_inference(name, sys, vs, ps)
-    @testset "NonlinearSystem construction: $name" begin
+    return @testset "NonlinearSystem construction: $name" begin
         @test Set(unknowns(sys)) == Set(value.(vs))
         @test Set(parameters(sys)) == Set(value.(ps))
     end
 end
 
 # Define a nonlinear system
-eqs = [0 ~ σ * (y - x) * h,
+eqs = [
+    0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
-    0 ~ x * y - β * z]
+    0 ~ x * y - β * z,
+]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h], initial_conditions = Dict(x => 2))
 ns2 = eval(toexpr(ns))
 @test issetequal(equations(ns), equations(ns2))
@@ -45,9 +47,11 @@ end
 @parameters σ ρ β
 
 # Define a nonlinear system
-eqs = [0 ~ σ * (y - x),
+eqs = [
+    0 ~ σ * (y - x),
     y ~ x * (ρ - z),
-    β * z ~ x * y]
+    β * z ~ x * y,
+]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
@@ -65,9 +69,11 @@ end
 # Intermediate calculations
 a = y - x
 # Define a nonlinear system
-eqs = [0 ~ σ * a * h,
+eqs = [
+    0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
-    0 ~ x * y - β * z]
+    0 ~ x * y - β * z,
+]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 ns = complete(ns)
 nlsys_func = generate_rhs(ns)
@@ -81,9 +87,9 @@ jac = generate_jacobian(ns)
 
 sH = calculate_hessian(ns)
 @test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :colptr) ==
-      getfield.(sparse.(sH), :colptr)
+    getfield.(sparse.(sH), :colptr)
 @test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :rowval) ==
-      getfield.(sparse.(sH), :rowval)
+    getfield.(sparse.(sH), :rowval)
 
 prob = NonlinearProblem(ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0])
 @test prob.f.sys === ns
@@ -91,7 +97,8 @@ sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
 prob = NonlinearProblem(
-    ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0], jac = true)
+    ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0], jac = true
+)
 @test_nowarn solve(prob, NewtonRaphson())
 
 @variables u F s a
@@ -99,7 +106,7 @@ eqs1 = [
     0 ~ σ * (y - x) * h + F,
     0 ~ x * (ρ - z) - u,
     0 ~ x * y - β * z,
-    0 ~ x + y - z - u
+    0 ~ x + y - z - u,
 ]
 
 lorenz = name -> System(eqs1, [x, y, z, u, F], [σ, ρ, β, h], name = name)
@@ -107,12 +114,15 @@ lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(complete(lorenz1), zeros(4))
 lorenz2 = lorenz(:lorenz2)
 @named connected = System(
-    [s ~ a + lorenz1.x
-     lorenz2.y ~ s * h
-     lorenz1.F ~ lorenz2.u
-     lorenz2.F ~ lorenz1.u],
+    [
+        s ~ a + lorenz1.x
+        lorenz2.y ~ s * h
+        lorenz1.F ~ lorenz2.u
+        lorenz2.F ~ lorenz1.u
+    ],
     [s, a], [h],
-    systems = [lorenz1, lorenz2])
+    systems = [lorenz1, lorenz2]
+)
 if @isdefined(ModelingToolkit)
     @test_nowarn alias_elimination(connected)
 end
@@ -126,8 +136,8 @@ D = Differential(t)
 sys = mtkcompile(sys)
 u0 = [subsys.x => 1]
 prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0); guesses = [subsys.y => 1])
-sol = solve(prob, FBDF(), reltol = 1e-7, abstol = 1e-7)
-@test sol[subsys.x] + sol[subsys.y] - sol[subsys.z]≈sol[subsys.u] atol=1e-7
+sol = solve(prob, FBDF(), reltol = 1.0e-7, abstol = 1.0e-7)
+@test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u] atol = 1.0e-7
 if @isdefined(ModelingToolkit)
     @test_throws ArgumentError convert_system_indepvar(sys, t)
 end
@@ -136,12 +146,15 @@ end
 @variables x y z
 
 # Define a nonlinear system
-eqs = [0 ~ σ * (y - x),
+eqs = [
+    0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
-    0 ~ x * y - β * z * h]
+    0 ~ x * y - β * z * h,
+]
 @named ns = System(eqs, [x, y, z], [σ, ρ, β, h])
 np = NonlinearProblem(
-    complete(ns), [x => 0, y => 0, z => 0, σ => 1, ρ => 2, β => 3], jac = true, sparse = true)
+    complete(ns), [x => 0, y => 0, z => 0, σ => 1, ρ => 2, β => 3], jac = true, sparse = true
+)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
 
 # issue #819
@@ -158,7 +171,8 @@ np = NonlinearProblem(
         sys2 = makesys(:sys1)
         @test_throws ModelingToolkitBase.NonUniqueSubsystemsError System(
             [sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
-            systems = [sys1, sys2], name = :foo)
+            systems = [sys1, sys2], name = :foo
+        )
     end
     issue819()
 end
@@ -168,18 +182,20 @@ end
     @parameters a b
     @variables x y
     eqs1 = [
-        0 ~ a * x
+        0 ~ a * x,
     ]
     eqs2 = [
-        0 ~ b * y
+        0 ~ b * y,
     ]
 
     @named sys1 = System(eqs1, [x], [a])
     @named sys2 = System(eqs2, [y], [b])
     @named sys3 = extend(sys1, sys2)
 
-    @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))),
-        Set(parameters(sys3)))
+    @test isequal(
+        union(Set(parameters(sys1)), Set(parameters(sys2))),
+        Set(parameters(sys3))
+    )
     @test isequal(union(Set(unknowns(sys1)), Set(unknowns(sys2))), Set(unknowns(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
@@ -188,8 +204,10 @@ end
 @independent_variables t
 @parameters τ
 @variables x(t) RHS(t)
-@named fol = System([0 ~ (1 - x * h) / τ], [x], [τ];
-    observed = [RHS ~ (1 - x) / τ])
+@named fol = System(
+    [0 ~ (1 - x * h) / τ], [x], [τ];
+    observed = [RHS ~ (1 - x) / τ]
+)
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -199,22 +217,26 @@ RHS2 = RHS
 if @isdefined(ModelingToolkit)
     @independent_variables t
     @variables v1(t) v2(t) i1(t) i2(t)
-    eq = [v1 ~ sin(2pi * t * h)
-          v1 - v2 ~ i1
-          v2 ~ i2
-          i1 ~ i2]
+    eq = [
+        v1 ~ sin(2pi * t * h)
+        v1 - v2 ~ i1
+        v2 ~ i2
+        i1 ~ i2
+    ]
     @named sys = System(eq, t)
     @test length(equations(mtkcompile(sys))) == 0
 end
 
 @testset "Remake" begin
-    @parameters a=1.0 b=1.0 c=1.0
+    @parameters a = 1.0 b = 1.0 c = 1.0
     @constants h = 1
     @variables x y z
 
-    eqs = [0 ~ a * (y - x) * h,
+    eqs = [
+        0 ~ a * (y - x) * h,
         0 ~ x * (b - z) - y,
-        0 ~ x * y - c * z]
+        0 ~ x * y - c * z,
+    ]
     @named sys = System(eqs, [x, y, z], [a, b, c, h], initial_conditions = Dict(x => 2.0))
     sys = complete(sys)
     prob = NonlinearProblem(sys, unknowns(sys) .=> ones(length(unknowns(sys))))
@@ -233,9 +255,11 @@ end
 @testset "Observed function generation without parameters" begin
     @variables x y z
 
-    eqs = [0 ~ x + sin(y),
+    eqs = [
+        0 ~ x + sin(y),
         0 ~ z - cos(x),
-        0 ~ x * y]
+        0 ~ x * y,
+    ]
     @named ns = System(eqs, [x, y, z], [])
     ns = complete(ns)
     vs = [unknowns(ns); parameters(ns)]
@@ -279,15 +303,21 @@ end
 @testset "Jacobian/Hessian with observed equations that depend on unknowns" begin
     @variables x y z
     @parameters σ ρ β
-    eqs = [0 ~ σ * (y - x)
-           0 ~ x * (ρ - z) - y
-           0 ~ x * y - β * z]
+    eqs = [
+        0 ~ σ * (y - x)
+        0 ~ x * (ρ - z) - y
+        0 ~ x * y - β * z
+    ]
     guesses = [x => 1.0, y => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
     @mtkcompile ns = System(eqs)
 
-    @test isequal(calculate_jacobian(ns), [(-1 - z + ρ)*σ -x*σ
-                                           2x*(-z + ρ) -β-(x^2)]) broken=!@isdefined(ModelingToolkit)
+    @test isequal(
+        calculate_jacobian(ns), [
+            (-1 - z + ρ) * σ -x * σ
+            2x * (-z + ρ) -β - (x^2)
+        ]
+    ) broken = !@isdefined(ModelingToolkit)
     # solve without analytical jacobian
     prob = NonlinearProblem(ns, [guesses; ps])
     sol = solve(prob, NewtonRaphson())
@@ -303,13 +333,13 @@ end
     eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
     @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
     mtkjac = expand.(calculate_jacobian(ns))
-    jac1 = unwrap.([3//2 + y;;])
-    jac2 = unwrap.([-3//2 - x;;])
-    @test isequal(mtkjac, jac1) || isequal(mtkjac, jac2) broken=!@isdefined(ModelingToolkit)
+    jac1 = unwrap.([3 // 2 + y;;])
+    jac2 = unwrap.([-3 // 2 - x;;])
+    @test isequal(mtkjac, jac1) || isequal(mtkjac, jac2) broken = !@isdefined(ModelingToolkit)
     mtkhess = calculate_hessian(ns)
     hess1 = [Num[1;;]]
     hess2 = [Num[-1;;]]
-    @test isequal(mtkhess, hess1) || isequal(mtkhess, hess2) broken=!@isdefined(ModelingToolkit)
+    @test isequal(mtkhess, hess1) || isequal(mtkhess, hess2) broken = !@isdefined(ModelingToolkit)
     prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
@@ -325,9 +355,11 @@ end
 @testset "System of linear equations with vector variable" begin
     # 1st example in https://en.wikipedia.org/w/index.php?title=System_of_linear_equations&oldid=1247697953
     @variables x[1:3]
-    A = [3 2 -1
-         2 -2 4
-         -1 1/2 -1]
+    A = [
+        3 2 -1
+        2 -2 4
+        -1 1 / 2 -1
+    ]
     b = [1, -2, 0]
     @named sys = System(A * x ~ b, [x], [])
     sys = mtkcompile(sys)
@@ -342,9 +374,9 @@ if @isdefined(ModelingToolkit)
         @parameters p
         @named sys = System([x ~ 1, x^2 - p ~ 0])
         for sys in [
-            mtkcompile(sys, fully_determined = false),
-            mtkcompile(sys, fully_determined = false, split = false)
-        ]
+                mtkcompile(sys, fully_determined = false),
+                mtkcompile(sys, fully_determined = false, split = false),
+            ]
             @test length(equations(sys)) == 1
             @test length(unknowns(sys)) == 0
             T = typeof(ForwardDiff.Dual(1.0))
@@ -366,7 +398,8 @@ end
         sol = @test_nowarn solve(prob, ITP())
         @test SciMLBase.successful_retcode(sol)
         @test_nowarn IntervalNonlinearProblem(
-            sys, (0.0, 2.0), [p => 1.0]; expression = Val{true})
+            sys, (0.0, 2.0), [p => 1.0]; expression = Val{true}
+        )
     end
 
     @variables y
@@ -374,9 +407,11 @@ end
     @test_throws ["single unknown"] IntervalNonlinearProblem(sys, (0.0, 1.0))
     @test_throws ["single unknown"] IntervalNonlinearFunction(sys)
     @test_throws ["single unknown"] IntervalNonlinearProblem(
-        sys, (0.0, 1.0); expression = Val{true})
+        sys, (0.0, 1.0); expression = Val{true}
+    )
     @test_throws ["single unknown"] IntervalNonlinearFunction(
-        sys; expression = Val{true})
+        sys; expression = Val{true}
+    )
 end
 
 @testset "Vector parameter used unscalarized and partially scalarized" begin
@@ -391,9 +426,11 @@ end
 @testset "Can convert from `System`" begin
     @variables x(t) y(t)
     @parameters p q r
-    @named sys = System([D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+    @named sys = System(
+        [D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
         initial_conditions = [x => 1.0], bindings = [p => missing, r => 3p], guesses = [p => 1.0],
-        initialization_eqs = [p^3 + q^3 ~ 4r])
+        initialization_eqs = [p^3 + q^3 ~ 4r]
+    )
     nlsys = NonlinearSystem(sys)
     nlsys = complete(nlsys)
     @test value(initial_conditions(nlsys)[x]) == 1.0
@@ -428,7 +465,7 @@ end
     @test prob.f.initialization_data.initializeprobmap === nothing
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
-    @test sol.ps[p ^ 3 + q ^ 3]≈sol.ps[4r] atol=1e-10
+    @test sol.ps[p^3 + q^3] ≈ sol.ps[4r] atol = 1.0e-10
 
     @testset "Differential inside expression also substituted" begin
         @named sys = System([0 ~ y * D(x) + x^2 - p, 0 ~ x * D(y) + y * p], t)
@@ -448,7 +485,8 @@ end
     @test resid == [0.0]
     @test resid isa Vector
     prob = NonlinearLeastSquaresProblem{false}(
-        complete(sys), nothing; u0_constructor = splat(SVector))
+        complete(sys), nothing; u0_constructor = splat(SVector)
+    )
     sol = solve(prob)
     resid = sol.resid
     @test resid == [0.0]
@@ -458,7 +496,8 @@ end
 @testset "`ProblemTypeCtx`" begin
     @variables x
     @mtkcompile sys = System(
-        [0 ~ x^2 - 4x + 4]; metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"])
+        [0 ~ x^2 - 4x + 4]; metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"]
+    )
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.problem_type == "A"
 end

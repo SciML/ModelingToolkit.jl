@@ -18,7 +18,7 @@ using Test
 
         equations = Equation[
             D(x) ~ abs(y),
-            y ~ sin(t)
+            y ~ sin(t),
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -45,8 +45,8 @@ using Test
     # x(t) = 1 - cos(t) in [0, pi)
     # x(t) = 3 + cos(t) in [pi, 2pi)
     _trueval = 3 + cos(_t)
-    @test !isapprox(sol1(_t)[1], _trueval; rtol = 1e-3)
-    @test isapprox(sol2(_t)[1], _trueval; rtol = 1e-3)
+    @test !isapprox(sol1(_t)[1], _trueval; rtol = 1.0e-3)
+    @test isapprox(sol2(_t)[1], _trueval; rtol = 1.0e-3)
 end
 
 @testset "Big test case" begin
@@ -82,7 +82,7 @@ end
             # all the boolean operators
             D(q) ~ ifelse((x < 1) & ((y < 0.5) | ifelse(y > 0.8, c, !c)), 1.0, 2.0),
             # don't touch time-independent condition, but modify time-dependent branches
-            D(r) ~ ifelse(p < 2, abs(x), max(y, 0.9))
+            D(r) ~ ifelse(p < 2, abs(x), max(y, 0.9)),
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -144,12 +144,12 @@ end
 
         equations = Equation[
             D(x) ~ abs(y),
-            y ~ sin(t)
+            y ~ sin(t),
         ]
 
         return System(equations, t, vars, pars; name, systems)
     end
-    @test_nowarn @mtkcompile sys=SimpleAbs() additional_passes=[IfLifting]
+    @test_nowarn @mtkcompile sys = SimpleAbs() additional_passes = [IfLifting]
 end
 
 @testset "Nested conditions are handled properly" begin
@@ -169,17 +169,21 @@ end
         end
 
         equations = Equation[
-            y ~ ifelse(start_time < t,
-                ifelse(t < start_time + duration,
-                    (t - start_time) * height / duration, height),
-                0.0),
-            D(x) ~ y
+            y ~ ifelse(
+                start_time < t,
+                ifelse(
+                    t < start_time + duration,
+                    (t - start_time) * height / duration, height
+                ),
+                0.0
+            ),
+            D(x) ~ y,
         ]
 
         return System(equations, t, vars, pars; name, systems)
     end
     @mtkcompile sys = RampModel()
-    @mtkcompile sys2=RampModel() additional_passes=[IfLifting]
+    @mtkcompile sys2 = RampModel() additional_passes = [IfLifting]
     prob = ODEProblem(sys, [sys.x => 1.0], (0.0, 3.0))
     prob2 = ODEProblem(sys2, [sys.x => 1.0], (0.0, 3.0))
     sol = solve(prob)

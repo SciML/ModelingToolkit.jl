@@ -40,16 +40,16 @@ include("common/rc_model.jl")
             @test iszero(sol[rc_model.ground.g.i])
             @test iszero(sol[rc_model.ground.g.v])
             @test sol[rc_model.resistor.v] == sol[resistor.v] ==
-                  sol[source.p.v] - sol[capacitor.p.v]
+                sol[source.p.v] - sol[capacitor.p.v]
         else
-            @test sol[rc_model.resistor.p.i] ≈ sol[resistor.p.i] atol=1e-6
-            @test sol[rc_model.resistor.p.i] ≈ sol[capacitor.p.i] atol=1e-6
-            @test sol[rc_model.resistor.n.i] ≈ sol[resistor.n.i] atol=1e-6
-            @test sol[rc_model.resistor.n.i] ≈ -sol[capacitor.p.i] atol=1e-6
-            @test sol[rc_model.capacitor.n.i] ≈ sol[capacitor.n.i] atol=1e-6
-            @test sol[rc_model.capacitor.n.i] ≈ -sol[capacitor.p.i] atol=1e-6
-            @test sol[rc_model.ground.g.i] ≈ zeros(length(sol.t)) atol=1e-6
-            @test sol[rc_model.ground.g.v] ≈ zeros(length(sol.t)) atol=1e-6
+            @test sol[rc_model.resistor.p.i] ≈ sol[resistor.p.i] atol = 1.0e-6
+            @test sol[rc_model.resistor.p.i] ≈ sol[capacitor.p.i] atol = 1.0e-6
+            @test sol[rc_model.resistor.n.i] ≈ sol[resistor.n.i] atol = 1.0e-6
+            @test sol[rc_model.resistor.n.i] ≈ -sol[capacitor.p.i] atol = 1.0e-6
+            @test sol[rc_model.capacitor.n.i] ≈ sol[capacitor.n.i] atol = 1.0e-6
+            @test sol[rc_model.capacitor.n.i] ≈ -sol[capacitor.p.i] atol = 1.0e-6
+            @test sol[rc_model.ground.g.i] ≈ zeros(length(sol.t)) atol = 1.0e-6
+            @test sol[rc_model.ground.g.v] ≈ zeros(length(sol.t)) atol = 1.0e-6
             @test sol[rc_model.resistor.v] == sol[resistor.v]
             @test sol[rc_model.resistor.v] ≈ sol[source.p.v] - sol[capacitor.p.v]
         end
@@ -78,7 +78,7 @@ include("common/rc_model.jl")
     @test !isempty(ModelingToolkitBase.bindings(sys))
     u0 = [capacitor.v => 0.0]
     prob = ODEProblem(sys, u0, (0, 10.0))
-    sol = solve(prob, Rodas4(); abstol = 1e-8, reltol = 1e-8)
+    sol = solve(prob, Rodas4(); abstol = 1.0e-8, reltol = 1.0e-8)
     check_rc_sol(sol)
 end
 
@@ -90,14 +90,16 @@ end
     @test SciMLBase.successful_retcode(sol)
     function rc_component(; name, R = 1, C = 1)
         local sys
-        @parameters R=R C=C
+        @parameters R = R C = C
         @named p = Pin()
         @named n = Pin()
         @named resistor = Resistor(R = R) # test parent scope default of @named
         @named capacitor = Capacitor(C = C)
-        eqs = [connect(p, resistor.p);
-               connect(resistor.n, capacitor.p);
-               connect(capacitor.n, n)]
+        eqs = [
+            connect(p, resistor.p);
+            connect(resistor.n, capacitor.p);
+            connect(capacitor.n, n)
+        ]
         @named sys = System(eqs, t, [], [R, C])
         compose(sys, [p, n, resistor, capacitor]; name = name)
     end
@@ -106,10 +108,12 @@ end
     @named shape = Constant(k = 1)
     @named source = Voltage()
     @named rc_comp = rc_component()
-    eqs = [connect(shape.output, source.V)
-           connect(source.p, rc_comp.p)
-           connect(source.n, rc_comp.n)
-           connect(source.n, ground.g)]
+    eqs = [
+        connect(shape.output, source.V)
+        connect(source.p, rc_comp.p)
+        connect(source.n, rc_comp.n)
+        connect(source.n, ground.g)
+    ]
     @named sys′ = System(eqs, t)
     @named sys_inner_outer = compose(sys′, [ground, shape, source, rc_comp])
     @test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
@@ -144,7 +148,8 @@ if @isdefined(ModelingToolkit)
         @test length(equations(sys)) == 2
         u0 = unknowns(sys) .=> 0
         @test_nowarn ODEProblem(
-            sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false)
+            sys, [], (0, 10.0), guesses = u0, warn_initialize_determined = false
+        )
         prob = DAEProblem(sys, D.(unknowns(sys)) .=> 0, (0, 0.5), guesses = u0)
         sol = solve(prob, DFBDF())
         @test sol.retcode == SciMLBase.ReturnCode.Success
@@ -168,7 +173,7 @@ end
 
     # compose tests
     function record_fun(; name)
-        pars = @parameters a=10 b=100
+        pars = @parameters a = 10 b = 100
         System(Equation[], t, [], pars; name)
     end
 
@@ -178,7 +183,7 @@ end
         defs = Dict()
         defs[foo.a] = 3
         defs[foo.b] = 300
-        pars = @parameters x=2 y=20
+        pars = @parameters x = 2 y = 20
         compose(System(Equation[], t, [], pars; name, initial_conditions = defs), foo)
     end
     @named goo = first_model()
@@ -192,10 +197,12 @@ function Load(; name)
     @named p = Pin()
     @named n = Pin()
     @named resistor = Resistor(R = R)
-    eqs = [connect(p, resistor.p);
-           connect(resistor.n, n)]
+    eqs = [
+        connect(p, resistor.p);
+        connect(resistor.n, n)
+    ]
     @named sys = System(eqs, t)
-    compose(sys, [p, n, resistor]; name = name)
+    return compose(sys, [p, n, resistor]; name = name)
 end
 
 function Circuit(; name)
@@ -203,10 +210,12 @@ function Circuit(; name)
     @named ground = Ground()
     @named load = Load()
     @named resistor = Resistor(R = R)
-    eqs = [connect(load.p, ground.g);
-           connect(resistor.p, ground.g)]
+    eqs = [
+        connect(load.p, ground.g);
+        connect(resistor.p, ground.g)
+    ]
     @named sys = System(eqs, t)
-    compose(sys, [ground, resistor, load]; name = name)
+    return compose(sys, [ground, resistor, load]; name = name)
 end
 
 @named foo = Circuit()
@@ -220,14 +229,18 @@ if @isdefined(ModelingToolkit)
             capacitor = Capacitor(name = Symbol(:capacitor, i), C = C)
             heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
-            rc_eqs = [connect(shape.output, source.V)
-                      connect(source.p, resistor.p)
-                      connect(resistor.n, capacitor.p)
-                      connect(capacitor.n, source.n, ground.g)
-                      connect(resistor.heat_port, heat_capacitor.port)]
+            rc_eqs = [
+                connect(shape.output, source.V)
+                connect(source.p, resistor.p)
+                connect(resistor.n, capacitor.p)
+                connect(capacitor.n, source.n, ground.g)
+                connect(resistor.heat_port, heat_capacitor.port)
+            ]
 
-            compose(System(rc_eqs, t, name = Symbol(name, i)),
-                [resistor, capacitor, source, ground, shape, heat_capacitor])
+            compose(
+                System(rc_eqs, t, name = Symbol(name, i)),
+                [resistor, capacitor, source, ground, shape, heat_capacitor]
+            )
         end
         V = 2.0
         @named shape = Constant(k = V)
@@ -241,8 +254,10 @@ if @isdefined(ModelingToolkit)
         end
         @variables E(t) = 0.0
         eqs = [
-            D(E) ~ sum(((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).heat_port.Q_flow,
-            enumerate(rc_systems))
+            D(E) ~ sum(
+                ((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).heat_port.Q_flow,
+                enumerate(rc_systems)
+            ),
         ]
         @named _big_rc = System(eqs, t, [E], [])
         @named big_rc = compose(_big_rc, rc_systems)
@@ -259,20 +274,24 @@ end
         @unpack v, i = oneport
         @constants R = R
         eqs = [
-            v ~ i * R
+            v ~ i * R,
         ]
         extend(System(eqs, t, [], [R]; name = name), oneport)
     end
     capacitor = Capacitor(; name = :c1, C = 1.0)
     resistor = FixedResistor(; name = :r1)
     ground = Ground(; name = :ground)
-    rc_eqs = [connect(capacitor.n, resistor.p)
-              connect(resistor.n, capacitor.p)
-              connect(capacitor.n, ground.g)]
+    rc_eqs = [
+        connect(capacitor.n, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, ground.g)
+    ]
 
     @named _rc_model = System(rc_eqs, t)
-    @named rc_model = compose(_rc_model,
-        [resistor, capacitor, ground])
+    @named rc_model = compose(
+        _rc_model,
+        [resistor, capacitor, ground]
+    )
     sys = mtkcompile(rc_model)
     prob = ODEProblem(sys, [sys.c1.v => 0.0], (0, 10.0))
     sol = solve(prob, @isdefined(ModelingToolkit) ? Tsit5() : Rodas5P())
@@ -284,7 +303,7 @@ end
     """
     @connector function Pin1(; name)
         @independent_variables t
-        sts = @variables v(t)=1.0 i(t)=1.0
+        sts = @variables v(t) = 1.0 i(t) = 1.0
         System(Equation[], t, sts, []; name = name)
     end
     @test string(Base.doc(Pin1)) == "Hey there, Pin1!\n"
@@ -294,7 +313,7 @@ end
     """
     @component function Pin2(; name)
         @independent_variables t
-        sts = @variables v(t)=1.0 i(t)=1.0
+        sts = @variables v(t) = 1.0 i(t) = 1.0
         System(Equation[], t, sts, []; name = name)
     end
     @test string(Base.doc(Pin2)) == "Hey there, Pin2!\n"
@@ -330,7 +349,7 @@ end
         end
 
         equations = Equation[
-            x ~ inner.p
+            x ~ inner.p,
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -383,7 +402,7 @@ end
         end
 
         equations = Equation[
-            D(foo.x) ~ foo.x
+            D(foo.x) ~ foo.x,
         ]
 
         return System(equations, t, vars, pars; name, systems)
@@ -419,8 +438,11 @@ end
     @named comp1 = System(Equation[], t; systems = [input])
     @named output = RealOutput()
     @named comp2 = System(Equation[], t; systems = [output])
-    @named sys = System([connect(comp2.output.u, comp1.input.u)], t; systems = [
-        comp1, comp2])
+    @named sys = System(
+        [connect(comp2.output.u, comp1.input.u)], t; systems = [
+            comp1, comp2,
+        ]
+    )
     eq = only(equations(expand_connections(sys)))
     # as opposed to `output.u ~ input.u`
     @test isequal(eq, comp1.input.u ~ comp2.output.u)
@@ -451,9 +473,9 @@ end
         Symbol[],
         Symbol[],
         Symbol[],
-        Symbol[]
+        Symbol[],
     ]
     is_connect_truth = falses(22)
-    is_connect_truth[end-7:end] .= true
+    is_connect_truth[(end - 7):end] .= true
     @test source_info.is_connection_equation == is_connect_truth
 end

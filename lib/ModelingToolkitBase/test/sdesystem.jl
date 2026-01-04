@@ -14,13 +14,17 @@ import DiffEqNoiseProcess
 @parameters σ ρ β
 @variables x(tt) y(tt) z(tt)
 
-eqs = [D(x) ~ σ * (y - x),
+eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z,
+]
 
-noiseeqs = [0.1 * x,
+noiseeqs = [
+    0.1 * x,
     0.1 * y,
-    0.1 * z]
+    0.1 * z,
+]
 
 # System -> SDESystem shorthand constructor
 @named sys = System(eqs, tt, [x, y, z], [σ, ρ, β])
@@ -33,48 +37,58 @@ f = eval(generate_diffusion_function(de)[1])
 f = SDEFunction(de)
 prob = SDEProblem(
     de, [unknowns(de) .=> [1.0, 0.0, 0.0]; parameters(de) .=> [10.0, 26.0, 2.33]],
-    (0.0, 100.0))
+    (0.0, 100.0)
+)
 sol = solve(prob, SRIW1(), seed = 1)
 
 probexpr = SDEProblem(
     de, [unknowns(de) .=> [1.0, 0.0, 0.0]; parameters(de) .=> [10.0, 26.0, 2.33]],
-    (0.0, 100.0))
+    (0.0, 100.0)
+)
 solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 @test all(x -> x == 0, Array(sol - solexpr))
 
-noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
-               σ 0.01*y 0.02*x*z
-               ρ β 0.01*z]
+noiseeqs_nd = [
+    0.01 * x 0.01 * x * y 0.02 * x * z
+    σ 0.01 * y 0.02 * x * z
+    ρ β 0.01 * z
+]
 @named de = SDESystem(eqs, noiseeqs_nd, tt, [x, y, z], [σ, ρ, β])
 de = complete(de)
 f = eval(generate_diffusion_function(de)[1])
 p = MTKParameters(de, [σ => 0.1, ρ => 0.2, β => 0.3])
-@test f([1, 2, 3.0], p, nothing) == [0.01*1 0.01*1*2 0.02*1*3
-       0.1 0.01*2 0.02*1*3
-       0.2 0.3 0.01*3]
+@test f([1, 2, 3.0], p, nothing) == [
+    0.01 * 1 0.01 * 1 * 2 0.02 * 1 * 3
+    0.1 0.01 * 2 0.02 * 1 * 3
+    0.2 0.3 0.01 * 3
+]
 
 f = eval(generate_diffusion_function(de)[2])
 du = ones(3, 3)
 f(du, [1, 2, 3.0], p, nothing)
-@test du == [0.01*1 0.01*1*2 0.02*1*3
-             0.1 0.01*2 0.02*1*3
-             0.2 0.3 0.01*3]
+@test du == [
+    0.01 * 1 0.01 * 1 * 2 0.02 * 1 * 3
+    0.1 0.01 * 2 0.02 * 1 * 3
+    0.2 0.3 0.01 * 3
+]
 
-prob = SDEProblem(de, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, ρ => 26.0, β => 2.33],
-    (0.0, 100.0), noise_rate_prototype = zeros(3, 3))
+prob = SDEProblem(
+    de, [x => 1.0, y => 0.0, z => 0.0, σ => 10.0, ρ => 26.0, β => 2.33],
+    (0.0, 100.0), noise_rate_prototype = zeros(3, 3)
+)
 sol = solve(prob, EM(), dt = 0.001)
 
 u0map = [
     x => 1.0,
     y => 0.0,
-    z => 0.0
+    z => 0.0,
 ]
 
 parammap = [
     σ => 10.0,
     β => 26.0,
-    ρ => 2.33
+    ρ => 2.33,
 ]
 
 prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
@@ -93,7 +107,7 @@ function test_SDEFunction_no_eval()
     # Need to test within a function scope to trigger world age issues
     f = SDEFunction(de, eval_expression = false)
     p = MTKParameters(de, [σ => 10.0, ρ => 26.0, β => 2.33])
-    @test f([1.0, 0.0, 0.0], p, (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
+    return @test f([1.0, 0.0, 0.0], p, (0.0, 100.0)) ≈ [-10.0, 26.0, 0.0]
 end
 test_SDEFunction_no_eval()
 
@@ -326,8 +340,10 @@ sys = modelingtoolkitize(prob)
 fdrift = eval(generate_rhs(sys)[1])
 fdif = eval(generate_diffusion_function(sys)[1])
 @test fdrift(u0, p, t) == p[1] * u0
-@test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-                         p[4]*u0[1] p[5]*u0[2]]
+@test fdif(u0, p, t) == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 fdrift! = eval(generate_rhs(sys)[2])
 fdif! = eval(generate_diffusion_function(sys)[2])
 du = similar(u0)
@@ -335,8 +351,10 @@ fdrift!(du, u0, p, t)
 @test du == p[1] * u0
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
-@test du == [p[2]*u0[1] p[3]*u0[1]
-             p[4]*u0[1] p[5]*u0[2]]
+@test du == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 
 # Ito -> Strat
 sys2 = stochastic_integral_transform(sys, -1 // 2)
@@ -344,22 +362,26 @@ fdrift = eval(generate_rhs(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) ≈ [
     p[1] * u0[1] - 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
+    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
 ]
-@test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-                         p[4]*u0[1] p[5]*u0[2]]
+@test fdif(u0, p, t) == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 fdrift! = eval(generate_rhs(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du, u0, p, t)
 @test du ≈ [
     p[1] * u0[1] - 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
+    p[1] * u0[2] - 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
 ]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
-@test du == [p[2]*u0[1] p[3]*u0[1]
-             p[4]*u0[1] p[5]*u0[2]]
+@test du == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 
 # Strat -> Ito
 sys2 = stochastic_integral_transform(sys, 1 // 2)
@@ -367,22 +389,26 @@ fdrift = eval(generate_rhs(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) ≈ [
     p[1] * u0[1] + 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
+    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
 ]
-@test fdif(u0, p, t) == [p[2]*u0[1] p[3]*u0[1]
-                         p[4]*u0[1] p[5]*u0[2]]
+@test fdif(u0, p, t) == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 fdrift! = eval(generate_rhs(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du, u0, p, t)
 @test du ≈ [
     p[1] * u0[1] + 1 // 2 * (p[2]^2 * u0[1] + p[3]^2 * u0[1]),
-    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2])
+    p[1] * u0[2] + 1 // 2 * (p[2] * p[4] * u0[1] + p[5]^2 * u0[2]),
 ]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
-@test du == [p[2]*u0[1] p[3]*u0[1]
-             p[4]*u0[1] p[5]*u0[2]]
+@test du == [
+    p[2] * u0[1] p[3] * u0[1]
+    p[4] * u0[1] p[5] * u0[2]
+]
 
 # non-diagonal noise: Torus -- Strat and Ito are identical
 u0 = rand(2)
@@ -408,8 +434,10 @@ fdrift = eval(generate_rhs(sys)[1])
 fdif = eval(generate_diffusion_function(sys)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 fdrift! = eval(generate_rhs(sys)[2])
 fdif! = eval(generate_diffusion_function(sys)[2])
 du = similar(u0)
@@ -418,8 +446,10 @@ fdrift!(du, u0, p, t)
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 
 # Ito -> Strat
 sys2 = stochastic_integral_transform(sys, -1 // 2)
@@ -427,8 +457,10 @@ fdrift = eval(generate_rhs(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 fdrift! = eval(generate_rhs(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
@@ -437,8 +469,10 @@ fdrift!(du, u0, p, t)
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 
 # Strat -> Ito
 sys2 = stochastic_integral_transform(sys, 1 // 2)
@@ -446,8 +480,10 @@ fdrift = eval(generate_rhs(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0, p, t) == 0 * u0
 @test fdif(u0, p, t) ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 fdrift! = eval(generate_rhs(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
@@ -456,30 +492,38 @@ fdrift!(du, u0, p, t)
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du, u0, p, t)
 @test du ==
-      [cos(p[1])*sin(u0[1]) cos(p[1])*cos(u0[1]) -sin(p[1])*sin(u0[2]) -sin(p[1])*cos(u0[2])
-       sin(p[1])*sin(u0[1]) sin(p[1])*cos(u0[1]) cos(p[1])*sin(u0[2]) cos(p[1])*cos(u0[2])]
+    [
+    cos(p[1]) * sin(u0[1]) cos(p[1]) * cos(u0[1]) -sin(p[1]) * sin(u0[2]) -sin(p[1]) * cos(u0[2])
+    sin(p[1]) * sin(u0[1]) sin(p[1]) * cos(u0[1]) cos(p[1]) * sin(u0[2]) cos(p[1]) * cos(u0[2])
+]
 
 # issue #819
 @testset "Combined system name collisions" begin
     @independent_variables t
     D = Differential(t)
-    eqs_short = [D(x) ~ σ * (y - x),
-        D(y) ~ x * (ρ - z) - y
+    eqs_short = [
+        D(x) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
     ]
-    noise_eqs = [y - x
-                 x - y]
+    noise_eqs = [
+        y - x
+        x - y
+    ]
     sys1 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     sys2 = SDESystem(eqs_short, noise_eqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     @test_throws ModelingToolkitBase.NonUniqueSubsystemsError SDESystem(
         [sys2.y ~ sys1.z], [sys2.y], t, [], [],
-        systems = [sys1, sys2], name = :foo)
+        systems = [sys1, sys2], name = :foo
+    )
 end
 
 # observed variable handling
 @variables x(tt) RHS(tt)
 @parameters τ
-@named fol = SDESystem([D(x) ~ (1 - x) / τ], [x], tt, [x], [τ];
-    observed = [RHS ~ (1 - x) / τ])
+@named fol = SDESystem(
+    [D(x) ~ (1 - x) / τ], [x], tt, [x], [τ];
+    observed = [RHS ~ (1 - x) / τ]
+)
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -503,12 +547,12 @@ noiseeqs = [0.1 * x]
     x0 = 0.1
 
     u0map = [
-        x => x0
+        x => x0,
     ]
 
     parammap = [
         α => 1.5,
-        β => 1.0
+        β => 1.0,
     ]
 
     @named de = SDESystem(eqs, noiseeqs, tt, [x], [α, β], observed = [weight ~ x * 10])
@@ -544,12 +588,12 @@ end
     ## Standard approach
     # EM with 1`000 trajectories for stepsize 2^-7
     u0map = [
-        x => x0
+        x => x0,
     ]
 
     parammap = [
         α => 1.5,
-        β => 1.0
+        β => 1.0,
     ]
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
@@ -557,14 +601,16 @@ end
     function prob_func(prob, i, repeat)
         remake(prob, seed = seeds[i])
     end
-    numtraj = Int(1e3)
+    numtraj = Int(1.0e3)
     seed = 100
     Random.seed!(seed)
     seeds = rand(UInt, numtraj)
 
-    ensemble_prob = EnsembleProblem(prob;
+    ensemble_prob = EnsembleProblem(
+        prob;
         output_func = (sol, i) -> (g(sol.u[end]), false),
-        prob_func = prob_func)
+        prob_func = prob_func
+    )
 
     sim = solve(ensemble_prob, EM(), dt = dt, trajectories = numtraj)
     μ = mean(sim)
@@ -576,20 +622,24 @@ end
 
     probmod = SDEProblem(demod, [u0map; parammap], (0.0, 1.0))
 
-    ensemble_probmod = EnsembleProblem(probmod;
-        output_func = (sol, i) -> (g(sol[x][end]) *
-                                   sol[demod.weight][end],
-            false),
-        prob_func = prob_func)
+    ensemble_probmod = EnsembleProblem(
+        probmod;
+        output_func = (sol, i) -> (
+            g(sol[x][end]) *
+                sol[demod.weight][end],
+            false,
+        ),
+        prob_func = prob_func
+    )
 
     simmod = solve(ensemble_probmod, EM(), dt = dt, trajectories = numtraj)
     μmod = mean(simmod)
     σmod = std(simmod) / sqrt(numtraj)
 
-    display("μ = $(round(μ, digits=2)) ± $(round(σ, digits=2))")
-    display("μmod = $(round(μmod, digits=2)) ± $(round(σmod, digits=2))")
+    display("μ = $(round(μ, digits = 2)) ± $(round(σ, digits = 2))")
+    display("μmod = $(round(μmod, digits = 2)) ± $(round(σmod, digits = 2))")
 
-    @test μ≈μmod atol=2σ
+    @test μ ≈ μmod atol = 2σ
     @test σ > σmod
 end
 
@@ -600,27 +650,35 @@ s = 0.001
 β *= s
 η *= s
 
-eqs = [D(x) ~ σ * (y - x) + x * β,
+eqs = [
+    D(x) ~ σ * (y - x) + x * β,
     D(y) ~ x * (ρ - z) - y + y * β + x * η,
-    D(z) ~ x * y - β * z + (x * z) * β]
+    D(z) ~ x * y - β * z + (x * z) * β,
+]
 @named sys1 = System(eqs, tt)
 sys1 = mtkcompile(sys1)
 
-drift_eqs = [D(x) ~ σ * (y - x),
+drift_eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y]
+    D(z) ~ x * y,
+]
 
-diffusion_eqs = [s*x 0
-                 s*y s*x
-                 (s * x * z)-s * z 0]
+diffusion_eqs = [
+    s * x 0
+    s * y s * x
+    (s * x * z) - s * z 0
+]
 
 sys2 = SDESystem(drift_eqs, diffusion_eqs, tt, sts, ps, name = :sys1)
 sys2 = complete(sys2)
 
 @test issetequal(ModelingToolkitBase.get_noise_eqs(sys1), ModelingToolkitBase.get_noise_eqs(sys2))
 
-prob = SDEProblem(sys1, [sts .=> [1.0, 0.0, 0.0]; ps .=> [10.0, 26.0]],
-    (0.0, 100.0))
+prob = SDEProblem(
+    sys1, [sts .=> [1.0, 0.0, 0.0]; ps .=> [10.0, 26.0]],
+    (0.0, 100.0)
+)
 solve(prob, LambaEulerHeun(), seed = 1)
 
 # Test ill-formed due to more equations than states in noise equations
@@ -631,7 +689,8 @@ solve(prob, LambaEulerHeun(), seed = 1)
 eqs = [D(X) ~ p - d * X]
 noise_eqs = [sqrt(p), -sqrt(d * X)]
 @test_throws ModelingToolkitBase.IllFormedNoiseEquationsError SDESystem(
-    eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
+    eqs, noise_eqs, t, [X], [p, d]; name = :ssys
+)
 
 noise_eqs = reshape([sqrt(p), -sqrt(d * X)], 1, 2)
 ssys = SDESystem(eqs, noise_eqs, t, [X], [p, d]; name = :ssys)
@@ -654,8 +713,10 @@ sprob = SDEProblem(sys, [u0; ps], tspan)
 # Ensure diagonal noise generates vector noise function
 @variables y(tt)
 @brownians b
-eqs = [D(x) ~ p - d * x + a * sqrt(p)
-       D(y) ~ p - d * y + b * sqrt(d)]
+eqs = [
+    D(x) ~ p - d * x + a * sqrt(p)
+    D(y) ~ p - d * y + b * sqrt(d)
+]
 @mtkcompile sys = System(eqs, tt)
 u0 = @SVector[x => 10.0, y => 20.0]
 tspan = (0.0, 10.0)
@@ -668,22 +729,24 @@ let
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
     @brownians a
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+    eqs = [
+        D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
-        D(z) ~ x * y - β * z + 0.1a * z]
+        D(z) ~ x * y - β * z + 0.1a * z,
+    ]
 
     @mtkcompile de = System(eqs, t)
 
     u0map = [
         x => 1.0,
         y => 0.0,
-        z => 0.0
+        z => 0.0,
     ]
 
     parammap = [
         σ => 10.0,
         β => 26.0,
-        ρ => 2.33
+        ρ => 2.33,
     ]
     prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     # TODO: re-enable this when we support scalar noise
@@ -693,8 +756,10 @@ end
 let # test to make sure that scalar noise always receive the same kicks
     @variables x(t) y(t)
     @brownians a
-    eqs = [D(x) ~ a,
-        D(y) ~ a]
+    eqs = [
+        D(x) ~ a,
+        D(y) ~ a,
+    ]
 
     @mtkcompile de = System(eqs, t)
     prob = SDEProblem(de, [x => 0, y => 0], (0.0, 10.0))
@@ -706,22 +771,24 @@ let # test that diagonal noise is correctly handled
     @parameters σ ρ β
     @variables x(t) y(t) z(t)
     @brownians a b c
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+    eqs = [
+        D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1b * y,
-        D(z) ~ x * y - β * z + 0.1c * z]
+        D(z) ~ x * y - β * z + 0.1c * z,
+    ]
 
     @mtkcompile de = System(eqs, t)
 
     u0map = [
         x => 1.0,
         y => 0.0,
-        z => 0.0
+        z => 0.0,
     ]
 
     parammap = [
         σ => 10.0,
         β => 26.0,
-        ρ => 2.33
+        ρ => 2.33,
     ]
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
@@ -733,26 +800,28 @@ end
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownians a b c d e f
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x + d,
+    eqs = [
+        D(x) ~ σ * (y - x) + 0.1a * x + d,
         D(y) ~ x * (ρ - z) - y + 0.1b * y + e,
-        D(z) ~ x * y - β * z + 0.1c * z + f]
+        D(z) ~ x * y - β * z + 0.1c * z + f,
+    ]
     @mtkcompile de = System(eqs, tt)
 
     u0map = [
         x => 1.0,
         y => 0.0,
-        z => 0.0
+        z => 0.0,
     ]
 
     parammap = [
         σ => 10.0,
         β => 26.0,
-        ρ => 2.33
+        ρ => 2.33,
     ]
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
     # SOSRI only works for diagonal and scalar noise
-    @test_throws ErrorException solve(prob, SOSRI()).retcode==ReturnCode.Success
+    @test_throws ErrorException solve(prob, SOSRI()).retcode == ReturnCode.Success
     # ImplicitEM does work for non-diagonal noise
     @test solve(prob, ImplicitEM()).retcode == ReturnCode.Success
     @test size(ModelingToolkitBase.get_noise_eqs(de)) == (3, 6)
@@ -762,21 +831,23 @@ end
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownians a b
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,     # One brownian
+    eqs = [
+        D(x) ~ σ * (y - x) + 0.1a * x,     # One brownian
         D(y) ~ x * (ρ - z) - y + 0.1b * y, # Another brownian
-        D(z) ~ x * y - β * z]              # no brownians -- still diagonal
+        D(z) ~ x * y - β * z,
+    ]              # no brownians -- still diagonal
     @mtkcompile de = System(eqs, tt)
 
     u0map = [
         x => 1.0,
         y => 0.0,
-        z => 0.0
+        z => 0.0,
     ]
 
     parammap = [
         σ => 10.0,
         β => 26.0,
-        ρ => 2.33
+        ρ => 2.33,
     ]
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
@@ -801,8 +872,10 @@ if @isdefined(ModelingToolkit)
         ps = @parameters a = 2
         browns = @brownians η
 
-        eqs = [D(x) ~ -a * x + (input + 1) * η
-               input ~ 0.0]
+        eqs = [
+            D(x) ~ -a * x + (input + 1) * η
+            input ~ 0.0
+        ]
 
         sys = System(eqs, t, sts, ps, browns; name = :name)
         sys = mtkcompile(sys)
@@ -824,12 +897,15 @@ end
 @testset "SDESystem to System" begin
     @variables x(t) y(t) z(t)
     @testset "Scalar noise" begin
-        @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 3],
-            t, [x, y, z], [], is_scalar_noise = true)
+        @named sys = SDESystem(
+            [D(x) ~ x, D(y) ~ y, z ~ x + y], [x, y, 3],
+            t, [x, y, z], [], is_scalar_noise = true
+        )
         odesys = noise_to_brownians(sys)
         vs = SU.search_variables(equations(odesys))
         nbrownian = count(
-            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs)
+            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs
+        )
         @test length(brownians(odesys)) == 3
         @test nbrownian == 3
         for eq in equations(odesys)
@@ -839,12 +915,15 @@ end
     end
 
     @testset "Non-scalar vector noise" begin
-        @named sys = SDESystem([D(x) ~ x, D(y) ~ y, z ~ x + y], [x; y; 0;;],
-            t, [x, y, z], []; is_scalar_noise = false)
+        @named sys = SDESystem(
+            [D(x) ~ x, D(y) ~ y, z ~ x + y], [x; y; 0;;],
+            t, [x, y, z], []; is_scalar_noise = false
+        )
         odesys = noise_to_brownians(sys)
         vs = SU.search_variables(equations(odesys))
         nbrownian = count(
-            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs)
+            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs
+        )
         @test nbrownian == 1
         for eq in equations(odesys)
             ModelingToolkitBase.isdiffeq(eq) || continue
@@ -853,14 +932,17 @@ end
     end
 
     @testset "Matrix noise" begin
-        noiseeqs = [x+y y+z z+x
-                    2y 2z 2x
-                    z+1 x+1 y+1]
+        noiseeqs = [
+            x + y y + z z + x
+            2y 2z 2x
+            z + 1 x + 1 y + 1
+        ]
         @named sys = SDESystem([D(x) ~ x, D(y) ~ y, D(z) ~ z], noiseeqs, t, [x, y, z], [])
         odesys = noise_to_brownians(sys)
         vs = SU.search_variables(equations(odesys))
         nbrownian = count(
-            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs)
+            v -> ModelingToolkitBase.getvariabletype(v) == ModelingToolkitBase.BROWNIAN, vs
+        )
         @test nbrownian == 3
         for eq in equations(odesys)
             @test length(arguments(eq.rhs)) == 4
@@ -872,7 +954,8 @@ if @isdefined(ModelingToolkit)
     @testset "`mtkcompile(::SDESystem)`" begin
         @variables x(t) y(t)
         @mtkcompile sys = SDESystem(
-            [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], [])
+            [D(x) ~ x, y ~ 2x], [x, 0], t, [x, y], []
+        )
         @test length(equations(sys)) == 1
         @test length(ModelingToolkitBase.get_noise_eqs(sys)) == 1
         @test length(observed(sys)) == 1
@@ -886,23 +969,29 @@ end
     @brownians z
     eq2 = D(X) ~ p - d * X + z
     @test_throws ModelingToolkitBase.ContinuousOperatorDiscreteArgumentError @mtkcompile ssys = System(
-        [eq2], t)
+        [eq2], t
+    )
     noiseeq = [1]
     @test_throws ModelingToolkitBase.ContinuousOperatorDiscreteArgumentError @named ssys = SDESystem(
-        [eq2], [noiseeq], t)
+        [eq2], [noiseeq], t
+    )
 end
 
 @testset "SDEFunctionExpr" begin
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
 
-    eqs = [D(x) ~ σ * (y - x),
+    eqs = [
+        D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
+        D(z) ~ x * y - β * z,
+    ]
 
-    noiseeqs = [0.1 * x,
+    noiseeqs = [
+        0.1 * x,
         0.1 * y,
-        0.1 * z]
+        0.1 * z,
+    ]
 
     @named sys = System(eqs, tt, [x, y, z], [σ, ρ, β])
 
@@ -938,9 +1027,11 @@ end
     @parameters σ ρ β
     @variables x(tt) y(tt) z(tt)
     @brownians a
-    eqs = [D(x) ~ σ * (y - x) + 0.1a * x,
+    eqs = [
+        D(x) ~ σ * (y - x) + 0.1a * x,
         D(y) ~ x * (ρ - z) - y + 0.1a * y,
-        D(z) ~ x * y - β * z + 0.1a * z]
+        D(z) ~ x * y - β * z + 0.1a * z,
+    ]
 
     @named de = System(eqs, t)
     de = complete(de)
@@ -949,7 +1040,8 @@ end
     parammap = [σ => 10.0, β => 26.0, ρ => 2.33]
 
     @test_throws ["Brownian", "mtkcompile"] SDEProblem(
-        de, [u0map; parammap], (0.0, 100.0))
+        de, [u0map; parammap], (0.0, 100.0)
+    )
     de = mtkcompile(de)
     @test SDEProblem(de, [u0map; parammap], (0.0, 100.0)) isa SDEProblem
 end
@@ -969,12 +1061,16 @@ end
     u0 = [1.0, 0.0, 0.0]
     T = (0.0, 5.0)
 
-    eqs = [D(x) ~ σ * (y - x),
+    eqs = [
+        D(x) ~ σ * (y - x),
         D(y) ~ x * (ρ - z) - y,
-        D(z) ~ x * y - β * z]
-    noiseeqs = [3.0,
+        D(z) ~ x * y - β * z,
+    ]
+    noiseeqs = [
         3.0,
-        3.0]
+        3.0,
+        3.0,
+    ]
     @mtkbuild sde_lorentz = SDESystem(eqs, noiseeqs, tt, [x, y, z], [σ, ρ, β])
     parammap = [σ, ρ, β] .=> [10, 28.0, 8 / 3]
 

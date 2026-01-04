@@ -2,31 +2,41 @@ using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
 using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
 @variables x(t) y(t) z(t) k(t)
-eqs = [x ~ y + z
-       z ~ 2
-       y ~ 2z + k]
+eqs = [
+    x ~ y + z
+    z ~ 2
+    y ~ 2z + k
+]
 
 sorted_eq = topsort_equations(eqs, unwrap.([x, y, z, k]))
 
-ref_eq = [z ~ 2
-          y ~ 2z + k
-          x ~ y + z]
+ref_eq = [
+    z ~ 2
+    y ~ 2z + k
+    x ~ y + z
+]
 @test ref_eq == sorted_eq
 
-@test_throws ArgumentError topsort_equations([x ~ y + z
-                                              z ~ 2
-                                              y ~ 2z + x], unwrap.([x, y, z, k]))
+@test_throws ArgumentError topsort_equations(
+    [
+        x ~ y + z
+        z ~ 2
+        y ~ 2z + x
+    ], unwrap.([x, y, z, k])
+)
 
 @parameters σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
 
 test_equal(a, b) = @test isequal(a, b) || isequal(simplify(a), simplify(b))
 
-eqs = [D(x) ~ σ * (y - x)
-       D(y) ~ x * (ρ - z) - y + β
-       0 ~ z - x + y
-       0 ~ a + z
-       u ~ z + a]
+eqs = [
+    D(x) ~ σ * (y - x)
+    D(y) ~ x * (ρ - z) - y + β
+    0 ~ z - x + y
+    0 ~ a + z
+    u ~ z + a
+]
 
 lorenz1 = System(eqs, t, name = :lorenz1)
 
@@ -35,8 +45,10 @@ io = IOBuffer();
 show(io, MIME("text/plain"), lorenz1_aliased);
 str = String(take!(io));
 @test all(s -> occursin(s, str), ["lorenz1", "Unknowns (2)", "Parameters (3)"])
-reduced_eqs = [D(x) ~ σ * (y - x)
-               D(y) ~ β + (ρ - z) * x - y]
+reduced_eqs = [
+    D(x) ~ σ * (y - x)
+    D(y) ~ β + (ρ - z) * x - y
+]
 #test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(unknowns(lorenz1_aliased), [x, y, z]))
 #test_equal.(observed(lorenz1_aliased), [u ~ 0
@@ -50,7 +62,7 @@ eqs1 = [
     D(x) ~ σ * (y - x) + F,
     D(y) ~ x * (ρ - z) - u,
     D(z) ~ x * y - β * z,
-    u ~ x + y - z
+    u ~ x + y - z,
 ]
 
 lorenz = name -> System(eqs1, t, name = name)
@@ -60,11 +72,14 @@ state = TearingState(lorenz1)
 lorenz2 = lorenz(:lorenz2)
 
 @named connected = System(
-    [s ~ a + lorenz1.x
-     lorenz2.y ~ s
-     lorenz1.u ~ lorenz2.F
-     lorenz2.u ~ lorenz1.F],
-    t, systems = [lorenz1, lorenz2])
+    [
+        s ~ a + lorenz1.x
+        lorenz2.y ~ s
+        lorenz1.u ~ lorenz2.F
+        lorenz2.u ~ lorenz1.F
+    ],
+    t, systems = [lorenz1, lorenz2]
+)
 @test length(Base.propertynames(connected)) == 10 + 1 # + 1 for independent variable
 @test isequal((@nonamespace connected.lorenz1.x), x)
 __x = x
@@ -80,41 +95,53 @@ reduced_system2 = mtkcompile(tearing_substitution(mtkcompile(tearing_substitutio
 @test isempty(setdiff(unknowns(reduced_system), unknowns(reduced_system2)))
 @test isequal(equations(tearing_substitution(reduced_system)), equations(reduced_system2))
 @test isequal(observed(reduced_system), observed(reduced_system2))
-@test setdiff(unknowns(reduced_system),
-    [s
-     a
-     lorenz1.x
-     lorenz1.y
-     lorenz1.z
-     lorenz1.u
-     lorenz2.x
-     lorenz2.y
-     lorenz2.z
-     lorenz2.u]) |> isempty
+@test setdiff(
+    unknowns(reduced_system),
+    [
+        s
+        a
+        lorenz1.x
+        lorenz1.y
+        lorenz1.z
+        lorenz1.u
+        lorenz2.x
+        lorenz2.y
+        lorenz2.z
+        lorenz2.u
+    ]
+) |> isempty
 
-@test setdiff(parameters(reduced_system),
-    [lorenz1.σ
-     lorenz1.ρ
-     lorenz1.β
-     lorenz2.σ
-     lorenz2.ρ
-     lorenz2.β]) |> isempty
+@test setdiff(
+    parameters(reduced_system),
+    [
+        lorenz1.σ
+        lorenz1.ρ
+        lorenz1.β
+        lorenz2.σ
+        lorenz2.ρ
+        lorenz2.β
+    ]
+) |> isempty
 
 @test length(equations(reduced_system)) == 6
 
-pp = [lorenz1.σ => 10
-      lorenz1.ρ => 28
-      lorenz1.β => 8 / 3
-      lorenz2.σ => 10
-      lorenz2.ρ => 28
-      lorenz2.β => 8 / 3]
-u0 = [lorenz1.x => 1.0
-      lorenz1.y => 0.0
-      lorenz1.z => 0.0
-      s => 0.0
-      lorenz2.x => 1.0
-      lorenz2.y => 0.0
-      lorenz2.z => 0.0]
+pp = [
+    lorenz1.σ => 10
+    lorenz1.ρ => 28
+    lorenz1.β => 8 / 3
+    lorenz2.σ => 10
+    lorenz2.ρ => 28
+    lorenz2.β => 8 / 3
+]
+u0 = [
+    lorenz1.x => 1.0
+    lorenz1.y => 0.0
+    lorenz1.z => 0.0
+    s => 0.0
+    lorenz2.x => 1.0
+    lorenz2.y => 0.0
+    lorenz2.z => 0.0
+]
 prob1 = ODEProblem(reduced_system, [u0; pp], (0.0, 100.0))
 solve(prob1, Rodas5())
 
@@ -129,13 +156,17 @@ let
     @variables u_c(t) y_c(t)
     @parameters k_P
     pc = System(Equation[u_c ~ k_P * y_c], t, name = :pc)
-    connections = [pc.u_c ~ ol.u
-                   pc.y_c ~ ol.y]
+    connections = [
+        pc.u_c ~ ol.u
+        pc.y_c ~ ol.y
+    ]
     @named connected = System(connections, t, systems = [ol, pc])
     @test equations(connected) isa Vector{Equation}
     reduced_sys = mtkcompile(connected)
-    ref_eqs = [D(ol.x) ~ ol.a * ol.x + ol.b * ol.u
-               0 ~ pc.k_P * ol.y - ol.u]
+    ref_eqs = [
+        D(ol.x) ~ ol.a * ol.x + ol.b * ol.u
+        0 ~ pc.k_P * ol.y - ol.u
+    ]
     #@test ref_eqs == equations(reduced_sys)
 end
 
@@ -151,9 +182,11 @@ end
 # NonlinearSystem
 @variables u1(t) u2(t) u3(t)
 @parameters p
-eqs = [u1 ~ u2
-       u3 ~ u1 + u2 + p
-       u3 ~ hypot(u1, u2) * p]
+eqs = [
+    u1 ~ u2
+    u3 ~ u1 + u2 + p
+    u3 ~ hypot(u1, u2) * p
+]
 @named sys = System(eqs, [u1, u2, u3], [p])
 reducedsys = mtkcompile(sys)
 @test length(observed(reducedsys)) == 2
@@ -164,15 +197,17 @@ nlprob = NonlinearProblem(reducedsys, [u0; [p => pp[1]]])
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(unknowns(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
-@test hypot(nlprob.f.observed(u2, reducedsol.u, pp),
-    nlprob.f.observed(u1, reducedsol.u, pp)) *
-      pp[1]≈nlprob.f.observed(u3, reducedsol.u, pp) atol=1e-9
+@test hypot(
+    nlprob.f.observed(u2, reducedsol.u, pp),
+    nlprob.f.observed(u1, reducedsol.u, pp)
+) *
+    pp[1] ≈ nlprob.f.observed(u3, reducedsol.u, pp) atol = 1.0e-9
 
-@test all(x -> abs(x) < 1e-5, residual)
+@test all(x -> abs(x) < 1.0e-5, residual)
 
 N = 5
 @variables xs[1:N]
-A = reshape(1:(N ^ 2), N, N)
+A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = System(eqs, [xs], [])
 sys = mtkcompile(sys′)
@@ -182,11 +217,13 @@ sys = mtkcompile(sys′)
 @parameters k₁ k₂ k₋₁ E₀
 @variables E(t) C(t) S(t) P(t)
 
-eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
-       D(C) ~ k₁ * E * S - k₋₁ * C - k₂ * C
-       D(S) ~ k₋₁ * C - k₁ * E * S
-       D(P) ~ k₂ * C
-       E₀ ~ E + C]
+eqs = [
+    D(E) ~ k₋₁ * C - k₁ * E * S
+    D(C) ~ k₁ * E * S - k₋₁ * C - k₂ * C
+    D(S) ~ k₋₁ * C - k₁ * E * S
+    D(P) ~ k₂ * C
+    E₀ ~ E + C
+]
 
 @named sys = System(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
 @test_throws ModelingToolkit.StateSelection.ExtraEquationsSystemException mtkcompile(sys)
@@ -194,25 +231,29 @@ eqs = [D(E) ~ k₋₁ * C - k₁ * E * S
 # Example 5 from Pantelides' original paper
 params = collect(@parameters y1 y2)
 sts = collect(@variables x(t) u1(t) u2(t))
-eqs = [0 ~ x + sin(u1 + u2)
-       D(x) ~ x + y1
-       cos(x) ~ sin(y2)]
+eqs = [
+    0 ~ x + sin(u1 + u2)
+    D(x) ~ x + y1
+    cos(x) ~ sin(y2)
+]
 @named sys = System(eqs, t, sts, params)
 @test_throws ModelingToolkit.StateSelection.InvalidSystemException mtkcompile(sys)
 
 # issue #963
 @variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)
 
-eq = [v47 ~ v1
-      v47 ~ sin(10t)
-      v57 ~ v1 - v2
-      v57 ~ 10.0i64
-      v66 ~ v2
-      v66 ~ 5.0i74
-      v25 ~ v2
-      i75 ~ 0.005 * D(v25)
-      0 ~ i74 + i75 - i64
-      0 ~ i64 + i71]
+eq = [
+    v47 ~ v1
+    v47 ~ sin(10t)
+    v57 ~ v1 - v2
+    v57 ~ 10.0i64
+    v66 ~ v2
+    v66 ~ 5.0i74
+    v25 ~ v2
+    i75 ~ 0.005 * D(v25)
+    0 ~ i74 + i75 - i64
+    0 ~ i64 + i71
+]
 
 @named sys0 = System(eq, t)
 sys = mtkcompile(sys0)
@@ -227,10 +268,12 @@ dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
 @parameters σ ρ β
 @variables x(t) y(t) z(t) [input = true] a(t) u(t) F(t)
 
-eqs = [D(x) ~ σ * (y - x)
-       D(y) ~ x * (ρ - z) - y + β
-       0 ~ a + z
-       u ~ z + a]
+eqs = [
+    D(x) ~ σ * (y - x)
+    D(y) ~ x * (ρ - z) - y + β
+    0 ~ a + z
+    u ~ z + a
+]
 
 lorenz1 = System(eqs, t, name = :lorenz1)
 lorenz1_reduced = mtkcompile(lorenz1, inputs = [z], outputs = [])
@@ -238,9 +281,11 @@ lorenz1_reduced = mtkcompile(lorenz1, inputs = [z], outputs = [])
 
 # #2064
 vars = @variables x(t) y(t) z(t)
-eqs = [D(x) ~ x
-       D(y) ~ y
-       D(z) ~ t]
+eqs = [
+    D(x) ~ x
+    D(y) ~ y
+    D(z) ~ t
+]
 @named model = System(eqs, t)
 sys = mtkcompile(model)
 Js = ModelingToolkit.jacobian_sparsity(sys)
@@ -249,37 +294,55 @@ Js = ModelingToolkit.jacobian_sparsity(sys)
 
 # MWE for #1722
 vars = @variables a(t) w(t) phi(t)
-eqs = [a ~ D(w)
-       w ~ D(phi)
-       w ~ sin(t)]
+eqs = [
+    a ~ D(w)
+    w ~ D(phi)
+    w ~ sin(t)
+]
 @named sys = System(eqs, t, vars, [])
 ss = alias_elimination(sys)
 @test isempty(observed(ss))
 
 @variables x(t) y(t)
-@named sys = System([D(x) ~ 1 - x,
-        D(y) + D(x) ~ 0], t)
+@named sys = System(
+    [
+        D(x) ~ 1 - x,
+        D(y) + D(x) ~ 0,
+    ], t
+)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-@named sys = System([D(x) ~ x,
-        D(y) + D(x) ~ 0], t)
+@named sys = System(
+    [
+        D(x) ~ x,
+        D(y) + D(x) ~ 0,
+    ], t
+)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-@named sys = System([D(x) ~ 1 - x,
-        y + D(x) ~ 0], t)
+@named sys = System(
+    [
+        D(x) ~ 1 - x,
+        y + D(x) ~ 0,
+    ], t
+)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-eqs = [x ~ 0
-       D(x) ~ x + y]
+eqs = [
+    x ~ 0
+    D(x) ~ x + y
+]
 @named sys = System(eqs, t, [x, y], [])
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
-@test sort(string.(observed(ss))) == ["x(t) ~ 0"
-                                      "xˍt(t) ~ 0"
-                                      "y(t) ~ xˍt(t) - x(t)"]
+@test sort(string.(observed(ss))) == [
+    "x(t) ~ 0"
+    "xˍt(t) ~ 0"
+    "y(t) ~ xˍt(t) - x(t)"
+]
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])

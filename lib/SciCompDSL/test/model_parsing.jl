@@ -1,8 +1,8 @@
 using ModelingToolkitBase, Symbolics, Test
 using ModelingToolkitBase: get_connector_type, get_initial_conditions, get_gui_metadata,
-                       get_systems, get_ps, getdefault, getname, readable_code,
-                       scalarize, symtype, VariableDescription, RegularConnector,
-                       get_unit, value
+    get_systems, get_ps, getdefault, getname, readable_code,
+    scalarize, symtype, VariableDescription, RegularConnector,
+    get_unit, value
 using SymbolicIndexingInterface
 using URIs: URI
 using Distributions
@@ -14,26 +14,26 @@ ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
 module MyMockModule
-using ModelingToolkitBase, DynamicQuantities, SciCompDSL
-using ModelingToolkitBase: t, D
+    using ModelingToolkitBase, DynamicQuantities, SciCompDSL
+    using ModelingToolkitBase: t, D
 
-export Pin
-@connector Pin begin
-    v(t), [unit = u"V"]                    # Potential at the pin [V]
-    i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
-    @icon "pin.png"
-end
+    export Pin
+    @connector Pin begin
+        v(t), [unit = u"V"]                    # Potential at the pin [V]
+        i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
+        @icon "pin.png"
+    end
 
-ground_logo = read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
-@mtkmodel Ground begin
-    @components begin
-        g = Pin()
+    ground_logo = read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    @mtkmodel Ground begin
+        @components begin
+            g = Pin()
+        end
+        @icon ground_logo
+        @equations begin
+            g.v ~ 0
+        end
     end
-    @icon ground_logo
-    @equations begin
-        g.v ~ 0
-    end
-end
 end
 
 using .MyMockModule
@@ -86,19 +86,19 @@ end
         R, [unit = u"Ω"]
     end
     @icon """<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
-<path d="M10 15
-l15 0
-l2.5 -5
-l5 10
-l5 -10
-l5 10
-l5 -10
-l5 10
-l2.5 -5
-l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
-</svg>
-"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
+    <path d="M10 15
+    l15 0
+    l2.5 -5
+    l5 10
+    l5 -10
+    l5 10
+    l5 -10
+    l5 10
+    l2.5 -5
+    l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
+    </svg>
+    """
     @equations begin
         v ~ i * R
     end
@@ -154,7 +154,7 @@ C_val = 20u"F"
 R_val = 20u"Ω"
 res__R = 100u"Ω"
 @mtkcompile rc = RC(; C_val, R_val, resistor.R = res__R)
-prob = ODEProblem(rc, [], (0, 1e9))
+prob = ODEProblem(rc, [], (0, 1.0e9))
 sol = solve(prob)
 defs = ModelingToolkitBase.initial_conditions(rc)
 @test sol[rc.capacitor.v][end] ≈ value(defs[rc.constant.k])
@@ -169,21 +169,21 @@ resistor = getproperty(rc, :resistor; namespace = false)
 @test getdefault(rc.capacitor.C) * get_unit(rc.capacitor.C) == C_val
 # Test that `k`'s default value is unchanged.
 @test getdefault(rc.constant.k) * get_unit(rc.constant.k) ==
-      eval(RC.structure[:kwargs][:k_val][:value])
+    eval(RC.structure[:kwargs][:k_val][:value])
 @test getdefault(rc.capacitor.v) == 0.0
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
-      read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
+    read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
 @test get_gui_metadata(rc.ground).layout ==
-      read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @test get_gui_metadata(rc.capacitor).layout ==
-      URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
+    URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
 @test OnePort.structure[:icon] ==
-      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "oneport.png"))
+    URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "oneport.png"))
 @test ModelingToolkitBase.get_gui_metadata(rc.resistor.p).layout == Pin.structure[:icon] ==
-      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
+    URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
 
-@test length(equations(rc)) == 1 broken=!@isdefined(ModelingToolkit)
+@test length(equations(rc)) == 1 broken = !@isdefined(ModelingToolkit)
 
 @testset "Constants" begin
     @mtkmodel PiModel begin
@@ -290,12 +290,12 @@ end
         @parameters begin
             (l(t)[1:2, 1:3] = ones(2, 3)), [description = "l is more than 1D"]
             (l2(t)[1:N, 1:M] = 2ones(N, M)),
-            [description = "l is more than 1D, with arbitrary length"]
+                [description = "l is more than 1D, with arbitrary length"]
             (l3(t)[1:3] = 3ones(3)), [description = "l2 is 1D"]
             (l4(t)[1:N] = 4ones(N)), [description = "l2 is 1D, with arbitrary length"]
             (l5(t)[1:3]::Int = 5ones(Int, 3)), [description = "l3 is 1D and has a type"]
             (l6(t)[1:N]::Int = 6ones(Int, N)),
-            [description = "l3 is 1D and has a type, with arbitrary length"]
+                [description = "l3 is 1D and has a type, with arbitrary length"]
         end
     end
 
@@ -322,7 +322,7 @@ end
             par0::Bool = true
             par1::Int = 1
             par2(t)::Int,
-            [description = "Enforced `par4` to be an Int by setting the type to the keyword-arg."]
+                [description = "Enforced `par4` to be an Int by setting the type to the keyword-arg."]
             par3(t)::BigFloat = 1.0
             par4(t)::Float64 = 1 # converts 1 to 1.0 of Float64 type
             par5[1:3]::BigFloat
@@ -411,15 +411,19 @@ end
 end
 
 @testset "Metadata in variables" begin
-    metadata = Dict(:description => "Variable to test metadata in the Model.structure",
+    metadata = Dict(
+        :description => "Variable to test metadata in the Model.structure",
         :input => true, :bounds => :((-1, 1)), :connection_type => :Flow,
-        :tunable => false, :disturbance => true, :dist => :(Normal(1, 1)))
+        :tunable => false, :disturbance => true, :dist => :(Normal(1, 1))
+    )
 
     @connector MockMeta begin
         m(t),
-        [description = "Variable to test metadata in the Model.structure",
-            input = true, bounds = (-1, 1), connect = Flow,
-            tunable = false, disturbance = true, dist = Normal(1, 1)]
+            [
+                description = "Variable to test metadata in the Model.structure",
+                input = true, bounds = (-1, 1), connect = Flow,
+                tunable = false, disturbance = true, dist = Normal(1, 1),
+            ]
     end
 
     for (k, v) in metadata
@@ -463,7 +467,8 @@ end
     @test A.structure[:equations] == ["e ~ 0"]
     @test A.structure[:kwargs] == Dict{Symbol, Dict}(
         :p => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real),
-        :v => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real))
+        :v => Dict{Symbol, Union{Nothing, DataType}}(:value => nothing, :type => Real)
+    )
     @test A.structure[:components] == [[:cc, :C]]
 end
 
@@ -501,24 +506,24 @@ end
 # Ensure that modules consisting MTKModels with component arrays and icons of
 # `Expr` type and `unit` metadata can be precompiled.
 module PrecompilationTest
-push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
-using DynamicQuantities, Test, ModelParsingPrecompile, ModelingToolkitBase
-using ModelingToolkitBase: getdefault, scalarize
-@testset "Precompile packages with MTKModels" begin
-    using ModelParsingPrecompile: ModelWithComponentArray
+    push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+    using DynamicQuantities, Test, ModelParsingPrecompile, ModelingToolkitBase
+    using ModelingToolkitBase: getdefault, scalarize
+    @testset "Precompile packages with MTKModels" begin
+        using ModelParsingPrecompile: ModelWithComponentArray
 
-    @named model_with_component_array = ModelWithComponentArray()
+        @named model_with_component_array = ModelWithComponentArray()
 
-    @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
-          eval(u"Ω")
-    @test lastindex(parameters(model_with_component_array)) == 4
+        @test eval(ModelWithComponentArray.structure[:parameters][:r][:unit]) ==
+            eval(u"Ω")
+        @test lastindex(parameters(model_with_component_array)) == 4
 
-    # Test the constant `k`. Manually k's value should be kept in sync here
-    # and the ModelParsingPrecompile.
-    @test all(getdefault.(getdefault.(scalarize(model_with_component_array.r))) .== 1)
+        # Test the constant `k`. Manually k's value should be kept in sync here
+        # and the ModelParsingPrecompile.
+        @test all(getdefault.(getdefault.(scalarize(model_with_component_array.r))) .== 1)
 
-    pop!(LOAD_PATH)
-end
+        pop!(LOAD_PATH)
+    end
 end
 
 @testset "Conditional statements inside the blocks" begin
@@ -582,21 +587,27 @@ end
     @test nameof.(get_systems(elseif_in_sys)) == [:elseif_sys, :default_sys]
     @test nameof.(get_systems(else_in_sys)) == [:else_sys, :default_sys]
 
-    @test all([
-        if_in_sys.eq ~ 0,
-        if_in_sys.eq ~ 1,
-        if_in_sys.eq ~ 4
-    ] .∈ [equations(if_in_sys)])
-    @test all([
-        elseif_in_sys.eq ~ 0,
-        elseif_in_sys.eq ~ 2,
-        elseif_in_sys.eq ~ 5
-    ] .∈ [equations(elseif_in_sys)])
-    @test all([
-        else_in_sys.eq ~ 0,
-        else_in_sys.eq ~ 3,
-        else_in_sys.eq ~ 5
-    ] .∈ [equations(else_in_sys)])
+    @test all(
+        [
+            if_in_sys.eq ~ 0,
+            if_in_sys.eq ~ 1,
+            if_in_sys.eq ~ 4,
+        ] .∈ [equations(if_in_sys)]
+    )
+    @test all(
+        [
+            elseif_in_sys.eq ~ 0,
+            elseif_in_sys.eq ~ 2,
+            elseif_in_sys.eq ~ 5,
+        ] .∈ [equations(elseif_in_sys)]
+    )
+    @test all(
+        [
+            else_in_sys.eq ~ 0,
+            else_in_sys.eq ~ 3,
+            else_in_sys.eq ~ 5,
+        ] .∈ [equations(else_in_sys)]
+    )
 
     @test getdefault(if_in_sys.eq) == 1
     @test getdefault(elseif_in_sys.eq) == 0
@@ -675,38 +686,44 @@ end
     @test nameof.(get_systems(elseif_out_sys)) == [:elseif_sys, :default_sys]
     @test nameof.(get_systems(else_out_sys)) == [:else_sys, :default_sys]
 
-    @test Equation[if_out_sys.if_parameter ~ 0
-                   if_out_sys.default_parameter ~ 0] == equations(if_out_sys)
-    @test Equation[elseif_out_sys.elseif_parameter ~ 0
-                   elseif_out_sys.default_parameter ~ 0] == equations(elseif_out_sys)
-    @test Equation[else_out_sys.else_parameter ~ 0
-                   else_out_sys.default_parameter ~ 0] == equations(else_out_sys)
+    @test Equation[
+        if_out_sys.if_parameter ~ 0
+        if_out_sys.default_parameter ~ 0
+    ] == equations(if_out_sys)
+    @test Equation[
+        elseif_out_sys.elseif_parameter ~ 0
+        elseif_out_sys.default_parameter ~ 0
+    ] == equations(elseif_out_sys)
+    @test Equation[
+        else_out_sys.else_parameter ~ 0
+        else_out_sys.default_parameter ~ 0
+    ] == equations(else_out_sys)
 
     @mtkmodel TernaryBranchingOutsideTheBlock begin
         @structural_parameters begin
             condition = true
         end
         condition ? begin
-            @parameters begin
-                ternary_parameter_true
+                @parameters begin
+                    ternary_parameter_true
+                end
+                @equations begin
+                    ternary_parameter_true ~ 0
+                end
+                @components begin
+                    ternary_sys_true = C()
+                end
+            end : begin
+                @parameters begin
+                    ternary_parameter_false
+                end
+                @equations begin
+                    ternary_parameter_false ~ 0
+                end
+                @components begin
+                    ternary_sys_false = C()
+                end
             end
-            @equations begin
-                ternary_parameter_true ~ 0
-            end
-            @components begin
-                ternary_sys_true = C()
-            end
-        end : begin
-            @parameters begin
-                ternary_parameter_false
-            end
-            @equations begin
-                ternary_parameter_false ~ 0
-            end
-            @components begin
-                ternary_sys_false = C()
-            end
-        end
     end
 
     @named ternary_true = TernaryBranchingOutsideTheBlock()
@@ -767,7 +784,7 @@ end
         :comprehension_2,
         :written_out_for_1,
         :written_out_for_2,
-        :single_sub_component
+        :single_sub_component,
     ]
 
     @test getdefault(component.comprehension_1.sc) == 1
@@ -795,12 +812,14 @@ end
 
     @named elseif_component = ConditionalComponent(; N = 3)
     @test nameof.(get_systems(elseif_component)) ==
-          [:elseif_comprehension_1, :elseif_comprehension_2, :elseif_comprehension_3]
+        [:elseif_comprehension_1, :elseif_comprehension_2, :elseif_comprehension_3]
 
     @named else_component = ConditionalComponent(; N = 4)
     @test nameof.(get_systems(else_component)) ==
-          [:else_comprehension_1, :else_comprehension_2,
-        :else_comprehension_3, :else_comprehension_4]
+        [
+        :else_comprehension_1, :else_comprehension_2,
+        :else_comprehension_3, :else_comprehension_4,
+    ]
 end
 
 @testset "Parent module of Models" begin
@@ -893,24 +912,32 @@ end
 
 @testset "Duplicate names" begin
     mod = @__MODULE__
-    @test_throws ErrorException SciCompDSL._model_macro(mod, :ATest,
-        :(begin
-            @variables begin
-                a(t)
-                a(t)
+    @test_throws ErrorException SciCompDSL._model_macro(
+        mod, :ATest,
+        :(
+            begin
+                @variables begin
+                    a(t)
+                    a(t)
+                end
             end
-        end),
-        false)
-    @test_throws ErrorException SciCompDSL._model_macro(mod, :ATest,
-        :(begin
-            @variables begin
-                a(t)
+        ),
+        false
+    )
+    @test_throws ErrorException SciCompDSL._model_macro(
+        mod, :ATest,
+        :(
+            begin
+                @variables begin
+                    a(t)
+                end
+                @parameters begin
+                    a
+                end
             end
-            @parameters begin
-                a
-            end
-        end),
-        false)
+        ),
+        false
+    )
 end
 
 @mtkmodel BaseSys begin
@@ -1068,16 +1095,16 @@ end
             MyBool => false
             NewInt => 1
         end
-        
+
         @parameters begin
             k = 1.0
         end
-        
+
         @variables begin
             x(t)
             y(t)
         end
-        
+
         @equations begin
             D(x) ~ -k * x
             y ~ x
@@ -1094,7 +1121,7 @@ end
 end
 
 @testset "Pass parameters of higher level models as structural parameters" begin
-    let D=ModelingToolkitBase.D_nounits, t=ModelingToolkitBase.t_nounits
+    let D = ModelingToolkitBase.D_nounits, t = ModelingToolkitBase.t_nounits
         """
             ╭─────────╮
         in  │    K    │ out
@@ -1108,11 +1135,11 @@ end
                 T # Time constant
             end
             @variables begin
-                in(t), [description="Input signal", input=true]
-                out(t), [description="Output signal", output=true]
+                in(t), [description = "Input signal", input = true]
+                out(t), [description = "Output signal", output = true]
             end
             @equations begin
-                T * D(out) ~ K*in - out
+                T * D(out) ~ K * in - out
             end
         end
 
@@ -1128,18 +1155,18 @@ end
         """
         @mtkmodel DoubleLag begin
             @parameters begin
-                K1, [description="Proportional gain 1"]
-                T1, [description="Time constant 1"]
-                K2, [description="Proportional gain 2"]
-                T2, [description="Time constant 2"]
+                K1, [description = "Proportional gain 1"]
+                T1, [description = "Time constant 1"]
+                K2, [description = "Proportional gain 2"]
+                T2, [description = "Time constant 2"]
             end
             @components begin
                 lag1 = SimpleLag(K = K1, T = T1)
                 lag2 = SimpleLag(K = K2, T = T2)
             end
             @variables begin
-                in(t), [description="Input signal", input=true]
-                out(t), [description="Output signal", output=true]
+                in(t), [description = "Input signal", input = true]
+                out(t), [description = "Output signal", output = true]
             end
             @equations begin
                 in ~ lag1.in
@@ -1178,8 +1205,8 @@ end
 
             # check du values
             K1, K2, T1, T2 = 1, 2, 0.1, 0.2
-            @test du[lag1idx] ≈ (K1*1.0 - u[lag1idx]) / T1
-            @test du[lag2idx] ≈ (K2*u[lag1idx] - u[lag2idx]) / T2
+            @test du[lag1idx] ≈ (K1 * 1.0 - u[lag1idx]) / T1
+            @test du[lag2idx] ≈ (K2 * u[lag1idx] - u[lag2idx]) / T2
         end
     end
 end

@@ -18,10 +18,12 @@ GlobalScope(e.val)
 ie = ParentScope(1 / e)
 @test getmetadata(arguments(value(ie))[2], SymScope) === ParentScope(LocalScope())
 
-eqs = [0 ~ a
-       0 ~ b
-       0 ~ c
-       0 ~ d]
+eqs = [
+    0 ~ a
+    0 ~ b
+    0 ~ c
+    0 ~ d
+]
 @named sub4 = System(eqs, [a, b, c, d], [])
 @named sub3 = System(eqs, [a, b, c, d], [])
 @named sub2 = System(Equation[], [], [], systems = [sub3, sub4])
@@ -37,13 +39,18 @@ names = ModelingToolkitBase.getname.(unknowns(sys))
 
 @named foo = System(eqs, [a, b, c, d], [])
 @named bar = System(eqs, [a, b, c, d], [])
-@test ModelingToolkitBase.getname(ModelingToolkitBase.namespace_expr(
-    ModelingToolkitBase.namespace_expr(b,
-        foo),
-    bar)) == Symbol("bar₊b")
+@test ModelingToolkitBase.getname(
+    ModelingToolkitBase.namespace_expr(
+        ModelingToolkitBase.namespace_expr(
+            b,
+            foo
+        ),
+        bar
+    )
+) == Symbol("bar₊b")
 
 function renamed(nss, sym)
-    ModelingToolkitBase.getname(foldr(ModelingToolkitBase.renamespace, nss, init = sym))
+    return ModelingToolkitBase.getname(foldr(ModelingToolkitBase.renamespace, nss, init = sym))
 end
 
 @test renamed([:foo :bar :baz], a) == Symbol("foo₊bar₊baz₊a")
@@ -52,10 +59,12 @@ end
 @test renamed([:foo :bar :baz], d) == :d
 
 @parameters a b c d
-p = [a
-     ParentScope(b)
-     ParentScope(ParentScope(c))
-     GlobalScope(d)]
+p = [
+    a
+    ParentScope(b)
+    ParentScope(ParentScope(c))
+    GlobalScope(d)
+]
 
 level0 = System(Equation[], t, [], p; name = :level0)
 level1 = System(Equation[], t, [], []; name = :level1) ∘ level0

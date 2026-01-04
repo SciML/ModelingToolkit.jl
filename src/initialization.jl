@@ -1,8 +1,10 @@
 MTKBase.singular_check(ts::TearingState) = StateSelection.singular_check(ts)
 
-function MTKBase.get_initialization_problem_type(sys::System, isys::System;
-                                                 warn_initialize_determined = true,
-                                                 use_scc = true, kwargs...)
+function MTKBase.get_initialization_problem_type(
+        sys::System, isys::System;
+        warn_initialize_determined = true,
+        use_scc = true, kwargs...
+    )
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
     ts = get_tearing_state(isys)::TearingState
@@ -24,7 +26,7 @@ function MTKBase.get_initialization_problem_type(sys::System, isys::System;
     end
 
     unassigned_vars = MTKBase.singular_check(ts)
-    if neqs == nunknown && isempty(unassigned_vars)
+    return if neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
             if is_split(isys)
                 SCCNonlinearProblem

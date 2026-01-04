@@ -1,5 +1,5 @@
 function contains_variable(x, wrt)
-    any(y -> SU.query(isequal(y), x), wrt)
+    return any(y -> SU.query(isequal(y), x), wrt)
 end
 
 """
@@ -25,7 +25,7 @@ EnumX.@enumx NonPolynomialReason begin
 end
 
 function display_reason(reason::NonPolynomialReason.T, sym)
-    if reason == NonPolynomialReason.NonIntegerExponent
+    return if reason == NonPolynomialReason.NonIntegerExponent
         pow = arguments(sym)[2]
         "In $sym: Exponent $pow is not an integer"
     elseif reason == NonPolynomialReason.ExponentContainsUnknowns
@@ -76,8 +76,10 @@ struct MultivarTerm <: PolynomialTransformationError
 end
 
 function Base.showerror(io::IO, err::MultivarTerm)
-    println(io,
-        "Cannot convert system to polynomial: Found term $(err.term) which is a function of multiple unknowns $(err.vars).")
+    return println(
+        io,
+        "Cannot convert system to polynomial: Found term $(err.term) which is a function of multiple unknowns $(err.vars)."
+    )
 end
 
 struct MultipleTermsOfSameVar <: PolynomialTransformationError
@@ -86,8 +88,10 @@ struct MultipleTermsOfSameVar <: PolynomialTransformationError
 end
 
 function Base.showerror(io::IO, err::MultipleTermsOfSameVar)
-    println(io,
-        "Cannot convert system to polynomial: Found multiple non-polynomial terms $(err.terms) involving the same unknown $(err.var).")
+    return println(
+        io,
+        "Cannot convert system to polynomial: Found multiple non-polynomial terms $(err.terms) involving the same unknown $(err.var)."
+    )
 end
 
 struct SymbolicSolveFailure <: PolynomialTransformationError
@@ -96,15 +100,19 @@ struct SymbolicSolveFailure <: PolynomialTransformationError
 end
 
 function Base.showerror(io::IO, err::SymbolicSolveFailure)
-    println(io,
-        "Cannot convert system to polynomial: Unable to symbolically solve $(err.term) for $(err.var).")
+    return println(
+        io,
+        "Cannot convert system to polynomial: Unable to symbolically solve $(err.term) for $(err.var)."
+    )
 end
 
 struct NemoNotLoaded <: PolynomialTransformationError end
 
 function Base.showerror(io::IO, err::NemoNotLoaded)
-    println(io,
-        "ModelingToolkitBase may be able to solve this system as a polynomial system if `Nemo` is loaded. Run `import Nemo` and try again.")
+    return println(
+        io,
+        "ModelingToolkitBase may be able to solve this system as a polynomial system if `Nemo` is loaded. Run `import Nemo` and try again."
+    )
 end
 
 struct VariablesAsPolyAndNonPoly <: PolynomialTransformationError
@@ -112,8 +120,10 @@ struct VariablesAsPolyAndNonPoly <: PolynomialTransformationError
 end
 
 function Base.showerror(io::IO, err::VariablesAsPolyAndNonPoly)
-    println(io,
-        "Cannot convert convert system to polynomial: Variables $(err.vars) occur in both polynomial and non-polynomial terms in the system.")
+    return println(
+        io,
+        "Cannot convert convert system to polynomial: Variables $(err.vars) occur in both polynomial and non-polynomial terms in the system."
+    )
 end
 
 struct NotPolynomialError <: Exception
@@ -130,17 +140,20 @@ function Base.showerror(io::IO, err::NotPolynomialError)
         if isempty(data.non_polynomial_terms)
             continue
         end
-        println(io,
-            "Equation $(eq) is not a polynomial in the unknowns for the following reasons:")
+        println(
+            io,
+            "Equation $(eq) is not a polynomial in the unknowns for the following reasons:"
+        )
         for (term, reason) in zip(data.non_polynomial_terms, data.reasons)
             println(io, display_reason(reason, term))
         end
     end
+    return
 end
 
 function is_polynomial!(data, y, wrt)
     process_polynomial!(data, y, wrt)
-    isempty(data.reasons)
+    return isempty(data.reasons)
 end
 
 """
@@ -259,7 +272,8 @@ function PolynomialTransformation(sys::System)
     # (maybe use the threaded version?) and `expand` can blow up expression size.
     # Could metatheory help?
     all_non_poly_terms = mapreduce(
-        d -> d.non_polynomial_terms, vcat, polydata; init = BasicSymbolic[])
+        d -> d.non_polynomial_terms, vcat, polydata; init = BasicSymbolic[]
+    )
     unique!(all_non_poly_terms)
 
     # each variable can only be replaced by one non-polynomial expression involving
@@ -287,7 +301,8 @@ function PolynomialTransformation(sys::System)
         new_var = gensym(Symbol(var))
         new_var = unwrap(only(@variables $new_var))
         invterm = Symbolics.ia_solve(
-            t - new_var, var; complex_roots = false, periodic_roots = false, warns = false)
+            t - new_var, var; complex_roots = false, periodic_roots = false, warns = false
+        )
         # if we can't invert it, quit
         if invterm === nothing || isempty(invterm)
             transformation_err = SymbolicSolveFailure(t, var)
@@ -353,8 +368,10 @@ Transform the system `sys` with `transformation` and return a
 `PolynomialTransformationResult`, or a `NotPolynomialError` if the system cannot
 be transformed.
 """
-function transform_system(sys::System, transformation::PolynomialTransformation;
-        fraction_cancel_fn = simplify_fractions)
+function transform_system(
+        sys::System, transformation::PolynomialTransformation;
+        fraction_cancel_fn = simplify_fractions
+    )
     subrules = transformation.substitution_rules
     dvs = unknowns(sys)
     eqs = full_equations(sys)
@@ -373,7 +390,8 @@ function transform_system(sys::System, transformation::PolynomialTransformation;
         end
         if any(poly_and_nonpoly)
             return NotPolynomialError(
-                VariablesAsPolyAndNonPoly(dvs[poly_and_nonpoly]), eqs, polydata)
+                VariablesAsPolyAndNonPoly(dvs[poly_and_nonpoly]), eqs, polydata
+            )
         end
         num, den = handle_rational_polynomials(t, new_dvs; fraction_cancel_fn)
         # make factors different elements, otherwise the nonzero factors artificially
@@ -475,7 +493,8 @@ end
 @fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::System; eval_expression = false, eval_module = @__MODULE__,
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
-        kwargs...) where {iip, specialize}
+        kwargs...
+    ) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationFunction`")
     end
@@ -498,7 +517,8 @@ end
     # but the `sys` inside for symbolic indexing should be the non-polynomial system
     fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, cse, kwargs...)
     obsfn = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse)
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse
+    )
     fn = remake(fn; sys = sys, observed = obsfn)
 
     denominator = build_explicit_observed_function(sys2, denoms)
@@ -509,43 +529,50 @@ end
     polynomialize = build_explicit_observed_function(sys, polynomialize_terms)
 
     return HomotopyNonlinearFunction{iip, specialize}(
-        fn; polynomialize, unpolynomialize, denominator)
+        fn; polynomialize, unpolynomialize, denominator
+    )
 end
 
 struct HomotopyContinuationProblem{iip, specialization} end
 
 @doc problem_docstring(
-    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false) HomotopyContinuationProblem
+    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false
+) HomotopyContinuationProblem
 
 function HomotopyContinuationProblem(sys::System, args...; kwargs...)
-    HomotopyContinuationProblem{true}(sys, args...; kwargs...)
+    return HomotopyContinuationProblem{true}(sys, args...; kwargs...)
 end
 
-function HomotopyContinuationProblem(sys::System, t,
+function HomotopyContinuationProblem(
+        sys::System, t,
         u0map::StaticArray,
         args...;
-        kwargs...)
-    HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(
-        sys, t, u0map, args...; kwargs...)
+        kwargs...
+    )
+    return HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(
+        sys, t, u0map, args...; kwargs...
+    )
 end
 
 function HomotopyContinuationProblem{true}(sys::System, args...; kwargs...)
-    HomotopyContinuationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+    return HomotopyContinuationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
 function HomotopyContinuationProblem{false}(sys::System, args...; kwargs...)
-    HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+    return HomotopyContinuationProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
 function HomotopyContinuationProblem{iip, spec}(
         sys::System, op;
-        kwargs...) where {iip, spec}
+        kwargs...
+    ) where {iip, spec}
     if !iscomplete(sys)
         error("A completed `System` is required. Call `complete` or `mtkcompile` on the system before creating a `HomotopyContinuationProblem`")
     end
     f, u0,
-    p = process_SciMLProblem(
-        HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...)
+        p = process_SciMLProblem(
+        HomotopyNonlinearFunction{iip, spec}, sys, op; kwargs...
+    )
 
     kwargs = filter_kwargs(kwargs)
     return NonlinearProblem{iip}(f, u0, p; kwargs...)

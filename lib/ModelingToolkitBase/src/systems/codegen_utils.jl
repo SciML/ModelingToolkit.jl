@@ -59,7 +59,8 @@ function array_variable_assignments(args...; argument_name = generated_argument_
             isarr || continue
             # get and/or construct the buffer storing indexes
             idxbuffer = get!(
-                () -> map(Returns((0, 0)), SU.stable_eachindex(arrvar)), var_to_arridxs, arrvar)
+                () -> map(Returns((0, 0)), SU.stable_eachindex(arrvar)), var_to_arridxs, arrvar
+            )
             idxbuffer[SU.as_linear_idx(SU.shape(arrvar), get_stable_index(var))] = (i, j)
         end
     end
@@ -86,16 +87,20 @@ function array_variable_assignments(args...; argument_name = generated_argument_
             end
             # view and reshape
 
-            expr = term(reshape, term(view, argument_name(buffer_idx), idxs),
-                size(arrvar))
+            expr = term(
+                reshape, term(view, argument_name(buffer_idx), idxs),
+                size(arrvar)
+            )
         else
             elems = map(idxs) do idx
                 i, j = idx
                 term(getindex, argument_name(i), j; type = Real, shape = SU.ShapeVecT())
             end
             # use `MakeArray` syntax and generate a stack-allocated array
-            expr = term(SymbolicUtils.Code.create_array, SArray, nothing,
-                Val(ndims(arrvar)), Val(length(arrvar)), elems...)
+            expr = term(
+                SymbolicUtils.Code.create_array, SArray, nothing,
+                Val(ndims(arrvar)), Val(length(arrvar)), elems...
+            )
         end
         if any(x -> !isone(first(x)), axes(arrvar))
             expr = term(Origin(first.(axes(arrvar))...), expr)
@@ -153,19 +158,23 @@ Turn delayed unknowns in `eqs` into calls to `DDE_HISTORY_FUNCTION`.
 - `histfn`: The history function to use for codegen, called as `histfn(p, t)`
 """
 function delay_to_function(
-        sys::AbstractSystem, eqs = full_equations(sys); param_arg = MTKPARAMETERS_ARG, histfn = DDE_HISTORY_FUN)
-    delay_to_function(eqs,
+        sys::AbstractSystem, eqs = full_equations(sys); param_arg = MTKPARAMETERS_ARG, histfn = DDE_HISTORY_FUN
+    )
+    return delay_to_function(
+        eqs,
         get_iv(sys),
         Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(unknowns(sys))),
         parameters(sys),
-        histfn; param_arg)
+        histfn; param_arg
+    )
 end
 function delay_to_function(eqs::Vector, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
-    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); param_arg)
+    return delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,); param_arg)
 end
 function delay_to_function(eq::Equation, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
-    delay_to_function(eq.lhs, iv, sts, ps, h; param_arg) ~ delay_to_function(
-        eq.rhs, iv, sts, ps, h; param_arg)
+    return delay_to_function(eq.lhs, iv, sts, ps, h; param_arg) ~ delay_to_function(
+        eq.rhs, iv, sts, ps, h; param_arg
+    )
 end
 function delay_to_function(expr, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
     if isdelay(expr, iv)
@@ -174,17 +183,19 @@ function delay_to_function(expr, iv, sts, ps, h; param_arg = MTKPARAMETERS_ARG)
         idx = sts[v]
         return term(getindex, h(param_arg, time), idx, type = Real)
     elseif iscall(expr)
-        return maketerm(typeof(expr),
+        return maketerm(
+            typeof(expr),
             operation(expr),
             map(x -> delay_to_function(x, iv, sts, ps, h; param_arg), arguments(expr)),
-            metadata(expr))
+            metadata(expr)
+        )
     else
         return expr
     end
 end
 
 function __search_dervars_recurse(x::SymbolicT)
-    iscall(x) && Moshi.Match.@match x begin
+    return iscall(x) && Moshi.Match.@match x begin
         BSImpl.Term(; f) && if f isa Operator end => false
         _ => true
     end
@@ -235,12 +246,14 @@ generated functions, and `args` are the arguments.
 
 All other keyword arguments are forwarded to `build_function`.
 """
-function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
+function build_function_wrapper(
+        sys::AbstractSystem, expr, args...; p_start = 2,
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),
         create_bindings = false, output_type = nothing, mkarray = nothing,
-        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true, kwargs...)
+        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true, kwargs...
+    )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     # filter observed equations
     obs = filter(filter_observed, observed(sys))
@@ -288,7 +301,7 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
     else
         ParameterBindingsGraph(sys)
     end
-    
+
     bound_parameters_used_by!(reqd_bound_pars, sys, expr; bgraph)
     for i in obsidxs
         bound_parameters_used_by!(reqd_bound_pars, sys, obs[i].rhs; bgraph)
@@ -331,9 +344,11 @@ function build_function_wrapper(sys::AbstractSystem, expr, args...; p_start = 2,
             args = (args[1:(p_start - 1)]..., MTKPARAMETERS_ARG, args[(p_end + 1):end]...)
         else
             # cannot apply `create_bindings` here since it doesn't nest
-            args = (args[1:(p_start - 1)]...,
+            args = (
+                args[1:(p_start - 1)]...,
                 DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG),
-                args[(p_end + 1):end]...)
+                args[(p_end + 1):end]...,
+            )
         end
     end
 
@@ -378,19 +393,19 @@ struct GeneratedFunctionWrapper{P, O, I} <: Function
 end
 
 function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
-    GeneratedFunctionWrapper{P, O, I}(foop, fiip)
+    return GeneratedFunctionWrapper{P, O, I}(foop, fiip)
 end
 
 function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
-    :($(GeneratedFunctionWrapper{P})($foop, $fiip))
+    return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
 
 function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; kws...) where {P}
-    GeneratedFunctionWrapper{P}(eval_or_rgf(foop; kws...), eval_or_rgf(fiip; kws...))
+    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; kws...), eval_or_rgf(fiip; kws...))
 end
 
 function (gfw::GeneratedFunctionWrapper)(args...)
-    _generated_call(gfw, args...)
+    return _generated_call(gfw, args...)
 end
 
 @generated function _generated_call(gfw::GeneratedFunctionWrapper{P}, args...) where {P}
@@ -413,7 +428,7 @@ end
         return :($f(args...))
     end
     if args[paramidx] <: Union{Tuple, MTKParameters} &&
-       !(args[paramidx] <: Tuple{Vararg{Number}})
+            !(args[paramidx] <: Tuple{Vararg{Number}})
         # for split systems, call it as-is if the parameter object is a tuple or MTKParameters
         # but not if it is a tuple of numbers
         return :($f(args...))
@@ -436,27 +451,37 @@ basis of `expression` `wrap_gfw`, both of type `Union{Type{Val{true}}, Type{Val{
 function expressions of the form `(oop, iip)` or a single out-of-place function expression.
 Keyword arguments are forwarded to `eval_or_rgf`.
 """
-function maybe_compile_function(expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...)
-    GeneratedFunctionWrapper{gfw_args}(expression, f...; kwargs...)
+function maybe_compile_function(
+        expression, wrap_gfw::Type{Val{true}},
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+    )
+    return GeneratedFunctionWrapper{gfw_args}(expression, f...; kwargs...)
 end
 
-function maybe_compile_function(expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...)
-    eval_or_rgf.(f; kwargs...)
+function maybe_compile_function(
+        expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+    )
+    return eval_or_rgf.(f; kwargs...)
 end
 
-function maybe_compile_function(expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; kwargs...)
+function maybe_compile_function(
+        expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; kwargs...
+    )
     return f
 end
 
-function maybe_compile_function(expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...)
-    GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; kwargs...)
+function maybe_compile_function(
+        expression, wrap_gfw::Type{Val{true}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+    )
+    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; kwargs...)
 end
 
-function maybe_compile_function(expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...)
-    eval_or_rgf(f; kwargs...)
+function maybe_compile_function(
+        expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+    )
+    return eval_or_rgf(f; kwargs...)
 end

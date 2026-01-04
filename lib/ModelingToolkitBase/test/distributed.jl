@@ -9,9 +9,11 @@ addprocs(2)
 @everywhere @parameters σ ρ β
 @everywhere @variables x(t) y(t) z(t)
 
-@everywhere eqs = [D(x) ~ σ * (y - x),
+@everywhere eqs = [
+    D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z,
+]
 
 @everywhere @named de = System(eqs, t)
 @everywhere de = complete(de)

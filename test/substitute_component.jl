@@ -3,7 +3,7 @@ using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 using OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D, renamespace,
-                       NAMESPACE_SEPARATOR as NS
+    NAMESPACE_SEPARATOR as NS
 
 @component function SignalInterface(; name)
     pars = @parameters begin
@@ -40,7 +40,7 @@ end
         connect(signal.output.u, source.V.u),
         connect(source.p, component1.p),
         connect(component1.n, component2.p),
-        connect(component2.n, source.n, ground.g)
+        connect(component2.n, source.n, ground.g),
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -68,7 +68,7 @@ end
         connect(constant.output, source.V),
         connect(source.p, component1.p),
         connect(component1.n, component2.p),
-        connect(component2.n, source.n, ground.g)
+        connect(component2.n, source.n, ground.g),
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -95,7 +95,7 @@ end
 
     sol1 = solve(prob1, Tsit5())
     sol2 = solve(prob2, Tsit5(); saveat = sol1.t)
-    @test sol1.u≈sol2.u atol=1e-8
+    @test sol1.u ≈ sol2.u atol = 1.0e-8
 end
 
 @component function BadOnePort1(; name)
@@ -113,7 +113,7 @@ end
 
     equations = Equation[
         0 ~ p.i + n.i,
-        i ~ p.i
+        i ~ p.i,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -142,7 +142,7 @@ end
 
     equations = Equation[
         0 ~ p.v + n.v,
-        v ~ p.v
+        v ~ p.v,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -172,7 +172,7 @@ end
 
     equations = Equation[
         0 ~ p.v + n.v,
-        v ~ p.v
+        v ~ p.v,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -202,7 +202,7 @@ end
 
     equations = Equation[
         0 ~ p.v + n.v,
-        v ~ p.v
+        v ~ p.v,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -232,7 +232,7 @@ end
 
     equations = Equation[
         0 ~ p.v + n.v,
-        v ~ p.v
+        v ~ p.v,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -271,7 +271,7 @@ end
 
     equations = Equation[
         0 ~ p.v + n.v,
-        v ~ p.v
+        v ~ p.v,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -300,7 +300,7 @@ end
 
     equations = Equation[
         0 ~ p.i + n.i,
-        i ~ p.i
+        i ~ p.i,
     ]
 
     return System(equations, t, vars, pars; name, systems)
@@ -329,14 +329,18 @@ end
     @named component1 = Resistor(R = 1.0)
     @named component2 = Capacitor(C = 1.0, v = 0.0)
     @test_throws ["LHS", "cannot be completed"] substitute_component(
-        templated, complete(templated.component1) => component1)
+        templated, complete(templated.component1) => component1
+    )
     @test_throws ["RHS", "cannot be completed"] substitute_component(
-        templated, templated.component1 => complete(component1))
+        templated, templated.component1 => complete(component1)
+    )
     @test_throws ["RHS", "not be namespaced"] substitute_component(
-        templated, templated.component1 => renamespace(templated, component1))
+        templated, templated.component1 => renamespace(templated, component1)
+    )
     @named resistor = Resistor(R = 1.0)
     @test_throws ["RHS", "same name"] substitute_component(
-        templated, templated.component1 => resistor)
+        templated, templated.component1 => resistor
+    )
 
     @testset "Different indepvar" begin
         @independent_variables tt
@@ -344,38 +348,47 @@ end
         @named outer = System(Equation[], t; systems = [empty])
         @named empty = System(Equation[], tt)
         @test_throws ["independent variable"] substitute_component(
-            outer, outer.empty => empty)
+            outer, outer.empty => empty
+        )
     end
 
     @named component1 = BadOnePort1()
     @test_throws ["RHS", "unknown", "v(t)"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort2()
     @test_throws ["component1$(NS)p", "i(t)"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort3()
     @test_throws ["component1$(NS)p$(NS)i", "Flow"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort4()
     @test_throws ["component1$(NS)p$(NS)v", "differing causality", "input"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort5()
     @test_throws ["component1$(NS)p$(NS)v", "differing causality", "output"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort6()
     @test_throws ["templated$(NS)component1$(NS)p", "not a connector"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort7()
     @test_throws ["templated$(NS)component1$(NS)p", "DomainConnector", "RegularConnector"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 
     @named component1 = BadOnePort8()
     @test_throws ["templated$(NS)component1", "subsystem p"] substitute_component(
-        templated, templated.component1 => component1)
+        templated, templated.component1 => component1
+    )
 end

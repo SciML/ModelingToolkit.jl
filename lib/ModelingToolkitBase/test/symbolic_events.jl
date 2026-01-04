@@ -1,10 +1,10 @@
-using ModelingToolkitBase , OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
-                       SymbolicDiscreteCallback,
-                       t_nounits as t,
-                       D_nounits as D,
-                       affects, affect_negs, system, observed, AffectSystem
+    SymbolicDiscreteCallback,
+    t_nounits as t,
+    D_nounits as D,
+    affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
 
 using StableRNGs
@@ -14,7 +14,7 @@ using Setfield
 rng = StableRNG(12345)
 
 function get_callback(prob)
-    prob.kwargs[:callback]
+    return prob.kwargs[:callback]
 end
 
 @variables x(t) = 0
@@ -87,7 +87,8 @@ affect_neg = [x ~ 1]
 
     # with different root finding ops
     e = SymbolicContinuousCallback(
-        eqs[], affect, affect_neg = affect_neg, rootfind = SciMLBase.LeftRootFind)
+        eqs[], affect, affect_neg = affect_neg, rootfind = SciMLBase.LeftRootFind
+    )
     @test e isa SymbolicContinuousCallback
     @test isequal(equations(e), eqs)
     @test e.rootfind == SciMLBase.LeftRootFind
@@ -177,7 +178,8 @@ end
     @test m.ctx === nothing
 
     m = ModelingToolkitBase.ImperativeAffect(
-        fmfa; modified = (; y = x), observed = (; y = x))
+        fmfa; modified = (; y = x), observed = (; y = x)
+    )
     @test m isa ModelingToolkitBase.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -187,7 +189,8 @@ end
     @test m.ctx === nothing
 
     m = ModelingToolkitBase.ImperativeAffect(
-        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3)
+        fmfa; modified = (; y = x), observed = (; y = x), ctx = 3
+    )
     @test m isa ModelingToolkitBase.ImperativeAffect
     @test m.f == fmfa
     @test isequal(m.obs, [x])
@@ -210,7 +213,7 @@ end
     @named sys = System(eqs, t, continuous_events = [x ~ 1])
     cevt1 = getfield(sys, :continuous_events)[]
     @test getfield(sys, :continuous_events)[] ==
-          SymbolicContinuousCallback(Equation[x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
+        SymbolicContinuousCallback(Equation[x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
     @test isequal(equations(getfield(sys, :continuous_events))[], x ~ 1)
     fsys = flatten(sys)
     @test isequal(equations(getfield(fsys, :continuous_events))[], x ~ 1)
@@ -218,11 +221,13 @@ end
     @named sys2 = System([D(x) ~ 1], t, continuous_events = [x ~ 2], systems = [sys])
     cevt2 = getfield(sys2, :continuous_events)[]
     @test getfield(sys2, :continuous_events)[] ==
-          SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id)
-    @test all(ModelingToolkitBase.continuous_events(sys2) .== [
-        SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id),
-        SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id)
-    ])
+        SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id)
+    @test all(
+        ModelingToolkitBase.continuous_events(sys2) .== [
+            SymbolicContinuousCallback(Equation[x ~ 2], nothing; zero_crossing_id = cevt2.zero_crossing_id),
+            SymbolicContinuousCallback(Equation[sys.x ~ 1], nothing; zero_crossing_id = cevt1.zero_crossing_id),
+        ]
+    )
 
     @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)
     @test length(ModelingToolkitBase.continuous_events(sys2)) == 2
@@ -252,8 +257,8 @@ end
     prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0))
     sol = solve(prob, Tsit5())
     sol_nosplit = solve(prob_nosplit, Tsit5())
-    @test minimum(t -> abs(t - 1), sol.t) < 1e-10 # test that the solver stepped at the root
-    @test minimum(t -> abs(t - 1), sol_nosplit.t) < 1e-10 # test that the solver stepped at the root
+    @test minimum(t -> abs(t - 1), sol.t) < 1.0e-10 # test that the solver stepped at the root
+    @test minimum(t -> abs(t - 1), sol_nosplit.t) < 1.0e-10 # test that the solver stepped at the root
 
     # Test user-provided callback is respected
     test_callback = DiscreteCallback(x -> x, x -> x)
@@ -290,28 +295,31 @@ end
     @test out[2] ≈ 1  # signature is u,p,t
 
     sol = solve(prob, Tsit5())
-    @test minimum(t -> abs(t - 1), sol.t) < 1e-9 # test that the solver stepped at the first root
-    @test minimum(t -> abs(t - 2), sol.t) < 1e-9 # test that the solver stepped at the second root
+    @test minimum(t -> abs(t - 1), sol.t) < 1.0e-9 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1.0e-9 # test that the solver stepped at the second root
 
     @named sys = System(eqs, t, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same unknown
     sys = complete(sys)
     prob = ODEProblem(sys, Pair[], (0.0, 3.0))
     @test get_callback(prob) isa ModelingToolkitBase.DiffEqCallbacks.VectorContinuousCallback
     sol = solve(prob, Tsit5())
-    @test minimum(t -> abs(t - 1), sol.t) < 1e-9 # test that the solver stepped at the first root
-    @test minimum(t -> abs(t - 2), sol.t) < 1e-9 # test that the solver stepped at the second root
+    @test minimum(t -> abs(t - 1), sol.t) < 1.0e-9 # test that the solver stepped at the first root
+    @test minimum(t -> abs(t - 2), sol.t) < 1.0e-9 # test that the solver stepped at the second root
 end
 
 @testset "Bouncing Ball" begin
     ###### 1D Bounce
-    @variables x(t)=1 v(t)=0
+    @variables x(t) = 1 v(t) = 0
 
     root_eqs = [x ~ 0]
     affect = [v ~ -Pre(v)]
 
     @named ball = System(
-        [D(x) ~ v
-         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
+        [
+            D(x) ~ v
+            D(v) ~ -9.8
+        ], t, continuous_events = root_eqs => affect
+    )
 
     cev = only(continuous_events(ball))
     @test isequal(only(equations(cev)), x ~ 0)
@@ -326,19 +334,24 @@ end
     tspan = (0.0, 5.0)
     prob = ODEProblem(ball, Pair[], tspan)
     sol = solve(prob, Tsit5())
-    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
 
     ###### 2D bouncing ball
-    @variables x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
+    @variables x(t) = 1 y(t) = 0 vx(t) = 0 vy(t) = 1
 
-    events = [[x ~ 0] => [vx ~ -Pre(vx)]
-              [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
+    events = [
+        [x ~ 0] => [vx ~ -Pre(vx)]
+        [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]
+    ]
 
     @named ball = System(
-        [D(x) ~ vx
-         D(y) ~ vy
-         D(vx) ~ -9.8
-         D(vy) ~ -0.01vy], t; continuous_events = events)
+        [
+            D(x) ~ vx
+            D(y) ~ vy
+            D(vx) ~ -9.8
+            D(vy) ~ -0.01vy
+        ], t; continuous_events = events
+    )
 
     _ball = ball
     ball = mtkcompile(_ball)
@@ -364,10 +377,10 @@ end
 
     sol = solve(prob, Tsit5())
     sol_nosplit = solve(prob_nosplit, Tsit5())
-    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol[y]) ≈ 1.5  # check wall conditions
-    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol_nosplit[x]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
 
@@ -376,10 +389,13 @@ end
     events = [[x ~ 0] => [vx ~ -Pre(vx), vy ~ -Pre(vy)]]
 
     @named ball = System(
-        [D(x) ~ vx
-         D(y) ~ vy
-         D(vx) ~ -1
-         D(vy) ~ 0], t; continuous_events = events)
+        [
+            D(x) ~ vx
+            D(y) ~ vy
+            D(vx) ~ -1
+            D(vy) ~ 0
+        ], t; continuous_events = events
+    )
 
     ball_nosplit = mtkcompile(ball)
     ball = mtkcompile(ball)
@@ -389,9 +405,9 @@ end
     prob_nosplit = ODEProblem(ball_nosplit, Pair[], tspan)
     sol = solve(prob, Tsit5())
     sol_nosplit = solve(prob_nosplit, Tsit5())
-    @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
-    @test 0 <= minimum(sol_nosplit[x]) <= 1e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol_nosplit[x]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
 end
 
@@ -399,9 +415,11 @@ end
 # tests that it works for ODAESystem
 @testset "ODAESystem" begin
     @variables vs(t) v(t) vmeasured(t)
-    eq = [vs ~ sin(2pi * t)
-          D(v) ~ vs - v
-          D(vmeasured) ~ 0.0]
+    eq = [
+        vs ~ sin(2pi * t)
+        D(v) ~ vs - v
+        D(vmeasured) ~ 0.0
+    ]
     ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ Pre(v)]
     @named sys = System(eq, t, continuous_events = ev)
     sys = mtkcompile(sys)
@@ -420,11 +438,11 @@ end
 
     function Mass(; name, m = 1.0, p = 0, v = 0)
         ps = @parameters m = m
-        sts = @variables pos(t)=p vel(t)=v
+        sts = @variables pos(t) = p vel(t) = v
         eqs = Dₜ(pos) ~ vel
         System(eqs, t, [pos, vel], ps; name)
     end
-    function Spring(; name, k = 1e4)
+    function Spring(; name, k = 1.0e4)
         ps = @parameters k = k
         @variables x(t) = 0 # Spring deflection
         System(Equation[], t, [x], ps; name)
@@ -437,20 +455,26 @@ end
     function SpringDamper(; name, k = false, c = false)
         spring = Spring(; name = :spring, k)
         damper = Damper(; name = :damper, c)
-        compose(System(Equation[], t; name),
-            spring, damper)
+        compose(
+            System(Equation[], t; name),
+            spring, damper
+        )
     end
     connect_sd(
-        sd, m1, m2) = [
-        sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
+        sd, m1, m2
+    ) = [
+        sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel,
+    ]
     sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
     @named mass1 = Mass(; m = 1)
     @named mass2 = Mass(; m = 1)
     @named sd = SpringDamper(; k = 1000, c = 10)
     function Model(u, d = 0)
-        eqs = [connect_sd(sd, mass1, mass2)
-               Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-               Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
+        eqs = [
+            connect_sd(sd, mass1, mass2)
+            Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+            Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m
+        ]
         @named _model = System(eqs, t; observed = [y ~ mass2.pos])
         @named model = compose(_model, mass1, mass2, sd)
     end
@@ -462,12 +486,13 @@ end
 @testset "SDE/ODESystem Discrete Callbacks" begin
     function testsol(
             sys, probtype, solver, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
-            kwargs...)
+            kwargs...
+        )
         prob = probtype(complete(sys), [u0; p], tspan; kwargs...)
-        sol = solve(prob, solver(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
-        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
+        sol = solve(prob, solver(); tstops = tstops, abstol = 1.0e-10, reltol = 1.0e-10)
+        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1.0e-6)
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
-        @test isapprox(sol(4.0)[1], 2 * exp(-2.0); rtol = 1e-6)
+        @test isapprox(sol(4.0)[1], 2 * exp(-2.0); rtol = 1.0e-6)
         sol
     end
 
@@ -497,15 +522,21 @@ end
     affect1a = [A ~ Pre(A) + 1, B ~ A]
     cb1a = cond1a => affect1a
     @named osys1 = System(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
-    @named ssys1 = SDESystem(eqs, [0.0], t, [A, B], [k, t1, t2],
-        discrete_events = [cb1a, cb2])
+    @named ssys1 = SDESystem(
+        eqs, [0.0], t, [A, B], [k, t1, t2],
+        discrete_events = [cb1a, cb2]
+    )
     u0′ = [A => 1.0, B => 0.0]
-    sol = testsol(osys1, ODEProblem, Tsit5, u0′, p, tspan;
-        tstops = [1.0, 2.0], check_length = false, paramtotest = k)
+    sol = testsol(
+        osys1, ODEProblem, Tsit5, u0′, p, tspan;
+        tstops = [1.0, 2.0], check_length = false, paramtotest = k
+    )
     @test sol(1.0000001, idxs = B) == 2.0
 
-    sol = testsol(ssys1, SDEProblem, RI5, u0′, p, tspan; tstops = [1.0, 2.0],
-        check_length = false, paramtotest = k)
+    sol = testsol(
+        ssys1, SDEProblem, RI5, u0′, p, tspan; tstops = [1.0, 2.0],
+        check_length = false, paramtotest = k
+    )
     @test sol(1.0000001, idxs = B) == 2.0
 
     # same as above - but with set-time event syntax
@@ -518,8 +549,10 @@ end
 
     # mixing discrete affects
     @named osys3 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
-    @named ssys3 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
-        discrete_events = [cb1, cb2‵])
+    @named ssys3 = SDESystem(
+        eqs, [0.0], t, [A], [k, t1, t2],
+        discrete_events = [cb1, cb2‵]
+    )
     testsol(osys3, ODEProblem, Tsit5, u0, p, tspan; tstops = [1.0], paramtotest = k)
     testsol(ssys3, SDEProblem, RI5, u0, p, tspan; tstops = [1.0], paramtotest = k)
 
@@ -529,8 +562,10 @@ end
     end
     cb2‵‵ = [2.0] => (f = affect!, modified = (; k))
     @named osys4 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵])
-    @named ssys4 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
-        discrete_events = [cb1, cb2‵‵])
+    @named ssys4 = SDESystem(
+        eqs, [0.0], t, [A], [k, t1, t2],
+        discrete_events = [cb1, cb2‵‵]
+    )
     oprob4 = ODEProblem(complete(osys4), [u0; p], tspan)
     testsol(osys4, ODEProblem, Tsit5, u0, p, tspan; tstops = [1.0], paramtotest = k)
     testsol(ssys4, SDEProblem, RI5, u0, p, tspan; tstops = [1.0], paramtotest = k)
@@ -538,13 +573,17 @@ end
     # mixing with symbolic condition in the func affect
     cb2‵‵‵ = (t == t2) => (f = affect!, modified = (; k))
     @named osys5 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
-    @named ssys5 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
-        discrete_events = [cb1, cb2‵‵‵])
+    @named ssys5 = SDESystem(
+        eqs, [0.0], t, [A], [k, t1, t2],
+        discrete_events = [cb1, cb2‵‵‵]
+    )
     testsol(osys5, ODEProblem, Tsit5, u0, p, tspan; tstops = [1.0, 2.0])
     testsol(ssys5, SDEProblem, RI5, u0, p, tspan; tstops = [1.0, 2.0])
     @named osys6 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
-    @named ssys6 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
-        discrete_events = [cb2‵‵‵, cb1])
+    @named ssys6 = SDESystem(
+        eqs, [0.0], t, [A], [k, t1, t2],
+        discrete_events = [cb2‵‵‵, cb1]
+    )
     testsol(osys6, ODEProblem, Tsit5, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
     testsol(ssys6, SDEProblem, RI5, u0, p, tspan; tstops = [1.0, 2.0], paramtotest = k)
 
@@ -552,21 +591,27 @@ end
     cond3 = A ~ 0.1
     affect3 = [k ~ 0.0]
     cb3 = SymbolicContinuousCallback(cond3 => affect3, discrete_parameters = [k], iv = t)
-    @named osys7 = System(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
-        continuous_events = [cb3])
-    @named ssys7 = SDESystem(eqs, [0.0], t, [A], [k, t1, t2],
+    @named osys7 = System(
+        eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
+        continuous_events = [cb3]
+    )
+    @named ssys7 = SDESystem(
+        eqs, [0.0], t, [A], [k, t1, t2],
         discrete_events = [cb1, cb2‵‵‵],
-        continuous_events = [cb3])
+        continuous_events = [cb3]
+    )
 
     sol = testsol(osys7, ODEProblem, Tsit5, u0, p, (0.0, 10.0); tstops = [1.0, 2.0])
-    @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
+    @test isapprox(sol(10.0)[1], 0.1; atol = 1.0e-10, rtol = 1.0e-10)
     sol = testsol(ssys7, SDEProblem, RI5, u0, p, (0.0, 10.0); tstops = [1.0, 2.0])
-    @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
+    @test isapprox(sol(10.0)[1], 0.1; atol = 1.0e-10, rtol = 1.0e-10)
 end
 
 @testset "JumpSystem Discrete Callbacks" begin
-    function testsol(jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
-            N = 40000, kwargs...)
+    function testsol(
+            jsys, u0, p, tspan; tstops = Float64[], paramtotest = nothing,
+            N = 40000, kwargs...
+        )
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
@@ -600,8 +645,10 @@ end
     cb1a = cond1a => affect1a
     @named jsys1 = JumpSystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
     u0′ = [A => 1, B => 0]
-    sol = testsol(jsys1, u0′, p, tspan; tstops = [1.0, 2.0],
-        check_length = false, rng, paramtotest = k)
+    sol = testsol(
+        jsys1, u0′, p, tspan; tstops = [1.0, 2.0],
+        check_length = false, rng, paramtotest = k
+    )
     @test sol(1.000000001, idxs = B) == 2
 
     # same as above - but with set-time event syntax
@@ -632,8 +679,8 @@ end
 
 @testset "Namespacing" begin
     function oscillator_ce(k = 1.0; name)
-        sts = @variables x(t)=1.0 v(t)=0.0 F(t)
-        ps = @parameters k=k Θ=0.5
+        sts = @variables x(t) = 1.0 v(t) = 0.0 F(t)
+        ps = @parameters k = k Θ = 0.5
         eqs = [D(x) ~ v, D(v) ~ -k * x + F]
         ev = [x ~ Θ] => [x ~ 1.0, v ~ 0.0]
         System(eqs, t, sts, ps; continuous_events = [ev], name)
@@ -655,7 +702,7 @@ end
 
 @testset "Additional SymbolicContinuousCallback options" begin
     # baseline affect (pos + neg + left root find)
-    @variables c1(t)=1.0 c2(t)=1.0 # c1 = cos(t), c2 = cos(3t)
+    @variables c1(t) = 1.0 c2(t) = 1.0 # c1 = cos(t), c2 = cos(3t)
     eqs = [D(c1) ~ -sin(t); D(c2) ~ -3 * sin(3 * t)]
     function record_crossings(mod, obs, ctx, integ)
         push!(ctx, integ.t => obs.v)
@@ -664,19 +711,21 @@ end
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1))
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1)
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2))
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2)
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
-    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
-    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
-    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
-    @test sign.(cos.(3 * (required_crossings_c2 .- 1e-6))) == sign.(last.(cr2))
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
+    @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3 * (required_crossings_c2 .- 1.0e-6))) == sign.(last.(cr2))
 
     # with neg affect (pos * neg + left root find)
     cr1p = []
@@ -685,10 +734,12 @@ end
     cr2n = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p);
-        affect_neg = (f = record_crossings, observed = (; v = c1), ctx = cr1n))
+        affect_neg = (f = record_crossings, observed = (; v = c1), ctx = cr1n)
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p);
-        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n))
+        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n)
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -697,30 +748,32 @@ end
     c1_nc = filter((>=)(0) ∘ sin, required_crossings_c1)
     c2_pc = filter(c -> -sin(3c) > 0, required_crossings_c2)
     c2_nc = filter(c -> -sin(3c) < 0, required_crossings_c2)
-    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
-    @test maximum(abs.(c1_nc .- first.(cr1n))) < 1e-5
-    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
-    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1e-5
-    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
-    @test sign.(cos.(c1_nc .- 1e-6)) == sign.(last.(cr1n))
-    @test sign.(cos.(3 * (c2_pc .- 1e-6))) == sign.(last.(cr2p))
-    @test sign.(cos.(3 * (c2_nc .- 1e-6))) == sign.(last.(cr2n))
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1.0e-5
+    @test maximum(abs.(c1_nc .- first.(cr1n))) < 1.0e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1.0e-5
+    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1.0e-5
+    @test sign.(cos.(c1_pc .- 1.0e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(c1_nc .- 1.0e-6)) == sign.(last.(cr1n))
+    @test sign.(cos.(3 * (c2_pc .- 1.0e-6))) == sign.(last.(cr2p))
+    @test sign.(cos.(3 * (c2_nc .- 1.0e-6))) == sign.(last.(cr2n))
 
     # with nothing neg affect (pos * neg + left root find)
     cr1p = []
     cr2p = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing)
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p); affect_neg = nothing)
+        [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p); affect_neg = nothing
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
-    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
-    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
-    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
-    @test sign.(cos.(3 * (c2_pc .- 1e-6))) == sign.(last.(cr2p))
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1.0e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1.0e-5
+    @test sign.(cos.(c1_pc .- 1.0e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(3 * (c2_pc .- 1.0e-6))) == sign.(last.(cr2p))
 
     #mixed
     cr1p = []
@@ -728,10 +781,12 @@ end
     cr1n = []
     cr2n = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing)
+        [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1p); affect_neg = nothing
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2p);
-        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n))
+        affect_neg = (f = record_crossings, observed = (; v = c2), ctx = cr2n)
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
@@ -739,81 +794,91 @@ end
     c1_pc = filter((<=)(0) ∘ sin, required_crossings_c1)
     c2_pc = filter(c -> -sin(3c) > 0, required_crossings_c2)
     c2_nc = filter(c -> -sin(3c) < 0, required_crossings_c2)
-    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1e-5
-    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1e-5
-    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1e-5
-    @test sign.(cos.(c1_pc .- 1e-6)) == sign.(last.(cr1p))
-    @test sign.(cos.(3 * (c2_pc .- 1e-6))) == sign.(last.(cr2p))
-    @test sign.(cos.(3 * (c2_nc .- 1e-6))) == sign.(last.(cr2n))
+    @test maximum(abs.(c1_pc .- first.(cr1p))) < 1.0e-5
+    @test maximum(abs.(c2_pc .- first.(cr2p))) < 1.0e-5
+    @test maximum(abs.(c2_nc .- first.(cr2n))) < 1.0e-5
+    @test sign.(cos.(c1_pc .- 1.0e-6)) == sign.(last.(cr1p))
+    @test sign.(cos.(3 * (c2_pc .- 1.0e-6))) == sign.(last.(cr2p))
+    @test sign.(cos.(3 * (c2_nc .- 1.0e-6))) == sign.(last.(cr2n))
 
     # baseline affect w/ right rootfind (pos + neg + right root find)
-    @variables c1(t)=1.0 c2(t)=1.0 # c1 = cos(t), c2 = cos(3t)
+    @variables c1(t) = 1.0 c2(t) = 1.0 # c1 = cos(t), c2 = cos(3t)
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
-        rootfind = SciMLBase.RightRootFind)
+        rootfind = SciMLBase.RightRootFind
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
-        rootfind = SciMLBase.RightRootFind)
+        rootfind = SciMLBase.RightRootFind
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
-    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
-    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
-    @test sign.(cos.(required_crossings_c1 .+ 1e-6)) == sign.(last.(cr1))
-    @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
+    @test sign.(cos.(required_crossings_c1 .+ 1.0e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3 * (required_crossings_c2 .+ 1.0e-6))) == sign.(last.(cr2))
 
     # baseline affect w/ mixed rootfind (pos + neg + right root find)
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
-        rootfind = SciMLBase.LeftRootFind)
+        rootfind = SciMLBase.LeftRootFind
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
-        rootfind = SciMLBase.RightRootFind)
+        rootfind = SciMLBase.RightRootFind
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
-    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
-    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
-    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
-    @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
+    @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3 * (required_crossings_c2 .+ 1.0e-6))) == sign.(last.(cr2))
 
     #flip order and ensure results are okay
     cr1 = []
     cr2 = []
     evt1 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c1 ~ 0], (f = record_crossings, observed = (; v = c1), ctx = cr1);
-        rootfind = SciMLBase.LeftRootFind)
+        rootfind = SciMLBase.LeftRootFind
+    )
     evt2 = ModelingToolkitBase.SymbolicContinuousCallback(
         [c2 ~ 0], (f = record_crossings, observed = (; v = c2), ctx = cr2);
-        rootfind = SciMLBase.RightRootFind)
+        rootfind = SciMLBase.RightRootFind
+    )
     @named trigsys = System(eqs, t; continuous_events = [evt2, evt1])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
     sol = solve(prob, Tsit5())
-    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1e-4
-    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1e-4
-    @test sign.(cos.(required_crossings_c1 .- 1e-6)) == sign.(last.(cr1))
-    @test sign.(cos.(3 * (required_crossings_c2 .+ 1e-6))) == sign.(last.(cr2))
+    @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
+    @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
+    @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
+    @test sign.(cos.(3 * (required_crossings_c2 .+ 1.0e-6))) == sign.(last.(cr2))
 end
 
 if @isdefined(ModelingToolkit)
     @testset "Discrete event reinitialization (#3142)" begin
         @connector function LiquidPort(; name, p = nothing, Vdot = nothing)
             vars = @variables begin
-                p(t)::Float64, [description = "Set pressure in bar",
-                guess = 1.01325]
+                p(t)::Float64, [
+                        description = "Set pressure in bar",
+                        guess = 1.01325,
+                    ]
                 Vdot(t)::Float64,
-                [description = "Volume flow rate in L/min",
-                    guess = 0.0,
-                    connect = Flow]
+                    [
+                        description = "Volume flow rate in L/min",
+                        guess = 0.0,
+                        connect = Flow,
+                    ]
             end
             System(Equation[], t, vars, []; name)
         end
@@ -831,13 +896,13 @@ if @isdefined(ModelingToolkit)
             end
 
             equations = Equation[
-                port.p ~ p_set
+                port.p ~ p_set,
             ]
 
             return System(equations, t, vars, pars; name, systems)
         end
 
-        @component function BinaryValve(; name, p_ref = 1.0, ρ_ref = 1000.0, k_V = 1.0, k_leakage = 1e-08, ρ = 1000.0, S = nothing, Δp = nothing, Vdot = nothing)
+        @component function BinaryValve(; name, p_ref = 1.0, ρ_ref = 1000.0, k_V = 1.0, k_leakage = 1.0e-8, ρ = 1000.0, S = nothing, Δp = nothing, Vdot = nothing)
             pars = @parameters begin
                 k_V::Float64 = k_V, [description = "Valve coefficient in L/min/bar"]
                 k_leakage::Float64 = k_leakage, [description = "Leakage coefficient in L/min/bar"]
@@ -929,8 +994,10 @@ end
     cb2 = [x ~ 0.5] => (f = save_affect!, modified = (; b))
     cb3 = SymbolicDiscreteCallback(1.0 => [c ~ t], discrete_parameters = [c])
 
-    @mtkcompile sys = System(D(x) ~ cos(t), t, [x], [a, b, c];
-        continuous_events = [cb1, cb2], discrete_events = [cb3])
+    @mtkcompile sys = System(
+        D(x) ~ cos(t), t, [x], [a, b, c];
+        continuous_events = [cb1, cb2], discrete_events = [cb3]
+    )
     prob = ODEProblem(sys, [x => 1.0, a => 1.0, b => 2.0, c => 0.0], (0.0, 2pi))
     @test sort(canonicalize(Discrete(), prob.p)[1]) == [0.0, 1.0, 2.0]
     sol = solve(prob, Tsit5())
@@ -942,23 +1009,26 @@ end
 
 @testset "Heater" begin
     @variables temp(t)
-    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    params = @parameters furnace_on_threshold = 0.5 furnace_off_threshold = 0.7 furnace_power = 1.0 leakage = 0.1 furnace_on::Bool = false
     eqs = [
-        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage,
     ]
 
     furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
         ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
             @set! x.furnace_on = false
-        end)
+        end
+    )
     furnace_enable = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
         ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on)) do x, o, i, c
             @set! x.furnace_on = true
-        end)
+        end
+    )
     @named sys = System(
-        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable]
+    )
     ss = mtkcompile(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -968,17 +1038,23 @@ end
         [temp ~ furnace_off_threshold],
         ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = false
-        end; initialize = ModelingToolkitBase.ImperativeAffect(modified = (;
-            temp)) do x, o, c, i
+        end; initialize = ModelingToolkitBase.ImperativeAffect(
+            modified = (;
+                temp,
+            )
+        ) do x, o, c, i
             @set! x.temp = 0.2
-        end)
+        end
+    )
     furnace_enable = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_on_threshold],
         ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on)) do x, o, c, i
             @set! x.furnace_on = true
-        end)
+        end
+    )
     @named sys = System(
-        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable])
+        eqs, t, [temp], params; continuous_events = [furnace_off, furnace_enable]
+    )
     ss = mtkcompile(sys)
     prob = ODEProblem(ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -988,65 +1064,86 @@ end
 
 @testset "ImperativeAffect errors and warnings" begin
     @variables temp(t)
-    params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on::Bool=false
+    params = @parameters furnace_on_threshold = 0.5 furnace_off_threshold = 0.7 furnace_power = 1.0 leakage = 0.1 furnace_on::Bool = false
     eqs = [
+        D(temp) ~ furnace_on * furnace_power - temp^2 * leakage,
+    ]
+
+    furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
+        [temp ~ furnace_off_threshold],
+        ModelingToolkitBase.ImperativeAffect(
+            modified = (; furnace_on), observed = (; furnace_on)
+        ) do x, o, c, i
+            @set! x.furnace_on = false
+        end
+    )
+    @named sys = System(eqs, t, [temp], params; continuous_events = [furnace_off])
+    ss = mtkcompile(sys)
+    @test_logs (
+        :warn,
+        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.",
+    ) prob = ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
+    )
+
+    @variables tempsq(t) # trivially eliminated
+    eqs = [
+        tempsq ~ temp^2
         D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
     ]
 
     furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
         ModelingToolkitBase.ImperativeAffect(
-            modified = (; furnace_on), observed = (; furnace_on)) do x, o, c, i
+            modified = (; furnace_on, tempsq), observed = (; furnace_on)
+        ) do x, o, c, i
             @set! x.furnace_on = false
-        end)
-    @named sys = System(eqs, t, [temp], params; continuous_events = [furnace_off])
-    ss = mtkcompile(sys)
-    @test_logs (:warn,
-        "The symbols Any[:furnace_on] are declared as both observed and modified; this is a code smell because it becomes easy to confuse them and assign/not assign a value.") prob=ODEProblem(
-        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
-
-    @variables tempsq(t) # trivially eliminated
-    eqs = [tempsq ~ temp^2
-           D(temp) ~ furnace_on * furnace_power - temp^2 * leakage]
-
-    furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
-        [temp ~ furnace_off_threshold],
-        ModelingToolkitBase.ImperativeAffect(
-            modified = (; furnace_on, tempsq), observed = (; furnace_on)) do x, o, c, i
-            @set! x.furnace_on = false
-        end)
+        end
+    )
     @named sys = System(
-        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off]
+    )
     ss = mtkcompile(sys)
     if @isdefined(ModelingToolkit)
-        @test_throws "refers to missing variable(s)" prob=ODEProblem(
-            ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+        @test_throws "refers to missing variable(s)" prob = ODEProblem(
+            ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
+        )
     end
 
     @parameters not_actually_here
     furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on),
-            observed = (; furnace_on, not_actually_here)) do x, o, c, i
+        ModelingToolkitBase.ImperativeAffect(
+            modified = (; furnace_on),
+            observed = (; furnace_on, not_actually_here)
+        ) do x, o, c, i
             @set! x.furnace_on = false
-        end)
+        end
+    )
     @named sys = System(
-        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off]
+    )
     ss = mtkcompile(sys)
-    @test_throws "refers to missing variable(s)" prob=ODEProblem(
-        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+    @test_throws "refers to missing variable(s)" prob = ODEProblem(
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
+    )
 
     furnace_off = ModelingToolkitBase.SymbolicContinuousCallback(
         [temp ~ furnace_off_threshold],
-        ModelingToolkitBase.ImperativeAffect(modified = (; furnace_on),
-            observed = (; furnace_on)) do x, o, c, i
+        ModelingToolkitBase.ImperativeAffect(
+            modified = (; furnace_on),
+            observed = (; furnace_on)
+        ) do x, o, c, i
             return (; fictional2 = false)
-        end)
+        end
+    )
     @named sys = System(
-        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off])
+        eqs, t, [temp, tempsq], params; continuous_events = [furnace_off]
+    )
     ss = mtkcompile(sys)
     prob = ODEProblem(
-        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0))
+        ss, [temp => 0.0, furnace_on => true], (0.0, 100.0)
+    )
     if @isdefined(ModelingToolkit)
         @test_throws "Tried to write back to" solve(prob, Tsit5())
     end
@@ -1054,25 +1151,28 @@ end
 
 @testset "Quadrature" begin
     @variables theta(t) omega(t)
-    params = @parameters qA=0 qB=0 hA=0 hB=0 cnt::Int=0
-    eqs = [D(theta) ~ omega
-           omega ~ 1.0]
+    params = @parameters qA = 0 qB = 0 hA = 0 hB = 0 cnt::Int = 0
+    eqs = [
+        D(theta) ~ omega
+        omega ~ 1.0
+    ]
     function decoder(oldA, oldB, newA, newB)
         state = (oldA, oldB, newA, newB)
         if state == (0, 0, 1, 0) || state == (1, 0, 1, 1) || state == (1, 1, 0, 1) ||
-           state == (0, 1, 0, 0)
+                state == (0, 1, 0, 0)
             return 1
         elseif state == (0, 0, 0, 1) || state == (0, 1, 1, 1) || state == (1, 1, 1, 0) ||
-               state == (1, 0, 0, 0)
+                state == (1, 0, 0, 0)
             return -1
         elseif state == (0, 0, 0, 0) || state == (0, 1, 0, 1) || state == (1, 0, 1, 0) ||
-               state == (1, 1, 1, 1)
+                state == (1, 1, 1, 1)
             return 0
         else
             return 0 # err is interpreted as no movement
         end
     end
-    qAevt = ModelingToolkitBase.SymbolicContinuousCallback([cos(100 * theta) ~ 0],
+    qAevt = ModelingToolkitBase.SymbolicContinuousCallback(
+        [cos(100 * theta) ~ 0],
         ModelingToolkitBase.ImperativeAffect((; qA, hA, hB, cnt), (; qB)) do x, o, c, i
             @set! x.hA = x.qA
             @set! x.hB = o.qB
@@ -1081,14 +1181,17 @@ end
             x
         end,
         affect_neg = ModelingToolkitBase.ImperativeAffect(
-            (; qA, hA, hB, cnt), (; qB)) do x, o, c, i
+            (; qA, hA, hB, cnt), (; qB)
+        ) do x, o, c, i
             @set! x.hA = x.qA
             @set! x.hB = o.qB
             @set! x.qA = 0
             @set! x.cnt += decoder(x.hA, x.hB, x.qA, o.qB)
             x
-        end; rootfind = SciMLBase.RightRootFind)
-    qBevt = ModelingToolkitBase.SymbolicContinuousCallback([cos(100 * theta - π / 2) ~ 0],
+        end; rootfind = SciMLBase.RightRootFind
+    )
+    qBevt = ModelingToolkitBase.SymbolicContinuousCallback(
+        [cos(100 * theta - π / 2) ~ 0],
         ModelingToolkitBase.ImperativeAffect((; qB, hA, hB, cnt), (; qA)) do x, o, c, i
             @set! x.hA = o.qA
             @set! x.hB = x.qB
@@ -1097,17 +1200,20 @@ end
             x
         end,
         affect_neg = ModelingToolkitBase.ImperativeAffect(
-            (; qB, hA, hB, cnt), (; qA)) do x, o, c, i
+            (; qB, hA, hB, cnt), (; qA)
+        ) do x, o, c, i
             @set! x.hA = o.qA
             @set! x.hB = x.qB
             @set! x.qB = 0
             @set! x.cnt += decoder(x.hA, x.hB, o.qA, x.qB)
             x
-        end; rootfind = SciMLBase.RightRootFind)
+        end; rootfind = SciMLBase.RightRootFind
+    )
     @named sys = System(
-        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt])
+        eqs, t, [theta, omega], params; continuous_events = [qAevt, qBevt]
+    )
     ss = mtkcompile(sys)
-    prob = ODEProblem(ss, [theta => 1e-5], (0.0, pi))
+    prob = ODEProblem(ss, [theta => 1.0e-5], (0.0, pi))
     sol = solve(prob, @isdefined(ModelingToolkit) ? Tsit5() : Rodas5P(); dtmax = 0.01)
     @test getp(sol, cnt)(sol) == 198 # we get 2 pulses per phase cycle (cos 0 crossing) and we go to 100 cycles; we miss a few due to the initial state
 end
@@ -1117,7 +1223,8 @@ end
     seen = false
     f = ModelingToolkitBase.ImperativeAffect(f = (m, o, ctx, int) -> (seen = true; return (;)))
     cb1 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f
+    )
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2))
     sol = solve(prob, Tsit5(); dtmax = 0.01)
@@ -1129,15 +1236,23 @@ end
     seen = false
     f = ModelingToolkitBase.ImperativeAffect(f = (m, o, ctx, int) -> (seen = true; return (;)))
     cb1 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f)
+        [x ~ 0], nothing, initialize = [x ~ 1.5], finalize = f
+    )
     inited = false
     finaled = false
-    a = ModelingToolkitBase.ImperativeAffect(f = (
-        m, o, ctx, int) -> (inited = true; return (;)))
-    b = ModelingToolkitBase.ImperativeAffect(f = (
-        m, o, ctx, int) -> (finaled = true; return (;)))
+    a = ModelingToolkitBase.ImperativeAffect(
+        f = (
+            m, o, ctx, int,
+        ) -> (inited = true; return (;))
+    )
+    b = ModelingToolkitBase.ImperativeAffect(
+        f = (
+            m, o, ctx, int,
+        ) -> (finaled = true; return (;))
+    )
     cb2 = ModelingToolkitBase.SymbolicContinuousCallback(
-        [x ~ 0.1], nothing, initialize = a, finalize = b)
+        [x ~ 0.1], nothing, initialize = a, finalize = b
+    )
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cb1, cb2])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2))
     sol = solve(prob, Tsit5())
@@ -1151,13 +1266,14 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkitBase.SymbolicDiscreteCallback(
-        1.0, [x ~ 2], initialize = a, finalize = b)
+        1.0, [x ~ 2], initialize = a, finalize = b
+    )
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2))
     sol = solve(prob, Tsit5())
     @test inited == true
     @test finaled == true
-    @test isapprox(sol[x][3], 0.0, atol = 1e-9)
+    @test isapprox(sol[x][3], 0.0, atol = 1.0e-9)
     @test sol[x][4] ≈ 2.0
     @test sol[x][5] ≈ 1.0
 
@@ -1188,7 +1304,8 @@ end
     inited = false
     finaled = false
     cb3 = ModelingToolkitBase.SymbolicDiscreteCallback(
-        t == 1.0, f, initialize = a, finalize = b)
+        t == 1.0, f, initialize = a, finalize = b
+    )
     @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [cb3])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 2))
     sol = solve(prob, Tsit5(); tstops = 1.0)
@@ -1213,7 +1330,7 @@ end
     cb = [x ~ 0.0] => [x ~ 1, y ~ 1]
     @mtkcompile pend = System(eqs, t; continuous_events = [cb])
     prob = ODEProblem(pend, [x => 1], (0.0, 3.0), guesses = [y => x])
-    @test all(≈(0.0; atol = 1e-9), solve(prob, Rodas5())[[x, y]][end])
+    @test all(≈(0.0; atol = 1.0e-9), solve(prob, Rodas5())[[x, y]][end])
 end
 
 @testset "Issue#3154 Array variable in discrete condition" begin
@@ -1234,11 +1351,11 @@ end
         vars = [vars; discs]
 
         equations = Equation[
-            D(x) ~ -k * x
+            D(x) ~ -k * x,
         ]
 
         discrete_events = [
-            SymbolicDiscreteCallback((t == 1.0), [k ~ 1.0], discrete_parameters = [k])
+            SymbolicDiscreteCallback((t == 1.0), [k ~ 1.0], discrete_parameters = [k]),
         ]
 
         return System(equations, t, vars, pars; name, systems, discrete_events)
@@ -1256,17 +1373,24 @@ end
         vars = @variables begin
             x(t) = 0.0
         end
-        eqs = reduce(vcat, Symbolics.scalarize.([
-            D(x) ~ 1.0
-        ]))
+        eqs = reduce(
+            vcat, Symbolics.scalarize.(
+                [
+                    D(x) ~ 1.0,
+                ]
+            )
+        )
         reset = ModelingToolkitBase.ImperativeAffect(
-            modified = (; x, θ)) do m, o, _, i
+            modified = (; x, θ)
+        ) do m, o, _, i
             @set! m.θ = 0.0
             @set! m.x = 0.0
             return m
         end
-        return System(eqs, t, vars, params; name = name,
-            continuous_events = [[x ~ max_time] => reset])
+        return System(
+            eqs, t, vars, params; name = name,
+            continuous_events = [[x ~ max_time] => reset]
+        )
     end
 
     function weird2(max_time; name)
@@ -1276,27 +1400,45 @@ end
         vars = @variables begin
             x(t) = 0.0
         end
-        eqs = reduce(vcat, Symbolics.scalarize.([
-            D(x) ~ 1.0
-        ]))
+        eqs = reduce(
+            vcat, Symbolics.scalarize.(
+                [
+                    D(x) ~ 1.0,
+                ]
+            )
+        )
         return System(eqs, t, vars, params; name = name) # note no event
     end
 
     @named wd1 = weird1(0.021)
     @named wd2 = weird2(0.021)
 
-    sys1 = mtkcompile(System(Equation[], t; name = :parent,
-        discrete_events = [0.01 => ModelingToolkitBase.ImperativeAffect(
-            modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]) do m, o, c, i
-            @set! m.θs[1] = c[] += 1
-        end],
-        systems = [wd1]))
-    sys2 = mtkcompile(System(Equation[], t; name = :parent,
-        discrete_events = [0.01 => ModelingToolkitBase.ImperativeAffect(
-            modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]) do m, o, c, i
-            @set! m.θs[1] = c[] += 1
-        end],
-        systems = [wd2]))
+    sys1 = mtkcompile(
+        System(
+            Equation[], t; name = :parent,
+            discrete_events = [
+                0.01 => ModelingToolkitBase.ImperativeAffect(
+                    modified = (; θs = reduce(vcat, [[wd1.θ]])), ctx = [1]
+                ) do m, o, c, i
+                    @set! m.θs[1] = c[] += 1
+                end
+            ],
+            systems = [wd1]
+        )
+    )
+    sys2 = mtkcompile(
+        System(
+            Equation[], t; name = :parent,
+            discrete_events = [
+                0.01 => ModelingToolkitBase.ImperativeAffect(
+                    modified = (; θs = reduce(vcat, [[wd2.θ]])), ctx = [1]
+                ) do m, o, c, i
+                    @set! m.θs[1] = c[] += 1
+                end
+            ],
+            systems = [wd2]
+        )
+    )
 
     sol1 = solve(ODEProblem(sys1, [], (0.0, 1.0)), Tsit5())
     @test 100.0 ∈ sol1[sys1.wd1.θ]
@@ -1310,54 +1452,62 @@ if @isdefined(ModelingToolkit)
         using ModelingToolkitBase: UnsolvableCallbackError
         @parameters g
         @variables x(t) y(t) λ(t)
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + 0.1]
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
         prob = ODEProblem(pend, [x => -1, D(x) => 0, g => 1], (0.0, 10.0), guesses = [λ => 1, y => 1])
         sol = solve(prob, FBDF())
-        @test ≈(sol(5.000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
-        @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1e-4)
+        @test ≈(sol(5.000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1.0e-4)
+        @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1.0e-4)
 
         # Implicit affect with Pre
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + y^2]
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
-        prob = ODEProblem(pend, [x => 1, D(x) => 0, g => 1], (0.0, 10.0), guesses = [λ => 1,  y => 1])
+        prob = ODEProblem(pend, [x => 1, D(x) => 0, g => 1], (0.0, 10.0), guesses = [λ => 1, y => 1])
         sol = solve(prob, FBDF())
-        @test ≈(sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x),
-            sol(5.000001, idxs = x), rtol = 1e-4)
-        @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1e-4)
+        @test ≈(
+            sol(5.000001, idxs = y)^2 + sol(4.999999, idxs = x),
+            sol(5.000001, idxs = x), rtol = 1.0e-4
+        )
+        @test ≈(sol(5.000001, idxs = x)^2 + sol(5.000001, idxs = y)^2, 1, rtol = 1.0e-4)
 
         # Impossible affect errors
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + 2]
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
         prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 10.0), guesses = [λ => 1])
-        @test_throws UnsolvableCallbackError sol=solve(prob, FBDF())
+        @test_throws UnsolvableCallbackError sol = solve(prob, FBDF())
 
         # Changing both variables and parameters in the same affect.
         @discretes g(t)
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         c_evt = SymbolicContinuousCallback(
-            [t ~ 5.0], [x ~ Pre(x) + 0.1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
+            [t ~ 5.0], [x ~ Pre(x) + 0.1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t
+        )
         @mtkcompile pend = System(eqs, t, continuous_events = c_evt)
         prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 10.0), guesses = [λ => 1])
         sol = solve(prob, FBDF())
         @test sol.ps[g] ≈ [1, 2]
-        @test ≈(sol(5.0000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1e-4)
+        @test ≈(sol(5.0000001, idxs = x) - sol(4.999999, idxs = x), 0.1, rtol = 1.0e-4)
 
         # Proper re-initialization after parameter change
         eqs = [y ~ g^2, D(x) ~ x]
         c_evt = SymbolicContinuousCallback(
-            [t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t)
+            [t ~ 5.0], [x ~ Pre(x) + 1, g ~ Pre(g) + 1], discrete_parameters = [g], iv = t
+        )
         @mtkcompile sys = System(eqs, t, continuous_events = c_evt)
         prob = ODEProblem(sys, [x => 1.0, g => 2], (0.0, 10.0))
         sol = solve(prob, FBDF())
         @test sol.ps[g] ≈ [2.0, 3.0]
-        @test ≈(sol(5.00000001, idxs = x) - sol(4.9999999, idxs = x), 1; rtol = 1e-4)
-        @test ≈(sol(5.00000001, idxs = y), 9, rtol = 1e-4)
+        @test ≈(sol(5.00000001, idxs = x) - sol(4.9999999, idxs = x), 1; rtol = 1.0e-4)
+        @test ≈(sol(5.00000001, idxs = y), 9, rtol = 1.0e-4)
 
         # Parameters that don't appear in affects should not be mutated.
         c_evt = [t ~ 5.0] => [x ~ Pre(x) + 1]
@@ -1373,24 +1523,33 @@ end
         vars = @variables begin
             x(t) = 0.0
         end
-        eqs = reduce(vcat, Symbolics.scalarize.([
-            D(x) ~ 1.0
-        ]))
+        eqs = reduce(
+            vcat, Symbolics.scalarize.(
+                [
+                    D(x) ~ 1.0,
+                ]
+            )
+        )
         reset = ModelingToolkitBase.ImperativeAffect(
-            modified = (; vals = Symbolics.scalarize(ParentScope.(vals)), x)) do m, o, _, i
+            modified = (; vals = Symbolics.scalarize(ParentScope.(vals)), x)
+        ) do m, o, _, i
             @set! m.vals = m.vals .+ 1
             @set! m.x = 0.0
             return m
         end
-        return System(eqs, t, vars, []; name = name,
-            continuous_events = [[x ~ max_time] => reset])
+        return System(
+            eqs, t, vars, []; name = name,
+            continuous_events = [[x ~ max_time] => reset]
+        )
     end
     shared_pars = @discretes begin
         vals(t)[1:2] = zeros(2)
     end
 
-    @named sys = System(Equation[], t, [], Symbolics.scalarize(vals);
-        systems = [child(vals; name = :child)])
+    @named sys = System(
+        Equation[], t, [], Symbolics.scalarize(vals);
+        systems = [child(vals; name = :child)]
+    )
     sys = mtkcompile(sys)
     sol = solve(ODEProblem(sys, [], (0.0, 1.0)), Tsit5())
 end
@@ -1400,7 +1559,8 @@ end
         @discretes p(t)::Int
         @variables x(t)
         cevs = ModelingToolkitBase.SymbolicContinuousCallback(
-            [x ~ 1.0], [p ~ Pre(p) + 1]; iv = t, discrete_parameters = [p])
+            [x ~ 1.0], [p ~ Pre(p) + 1]; iv = t, discrete_parameters = [p]
+        )
         System([D(x) ~ 1], t, [x], [p]; continuous_events = [cevs], name)
     end
     @named inner = Inner()
@@ -1428,7 +1588,7 @@ end
 
     eq = [
         D(x) ~ p2,
-        x2 ~ p_1(x)
+        x2 ~ p_1(x),
     ]
     @mtkcompile sys = System(eq, t, [x, x2], [p_1, p2], discrete_events = [event])
 
@@ -1436,7 +1596,7 @@ end
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
     @test sol[p2] ≈ [1.0, 0.5]
-    @test sol[x][end]≈0.75 atol=1e-6
+    @test sol[x][end] ≈ 0.75 atol = 1.0e-6
 end
 
 if @isdefined(ModelingToolkit)
@@ -1444,9 +1604,11 @@ if @isdefined(ModelingToolkit)
         @parameters g
         @variables x(t) [state_priority = 10.0] y(t) [guess = 1.0]
         @variables λ(t) [guess = 1.0]
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         cevts = [[x ~ 0.0] => [D(x) ~ Pre(D(x)) + 0.1sign(Pre(D(x)))]]
         @named pend = System(eqs, t; continuous_events = cevts)
 
@@ -1459,7 +1621,7 @@ if @isdefined(ModelingToolkit)
         @test scc.affect isa ModelingToolkitBase.AffectSystem
         @test length(ModelingToolkitBase.all_equations(scc.affect)) == 5 # 1 affect, 3 algebraic, 1 observed
 
-        u0 = [x => -1/2, D(x) => 1/2, g => 1]
+        u0 = [x => -1 / 2, D(x) => 1 / 2, g => 1]
         prob = ODEProblem(pend, u0, (0.0, 5.0))
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
@@ -1493,11 +1655,11 @@ end
         append!(vars, discretes)
 
         equations = Equation[
-            D(x) ~ p * x
+            D(x) ~ p * x,
         ]
 
         discrete_events = [
-            SymbolicDiscreteCallback(1.0, [x ~ p * Pre(x) * sin(x)]; discrete_parameters = [p])
+            SymbolicDiscreteCallback(1.0, [x ~ p * Pre(x) * sin(x)]; discrete_parameters = [p]),
         ]
 
         return System(equations, t, vars, pars; name, systems, discrete_events)
@@ -1510,16 +1672,31 @@ end
     @discretes p(t)
     @parameters d
     @variables X(t)
-    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([X <
-                                                                                            5.0] => [X ~
-                                                                                                     Pre(X) +
-                                                                                                     10.0])
-    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback([
-        X < 5.0, X > 10.0] => [X ~ Pre(X) + 10.0])
-    @test_throws "MethodError: no method" SymbolicContinuousCallback((X <
-                                                                      5.0) => [X ~
-                                                                               Pre(X) +
-                                                                               10.0])
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback(
+        [
+            X <
+                5.0,
+        ] => [
+            X ~
+                Pre(X) +
+                10.0,
+        ]
+    )
+    @test_throws "Vectors of symbolic conditions are not allowed" SymbolicDiscreteCallback(
+        [
+            X < 5.0, X > 10.0,
+        ] => [X ~ Pre(X) + 10.0]
+    )
+    @test_throws "MethodError: no method" SymbolicContinuousCallback(
+        (
+            X <
+                5.0
+        ) => [
+            X ~
+                Pre(X) +
+                10.0,
+        ]
+    )
 end
 
 @testset "Issue#3990: Scalarized array passed to `discrete_parameters` of symbolic affect" begin
@@ -1599,7 +1776,7 @@ end
 end
 
 @testset "Check array parameter and variables event" begin
-    # Creates the model using the macro. 
+    # Creates the model using the macro.
     us = @variables begin
         X(t)[1:2] = [4.0, 4.0]
     end
@@ -1611,11 +1788,12 @@ end
     end
     ps = [ps; discs]
     eqs = [
-        D(X[1]) ~ -k[1]*X[1] + k[2]*X[2]
-        D(X[2]) ~ k[1]*X[1] - k[2]*X[2]
+        D(X[1]) ~ -k[1] * X[1] + k[2] * X[2]
+        D(X[2]) ~ k[1] * X[1] - k[2] * X[2]
     ]
     c_event = SymbolicContinuousCallback(
-        (k[2] ~ t) => [k[1] ~ Pre(k[1] + kup)]; discrete_parameters = [k[1]])
+        (k[2] ~ t) => [k[1] ~ Pre(k[1] + kup)]; discrete_parameters = [k[1]]
+    )
     @mtkcompile model = System(eqs, t, us, ps; continuous_events = [c_event])
 
     # Simulates the model. Checks that the correct values are achieved.
@@ -1624,6 +1802,6 @@ end
     @test sol.ps[model.kup] == 2.0
     @test sol.ps[model.k[1]][end] == 3.0
     @test sol.ps[model.k[2]][end] == 1.0
-    @test sol[model.X[1]][end]≈2.0 atol=1e-8 rtol=1e-8
-    @test sol[model.X[2]][end]≈6.0 atol=1e-8 rtol=1e-8
+    @test sol[model.X[1]][end] ≈ 2.0 atol = 1.0e-8 rtol = 1.0e-8
+    @test sol[model.X[2]][end] ≈ 6.0 atol = 1.0e-8 rtol = 1.0e-8
 end

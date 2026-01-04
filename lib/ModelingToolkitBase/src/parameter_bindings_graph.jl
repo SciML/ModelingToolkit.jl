@@ -101,8 +101,10 @@ end
 
 Find the bound parameters used by `expr`.
 """
-function bound_parameters_used_by!(buffer::OrderedSet{SymbolicT}, sys::AbstractSystem, expr;
-                                   bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys))
+function bound_parameters_used_by!(
+        buffer::OrderedSet{SymbolicT}, sys::AbstractSystem, expr;
+        bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys)
+    )
     # No point searching if we've already included all of them.
     if issubset(bgraph.bound_ps, buffer)
         return buffer
@@ -126,8 +128,10 @@ end
 
 Topologically sort the bound parameters `bound_ps`.
 """
-function sort_bound_parameters!(bound_ps::OrderedSet{SymbolicT}, sys::AbstractSystem;
-                                bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys))
+function sort_bound_parameters!(
+        bound_ps::OrderedSet{SymbolicT}, sys::AbstractSystem;
+        bgraph::ParameterBindingsGraph = get_parameter_bindings_graph(sys)
+    )
     sort!(bound_ps; by = Base.Fix1(getindex, bgraph.bound_par_idx))
     return bound_ps
 end
@@ -137,11 +141,14 @@ struct CyclicBindingsError <: Exception
 end
 
 function Base.showerror(io::IO, err::CyclicBindingsError)
-    println(io, """
-    The bindings for parameters were found to have at least one cycle involving the \
-    follow parameters:
-    """)
+    println(
+        io, """
+        The bindings for parameters were found to have at least one cycle involving the \
+        follow parameters:
+        """
+    )
     for p in err.cycle_ps
         println(io, p)
     end
+    return
 end

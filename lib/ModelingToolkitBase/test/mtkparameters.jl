@@ -13,13 +13,19 @@ using Test
 @parameters a b d::Integer e[1:3] f[1:3, 1:3]::Int g::Vector{AbstractFloat} h::String
 @named sys = System(
     Equation[], t, [], [a, b, c, d, e, f, g, h];
-    continuous_events = [ModelingToolkitBase.SymbolicContinuousCallback(
-        [a ~ 0] => [c ~ 0], discrete_parameters = c)], bindings = [b => 2a],
-    initial_conditions = Dict(a => 0.0))
+    continuous_events = [
+        ModelingToolkitBase.SymbolicContinuousCallback(
+            [a ~ 0] => [c ~ 0], discrete_parameters = c
+        ),
+    ], bindings = [b => 2a],
+    initial_conditions = Dict(a => 0.0)
+)
 sys = complete(sys)
 
-ivs = Dict(c => 3a, d => 4, e => [5.0, 6.0, 7.0],
-    f => ones(Int, 3, 3), g => [0.1, 0.2, 0.3], h => "foo")
+ivs = Dict(
+    c => 3a, d => 4, e => [5.0, 6.0, 7.0],
+    f => ones(Int, 3, 3), g => [0.1, 0.2, 0.3], h => "foo"
+)
 
 ps = MTKParameters(sys, ivs)
 @test_nowarn copy(ps)
@@ -59,14 +65,18 @@ setp(sys, a)(ps, 1.0)
 
 @test getp(sys, a)(ps) == getp(sys, b)(ps) / 2 == getp(sys, c)(ps) / 3 == 1.0
 
-for (portion, values) in [(Tunable(), [1.0, 5.0, 6.0, 7.0])
-     (Discrete(), [3.0])
-     (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))]
+for (portion, values) in [
+        (Tunable(), [1.0, 5.0, 6.0, 7.0])
+        (Discrete(), [3.0])
+        (Constants(), vcat([0.1, 0.2, 0.3], ones(9), [4.0]))
+    ]
     buffer, repack, alias = canonicalize(portion, ps)
     @test alias
     @test sort(collect(buffer)) == values
-    @test all(isone,
-        canonicalize(portion, SciMLStructures.replace(portion, ps, ones(length(buffer))))[1])
+    @test all(
+        isone,
+        canonicalize(portion, SciMLStructures.replace(portion, ps, ones(length(buffer))))[1]
+    )
     # make sure it is out-of-place
     @test sort(collect(buffer)) == values
     SciMLStructures.replace!(portion, ps, ones(length(buffer)))
@@ -91,11 +101,14 @@ setp(sys, g)(ps, ones(100)) # with non-fixed-length array
 setp(sys, h)(ps, "bar") # with a non-numeric
 @test getp(sys, h)(ps) == "bar"
 
-varmap = Dict(a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x5, e => Float32[0.4, 0.5, 0.6],
-    f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar")
+varmap = Dict(
+    a => 1.0f0, b => 5.0f0, c => 2.0, d => 0x05, e => Float32[0.4, 0.5, 0.6],
+    f => 3ones(UInt, 3, 3), g => ones(Float32, 4), h => "bar"
+)
 @test_deprecated remake_buffer(sys, ps, varmap)
 @test_warn ["Symbolic variable b", "non-dependent", "parameter"] remake_buffer(
-    sys, ps, keys(varmap), values(varmap))
+    sys, ps, keys(varmap), values(varmap)
+)
 newps = remake_buffer(sys, ps, keys(varmap), values(varmap))
 
 for fname in (:tunable, :discrete, :constant)
@@ -135,7 +148,7 @@ ps = MTKParameters(sys, ivs)
 function loss(value, sys, ps)
     @test value isa ForwardDiff.Dual
     ps = remake_buffer(sys, ps, (a,), (value,))
-    getp(sys, a)(ps) + getp(sys, b)(ps)
+    return getp(sys, a)(ps) + getp(sys, b)(ps)
 end
 
 @test ForwardDiff.derivative(x -> loss(x, sys, ps), 1.5) == 3.0
@@ -177,84 +190,115 @@ ps = [p => 1.0] # Value for `d` is missing
 
 # scalar parameters only
 function level1()
-    @parameters p1=0.5 [tunable=true] p2=1 [tunable=true] p3=3 [tunable=false] p4=3 [tunable=true] y0
-    @variables x(t)=2 y(t)=y0
+    @parameters p1 = 0.5 [tunable = true] p2 = 1 [tunable = true] p3 = 3 [tunable = false] p4 = 3 [tunable = true] y0
+    @variables x(t) = 2 y(t) = y0
     D = Differential(t)
 
-    eqs = [D(x) ~ p1 * x - p2 * x * y
-           D(y) ~ -p3 * y + p4 * x * y]
+    eqs = [
+        D(x) ~ p1 * x - p2 * x * y
+        D(y) ~ -p3 * y + p4 * x * y
+    ]
 
-    sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, bindings = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
+    sys = mtkcompile(
+        complete(
+            System(
+                eqs, t, name = :sys, bindings = [y0 => 2p4]
+            )
+        )
+    )
+    return prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters
 function level2()
-    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4=3 [tunable=false] y0
-    @variables x(t)=2 y(t)=y0
+    @parameters p1 = 0.5 [tunable = true] (p23[1:2] = [1, 3.0]) [tunable = true] p4 = 3 [tunable = false] y0
+    @variables x(t) = 2 y(t) = y0
     D = Differential(t)
 
-    eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+    eqs = [
+        D(x) ~ p1 * x - p23[1] * x * y
+        D(y) ~ -p23[2] * y + p4 * x * y
+    ]
 
-    sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, bindings = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
+    sys = mtkcompile(
+        complete(
+            System(
+                eqs, t, name = :sys, bindings = [y0 => 2p4]
+            )
+        )
+    )
+    return prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 # scalar and vector parameters with different scalar types
 function level3()
-    @parameters p1=0.5 [tunable=true] (p23[1:2]=[1, 3.0]) [tunable=true] p4::Int=3 [tunable=true] y0::Int
-    @variables x(t)=2 y(t)=y0
+    @parameters p1 = 0.5 [tunable = true] (p23[1:2] = [1, 3.0]) [tunable = true] p4::Int = 3 [tunable = true] y0::Int
+    @variables x(t) = 2 y(t) = y0
     D = Differential(t)
 
-    eqs = [D(x) ~ p1 * x - p23[1] * x * y
-           D(y) ~ -p23[2] * y + p4 * x * y]
+    eqs = [
+        D(x) ~ p1 * x - p23[1] * x * y
+        D(y) ~ -p23[2] * y + p4 * x * y
+    ]
 
-    sys = mtkcompile(complete(System(
-        eqs, t, name = :sys, bindings = [y0 => 2p4])))
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
+    sys = mtkcompile(
+        complete(
+            System(
+                eqs, t, name = :sys, bindings = [y0 => 2p4]
+            )
+        )
+    )
+    return prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 3.0))
 end
 
 @testset "level$i" for (i, prob) in enumerate([level1(), level2(), level3()])
     ps = prob.p
     @testset "Type stability of $portion" for portion in [
-        Tunable(), Discrete(), Constants()]
+            Tunable(), Discrete(), Constants(),
+        ]
         @test_call canonicalize(portion, ps)
         @inferred canonicalize(portion, ps)
 
         # broken because the size of a vector of vectors can't be determined at compile time
-        @test_opt target_modules=(ModelingToolkitBase,) canonicalize(
-            portion, ps)
+        @test_opt target_modules = (ModelingToolkitBase,) canonicalize(
+            portion, ps
+        )
 
         buffer, repack, alias = canonicalize(portion, ps)
 
         # broken because dependent update functions break inference
-        @test_call target_modules=(ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer)))
+        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
+            portion, ps, ones(length(buffer))
+        )
         @inferred SciMLStructures.replace(
-            portion, ps, ones(length(buffer)))
+            portion, ps, ones(length(buffer))
+        )
         @inferred MTKParameters SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @test_opt target_modules=(ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer)))
+        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
+            portion, ps, ones(length(buffer))
+        )
 
-        @test_call target_modules=(ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer)))
+        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
+            portion, ps, ones(length(buffer))
+        )
         @inferred SciMLStructures.replace!(portion, ps, ones(length(buffer)))
-        @test_opt target_modules=(ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer)))
+        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
+            portion, ps, ones(length(buffer))
+        )
     end
 end
 
 # Issue#2642
 @parameters α β γ δ
 @variables x(t) y(t)
-eqs = [D(x) ~ (α - β * y) * x
-       D(y) ~ (δ * x - γ) * y]
+eqs = [
+    D(x) ~ (α - β * y) * x
+    D(y) ~ (δ * x - γ) * y
+]
 @mtkcompile odesys = System(eqs, t)
 odeprob = ODEProblem(
-    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0))
+    odesys, [x => 1.0, y => 1.0, α => 1.5, β => 1.0, γ => 3.0, δ => 1.0], (0.0, 10.0)
+)
 tunables, _... = canonicalize(Tunable(), odeprob.p)
 @test tunables isa AbstractVector{Float64}
 
@@ -280,14 +324,20 @@ VVDual = Vector{<:Vector{<:ForwardDiff.Dual}}
     @parameters a b::Int c::Vector{Float64} d[1:2, 1:2]::Int e::Foo{Int} f::AbstractFooT
     @named sys = System(Equation[], t, [], [a, b, c, d, e, f])
     sys = complete(sys)
-    ps = MTKParameters(sys,
-        Dict(a => 1.0, b => 2, c => 3ones(2),
-            d => 3ones(Int, 2, 2), e => Foo(1), f => Foo("a")))
+    ps = MTKParameters(
+        sys,
+        Dict(
+            a => 1.0, b => 2, c => 3ones(2),
+            d => 3ones(Int, 2, 2), e => Foo(1), f => Foo("a")
+        )
+    )
     @test_nowarn setp(sys, c)(ps, ones(4)) # so this is fixed when SII is fixed
     @test_throws DimensionMismatch set_parameter!(
-        ps, 4ones(Int, 3, 2), parameter_index(sys, d))
+        ps, 4ones(Int, 3, 2), parameter_index(sys, d)
+    )
     @test_throws DimensionMismatch set_parameter!(
-        ps, 4ones(Int, 4), parameter_index(sys, d)) # size has to match, not just length
+        ps, 4ones(Int, 4), parameter_index(sys, d)
+    ) # size has to match, not just length
     @test_nowarn setp(sys, f)(ps, Foo(:a)) # can change non-concrete type
 
     # Same flexibility is afforded to `b::Int` to allow for ForwardDiff
@@ -326,7 +376,7 @@ end
     @variables (V(t))[1:2]
     eqs = [
         D(V[1]) ~ k[1] - k[2] * V[1],
-        D(V[2]) ~ k[3] - k[4] * V[2]
+        D(V[2]) ~ k[3] - k[4] * V[2],
     ]
     @mtkcompile osys_scal = System(eqs, t, [V[1], V[2]], [k[1], k[2], k[3], k[4]])
 
@@ -339,16 +389,20 @@ end
 end
 
 # Parameter timeseries
-ps = MTKParameters([1.0, 1.0], (), (BlockedArray(zeros(4), [2, 2]),),
-    (), (), ())
+ps = MTKParameters(
+    [1.0, 1.0], (), (BlockedArray(zeros(4), [2, 2]),),
+    (), (), ()
+)
 ps2 = SciMLStructures.replace(Discrete(), ps, ones(4))
 @test typeof(ps2.discrete) == typeof(ps.discrete)
 with_updated_parameter_timeseries_values(
-    sys, ps, 1 => ModelingToolkitBase.NestedGetIndex(([5.0, 10.0],)))
+    sys, ps, 1 => ModelingToolkitBase.NestedGetIndex(([5.0, 10.0],))
+)
 @test ps.discrete[1][Block(1)] == [5.0, 10.0]
 with_updated_parameter_timeseries_values(
     sys, ps, 1 => ModelingToolkitBase.NestedGetIndex(([3.0, 30.0],)),
-    2 => ModelingToolkitBase.NestedGetIndex(([4.0, 40.0],)))
+    2 => ModelingToolkitBase.NestedGetIndex(([4.0, 40.0],))
+)
 @test ps.discrete[1][Block(1)] == [3.0, 30.0]
 @test ps.discrete[1][Block(2)] == [4.0, 40.0]
 @test SciMLBase.get_saveable_values(sys, ps, 1).x == (ps.discrete[1][Block(1)],)
@@ -356,9 +410,12 @@ with_updated_parameter_timeseries_values(
 # With multiple types and clocks
 ps = MTKParameters(
     (), (),
-    (BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
-        BlockedArray(falses(1), [1, 0])),
-    (), (), ())
+    (
+        BlockedArray([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [3, 3]),
+        BlockedArray(falses(1), [1, 0]),
+    ),
+    (), (), ()
+)
 @test SciMLBase.get_saveable_values(sys, ps, 1).x isa Tuple{Vector{Float64}, BitVector}
 tsidx1 = 1
 tsidx2 = 2
@@ -367,7 +424,8 @@ tsidx2 = 2
 @test length(ps.discrete[1][Block(tsidx2)]) == 3
 @test length(ps.discrete[2][Block(tsidx2)]) == 0
 with_updated_parameter_timeseries_values(
-    sys, ps, tsidx1 => ModelingToolkitBase.NestedGetIndex(([10.0, 11.0, 12.0], [false])))
+    sys, ps, tsidx1 => ModelingToolkitBase.NestedGetIndex(([10.0, 11.0, 12.0], [false]))
+)
 @test ps.discrete[1][Block(tsidx1)] == [10.0, 11.0, 12.0]
 @test ps.discrete[2][Block(tsidx1)][] == false
 
@@ -385,26 +443,30 @@ end
 if @isdefined(ModelingToolkit)
     @testset "Issue#3925: Autodiff after `subset_tunables`" begin
         function circuit_model()
-            @named resistor1 = Resistor(R=5.0)
-            @named resistor2 = Resistor(R=2.0)
-            @named capacitor1 = Capacitor(C=2.4)
-            @named capacitor2 = Capacitor(C=60.0)
+            @named resistor1 = Resistor(R = 5.0)
+            @named resistor2 = Resistor(R = 2.0)
+            @named capacitor1 = Capacitor(C = 2.4)
+            @named capacitor2 = Capacitor(C = 60.0)
             @named source = Voltage()
-            @named input_signal = Sine(frequency=1.0)
+            @named input_signal = Sine(frequency = 1.0)
             @named ground = Ground()
             @named ampermeter = CurrentSensor()
 
-            eqs = [connect(input_signal.output, source.V)
+            eqs = [
+                connect(input_signal.output, source.V)
                 connect(source.p, capacitor1.n, capacitor2.n)
                 connect(source.n, resistor1.p, resistor2.p, ground.g)
                 connect(resistor1.n, capacitor1.p, ampermeter.n)
-                connect(resistor2.n, capacitor2.p, ampermeter.p)]
+                connect(resistor2.n, capacitor2.p, ampermeter.p)
+            ]
 
-            @named circuit_model = System(eqs, t,
-                systems=[
+            @named circuit_model = System(
+                eqs, t,
+                systems = [
                     resistor1, resistor2, capacitor1, capacitor2,
-                    source, input_signal, ground, ampermeter
-                ], guesses = [capacitor1.i => 1.0])
+                    source, input_signal, ground, ampermeter,
+                ], guesses = [capacitor1.i => 1.0]
+            )
         end
 
         model = circuit_model()
@@ -416,9 +478,9 @@ if @isdefined(ModelingToolkit)
 
         tunable_parameters(sub_sys)
 
-        prob = ODEProblem(sub_sys, [sys.capacitor2.v => 0.0], (0, 3.))
+        prob = ODEProblem(sub_sys, [sys.capacitor2.v => 0.0], (0, 3.0))
 
-        setter = setsym_oop(prob, [sys.capacitor2.C]);
+        setter = setsym_oop(prob, [sys.capacitor2.C])
 
         function loss(x, ps)
             setter, prob = ps
@@ -429,7 +491,7 @@ if @isdefined(ModelingToolkit)
         end
 
         grad = ForwardDiff.gradient(Base.Fix2(loss, (setter, prob)), [3.0])
-        @test grad ≈ [0.14882627068752538] atol=1e-10
+        @test grad ≈ [0.14882627068752538] atol = 1.0e-10
     end
 end
 

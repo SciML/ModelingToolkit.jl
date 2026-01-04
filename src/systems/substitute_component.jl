@@ -4,7 +4,8 @@
 Validate the rules for replacement of subcomponents as defined in `substitute_component`.
 """
 function validate_replacement_rule(
-        rule::Pair{T, T}; namespace = []) where {T <: AbstractSystem}
+        rule::Pair{T, T}; namespace = []
+    ) where {T <: AbstractSystem}
     lhs, rhs = rule
 
     iscomplete(lhs) && throw(ArgumentError("LHS of replacement rule cannot be completed."))
@@ -32,8 +33,10 @@ function validate_replacement_rule(
             end
         end
         ru = getkey(rhs_u, u, nothing)
-        name = join([namespace; nameof(lhs); (hasname(u) ? getname(u) : Symbol(u))],
-            NAMESPACE_SEPARATOR)
+        name = join(
+            [namespace; nameof(lhs); (hasname(u) ? getname(u) : Symbol(u))],
+            NAMESPACE_SEPARATOR
+        )
         l_connect = something(getconnect(u), Equality)
         r_connect = something(getconnect(ru), Equality)
         if l_connect != r_connect
@@ -85,6 +88,7 @@ function validate_replacement_rule(
         name1 = join([namespace; nameof(lhs)], NAMESPACE_SEPARATOR)
         throw(ArgumentError("$name1 of replacement rule does not contain subsystem $(nameof(s))."))
     end
+    return
 end
 
 """
@@ -97,7 +101,8 @@ Chain `getproperty` calls on `root` in the order given in `hierarchy`.
 - `skip_namespace_first`: Whether to avoid namespacing in the first `getproperty` call.
 """
 function recursive_getproperty(
-        root::AbstractSystem, hierarchy::Vector{Symbol}; skip_namespace_first = true)
+        root::AbstractSystem, hierarchy::Vector{Symbol}; skip_namespace_first = true
+    )
     cur = root
     for (i, name) in enumerate(hierarchy)
         cur = getproperty(cur, name; namespace = i > 1 || !skip_namespace_first)
@@ -175,4 +180,3 @@ function substitute_component(sys::T, rule::Pair{T, T}) where {T <: AbstractSyst
     end
     return recreate_connections(newsys)
 end
-

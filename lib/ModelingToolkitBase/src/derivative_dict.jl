@@ -18,7 +18,7 @@ DerivativeDict{K}(args...) where {K} = DerivativeDict(Dict{K, SymbolicT}(args...
 
 Base.copy(dd::DerivativeDict) = DerivativeDict(copy(dd.dict))
 function Base.empty(dd::DerivativeDict, ::Type{K}, ::Type{V}) where {K, V}
-    DerivativeDict(empty(dd.dict, K, V))
+    return DerivativeDict(empty(dd.dict, K, V))
 end
 
 struct __DDSentinel end
@@ -27,7 +27,7 @@ const DD_SENTINEL = __DDSentinel()
 function Base.get(def::Base.Callable, dd::DerivativeDict, k::SymbolicT)
     res = get(dd.dict, k, DD_SENTINEL)
     res === DD_SENTINEL || return res
-    Moshi.Match.@match k begin
+    return Moshi.Match.@match k begin
         BSImpl.Term(; f, args) && if f isa Differential && f.order::Int > 1 end => begin
             order = f.order::Int
             res = get(dd.dict, Differential(f.x, 1)(args[1]), DD_SENTINEL)

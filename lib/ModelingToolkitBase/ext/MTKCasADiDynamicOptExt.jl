@@ -19,7 +19,7 @@ struct MXLinearInterpolation
     dt::Float64
 end
 function Base.getindex(m::MXLinearInterpolation, i...)
-    length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
+    return length(i) == length(size(m.u)) ? m.u[i...] : m.u[i..., :]
 end
 
 mutable struct CasADiModel{T}
@@ -33,12 +33,12 @@ mutable struct CasADiModel{T}
     solver_opti::Union{Nothing, Opti}
 
     function CasADiModel(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti = nothing)
-        new{typeof(P)}(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti)
+        return new{typeof(P)}(opti, U, V, P, tₛ, is_free_final, tsteps, solver_opti)
     end
 end
 
 struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
-       SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
+    SciMLBase.AbstractDynamicOptProblem{uType, tType, isinplace}
     f::F
     u0::uType
     tspan::tType
@@ -47,8 +47,10 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     kwargs::K
 
     function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
-        new{typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
-            typeof(p), typeof(f), typeof(kwargs)}(f, u0, tspan, p, model, kwargs)
+        return new{
+            typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
+            typeof(p), typeof(f), typeof(kwargs),
+        }(f, u0, tspan, p, model, kwargs)
     end
 end
 
@@ -59,22 +61,25 @@ function (M::MXLinearInterpolation)(τ)
 
     (i > length(M.t) || i < 1) && error("Cannot extrapolate past the tspan.")
     colons = ntuple(_ -> (:), length(size(M.u)) - 1)
-    if i < length(M.t)
-        M.u[colons..., i] + Δ*(M.u[colons..., i + 1] - M.u[colons..., i])
+    return if i < length(M.t)
+        M.u[colons..., i] + Δ * (M.u[colons..., i + 1] - M.u[colons..., i])
     else
         M.u[colons..., i]
     end
 end
 
-function MTK.CasADiDynamicOptProblem(sys::System, op, tspan;
+function MTK.CasADiDynamicOptProblem(
+        sys::System, op, tspan;
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...)
+        guesses = Dict(), kwargs...
+    )
     prob,
-    _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...)
-    prob
+        _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+    )
+    return prob
 end
 
 MTK.generate_internal_model(::Type{CasADiModel}) = CasADi.Opti()
@@ -84,14 +89,14 @@ function MTK.generate_state_variable!(model::Opti, u0, ns, tsteps)
     nt = length(tsteps)
     U = CasADi.variable!(model, ns, nt)
     set_initial!(model, U, DM(repeat(u0, 1, nt)))
-    MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
+    return MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
 end
 
 function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
     nt = length(tsteps)
     V = CasADi.variable!(model, nc, nt)
     !isempty(c0) && set_initial!(model, V, DM(repeat(c0, 1, nt)))
-    MXLinearInterpolation(V, tsteps, tsteps[2] - tsteps[1])
+    return MXLinearInterpolation(V, tsteps, tsteps[2] - tsteps[1])
 end
 
 function MTK.generate_tunable_params!(model::Opti, p0, np)
@@ -99,11 +104,11 @@ function MTK.generate_tunable_params!(model::Opti, p0, np)
     for i in 1:np
         set_initial!(model, P[i], p0[i])
     end
-    P
+    return P
 end
 
 function MTK.generate_timescale!(model::Opti, guess, is_free_t)
-    if is_free_t
+    return if is_free_t
         tₛ = variable!(model)
         set_initial!(model, tₛ, guess)
         subject_to!(model, tₛ >= 0)
@@ -114,7 +119,7 @@ function MTK.generate_timescale!(model::Opti, guess, is_free_t)
 end
 
 function MTK.add_constraint!(m::CasADiModel, expr)
-    if expr isa Equation
+    return if expr isa Equation
         subject_to!(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) == 0)
     elseif expr.relational_op === Symbolics.geq
         subject_to!(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) ≥ 0)
@@ -130,11 +135,12 @@ function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     for i in u0_idxs
         subject_to!(model, U.u[i, 1] == u0[i])
     end
+    return
 end
 
 function MTK.lowered_var(m::CasADiModel, uv, i, t)
     X = getfield(m, uv)
-    t isa Union{Num, SymbolicT} ? X.u[i, :] : X(t)[i]
+    return t isa Union{Num, SymbolicT} ? X.u[i, :] : X(t)[i]
 end
 
 function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
@@ -144,13 +150,13 @@ function MTK.lowered_integral(model::CasADiModel, expr, lo, hi)
     for (i, t) in enumerate(model.U.t)
         if lo < t < hi
             Δt = min(dt, t - lo)
-            total += (0.5*Δt*(expr[i] + expr[i - 1]))
+            total += (0.5 * Δt * (expr[i] + expr[i - 1]))
         elseif t >= hi && (t - dt < hi)
             Δt = hi - t + dt
-            total += (0.5*Δt*(expr[i] + expr[i - 1]))
+            total += (0.5 * Δt * (expr[i] + expr[i - 1]))
         end
     end
-    model.tₛ * total
+    return model.tₛ * total
 end
 
 MTK.needs_individual_tunables(::Opti) = true
@@ -201,7 +207,7 @@ function add_solve_constraints!(prob::CasADiDynamicOptProblem, tableau)
             subject_to!(solver_opti, U.u[:, k] + ΔU_tot == U.u[:, k + 1])
         end
     end
-    solver_opti
+    return solver_opti
 end
 
 struct CasADiCollocation <: AbstractCollocation
@@ -210,12 +216,13 @@ struct CasADiCollocation <: AbstractCollocation
 end
 
 function MTK.CasADiCollocation(solver, tableau = MTK.constructDefault())
-    CasADiCollocation(solver, tableau)
+    return CasADiCollocation(solver, tableau)
 end
 
 function MTK.prepare_and_optimize!(
         prob::CasADiDynamicOptProblem, solver::CasADiCollocation; verbose = false,
-        solver_options = Dict(), plugin_options = Dict(), kwargs...)
+        solver_options = Dict(), plugin_options = Dict(), kwargs...
+    )
     solver_opti = add_solve_constraints!(prob, solver.tableau)
     verbose || (solver_options["print_level"] = 0)
     solver!(solver_opti, "$(solver.solver)", plugin_options, solver_options)
@@ -224,7 +231,7 @@ function MTK.prepare_and_optimize!(
     catch ErrorException
     end
     prob.wrapped_model.solver_opti = solver_opti
-    prob.wrapped_model
+    return prob.wrapped_model
 end
 
 function MTK.get_U_values(model::CasADiModel)
@@ -232,13 +239,13 @@ function MTK.get_U_values(model::CasADiModel)
     (nu, nt) = size(model.U.u)
     U_vals = value_getter(model.solver_opti, model.U.u)
     size(U_vals, 2) == 1 && (U_vals = U_vals')
-    U_vals = [[U_vals[i, j] for i in 1:nu] for j in 1:nt]
+    return U_vals = [[U_vals[i, j] for i in 1:nu] for j in 1:nt]
 end
 
 function MTK.get_V_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
     (nu, nt) = size(model.V.u)
-    if nu*nt != 0
+    return if nu * nt != 0
         V_vals = value_getter(model.solver_opti, model.V.u)
         size(V_vals, 2) == 1 && (V_vals = V_vals')
         V_vals = [[V_vals[i, j] for i in 1:nu] for j in 1:nt]
@@ -249,20 +256,20 @@ end
 
 function MTK.get_P_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
-    [value_getter(model.solver_opti, model.P[i]) for i in eachindex(model.P)]
+    return [value_getter(model.solver_opti, model.P[i]) for i in eachindex(model.P)]
 end
 
 function MTK.get_t_values(model::CasADiModel)
     value_getter = MTK.successful_solve(model) ? CasADi.debug_value : CasADi.value
-    ts = value_getter(model.solver_opti, model.tₛ) .* model.U.t
+    return ts = value_getter(model.solver_opti, model.tₛ) .* model.U.t
 end
 function MTK.objective_value(model::CasADiModel)
-    CasADi.pyconvert(Float64, model.solver_opti.py.value(model.solver_opti.py.f))
+    return CasADi.pyconvert(Float64, model.solver_opti.py.value(model.solver_opti.py.f))
 end
 
 function MTK.successful_solve(m::CasADiModel)
     isnothing(m.solver_opti) && return false
     retcode = CasADi.return_status(m.solver_opti)
-    retcode == "Solve_Succeeded" || retcode == "Solved_To_Acceptable_Level"
+    return retcode == "Solve_Succeeded" || retcode == "Solved_To_Acceptable_Level"
 end
 end
