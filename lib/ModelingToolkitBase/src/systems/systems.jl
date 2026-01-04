@@ -147,6 +147,16 @@ function __mtkcompile(sys::AbstractSystem;
     filter!(all_dvs) do v
         v in original_vars || split_indexed_var(v)[1] in original_vars
     end
+
+    new_binds = copy(parent(bindings(sys)))
+    new_ics = copy(initial_conditions(sys))
+    for unused in setdiff(original_vars, all_dvs)
+        arr, isarr = split_indexed_var(unused)
+        arr in all_dvs && continue
+        delete!(new_binds, arr)
+        delete!(new_ics, arr)
+    end
+
     setdiff!(all_dvs, inputs, disturbance_inputs)
     if fully_determined === nothing
         fully_determined = false
@@ -342,6 +352,8 @@ function __mtkcompile(sys::AbstractSystem;
     @set! sys.outputs = outputs
     @set! sys.schedule = schedule
     @set! sys.isscheduled = true
+    @set! sys.bindings = new_binds
+    @set! sys.initial_conditions = new_ics
     return sys
 end
 
