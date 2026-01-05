@@ -281,7 +281,7 @@ end
 
 # To be overloaded downstream by MTK
 default_missing_guess_value() = default_missing_guess_value(nothing)
-default_missing_guess_value(_) = MissingGuessValue.Constant(true)
+default_missing_guess_value(_) = MissingGuessValue.Error()
 
 """
     $(TYPEDSIGNATURES)
