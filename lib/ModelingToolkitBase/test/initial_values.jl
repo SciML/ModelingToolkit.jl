@@ -372,3 +372,23 @@ end
     sol = solve(prob2)
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "metadata defaults for variables removed by `mtkcompile` are removed" begin
+    @parameters p d
+    @variables X(t) Y(t) = 1.0
+    eq = [
+        D(X) ~ p - d*X
+    ]
+    @named sys = System(eq, t, [X, Y], [p, d])
+    @test haskey(initial_conditions(sys), Y)
+    sys = mtkcompile(sys)
+    @test !haskey(initial_conditions(sys), Y)
+    @test_nowarn ODEProblem(sys, [X => 0.0, p => 2.0, d => 0.1], (0.0, 1.0))
+    
+    @variables X(t) Y(t) = X
+    @named sys = System(eq, t, [X, Y], [p, d])
+    @test haskey(bindings(sys), Y)
+    sys = mtkcompile(sys)
+    @test !haskey(bindings(sys), Y)
+    @test_nowarn ODEProblem(sys, [X => 0.0, p => 2.0, d => 0.1], (0.0, 1.0))
+end
