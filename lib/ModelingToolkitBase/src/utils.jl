@@ -525,13 +525,21 @@ end
 
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
-        x = Moshi.Match.@match x begin
-            BSImpl.Const() => continue
-            BSImpl.Term(; f, args) && if f === getindex end => args[1]
-            _ => x
-        end
+        SU.isconst(x) && continue
+        x = split_indexed_var(x)[1]
         hasname(x) || continue
-        vars[getname(x)] = x
+        nm = getname(x)
+        if !isequal(get(vars, nm, x), x)
+            throw(
+                ArgumentError(
+                    """
+                    Found variables with duplicate names! $x and $(vars[nm]) have the same \
+                    name but are not identical. This is not allowed.
+                    """
+                )
+            )
+        end
+        vars[nm] = x
     end
     return
 end
@@ -799,6 +807,16 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
                 push!(vars, args[1])
+            end
+            BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && SU.isconst(args[1]) end => begin
+                # `EvalAt` variables
+                collect_var!(unknowns, parameters, f(iv), iv; depth)
+            end
+            if iv isa SymbolicT && isdelay(var, iv) end => begin
+                f = Moshi.Match.@match var begin
+                    BSImpl.Term(; f) => f
+                end
+                collect_var!(unknowns, parameters, f(iv), iv; depth)
             end
             _ => collect_var!(unknowns, parameters, var, iv; depth)
         end
