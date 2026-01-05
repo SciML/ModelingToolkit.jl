@@ -232,7 +232,8 @@ function Base.showerror(io::IO, err::MissingGuessError)
     println(
         io,
         """
-        Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
+        Cyclic guesses detected in the system. Symbolic values were found for the following \
+        variables/parameters in the map: \
         """
     )
     for (sym, val) in zip(err.syms, err.vals)
@@ -241,7 +242,11 @@ function Base.showerror(io::IO, err::MissingGuessError)
     return println(
         io,
         """
-        In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """
+        In order to resolve this, please provide additional numeric guesses so that the \
+        chain can be resolved to assign numeric values to each variable. Alternatively, the \
+        `missing_guess_value` keyword can be used to set a fallback guess for all \
+        variables. The keyword must be passed an instance of the `MissingGuessValue` sum-type.
+        """
     )
 end
 
