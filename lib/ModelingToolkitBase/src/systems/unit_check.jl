@@ -3,6 +3,7 @@ check_units(_...) = true
 __get_unit_type(_...) = nothing
 get_unit(_...) = nothing
 validate(_...) = nothing
+_validate(_...) = true
 struct ValidationError <: Exception
     message::String
 end

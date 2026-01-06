@@ -5,7 +5,7 @@ const DQ = DynamicQuantities
 
 using ModelingToolkitBase, Symbolics, SymbolicUtils, JumpProcesses
 using ModelingToolkitBase: get_unit, check_units, __get_unit_type, validate, VariableUnit,
-    JumpType, setdefault, ValidationError
+    JumpType, setdefault, ValidationError, _validate
 using SymbolicUtils: isconst, issym, isadd, ismul, ispow, unwrap
 using Symbolics: SymbolicT, value
 import SciMLBase
@@ -207,7 +207,7 @@ function safe_get_unit(term, info)
     return side
 end
 
-function _validate(terms::Vector, labels::Vector{String}; info::String = "")
+function MTK._validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid = true
     first_unit = nothing
     first_label = nothing
@@ -232,7 +232,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     return valid
 end
 
-function _validate(conn::Connection; info::String = "")
+function MTK._validate(conn::Connection; info::String = "")
     valid = true
     syss = MTK.get_systems(conn)
     sys = first(syss)
