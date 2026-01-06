@@ -139,3 +139,11 @@ bar = complete(bar)
     @test length(parameters(sys5)) == 4
     @test any(isequal(p4), parameters(sys5))
 end
+
+@testset "Array globalscope variables are not discovered early if used scalarized" begin
+    @parameters p[1:1]
+    p = GlobalScope(p)
+    @variables x(t)
+    @named sys = System([D(x) ~ p[1]], t)
+    @test isempty(parameters(sys))
+end

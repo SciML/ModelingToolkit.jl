@@ -832,7 +832,8 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             """
         )
     end
-    check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
+    arr, isarr = split_indexed_var(var)
+    check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
