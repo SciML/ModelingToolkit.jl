@@ -191,8 +191,8 @@ at the inferred clock for that equation.
 struct SampleTime <: Operator
     SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
 end
-SymbolicUtils.promote_symtype(::Type{SampleTime}, ::Type{T}) where {T} = Real
-SymbolicUtils.promote_shape(::Type{SampleTime}, @nospecialize(x::SU.ShapeT)) = x
+SymbolicUtils.promote_symtype(::Type{SampleTime}) = Real
+SymbolicUtils.promote_shape(::Type{SampleTime}) = SU.ShapeVecT()
 Base.nameof(::SampleTime) = :SampleTime
 SymbolicUtils.isbinop(::SampleTime) = false
 
