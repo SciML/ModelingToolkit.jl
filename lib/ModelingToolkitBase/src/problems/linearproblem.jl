@@ -69,7 +69,7 @@ function SciMLBase.LinearProblem{iip}(
         kwargs...
     )
 
-    if any(x -> symbolic_type(x) != NotSymbolic(), u0)
+    if any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
