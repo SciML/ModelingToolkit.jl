@@ -2679,7 +2679,7 @@ macro namespace(expr)
     return esc(_config(expr, true))
 end
 
-function component_post_processing(expr, isconnector)
+function component_post_processing(__source__, expr, isconnector)
     @assert expr isa Expr && (
         expr.head == :function || (
             expr.head == :(=) &&
@@ -2694,7 +2694,7 @@ function component_post_processing(expr, isconnector)
     fname = sig.args[1]
     args = sig.args[2:end]
 
-    return quote
+    out = quote
         $Base.@__doc__ function $fname($(args...))
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
@@ -2715,6 +2715,9 @@ function component_post_processing(expr, isconnector)
             end
         end
     end
+    @assert out.args[2].args[3].args[2].args[1] isa LineNumberNode
+    out.args[2].args[3].args[2].args[1] = __source__  # set the LineNumberNode correctly
+    return out
 end
 
 """
@@ -2738,7 +2741,7 @@ information.
 See also: [`@connector`](@ref).
 """
 macro component(expr)
-    return esc(component_post_processing(expr, false))
+    return esc(component_post_processing(__source__, expr, false))
 end
 
 """

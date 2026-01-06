@@ -121,7 +121,7 @@ information.
 See also: [`@component`](@ref).
 """
 macro connector(expr)
-    return esc(component_post_processing(expr, true))
+    return esc(component_post_processing(__source__, expr, true))
 end
 
 function __mtkmodel_connector(_...)
