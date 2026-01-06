@@ -139,3 +139,21 @@ bar = complete(bar)
     @test length(parameters(sys5)) == 4
     @test any(isequal(p4), parameters(sys5))
 end
+
+@testset "Array globalscope variables are not discovered early if used scalarized" begin
+    @parameters p[1:1]
+    p = GlobalScope(p)
+    @variables x(t)
+    @named sys = System([D(x) ~ p[1]], t)
+    @test isempty(parameters(sys))
+end
+
+@testset "`discover_globalscoped` searches array equations" begin
+    @parameters cond::Bool
+    cond = GlobalScope(cond)
+    @variables x(t)[1:2]
+    @named sys = System([D(x) ~ [ifelse(cond, 0, 1), ifelse(cond, 1, 2)]], t)
+    @test isempty(parameters(sys))
+    sys2 = ModelingToolkitBase.discover_globalscoped(sys)
+    @test isequal(only(parameters(sys2)), cond)
+end

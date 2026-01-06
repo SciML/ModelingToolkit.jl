@@ -630,10 +630,7 @@ recursively searches through all subsystems of `sys`, increasing the depth if it
 function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, sys::AbstractSystem, iv::Union{SymbolicT, Nothing}, ::Type{op} = Differential; depth = 1) where {op}
     if has_eqs(sys)
         for eq in equations(sys)
-            eqtype_supports_collect_vars(eq) || continue
-            if eq isa Equation
-                symtype(eq.lhs) <: Number || continue
-            end
+            is_numeric_symtype(SU.symtype(eq.lhs)) || continue
             collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
     end
@@ -832,7 +829,8 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             """
         )
     end
-    check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
+    arr, isarr = split_indexed_var(var)
+    check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
