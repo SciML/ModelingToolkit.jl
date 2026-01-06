@@ -350,7 +350,12 @@ function check_no_parameter_equations(sys::AbstractSystem)
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
     for eq in equations(sys)
         empty!(varsbuf)
-        Symbolics.get_variables!(varsbuf, eq, allowed_vars; is_atomic = check_bindings_is_atomic, recurse = check_no_parameter_equations_recurse)
+        Symbolics.search_variables!(
+            varsbuf, eq; is_atomic = check_bindings_is_atomic,
+            recurse = check_no_parameter_equations_recurse
+        )
+        isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
+        intersect!(varsbuf, allowed_vars)
         isempty(varsbuf) && push!(pareqs, eq)
     end
 
