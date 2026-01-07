@@ -1,6 +1,7 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: SymScope, t_nounits as t, D_nounits as D
-using Symbolics: arguments, value, getname
+using Symbolics: arguments, value, getname, VartypeT
+import SymbolicUtils as SU
 using Test
 
 @variables a b(t) c d e(t)
@@ -156,4 +157,17 @@ end
     @test isempty(parameters(sys))
     sys2 = ModelingToolkitBase.discover_globalscoped(sys)
     @test isequal(only(parameters(sys2)), cond)
+end
+
+@testset "`@named` applies `ParentScope` to arrays of symbolics" begin
+    function Foo(; name, k)
+        tmp = SU.Const{VartypeT}(k)
+        vars = SU.search_variables(tmp)
+        for var in vars
+            @test SU.getmetadata(var, SymScope, LocalScope()) == ParentScope(LocalScope())
+        end
+    end
+    @parameters k
+    @variables x(t)
+    @named foo = Foo(; k = [k + 1, x + 2])
 end
