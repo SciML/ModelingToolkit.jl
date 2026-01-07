@@ -611,7 +611,8 @@ function SciMLBase.remake_initialization_data(
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, guesses;
         time_dependent_init, use_scc, initialization_eqs, floatT, fast_path = true,
-        u0_constructor, p_constructor, allow_incomplete = true, check_units = false
+        u0_constructor, p_constructor, allow_incomplete = true, check_units = false,
+        missing_guess_value = meta.missing_guess_value
     )
 
     odefn = remake(odefn; kws...)

@@ -988,6 +988,10 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
+    """
+    The value of the `missing_guess_value` keyword indicating how to handle missing guesses.
+    """
+    missing_guess_value::MissingGuessValue.Type
 end
 
 """
@@ -1087,6 +1091,7 @@ function maybe_build_initialization_problem(
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
+        missing_guess_value = default_missing_guess_value(),
         implicit_dae = false, kwargs...
     )
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
@@ -1098,7 +1103,8 @@ function maybe_build_initialization_problem(
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
         sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...
+        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
+        missing_guess_value, kwargs...
     )
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1142,7 +1148,7 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; u0_constructor,
             p_constructor, eval_expression, eval_module
         ),
-        get_initial_unknowns, SetInitialUnknowns(sys)
+        get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
 
     if time_dependent_init
