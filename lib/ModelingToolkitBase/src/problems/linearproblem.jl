@@ -110,7 +110,15 @@ function get_A_b_from_LinearFunction(
         A = u0_constructor(u0_eltype.(get_A(p)))
         b = u0_constructor(u0_eltype.(get_b(p)))
     else
-        A = u0_constructor(u0_eltype.(interface.update_A!(p)))
+        A = u0_eltype.(interface.update_A!(p))
+        szA = size(A)::NTuple{2, Int}
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, szA)
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(szA))(_A)
+        end
         b = u0_constructor(u0_eltype.(interface.update_b!(p)))
     end
     if sparse
