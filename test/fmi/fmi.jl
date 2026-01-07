@@ -7,7 +7,8 @@ const FMU_DIR = joinpath(@__DIR__, "fmus")
 @testset "Standalone pendulum model" begin
     fmu = loadFMU("SpringPendulum1D", "Dymola", "2022x"; type = :ME)
     truesol = FMI.simulate(
-        fmu, (0.0, 8.0); saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"]
+        fmu, (0.0, 8.0); saveat = 0.0:0.1:8.0, recordValues = ["mass.s", "mass.v"],
+        reltol = 1.0e-8, abstol = 1.0e-8
     )
 
     function test_no_inputs_outputs(sys)
