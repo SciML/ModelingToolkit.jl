@@ -133,6 +133,11 @@ function SciMLBase.get_new_A_b(
         sys::AbstractSystem, f::SciMLBase.SymbolicLinearInterface, p, A, b; kw...
     )
     if ArrayInterface.ismutable(A)
+        T = eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1])
+        if eltype(A) !== T
+            A = similar(A, T)
+            b = similar(b, T)
+        end
         f.update_A!(A, p)
         f.update_b!(b, p)
     else
