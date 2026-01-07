@@ -10,6 +10,11 @@ import DiffEqNoiseProcess
 using Setfield: @set!
 
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
@@ -45,7 +50,7 @@ pend = complete(pend)
 # Guesses for D(x) and D(y) should not be required
 initprob = ModelingToolkitBase.InitializationProblem(
     pend, 0.0, [g => 1];
-    guesses = [x => 1, y => 0.2, λ => 0.0]
+    guesses = [x => 1, y => 0.2, λ => 0.0], missing_guess_value
 )
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
@@ -74,8 +79,8 @@ sol = solve(initprob)
 )
 
 prob = ODEProblem(
-    pend, [x => 1, y => 0, g => 1], (0.0, 1.5),
-    guesses = [x => 1, y => 0.2, λ => 0.0]
+    pend, [x => 1, y => 0, g => 1], (0.0, 1.5);
+    guesses = [x => 1, y => 0.2, λ => 0.0], missing_guess_value
 )
 prob.f.initializeprob isa NonlinearProblem
 sol = solve(prob.f.initializeprob)
@@ -88,8 +93,8 @@ else
 end
 
 prob = ODEProblem(
-    pend, [x => 1, g => 1], (0.0, 1.5),
-    guesses = [x => 1, y => 0.2, λ => 0.0]
+    pend, [x => 1, g => 1], (0.0, 1.5);
+    guesses = [x => 1, y => 0.2, λ => 0.0], missing_guess_value
 )
 prob.f.initializeprob isa NonlinearLeastSquaresProblem
 sol = solve(prob.f.initializeprob)
@@ -316,7 +321,7 @@ end
 end
 
 @mtkcompile sys = HydraulicSystem()
-initprob = ModelingToolkitBase.InitializationProblem(sys, 0.0)
+initprob = ModelingToolkitBase.InitializationProblem(sys, 0.0; missing_guess_value)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
 @test initprob isa NonlinearLeastSquaresProblem
@@ -552,7 +557,7 @@ end
     ]
 
     tspan = (0.0, 0.2)
-    prob_mtk = ODEProblem(sys, [u0; p], tspan)
+    prob_mtk = ODEProblem(sys, [u0; p], tspan; missing_guess_value)
     sol = solve(prob_mtk, Tsit5())
     @test sol[x * (ρ - z) - y][1] ≈ 0.0 atol = 1.0e-10
 
@@ -597,8 +602,8 @@ sol = solve(prob, Tsit5())
     pend = complete(pend)
 
     prob = ODEProblem(
-        pend, [x => 1, g => 1], (0.0, 1.5),
-        guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1]
+        pend, [x => 1, g => 1], (0.0, 1.5);
+        guesses = [λ => 0, y => 1], initialization_eqs = [y ~ 1], missing_guess_value
     )
 
     unsimp = generate_initializesystem(pend; op = [x => 1], initialization_eqs = [y ~ 1])
@@ -704,9 +709,9 @@ tspan = (0.0, 10.0)
 ps = [ω => 0.5, k1 => 2.0, k2 => 3.0]
 
 oprob_1st_order_1 = ODEProblem(sys_1st_order, [u0_1st_order_1; ps], tspan)
-oprob_1st_order_2 = ODEProblem(sys_1st_order, [u0_1st_order_2; ps], tspan)
+oprob_1st_order_2 = ODEProblem(sys_1st_order, [u0_1st_order_2; ps], tspan; missing_guess_value)
 oprob_2nd_order_1 = ODEProblem(sys_2nd_order, [u0_2nd_order_1; ps], tspan) # gives sys_2nd_order
-oprob_2nd_order_2 = ODEProblem(sys_2nd_order, [u0_2nd_order_2; ps], tspan)
+oprob_2nd_order_2 = ODEProblem(sys_2nd_order, [u0_2nd_order_2; ps], tspan; missing_guess_value)
 
 @test solve(oprob_1st_order_1, Rosenbrock23()).retcode ==
     SciMLBase.ReturnCode.InitialFailure
@@ -764,7 +769,10 @@ end
             @set! sys.eqs = [D(x) ~ p * x + rhss[1] - neqs[1, 1] * a]
         end
         sys = complete(sys)
-        prob = Problem(sys, [x => 1.0, y => 1.0], (0.0, 1.0); u0_constructor, p_constructor)
+        prob = Problem(
+            sys, [x => 1.0, y => 1.0], (0.0, 1.0);
+            u0_constructor, p_constructor, missing_guess_value
+        )
         integ = init(prob, alg; abstol = 1.0e-6, reltol = 1.0e-6)
         @test integ.ps[p] ≈ 0.5 atol = 1.0e-6
         @test integ.ps[q] ≈ 1.0 atol = 1.0e-6
@@ -772,7 +780,10 @@ end
         @test parameter_values(integ).tunable isa expectedT
 
         # Specify `p`, solve for `y`
-        prob = Problem(sys, [x => 1.0, p => 1.0], (0.0, 1.0); u0_constructor, p_constructor)
+        prob = Problem(
+            sys, [x => 1.0, p => 1.0], (0.0, 1.0);
+            u0_constructor, p_constructor, missing_guess_value
+        )
         integ = init(prob, alg; abstol = 1.0e-6, reltol = 1.0e-6)
         @test integ.ps[p] ≈ 1.0
         @test integ.ps[q] ≈ 2.0
@@ -787,7 +798,10 @@ end
             initialization_eqs = [p ~ 3 * q^2], guesses = [q => 10.0, p => 1.0]
         )
         # Specify `p`
-        prob = Problem(sys, [x => 1.0, y => 1.0, p => 12.0], (0.0, 1.0); u0_constructor, p_constructor)
+        prob = Problem(
+            sys, [x => 1.0, y => 1.0, p => 12.0], (0.0, 1.0);
+            u0_constructor, p_constructor, missing_guess_value
+        )
         if !@isdefined(ModelingToolkit)
             @test prob.f.initialization_data.initializeprob[q] ≈ 10.0 atol = 1.0e-10
         end
@@ -798,10 +812,16 @@ end
         @test parameter_values(integ).tunable isa expectedT
 
         # Specify `q`
-        prob = Problem(sys, [x => 1.0, y => 1.0, q => 3.0], (0.0, 1.0); u0_constructor, p_constructor)
+        prob = Problem(
+            sys, [x => 1.0, y => 1.0, q => 3.0], (0.0, 1.0);
+            u0_constructor, p_constructor
+        )
         # Specify `initializealg` because the default for OOP form is SimpleTrustRegion which
         # doesn't converge with the un-torn system in MTKBase.
-        integ = init(prob, alg; abstol = 1.0e-6, reltol = 1.0e-6, initializealg = SciMLBase.OverrideInit(; nlsolve = NewtonRaphson()))
+        integ = init(
+            prob, alg; abstol = 1.0e-6, reltol = 1.0e-6,
+            initializealg = SciMLBase.OverrideInit(; nlsolve = NewtonRaphson())
+        )
         @test integ.ps[p] ≈ 27.0 atol = 1.0e-6
         @test integ.ps[q] ≈ 3.0
         @test state_values(integ) isa expectedT
@@ -830,7 +850,10 @@ end
             @set! sys.eqs = [D(x) ~ p * x + rhss[1] - neqs[1, 1] * a]
         end
         sys = complete(sys)
-        prob = Problem(sys, [x => 2.0, y => 4.0, p => 1.0, q => missing], (0.0, 1.0); u0_constructor, p_constructor)
+        prob = Problem(
+            sys, [x => 2.0, y => 4.0, p => 1.0, q => missing], (0.0, 1.0);
+            u0_constructor, p_constructor, missing_guess_value
+        )
         integ = init(prob, alg; abstol = 1.0e-6, reltol = 1.0e-6)
         @test integ.ps[p] ≈ 1.0
         @test integ.ps[q] ≈ 1.5
@@ -1228,8 +1251,8 @@ end
     sys = mtkcompile(sys)
 
     prob = ODEProblem(
-        pend, [x => 1, y => 0, g => 1], (0.0, 1.5),
-        guesses = [x => 1.0, y => 1.0, λ => 1.0]
+        pend, [x => 1, y => 0, g => 1], (0.0, 1.5);
+        guesses = [x => 1.0, y => 1.0, λ => 1.0], missing_guess_value
     )
     sol = solve(prob, FBDF())
     @test SciMLBase.successful_retcode(sol)
@@ -1487,7 +1510,10 @@ end
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ p * y], t; initialization_eqs = [x^2 + y[1]^2 + y[2]^2 ~ 4]
     )
-    prob = ODEProblem(sys, [x => 1.0, y[1] => 1, p => 2ones(2, 2)], (0.0, 1.0); guesses = [y[2] => 2.0])
+    prob = ODEProblem(
+        sys, [x => 1.0, y[1] => 1, p => 2ones(2, 2)], (0.0, 1.0);
+        guesses = [y[2] => 2.0], missing_guess_value
+    )
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 1.0 atol = 1.0e-6
     @test integ[y] ≈ [1.0, sqrt(2.0)] atol = 1.0e-6
@@ -1697,8 +1723,8 @@ end
     pend = complete(pend)
 
     prob = ODEProblem(
-        pend, [y => -(√2 / 2), D(y) => 0.0, g => 1], (0.0, 1.5),
-        guesses = [λ => 1, x => √2 / 2]
+        pend, [y => -(√2 / 2), D(y) => 0.0, g => 1], (0.0, 1.5);
+        guesses = [λ => 1, x => √2 / 2], missing_guess_value
     )
     sol = solve(prob, FBDF())
 
@@ -1712,8 +1738,8 @@ end
 
     @testset "Initial values for algebraic variables are retained" begin
         prob2 = ODEProblem(
-            pend, [x => (√2 / 2), D(y) => 0.0, g => 1], (0.0, 1.5),
-            guesses = [λ => 1, y => √2 / 2]
+            pend, [x => (√2 / 2), D(y) => 0.0, g => 1], (0.0, 1.5);
+            guesses = [λ => 1, y => √2 / 2], missing_guess_value
         )
         sol = solve(prob, FBDF())
         @test SciMLBase.successful_retcode(sol)
@@ -1840,7 +1866,7 @@ end
 @testset "Initial conditions removed with ` => nothing` aren't retained" begin
     @variables x(t)[1:2]
     @mtkcompile sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; initial_conditions = [x => ones(2)])
-    prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0))
+    prob = ODEProblem(sys, [x[1] => nothing, x[2] => 1], (0.0, 1.0); missing_guess_value)
     @test SciMLBase.initialization_status(prob) == SciMLBase.FULLY_DETERMINED
 end
 

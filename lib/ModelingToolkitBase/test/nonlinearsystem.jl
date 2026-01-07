@@ -9,6 +9,12 @@ using ModelingToolkitBase: get_default_or_guess, MTKParameters
 import SymbolicUtils as SU
 using Symbolics: VartypeT, unwrap
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Define some variables
@@ -135,7 +141,7 @@ D = Differential(t)
 @named sys = System([D(subsys.x) ~ subsys.x + subsys.x], t, systems = [subsys])
 sys = mtkcompile(sys)
 u0 = [subsys.x => 1]
-prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0); guesses = [subsys.y => 1])
+prob = ODEProblem(sys, [u0; [subsys.σ => 1, subsys.ρ => 2, subsys.β => 3]], (0, 1.0); guesses = [subsys.y => 1], missing_guess_value)
 sol = solve(prob, FBDF(), reltol = 1.0e-7, abstol = 1.0e-7)
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u] atol = 1.0e-7
 if @isdefined(ModelingToolkit)
