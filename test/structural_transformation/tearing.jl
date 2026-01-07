@@ -280,3 +280,10 @@ end
     @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
     @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
 end
+
+@testset "`Initial` parameters are added for observed variables solved by inline linear SCCS" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
+    @test Initial(sys.resistor1.v) in Set(ModelingToolkit.get_ps(sys))
+    @test Initial(sys.resistor2.v) in Set(ModelingToolkit.get_ps(sys))
+end

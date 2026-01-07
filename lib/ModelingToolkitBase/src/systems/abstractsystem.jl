@@ -566,7 +566,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     _sys = unhack_system(sys)
     obs = observed(_sys)
     eqs = equations(_sys)
-    for x in unknowns(sys)
+    for x in unknowns(_sys)
         if !split
             push!(all_initialvars, x)
             continue
