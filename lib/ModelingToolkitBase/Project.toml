@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.5.0"
+version = "1.5.1"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
