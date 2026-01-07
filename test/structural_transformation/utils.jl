@@ -216,14 +216,14 @@ end
             mapping = map_variables_to_equations(sys)
             x1 = operation(unwrap(osc1.x))
             x2 = operation(unwrap(osc2.x))
-            @test mapping[osc1.x] == (D(osc1.x) ~ osc1.y)
-            @test mapping[osc1.y] == (D(osc1.y) ~ osc1.jcn - osc1.k * x1(t - osc1.τ))
-            @test mapping[osc1.delx] == (osc1.delx ~ x1(t - osc1.τ))
-            @test mapping[osc1.jcn] == (osc1.jcn ~ osc2.delx)
-            @test mapping[osc2.x] == (D(osc2.x) ~ osc2.y)
-            @test mapping[osc2.y] == (D(osc2.y) ~ osc2.jcn - osc2.k * x2(t - osc2.τ))
-            @test mapping[osc2.delx] == (osc2.delx ~ x2(t - osc2.τ))
-            @test mapping[osc2.jcn] == (osc2.jcn ~ osc1.delx)
+            @test mapping[sys.osc1.x] == (D(sys.osc1.x) ~ sys.osc1.y)
+            @test mapping[sys.osc1.y] == (D(sys.osc1.y) ~ sys.osc1.jcn - sys.osc1.k * x1(t - sys.osc1.τ))
+            @test mapping[sys.osc1.delx] == (sys.osc1.delx ~ x1(t - sys.osc1.τ))
+            @test mapping[sys.osc1.jcn] == (sys.osc1.jcn ~ sys.osc2.delx)
+            @test mapping[sys.osc2.x] == (D(sys.osc2.x) ~ sys.osc2.y)
+            @test mapping[sys.osc2.y] == (D(sys.osc2.y) ~ sys.osc2.jcn - sys.osc2.k * x2(t - sys.osc2.τ))
+            @test mapping[sys.osc2.delx] == (sys.osc2.delx ~ x2(t - sys.osc2.τ))
+            @test mapping[sys.osc2.jcn] == (sys.osc2.jcn ~ sys.osc1.delx)
             @test length(mapping) == 8
         end
     end
