@@ -25,9 +25,9 @@ function MTKBase.__mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        sort_eqs = true,
+        sort_eqs::Bool = true,
         kwargs...
-    )
+    )::System
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     state = TearingState(sys, source_info; sort_eqs)
@@ -87,8 +87,8 @@ function MTKBase.__mtkcompile(
         ]
         ode_sys = mtkcompile(
             sys; inputs, outputs, disturbance_inputs, kwargs...
-        )
-        eqs = equations(ode_sys)
+        )::System
+        eqs = equations(ode_sys)::Vector{Equation}
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
         for (i, eq) in enumerate(eqs)
             dvar = eq.lhs
@@ -133,7 +133,7 @@ function MTKBase.__mtkcompile(
     end
 end
 
-function MTKBase.simplify_sde_system(sys::System; kwargs...)
+function MTKBase.simplify_sde_system(sys::System; kwargs...)::System
     return __mtkcompile(sys; kwargs...)
 end
 

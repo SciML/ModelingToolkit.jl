@@ -39,6 +39,7 @@ end
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
+            @safetestset "Type Stability Tests" include("jet_tests.jl")
             @mtktestset("Input Output Test", "input_output_handling.jl")
             @safetestset "Clock Test" include("clock.jl")
             @mtktestset("Variable binding semantics", "binding_semantics.jl")
