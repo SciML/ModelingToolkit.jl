@@ -120,11 +120,14 @@ function SciMLBase.SCCNonlinearProblem{iip}(
 
     if length(var_sccs) == 1
         if isaffine(sys)
-            linprob = LinearProblem{iip}(sys, op; eval_expression, eval_module, kwargs...)
+            linprob = LinearProblem{iip}(
+                sys, op; eval_expression, eval_module,
+                u0_constructor, cse, kwargs...
+            )
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
             return NonlinearProblem{iip}(
-                sys, op; eval_expression, eval_module, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, cse, kwargs...
             )
         end
     end
