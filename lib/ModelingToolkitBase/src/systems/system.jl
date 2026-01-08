@@ -263,6 +263,10 @@ struct System <: IntermediateDeprecationSystem
     """
     state_priorities::AtomicMapT{Int}
     """
+    Variables marked as irreducible for simplification.
+    """
+    irreducibles::AtomicSetT
+    """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
     """
@@ -285,7 +289,7 @@ struct System <: IntermediateDeprecationSystem
             ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
-            isscheduled = false,
+            irreducibles = AtomicSetT(), isscheduled = false,
             schedule = nothing; checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
@@ -339,7 +343,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            state_priorities,
+            state_priorities, irreducibles,
             isscheduled, schedule
         )
     end
@@ -383,6 +387,15 @@ function as_atomicmap(::Type{T}, x::Union{AbstractDict, AbstractArray{<:Pair}}) 
     return result
 end
 
+parse_atomicset(x::AtomicSetT) = x
+function parse_atomicset(vars)
+    result = AtomicSetT()
+    for var in vars
+        push!(result, unwrap(var))
+    end
+    return result
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -413,6 +426,7 @@ function System(
         is_dde = nothing, inputs = OrderedSet{SymbolicT}(),
         outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing, state_priorities = AtomicMapT{Int}(),
+        irreducibles = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         checks = true, __legacy_defaults__ = nothing
@@ -513,8 +527,10 @@ function System(
     end
 
     state_priorities = as_atomicmap(Int, state_priorities)
+    irreducibles = parse_atomicset(irreducibles)
     if discover_from_metadata
         collect_metadata!(VariableStatePriority, state_priorities, dvs)
+        collect_metadata!(VariableIrreducible, irreducibles, dvs)
     end
 
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
@@ -580,7 +596,7 @@ function System(
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem, is_discrete, state_priorities; checks
+        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
     )
 end
 
@@ -899,6 +915,7 @@ function flatten(sys::System, noeqs = false)
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
+        irreducibles = irreducibles(sys),
         # without this, any initial conditions/bindings/guesses obtained from metadata that
         # were later removed by the user will be re-added. Right now, we just want to
         # retain `initial_conditions(sys)` as-is.

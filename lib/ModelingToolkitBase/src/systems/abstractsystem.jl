@@ -916,6 +916,7 @@ const SYS_PROPS = [
     :is_initializesystem
     :is_discrete
     :state_priorities
+    :irreducibles
     :assertions
     :ignored_connections
     :parent
@@ -1730,6 +1731,17 @@ function state_priorities(sys::AbstractSystem)
         left_merge!(sps, namespace_expr(state_priorities(s), s))
     end
     return sps
+end
+
+function irreducibles(sys::AbstractSystem)
+    ircs = get_irreducibles(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return ircs
+    ircs = copy(ircs)
+    for s in systems
+        union!(ircs, namespace_expr(irreducibles(s), s))
+    end
+    return ircs
 end
 
 function initial_conditions_and_guesses(sys::AbstractSystem)
@@ -2989,6 +3001,7 @@ function extend(
     ics = merge(get_initial_conditions(basesys), get_initial_conditions(sys)) # prefer `sys`
     binds = merge(get_bindings(basesys), get_bindings(sys)) # prefer `sys`
     sps = merge(get_state_priorities(basesys), get_state_priorities(sys))
+    ircs = union(get_irreducibles(basesys), get_irreducibles(sys))
     meta = MetadataT()
     for kvp in get_metadata(basesys)
         kvp[1] == MutableCacheKey && continue
@@ -3003,7 +3016,7 @@ function extend(
     kwargs = (
         observed = obs, continuous_events = cevs,
         discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
-        metadata = meta, state_priorities = sps,
+        metadata = meta, state_priorities = sps, irreducibles = ircs,
         name = name, description = description, gui_metadata = gui_metadata,
     )
 
