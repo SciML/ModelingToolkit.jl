@@ -1443,6 +1443,13 @@ function namespace_expr(O::AbstractDict, sys::AbstractSystem, n::Symbol = nameof
     end
     return O2
 end
+function namespace_expr(O::AbstractSet, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+    O2 = empty(O)
+    for v in O
+        push!(O2, namespace_expr(v, sys, n; kw...))
+    end
+    return O2
+end
 function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
     any(isequal(O), ivs) && return O
     isvar = isvariable(O)
