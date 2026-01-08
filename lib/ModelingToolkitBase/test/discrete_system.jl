@@ -7,6 +7,12 @@ using ModelingToolkitBase, SymbolicIndexingInterface, Test
 using ModelingToolkitBase: t_nounits as t
 using Setfield: @set!
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 # Make sure positive shifts error
 @variables x(t)
 k = ShiftIndex(t)
@@ -276,7 +282,7 @@ end
     @variables x(t) = 1
     k = ShiftIndex(t)
     @mtkcompile sys = System([x(k) ~ x(k - 1) + 1], t)
-    prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0))
+    prob = @test_nowarn DiscreteProblem(sys, nothing, (0.0, 1.0); missing_guess_value)
     sol = solve(prob, FunctionMap())
     @test SciMLBase.successful_retcode(sol)
 end
@@ -323,7 +329,7 @@ end
             y(k - 1) => 1.0, z(k - 1) => 1.0,
         ]
     )
-    discprob = DiscreteProblem(discsys, p, (0, 10))
+    discprob = DiscreteProblem(discsys, p, (0, 10); missing_guess_value)
     sol = solve(discprob, FunctionMap())
     @test SciMLBase.successful_retcode(sol)
 end

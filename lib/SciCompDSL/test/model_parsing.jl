@@ -10,6 +10,12 @@ using DynamicQuantities, OrdinaryDiffEqDefault, OrdinaryDiffEqTsit5
 using SciCompDSL
 using ModelingToolkitBase: t, D
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 # Mock module used to test if the `@mtkmodel` macro works with fully-qualified names as well.
@@ -154,7 +160,7 @@ C_val = 20u"F"
 R_val = 20u"Ω"
 res__R = 100u"Ω"
 @mtkcompile rc = RC(; C_val, R_val, resistor.R = res__R)
-prob = ODEProblem(rc, [], (0, 1.0e9))
+prob = ODEProblem(rc, [], (0, 1.0e9); missing_guess_value)
 sol = solve(prob)
 defs = ModelingToolkitBase.initial_conditions(rc)
 @test sol[rc.capacitor.v][end] ≈ value(defs[rc.constant.k])

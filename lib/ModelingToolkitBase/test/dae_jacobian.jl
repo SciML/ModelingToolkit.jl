@@ -58,7 +58,7 @@ p = [
     p2 => 3.0,
 ]
 
-prob = DAEProblem(complete(sys), [du0; p], tspan, jac = true, sparse = true)
+prob = DAEProblem(complete(sys), [du0; p], tspan, jac = true, sparse = true, missing_guess_value = MissingGuessValue.Constant(1.0))
 sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 2.0e-12

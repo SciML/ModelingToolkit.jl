@@ -320,6 +320,7 @@ export AbstractDynamicOptProblem, JuMPDynamicOptProblem, InfiniteOptDynamicOptPr
 export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
     CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
+export MissingGuessValue
 
 const set_scalar_metadata = setmetadata
 

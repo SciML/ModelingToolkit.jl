@@ -45,5 +45,3 @@ function MTKBase.get_initialization_problem_type(
         NonlinearLeastSquaresProblem
     end
 end
-
-MTKBase.default_missing_guess_value(::Nothing) = MTKBase.MissingGuessValue.Error()

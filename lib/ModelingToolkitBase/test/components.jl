@@ -11,6 +11,12 @@ using BipartiteGraphs
 import SymbolicUtils as SU
 include("common/rc_model.jl")
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 @testset "Basics" begin
     @unpack resistor, capacitor, source = rc_model
     function check_contract(sys)
@@ -77,7 +83,7 @@ include("common/rc_model.jl")
     end
     @test !isempty(ModelingToolkitBase.bindings(sys))
     u0 = [capacitor.v => 0.0]
-    prob = ODEProblem(sys, u0, (0, 10.0))
+    prob = ODEProblem(sys, u0, (0, 10.0); missing_guess_value)
     sol = solve(prob, Rodas4(); abstol = 1.0e-8, reltol = 1.0e-8)
     check_rc_sol(sol)
 end
@@ -85,7 +91,7 @@ end
 @testset "Outer/inner connections" begin
     sys = mtkcompile(rc_model)
 
-    prob = ODEProblem(sys, [sys.capacitor.v => 0.0], (0.0, 10.0))
+    prob = ODEProblem(sys, [sys.capacitor.v => 0.0], (0.0, 10.0); missing_guess_value)
     sol = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol)
     function rc_component(; name, R = 1, C = 1)
@@ -121,7 +127,7 @@ end
     sys_inner_outer = mtkcompile(sys_inner_outer)
     @test !isempty(ModelingToolkitBase.bindings(sys_inner_outer))
     u0 = [rc_comp.capacitor.v => 0.0]
-    prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
+    prob = ODEProblem(sys_inner_outer, u0, (0, 10.0); sparse = true, missing_guess_value)
     sol_inner_outer = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol_inner_outer)
     if @isdefined(ModelingToolkit)
@@ -293,7 +299,7 @@ end
         [resistor, capacitor, ground]
     )
     sys = mtkcompile(rc_model)
-    prob = ODEProblem(sys, [sys.c1.v => 0.0], (0, 10.0))
+    prob = ODEProblem(sys, [sys.c1.v => 0.0], (0, 10.0); missing_guess_value)
     sol = solve(prob, @isdefined(ModelingToolkit) ? Tsit5() : Rodas5P())
 end
 

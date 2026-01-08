@@ -6,6 +6,12 @@ using StaticArrays
 using SymbolicIndexingInterface
 using Test
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 @variables x(t)[1:3] = [1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
 @mtkcompile sys = System([D(x) ~ t * x], t) simplify = false
@@ -195,9 +201,12 @@ end
     pend = complete(pend)
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-        pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => y + 1]
+        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1]
     )
-    ODEProblem(pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => 0.5])
+    ODEProblem(
+        pend, [x => 1, g => 1], (0, 1);
+        guesses = [y => λ, λ => 0.5], missing_guess_value
+    )
 
     # Throw multiple if multiple are missing
     @variables a(t) b(t) c(t) d(t) e(t)
@@ -347,7 +356,7 @@ end
     u0 = [y => -1.0, D(y) => 0.0]
     u0_constructor = p_constructor = vals -> SVector{length(vals)}(vals...)
     tspan = (0.0, 5.0)
-    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
+    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor, missing_guess_value)
     @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
@@ -356,7 +365,7 @@ end
     @test parameter_values(initdata.initializeprob).tunable isa SVector
 
     pend = complete(pend; split = false)
-    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
+    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor, missing_guess_value)
     @test prob.p isa SVector
     initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
