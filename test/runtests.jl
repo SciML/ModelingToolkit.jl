@@ -4,7 +4,6 @@ import REPL
 
 const MTKBasePath = joinpath(dirname(@__DIR__), "lib", "ModelingToolkitBase")
 const MTKBasePkgSpec = PackageSpec(; path = MTKBasePath)
-Pkg.develop([MTKBasePkgSpec])
 
 const GROUP = get(ENV, "GROUP", "All")
 
