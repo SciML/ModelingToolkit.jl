@@ -163,6 +163,7 @@ include("atomic_array_dict.jl")
 include("parameter_bindings_graph.jl")
 
 const SymmapT = AtomicArrayDict{SymbolicT, Dict{SymbolicT, SymbolicT}}
+const AtomicMapT{T} = AtomicArrayDict{T, Dict{SymbolicT, T}}
 const ROSymmapT = ReadOnlyDict{SymbolicT, SymbolicT, SymmapT}
 struct CommonSentinel end
 const COMMON_SENTINEL = SU.Const{VartypeT}(CommonSentinel())
@@ -268,6 +269,7 @@ export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
+export state_priorities
 export mtkcompile, expand_connections, structural_simplify
 export solve
 export Pre

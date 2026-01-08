@@ -915,6 +915,7 @@ const SYS_PROPS = [
     :gui_metadata
     :is_initializesystem
     :is_discrete
+    :state_priorities
     :assertions
     :ignored_connections
     :parent
@@ -1706,6 +1707,22 @@ function initial_conditions(sys::AbstractSystem)
         left_merge!(ics, namespace_expr(initial_conditions(s), s))
     end
     return ics
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get the state priorities of a system `sys` and its subsystems.
+"""
+function state_priorities(sys::AbstractSystem)
+    sps = get_state_priorities(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return sps
+    sps = copy(sps)
+    for s in systems
+        left_merge!(sps, namespace_expr(state_priorities(s), s))
+    end
+    return sps
 end
 
 function initial_conditions_and_guesses(sys::AbstractSystem)
@@ -2964,6 +2981,7 @@ function extend(
     devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     ics = merge(get_initial_conditions(basesys), get_initial_conditions(sys)) # prefer `sys`
     binds = merge(get_bindings(basesys), get_bindings(sys)) # prefer `sys`
+    sps = merge(get_state_priorities(basesys), get_state_priorities(sys))
     meta = MetadataT()
     for kvp in get_metadata(basesys)
         kvp[1] == MutableCacheKey && continue
@@ -2978,7 +2996,7 @@ function extend(
     kwargs = (
         observed = obs, continuous_events = cevs,
         discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
-        metadata = meta,
+        metadata = meta, state_priorities = sps,
         name = name, description = description, gui_metadata = gui_metadata,
     )
 
