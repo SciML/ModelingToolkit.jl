@@ -259,6 +259,14 @@ struct System <: IntermediateDeprecationSystem
     is_initializesystem::Bool
     is_discrete::Bool
     """
+    State priorities for variables. Used in structural simplification algorithms.
+    """
+    state_priorities::AtomicMapT{Int}
+    """
+    Variables marked as irreducible for simplification.
+    """
+    irreducibles::AtomicSetT
+    """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
     """
@@ -280,7 +288,8 @@ struct System <: IntermediateDeprecationSystem
             complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
             ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
-            is_initializesystem = false, is_discrete = false, isscheduled = false,
+            is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
+            irreducibles = AtomicSetT(), isscheduled = false,
             schedule = nothing; checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
@@ -334,6 +343,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
+            state_priorities, irreducibles,
             isscheduled, schedule
         )
     end
@@ -368,6 +378,24 @@ function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     return result
 end
 
+as_atomicmap(::Type{T}, x::AtomicMapT{T}) where {T} = x
+function as_atomicmap(::Type{T}, x::Union{AbstractDict, AbstractArray{<:Pair}}) where {T}
+    result = AtomicMapT{T}()
+    for (k, v) in x
+        result[unwrap(k)] = convert(T, v)
+    end
+    return result
+end
+
+parse_atomicset(x::AtomicSetT) = x
+function parse_atomicset(vars)
+    result = AtomicSetT()
+    for var in vars
+        push!(result, unwrap(var))
+    end
+    return result
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -388,17 +416,20 @@ function System(
         eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
+        # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
+        @nospecialize(preface = nothing), @nospecialize(tstops = []),
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
         connector_type = nothing, assertions = Dict{SymbolicT, String}(),
         metadata = MetadataT(), gui_metadata = nothing,
-        is_dde = nothing, @nospecialize(tstops = []), inputs = OrderedSet{SymbolicT}(),
+        is_dde = nothing, inputs = OrderedSet{SymbolicT}(),
         outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
-        ignored_connections = nothing, parent = nothing,
+        ignored_connections = nothing, parent = nothing, state_priorities = AtomicMapT{Int}(),
+        irreducibles = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
-        @nospecialize(preface = nothing), checks = true, __legacy_defaults__ = nothing
+        checks = true, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
 
@@ -494,6 +525,14 @@ function System(
             end
         end
     end
+
+    state_priorities = as_atomicmap(Int, state_priorities)
+    irreducibles = parse_atomicset(irreducibles)
+    if discover_from_metadata
+        collect_metadata!(VariableStatePriority, state_priorities, dvs)
+        collect_metadata!(VariableIrreducible, irreducibles, dvs)
+    end
+
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
@@ -557,7 +596,7 @@ function System(
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem, is_discrete; checks
+        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
     )
 end
 
@@ -875,6 +914,8 @@ function flatten(sys::System, noeqs = false)
         is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
+        state_priorities = state_priorities(sys),
+        irreducibles = irreducibles(sys),
         # without this, any initial conditions/bindings/guesses obtained from metadata that
         # were later removed by the user will be re-added. Right now, we just want to
         # retain `initial_conditions(sys)` as-is.
@@ -1311,5 +1352,6 @@ function Base.isapprox(sysa::System, sysb::System)
         safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
         isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
         isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
+        isequal(get_state_priorities(sysa), get_state_priorities(sysb)) &&
         isequal(get_isscheduled(sysa), get_isscheduled(sysb))
 end

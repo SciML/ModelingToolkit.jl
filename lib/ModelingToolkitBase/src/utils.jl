@@ -418,6 +418,43 @@ function setdefault(v, val)
     return val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
+"""
+    $TYPEDSIGNATURES
+
+For all variables in `vars`, obtain the value associated with metadata key `Key` (if present)
+and add it to `cache`. Somewhat equivalent to [`collect_defaults!`](@ref) for arbitrary
+metadata. For type-stability, the value obtained via `getmetadata` is type-asserted to the
+value type of `cache`. If `cache` already contains a value for a variable, the metadata is
+ignored.
+"""
+function collect_metadata!(::Type{Key}, cache::AtomicArrayDict{V}, vars::Vector{SymbolicT}) where {Key, V}
+    for var in vars
+        arr, _ = split_indexed_var(var)
+        haskey(cache, arr) && continue
+        value = getmetadata(arr, Key, nothing)::Union{Nothing, V}
+        value === nothing && continue
+        value = value::V
+        cache[arr] = value
+    end
+    return
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized method for when `Key` refers to boolean metadata. Variables for which the value
+is `true` are added to `cache`.
+"""
+function collect_metadata!(::Type{Key}, cache::AtomicSetT, vars::Vector{SymbolicT}) where {Key}
+    for var in vars
+        arr, _ = split_indexed_var(var)
+        arr in cache && continue
+        value = getmetadata(arr, Key, false)::Bool
+        value && push!(cache, arr)
+    end
+    return
+end
+
 function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
     collect_defaults!(initial_conditions, bindings, vars)
     collect_guesses!(guesses, vars)

@@ -338,11 +338,8 @@ eqs = [
 @named sys = System(eqs, t, [x, y], [])
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
-@test sort(string.(observed(ss))) == [
-    "x(t) ~ 0"
-    "xˍt(t) ~ 0"
-    "y(t) ~ xˍt(t) - x(t)"
-]
+dx = ModelingToolkit.default_toterm(unwrap(D(x)))
+@test issetequal(observed(ss), [x ~ 0, dx ~ 0, y ~ dx - x])
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])

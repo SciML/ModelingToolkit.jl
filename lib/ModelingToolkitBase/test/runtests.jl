@@ -25,6 +25,7 @@ end
             @safetestset "System Linearity Test" include("linearity.jl")
             @safetestset "Variable binding semantics" include("binding_semantics.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
+            @safetestset "System Building Tests" include("system_building.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
