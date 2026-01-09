@@ -465,6 +465,12 @@ function get_model_vars_substitution_rules!(rules::Dict{Any, Any}, model, sys, t
     return nothing
 end
 
+function get_observed_substitution_rules!(rules::Dict{Any, Any}, sys)
+    # add the substitution rules for the observed variables
+    merge!(rules, get_substitutions(sys))
+    return nothing
+end
+
 """Mappings for variables that depend on the final time parameter, x(tf)."""
 function free_t_map(m, tf, x_ops, c_ops)
     return Dict(
@@ -515,6 +521,7 @@ function add_user_constraints!(model, sys, tspan, pmap)
     get_toterm_substitution_rules!(rules, cons_dvs)
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
     get_param_substitution_rules!(rules, pmap)
+    get_observed_substitution_rules!(rules, sys)
     # `fixpoint_sub` to recursively substitute into `toterm` rules
     jconstraints = fixpoint_sub(jconstraints, rules; fold = Val(true), filterer = Returns(true))
 
@@ -526,15 +533,16 @@ end
 
 function add_equational_constraints!(model, sys, pmap, tspan)
     rules = Dict{Any, Any}()
+    get_observed_substitution_rules!(rules, sys)
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
     get_param_substitution_rules!(rules, pmap)
     get_differential_substitution_rules!(rules, model, sys)
-    diff_eqs = substitute(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
+    diff_eqs = fixpoint_sub(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
     for eq in diff_eqs
         add_constraint!(model, eq.lhs ~ unwrap_const(eq.rhs) * model.tₛ)
     end
 
-    alg_eqs = substitute(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))
+    alg_eqs = fixpoint_sub(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))
     for eq in alg_eqs
         add_constraint!(model, eq.lhs ~ eq.rhs)
     end
