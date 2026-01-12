@@ -6,6 +6,7 @@ using SimpleDiffEq
 using OrdinaryDiffEqSDIRK, OrdinaryDiffEqVerner, OrdinaryDiffEqTsit5, OrdinaryDiffEqFIRK
 using Ipopt
 using DataInterpolations
+using DataInterpolations: ConstantInterpolation
 using CasADi
 # using Pyomo
 using Test
