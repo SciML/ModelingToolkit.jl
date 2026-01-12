@@ -518,6 +518,7 @@ SymbolicUtils.isbinop(::Initial) = false
 Base.nameof(::Initial) = :Initial
 Base.show(io::IO, x::Initial) = print(io, "Initial")
 distribute_shift_into_operator(::Initial) = false
+validate_operator(::Initial, args, iv; context = nothing) = true
 
 function (f::Initial)(x)
     # wrap output if wrapped input
