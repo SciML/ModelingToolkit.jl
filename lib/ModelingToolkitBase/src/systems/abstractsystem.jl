@@ -566,7 +566,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     _sys = unhack_system(sys)
     obs = observed(_sys)
     eqs = equations(_sys)
-    for x in unknowns(sys)
+    for x in unknowns(_sys)
         if !split
             push!(all_initialvars, x)
             continue
@@ -2669,9 +2669,14 @@ end
 
 function default_to_parentscope(v)
     uv = unwrap(v)
-    uv isa SymbolicT || return v
-    return apply_to_variables(v) do sym
-        ParentScope(sym)
+    if uv isa SymbolicT
+        return apply_to_variables(v) do sym
+            ParentScope(sym)
+        end
+    elseif is_array_of_symbolics(uv)
+        return map(default_to_parentscope, v)
+    else
+        return v
     end
 end
 
