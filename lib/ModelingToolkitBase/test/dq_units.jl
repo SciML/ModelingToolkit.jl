@@ -28,7 +28,7 @@ eqs = [
 
 # Disabling unit validation/checks selectively
 @test_throws MT.ArgumentError System(eqs, t, [E, P, t], [τ], name = :sys)
-System(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
+@test_nowarn System(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
 eqs = [
     D(E) ~ P - E / τ
     0 ~ P + E * τ
@@ -43,7 +43,7 @@ System(eqs, t, name = :sys, checks = false)
 )
 @named sys = System(eqs, t, checks = MT.CheckComponents)
 @test_throws MT.ValidationError System(
-    eqs, t, [E, P, t], [τ], name = :sys,
+    eqs, t, [E, P], [τ], name = :sys,
     checks = MT.CheckUnits
 )
 
