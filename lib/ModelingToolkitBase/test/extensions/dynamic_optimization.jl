@@ -629,7 +629,7 @@ end
         D(x) ~ -x + u,
         sensor_output ~ 2x,       # Creates observed variable
         D(y) ~ sensor_input,      # Uses observed variable in differential equation
-        sensor_input ~ sensor_output  # Chained observed variable
+        sensor_input ~ sensor_output,  # Chained observed variable
     ]
 
     @named sys = System(eqs, t; costs)
