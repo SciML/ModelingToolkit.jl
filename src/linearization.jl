@@ -759,7 +759,7 @@ function linearize(
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
     for (k, v) in op
-        v === nothing && continue
+        isequal(v, COMMON_NOTHING) && continue
         if symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v)
             v = getu(prob, v)(prob)
         end
