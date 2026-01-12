@@ -1104,3 +1104,17 @@ end
     sol4 = solve(prob4, SRIW1(), seed = 2)
     @test !(sol3.u[end] ≈ sol4.u[end])
 end
+
+if !@isdefined(ModelingToolkit)
+    @testset "MTKBase `mtkcompile` creates appropriately sized `noise_eqs`" begin
+        @variables X(t) A(t)
+        @parameters p d k
+        eqs = [
+            D(X) ~ p - d * X
+            k + A^3 ~ 3 + 2 * X^2
+        ]
+        noise_eqs = [2p 1; 0 0]
+        @mtkcompile ssys = System(eqs, t; noise_eqs)
+        @test isequal(ModelingToolkitBase.get_noise_eqs(ssys), noise_eqs)
+    end
+end
