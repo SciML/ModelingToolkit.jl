@@ -42,7 +42,7 @@ https://abhishekhalder.bitbucket.io/F16ACC2013Final.pdf
 """
 function liouville_transform(sys::System; kwargs...)
     t = get_iv(sys)
-    @variables trJ
+    @variables trJ(t)
     D = Differential(t)
     neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
     neweqs = [equations(sys); neweq]
