@@ -2720,7 +2720,7 @@ macro namespace(expr)
     return esc(_config(expr, true))
 end
 
-function component_post_processing(expr, isconnector)
+function component_post_processing(__source__, expr, isconnector)
     @assert expr isa Expr && (
         expr.head == :function || (
             expr.head == :(=) &&
@@ -2735,7 +2735,7 @@ function component_post_processing(expr, isconnector)
     fname = sig.args[1]
     args = sig.args[2:end]
 
-    return quote
+    out = quote
         $Base.@__doc__ function $fname($(args...))
             # we need to create a closure to escape explicit return in `body`.
             res = (() -> $body)()
@@ -2756,6 +2756,25 @@ function component_post_processing(expr, isconnector)
             end
         end
     end
+    return set_component_line_number!(__source__, out)
+end
+
+function set_component_line_number!(__source__::LineNumberNode, expr::Expr)
+    # To set the LineNumberNode correctly (and thus fix Go-to-definition), we modify the
+    # LineNumberNode in the `function` body. `dump(expr)` looks like this:
+    #   head: Symbol block
+    #     2: Expr
+    #       head: Symbol macrocall
+    #         3: Expr
+    #           head: Symbol function
+    #           args: Array{Any}((2,))
+    #             2: Expr
+    #               head: Symbol block
+    #               args: Array{Any}((5,))
+    #                 1: LineNumberNode
+    @assert expr.args[2].args[3].args[2].args[1] isa LineNumberNode
+    expr.args[2].args[3].args[2].args[1] = __source__
+    return expr
 end
 
 """
@@ -2779,7 +2798,7 @@ information.
 See also: [`@connector`](@ref).
 """
 macro component(expr)
-    return esc(component_post_processing(expr, false))
+    return esc(component_post_processing(__source__, expr, false))
 end
 
 """
