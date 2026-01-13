@@ -637,6 +637,15 @@ function discover_globalscoped(sys::AbstractSystem)
     iv::Union{SymbolicT, Nothing} = has_iv(sys) ? get_iv(sys) : nothing
     collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
     setdiff!(newunknowns, observables(sys))
+    # Find parameters that were discovered scalarized, and add the array instead.
+    # We can push to the set while iterating over it because it is an `OrderedSet`
+    for p in newparams
+        arrp, isarr = split_indexed_var(p)
+        isarr || continue
+        push!(newparams, arrp)
+    end
+    # Remove indexed parameters
+    filter!(!last ∘ split_indexed_var, newparams)
     @set! sys.ps = unique!(vcat(get_ps(sys), collect(newparams)))
     @set! sys.unknowns = unique!(vcat(get_unknowns(sys), collect(newunknowns)))
     return sys
