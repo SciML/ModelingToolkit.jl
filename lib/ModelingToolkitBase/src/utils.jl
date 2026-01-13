@@ -799,6 +799,16 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
         _ => nothing
     end
+    # Handle Integral operators at expression level - discover parameters in domain bounds
+    # This must be done here since search_variables! returns leaf variables, not the Integral term
+    if SU.iscall(expr)
+        f = SU.operation(expr)
+        if f isa Symbolics.Integral
+            lo, hi = value.((f.domain.domain.left, f.domain.domain.right))
+            collect_vars!(unknowns, parameters, lo, iv, op; depth)
+            collect_vars!(unknowns, parameters, hi, iv, op; depth)
+        end
+    end
     vars = OrderedSet{SymbolicT}()
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
