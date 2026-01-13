@@ -17,6 +17,13 @@ abstract type MutableCacheKey end
 const MutableCacheT = Dict{DataType, Any}
 
 """
+    $TYPEDEF
+
+Utility metadata key for adding miscellaneous/one-off metadata to systems.
+"""
+abstract type MiscSystemData end
+
+"""
     $(TYPEDEF)
 
 A symbolic representation of a numerical system to be solved. This is a recursive

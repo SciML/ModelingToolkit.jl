@@ -324,6 +324,7 @@ export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
     CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
 export MissingGuessValue
+export MiscSystemData
 
 const set_scalar_metadata = setmetadata
 
