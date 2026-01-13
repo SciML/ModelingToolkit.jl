@@ -159,6 +159,15 @@ sp = Set(p)
 @test k2 ∉ sp
 @test length(p) == 1
 
+# Test that parameters appearing only in bounds are discovered
+@independent_variables t2
+Dₜ2 = Differential(t2)
+@parameters Tₘ
+@variables x2(t2) u2(t2) [bounds = (0, Tₘ)]
+eqs2 = [Dₜ2(x2) ~ u2]
+sys2 = System(eqs2, t2, name = :bounds_param_discovery)
+@test Tₘ ∈ Set(parameters(sys2))
+
 ## Descriptions
 @variables u [description = "This is my input"]
 @test getdescription(u) == "This is my input"

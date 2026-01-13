@@ -919,6 +919,32 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             collect_vars!(unknowns, parameters, def, iv)
         end
     end
+    # Add also any parameters that appear only in the bounds of the var
+    if hasbounds(var)
+        (lo, hi) = getbounds(var)
+        if lo isa SymbolicT
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Num
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Arr
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa CallAndWrap
+            collect_vars!(unknowns, parameters, lo, iv)
+        else
+            collect_vars!(unknowns, parameters, lo, iv)
+        end
+        if hi isa SymbolicT
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Num
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Arr
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa CallAndWrap
+            collect_vars!(unknowns, parameters, hi, iv)
+        else
+            collect_vars!(unknowns, parameters, hi, iv)
+        end
+    end
     return nothing
 end
 
