@@ -2756,8 +2756,12 @@ function component_post_processing(__source__, expr, isconnector)
             end
         end
     end
+    return set_component_line_number!(__source__, out)
+end
+
+function set_component_line_number!(__source__::LineNumberNode, expr::Expr)
     # To set the LineNumberNode correctly (and thus fix Go-to-definition), we modify the
-    # LineNumberNode in the `function` body. `dump(out)` looks like this:
+    # LineNumberNode in the `function` body. `dump(expr)` looks like this:
     #   head: Symbol block
     #     2: Expr
     #       head: Symbol macrocall
@@ -2768,9 +2772,9 @@ function component_post_processing(__source__, expr, isconnector)
     #               head: Symbol block
     #               args: Array{Any}((5,))
     #                 1: LineNumberNode
-    @assert out.args[2].args[3].args[2].args[1] isa LineNumberNode
-    out.args[2].args[3].args[2].args[1] = __source__
-    return out
+    @assert expr.args[2].args[3].args[2].args[1] isa LineNumberNode
+    expr.args[2].args[3].args[2].args[1] = __source__
+    return expr
 end
 
 """
