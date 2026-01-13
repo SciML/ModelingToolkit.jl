@@ -1079,15 +1079,18 @@ end
     noise1 = StochasticDiffEq.RealWienerProcess(0.0, 0.0, 0.0; save_everystep = true)
     u0_dict = Dict(unknowns(sde_lorentz) .=> u0)
     prob1 = SDEProblem(sde_lorentz, merge(u0_dict, Dict(parammap)), T; noise = noise1)
-    sol1 = solve(prob1, SRIW1())
+    # Use fixed-step solver to ensure deterministic timesteps for NoiseWrapper comparison
+    sol1 = solve(prob1, EM(), dt = 0.01)
 
     # Verify noise was actually used (curW should be modified)
     @test noise1.curW != 0.0
 
     # Test that using the same noise via NoiseWrapper gives deterministic results
-    noise2 = NoiseWrapper(noise1)
+    # Must wrap sol1.W (the solved noise) since StochasticDiffEq copies the noise process
+    # Use fixed-step solver since adaptive solvers may take different timesteps
+    noise2 = NoiseWrapper(sol1.W)
     prob2 = SDEProblem(sde_lorentz, merge(u0_dict, Dict(parammap)), T; noise = noise2)
-    sol2 = solve(prob2, SRIW1())
+    sol2 = solve(prob2, EM(), dt = 0.01)
 
     # Same noise should give same results
     @test sol1.u[end] ≈ sol2.u[end]
