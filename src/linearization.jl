@@ -101,11 +101,25 @@ function linearization_function(
         end
     end
     if u0 === nothing
+        T = typeof(t0)
+    else
+        T = promote_type(eltype(u0), typeof(t0))
+    end
+    ct0 = DI.Constant(T(t0))
+    u0T = if u0 === nothing
+        u0
+    else
+        T.(u0)
+    end
+    cu0T = DI.Constant(u0T)
+    cp = DI.Constant(p)
+
+    if u0 === nothing
         uf_jac = h_jac = pf_jac = nothing
-        T = p isa MTKParameters ? eltype(p.tunable) : eltype(p)
+        Tp = promote_type(p isa MTKParameters ? eltype(p.tunable) : eltype(p), typeof(t0))
         hp_jac = PreparedJacobian{true}(
-            hp_fun, zeros(T, size(outputs)), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+            hp_fun, zeros(Tp, size(outputs)), autodiff, inputvals,
+            cu0T, cp, DI.Constant(t0)
         )
     else
         uf_fun = let fun = prob.f
@@ -113,13 +127,14 @@ function linearization_function(
                 return SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
             end
         end
+
         uf_jac = PreparedJacobian{true}(
-            uf_fun, similar(prob.u0), autodiff, prob.u0, DI.Constant(p), DI.Constant(t0)
+            uf_fun, similar(prob.u0, T), autodiff, u0T, cp, ct0
         )
         # observed function is a `GeneratedFunctionWrapper` with iip component
         h_jac = PreparedJacobian{true}(
-            h, similar(prob.u0, size(outputs)), autodiff,
-            prob.u0, DI.Constant(p), DI.Constant(t0)
+            h, similar(prob.u0, T, size(outputs)), autodiff,
+            u0T, cp, ct0
         )
         pf_fun = let fun = prob.f, setter = setp_oop(sys, inputs)
             function pff(du, input, u, p, t)
@@ -128,18 +143,18 @@ function linearization_function(
             end
         end
         pf_jac = PreparedJacobian{true}(
-            pf_fun, similar(prob.u0), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+            pf_fun, similar(prob.u0, T), autodiff, inputvals,
+            cu0T, cp, ct0
         )
         hp_jac = PreparedJacobian{true}(
-            hp_fun, similar(prob.u0, size(outputs)), autodiff, inputvals,
-            DI.Constant(prob.u0), DI.Constant(p), DI.Constant(t0)
+            hp_fun, similar(prob.u0, T, size(outputs)), autodiff, inputvals,
+            cu0T, cp, ct0
         )
     end
 
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
-        prob, h, u0 === nothing ? nothing : similar(u0), uf_jac, h_jac, pf_jac,
+        prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs
     )
     return lin_fun, sys

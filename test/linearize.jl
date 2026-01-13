@@ -41,6 +41,8 @@ eqs = [
 @named sys = System(eqs, t)
 
 lsys, ssys, extras = linearize(sys, [r], [y])
+lsysbig, ssysbig, extrasbig = linearize(sys, [r], [y], t = big(0.0))
+@test lsys.A[] == Float64.(lsysbig.A[])
 lprob = LinearizationProblem(sys, [r], [y])
 lsys2, extras2 = solve(lprob)
 lsys3, _ = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
