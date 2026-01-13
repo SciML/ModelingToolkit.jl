@@ -168,6 +168,16 @@ eqs2 = [Dₜ2(x2) ~ u2]
 sys2 = System(eqs2, t2, name = :bounds_param_discovery)
 @test Tₘ ∈ Set(parameters(sys2))
 
+# Test that parameters in callable variable time arguments are discovered (x(tf) pattern)
+@independent_variables t3
+Dₜ3 = Differential(t3)
+@parameters tf
+@variables x3(..)
+eqs3 = [Dₜ3(x3(t3)) ~ 1]
+costs3 = [-x3(tf)]
+sys3 = System(eqs3, t3; costs = costs3, name = :callable_param_discovery)
+@test tf ∈ Set(parameters(sys3))
+
 ## Descriptions
 @variables u [description = "This is my input"]
 @test getdescription(u) == "This is my input"
