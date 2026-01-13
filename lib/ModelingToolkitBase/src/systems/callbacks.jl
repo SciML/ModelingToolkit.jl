@@ -6,14 +6,27 @@ end
 
 struct SymbolicAffect
     affect::Vector{Equation}
-    alg_eqs::Vector{Equation}
     discrete_parameters::Vector{SymbolicT}
+end
+
+@noinline function depwarn_alg_eqs()
+    return Base.depwarn(
+        """
+        The `alg_eqs` keyword for callback affects is deprecated. The equations can \
+        simply be passed as equations of the affect.
+        """,
+        :callback_alg_eqs
+    )
 end
 
 function SymbolicAffect(
         affect::Vector{Equation}; alg_eqs = Equation[],
         discrete_parameters = SymbolicT[], kwargs...
     )
+    if !isempty(alg_eqs)
+        depwarn_alg_eqs()
+        append!(affect, alg_eqs)
+    end
     if symbolic_type(discrete_parameters) !== NotSymbolic()
         discrete_parameters = SymbolicT[unwrap(discrete_parameters)]
     elseif !(discrete_parameters isa Vector{SymbolicT})
@@ -23,18 +36,17 @@ function SymbolicAffect(
         end
         discrete_parameters = _discs
     end
-    return SymbolicAffect(affect, alg_eqs, discrete_parameters)
+    return SymbolicAffect(affect, discrete_parameters)
 end
 function SymbolicAffect(affect::SymbolicAffect; kwargs...)
     return SymbolicAffect(
-        affect.affect; alg_eqs = affect.alg_eqs,
-        discrete_parameters = affect.discrete_parameters, kwargs...
+        affect.affect; discrete_parameters = affect.discrete_parameters, kwargs...
     )
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
 
 function (s::SymbolicUtils.Substituter)(aff::SymbolicAffect)
-    return SymbolicAffect(s(aff.affect), s(aff.alg_eqs), s(aff.discrete_parameters))
+    return SymbolicAffect(s(aff.affect), s(aff.discrete_parameters))
 end
 
 discretes(affect::SymbolicAffect) = affect.discrete_parameters
@@ -63,19 +75,17 @@ function (s::SymbolicUtils.Substituter)(aff::AffectSystem)
 end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
-    return AffectSystem(
-        spec.affect; alg_eqs = vcat(spec.alg_eqs, alg_eqs), iv,
-        discrete_parameters = spec.discrete_parameters, kwargs...
-    )
-end
-
-@noinline function warn_algebraic_equation(eq::Equation)
-    return @warn "Affect equation $eq has no `Pre` operator. As such it will be interpreted as an algebraic equation to be satisfied after the callback. If you intended to use the value of a variable x before the affect, use Pre(x). Errors may be thrown if there is no `Pre` and the algebraic equation is unsatisfiable, such as X ~ X + 1."
+    affect = spec.affect
+    if !isempty(alg_eqs)
+        depwarn_alg_eqs()
+        affect = [affect; alg_eqs]
+    end
+    return AffectSystem(affect; iv, discrete_parameters = spec.discrete_parameters, kwargs...)
 end
 
 function AffectSystem(
         affect::Vector{Equation}; discrete_parameters = SymbolicT[],
-        iv = nothing, alg_eqs::Vector{Equation} = Equation[], warn_no_algebraic = true, kwargs...
+        iv = nothing, kwargs...
     )
     isempty(affect) && return nothing
     if isnothing(iv)
@@ -83,7 +93,7 @@ function AffectSystem(
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
 
-    discrete_parameters = SymbolicAffect(affect; alg_eqs, discrete_parameters).discrete_parameters
+    discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
 
     for p in discrete_parameters
         SU.query(isequal(unwrap(iv)), unwrap(p)) ||
@@ -94,9 +104,6 @@ function AffectSystem(
     params = OrderedSet{SymbolicT}()
     _varsbuf = Set{SymbolicT}()
     for eq in affect
-        if !haspre(eq) && !(isconst(eq.lhs) && isconst(eq.rhs))
-            @invokelatest warn_algebraic_equation(eq)
-        end
         collect_vars!(dvs, params, eq, iv, Pre)
         empty!(_varsbuf)
         SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Pre}())
@@ -104,9 +111,6 @@ function AffectSystem(
         union!(params, _varsbuf)
         diffvs = collect_applied_operators(eq, Differential)
         union!(dvs, diffvs)
-    end
-    for eq in alg_eqs
-        collect_vars!(dvs, params, eq, iv)
     end
     pre_params = filter(haspre, params)
     sys_params = SymbolicT[]
@@ -125,10 +129,9 @@ function AffectSystem(
     rev_map = Dict{SymbolicT, SymbolicT}(zip(discrete_parameters, discretes))
     subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
     affect = substitute(affect, subs)
-    alg_eqs = substitute(alg_eqs, subs)
 
     @named affectsys = System(
-        vcat(affect, alg_eqs), iv, collect(union(_dvs, discretes)),
+        affect, iv, collect(union(_dvs, discretes)),
         collect(union(pre_params, sys_params)); is_discrete = true
     )
     # This `@invokelatest` should not be necessary, but it works around the inference bug
@@ -256,7 +259,7 @@ const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
     SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
-                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind, alg_eqs = Equation[])
+                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind)
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -458,7 +461,7 @@ end
 ################################
 """
     SymbolicDiscreteCallback(conditions::Vector{Equation}, affect = nothing, iv = nothing;
-                             initialize = nothing, finalize = nothing, alg_eqs = Equation[])
+                             initialize = nothing, finalize = nothing)
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
@@ -469,7 +472,6 @@ The condition can be one of:
 
 Arguments: 
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
-- alg_eqs: Algebraic equations of the system that must be satisfied after the callback occurs.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
     conditions::Union{Number, Vector{<:Number}, SymbolicT}
@@ -578,7 +580,7 @@ function namespace_affects(affect::AffectSystem, s)
 end
 function namespace_affects(affect::SymbolicAffect, s)
     return SymbolicAffect(
-        namespace_equation.(affect.affect, (s,)), namespace_equation.(affect.alg_eqs, (s,)),
+        namespace_equation.(affect.affect, (s,)),
         renamespace.((s,), affect.discrete_parameters)
     )
 end
@@ -988,9 +990,7 @@ function compile_equational_affect(
         eval_expression = false, eval_module = @__MODULE__, op = nothing, kwargs...
     )
     if aff isa AbstractVector
-        aff = make_affect(
-            aff; iv = get_iv(sys), warn_no_algebraic = false
-        )
+        aff = make_affect(aff; iv = get_iv(sys))
     end
     if op === nothing
         op = default_operating_point(aff)

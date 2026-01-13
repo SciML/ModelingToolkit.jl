@@ -1902,3 +1902,15 @@ end
     end
     @test_throws err ODEProblem(sys, [], (0.0, 1.0); initsys_mtkcompile_kwargs = (; fully_determined = true))
 end
+
+@testset "Issue#4098: `remake` supports passing StaticArrays as `p`" begin
+    @parameters p d
+    @variables X(t)
+    eqs = [D(X) ~ p - d * X]
+    @mtkbuild sys = System(eqs, t)
+
+    sim_cond = SA[:X => 1.0, :p => 2.0, :d => 0.1]
+    oprob = ODEProblem(sys, sim_cond, (0.0, 1.0))
+    @test_nowarn remake(oprob; p = SA[:p => 2.0, :d => 0.1])
+    @test_nowarn remake(oprob; p = (:p => 2.0, :d => 0.1))
+end

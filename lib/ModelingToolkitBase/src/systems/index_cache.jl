@@ -304,45 +304,9 @@ function IndexCache(sys::AbstractSystem)
         end
     end
 
-    dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
-    vs = Set{SymbolicT}()
-
-    observed_syms_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
-    for eq in observed(sys)
-        if symbolic_type(eq.lhs) != NotSymbolic()
-            sym = eq.lhs
-            empty!(vs)
-            SU.search_variables!(vs, eq.rhs)
-            timeseries = TimeseriesSetType()
-            if is_time_dependent(sys)
-                for v in vs
-                    if (idx = get(disc_idxs, v, nothing)) !== nothing
-                        push!(timeseries, idx.clock_idx)
-                    elseif Moshi.Match.@match v begin
-                            BSImpl.Term(; f, args) => begin
-                                f === getindex && (idx = get(disc_idxs, args[1], nothing)) !== nothing
-                            end
-                            _ => false
-                        end
-                        push!(timeseries, idx.clock_idx)
-                    elseif haskey(observed_syms_to_timeseries, v)
-                        union!(timeseries, observed_syms_to_timeseries[v])
-                    elseif haskey(dependent_pars_to_timeseries, v)
-                        union!(timeseries, dependent_pars_to_timeseries[v])
-                    end
-                end
-                if isempty(timeseries)
-                    push!(timeseries, ContinuousTimeseries())
-                end
-            end
-            ttsym = default_toterm(sym)
-            rsym = renamespace(sys, sym)
-            rttsym = renamespace(sys, ttsym)
-            for s in (sym, ttsym, rsym, rttsym)
-                observed_syms_to_timeseries[s] = timeseries
-            end
-        end
-    end
+    observed_syms_to_timeseries, dependent_pars_to_timeseries = get_observed_and_dependent_to_timeseries(
+        sys, disc_idxs, unk_idxs
+    )
 
     populate_symbol_to_var!(symbol_to_variable, keys(unk_idxs))
     populate_symbol_to_var!(symbol_to_variable, keys(disc_idxs))
@@ -373,6 +337,59 @@ function IndexCache(sys::AbstractSystem)
         nonnumeric_buffer_sizes,
         symbol_to_variable
     )
+end
+
+function get_observed_and_dependent_to_timeseries(
+        sys::AbstractSystem,
+        disc_idxs::Dict{SymbolicParam, DiscreteIndex}, unk_idxs::UnknownIndexMap
+    )
+    dependent_pars_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
+    observed_syms_to_timeseries = Dict{SymbolicT, TimeseriesSetType}()
+    if !is_time_dependent(sys)
+        for eq in observed(sys)
+            sym = eq.lhs
+            ttsym = default_toterm(sym)
+            rsym = renamespace(sys, sym)
+            rttsym = renamespace(sys, ttsym)
+            for s in (sym, ttsym, rsym, rttsym)
+                observed_syms_to_timeseries[s] = TimeseriesSetType()
+            end
+        end
+        return observed_syms_to_timeseries, dependent_pars_to_timeseries
+    end
+
+    varsbuf = Set{SymbolicT}()
+    for eq in observed(sys)
+        sym = eq.lhs
+        empty!(varsbuf)
+        SU.search_variables!(varsbuf, eq.rhs)
+        timeseries = TimeseriesSetType()
+        for v in varsbuf
+            arrv, _ = split_indexed_var(v)
+            if (idx = get(disc_idxs, v, nothing)) !== nothing
+                push!(timeseries, idx.clock_idx)
+            elseif (idx = get(disc_idxs, arrv, nothing)) !== nothing
+                push!(timeseries, idx.clock_idx)
+            elseif haskey(observed_syms_to_timeseries, v)
+                union!(timeseries, observed_syms_to_timeseries[v])
+            elseif haskey(dependent_pars_to_timeseries, v)
+                union!(timeseries, dependent_pars_to_timeseries[v])
+            elseif haskey(unk_idxs, v) || haskey(unk_idxs, arrv)
+                push!(timeseries, ContinuousTimeseries())
+            end
+        end
+        if isempty(timeseries)
+            push!(timeseries, ContinuousTimeseries())
+        end
+        ttsym = default_toterm(sym)
+        rsym = renamespace(sys, sym)
+        rttsym = renamespace(sys, ttsym)
+        for s in (sym, ttsym, rsym, rttsym)
+            observed_syms_to_timeseries[s] = timeseries
+        end
+    end
+
+    return observed_syms_to_timeseries, dependent_pars_to_timeseries
 end
 
 function populate_symbol_to_var!(symbol_to_variable::Dict{Symbol, SymbolicT}, vars)

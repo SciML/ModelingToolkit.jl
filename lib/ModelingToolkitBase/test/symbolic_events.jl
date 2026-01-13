@@ -1792,7 +1792,7 @@ end
         D(X[2]) ~ k[1] * X[1] - k[2] * X[2]
     ]
     c_event = SymbolicContinuousCallback(
-        (k[2] ~ t) => [k[1] ~ Pre(k[1] + kup)]; discrete_parameters = [k[1]]
+        (k[2] ~ t) => [k[1] ~ Pre(k[1]) + kup]; discrete_parameters = [k[1]]
     )
     @mtkcompile model = System(eqs, t, us, ps; continuous_events = [c_event])
 

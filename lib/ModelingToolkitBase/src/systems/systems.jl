@@ -556,7 +556,7 @@ function simplify_sde_system(sys::AbstractSystem; kwargs...)
         new_eqs[i] = eq.lhs ~ resid
     end
 
-    g = Matrix(sparse(Is, Js, vals))
+    g = Matrix(sparse(Is, Js, vals, length(new_eqs), length(brown_vars)))
     @set! sys.eqs = new_eqs
     # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
     if size(g, 2) == 1

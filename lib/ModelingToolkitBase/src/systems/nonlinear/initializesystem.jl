@@ -564,7 +564,7 @@ function SciMLBase.remake_initialization_data(
     dvs = unknowns(sys)
     ps = parameters(sys)
     if eltype(u0) <: Pair
-        if u0 isa Array
+        if u0 isa Union{AbstractArray, Tuple}
             u0 = Dict(u0)
         end
         if keytype(u0) === Any || keytype(u0) <: Symbol
@@ -577,7 +577,7 @@ function SciMLBase.remake_initialization_data(
     end
     u0map = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(u0), COMMON_NOTHING)
     if eltype(p) <: Pair
-        if p isa Array
+        if p isa Union{AbstractArray, Tuple}
             p = Dict(p)
         end
         if keytype(p) === Any || keytype(p) <: Symbol
