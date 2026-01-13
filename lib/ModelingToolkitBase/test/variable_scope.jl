@@ -171,3 +171,11 @@ end
     @variables x(t)
     @named foo = Foo(; k = [k + 1, x + 2])
 end
+
+@testset "Array `GlobalScope` variables are discovered unscalarized" begin
+    @parameters p[1:2]
+    p = GlobalScope(p)
+    @variables x(t)
+    @named sys = System([D(x) ~ p[1] * x + p[2]], t)
+    @test_nowarn complete(sys)
+end
