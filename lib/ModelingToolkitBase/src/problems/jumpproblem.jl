@@ -196,16 +196,7 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(
 end
 
 # create the initial parameter vector for use in a MassActionJump
-function (
-        ratemap::JumpSysMajParamMapper{
-            U,
-            V,
-            W,
-        }
-    )(params) where {
-        U <: AbstractArray,
-        V <: AbstractArray, W,
-    }
+function (ratemap::JumpSysMajParamMapper{U, V, W})(params) where {U <: AbstractArray, V <: AbstractArray, W}
     updateparams!(ratemap, params)
     return [
         convert(W, value(substitute(paramexpr, ratemap.subdict; fold = Val(true))))

@@ -608,3 +608,64 @@ end
     # @test psol.sol.ps[δ] ≈ 1.8 rtol=1e-4
     # @test psol.sol.ps[α] ≈ 2.5 rtol=1e-4
 end
+
+@testset "Observed variable substitution in dynamic optimization (issue #4089)" begin
+    # Test that observed variables are properly substituted in differential equations
+    # when creating dynamic optimization problems. This was causing MethodError when
+    # observed variables appeared in diff_equations() without substitution.
+
+    @variables begin
+        x(t) = 1.0
+        sensor_output(t)
+        y(t) = 0.0
+        sensor_input(t)
+        u(t), [input = true, bounds = (-1.0, 1.0)]
+    end
+
+    te = 1.0
+    costs = [-EvalAt(te)(x)]  # Terminal cost
+
+    eqs = [
+        D(x) ~ -x + u,
+        sensor_output ~ 2x,       # Creates observed variable
+        D(y) ~ sensor_input,      # Uses observed variable in differential equation
+        sensor_input ~ sensor_output,  # Chained observed variable
+    ]
+
+    @named sys = System(eqs, t; costs)
+    sys = mtkcompile(sys; inputs = [u])
+
+    # Verify observed variables exist
+    @test length(observed(sys)) == 2
+
+    u0map = [x => 1.0, y => 0.0]
+    pmap = [u => 0.0]
+    tspan = (0.0, te)
+
+    # This should not throw - observed variables should be substituted
+    iprob = InfiniteOptDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.1)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+
+    # Verify the solution makes sense: y should integrate 2x over time
+    @test isol.sol[y][end] > 0  # y increases since it integrates 2x (positive)
+
+    # Test with JuMP backend as well
+    jprob = JuMPDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.1)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRK4()))
+    @test jsol.sol[y][end] > 0
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.1)
+        csol = solve(cprob, CasADiCollocation("ipopt", constructRK4()))
+        @test csol.sol[y][end] > 0
+    end
+
+    # Test with constraints containing observed variables
+    constraints = [sensor_output ≳ 0]  # Constraint using observed variable
+    @named sys_constrained = System(eqs, t; costs, constraints)
+    sys_constrained = mtkcompile(sys_constrained; inputs = [u])
+
+    iprob2 = InfiniteOptDynamicOptProblem(sys_constrained, [u0map; pmap], tspan; dt = 0.1)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test isol2.sol[y][end] > 0
+end

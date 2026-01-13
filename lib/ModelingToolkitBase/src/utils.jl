@@ -350,7 +350,12 @@ function check_no_parameter_equations(sys::AbstractSystem)
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
     for eq in equations(sys)
         empty!(varsbuf)
-        Symbolics.get_variables!(varsbuf, eq, allowed_vars; is_atomic = check_bindings_is_atomic, recurse = check_no_parameter_equations_recurse)
+        Symbolics.search_variables!(
+            varsbuf, eq; is_atomic = check_bindings_is_atomic,
+            recurse = check_no_parameter_equations_recurse
+        )
+        isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
+        intersect!(varsbuf, allowed_vars)
         isempty(varsbuf) && push!(pareqs, eq)
     end
 
@@ -411,6 +416,43 @@ Set the default value of symbolic variable `v` to `val`.
 """
 function setdefault(v, val)
     return val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+For all variables in `vars`, obtain the value associated with metadata key `Key` (if present)
+and add it to `cache`. Somewhat equivalent to [`collect_defaults!`](@ref) for arbitrary
+metadata. For type-stability, the value obtained via `getmetadata` is type-asserted to the
+value type of `cache`. If `cache` already contains a value for a variable, the metadata is
+ignored.
+"""
+function collect_metadata!(::Type{Key}, cache::AtomicArrayDict{V}, vars::Vector{SymbolicT}) where {Key, V}
+    for var in vars
+        arr, _ = split_indexed_var(var)
+        haskey(cache, arr) && continue
+        value = getmetadata(arr, Key, nothing)::Union{Nothing, V}
+        value === nothing && continue
+        value = value::V
+        cache[arr] = value
+    end
+    return
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Specialized method for when `Key` refers to boolean metadata. Variables for which the value
+is `true` are added to `cache`.
+"""
+function collect_metadata!(::Type{Key}, cache::AtomicSetT, vars::Vector{SymbolicT}) where {Key}
+    for var in vars
+        arr, _ = split_indexed_var(var)
+        arr in cache && continue
+        value = getmetadata(arr, Key, false)::Bool
+        value && push!(cache, arr)
+    end
+    return
 end
 
 function process_variables!(var_to_name::Dict{Symbol, SymbolicT}, initial_conditions::SymmapT, bindings::SymmapT, guesses::SymmapT, vars::Vector{SymbolicT})
@@ -631,8 +673,9 @@ function collect_scoped_vars!(unknowns::OrderedSet{SymbolicT}, parameters::Order
     if has_eqs(sys)
         for eq in equations(sys)
             eqtype_supports_collect_vars(eq) || continue
+            # Catalyst stores `Reaction`s in `equations(sys)`
             if eq isa Equation
-                symtype(eq.lhs) <: Number || continue
+                is_numeric_symtype(SU.symtype(eq.lhs)) || continue
             end
             collect_vars!(unknowns, parameters, eq, iv, op; depth)
         end
@@ -832,7 +875,8 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             """
         )
     end
-    check_scope_depth(getmetadata(var, SymScope, LocalScope())::AllScopes, depth) || return nothing
+    arr, isarr = split_indexed_var(var)
+    check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)

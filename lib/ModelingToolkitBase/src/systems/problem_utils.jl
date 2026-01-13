@@ -232,7 +232,8 @@ function Base.showerror(io::IO, err::MissingGuessError)
     println(
         io,
         """
-        Cyclic guesses detected in the system. Symbolic values were found for the following variables/parameters in the map: \
+        Cyclic guesses detected in the system. Symbolic values were found for the following \
+        variables/parameters in the map: \
         """
     )
     for (sym, val) in zip(err.syms, err.vals)
@@ -241,7 +242,11 @@ function Base.showerror(io::IO, err::MissingGuessError)
     return println(
         io,
         """
-        In order to resolve this, please provide additional numeric guesses so that the chain can be resolved to assign numeric values to each variable.            """
+        In order to resolve this, please provide additional numeric guesses so that the \
+        chain can be resolved to assign numeric values to each variable. Alternatively, the \
+        `missing_guess_value` keyword can be used to set a fallback guess for all \
+        variables. The keyword must be passed an instance of the `MissingGuessValue` sum-type.
+        """
     )
 end
 
@@ -281,7 +286,7 @@ end
 
 # To be overloaded downstream by MTK
 default_missing_guess_value() = default_missing_guess_value(nothing)
-default_missing_guess_value(_) = MissingGuessValue.Constant(true)
+default_missing_guess_value(_) = MissingGuessValue.Error()
 
 """
     $(TYPEDSIGNATURES)
@@ -983,6 +988,10 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
+    """
+    The value of the `missing_guess_value` keyword indicating how to handle missing guesses.
+    """
+    missing_guess_value::MissingGuessValue.Type
 end
 
 """
@@ -1082,6 +1091,7 @@ function maybe_build_initialization_problem(
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
+        missing_guess_value = default_missing_guess_value(),
         implicit_dae = false, kwargs...
     )
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
@@ -1093,7 +1103,8 @@ function maybe_build_initialization_problem(
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
         sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module, kwargs...
+        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
+        missing_guess_value, kwargs...
     )
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1137,7 +1148,7 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; u0_constructor,
             p_constructor, eval_expression, eval_module
         ),
-        get_initial_unknowns, SetInitialUnknowns(sys)
+        get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
 
     if time_dependent_init

@@ -1,6 +1,7 @@
 using ModelingToolkitBase, SciMLBase, Serialization, OrdinaryDiffEq
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
+missing_guess_value = MissingGuessValue.Constant(1.0)
 @variables x(t)
 
 @named sys = System([D(x) ~ -0.5 * x], t, initial_conditions = Dict(x => 1.0))
@@ -36,13 +37,13 @@ rc2 = expand_connections(rc_model)
 # check answer
 ss = mtkcompile(rc_model)
 all_obs = observables(ss)
-prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1))
+prob = ODEProblem(ss, [capacitor.v => 0.0], (0, 0.1); missing_guess_value)
 sol = solve(prob, ImplicitEuler())
 
 ## Check System with Observables ----------
 ss_exp = ModelingToolkitBase.toexpr(ss)
 ss_ = complete(eval(ss_exp))
-prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1))
+prob_ = ODEProblem(ss_, [capacitor.v => 0.0], (0, 0.1); missing_guess_value)
 sol_ = solve(prob_, ImplicitEuler())
 @test sol[all_obs] == sol_[all_obs] skip = !@isdefined(ModelingToolkit)
 
@@ -50,7 +51,7 @@ sol_ = solve(prob_, ImplicitEuler())
 
 # build the observable function expression
 # ODEProblemExpr with observedfun_exp included
-probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true});
+probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true}, missing_guess_value);
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
 @show all_obs

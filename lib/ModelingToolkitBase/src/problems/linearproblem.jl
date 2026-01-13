@@ -69,7 +69,7 @@ function SciMLBase.LinearProblem{iip}(
         kwargs...
     )
 
-    if any(x -> symbolic_type(x) != NotSymbolic(), u0)
+    if any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
@@ -110,7 +110,15 @@ function get_A_b_from_LinearFunction(
         A = u0_constructor(u0_eltype.(get_A(p)))
         b = u0_constructor(u0_eltype.(get_b(p)))
     else
-        A = u0_constructor(u0_eltype.(interface.update_A!(p)))
+        A = u0_eltype.(interface.update_A!(p))
+        szA = size(A)::NTuple{2, Int}
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, szA)
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(szA))(_A)
+        end
         b = u0_constructor(u0_eltype.(interface.update_b!(p)))
     end
     if sparse
@@ -125,6 +133,11 @@ function SciMLBase.get_new_A_b(
         sys::AbstractSystem, f::SciMLBase.SymbolicLinearInterface, p, A, b; kw...
     )
     if ArrayInterface.ismutable(A)
+        T = eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1])
+        if eltype(A) !== T
+            A = similar(A, T)
+            b = similar(b, T)
+        end
         f.update_A!(A, p)
         f.update_b!(b, p)
     else

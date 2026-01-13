@@ -15,6 +15,12 @@ using Symbolics
 using Symbolics: unwrap
 using DiffEqBase: isinplace
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 # Define some variables
 @parameters σ ρ β
 @constants κ = 1
@@ -613,7 +619,7 @@ let
 
     u0 = x .=> [0.5, 0]
     du0 = D.(x) .=> 0.0
-    prob = DAEProblem(sys, du0, (0, 50); guesses = u0)
+    prob = DAEProblem(sys, du0, (0, 50); guesses = u0, missing_guess_value)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -621,7 +627,7 @@ let
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 
-    prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0)
+    prob = DAEProblem(sys, [D(x[1]) => 0, D(x[2]) => 0], (0, 50); guesses = u0, missing_guess_value)
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
     @test prob.ps[k] ≈ 1
@@ -630,7 +636,7 @@ let
 
     prob = DAEProblem(
         sys, [D(x[1]) => 0, D(x[2]) => 0, k => 2],
-        (0, 50); guesses = u0
+        (0, 50); guesses = u0, missing_guess_value
     )
     @test prob.du0 ≈ zeros(length(unknowns(sys)))
     @test prob.p isa MTKParameters
@@ -638,7 +644,7 @@ let
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 2, atol = 1.0e-3)
 
-    prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
+    prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50); missing_guess_value)
     sol = solve(prob, Rosenbrock23())
     @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 end
@@ -794,7 +800,7 @@ let
     @parameters pp = -1
     @named sys4 = System([D(x) ~ -y; D(y) ~ 1 + pp * y + x], t)
     sys4s = mtkcompile(sys4)
-    prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    prob = ODEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0); missing_guess_value)
     @test issetequal(string.(unknowns(prob.f.sys)), ["x(t)", "y(t)"])
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
@@ -861,7 +867,7 @@ let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
     @test a ∈ keys(ModelingToolkitBase.initial_conditions(sys_simp))
 
     tspan = (0.0, 1)
-    prob = ODEProblem(sys_simp, [], tspan)
+    prob = ODEProblem(sys_simp, [], tspan; missing_guess_value)
     sol = solve(prob, Rodas4())
     @test sol(1; idxs = x) ≈ 0.6065307685451087 rtol = 1.0e-4
 end

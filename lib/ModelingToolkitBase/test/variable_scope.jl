@@ -1,6 +1,7 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: SymScope, t_nounits as t, D_nounits as D
-using Symbolics: arguments, value, getname
+using Symbolics: arguments, value, getname, VartypeT
+import SymbolicUtils as SU
 using Test
 
 @variables a b(t) c d e(t)
@@ -138,4 +139,35 @@ bar = complete(bar)
     @test any(isequal(x4), unknowns(sys5))
     @test length(parameters(sys5)) == 4
     @test any(isequal(p4), parameters(sys5))
+end
+
+@testset "Array globalscope variables are not discovered early if used scalarized" begin
+    @parameters p[1:1]
+    p = GlobalScope(p)
+    @variables x(t)
+    @named sys = System([D(x) ~ p[1]], t)
+    @test isempty(parameters(sys))
+end
+
+@testset "`discover_globalscoped` searches array equations" begin
+    @parameters cond::Bool
+    cond = GlobalScope(cond)
+    @variables x(t)[1:2]
+    @named sys = System([D(x) ~ [ifelse(cond, 0, 1), ifelse(cond, 1, 2)]], t)
+    @test isempty(parameters(sys))
+    sys2 = ModelingToolkitBase.discover_globalscoped(sys)
+    @test isequal(only(parameters(sys2)), cond)
+end
+
+@testset "`@named` applies `ParentScope` to arrays of symbolics" begin
+    function Foo(; name, k)
+        tmp = SU.Const{VartypeT}(k)
+        vars = SU.search_variables(tmp)
+        for var in vars
+            @test SU.getmetadata(var, SymScope, LocalScope()) == ParentScope(LocalScope())
+        end
+    end
+    @parameters k
+    @variables x(t)
+    @named foo = Foo(; k = [k + 1, x + 2])
 end

@@ -6,6 +6,12 @@ using StaticArrays
 using SymbolicIndexingInterface
 using Test
 
+missing_guess_value = if @isdefined(ModelingToolkit)
+    MissingGuessValue.Error()
+else
+    MissingGuessValue.Constant(1.0)
+end
+
 @variables x(t)[1:3] = [1.0, 2.0, 3.0] y(t) z(t)[1:2]
 
 @mtkcompile sys = System([D(x) ~ t * x], t) simplify = false
@@ -195,9 +201,12 @@ end
     pend = complete(pend)
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-        pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => y + 1]
+        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1]
     )
-    ODEProblem(pend, [x => 1, g => 1], (0, 1), guesses = [y => λ, λ => 0.5])
+    ODEProblem(
+        pend, [x => 1, D(y) => 0, g => 1], (0, 1);
+        guesses = [y => λ, λ => 0.5], missing_guess_value
+    )
 
     # Throw multiple if multiple are missing
     @variables a(t) b(t) c(t) d(t) e(t)
@@ -337,17 +346,17 @@ end
 
 @testset "`p_constructor` keyword argument" begin
     @parameters g = 1.0
-    @variables x(t) y(t) [state_priority = 10, guess = 1.0] λ(t) [guess = 1.0]
+    @variables x(t) y(t) [state_priority = 10] λ(t)
     @named pend = index_reduced_pend()
     pend = complete(pend)
-    guesses(pend)[y] = 1.0
+    guesses(pend)[x] = 1.0
     guesses(pend)[λ] = 1.0
     initial_conditions(pend)[g] = 1.0
 
     u0 = [y => -1.0, D(y) => 0.0]
     u0_constructor = p_constructor = vals -> SVector{length(vals)}(vals...)
     tspan = (0.0, 5.0)
-    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
+    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor, missing_guess_value)
     @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
@@ -356,7 +365,10 @@ end
     @test parameter_values(initdata.initializeprob).tunable isa SVector
 
     pend = complete(pend; split = false)
-    prob = ODEProblem(pend, u0, tspan; u0_constructor, p_constructor)
+    prob = ODEProblem(
+        pend, u0, tspan; u0_constructor, p_constructor, missing_guess_value,
+        guesses = [D(x) => 1.0]
+    )
     @test prob.p isa SVector
     initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
@@ -377,14 +389,14 @@ end
     @parameters p d
     @variables X(t) Y(t) = 1.0
     eq = [
-        D(X) ~ p - d*X
+        D(X) ~ p - d * X,
     ]
     @named sys = System(eq, t, [X, Y], [p, d])
     @test haskey(initial_conditions(sys), Y)
     sys = mtkcompile(sys)
     @test !haskey(initial_conditions(sys), Y)
     @test_nowarn ODEProblem(sys, [X => 0.0, p => 2.0, d => 0.1], (0.0, 1.0))
-    
+
     @variables X(t) Y(t) = X
     @named sys = System(eq, t, [X, Y], [p, d])
     @test haskey(bindings(sys), Y)

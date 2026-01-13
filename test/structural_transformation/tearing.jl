@@ -219,41 +219,41 @@ prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
-#=
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks: Constant
 
-@testset "Inline linear SCCs" begin
-    function RCModel(; name)
-        pars = @parameters begin
-            R = 1.0
-            C = 1.0
-            V = 1.0
-        end
-        systems = @named begin
-            resistor1 = Resistor(R = R)
-            resistor2 = Resistor(R = R)
-            capacitor = Capacitor(C = C, v = 0.0)
-            source = Voltage()
-            constant = Constant(k = V)
-            ground = Ground()
-        end
-        eqs = [
-            connect(constant.output, source.V)
-            connect(source.p, resistor1.p)
-            connect(resistor1.n, resistor2.p)
-            connect(resistor2.n, capacitor.p)
-            connect(capacitor.n, source.n, ground.g)
-        ]
-        return System(eqs, t, [], pars; systems, name)
+function RCModel(; name)
+    pars = @parameters begin
+        R = 1.0
+        C = 1.0
+        V = 1.0
     end
+    systems = @named begin
+        resistor1 = Resistor(R = R)
+        resistor2 = Resistor(R = R)
+        capacitor = Capacitor(C = C, v = 0.0)
+        source = Voltage()
+        constant = Constant(k = V)
+        ground = Ground()
+    end
+    eqs = [
+        connect(constant.output, source.V)
+        connect(source.p, resistor1.p)
+        connect(resistor1.n, resistor2.p)
+        connect(resistor2.n, capacitor.p)
+        connect(capacitor.n, source.n, ground.g)
+    ]
+    return System(eqs, t, [], pars; systems, name)
+end
 
+
+@testset "Inline linear SCCs" begin
     reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
     reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 0)
     @mtkcompile sys1 = RCModel()
-    @mtkcompile sys2 = RCModel() reassemble_alg=reassemble_alg1
-    @mtkcompile sys3 = RCModel() reassemble_alg=reassemble_alg2
-    
+    @mtkcompile sys2 = RCModel() reassemble_alg = reassemble_alg1
+    @mtkcompile sys3 = RCModel() reassemble_alg = reassemble_alg2
+
     @test length(equations(sys1)) == 2
     @test length(equations(sys2)) == 1
     @test isequal(only(unknowns(sys2)), sys2.capacitor.v)
@@ -263,21 +263,27 @@ using ModelingToolkitStandardLibrary.Blocks: Constant
     idx = findfirst(isequal(sys3.capacitor.i), observables(sys3))
     rhs = observed(sys3)[idx].rhs
     @test operation(rhs) === getindex
-    @test operation(arguments(rhs)[1]) === solve
+    @test operation(arguments(rhs)[1]) === (\)
 
     prob1 = ODEProblem(sys1, [], (0.0, 10.0); guesses = [sys1.resistor1.v => 1.0])
     prob2 = ODEProblem(sys2, [], (0.0, 10.0))
     prob3 = ODEProblem(sys3, [], (0.0, 10.0))
 
-    sol1 = solve(prob1, Rodas5P(); abstol = 1e-8, reltol = 1e-8)
-    sol2 = solve(prob2, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    sol3 = solve(prob3, Tsit5(), abstol = 1e-8, reltol = 1e-8)
+    sol1 = solve(prob1, Rodas5P(); abstol = 1.0e-8, reltol = 1.0e-8)
+    sol2 = solve(prob2, Tsit5(), abstol = 1.0e-8, reltol = 1.0e-8)
+    sol3 = solve(prob3, Tsit5(), abstol = 1.0e-8, reltol = 1.0e-8)
 
     @test SciMLBase.successful_retcode(sol1)
     @test SciMLBase.successful_retcode(sol2)
     @test SciMLBase.successful_retcode(sol3)
 
-    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol=1e-8
-    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol=1e-8
+    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
+    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
 end
-=#
+
+@testset "`Initial` parameters are added for observed variables solved by inline linear SCCS" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
+    @test Initial(sys.resistor1.v) in Set(ModelingToolkit.get_ps(sys))
+    @test Initial(sys.resistor2.v) in Set(ModelingToolkit.get_ps(sys))
+end
