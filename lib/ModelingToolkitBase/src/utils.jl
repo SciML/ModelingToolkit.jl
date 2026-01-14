@@ -825,6 +825,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
         _ => nothing
     end
     vars = OrderedSet{SymbolicT}()
+    othervars = OrderedSet{SymbolicT}()
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
         Moshi.Match.@match var begin
@@ -834,7 +835,19 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
                 push!(vars, args[1])
             end
             BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
-                # `EvalAt`/delayed variables 
+                # We know this isn't a called function symbolic, since our `is_atomic` filter
+                # wouldn't pick it up. Any variable then must have exactly one argument.
+                if length(args) > 1
+                    throw(
+                        ArgumentError(
+                            """
+                            Time-dependent variables must have exactly one independent \
+                            variable argument. Found $(var) with multiple arguments.
+                            """
+                        )
+                    )
+                end
+                # `EvalAt`/delayed variables
                 collect_var!(unknowns, parameters, f(iv), iv; depth)
                 # Also discover parameters used in the time argument
                 collect_vars!(unknowns, parameters, args[1], iv, op; depth)

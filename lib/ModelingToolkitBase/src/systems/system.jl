@@ -813,6 +813,36 @@ function gather_array_params(ps)
     return new_ps
 end
 
+struct ConstraintValidator
+    innervars::Set{SymbolicT}
+end
+ConstraintValidator() = ConstraintValidator(Set{SymbolicT}())
+
+function (cv::ConstraintValidator)(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            empty!(cv.innervars)
+            SU.search_variables!(cv.innervars, args[1])
+            for var in cv.innervars
+                Moshi.Match.@match var begin
+                    BSImpl.Term() => throw(
+                        ArgumentError(
+                            """
+                            Arguments of a delayed or evaluated (via `EvalAt`) variable \
+                            cannot be other dependent variables. Found $x which \
+                            contains $var.
+                            """
+                        )
+                    )
+                    _ => nothing
+                end
+            end
+        end
+        _ => nothing
+    end
+    return false
+end
+
 """
 Process variables in constraints of the (ODE) System.
 """
@@ -823,9 +853,12 @@ function process_constraint_system(
 
     constraintsts = OrderedSet{SymbolicT}()
     constraintps = OrderedSet{SymbolicT}()
+    validator = ConstraintValidator()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
+        SU.query(validator, cons.lhs)
+        SU.query(validator, cons.rhs)
     end
 
     # Validate the states.
