@@ -458,6 +458,7 @@ function timevaring_initsys_process_op!(
                 ikk = Initial(kk)
                 if SU.isconst(vv)
                     push!(eqs_ics, subkk ~ ikk)
+                    write_possibly_indexed_array!(op, ikk, vv, COMMON_FALSE)
                 else
                     write_possibly_indexed_array!(guesses, kk, vv, COMMON_FALSE)
                     vv = fixpoint_sub(vv, derivative_rules; maxiters = get_maxiters(derivative_rules))

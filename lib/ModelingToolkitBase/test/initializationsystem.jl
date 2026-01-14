@@ -1914,3 +1914,19 @@ end
     @test_nowarn remake(oprob; p = SA[:p => 2.0, :d => 0.1])
     @test_nowarn remake(oprob; p = (:p => 2.0, :d => 0.1))
 end
+
+@testset "Issue#4151: Partially symbolic initial conditions for array variable" begin
+    @variables x(t)[1:3] y(t)[1:1]
+    eqs = [
+        D(x)[1:2] ~ sin.(x[1:2]),
+        D(x)[3] ~ 0,
+        y[1] ~ x[1],
+    ]
+    x0 = [1.3, 4.5]
+    ics = [x => [x0; y]]
+    @mtkcompile sys = System(eqs, t, [x, y], [], initial_conditions = ics)
+    prob = ODEProblem(sys, nothing, (0.0, 1.0))
+    @test prob.ps[Initial(x)][1:2] == x0
+    sol = solve(prob, Tsit5())
+    @test sol[x[1:2]][1] == x0
+end
