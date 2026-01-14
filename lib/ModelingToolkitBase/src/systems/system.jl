@@ -619,14 +619,7 @@ function _is_unknown_delay_or_evalat(x::SymbolicT, iv::SymbolicT)
         BSImpl.Term(; f, args) && if f isa Differential end => begin
             _is_unknown_delay_or_evalat(args[1], iv)
         end
-        _ => throw(
-            ArgumentError(
-                """
-                Unknowns for time-dependent systems are expected to be time-dependent \
-                variables. Found $x, which is not time-dependent.
-                """
-            )
-        )
+        _ => false
     end
 end
 
