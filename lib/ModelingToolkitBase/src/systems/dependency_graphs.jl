@@ -44,7 +44,10 @@ function equation_dependencies(
     depeqs_to_vars = Vector{Vector}(undef, length(eqs))
 
     for (i, eq) in enumerate(eqs)
-        get_variables!(deps, eq, variables)
+        # For Equations, only examine RHS (dependencies, not what's modified).
+        # For jumps, use the whole object (specialized search_variables! handles it).
+        target = eq isa Equation ? eq.rhs : eq
+        get_variables!(deps, target, variables)
         depeqs_to_vars[i] = [value(v) for v in deps]
         empty!(deps)
     end
