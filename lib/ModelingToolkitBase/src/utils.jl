@@ -932,6 +932,16 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Num
             collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Arr{Num, 1}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Num}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Arr{Num, 1}}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Arr{Num, 2}}
+            collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr
             collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap
@@ -947,9 +957,11 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Num
             collect_vars!(unknowns, parameters, lo, iv)
-        elseif lo isa Arr
+        elseif lo isa Arr{Num, 1}
             collect_vars!(unknowns, parameters, lo, iv)
-        elseif lo isa CallAndWrap
+        elseif lo isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Arr
             collect_vars!(unknowns, parameters, lo, iv)
         else
             collect_vars!(unknowns, parameters, lo, iv)
@@ -958,9 +970,11 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Num
             collect_vars!(unknowns, parameters, hi, iv)
-        elseif hi isa Arr
+        elseif hi isa Arr{Num, 1}
             collect_vars!(unknowns, parameters, hi, iv)
-        elseif hi isa CallAndWrap
+        elseif hi isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Arr
             collect_vars!(unknowns, parameters, hi, iv)
         else
             collect_vars!(unknowns, parameters, hi, iv)
