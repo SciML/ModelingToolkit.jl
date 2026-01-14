@@ -779,6 +779,8 @@ function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
     end
 end
 
+const AnyInterval{T} = DomainSets.Interval{A, B, T} where {A, B}
+
 """
     $(TYPEDSIGNATURES)
 
@@ -797,17 +799,30 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     Moshi.Match.@match expr begin
         BSImpl.Const() => return
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
-        _ => nothing
-    end
-    # Handle Integral operators at expression level - discover parameters in domain bounds
-    # This must be done here since search_variables! returns leaf variables, not the Integral term
-    if SU.iscall(expr)
-        f = SU.operation(expr)
-        if f isa Symbolics.Integral
-            lo, hi = value.((f.domain.domain.left, f.domain.domain.right))
+        BSImpl.Term(; f) && if f isa Integral end => begin
+            # Handle Integral operators at expression level - discover parameters in domain bounds
+            # This must be done here since search_variables! returns leaf variables, not the Integral term
+            domain = f.domain.domain
+            if domain isa AnyInterval{Num}
+                lo, hi = unwrap.(DomainSets.endpoints(domain))
+            elseif domain isa AnyInterval{SymbolicT}
+                lo, hi = DomainSets.endpoints(domain)
+            elseif domain isa AnyInterval
+                lo = hi = COMMON_NOTHING
+            else
+                throw(
+                    ArgumentError(
+                        """
+                        ModelingToolkit does not support nonstandard intervals. Only \
+                        `DomainSets.Interval` is supported.
+                        """
+                    )
+                )
+            end
             collect_vars!(unknowns, parameters, lo, iv, op; depth)
             collect_vars!(unknowns, parameters, hi, iv, op; depth)
         end
+        _ => nothing
     end
     vars = OrderedSet{SymbolicT}()
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
