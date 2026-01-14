@@ -833,16 +833,11 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
                 isempty(args) && continue
                 push!(vars, args[1])
             end
-            BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && (SU.isconst(args[1]) || isparameter(args[1])) end => begin
-                # `EvalAt` variables - also discover parameters in the time argument
+            BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
+                # `EvalAt`/delayed variables 
                 collect_var!(unknowns, parameters, f(iv), iv; depth)
+                # Also discover parameters used in the time argument
                 collect_vars!(unknowns, parameters, args[1], iv, op; depth)
-            end
-            if iv isa SymbolicT && isdelay(var, iv) end => begin
-                f = Moshi.Match.@match var begin
-                    BSImpl.Term(; f) => f
-                end
-                collect_var!(unknowns, parameters, f(iv), iv; depth)
             end
             _ => collect_var!(unknowns, parameters, var, iv; depth)
         end
