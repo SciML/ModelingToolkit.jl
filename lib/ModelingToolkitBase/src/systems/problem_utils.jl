@@ -1043,10 +1043,25 @@ end
 
 struct SetInitialUnknowns{S}
     setter!::S
+    idxs_in_initials::Vector{Int}
 end
 
 function SetInitialUnknowns(sys::AbstractSystem)
-    return SetInitialUnknowns(setu(sys, Initial.(unknowns(sys))))
+    initpars = Initial.(unknowns(sys))
+    idxs_in_initials = Int[]
+    sizehint!(idxs_in_initials, length(initpars))
+    if is_split(sys)
+        for par in initpars
+            idx = parameter_index(sys, par)::ParameterIndex{SciMLStructures.Initials, Int}
+            push!(idxs_in_initials, idx.idx)
+        end
+    else
+        for par in initpars
+            idx = parameter_index(sys, par)::Int
+            push!(idxs_in_initials, idx)
+        end
+    end
+    return SetInitialUnknowns(setu(sys, initpars), idxs_in_initials)
 end
 
 function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
