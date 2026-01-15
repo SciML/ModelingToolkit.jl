@@ -133,4 +133,41 @@ function ModelingToolkitBase.update_initializeprob!(initprob::AbstractNonlinearP
     return remake(initprob; p)
 end
 
+function ChainRulesCore.rrule(siu::MTK.SetInitialUnknowns, p::MTKParameters, u0)
+    p2 = copy(p)
+    primal = siu(p2, u0)
+    pullback = let siu = siu, p = p, otheridxs = setdiff(eachindex(p.initials), siu.idxs_in_initials)
+        function __pullback(ps′)
+            ps′ = unthunk(ps′)
+            initials′ = selected_tangents(ps′.initials, otheridxs)
+            p′ = Tangent{typeof(p)}(; tunable = ps′.tunable, initials = initials′, discrete = ps′.discrete, constant = ps′.constant, nonnumeric = ps′.nonnumeric)
+            u0′ = if ps′.initials isa ZeroTangent
+                ZeroTangent()
+            else
+                ps′.initials[siu.idxs_in_initials]
+            end
+            return NoTangent(), p′, u0′
+        end
+    end
+    return primal, pullback
+end
+
+function ChainRulesCore.rrule(siu::MTK.SetInitialUnknowns, p::AbstractVector, u0)
+    p2 = copy(p)
+    primal = siu(p2, u0)
+    pullback = let siu = siu, p = p, otheridxs = setdiff(eachindex(p), siu.idxs_in_initials)
+        function __pullback(ps′)
+            ps′ = unthunk(ps′)
+            p′ = selected_tangents(ps′, otheridxs)
+            u0′ = if ps′ isa ZeroTangent
+                ZeroTangent()
+            else
+                ps′[siu.idxs_in_initials]
+            end
+            return NoTangent(), p′, u0′
+        end
+    end
+    return primal, pullback
+end
+
 end
