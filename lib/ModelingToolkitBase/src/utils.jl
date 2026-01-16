@@ -1486,6 +1486,11 @@ function split_indexed_var(x::SymbolicT)
             isarr || return x, false
             return f(arr)::SymbolicT, isarr
         end
+        BSImpl.ArrayOp(; term) && if term isa SymbolicT end => begin
+            arr, isarr = split_indexed_var(term)
+            isarr && return arr, isarr
+            return x, false
+        end
         _ => return x, false
     end
 end
