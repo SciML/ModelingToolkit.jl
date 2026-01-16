@@ -51,7 +51,7 @@ function SCCNonlinearFunction{iip}(
         @set! subsys.index_cache = subset_unknowns_observed(
             get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,))
         )
-        @set! subsys.parameter_bindings_graph = ParameterBindingsGraph(subsys)
+        @set! subsys.parameter_bindings_graph = get_parameter_bindings_graph(sys)
         @set! subsys.complete = true
     end
     # generate linear problem instead

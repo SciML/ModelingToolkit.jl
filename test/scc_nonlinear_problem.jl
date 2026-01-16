@@ -352,3 +352,16 @@ end
     prob = SCCNonlinearProblem(sys, [x => 1.0, y => 1.0, p => ones(2), f => sum])
     @test_nowarn solve(prob, NewtonRaphson())
 end
+
+@testset "Subproblems retain bound parameters" begin
+    # This can cause bad codegen, since `update_A`/`update_b` for LinearProblem SCCs
+    # won't have access to the necessary bound parameters. I'm unable to MWE that behavior,
+    # but checking the `bound_parameters` of the subsystems is a good proxy.
+    @parameters p[1:3, 1:3] q[1:3, 1:3] = p r[1:3] s[1:3] = r
+    @variables x[1:3] y[1:3]
+    @mtkcompile sys = System([p * x ~ r, q * y ~ s])
+    @test issetequal(bound_parameters(sys), [q, s])
+    prob = SCCNonlinearProblem(sys, [p => ones(3, 3), r => ones(3)])
+    @test issetequal(bound_parameters(prob.probs[1].f.sys), [q, s])
+    @test issetequal(bound_parameters(prob.probs[2].f.sys), [q, s])
+end
