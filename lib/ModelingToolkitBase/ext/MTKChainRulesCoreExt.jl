@@ -118,7 +118,7 @@ function ChainRulesCore.rrule(
                 tunable, initials, discrete, constant, nonnumeric
             )
             idxs′ = NoTangent()
-            vals′ = map(i -> _ducktyped_parameter_values(buf′, i), idxs)
+            vals′ = map(i -> MTK._ducktyped_parameter_values(buf′, i), idxs)
             return f′, indp′, oldbuf′, idxs′, vals′
         end
     end
