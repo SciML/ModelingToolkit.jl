@@ -325,8 +325,14 @@ function varmap_to_vars(
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
+    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit)
     if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
+        for var in vars
+            var = unwrap(var)
+            val = get_possibly_indexed(varmap, var, COMMON_NOTHING)
+            SU.isconst(val) || push!(missing_vars, var)
+        end
         Moshi.Match.@match missing_values begin
             MissingGuessValue.Constant(val) => begin
                 cval = BSImpl.Const{VartypeT}(val)
@@ -359,7 +365,6 @@ function varmap_to_vars(
             end
         end
     end
-    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit)
     vals = map(vars) do x
         x = unwrap(x)
         v = get_possibly_indexed(varmap, x, x)

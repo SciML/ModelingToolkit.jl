@@ -139,7 +139,7 @@ end
         guesses = [x => 2y, y => 2x]
     )
     @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
-    @test_throws ModelingToolkitBase.UnexpectedSymbolicValueInVarmap ODEProblem(
+    @test_throws ModelingToolkitBase.MissingVariablesError ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
         substitution_limit = 10
     )
@@ -403,4 +403,16 @@ end
     sys = mtkcompile(sys)
     @test !haskey(bindings(sys), Y)
     @test_nowarn ODEProblem(sys, [X => 0.0, p => 2.0, d => 0.1], (0.0, 1.0))
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "`missing_guess_value` handles transitive missing values" begin
+        @variables x(t) y(t) z(t)
+        @mtkcompile sys = System(
+            [D(x) ~ 2x + y, y^2 ~ 2sin(x) + 3, z ~ 2y], t;
+            guesses = [y => z + 2x]
+        )
+        # This should not throw
+        @test ODEProblem(sys, [], (0, 1); missing_guess_value = MissingGuessValue.Constant(1)) isa ODEProblem
+    end
 end
