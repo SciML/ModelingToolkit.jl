@@ -349,7 +349,7 @@ function varmap_to_vars(
                     if Symbolics.isarraysymbolic(var)
                         varmap[var] = rand(rng, size(var))
                     else
-                        write_possibly_indexed_array!(varmap, var, rand(rng), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng)), COMMON_NOTHING)
                     end
                 end
             end
