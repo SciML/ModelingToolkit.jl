@@ -590,7 +590,10 @@ const SCP_AGGRESSIVE = [
     ORTHO_INV_RULE;
 ]
 
-const SCP_OPTIONS = Dict(:basic => SCP_BASIC, :aggressive => SCP_AGGRESSIVE)
+const SCP_OPTIONS = Dict(:basic => SCP_BASIC,
+                        :aggressive => SCP_AGGRESSIVE,
+                        :none => nothing
+                    )
 
 function MTKBase.resolve_optimize_option(o::Bool)
     resolve_optimize_option(o ? SCP_BASIC : nothing)
