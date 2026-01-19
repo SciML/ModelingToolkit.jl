@@ -575,3 +575,17 @@ function get_semiquadratic_W_sparsity(
         SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end
+
+const SCP_BASIC = [
+    MATMUL_ADD_RULE,
+    TRIU_RULE,
+    TRIL_RULE,
+    NORMALIZE_RULE,
+    LDIV_RULE,
+]
+
+const SCP_AGGRESSIVE = [
+    SCP_BASIC;
+    HVNCAT_STATIC_RULE;
+    ORTHO_INV_RULE;
+]
