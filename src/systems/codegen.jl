@@ -589,3 +589,26 @@ const SCP_AGGRESSIVE = [
     HVNCAT_STATIC_RULE;
     ORTHO_INV_RULE;
 ]
+
+const SCP_OPTIONS = Dict(:basic => SCP_BASIC, :aggressive => SCP_AGGRESSIVE)
+
+function MTKBase.resolve_optimize_option(o::Bool)
+    resolve_optimize_option(o ? SCP_BASIC : nothing)
+end
+
+function MTKBase.resolve_optimize_option(o::Symbol)
+    rules = get(SCP_OPTIONS, o, nothing)
+    resolve_optimize_option(rules)
+end
+
+function MTKBase.resolve_optimize_option(o::Int)
+    if o == 0
+        return resolve_optimize_option(false)
+    elseif o == 1
+        return resolve_optimize_option(:basic)
+    elseif o == 2
+        return resolve_optimize_option(:aggressive)
+    else
+        throw(ArgumentError("Invalid optimize option integer: $o"))
+    end
+end
