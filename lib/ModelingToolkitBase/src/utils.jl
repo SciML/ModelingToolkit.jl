@@ -1039,7 +1039,12 @@ expressions used to calculate them.
 """
 function get_substitutions(sys)
     obs = observed(unhack_system(sys))
-    return Dict([eq.lhs => eq.rhs for eq in obs])
+    rules = Dict{SymbolicT, SymbolicT}()
+    substituter = SU.Substituter{false}(rules, SU.default_substitute_filter)
+    for eq in obs
+        rules[eq.lhs] = substituter(eq.rhs)
+    end
+    return rules
 end
 
 @noinline function throw_missingvars_in_sys(vars)
