@@ -1916,7 +1916,7 @@ Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expre
 if `simplify == true`.
 """
 function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
-    expr = Symbolics.fixpoint_sub(expr, dict, Union{Initial, Pre})
+    expr = substitute(expr, dict; filterer = Symbolics.FPSubFilterer{Union{Initial, Pre}}())
     return simplify ? Symbolics.simplify(expr) : expr
 end
 
