@@ -119,11 +119,19 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     end
 
     if length(var_sccs) == 1
-        if isaffine(sys)
+        if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
                 u0_constructor, cse, kwargs...
             )
+            # Required for filling missing parameter values when this is an initialization
+            # problem
+            if state_values(linprob) === nothing
+                linprob = remake(
+                    linprob;
+                    u0 = u0_constructor(ones(eltype(linprob.A), size(linprob.A, 2)))
+                )
+            end
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
             return NonlinearProblem{iip}(
