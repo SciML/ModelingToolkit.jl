@@ -611,7 +611,6 @@ function MTKBase.resolve_optimize_option(o::Int)
         return resolve_optimize_option(:basic)
     elseif o == 2
         return resolve_optimize_option(:aggressive)
-    else
-        throw(ArgumentError("Invalid optimize option integer: $o"))
     end
+    throw(ArgumentError("Invalid optimize option integer: $o"))
 end
