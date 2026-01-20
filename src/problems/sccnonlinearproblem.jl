@@ -55,7 +55,7 @@ function SCCNonlinearFunction{iip}(
         @set! subsys.complete = true
     end
     # generate linear problem instead
-    if isaffine(subsys)
+    if calculate_A_b(subsys; throw = false) !== nothing
         return LinearFunction{iip}(
             subsys; eval_expression, eval_module, cse, cachesyms, kwargs...
         )
