@@ -613,7 +613,12 @@ end
 function _is_unknown_delay_or_evalat(x::SymbolicT, iv::SymbolicT)
     x = split_indexed_var(x)[1]
     return Moshi.Match.@match x begin
-        BSImpl.Term(; f, args) && if f isa SymbolicT end => !isequal(args[1], iv)
+        BSImpl.Term(; f, args) && if f isa SymbolicT end => begin
+            !isequal(args[1], iv) && Moshi.Match.@match args[1] begin
+                BSImpl.Term(; f = f2) => !(f2 isa SymbolicT) || SU.is_function_symbolic(f2)
+                _ => true
+            end
+        end
         BSImpl.Term(; f, args) && if f === real || f === imag end => begin
             _is_unknown_delay_or_evalat(args[1], iv)
         end

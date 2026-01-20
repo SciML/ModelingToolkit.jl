@@ -848,7 +848,15 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
                     )
                 end
                 # `EvalAt`/delayed variables
-                collect_var!(unknowns, parameters, f(iv), iv; depth)
+                Moshi.Match.@match args[1] begin
+                    # `y(x(t))` is a valid variable, used by ControlSystemsMTK. Needs to be
+                    # handled separately.
+                    BSImpl.Term(; f) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+                        collect_var!(unknowns, parameters, var, iv; depth)
+                        collect_var!(unknowns, parameters, args[1], iv; depth)
+                    end
+                    _ => collect_var!(unknowns, parameters, f(iv), iv; depth)
+                end
                 # Also discover parameters used in the time argument
                 collect_vars!(unknowns, parameters, args[1], iv, op; depth)
             end
