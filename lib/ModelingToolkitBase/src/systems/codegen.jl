@@ -1351,43 +1351,83 @@ function build_explicit_observed_function(
     end
 end
 
+struct CachedLinearAb
+    A::Matrix{SymbolicT}
+    b::Vector{SymbolicT}
+end
+
+struct NotAffineError <: Exception
+    rhs::SymbolicT
+    var::SymbolicT
+end
+
+function Base.showerror(io::IO, err::NotAffineError)
+    return print(
+        io, """
+        System is not linear. Equation $(0 ~ err.rhs) is not linear in unknown \
+        $(err.var).
+        """
+    )
+end
+
 """
     $(TYPEDSIGNATURES)
 
 Return matrix `A` and vector `b` such that the system `sys` can be represented as
-`A * x = b` where `x` is `unknowns(sys)`. Errors if the system is not affine.
+`A * x = b` where `x` is `unknowns(sys)`.
 
 # Keyword arguments
 
 - `sparse`: return a sparse `A`.
+- `throw`: whether to throw an error if the system is not affine.
 """
-function calculate_A_b(sys::System; sparse = false)
-    rhss = [eq.rhs for eq in full_equations(sys)]
-    dvs = unknowns(sys)
-
-    A = Matrix{Any}(undef, length(rhss), length(dvs))
-    b = Vector{Any}(undef, length(rhss))
-    for (i, rhs) in enumerate(rhss)
+function calculate_A_b(sys::System; sparse = false, throw = true)
+    cache = getmetadata(sys, MutableCacheKey, nothing)::MutableCacheT
+    cached_ab = get(cache, CachedLinearAb, nothing)
+    if cached_ab isa CachedLinearAb
+        return sparse ? SparseArrays.sparse(cached_ab.A) : cached_ab.A, cached_ab.b
+    elseif cached_ab isa NotAffineError
+        throw || return nothing
+        Base.throw(cached_ab)
+    end
+    fulleqs = full_equations(sys)
+    rhss = SymbolicT[]
+    sizehint!(rhss, length(fulleqs))
+    for eq in fulleqs
         # mtkcompile makes this `0 ~ rhs` which typically ends up giving
         # unknowns negative coefficients. If given the equations `A * x ~ b`
         # it will simplify to `0 ~ b - A * x`. Thus this negation usually leads
         # to more comprehensible user API.
-        resid = -rhs
-        for (j, var) in enumerate(dvs)
-            p, q, islinear = Symbolics.linear_expansion(resid, var)
+        push!(rhss, -eq.rhs)
+    end
+    dvs = unknowns(sys)
+    A = Matrix{SymbolicT}(undef, length(rhss), length(dvs))
+    b = Vector{SymbolicT}(undef, length(rhss))
+    # `linear_expansion` caches values based on `var`. This loop ordering helps
+    # avoid invalidating the cache frequently.
+    for (j, var) in enumerate(dvs)
+        lex = Symbolics.LinearExpander(var)
+        for (i, resid) in enumerate(rhss)
+            p, q, islinear = lex(resid)
             if !islinear
-                throw(ArgumentError("System is not linear. Equation $(0 ~ rhs) is not linear in unknown $var."))
+                err = NotAffineError(fulleqs[i].rhs, var)
+                cache[CachedLinearAb] = err
+                throw || return nothing
+                Base.throw(err)
             end
             A[i, j] = p
-            resid = q
+            rhss[i] = q
         end
-        # negate beucause `resid` is the residual on the LHS
-        b[i] = -resid
+    end
+    for i in eachindex(rhss)
+        # negate because `resid` is the residual on the LHS
+        b[i] = -rhss[i]
     end
 
     @assert all(Base.Fix1(isassigned, A), eachindex(A))
     @assert all(Base.Fix1(isassigned, A), eachindex(b))
 
+    cache[CachedLinearAb] = CachedLinearAb(A, b)
     if sparse
         A = SparseArrays.sparse(A)
     end
