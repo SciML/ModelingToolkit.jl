@@ -200,6 +200,10 @@ struct System <: IntermediateDeprecationSystem
     """
     tstops::Vector{Any}
     """
+    The time span of the problem.
+    """
+    tspan::Union{Nothing,Tuple{Any,Any}}
+    """
     $INTERNAL_FIELD_WARNING
     The list of input variables of the system.
     """
@@ -289,7 +293,7 @@ struct System <: IntermediateDeprecationSystem
             brownians, iv, observed, var_to_name, name, description, bindings,
             initial_conditions, guesses, systems, initialization_eqs, continuous_events,
             discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
-            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
+            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [], tspan = nothing,
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
@@ -347,7 +351,7 @@ struct System <: IntermediateDeprecationSystem
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, inputs, outputs, tearing_state, namespacing,
+            tstops, tspan, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             state_priorities, irreducibles,
@@ -424,7 +428,7 @@ function System(
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
-        @nospecialize(preface = nothing), @nospecialize(tstops = []),
+        @nospecialize(preface = nothing), @nospecialize(tstops = []), tspan = nothing,
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
@@ -601,7 +605,7 @@ function System(
         costs, consolidate, dvs, ps, brownians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, inputs, outputs, tearing_state, true, false,
+        tstops, tspan, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
     )
