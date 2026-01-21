@@ -114,10 +114,14 @@ function Base.isequal(a::ConnectionVertex, b::ConnectionVertex)
 end
 
 function Base.show(io::IO, vert::ConnectionVertex)
-    for name in @view(vert.name[1:(end - 1)])
-        print(io, name, ".")
+    join(io, vert.name, ".")
+    idxs = Vector{Int}(collect(vert.idx))
+    if !isempty(idxs)
+        print(io, "[")
+        join(io, idxs, ", ")
+        print(io, "]")
     end
-    return print(io, vert.name[end], "::", vert.isouter ? "outer" : "inner")
+    return print(io, "::", vert.isouter ? "outer" : "inner")
 end
 
 const ConnectionGraph = HyperGraph{ConnectionVertex}
