@@ -15,30 +15,40 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 indexof(sym, syms) = findfirst(isequal(sym), syms)
 
 ## Build the system model ======================================================
-@mtkmodel SystemModel begin
-    @parameters begin
-        m1 = 1
-        m2 = 1
-        k = 10 # Spring stiffness
-        c = 3  # Damping coefficient
+@component function SystemModel(; name, m1 = 1, m2 = 1, k = 10, c = 3)
+    pars = @parameters begin
+        m1 = m1
+        m2 = m2
+        k = k # Spring stiffness
+        c = c  # Damping coefficient
     end
-    @components begin
+
+    systems = @named begin
         inertia1 = Inertia(; J = m1, phi = 0, w = 0)
         inertia2 = Inertia(; J = m2, phi = 0, w = 0)
         spring = Spring(; c = k)
         damper = Damper(; d = c)
         torque = Torque(use_support = false)
     end
-    @equations begin
-        connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(torque.flange, inertia1.flange_a),
+        connect(inertia1.flange_b, spring.flange_a, damper.flange_a),
+        connect(inertia2.flange_a, spring.flange_b, damper.flange_b),
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 # The addition of disturbance inputs relies on the fact that the plant model has been constructed using connectors, we use these to connect the disturbance inputs from outside the plant-model definition
-@mtkmodel ModelWithInputs begin
-    @components begin
+@component function ModelWithInputs(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0) # We add an input signal that equals zero by default so that it has no effect during normal simulation
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -46,13 +56,19 @@ end
         disturbance_torque2 = Torque(use_support = false)
         system_model = SystemModel()
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau) # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them. 
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau), # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them.
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b),
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model = ModelWithInputs() # Model with load disturbance
@@ -66,7 +82,8 @@ using ControlSystemsBase, ControlSystemsMTK
 cmodel = complete(model)
 P = cmodel.system_model
 lsys = named_ss(
-    model, [:u, :d1], [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w])
+    model, [:u, :d1], [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
+)
 
 ##
 # If we now want to add a disturbance model, we cannot do that since we have already connected a constant to the disturbance input, we thus create a new wrapper model with inputs
@@ -74,8 +91,11 @@ lsys = named_ss(
 s = tf("s")
 dist(; name) = System(1 / s; name)
 
-@mtkmodel SystemModelWithDisturbanceModel begin
-    @components begin
+@component function SystemModelWithDisturbanceModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0)
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -84,14 +104,20 @@ dist(; name) = System(1 / s; name)
         disturbance_model = dist()
         system_model = SystemModel()
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_model.input)
-        connect(disturbance_model.output, disturbance_torque1.tau)
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
+
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_model.input),
+        connect(disturbance_model.output, disturbance_torque1.tau),
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b),
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
@@ -104,13 +130,16 @@ sol = solve(prob, Tsit5())
 @test SciMLBase.successful_retcode(sol)
 # plot(sol)
 
-## 
+##
 # Now we only have an integrating disturbance affecting inertia1, what if we want both integrating and direct Gaussian? We'd need a "PI controller" disturbancemodel. If we add the disturbance model (s+1)/s we get the integrating and non-integrating noises being correlated which is fine, it reduces the dimensions of the sigma point by 1.
 
 dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
 
-@mtkmodel SystemModelWithDisturbanceModel begin
-    @components begin
+@component function SystemModelWithDisturbanceModel(; name)
+    pars = @parameters begin
+    end
+
+    systems = @named begin
         input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
         disturbance_signal1 = Blocks.Constant(k = 0)
         disturbance_signal2 = Blocks.Constant(k = 0)
@@ -123,18 +152,24 @@ dist3(; name) = System(ss(1 + 10 / s, balance = false); name)
         angle_sensor = AngleSensor()
         output_disturbance = Blocks.Constant(k = 0)
     end
-    @equations begin
-        connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_model.input)
-        connect(disturbance_model.output, disturbance_torque1.tau)
-        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
-        connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
-        connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
 
-        connect(system_model.inertia1.flange_b, angle_sensor.flange)
-        connect(angle_sensor.phi, y.input1)
-        connect(output_disturbance.output, :dy, y.input2)
+    vars = @variables begin
     end
+
+    equations = Equation[
+        connect(input_signal.output, :u, system_model.torque.tau),
+        connect(disturbance_signal1.output, :d1, disturbance_model.input),
+        connect(disturbance_model.output, disturbance_torque1.tau),
+        connect(disturbance_signal2.output, :d2, disturbance_torque2.tau),
+        connect(disturbance_torque1.flange, system_model.inertia1.flange_b),
+        connect(disturbance_torque2.flange, system_model.inertia2.flange_b),
+
+        connect(system_model.inertia1.flange_b, angle_sensor.flange),
+        connect(angle_sensor.phi, y.input1),
+        connect(output_disturbance.output, :dy, y.input2),
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
@@ -151,26 +186,31 @@ sol = solve(prob, Tsit5())
 # temp = open_loop(model_with_disturbance, :d)
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 f, x_sym,
-p_sym,
-io_sys = ModelingToolkit.generate_control_function(
-    model_with_disturbance, [:u], [:d1, :d2, :dy], split = false)
+    p_sym,
+    io_sys = ModelingToolkit.generate_control_function(
+    model_with_disturbance, [:u], [:d1, :d2, :dy], split = false
+)
 
 f, x_sym,
-p_sym,
-io_sys = ModelingToolkit.generate_control_function(
+    p_sym,
+    io_sys = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u], [:d1, :d2, :dy],
-    disturbance_argument = true, split = false)
+    disturbance_argument = true, split = false
+)
 
 measurement = ModelingToolkit.build_explicit_observed_function(
-    io_sys, outputs, inputs = ModelingToolkit.inputs(io_sys)[1:1])
+    io_sys, outputs, inputs = ModelingToolkit.inputs(io_sys)[1:1]
+)
 measurement2 = ModelingToolkit.build_explicit_observed_function(
     io_sys, [io_sys.y.output.u], inputs = ModelingToolkit.inputs(io_sys)[1:1],
     disturbance_inputs = ModelingToolkit.inputs(io_sys)[2:end],
-    disturbance_argument = true)
+    disturbance_argument = true
+)
 # Test new interface with known_disturbance_inputs (equivalent to above)
 measurement3 = ModelingToolkit.build_explicit_observed_function(
     io_sys, [io_sys.y.output.u], inputs = ModelingToolkit.inputs(io_sys)[1:1],
-    known_disturbance_inputs = ModelingToolkit.inputs(io_sys)[2:end])
+    known_disturbance_inputs = ModelingToolkit.inputs(io_sys)[2:end]
+)
 
 op = ModelingToolkit.inputs(io_sys) .=> 0
 x0 = ModelingToolkit.get_u0(io_sys, op)
@@ -202,7 +242,7 @@ d = [0, 0, 1]
 @test measurement3(x, u, p, 0.0, d) == [1]  # Test new interface
 
 ## Further downstream tests that the functions generated above actually have the properties required to use for state estimation
-# 
+#
 # using LowLevelParticleFilters, SeeToDee
 # Ts = 0.001
 # discrete_dynamics = SeeToDee.Rk4(f_oop2, Ts)

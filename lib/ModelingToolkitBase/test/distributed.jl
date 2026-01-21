@@ -1,0 +1,38 @@
+using Distributed
+# add processes to workspace
+addprocs(2)
+
+@everywhere using ModelingToolkitBase, OrdinaryDiffEq
+@everywhere using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+# create the Lorenz system
+@everywhere @parameters σ ρ β
+@everywhere @variables x(t) y(t) z(t)
+
+@everywhere eqs = [
+    D(x) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z,
+]
+
+@everywhere @named de = System(eqs, t)
+@everywhere de = complete(de)
+
+@everywhere u0 = unknowns(de) .=> [19.0, 20.0, 50.0]
+@everywhere params = parameters(de) .=> [16.0, 45.92, 4]
+
+@everywhere ode_prob = ODEProblem(de, [u0; params], (0.0, 10.0))
+
+@everywhere begin
+    using OrdinaryDiffEq
+    using ModelingToolkitBase
+
+    function solve_lorenz(ode_problem)
+        print(solve(ode_problem, Tsit5()))
+    end
+end
+
+solve_lorenz(ode_prob)
+
+future = @spawn solve_lorenz(ode_prob)
+fetch(future)

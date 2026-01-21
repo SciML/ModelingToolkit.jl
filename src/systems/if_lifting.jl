@@ -31,7 +31,7 @@ Given a symbolic condition `expr` and the condition `dep` it depends on, update 
 mapping in `cw` and generate a new discrete variable if necessary.
 """
 function new_cond_sym(cw::CondRewriter, expr, dep)
-    if !iscall(expr) || operation(expr) != Base.:(<) || !iszero(arguments(expr)[2])
+    if !iscall(expr) || operation(expr) != Base.:(<) || !SU._iszero(arguments(expr)[2])
         throw(ArgumentError("`expr` passed to `new_cond_sym` must be of the form `f(args...) < 0`. Got $expr."))
     end
     # check if the same expression exists in the mapping
@@ -47,7 +47,7 @@ function new_cond_sym(cw::CondRewriter, expr, dep)
     cvar = gensym("cond")
     st = symtype(expr)
     iv = cw.iv
-    cv = unwrap(first(@parameters $(cvar)(iv)::st = true)) # TODO: real init 
+    cv = unwrap(first(@discretes $(cvar)(iv)::st = true)) # TODO: real init
     cw.conditions[cv] = (dependency = dep, expression = expr)
     return cv
 end
@@ -76,18 +76,20 @@ and family.
 """
 function (cw::CondRewriter)(expr, dep)
     # single variable, trivial case
-    if issym(expr) || iscall(expr) && issym(operation(expr))
-        return (expr, expr, !expr)
-        # literal boolean or integer
-    elseif expr isa Bool
-        return (expr, expr, !expr)
-    elseif expr isa Int
-        return (expr, true, true)
-        # other singleton symbolic variables
-    elseif !iscall(expr)
-        @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
-        return (expr, true, true) # error case => conservative assumption is that both true and false have to be evaluated
-    elseif operation(expr) == Base.:(|) # OR of two conditions
+    Moshi.Match.@match expr begin
+        BSImpl.Sym() => return (expr, expr, !expr)
+        BSImpl.Term(; f) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            return (expr, expr, !expr)
+        end
+        BSImpl.Const(; val) && if val isa Bool end => return (expr, expr, !expr)
+        BSImpl.Const(; val) && if val isa Int end => return (expr, COMMON_TRUE, COMMON_TRUE)
+        if !iscall(expr) end => begin
+            @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+            return (expr, COMMON_TRUE, COMMON_TRUE) # error case => conservative assumption is that both true and false have to be evaluated
+        end
+        _ => nothing
+    end
+    if operation(expr) == Base.:(|) # OR of two conditions
         a, b = arguments(expr)
         (rw_conda, truea, falsea) = cw(a, dep)
         # only evaluate second if first is false
@@ -110,15 +112,17 @@ function (cw::CondRewriter)(expr, dep)
         # expression is true if condition is true and THEN branch is true, or condition is false
         # and ELSE branch is true
         # similarly for expression being false
-        return (ifelse(rw_cond, rw_conda, rw_condb),
+        return (
+            ifelse(rw_cond, rw_conda, rw_condb),
             ctrue & truea | cfalse & trueb,
-            ctrue & falsea | cfalse & falseb)
+            ctrue & falsea | cfalse & falseb,
+        )
     elseif operation(expr) == Base.:(!) # NOT of expression
         (a,) = arguments(expr)
         (rw, ctrue, cfalse) = cw(a, dep)
         return (!rw, cfalse, ctrue)
     elseif operation(expr) == Base.:(<)
-        if !isequal(arguments(expr)[2], 0)
+        if !SU._iszero(arguments(expr)[2])
             throw(ArgumentError("Expected comparison to be written as `f(args...) < 0`. Found $expr."))
         end
 
@@ -143,12 +147,14 @@ function (cw::CondRewriter)(expr, dep)
     elseif !expression_is_time_dependent(expr, cw.iv)
         return (expr, expr, !expr)
     end
-    error("""
-    Unsupported expression form in decision variable computation $expr. If the expression
-    involves a registered function, declare the discontinuity using
-    `Symbolics.@register_discontinuity`. If this is not meant to be transformed via
-    `IfLifting`, wrap the parent expression in `ModelingToolkit.no_if_lift`.
-    """)
+    error(
+        """
+        Unsupported expression form in decision variable computation $expr. If the expression
+        involves a registered function, declare the discontinuity using
+        `Symbolics.@register_discontinuity`. If this is not meant to be transformed via
+        `IfLifting`, wrap the parent expression in `ModelingToolkit.no_if_lift`.
+        """
+    )
 end
 
 """
@@ -194,7 +200,7 @@ function (v::VarsUsedInCondition)(expr)
     args = arguments(expr)
     if op == ifelse
         cond, branch_a, branch_b = arguments(expr)
-        vars!(v.vars, cond)
+        SU.search_variables!(v.vars, cond)
         v(branch_a)
         v(branch_b)
     end
@@ -210,7 +216,7 @@ in the expression, `Differential(iv)` is in the expression, or a dependent varia
 as `@variables x(iv)` is in the expression.
 """
 function expression_is_time_dependent(expr, iv)
-    any(vars(expr)) do sym
+    return any(SU.search_variables(expr)) do sym
         sym = unwrap(sym)
         isequal(sym, iv) && return true
         iscall(sym) || return false
@@ -250,7 +256,8 @@ function rewrite_ifs(cw::CondRewriter, expr, dep)
         rw_iftrue = rewrite_ifs(cw, iftrue, deptrue)
         rw_iffalse = rewrite_ifs(cw, iffalse, depfalse)
         return maketerm(
-            typeof(expr), ifelse, [unwrap(rw_cond), rw_iftrue, rw_iffalse], metadata(expr))
+            typeof(expr), ifelse, [unwrap(rw_cond), rw_iftrue, rw_iffalse], metadata(expr)
+        )
     end
 
     # recurse into the rest of the cases
@@ -305,7 +312,8 @@ function discontinuities_to_ifelse(expr, iv)
         leftexpr = leftfn(args...)
         rightexpr = rightfn(args...)
         return maketerm(
-            typeof(expr), ifelse, [rootexpr, leftexpr, rightexpr], metadata(expr))
+            typeof(expr), ifelse, [rootexpr, leftexpr, rightexpr], metadata(expr)
+        )
     end
 
     return maketerm(typeof(expr), op, args, metadata(expr))
@@ -349,95 +357,191 @@ function generate_affects(cw::CondRewriter, sym, new_cond_vars, new_cond_vars_gr
     # use reverse direction of edges because instead of finding the variables it depends
     # on, we want the variables that depend on it
     parents = bfs_parents(new_cond_vars_graph, sym_idx; dir = :in)
-    cond_vars_to_update = [new_cond_vars[i]
-                           for i in eachindex(parents) if !iszero(parents[i])]
+    cond_vars_to_update = [
+        new_cond_vars[i]
+            for i in eachindex(parents) if !iszero(parents[i])
+    ]
     update_syms = Symbol.(cond_vars_to_update)
     modified = NamedTuple{(update_syms...,)}(cond_vars_to_update)
 
-    upcrossing_update_exprs = [arguments(last(cw.conditions[sym]))[1] < 0
-                               for sym in cond_vars_to_update]
+    upcrossing_update_exprs = [
+        arguments(last(cw.conditions[sym]))[1] < 0
+            for sym in cond_vars_to_update
+    ]
     upcrossing = ImperativeAffect(
         modified, observed = NamedTuple{(update_syms...,)}(upcrossing_update_exprs),
-        skip_checks = true) do x, o, c, i
+        skip_checks = true
+    ) do x, o, c, i
         return o
     end
-    downcrossing_update_exprs = [arguments(last(cw.conditions[sym]))[1] <= 0
-                                 for sym in cond_vars_to_update]
+    downcrossing_update_exprs = [
+        arguments(last(cw.conditions[sym]))[1] <= 0
+            for sym in cond_vars_to_update
+    ]
     downcrossing = ImperativeAffect(
         modified, observed = NamedTuple{(update_syms...,)}(downcrossing_update_exprs),
-        skip_checks = true) do x, o, c, i
+        skip_checks = true
+    ) do x, o, c, i
         return o
     end
 
     return upcrossing, downcrossing
 end
 
-const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([
-                                                                                    # simple boolean laws
-                                                                                    (@rule (!!(~x)) => (~x))
-                                                                                    (@rule ((~x) &
-                                                                                            true) => (~x))
-                                                                                    (@rule ((~x) &
-                                                                                            false) => false)
-                                                                                    (@rule ((~x) |
-                                                                                            true) => true)
-                                                                                    (@rule ((~x) |
-                                                                                            false) => (~x))
-                                                                                    (@rule ((~x) &
-                                                                                            !(~x)) => false)
-                                                                                    (@rule ((~x) |
-                                                                                            !(~x)) => true)
-                                                                                    # reversed order of the above, because it matters and `@acrule` refuses to do its job
-                                                                                    (@rule (true &
-                                                                                            (~x)) => (~x))
-                                                                                    (@rule (false &
-                                                                                            (~x)) => false)
-                                                                                    (@rule (true |
-                                                                                            (~x)) => true)
-                                                                                    (@rule (false |
-                                                                                            (~x)) => (~x))
-                                                                                    (@rule (!(~x) &
-                                                                                            (~x)) => false)
-                                                                                    (@rule (!(~x) |
-                                                                                            (~x)) => true)
-                                                                                    # idempotent
-                                                                                    (@rule ((~x) &
-                                                                                            (~x)) => (~x))
-                                                                                    (@rule ((~x) |
-                                                                                            (~x)) => (~x))
-                                                                                    # ifelse with determined branches
-                                                                                    (@rule ifelse(
-                                                                                        (~x),
-                                                                                        true,
-                                                                                        false) => (~x))
-                                                                                    (@rule ifelse(
-                                                                                        (~x),
-                                                                                        false,
-                                                                                        true) => !(~x))
-                                                                                    # ifelse with identical branches
-                                                                                    (@rule ifelse(
-                                                                                        (~x),
-                                                                                        (~y),
-                                                                                        (~y)) => (~y))
-                                                                                    (@rule ifelse(
-                                                                                        (~x),
-                                                                                        (~y),
-                                                                                        !(~y)) => ((~x) &
-                                                                                                   (~y)))
-                                                                                    (@rule ifelse(
-                                                                                        (~x),
-                                                                                        !(~y),
-                                                                                        (~y)) => ((~x) &
-                                                                                                  !(~y)))
-                                                                                    # ifelse with determined condition
-                                                                                    (@rule ifelse(
-                                                                                        true,
-                                                                                        (~x),
-                                                                                        (~y)) => (~x))
-                                                                                    (@rule ifelse(
-                                                                                        false,
-                                                                                        (~x),
-                                                                                        (~y)) => (~y))])))
+const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(
+    Rewriters.Postwalk(
+        Rewriters.Chain(
+            [
+                # simple boolean laws
+                (@rule (!!(~x)) => (~x))
+                (
+                    @rule (
+                        (~x) &
+                            true
+                    ) => (~x)
+                )
+                (
+                    @rule (
+                        (~x) &
+                            false
+                    ) => false
+                )
+                (
+                    @rule (
+                        (~x) |
+                            true
+                    ) => true
+                )
+                (
+                    @rule (
+                        (~x) |
+                            false
+                    ) => (~x)
+                )
+                (
+                    @rule (
+                        (~x) &
+                            !(~x)
+                    ) => false
+                )
+                (
+                    @rule (
+                        (~x) |
+                            !(~x)
+                    ) => true
+                )
+                # reversed order of the above, because it matters and `@acrule` refuses to do its job
+                (
+                    @rule (
+                        true &
+                            (~x)
+                    ) => (~x)
+                )
+                (
+                    @rule (
+                        false &
+                            (~x)
+                    ) => false
+                )
+                (
+                    @rule (
+                        true |
+                            (~x)
+                    ) => true
+                )
+                (
+                    @rule (
+                        false |
+                            (~x)
+                    ) => (~x)
+                )
+                (
+                    @rule (
+                        !(~x) &
+                            (~x)
+                    ) => false
+                )
+                (
+                    @rule (
+                        !(~x) |
+                            (~x)
+                    ) => true
+                )
+                # idempotent
+                (
+                    @rule (
+                        (~x) &
+                            (~x)
+                    ) => (~x)
+                )
+                (
+                    @rule (
+                        (~x) |
+                            (~x)
+                    ) => (~x)
+                )
+                # ifelse with determined branches
+                (
+                    @rule ifelse(
+                        (~x),
+                        true,
+                        false
+                    ) => (~x)
+                )
+                (
+                    @rule ifelse(
+                        (~x),
+                        false,
+                        true
+                    ) => !(~x)
+                )
+                # ifelse with identical branches
+                (
+                    @rule ifelse(
+                        (~x),
+                        (~y),
+                        (~y)
+                    ) => (~y)
+                )
+                (
+                    @rule ifelse(
+                        (~x),
+                        (~y),
+                        !(~y)
+                    ) => (
+                        (~x) &
+                            (~y)
+                    )
+                )
+                (
+                    @rule ifelse(
+                        (~x),
+                        !(~y),
+                        (~y)
+                    ) => (
+                        (~x) &
+                            !(~y)
+                    )
+                )
+                # ifelse with determined condition
+                (
+                    @rule ifelse(
+                        true,
+                        (~x),
+                        (~y)
+                    ) => (~x)
+                )
+                (
+                    @rule ifelse(
+                        false,
+                        (~x),
+                        (~y)
+                    ) => (~y)
+                )
+            ]
+        )
+    )
+)
 
 """
 If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.
@@ -461,12 +565,12 @@ function IfLifting(sys::System)
     obs = copy(observed(sys))
 
     # get variables used by `eqs`
-    syms = vars(eqs)
+    syms = SU.search_variables(eqs)
     # get observed equations used by `eqs`
     obs_idxs = observed_equations_used_by(sys, eqs; involved_vars = syms)
     # and the variables used in those equations
     for i in obs_idxs
-        vars!(syms, obs[i])
+        SU.search_variables!(syms, obs[i])
     end
 
     # get all integral variables used in conditions
@@ -529,23 +633,26 @@ function IfLifting(sys::System)
     new_cond_vars_graph = observed_dependency_graph(new_cond_dep_eqs)
 
     new_callbacks = continuous_events(sys)
-    new_defaults = defaults(sys)
+    new_initial_conditions = copy(initial_conditions(sys))
     new_ps = Vector{SymbolicParam}(parameters(sys))
 
     for var in new_cond_vars
         condition = generate_condition(cw, var)
         up_affect,
-        down_affect = generate_affects(
-            cw, var, new_cond_vars, new_cond_vars_graph)
-        cb = SymbolicContinuousCallback([condition], up_affect; affect_neg = down_affect,
-            initialize = up_affect, rootfind = SciMLBase.RightRootFind)
+            down_affect = generate_affects(
+            cw, var, new_cond_vars, new_cond_vars_graph
+        )
+        cb = SymbolicContinuousCallback(
+            [condition], up_affect; affect_neg = down_affect,
+            initialize = up_affect, rootfind = SciMLBase.RightRootFind
+        )
 
         push!(new_callbacks, cb)
-        new_defaults[var] = getdefault(var)
+        new_initial_conditions[var] = getdefault(var)
         push!(new_ps, var)
     end
 
-    @set! sys.defaults = new_defaults
+    @set! sys.initial_conditions = new_initial_conditions
     @set! sys.eqs = eqs
     # do not need to topsort because we didn't modify the order
     @set! sys.observed = obs

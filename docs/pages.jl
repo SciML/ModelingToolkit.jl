@@ -1,7 +1,8 @@
 pages = [
     "Home" => "index.md",
     "tutorials/ode_modeling.md",
-    "Tutorials" => Any["tutorials/acausal_components.md",
+    "Tutorials" => Any[
+        "tutorials/acausal_components.md",
         "tutorials/nonlinear.md",
         "tutorials/initialization.md",
         "tutorials/optimization.md",
@@ -19,22 +20,30 @@ pages = [
         "tutorials/callable_params.md",
         "tutorials/linear_analysis.md",
         "tutorials/disturbance_modeling.md",
-        "tutorials/fmi.md"],
+        "tutorials/fmi.md",
+    ],
     "Examples" => Any[
-        "Basic Examples" => Any["examples/higher_order.md",
+        "Basic Examples" => Any[
+            "examples/higher_order.md",
             "examples/spring_mass.md",
             "examples/modelingtoolkitize_index_reduction.md",
-            "examples/remake.md"],
-        "Advanced Examples" => Any["examples/tearing_parallelism.md",
+            "examples/remake.md",
+        ],
+        "Advanced Examples" => Any[
+            "examples/tearing_parallelism.md",
             "examples/sparse_jacobians.md",
-            "examples/perturbation.md"]],
-    "API" => Any["API/System.md",
+            "examples/perturbation.md",
+        ],
+    ],
+    "API" => Any[
+        "API/System.md",
         "API/variables.md",
         "API/model_building.md",
         "API/problems.md",
         "API/dynamic_opt.md",
         "API/codegen.md",
-        "API/PDESystem.md"],
+        "API/PDESystem.md",
+    ],
     "Basics" => Any[
         "basics/Composition.md",
         "basics/Events.md",
@@ -45,10 +54,12 @@ pages = [
         "basics/Debugging.md",
         "basics/DependencyGraphs.md",
         "basics/Precompilation.md",
-        "basics/FAQ.md"],
+        "basics/FAQ.md",
+    ],
     "comparison.md",
     "Internal Details" => Any[
         "internals.md",
         "internals/structural_transformation.md",
-        "internals/bipartite_graph.md"]
+        "internals/bipartite_graph.md",
+    ],
 ]

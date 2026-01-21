@@ -1,13 +1,17 @@
 using ModelingToolkit, ADTypes, Test
+using NonlinearSolve
+using Symbolics: value
 using CommonSolve: solve
 
 # Test reorder_unknowns
 # sys = ssrand(1,1,4);
 mats = let
-    A = [-1.617708540405859 0.14199864151523162 1.8120551022076838 -1.246419696614408;
-         0.6704209450894298 -2.4251566699889575 0.6782529705706082 -1.3731519847672025;
-         -0.09336677360807291 -0.11211714788917712 -3.6877851408229523 -0.7073967284605489;
-         -1.1743200892334098 1.1808779444006103 1.5721685015907167 -0.10858833182921268]
+    A = [
+        -1.617708540405859 0.14199864151523162 1.8120551022076838 -1.246419696614408;
+        0.6704209450894298 -2.4251566699889575 0.6782529705706082 -1.3731519847672025;
+        -0.09336677360807291 -0.11211714788917712 -3.6877851408229523 -0.7073967284605489;
+        -1.1743200892334098 1.1808779444006103 1.5721685015907167 -0.10858833182921268
+    ]
     B = [-0.3286766047686936; -1.8473436385672866; -2.4092567234250954; -0.06371974677173559;;]
     C = [-0.7144567541084362 0.18898849455229796 0.023473101245754475 1.0369097263843963]
     D = [0.6397583934617636;;]
@@ -18,23 +22,27 @@ new = [x4, x1, x3, x2]
 old = [x1, x2, x3, x4]
 lsys = ModelingToolkit.reorder_unknowns(mats, old, new)
 P = [0 1 0 0; 0 0 0 1; 0 0 1 0; 1 0 0 0]
-@test isequal(P*new, old)
+@test isequal(P * new, old)
 @test lsys.A == ModelingToolkit.similarity_transform(mats, P).A
 
 # r is an input, and y is an output.
 @independent_variables t
-@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0
-@variables x(t)=0 y(t)=0 u(t)=0 r(t)=0 [input=true]
+@variables x(t) = 0 y(t) = 0 u(t) = 0 r(t) = 0
+@variables x(t) = 0 y(t) = 0 u(t) = 0 r(t) = 0 [input = true]
 @parameters kp = 1
 D = Differential(t)
 
-eqs = [u ~ kp * (r - y)
-       D(x) ~ -x + u
-       y ~ x]
+eqs = [
+    u ~ kp * (r - y)
+    D(x) ~ -x + u
+    y ~ x
+]
 
 @named sys = System(eqs, t)
 
 lsys, ssys, extras = linearize(sys, [r], [y])
+lsysbig, ssysbig, extrasbig = linearize(sys, [r], [y], t = big(0.0))
+@test lsys.A[] == Float64.(lsysbig.A[])
 lprob = LinearizationProblem(sys, [r], [y])
 lsys2, extras2 = solve(lprob)
 lsys3, _ = linearize(sys, [r], [y]; autodiff = AutoFiniteDiff())
@@ -75,36 +83,42 @@ function plant(; name)
     @variables x(t)
     @variables u(t) y(t)
     D = Differential(t)
-    eqs = [D(x) ~ -x + u
-           y ~ x]
-    System(eqs, t; name = name)
+    eqs = [
+        D(x) ~ -x + u
+        y ~ x
+    ]
+    return System(eqs, t; name = name)
 end
 
 function filt_(; name)
     @variables x(t) y(t)
-    @variables u(t)=0 [input = true]
+    @variables u(t) = 0 [input = true]
     D = Differential(t)
-    eqs = [D(x) ~ -2 * x + u
-           y ~ x]
-    System(eqs, t, name = name)
+    eqs = [
+        D(x) ~ -2 * x + u
+        y ~ x
+    ]
+    return System(eqs, t, name = name)
 end
 
 function controller(kp; name)
-    @variables y(t)=0 r(t)=0 u(t)
+    @variables y(t) = 0 r(t) = 0 u(t)
     @parameters kp = kp
     eqs = [
-        u ~ kp * (r - y)
+        u ~ kp * (r - y),
     ]
-    System(eqs, t; name = name)
+    return System(eqs, t; name = name)
 end
 
 @named f = filt_()
 @named c = controller(1)
 @named p = plant()
 
-connections = [f.y ~ c.r # filtered reference to controller reference
-               c.u ~ p.u # controller output to plant input
-               p.y ~ c.y]
+connections = [
+    f.y ~ c.r # filtered reference to controller reference
+    c.u ~ p.u # controller output to plant input
+    p.y ~ c.y
+]
 
 @named cl = System(connections, t, systems = [f, c, p])
 
@@ -120,15 +134,15 @@ lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
 @test lsys.D[] == lsys2.D[] == 0
 
 ## Symbolic linearization
-lsyss_ns, ssys_ns = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x], split=false)
+lsyss_ns, ssys_ns = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x], split = false)
 lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @test isequal(lsyss.A, lsyss_ns.A)
 
 lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
-@test ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
-@test ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
-@test ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
-@test ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.defaults(cl)) == lsys.D
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.initial_conditions(cl))) == lsys.A
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.initial_conditions(cl))) == lsys.B
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.initial_conditions(cl))) == lsys.C
+@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.initial_conditions(cl))) == lsys.D
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -139,8 +153,10 @@ Nd = 10
 
 @unpack reference, measurement, ctr_output = pid
 lsys0,
-ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u];
-    op = Dict(reference.u => 0.0, measurement.u => 0.0))
+    ssys = linearize(
+    pid, [reference.u, measurement.u], [ctr_output.u];
+    op = Dict(reference.u => 0.0, measurement.u => 0.0)
+)
 @unpack int, der = pid
 desired_order = [int.x, der.x]
 lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
@@ -151,18 +167,32 @@ lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 @test lsys.D == [4400 -4400]
 
 lsyss0,
-ssys2 = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
-    [ctr_output.u])
+    ssys2 = ModelingToolkit.linearize_symbolic(
+    pid, [reference.u, measurement.u],
+    [ctr_output.u]
+)
 lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
 
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.A, ModelingToolkit.defaults_and_guesses(pid)) == lsys.A
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.B, ModelingToolkit.defaults_and_guesses(pid)) == lsys.B
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.C, ModelingToolkit.defaults_and_guesses(pid)) == lsys.C
-@test ModelingToolkit.fixpoint_sub(
-    lsyss.D, ModelingToolkit.defaults_and_guesses(pid)) == lsys.D
+@test value.(
+    ModelingToolkit.fixpoint_sub(
+        lsyss.A, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
+    )
+) == lsys.A
+@test value.(
+    ModelingToolkit.fixpoint_sub(
+        lsyss.B, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
+    )
+) == lsys.B
+@test value.(
+    ModelingToolkit.fixpoint_sub(
+        lsyss.C, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
+    )
+) == lsys.C
+@test value.(
+    ModelingToolkit.fixpoint_sub(
+        lsyss.D, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
+    )
+) == lsys.D
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_order))
@@ -173,30 +203,34 @@ lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_ord
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-@test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(pid,
+@test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(
+    pid,
     [
         pid.reference.u,
-        pid.measurement.u
-    ], [ctr_output.u])
-@test_throws ["outputs provided to `mtkcompile`", "not found"] linearize(pid,
+        pid.measurement.u,
+    ], [ctr_output.u]
+)
+@test_throws ["outputs provided to `mtkcompile`", "not found"] linearize(
+    pid,
     [
         reference.u,
-        measurement.u
+        measurement.u,
     ],
-    [pid.ctr_output.u])
+    [pid.ctr_output.u]
+)
 
 ## Test operating points
 
 # The saturation has no dynamics
 function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
-    @variables u(t)=0 y(t)=0
-    @parameters y_max=y_max y_min=y_min
+    @variables u(t) = 0 y(t) = 0
+    @parameters y_max = y_max y_min = y_min
     ie = ifelse
     eqs = [
-    # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
-        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min))
+        # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
+        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min)),
     ]
-    System(eqs, t, name = name)
+    return System(eqs, t, name = name)
 end
 @named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity
@@ -238,23 +272,27 @@ c = 10   # Damping coefficient
 @named torque = Torque()
 
 function SystemModel(u = nothing; name = :model)
-    eqs = [connect(torque.flange, inertia1.flange_a)
-           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+    eqs = [
+        connect(torque.flange, inertia1.flange_a)
+        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+    ]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return System(eqs, t;
+        return System(
+            eqs, t;
             systems = [
                 torque,
                 inertia1,
                 inertia2,
                 spring,
                 damper,
-                u
+                u,
             ],
-            name)
+            name
+        )
     end
-    System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+    return System(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
 end
 
 @named r = Step(start_time = 0)
@@ -264,49 +302,60 @@ model = SystemModel()
 @named sensor = AngleSensor()
 @named er = Add(k2 = -1)
 
-connections = [connect(r.output, :r, filt.input)
-               connect(filt.output, er.input1)
-               connect(pid.ctr_output, :u, model.torque.tau)
-               connect(model.inertia2.flange_b, sensor.flange)
-               connect(sensor.phi, :y, er.input2)
-               connect(er.output, :e, pid.err_input)]
+connections = [
+    connect(r.output, :r, filt.input)
+    connect(filt.output, er.input1)
+    connect(pid.ctr_output, :u, model.torque.tau)
+    connect(model.inertia2.flange_b, sensor.flange)
+    connect(sensor.phi, :y, er.input2)
+    connect(er.output, :e, pid.err_input)
+]
 
-closed_loop = System(connections, t, systems = [model, pid, filt, sensor, r, er],
-    name = :closed_loop, defaults = [
+closed_loop = System(
+    connections, t, systems = [model, pid, filt, sensor, r, er],
+    name = :closed_loop, initial_conditions = [
         model.inertia1.phi => 0.0,
         model.inertia2.phi => 0.0,
         model.inertia1.w => 0.0,
         model.inertia2.w => 0.0,
         filt.x => 0.0,
-        filt.xd => 0.0
-    ])
+        filt.xd => 0.0,
+    ]
+)
 
 @test_nowarn linearize(closed_loop, :r, :y; warn_empty_op = false)
 
 # https://discourse.julialang.org/t/mtk-change-in-linearize/115760/3
-@mtkmodel Tank_noi begin
+@component function Tank_noi(; name, ρ = 1, A = 5, K = 5, h_ς = 3)
     # Model parameters
-    @parameters begin
-        ρ = 1, [description = "Liquid density"]
-        A = 5, [description = "Cross sectional tank area"]
-        K = 5, [description = "Effluent valve constant"]
-        h_ς = 3, [description = "Scaling level in valve model"]
+    pars = @parameters begin
+        ρ = ρ, [description = "Liquid density"]
+        A = A, [description = "Cross sectional tank area"]
+        K = K, [description = "Effluent valve constant"]
+        h_ς = h_ς, [description = "Scaling level in valve model"]
     end
+
+    systems = @named begin
+    end
+
     # Model variables, with initial values needed
-    @variables begin
-        m(t) = 1.5 * ρ * A, [description = "Liquid mass"]
+    vars = @variables begin
+        m(t), [description = "Liquid mass"]
         md_i(t), [description = "Influent mass flow rate"]
         md_e(t), [description = "Effluent mass flow rate"]
         V(t), [description = "Liquid volume"]
         h(t), [description = "level"]
     end
+
     # Providing model equations
-    @equations begin
-        D(m) ~ md_i - md_e
-        m ~ ρ * V
-        V ~ A * h
-        md_e ~ K * sqrt(h / h_ς)
-    end
+    equations = Equation[
+        D(m) ~ md_i - md_e,
+        m ~ ρ * V,
+        V ~ A * h,
+        md_e ~ K * sqrt(h / h_ς),
+    ]
+
+    return System(equations, t, vars, pars; name, systems)
 end
 
 @named tank_noi = Tank_noi()
@@ -315,7 +364,7 @@ m_ss = 2.4000000003229878
 @test_nowarn linearize(tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2))
 
 # Test initialization
-@variables x(t) y(t) u(t)=1.0
+@variables x(t) y(t) u(t) = 1.0
 @parameters p = 1.0
 eqs = [D(x) ~ p * u, x ~ y]
 @named sys = System(eqs, t)
@@ -340,13 +389,15 @@ end
     @variables x(t) y(t)
     @parameters p
     eqs = [0 ~ x * log(y) - p]
-    @named sys = System(eqs, t; defaults = [p => 1.0])
+    @named sys = System(eqs, t; initial_conditions = [p => 1.0])
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingGuessError linearize(
-        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true)
+        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true
+    )
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
-        allow_input_derivatives = true)
+        allow_input_derivatives = true
+    )
 end
 
 @testset "Symbolic values for parameters in `linearize`" begin
@@ -354,7 +405,8 @@ end
     @unpack md_i, h, m, ρ, A, K = tank_noi
     m_ss = 2.4000000003229878
     @test_nowarn linearize(
-        tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5))
+        tank_noi, [md_i], [h]; op = Dict(m => m_ss, md_i => 2, ρ => A / K, A => 5)
+    )
 end
 
 @testset "Warn on empty operating point" begin
@@ -362,5 +414,6 @@ end
     @unpack md_i, h, m = tank_noi
     m_ss = 2.4000000003229878
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
-        tank_noi, [md_i], [h]; p = [md_i => 1.0])
+        tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
+    )
 end
