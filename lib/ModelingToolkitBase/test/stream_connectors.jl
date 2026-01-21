@@ -320,8 +320,8 @@ sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
         0 .~ collect(vp1.i)
         0 .~ collect(vp2.i)
         0 .~ collect(vp3.i)
-        vp1.v ~ vp2.v
-        vp1.v ~ vp3.v
+        collect(vp1.v) .~ collect(vp2.v)
+        collect(vp1.v) .~ collect(vp3.v)
         0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
         0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]
     ]
