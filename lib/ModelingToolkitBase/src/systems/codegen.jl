@@ -1406,7 +1406,7 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
     # `linear_expansion` caches values based on `var`. This loop ordering helps
     # avoid invalidating the cache frequently.
     for (j, var) in enumerate(dvs)
-        lex = Symbolics.LinearExpander(var)
+        lex = Symbolics.LinearExpander(var; strict = true)
         for (i, resid) in enumerate(rhss)
             p, q, islinear = lex(resid)
             if !islinear
