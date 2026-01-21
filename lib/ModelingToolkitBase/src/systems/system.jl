@@ -747,7 +747,7 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         collect_vars!(noisedvs, noiseps, noiseeqs, iv)
         for dv in noisedvs
             dv ∈ allunknowns ||
-                throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+                throw(ArgumentError(lazy"Variable $dv in noise equations is not an unknown of the system."))
         end
     end
 
@@ -905,20 +905,20 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         if !iscall(var)
             SU.query(isequal(iv), var) && (
                 var ∈ sts ||
-                    throw(ArgumentError("Time-dependent variable $var is not an unknown of the system."))
+                    throw(ArgumentError(lazy"Time-dependent variable $var is not an unknown of the system."))
             )
         elseif length(arguments(var)) > 1
-            throw(ArgumentError("Too many arguments for variable $var."))
+            throw(ArgumentError(lazy"Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
             if iscall(var) && operation(var) isa Differential
                 var = only(arguments(var))
             end
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
-                throw(ArgumentError("Variable $var is not a variable of the System. Called variables must be variables of the System."))
+                throw(ArgumentError(lazy"Variable $var is not a variable of the System. Called variables must be variables of the System."))
 
             isequal(arg, iv) || isparameter(arg) || isconst(arg) && symtype(arg) <: Real ||
-                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+                throw(ArgumentError(lazy"Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
         else

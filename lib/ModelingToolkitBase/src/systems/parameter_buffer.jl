@@ -169,7 +169,7 @@ function MTKParameters(
             end
         end
         if !SU.isconst(val)
-            error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
+            error(lazy"Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)

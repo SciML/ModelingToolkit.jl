@@ -556,7 +556,7 @@ function get_temporary_value(p, floatT = Float64)
     elseif stype <: AbstractArray
         zeros(eltype(stype), size(p))
     else
-        error("Nonnumeric parameter $p with symtype $stype cannot be solved for during initialization")
+        error(lazy"Nonnumeric parameter $p with symtype $stype cannot be solved for during initialization")
     end
 end
 

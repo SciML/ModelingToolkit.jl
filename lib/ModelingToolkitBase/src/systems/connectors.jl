@@ -153,7 +153,7 @@ function connector_type(sys::AbstractSystem)
     for s in unkvars
         vtype = get_connection_type(s)
         if vtype === Stream
-            isarray(s) && error("Array stream variables are not supported. Got $s.")
+            isarray(s) && error(lazy"Array stream variables are not supported. Got $s.")
             n_stream += 1
         elseif vtype === Flow
             n_flow += 1
@@ -227,10 +227,10 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
     for var in allvars
         vtype = getvariabletype(var)
         vtype === VARIABLE ||
-            throw(ArgumentError("Expected $var to be of kind `$VARIABLE`. Got `$vtype`."))
+            throw(ArgumentError(lazy"Expected $var to be of kind `$VARIABLE`. Got `$vtype`."))
     end
     if !allunique(allvars)
-        throw(ArgumentError("Expected all connection variables to be unique. Got variables $allvars which contains duplicate entries."))
+        throw(ArgumentError(lazy"Expected all connection variables to be unique. Got variables $allvars which contains duplicate entries."))
     end
     sh1 = SU.shape(allvars[1])::SU.ShapeVecT
     sz1 = SU.SmallV{Int}()
@@ -245,7 +245,7 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
             push!(sz2, length(x))
         end
         if !isequal(sz1, sz2)
-            throw(ArgumentError("Expected all connection variables to have the same size. Got variables $(allvars[1]) and $v with sizes $sz1 and $sz2 respectively."))
+            throw(ArgumentError(lazy"Expected all connection variables to have the same size. Got variables $(allvars[1]) and $v with sizes $sz1 and $sz2 respectively."))
 
         end
     end
