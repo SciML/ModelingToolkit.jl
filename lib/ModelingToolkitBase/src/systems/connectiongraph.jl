@@ -95,12 +95,12 @@ end
 
 Base.hash(x::ConnectionVertex, h::UInt) = h ⊻ x.hash
 
-function Base.:(==)(a::ConnectionVertex, b::ConnectionVertex)
+function Base.isequal(a::ConnectionVertex, b::ConnectionVertex)
     length(a.name) == length(b.name) || return false
     for (x, y) in zip(a.name, b.name)
         x == y || return false
     end
-    a.idx == b.idx || return false
+    isequal(a.idx, b.idx) || return false
     a.isouter == b.isouter || return false
     a.type == b.type || return false
     if a.hash != b.hash
