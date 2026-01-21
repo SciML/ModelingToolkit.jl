@@ -395,25 +395,13 @@ function ori(sys)
 end
 
 """
-Connection type used in `ConnectionVertex` for a causal input variable. `I` is an object
-that can be passed to `getindex` as an index denoting the index in the variable for
-causal array variables. For non-array variables this should be `1`.
+Connection type used in `ConnectionVertex` for a causal input variable.
 """
-abstract type InputVar{I} end
+abstract type InputVar end
 """
-Connection type used in `ConnectionVertex` for a causal output variable. `I` is an object
-that can be passed to `getindex` as an index denoting the index in the variable for
-causal array variables. For non-array variables this should be `1`.
+Connection type used in `ConnectionVertex` for a causal output variable.
 """
-abstract type OutputVar{I} end
-
-"""
-    $(METHODLIST)
-
-Get the contained index in an `InputVar` or `OutputVar` type.
-"""
-index_from_type(::Type{InputVar{I}}) where {I} = I
-index_from_type(::Type{OutputVar{I}}) where {I} = I
+abstract type OutputVar end
 
 """
     $(TYPEDSIGNATURES)
@@ -439,11 +427,7 @@ function variable_from_vertex(sys::AbstractSystem, vert::ConnectionVertex)
     value = iterative_getproperty(sys, vert.name)
     value isa System && return value
     value = value::SymbolicT
-    vert.type <: Union{InputVar, OutputVar} || return value
-    vert.type === InputVar{CartesianIndex()} && return value
-    vert.type === OutputVar{CartesianIndex()} && return value
-    # index possibly array causal variable
-    return value[index_from_type(vert.type)]::SymbolicT
+    return value[vert.idx]
 end
 
 """
@@ -493,33 +477,29 @@ end
 function _generate_connectionsets_with_idxs!(
         connection_state::AbstractConnectionState,
         namespace::Vector{Symbol}, connected_vars::Vector{SymbolicT}, isouter::IsOuter,
-        idxs::CartesianIndices{N, NTuple{N, UnitRange{Int}}}
-    ) where {N}
+        idxs::SU.StableIndices
+    )
     # all of them have the same size, but may have different axes/shape
     # so we iterate over `eachindex(eachindex(..))` since that is identical for all
     for sz_i in eachindex(idxs)
         hyperedge = ConnectionVertex[]
         for var in connected_vars
             var_ns = namespace_hierarchy(getname(var))
-            if N === 0
-                i = sz_i
-            else
-                i = (eachindex(var)::CartesianIndices{N, NTuple{N, UnitRange{Int}}})[sz_i]::CartesianIndex{N}
-            end
-            is_input = isinput(var)
-            is_output = isoutput(var)
+            i = SU.stable_eachindex(var)[sz_i]
+            var = var[i]
+            arrvar, _ = split_indexed_var(var)
+            is_input = isinput(arrvar)
+            is_output = isoutput(arrvar)
             if is_input && is_output
                 throw_both_input_output(var, connected_vars)
             elseif is_input
-                type = InputVar{i}
+                type = InputVar
             elseif is_output
-                type = OutputVar{i}
+                type = OutputVar
             else
                 throw_not_input_output(var, connected_vars)
             end
-            vert = ConnectionVertex(
-                [namespace; var_ns], length(var_ns) == 1 || isouter(var_ns[1]), type
-            )
+            vert = ConnectionVertex(namespace, var, length(var_ns) == 1 || isouter(var_ns[1]), type)
             push!(hyperedge, vert)
         end
         add_connection_edge!(connection_state, hyperedge)
@@ -529,7 +509,7 @@ function _generate_connectionsets_with_idxs!(
         # add an `Equality` variant of the edge.
         if connection_state isa NegativeConnectionState
             hyperedge = map(hyperedge) do cvert
-                ConnectionVertex(cvert.name, cvert.isouter, Equality)
+                ConnectionVertex(cvert.name, cvert.idx, cvert.isouter, Equality)
             end
             add_connection_edge!(connection_state, hyperedge)
         end
@@ -546,30 +526,11 @@ function _generate_connectionsets!(
     # NOTE: variable connections don't populate the domain network
 
     representative = first(connected_vars)
-    idxs = eachindex(representative)
-    # Manual dispatch for common cases
-    return if idxs isa CartesianIndices{0, Tuple{}}
-        _generate_connectionsets_with_idxs!(
-            connection_state, namespace, connected_vars,
-            isouter, idxs
-        )
-    elseif idxs isa CartesianIndices{1, Tuple{UnitRange{Int}}}
-        _generate_connectionsets_with_idxs!(
-            connection_state, namespace, connected_vars,
-            isouter, idxs
-        )
-    elseif idxs isa CartesianIndices{2, NTuple{2, UnitRange{Int}}}
-        _generate_connectionsets_with_idxs!(
-            connection_state, namespace, connected_vars,
-            isouter, idxs
-        )
-    else
-        # Dynamic dispatch
-        _generate_connectionsets_with_idxs!(
-            connection_state, namespace, connected_vars,
-            isouter, idxs
-        )
-    end
+    idxs = SU.stable_eachindex(representative)
+    return _generate_connectionsets_with_idxs!(
+        connection_state, namespace, connected_vars,
+        isouter, idxs
+    )
 end
 
 function _generate_connectionsets!(

@@ -15,6 +15,10 @@ struct ConnectionVertex
     """
     name::Vector{Symbol}
     """
+    For indexed array variables, the index of the array referred to by `name`.
+    """
+    idx::SU.StableIndex{Int}
+    """
     Boolean indicating whether this is an outside connector.
     """
     isouter::Bool
@@ -41,21 +45,24 @@ Create a `ConnectionVertex` given
   system.
 - `var`: the variable/subsystem.
 
-`isouter` is the same as the struct field. Uses `get_connection_type` to find the type to
-use for this connection.
+`isouter` is the same as the struct field. The connection type `type` can be provided
+explicitly, otherwise `get_connection_type` is used to find the type of this connection.
 """
 function ConnectionVertex(
-        namespace::Vector{Symbol}, var::Union{SymbolicT, AbstractSystem}, isouter::Bool
+        namespace::Vector{Symbol}, var::Union{SymbolicT, AbstractSystem}, isouter::Bool,
+        type::DataType = get_connection_type(var)
     )
     if var isa SymbolicT
         name = getname(var)
+        _, isidx = split_indexed_var(var)
+        idx = isidx ? get_stable_index(var) : SU.StableIndex(Int[])
     else
         name = nameof(var)
+        idx = SU.StableIndex(Int[])
     end
     var_ns = namespace_hierarchy(name)
-    type = get_connection_type(var)
     name = vcat(namespace, var_ns)
-    return ConnectionVertex(name, isouter, type; alias = true)
+    return ConnectionVertex(name, idx, isouter, type; alias = true)
 end
 
 """
@@ -65,7 +72,7 @@ Create a connection vertex for the given path. Typically used for domain connect
 where the type of connection doesn't matter. Uses `isouter = true` and `type = Flow`.
 """
 function ConnectionVertex(name::Vector{Symbol})
-    return ConnectionVertex(name, true, Flow)
+    return ConnectionVertex(name, SU.StableIndex(Int[]), true, Flow)
 end
 
 """
@@ -75,7 +82,7 @@ Create a connection vertex for the given path `name` using the provided `isouter
 `type`. `alias` denotes whether `name` can be stored by this vertex without copying.
 """
 function ConnectionVertex(
-        name::Vector{Symbol}, isouter::Bool, type::DataType; alias = false
+        name::Vector{Symbol}, idx::SU.StableIndex{Int}, isouter::Bool, type::DataType; alias = false
     )
     if !alias
         name = copy(name)
@@ -83,7 +90,7 @@ function ConnectionVertex(
     h = foldr(hash, name; init = zero(UInt))
     h = hash(type, h)
     h = hash(isouter, h)
-    return ConnectionVertex(name, isouter, type, h)
+    return ConnectionVertex(name, idx, isouter, type, h)
 end
 
 Base.hash(x::ConnectionVertex, h::UInt) = h ⊻ x.hash
@@ -93,6 +100,7 @@ function Base.:(==)(a::ConnectionVertex, b::ConnectionVertex)
     for (x, y) in zip(a.name, b.name)
         x == y || return false
     end
+    a.idx == b.idx || return false
     a.isouter == b.isouter || return false
     a.type == b.type || return false
     if a.hash != b.hash

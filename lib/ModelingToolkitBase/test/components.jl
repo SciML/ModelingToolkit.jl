@@ -485,3 +485,28 @@ end
     is_connect_truth[(end - 7):end] .= true
     @test source_info.is_connection_equation == is_connect_truth
 end
+
+@testset "Issue #4195: Indexed IO variables" begin
+    function ImBrokenPleaseFixMe(; name)
+        systems = @named begin
+            k = Blocks.Constant(k = 1)
+            R = Blocks.StateSpace(; A = [-1;;], B = [1;;], C = [1;2;;], D = [0;0;;])
+            P1 = Blocks.FirstOrder(T = 1)
+            P2 = Blocks.FirstOrder(T = 1)
+        end
+
+        eqs = [
+            connect(k.output, R.input)
+            connect(R.output.u[1], P1.input.u)
+            connect(R.output.u[2], P2.input.u)
+        ]
+
+        System(eqs, t, [], []; systems, name)
+    end
+
+    @named sys = ImBrokenPleaseFixMe()
+    sys = expand_connections(sys)
+    ss = toggle_namespacing(sys, false)
+    @test (ss.P1.input.u ~ ss.R.output.u[1]) in equations(sys)
+    @test (ss.P2.input.u ~ ss.R.output.u[2]) in equations(sys)
+end
