@@ -462,7 +462,7 @@ function System(
     ps = vec(unwrap_vars(ps))
     dvs = vec(unwrap_vars(dvs))
     if iv !== nothing
-        filter!(!Base.Fix2(isdelay, iv), dvs)
+        filter!(!Base.Fix2(_is_unknown_delay_or_evalat, iv), dvs)
     end
     brownians = unwrap_vars(brownians)
 
@@ -520,7 +520,10 @@ function System(
         buffer = SymbolicT[]
         for eq in observed
             push!(buffer, eq.lhs)
-            push!(buffer, eq.rhs)
+            if !(iv isa SymbolicT && _is_unknown_delay_or_evalat(eq.rhs, iv)) &&
+                    !iscalledparameter(eq.rhs)
+                push!(buffer, eq.rhs)
+            end
         end
         process_variables!(var_to_name, initial_conditions, bindings, guesses, buffer)
 
@@ -607,6 +610,25 @@ function System(
     )
 end
 
+function _is_unknown_delay_or_evalat(x::SymbolicT, iv::SymbolicT)
+    x = split_indexed_var(x)[1]
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa SymbolicT end => begin
+            !isequal(args[1], iv) && Moshi.Match.@match args[1] begin
+                BSImpl.Term(; f = f2) => !(f2 isa SymbolicT) || SU.is_function_symbolic(f2)
+                _ => true
+            end
+        end
+        BSImpl.Term(; f, args) && if f === real || f === imag end => begin
+            _is_unknown_delay_or_evalat(args[1], iv)
+        end
+        BSImpl.Term(; f, args) && if f isa Differential end => begin
+            _is_unknown_delay_or_evalat(args[1], iv)
+        end
+        _ => false
+    end
+end
+
 @noinline function nonunique_subsystems(systems)
     sysnames = nameof.(systems)
     unique_sysnames = Set(sysnames)
@@ -679,7 +701,23 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     setdiff!(allunknowns, brownians)
 
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
-    cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    cstrunknowns = empty(_cstrunknowns)
+    for var in _cstrunknowns
+        op, inner = Moshi.Match.@match var begin
+            BSImpl.Term(; f, args) && if f isa Differential end => (f, args[1])
+            _ => begin
+                push!(cstrunknowns, var)
+                continue
+            end
+        end
+        Moshi.Match.@match inner begin
+            BSImpl.Term(; f, args) && if f isa SymbolicT && SU.isconst(args[1]) end => begin
+                push!(cstrunknowns, op(f(iv)))
+            end
+            _ => push!(cstrunknowns, var)
+        end
+    end
     union!(allunknowns, cstrunknowns)
     union!(ps, cstrps)
 
@@ -781,19 +819,52 @@ function gather_array_params(ps)
     return new_ps
 end
 
+struct ConstraintValidator
+    innervars::Set{SymbolicT}
+end
+ConstraintValidator() = ConstraintValidator(Set{SymbolicT}())
+
+function (cv::ConstraintValidator)(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            empty!(cv.innervars)
+            SU.search_variables!(cv.innervars, args[1])
+            for var in cv.innervars
+                Moshi.Match.@match var begin
+                    BSImpl.Term() => throw(
+                        ArgumentError(
+                            """
+                            Arguments of a delayed or evaluated (via `EvalAt`) variable \
+                            cannot be other dependent variables. Found $x which \
+                            contains $var.
+                            """
+                        )
+                    )
+                    _ => nothing
+                end
+            end
+        end
+        _ => nothing
+    end
+    return false
+end
+
 """
 Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
-        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true
+        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true,
     )
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
     constraintsts = OrderedSet{SymbolicT}()
     constraintps = OrderedSet{SymbolicT}()
+    validator = ConstraintValidator()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
+        SU.query(validator, cons.lhs)
+        SU.query(validator, cons.rhs)
     end
 
     # Validate the states.

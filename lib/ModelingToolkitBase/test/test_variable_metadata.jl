@@ -159,6 +159,35 @@ sp = Set(p)
 @test k2 ∉ sp
 @test length(p) == 1
 
+# Test that parameters appearing only in bounds are discovered
+@independent_variables t2
+Dₜ2 = Differential(t2)
+@parameters Tₘ
+@variables x2(t2) u2(t2) [bounds = (0, Tₘ)]
+eqs2 = [Dₜ2(x2) ~ u2]
+sys2 = System(eqs2, t2, name = :bounds_param_discovery)
+@test Tₘ ∈ Set(parameters(sys2))
+
+# Test that parameters in callable variable time arguments are discovered (x(tf) pattern)
+@independent_variables t3
+Dₜ3 = Differential(t3)
+@parameters tf
+@variables x3(..)
+eqs3 = [Dₜ3(x3(t3)) ~ 1]
+costs3 = [-x3(tf)]
+sys3 = System(eqs3, t3; costs = costs3, name = :callable_param_discovery)
+@test tf ∈ Set(parameters(sys3))
+
+# Test that parameters in Integral domain bounds are discovered
+@independent_variables t4
+Dₜ4 = Differential(t4)
+@parameters tf2
+@variables x4(t4)
+eqs4 = [Dₜ4(x4) ~ 1]
+costs4 = [Symbolics.Integral(t4 in (0, tf2))(x4)]
+sys4 = System(eqs4, t4; costs = costs4, name = :integral_param_discovery)
+@test tf2 ∈ Set(parameters(sys4))
+
 ## Descriptions
 @variables u [description = "This is my input"]
 @test getdescription(u) == "This is my input"

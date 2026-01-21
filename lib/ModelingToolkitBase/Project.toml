@@ -159,7 +159,7 @@ StochasticDelayDiffEq = "1.11"
 StochasticDiffEq = "6.82.0"
 SymbolicIndexingInterface = "0.3.39"
 SymbolicUtils = "4.7.1"
-Symbolics = "7.1.1"
+Symbolics = "7.5.1"
 UnPack = "0.1, 1.0"
 julia = "1.9"
 

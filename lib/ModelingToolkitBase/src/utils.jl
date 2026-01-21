@@ -525,13 +525,21 @@ end
 
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
-        x = Moshi.Match.@match x begin
-            BSImpl.Const() => continue
-            BSImpl.Term(; f, args) && if f === getindex end => args[1]
-            _ => x
-        end
+        SU.isconst(x) && continue
+        x = split_indexed_var(x)[1]
         hasname(x) || continue
-        vars[getname(x)] = x
+        nm = getname(x)
+        if !isequal(get(vars, nm, x), x)
+            throw(
+                ArgumentError(
+                    """
+                    Found variables with duplicate names! $x and $(vars[nm]) have the same \
+                    name but are not identical. This is not allowed.
+                    """
+                )
+            )
+        end
+        vars[nm] = x
     end
     return
 end
@@ -771,6 +779,8 @@ function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
     end
 end
 
+const AnyInterval{T} = DomainSets.Interval{A, B, T} where {A, B}
+
 """
     $(TYPEDSIGNATURES)
 
@@ -789,9 +799,33 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     Moshi.Match.@match expr begin
         BSImpl.Const() => return
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
+        BSImpl.Term(; f) && if f isa Integral end => begin
+            # Handle Integral operators at expression level - discover parameters in domain bounds
+            # This must be done here since search_variables! returns leaf variables, not the Integral term
+            domain = f.domain.domain
+            if domain isa AnyInterval{Num}
+                lo, hi = unwrap.(DomainSets.endpoints(domain))
+            elseif domain isa AnyInterval{SymbolicT}
+                lo, hi = DomainSets.endpoints(domain)
+            elseif domain isa AnyInterval
+                lo = hi = COMMON_NOTHING
+            else
+                throw(
+                    ArgumentError(
+                        """
+                        ModelingToolkit does not support nonstandard intervals. Only \
+                        `DomainSets.Interval` is supported.
+                        """
+                    )
+                )
+            end
+            collect_vars!(unknowns, parameters, lo, iv, op; depth)
+            collect_vars!(unknowns, parameters, hi, iv, op; depth)
+        end
         _ => nothing
     end
     vars = OrderedSet{SymbolicT}()
+    othervars = OrderedSet{SymbolicT}()
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
         Moshi.Match.@match var begin
@@ -799,6 +833,32 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
                 push!(vars, args[1])
+            end
+            BSImpl.Term(; f, args) && if iv isa SymbolicT && f isa SymbolicT && !isequal(args[1], iv) end => begin
+                # We know this isn't a called function symbolic, since our `is_atomic` filter
+                # wouldn't pick it up. Any variable then must have exactly one argument.
+                if length(args) > 1
+                    throw(
+                        ArgumentError(
+                            """
+                            Time-dependent variables must have exactly one independent \
+                            variable argument. Found $(var) with multiple arguments.
+                            """
+                        )
+                    )
+                end
+                # `EvalAt`/delayed variables
+                Moshi.Match.@match args[1] begin
+                    # `y(x(t))` is a valid variable, used by ControlSystemsMTK. Needs to be
+                    # handled separately.
+                    BSImpl.Term(; f) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+                        collect_var!(unknowns, parameters, var, iv; depth)
+                        collect_var!(unknowns, parameters, args[1], iv; depth)
+                    end
+                    _ => collect_var!(unknowns, parameters, f(iv), iv; depth)
+                end
+                # Also discover parameters used in the time argument
+                collect_vars!(unknowns, parameters, args[1], iv, op; depth)
             end
             _ => collect_var!(unknowns, parameters, var, iv; depth)
         end
@@ -893,12 +953,52 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
             collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Num
             collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Arr{Num, 1}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Num}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Arr{Num, 1}}
+            collect_vars!(unknowns, parameters, def, iv)
+        elseif def isa CallAndWrap{Arr{Num, 2}}
+            collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr
             collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap
             collect_vars!(unknowns, parameters, def, iv)
         else
             collect_vars!(unknowns, parameters, def, iv)
+        end
+    end
+    # Add also any parameters that appear only in the bounds of the var
+    if hasbounds(var)
+        (lo, hi) = getbounds(var)
+        if lo isa SymbolicT
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Num
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Arr{Num, 1}
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, lo, iv)
+        elseif lo isa Arr
+            collect_vars!(unknowns, parameters, lo, iv)
+        else
+            collect_vars!(unknowns, parameters, lo, iv)
+        end
+        if hi isa SymbolicT
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Num
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Arr{Num, 1}
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Arr{Num, 2}
+            collect_vars!(unknowns, parameters, hi, iv)
+        elseif hi isa Arr
+            collect_vars!(unknowns, parameters, hi, iv)
+        else
+            collect_vars!(unknowns, parameters, hi, iv)
         end
     end
     return nothing
@@ -1393,6 +1493,11 @@ function split_indexed_var(x::SymbolicT)
             arr, isarr = split_indexed_var(args[1])
             isarr || return x, false
             return f(arr)::SymbolicT, isarr
+        end
+        BSImpl.ArrayOp(; term) && if term isa SymbolicT end => begin
+            arr, isarr = split_indexed_var(term)
+            isarr && return arr, isarr
+            return x, false
         end
         _ => return x, false
     end

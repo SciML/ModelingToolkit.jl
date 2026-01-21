@@ -342,7 +342,9 @@ function process_DynamicOptProblem(
     P_syms = [get_param_for_pmap(model, P, i) for i in eachindex(tunable_params)]
     P_backend = needs_individual_tunables(model) ? P_syms : P
 
-    tₛ = generate_timescale!(model, get(pmap, tspan[2], tspan[2]), is_free_t)
+    final_t_ic = get(pmap, tspan[2], tspan[2])
+    @assert symbolic_type(final_t_ic) isa NotSymbolic "The initial condition for the final time could not be determined from $final_t_ic."
+    tₛ = generate_timescale!(model, final_t_ic, is_free_t)
     fullmodel = model_type(model, U, V, P_backend, tₛ, is_free_t, tsteps)
 
     merge!(pmap, Dict(tunable_params .=> P_syms))

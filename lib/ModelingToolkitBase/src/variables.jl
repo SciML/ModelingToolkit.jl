@@ -431,22 +431,21 @@ Create parameters with bounds like this
 """
 getbounds(x::Union{Num, Symbolics.Arr}) = getbounds(unwrap(x))
 function getbounds(x::SymbolicT)
-    if iscall(x) && operation(x) === getindex
-        bounds = getmetadata(x, VariableBounds, nothing)
-        bounds === nothing || return bounds
-        p = arguments(x)[1]
-        bounds = getbounds(p)
-        idxs = @views unwrap_const.(arguments(x)[2:end])
-        return map(bounds) do b
-            @assert symbolic_has_known_size(p) && size(p) == size(b)
-            return b[idxs...]
+    if hasmetadata(x, VariableBounds)
+        return getmetadata(x, VariableBounds)
+    end
+    arrx, isarr = split_indexed_var(x)
+    if !isarr || !hasmetadata(arrx, VariableBounds)
+        if SU.is_array_shape(SU.shape(x))
+            return (fill(-Inf, size(x)), fill(Inf, size(x)))
         end
-    else
-        if symbolic_has_known_size(x) && SU.is_array_shape(SU.shape(x))
-            return getmetadata(x, VariableBounds, (fill(-Inf, size(x)), fill(Inf, size(x))))
-        else
-            return getmetadata(x, VariableBounds, (-Inf, Inf))
-        end
+        return (-Inf, Inf)
+    end
+    bounds = getmetadata(arrx, VariableBounds, nothing)::NTuple{2, Any}
+    idxs = @views unwrap_const.(arguments(x)[2:end])
+    return map(bounds) do b
+        @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
+        return b[idxs...]
     end
 end
 

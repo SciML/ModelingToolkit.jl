@@ -101,6 +101,8 @@ import PreallocationTools: DiffCache
 import FillArrays
 using BipartiteGraphs
 import Random: AbstractRNG
+# To handle `Integral` in a type-stable manner
+import DomainSets
 
 export @derivatives
 
