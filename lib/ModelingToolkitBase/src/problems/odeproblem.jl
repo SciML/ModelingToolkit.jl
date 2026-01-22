@@ -14,11 +14,11 @@ function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
     )
 end
 
-@fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
+Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
+        sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
-        steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing, expression = Val{false},
+        steady_state = false, checkbounds = false, sparsity = false, @nospecialize(analytic = nothing),
+        simplify = false, cse = true, @nospecialize(initialization_data = nothing), expression = Val{false},
         check_compatibility = true, nlstep = false, nlstep_compile = true, nlstep_scc = false,
         kwargs...
     ) where {iip, spec}
@@ -93,9 +93,9 @@ end
     maybe_codegen_scimlfn(expression, ODEFunction{iip, spec}, args; kwargs...)
 end
 
-@fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
-        sys::System, op, tspan;
-        callback = nothing, check_length = true, eval_expression = false,
+Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
+        sys::System, @nospecialize(op), tspan;
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         kwargs...
     ) where {iip, spec}

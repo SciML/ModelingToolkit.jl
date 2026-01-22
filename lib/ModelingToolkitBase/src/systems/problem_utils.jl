@@ -1727,6 +1727,16 @@ Macro for writing problem/function constructors. Expects a function definition w
 parameters for `iip` and `specialize`. Generates fallbacks with
 `specialize = SciMLBase.FullSpecialize` and `iip = true`.
 """
+# Unwrap `@nospecialize(arg)` to get the underlying argument expression.
+# Returns the argument unchanged if not wrapped in @nospecialize.
+function _unwrap_nospecialize(arg)
+    if Meta.isexpr(arg, :macrocall) && length(arg.args) >= 3 &&
+       arg.args[1] in (Symbol("@nospecialize"), GlobalRef(Base, Symbol("@nospecialize")))
+        return arg.args[3]
+    end
+    return arg
+end
+
 macro fallback_iip_specialize(ex)
     @assert Meta.isexpr(ex, :function)
     # fnname is ODEProblem{iip, spec}(args...) where {iip, spec}
@@ -1745,8 +1755,27 @@ macro fallback_iip_specialize(ex)
     # the function should have keyword arguments
     @assert Meta.isexpr(args[1], :parameters)
 
-    # arguments to call with
-    call_args = map(args) do arg
+    # Create signature args with @nospecialize stripped (for fallback function signatures)
+    sig_args = map(args) do arg
+        unwrapped = _unwrap_nospecialize(arg)
+        # Handle :parameters specially - unwrap each kwarg inside
+        if Meta.isexpr(unwrapped, :parameters)
+            new_params = map(unwrapped.args) do kwarg
+                kw = _unwrap_nospecialize(kwarg)
+                # Convert :(=) to :kw if needed
+                if Meta.isexpr(kw, :(=))
+                    Expr(:kw, kw.args...)
+                else
+                    kw
+                end
+            end
+            return Expr(:parameters, new_params...)
+        end
+        return unwrapped
+    end
+
+    # arguments to call with (for forwarding calls)
+    call_args = map(sig_args) do arg
         # keyword args are in `Expr(:parameters)` so any `Expr(:kw)` here
         # are optional positional arguments. Analyze `:(f(a, b = 1; k = 1, l...))`
         # to understand
@@ -1755,7 +1784,7 @@ macro fallback_iip_specialize(ex)
     end
     call_kwargs = map(call_args[1].args) do arg
         Meta.isexpr(arg, :...) && return arg
-        @assert Meta.isexpr(arg, :kw)
+        @assert Meta.isexpr(arg, :kw) "Expected keyword argument, got $(arg)"
         return Expr(:kw, arg.args[1], arg.args[1])
     end
     call_args[1] = Expr(:parameters, call_kwargs...)
@@ -1772,25 +1801,25 @@ macro fallback_iip_specialize(ex)
     )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])
-    # `ODEProblem{iip}(args...)`
-    fncall_iip = Expr(:call, fnname_iip, args...)
-    # ODEProblem{iip}(args...) where {iip}
+    # `ODEProblem{iip}(sig_args...)` - use sig_args (no @nospecialize) for fallback signature
+    fncall_iip = Expr(:call, fnname_iip, sig_args...)
+    # ODEProblem{iip}(sig_args...) where {iip}
     fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
     fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
 
     # `ODEProblem{true}(call_args...)`
     callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), call_args...)
-    # `ODEProblem(args...)`
-    fncall_base = Expr(:call, fnname_name, args...)
+    # `ODEProblem(sig_args...)` - use sig_args for fallback signature
+    fncall_base = Expr(:call, fnname_name, sig_args...)
     fn_base = Expr(:function, fncall_base, callexpr_base)
 
     # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
     # where `iip` should default to `false`.
     fn_sarr = nothing
     if occursin("Problem", string(fnname_name))
-        # args should at least contain an argument for the `u0map`
-        @assert length(args) > 2
-        u0_arg = args[3]
+        # sig_args should at least contain an argument for the `u0map`
+        @assert length(sig_args) > 2
+        u0_arg = sig_args[3]
         # should not have a type-annotation
         @assert !Meta.isexpr(u0_arg, :(::))
         if Meta.isexpr(u0_arg, :kw)
@@ -1801,7 +1830,7 @@ macro fallback_iip_specialize(ex)
         end
 
         callexpr_sarr = Expr(:call, Expr(:curly, fnname_name, false), call_args...)
-        fncall_sarr = Expr(:call, fnname_name, args[1], args[2], u0_arg, args[4:end]...)
+        fncall_sarr = Expr(:call, fnname_name, sig_args[1], sig_args[2], u0_arg, sig_args[4:end]...)
         fn_sarr = Expr(:function, fncall_sarr, callexpr_sarr)
     end
     return quote
