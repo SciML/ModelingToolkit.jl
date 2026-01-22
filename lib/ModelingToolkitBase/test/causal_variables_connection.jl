@@ -88,7 +88,7 @@ if @isdefined(ModelingToolkit)
 
         @testset "open_loop - $name" for (name, sys, ap) in test_cases
             open_sys, (du, u) = open_loop(sys, ap)
-            matrices, _ = linearize(open_sys, [du], [u])
+            matrices, _ = linearize(open_sys, du, [u])
             @test matrices.A[] == -1
             @test matrices.B[] * matrices.C[] == -1 # either one negative
             @test matrices.D[] == 0
