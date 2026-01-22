@@ -1355,12 +1355,12 @@ end
 
 abstract type ProblemConstructionHook end
 
-function operating_point_preprocess(sys::AbstractSystem, op)
+function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_point")
     if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
         throw(
             ArgumentError(
                 """
-                The operating point passed to the problem constructor must be a symbolic map.
+                The $name passed to the problem constructor must be a symbolic map.
                 """
             )
         )
@@ -1460,6 +1460,7 @@ function process_SciMLProblem(
     _sys = unhack_system(sys)
     obs = observed(_sys)
 
+    guesses = operating_point_preprocess(sys, guesses; name = "guesses")
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs, bindings(sys))

@@ -416,3 +416,16 @@ if @isdefined(ModelingToolkit)
         @test ODEProblem(sys, [], (0, 1); missing_guess_value = MissingGuessValue.Constant(1)) isa ODEProblem
     end
 end
+
+@testset "Issue #4168: Guess provided via `Symbol`" begin
+    @variables A(t) Y(t)
+    @parameters p d k1 k2
+    eqs = [
+        D(Y) ~ p - d * Y
+        0 ~ 3 + k2 * Y - (2 + k1 * A)
+    ]
+    @named sys = System(eqs, t)
+    sys = complete(sys)
+    sim_cond = [Y => 100.0, p => 1.0, d => 0.01, k1 => 3.0, k2 => 4.0]
+    @test_nowarn ODEProblem(sys, sim_cond, 1.0; guesses = [:A => 1.0])
+end
