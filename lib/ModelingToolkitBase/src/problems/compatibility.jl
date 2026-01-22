@@ -231,7 +231,7 @@ function check_no_equations(sys::System, T)
 end
 
 function check_affine(sys::System, T)
-    return if !isaffine(sys)
+    return if calculate_A_b(sys; throw = false) === nothing
         throw(
             SystemCompatibilityError(
                 """
