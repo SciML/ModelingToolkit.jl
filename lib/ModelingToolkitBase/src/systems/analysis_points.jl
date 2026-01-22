@@ -281,7 +281,7 @@ contains multiple variables, throw an error.
 """
 function ap_var(sys::AbstractSystem)
     if hasproperty(sys, :u)
-        return sys.u
+        return unwrap(sys.u)
     end
     x = unknowns(sys)
     length(x) == 1 && return renamespace(sys, x[1])
@@ -294,7 +294,7 @@ end
 For an `AnalysisPoint` involving causal variables. Simply return the variable.
 """
 function ap_var(var::ConnectableSymbolicT)
-    return var
+    return unwrap(var)::SymbolicT
 end
 
 """
@@ -493,14 +493,11 @@ The added variable(s) will have a default of zero, of the appropriate type and s
 """
     $(TYPEDEF)
 
-A transformation which breaks the connection referred to by `ap`. If `add_input == true`,
-it will add a new input variable which connects to the outputs of the analysis point.
-`apply_transformation` returns the new input variable (if added) as the auxiliary
-information. The new input variable will have the name `Symbol(:d_, nameof(ap))`.
+A transformation which breaks the connection referred to by `ap`.
+`apply_transformation` returns the vector of output variables as auxiliary information.
+`outputs_to_params` controls whether the output variables are turned into parameters.
 
 $DOC_WILL_REMOVE_AP
-
-$DOC_ADDED_VARIABLE
 
 ## Fields
 
@@ -512,28 +509,12 @@ struct Break <: AnalysisPointTransformation
     """
     ap::AnalysisPoint
     """
-    Whether to add a new input variable connected to all the outputs of `ap`.
+    Whether to turn outputs of the analysis point into parameters.
     """
-    add_input::Bool
-    """
-    Whether the initial condition of the added input variable should be the input of `ap`.
-    Only applicable if `add_input == true`.
-    """
-    default_outputs_to_input::Bool
-    """
-    Whether the added input is a parameter. Only applicable if `add_input == true`.
-    """
-    added_input_is_param::Bool
+    outputs_to_params::Bool
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-`Break` the given analysis point `ap`.
-"""
-function Break(ap::AnalysisPoint, add_input::Bool = false, default_outputs_to_input = false)
-    return Break(ap, add_input, default_outputs_to_input, false)
-end
+Break(ap::AnalysisPoint) = Break(ap, false)
 
 function apply_transformation(tf::Break, sys::AbstractSystem)
     return modify_nested_subsystem(sys, tf.ap) do breaksys
@@ -549,31 +530,43 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
 
         breaksys = with_analysis_point_ignored(breaksys, ap)
 
-        tf.add_input || return breaksys, ()
+        out_vars = SymbolicT[]
+        outs = ap.outputs::Union{Vector{System}, Vector{SymbolicT}}
+        if outs isa Vector{System}
+            for out in outs
+                if tf.outputs_to_params
+                    breaksys, (out_var,) = modify_nested_subsystem(breaksys, renamespace(breaksys, out)) do outsys
+                        new_dvs = copy(get_unknowns(outsys))
+                        @set! outsys.unknowns = new_dvs
+                        new_ps = copy(get_ps(outsys))
+                        @set! outsys.ps = new_ps
+                        
+                        out_var = ap_var(toggle_namespacing(outsys, false))
+                        deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
+                        push!(new_ps, out_var)
 
-        ap_ivar = ap_var(ap.input)
-        new_var, new_def = get_analysis_variable(ap_ivar, nameof(ap), get_iv(sys))
-        for outsys in ap.outputs
-            push!(breaksys_eqs, ap_var(outsys) ~ new_var)
-        end
-        defs = copy(get_initial_conditions(breaksys))
-        defs[new_var] = if tf.default_outputs_to_input
-            ap_ivar
+                        return outsys, (out_var,)
+                    end
+                else
+                    out_var = ap_var(out)
+                end
+                push!(out_vars, out_var)
+            end
         else
-            new_def
+            for out in outs
+                out_var = ap_var(out)
+                if tf.outputs_to_params
+                    new_dvs = copy(get_unknowns(breaksys))
+                    @set! breaksys.unknowns = new_dvs
+                    new_ps = copy(get_ps(breaksys))
+                    @set! breaksys.ps = new_ps
+                    deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
+                    push!(new_ps, out_var)
+                end
+                push!(out_vars, ap_var(out))
+            end
         end
-        @set! breaksys.initial_conditions = defs
-        if tf.added_input_is_param
-            ps = copy(get_ps(breaksys))
-            push!(ps, new_var)
-            @set! breaksys.ps = ps
-        else
-            unks = copy(get_unknowns(breaksys))
-            push!(unks, new_var)
-            @set! breaksys.unknowns = unks
-        end
-
-        return breaksys, (new_var,)
+        return breaksys, (out_vars,)
     end
 end
 
@@ -828,8 +821,8 @@ end
 
 function apply_transformation(tf::LoopTransferTransform, sys::AbstractSystem)
     sys, (u,) = apply_transformation(GetInput(tf.ap), sys)
-    sys, (du,) = apply_transformation(Break(tf.ap, true), sys)
-    return sys, (du, u)
+    sys, (dus,) = apply_transformation(Break(tf.ap), sys)
+    return sys, (dus, u)
 end
 
 """
