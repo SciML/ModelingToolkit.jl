@@ -31,6 +31,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
         algebraic_only = false,
         time_dependent_init = is_time_dependent(sys),
         initsys_mtkcompile_kwargs = (;),
+        is_steadystateprob = false,
         kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys)
@@ -69,6 +70,13 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
 
     if !is_split(sys)
         @set! isys.ps = mapreduce(collect, vcat, get_ps(isys))
+    end
+    if is_steadystateprob && time_dependent_init
+        @set! isys.ps = filter(!isequal(get_iv(sys)::SymbolicT), get_ps(isys))
+        binds = copy(parent(bindings(isys)))
+        # Steady state problems can assume `t0 = 0`
+        binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
+        @set! isys.bindings = ROSymmapT(binds)
     end
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
