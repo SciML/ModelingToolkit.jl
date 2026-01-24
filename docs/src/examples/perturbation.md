@@ -25,7 +25,7 @@ Next, expand $x(t)$ in a series up to second order in $ϵ$:
 
 ```@example perturbation
 using Symbolics
-@variables y(t)[0:2] # coefficients
+@variables y(t)[1:3] # coefficients (y[1]=0th order, y[2]=1st, y[3]=2nd)
 x_series = series(y, ϵ)
 ```
 
@@ -50,7 +50,7 @@ To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0)
 
 ```@example perturbation
 using OrdinaryDiffEq
-u0 = Dict([unknowns(sys) .=> 0.0; D(y[0]) => 1.0]) # nonzero initial velocity
+u0 = Dict([unknowns(sys) .=> 0.0; D(y[1]) => 1.0]) # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)
 ```
@@ -93,7 +93,7 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-u0 = [y[0] => 0.0, y[1] => 0.0, y[2] => 0.0, D(y[0]) => 1.0, D(y[1]) => 0.0, D(y[2]) => 0.0] # nonzero initial velocity
+u0 = [y[1] => 0.0, y[2] => 0.0, y[3] => 0.0, D(y[1]) => 1.0, D(y[2]) => 0.0, D(y[3]) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
 plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
