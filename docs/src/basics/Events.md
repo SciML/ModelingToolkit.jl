@@ -437,8 +437,10 @@ will be saved. If we repeat the above example with `c` not a `discrete_parameter
 @variables x(t)
 @discretes c(t)
 
+ev = ModelingToolkit.SymbolicDiscreteCallback(
+    1.0 => [c ~ Pre(c) + 1], iv = t)
 @mtkcompile sys = System(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
+    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
 
 prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
 sol = solve(prob, Tsit5())
@@ -465,7 +467,9 @@ Bang-bang control of a heater connected to a leaky plant requires hysteresis in 
 
 ```@example events
 @variables temp(t)
-params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on(t)::Bool=false
+@parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1
+@discretes furnace_on(t)::Bool = false
+params = [furnace_on_threshold, furnace_off_threshold, furnace_power, leakage, furnace_on]
 eqs = [
     D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
 ]
