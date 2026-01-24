@@ -66,7 +66,7 @@ same reference, and hence refer to the same quantity. Correspondingly, there is 
     creates them to manage the FMU. Unexpected usage of these variables/parameters can lead to errors.
 
 ```@example fmi
-defaults(model)
+initial_conditions(model)
 ```
 
 All parameters in the FMU are given a default equal to their start value, if present. Unknowns are not

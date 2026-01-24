@@ -289,7 +289,8 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 `t1` we want to inject `M` more cells into the population. We can model this by
 
 ```@example events
-@parameters M tinject α(t)
+@parameters M tinject
+@discretes α(t)
 @variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
@@ -411,7 +412,7 @@ example:
 
 ```@example events
 @variables x(t)
-@parameters c(t)
+@discretes c(t)
 
 ev = ModelingToolkit.SymbolicDiscreteCallback(
     1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
@@ -434,7 +435,7 @@ will be saved. If we repeat the above example with `c` not a `discrete_parameter
 
 ```@example events
 @variables x(t)
-@parameters c(t)
+@discretes c(t)
 
 @mtkcompile sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])

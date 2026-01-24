@@ -78,7 +78,7 @@ eqs = [D(x) ~ v
        D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
        y.u ~ x]
 
-@named duffing = System(eqs, t, systems = [y, u], defaults = [u.u => 0])
+@named duffing = System(eqs, t, systems = [y, u], bindings = [u.u => 0])
 
 # pass a constant value for `x`, since it is the variable we will change in operating points
 linfun, simplified_sys = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));
@@ -120,9 +120,9 @@ nothing # hide
 Note that `linprob` above can be interacted with similar to a normal `ODEProblem`.
 
 ```@repl LINEARIZE
-prob[x]
-prob[x] = 1.5
-prob[x]
+linprob[x]
+linprob[x] = 1.5
+linprob[x]
 ```
 
 ## Symbolic linearization

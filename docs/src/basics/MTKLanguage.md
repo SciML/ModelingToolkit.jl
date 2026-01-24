@@ -43,6 +43,7 @@ Let's explore these in more detail with the following example:
 ```@example mtkmodel-example
 using ModelingToolkit
 using ModelingToolkit: t
+using SciCompDSL
 
 @mtkmodel ModelA begin
     @description "A component with parameters `k` and `k_array`."
@@ -330,6 +331,7 @@ A simple connector can be defined with syntax similar to following example:
 ```@example connector
 using ModelingToolkit
 using ModelingToolkit: t
+using SciCompDSL
 
 @connector Pin begin
     v(t) = 0.0, [description = "Voltage"]
@@ -455,6 +457,7 @@ The if-elseif-else statements can be used inside `@equations`, `@parameters`,
 ```@example branches-in-components
 using ModelingToolkit
 using ModelingToolkit: t
+using SciCompDSL
 
 @mtkmodel C begin end
 

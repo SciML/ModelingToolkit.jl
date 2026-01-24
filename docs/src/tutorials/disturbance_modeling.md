@@ -12,6 +12,7 @@ We will consider a simple system consisting of two inertias connected through a 
 using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, Test
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
+using SciCompDSL
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 

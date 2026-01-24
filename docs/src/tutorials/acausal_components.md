@@ -22,6 +22,7 @@ equalities before solving. Let's see this in action.
 ```@example acausal
 using ModelingToolkit, Plots, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using SciCompDSL
 
 @connector Pin begin
     v(t)

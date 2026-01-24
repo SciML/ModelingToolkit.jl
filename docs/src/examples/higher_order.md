@@ -14,6 +14,7 @@ We utilize the derivative operator twice here to define the second order:
 ```@example orderlowering
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using SciCompDSL
 
 @mtkmodel SECOND_ORDER begin
     @parameters begin

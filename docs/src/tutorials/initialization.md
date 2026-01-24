@@ -313,7 +313,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
 @variables x(t) y(t)
 @parameters total
 @mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t;
-    defaults = [total => missing], guesses = [total => 1.0])
+    bindings = [total => missing], guesses = [total => 1.0])
 ```
 
 Given any two of `x`, `y` and `total` we can determine the remaining variable.
@@ -545,5 +545,6 @@ isinitial
 generate_initializesystem
 initialization_equations
 guesses
-defaults
+bindings
+initial_conditions
 ```
