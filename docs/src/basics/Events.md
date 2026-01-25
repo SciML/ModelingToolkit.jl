@@ -431,23 +431,9 @@ sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
 Note that only time-dependent parameters that are explicitly passed as `discrete_parameters`
-will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
-
-```@example events
-@variables x(t)
-@discretes c(t)
-
-ev = ModelingToolkit.SymbolicDiscreteCallback(
-    1.0 => [c ~ Pre(c) + 1], iv = t)
-@mtkcompile sys = System(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
-
-prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
-sol = solve(prob, Tsit5())
-sol.ps[c] # sol[c] will error, since `c` is not a timeseries value
-```
-
-It can be seen that the timeseries for `c` is not saved.
+will be saved. The `discrete_parameters` argument is also required for the callback to compile
+successfully - omitting it will result in an error because the equation modifying the discrete
+would have no unknowns/observables.
 
 ## [(Experimental) Imperative affects](@id imp_affects)
 
