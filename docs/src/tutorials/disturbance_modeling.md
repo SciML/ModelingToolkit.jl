@@ -187,7 +187,11 @@ using Test
 
 but we may also generate the functions ``f`` and ``g`` for state estimation:
 
-```@example DISTURBANCE_MODELING
+!!! warning "Example currently disabled"
+
+    This example is currently disabled due to compatibility issues with `generate_control_function` and analysis points in the current ModelingToolkit stack.
+
+```julia
 inputs = [ssys.u]
 disturbance_inputs = [ssys.d1, ssys.d2]
 P = ssys.system_model
