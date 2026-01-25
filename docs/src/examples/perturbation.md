@@ -59,9 +59,10 @@ This is the solution for the coefficients in the series for $x(t)$ and their der
 
 ```@example perturbation
 using Plots
+x_series_sys = series([sys.y₀, sys.y₁, sys.y₂], ϵ) # rebuild series with system variables
 p = plot()
 for ϵᵢ in 0.0:0.1:1.0
-    plot!(p, sol, idxs = substitute(x_series, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
+    plot!(p, sol, idxs = substitute(x_series_sys, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
 end
 p
 ```
@@ -96,11 +97,12 @@ We solve and plot it as in the previous example, and compare the solution with $
 u0 = [y₀ => 0.0, y₁ => 0.0, y₂ => 0.0, D(y₀) => 1.0, D(y₁) => 0.0, D(y₂) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
-plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
+x_series_sys = series([sys.y₀, sys.y₁, sys.y₂], ϵ) # rebuild series with system variables
+plot(sol, idxs = substitute(x_series_sys, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
 @assert isapprox(
-    sol(π/2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
+    sol(π/2; idxs = substitute(x_series_sys, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
