@@ -50,7 +50,12 @@ To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0)
 
 ```@example perturbation
 using OrdinaryDiffEq
-u0 = Dict([unknowns(sys) .=> 0.0; D(y₀) => 1.0]) # nonzero initial velocity
+# Get the system's unknowns for proper symbolic lookup
+unks = unknowns(sys)
+y₀_sys = first(filter(u -> contains(string(u), "y₀(t)"), unks))
+y₁_sys = first(filter(u -> contains(string(u), "y₁(t)"), unks))
+y₂_sys = first(filter(u -> contains(string(u), "y₂(t)"), unks))
+u0 = Dict([unknowns(sys) .=> 0.0; D(y₀_sys) => 1.0]) # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)
 ```
@@ -62,7 +67,7 @@ using Plots
 p = plot()
 for ϵᵢ in 0.0:0.1:1.0
     # Compute x(t) = y₀(t) + y₁(t)*ϵ + y₂(t)*ϵ² from solution values
-    xs = sol[y₀] .+ ϵᵢ .* sol[y₁] .+ ϵᵢ^2 .* sol[y₂]
+    xs = sol[y₀_sys] .+ ϵᵢ .* sol[y₁_sys] .+ ϵᵢ^2 .* sol[y₂_sys]
     plot!(p, sol.t, xs, label = "ϵ = $ϵᵢ")
 end
 p
@@ -92,20 +97,26 @@ x_series2 = series([z₀, z₁, z₂], ϵ)
 eq2_pert = substitute(eq2, x => x_series2)
 eqs2_pert = taylor_coeff(eq2_pert, ϵ, 0:2)
 @mtkcompile sys2 = System(eqs2_pert, t)
+
+# Get the system's unknowns for proper symbolic lookup
+unks2 = unknowns(sys2)
+z₀_sys = first(filter(u -> contains(string(u), "z₀(t)"), unks2))
+z₁_sys = first(filter(u -> contains(string(u), "z₁(t)"), unks2))
+z₂_sys = first(filter(u -> contains(string(u), "z₂(t)"), unks2))
 ```
 
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-u0 = [z₀ => 0.0, z₁ => 0.0, z₂ => 0.0, D(z₀) => 1.0, D(z₁) => 0.0, D(z₂) => 0.0] # nonzero initial velocity
+u0 = [z₀_sys => 0.0, z₁_sys => 0.0, z₂_sys => 0.0, D(z₀_sys) => 1.0, D(z₁_sys) => 0.0, D(z₂_sys) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys2, u0, (0.0, 50.0))
 sol = solve(prob)
 # Compute x(t) = z₀(t) + z₁(t)*ϵ + z₂(t)*ϵ² at ϵ=0.1
-x_pert = sol[z₀] .+ 0.1 .* sol[z₁] .+ 0.1^2 .* sol[z₂]
+x_pert = sol[z₀_sys] .+ 0.1 .* sol[z₁_sys] .+ 0.1^2 .* sol[z₂_sys]
 plot(sol.t, x_pert; label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
-x_pert_at_pi2 = sol(π/2)[z₀] + 0.1 * sol(π/2)[z₁] + 0.1^2 * sol(π/2)[z₂]
+x_pert_at_pi2 = sol(π/2)[z₀_sys] + 0.1 * sol(π/2)[z₁_sys] + 0.1^2 * sol(π/2)[z₂_sys]
 @assert isapprox(x_pert_at_pi2, x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
