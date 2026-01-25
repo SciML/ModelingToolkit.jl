@@ -10,7 +10,7 @@ component variables. We then simplify this to an ODE by eliminating the
 equalities before solving. Let's see this in action.
 
 !!! note
-    
+
     This tutorial teaches how to build the entire RC circuit from scratch.
     However, to simulate electric components with more ease, check out the
     [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
@@ -22,85 +22,76 @@ equalities before solving. Let's see this in action.
 ```@example acausal
 using ModelingToolkit, Plots, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
-using SciCompDSL
 
-@connector Pin begin
-    v(t)
-    i(t), [connect = Flow]
+# Define the Pin connector
+function Pin(; name)
+    @variables v(t) i(t) [connect = Flow]
+    System(Equation[], t; name)
 end
 
-@mtkmodel Ground begin
-    @components begin
-        g = Pin()
-    end
-    @equations begin
-        g.v ~ 0
-    end
+# Define Ground component
+function Ground(; name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    System(eqs, t; systems = [g], name)
 end
 
-@mtkmodel OnePort begin
-    @components begin
-        p = Pin()
-        n = Pin()
-    end
-    @variables begin
-        v(t)
-        i(t)
-    end
-    @equations begin
+# Define OnePort base component
+function OnePort(; name)
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t) i(t)
+    eqs = [
         v ~ p.v - n.v
         0 ~ p.i + n.i
         i ~ p.i
-    end
+    ]
+    System(eqs, t; systems = [p, n], name)
 end
 
-@mtkmodel Resistor begin
-    @extend OnePort()
-    @parameters begin
-        R = 1.0 # Sets the default resistance
-    end
-    @equations begin
-        v ~ i * R
-    end
+# Define Resistor component
+function Resistor(; name, R = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    @parameters R = R
+    eqs = [v ~ i * R]
+    extend(System(eqs, t; name), oneport)
 end
 
-@mtkmodel Capacitor begin
-    @extend OnePort()
-    @parameters begin
-        C = 1.0
-    end
-    @equations begin
-        D(v) ~ i / C
-    end
+# Define Capacitor component
+function Capacitor(; name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    @parameters C = C
+    eqs = [D(v) ~ i / C]
+    extend(System(eqs, t; name), oneport)
 end
 
-@mtkmodel ConstantVoltage begin
-    @extend OnePort()
-    @parameters begin
-        V = 1.0
-    end
-    @equations begin
-        V ~ v
-    end
+# Define ConstantVoltage source
+function ConstantVoltage(; name, V = 1.0)
+    @named oneport = OnePort()
+    @unpack v = oneport
+    @parameters V = V
+    eqs = [V ~ v]
+    extend(System(eqs, t; name), oneport)
 end
 
-@mtkmodel RCModel begin
-    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
-    @components begin
-        resistor = Resistor(R = 1.0)
-        capacitor = Capacitor(C = 1.0)
-        source = ConstantVoltage(V = 1.0)
-        ground = Ground()
-    end
-    @equations begin
-        connect(source.p, resistor.p)
-        connect(resistor.n, capacitor.p)
-        connect(capacitor.n, source.n)
-        connect(capacitor.n, ground.g)
-    end
-end
+# Build the RC circuit
+@named resistor = Resistor(R = 2.0)
+@named capacitor = Capacitor(C = 1.0)
+@named source = ConstantVoltage(V = 1.0)
+@named ground = Ground()
 
-@mtkcompile rc_model = RCModel(resistor.R = 2.0)
+rc_eqs = [
+    connect(source.p, resistor.p)
+    connect(resistor.n, capacitor.p)
+    connect(capacitor.n, source.n)
+    connect(capacitor.n, ground.g)
+]
+
+@named rc_model = System(rc_eqs, t; systems = [resistor, capacitor, source, ground])
+rc_model = mtkcompile(rc_model)
+
 u0 = [
     rc_model.capacitor.v => 0.0
 ]
@@ -117,20 +108,20 @@ We wish to build the following RC circuit by building individual components and 
 
 ### Building the Component Library
 
-For each of our components, we use ModelingToolkit `Model` that emits an `System`.
+For each of our components, we define a function that returns a `System`.
 At the top, we start with defining the fundamental qualities of an electric
 circuit component. At every input and output pin, a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
-component (connector) to simply be the values there. Whenever two `Pin`s in a
+connector to simply be the values there. Whenever two `Pin`s in a
 circuit are connected together, the system satisfies [Kirchhoff's laws](https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws),
 i.e. that currents sum to zero and voltages across the pins are equal.
 `[connect = Flow]` informs MTK that currents ought to sum to zero, and by
 default, variables are equal in a connection.
 
 ```@example acausal
-@connector Pin begin
-    v(t)
-    i(t), [connect = Flow]
+function Pin(; name)
+    @variables v(t) i(t) [connect = Flow]
+    System(Equation[], t; name)
 end
 ```
 
@@ -146,17 +137,14 @@ One can then construct a `Pin` using the `@named` helper macro:
 
 Next, we build our ground node. A ground node is just a pin that is connected
 to a constant voltage reservoir, typically taken to be `V = 0`. Thus to define
-this component, we generate an `System` with a `Pin` subcomponent and specify
+this component, we generate a `System` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```@example acausal
-@mtkmodel Ground begin
-    @components begin
-        g = Pin()
-    end
-    @equations begin
-        g.v ~ 0
-    end
+function Ground(; name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    System(eqs, t; systems = [g], name)
 end
 ```
 
@@ -167,20 +155,16 @@ zero, and the current of the component equals to the current of the positive
 pin.
 
 ```@example acausal
-@mtkmodel OnePort begin
-    @components begin
-        p = Pin()
-        n = Pin()
-    end
-    @variables begin
-        v(t)
-        i(t)
-    end
-    @equations begin
+function OnePort(; name)
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t) i(t)
+    eqs = [
         v ~ p.v - n.v
         0 ~ p.i + n.i
         i ~ p.i
-    end
+    ]
+    System(eqs, t; systems = [p, n], name)
 end
 ```
 
@@ -192,35 +176,32 @@ of charge we know that the current in must equal the current out, which means
 zero. This leads to our resistor equations:
 
 ```@example acausal
-@mtkmodel Resistor begin
-    @extend OnePort()
-    @parameters begin
-        R = 1.0
-    end
-    @equations begin
-        v ~ i * R
-    end
+function Resistor(; name, R = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    @parameters R = R
+    eqs = [v ~ i * R]
+    extend(System(eqs, t; name), oneport)
 end
 ```
 
 Notice that we have created this system with a default parameter `R` for the
 resistor's resistance. By doing so, if the resistance of this resistor is not
 overridden by a higher level default or overridden at `ODEProblem` construction
-time, this will be the value of the resistance. Also, note the use of `@extend`.
+time, this will be the value of the resistance. Also, note the use of `extend`.
 For the `Resistor`, we want to simply inherit `OnePort`'s
-equations and unknowns and extend them with a new equation. Note that `v`, `i` are not namespaced as `oneport.v` or `oneport.i`.
+equations and unknowns and extend them with a new equation. Note that `v`, `i` are unpacked
+from `oneport` using `@unpack`.
 
 Using our knowledge of circuits, we similarly construct the `Capacitor`:
 
 ```@example acausal
-@mtkmodel Capacitor begin
-    @extend OnePort()
-    @parameters begin
-        C = 1.0
-    end
-    @equations begin
-        D(v) ~ i / C
-    end
+function Capacitor(; name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    @parameters C = C
+    eqs = [D(v) ~ i / C]
+    extend(System(eqs, t; name), oneport)
 end
 ```
 
@@ -230,50 +211,36 @@ constant voltage, essentially generating the electric current. We would then
 model this as:
 
 ```@example acausal
-@mtkmodel ConstantVoltage begin
-    @extend OnePort()
-    @parameters begin
-        V = 1.0
-    end
-    @equations begin
-        V ~ v
-    end
+function ConstantVoltage(; name, V = 1.0)
+    @named oneport = OnePort()
+    @unpack v = oneport
+    @parameters V = V
+    eqs = [V ~ v]
+    extend(System(eqs, t; name), oneport)
 end
 ```
-
-Note that as we are extending only `v` from `OnePort`, it is explicitly specified as a tuple.
 
 ### Connecting and Simulating Our Electric Circuit
 
 Now we are ready to simulate our circuit. Let's build our four components:
 a `resistor`, `capacitor`, `source`, and `ground` term. For simplicity, we will
-make all of our parameter values 1.0. As `resistor`, `capacitor`, `source` lists
-`R`, `C`, `V` in their argument list, they are promoted as arguments of RCModel as
-`resistor.R`, `capacitor.C`, `source.V`
+make all of our parameter values 1.0, except the resistor which we set to 2.0.
 
 ```@example acausal
-@mtkmodel RCModel begin
-    @description "A circuit with a constant voltage source, resistor and capacitor connected in series."
-    @components begin
-        resistor = Resistor(R = 1.0)
-        capacitor = Capacitor(C = 1.0)
-        source = ConstantVoltage(V = 1.0)
-        ground = Ground()
-    end
-    @equations begin
-        connect(source.p, resistor.p)
-        connect(resistor.n, capacitor.p)
-        connect(capacitor.n, source.n)
-        connect(capacitor.n, ground.g)
-    end
-end
-```
+@named resistor = Resistor(R = 2.0)
+@named capacitor = Capacitor(C = 1.0)
+@named source = ConstantVoltage(V = 1.0)
+@named ground = Ground()
 
-We can create a RCModel component with `@named`. And using `subcomponent_name.parameter` we can set
-the parameters or defaults values of variables of subcomponents.
+rc_eqs = [
+    connect(source.p, resistor.p)
+    connect(resistor.n, capacitor.p)
+    connect(capacitor.n, source.n)
+    connect(capacitor.n, ground.g)
+]
 
-```@example acausal
-@mtkcompile rc_model = RCModel(resistor.R = 2.0)
+@named rc_model = System(rc_eqs, t; systems = [resistor, capacitor, source, ground])
+rc_model = mtkcompile(rc_model)
 ```
 
 This model is acausal because we have not specified anything about the causality of the model. We have

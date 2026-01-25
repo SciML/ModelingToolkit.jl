@@ -87,11 +87,11 @@ system, this does not do much.
 simp_sys = mtkcompile(sys)
 ```
 
-Since building and simplifying a system is a common workflow, MTK provides the `@mtkcompile`
-macro for convenience.
+Since building and simplifying a system is a common workflow, it is typical to use `@named` followed by `mtkcompile`:
 
 ```@example ode2
-@mtkcompile sys = System(eqs, t)
+@named sys = System(eqs, t)
+sys = mtkcompile(sys)
 ```
 
 We can now build an `ODEProblem` from the system. ModelingToolkit generates the necessary

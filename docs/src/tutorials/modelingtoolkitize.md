@@ -52,7 +52,8 @@ If we want to get a symbolic representation, we can simply call `modelingtoolkit
 on the `prob`, which will return an `System`:
 
 ```@example mtkize
-@mtkcompile sys = modelingtoolkitize(prob)
+@named sys = modelingtoolkitize(prob)
+sys = mtkcompile(sys)
 ```
 
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:

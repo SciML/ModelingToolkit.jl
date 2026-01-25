@@ -32,36 +32,20 @@ We first define the parameters, variables, differential equations and the output
 using StructuralIdentifiability, ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel Biohydrogenation begin
-    @variables begin
-        x4(t)
-        x5(t)
-        x6(t)
-        x7(t)
-        y1(t), [output = true]
-        y2(t), [output = true]
-    end
-    @parameters begin
-        k5
-        k6
-        k7
-        k8
-        k9
-        k10
-    end
-    # define equations
-    @equations begin
-        D(x4) ~ -k5 * x4 / (k6 + x4)
-        D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6)
-        D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10
-        D(x7) ~ k9 * x6 * (k10 - x6) / k10
-        y1 ~ x4
-        y2 ~ x5
-    end
-end
+@variables x4(t) x5(t) x6(t) x7(t) y1(t) [output = true] y2(t) [output = true]
+@parameters k5 k6 k7 k8 k9 k10
 
-# define the system
-@mtkcompile de = Biohydrogenation()
+eqs = [
+    D(x4) ~ -k5 * x4 / (k6 + x4)
+    D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6)
+    D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10
+    D(x7) ~ k9 * x6 * (k10 - x6) / k10
+    y1 ~ x4
+    y2 ~ x5
+]
+
+@named de_model = System(eqs, t)
+de = mtkcompile(de_model)
 ```
 
 After that, we are ready to check the system for local identifiability:
@@ -108,35 +92,19 @@ Global identifiability needs information about local identifiability first, but 
 using StructuralIdentifiability, ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel GoodwinOsc begin
-    @parameters begin
-        b
-        c
-        α
-        β
-        γ
-        δ
-        σ
-    end
-    @variables begin
-        x1(t)
-        x2(t)
-        x3(t)
-        x4(t)
-        y(t), [output = true]
-        y2(t), [output = true]
-    end
-    @equations begin
-        D(x1) ~ -b * x1 + 1 / (c + x4)
-        D(x2) ~ α * x1 - β * x2
-        D(x3) ~ γ * x2 - δ * x3
-        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
-        y ~ x1 + x2
-        y2 ~ x2
-    end
-end
+@parameters b c α β γ δ σ
+@variables x1(t) x2(t) x3(t) x4(t) y(t) [output = true] y2(t) [output = true]
 
-@named ode = GoodwinOsc()
+eqs = [
+    D(x1) ~ -b * x1 + 1 / (c + x4)
+    D(x2) ~ α * x1 - β * x2
+    D(x3) ~ γ * x2 - δ * x3
+    D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+    y ~ x1 + x2
+    y2 ~ x2
+]
+
+@named ode = System(eqs, t)
 
 global_id = assess_identifiability(ode)
 ```
@@ -149,37 +117,20 @@ Let us consider the same system but with two inputs, and we will find out identi
 using StructuralIdentifiability, ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel GoodwinOscillator begin
-    @parameters begin
-        b
-        c
-        α
-        β
-        γ
-        δ
-        σ
-    end
-    @variables begin
-        x1(t)
-        x2(t)
-        x3(t)
-        x4(t)
-        y(t), [output = true]
-        y2(t), [output = true]
-        u1(t), [input = true]
-        u2(t), [input = true]
-    end
-    @equations begin
-        D(x1) ~ -b * x1 + 1 / (c + x4)
-        D(x2) ~ α * x1 - β * x2 - u1
-        D(x3) ~ γ * x2 - δ * x3 + u2
-        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
-        y ~ x1 + x2
-        y2 ~ x2
-    end
-end
+@parameters b c α β γ δ σ
+@variables x1(t) x2(t) x3(t) x4(t) y(t) [output = true] y2(t) [output = true] u1(t) [input = true] u2(t) [input = true]
 
-@mtkcompile ode = GoodwinOscillator()
+eqs = [
+    D(x1) ~ -b * x1 + 1 / (c + x4)
+    D(x2) ~ α * x1 - β * x2 - u1
+    D(x3) ~ γ * x2 - δ * x3 + u2
+    D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+    y ~ x1 + x2
+    y2 ~ x2
+]
+
+@named ode_model = System(eqs, t)
+ode = mtkcompile(ode_model)
 
 # check only 2 parameters
 to_check = [ode.b, ode.c]

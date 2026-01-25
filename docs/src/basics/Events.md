@@ -59,7 +59,8 @@ For example, consider the following system.
 ```julia
 @variables x(t) y(t)
 @parameters p(t)
-@mtkcompile sys = System([x * y ~ p, D(x) ~ 0], t)
+@named sys = System([x * y ~ p, D(x) ~ 0], t)
+sys = mtkcompile(sys)
 event = [t == 1] => [x ~ Pre(x) + 1]
 ```
 
@@ -134,7 +135,8 @@ function UnitMassWithFriction(k; name)
            D(v) ~ sin(t) - k * sign(v)]
     System(eqs, t; continuous_events = [v ~ 0], name) # when v = 0 there is a discontinuity
 end
-@mtkcompile m = UnitMassWithFriction(0.7)
+@named m = UnitMassWithFriction(0.7)
+m = mtkcompile(m)
 prob = ODEProblem(m, Pair[], (0, 10pi))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -154,9 +156,10 @@ like this
 root_eqs = [x ~ 0]  # the event happens at the ground x(t) = 0
 affect = [v ~ -Pre(v)] # the effect is that the velocity changes sign
 
-@mtkcompile ball = System(
+@named ball = System(
     [D(x) ~ v
      D(v) ~ -9.8], t; continuous_events = root_eqs => affect) # equation => affect
+ball = mtkcompile(ball)
 
 tspan = (0.0, 5.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -175,13 +178,14 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 continuous_events = [[x ~ 0] => [vx ~ -Pre(vx)]
                      [y ~ -1.5, y ~ 1.5] => [vy ~ -Pre(vy)]]
 
-@mtkcompile ball = System(
+@named ball = System(
     [
         D(x) ~ vx,
         D(y) ~ vy,
         D(vx) ~ -9.8 - 0.1vx, # gravity + some small air resistance
         D(vy) ~ -0.1vy
     ], t; continuous_events)
+ball = mtkcompile(ball)
 
 tspan = (0.0, 10.0)
 prob = ODEProblem(ball, Pair[], tspan)
@@ -255,8 +259,9 @@ end
 
 reflect = [x ~ 0] => (bb_affect!, (; v))
 
-@mtkcompile bb_sys = System(bb_eqs, t, sts, par,
+@named bb_sys = System(bb_eqs, t, sts, par,
     continuous_events = reflect)
+bb_sys = mtkcompile(bb_sys)
 
 u0 = [v => 0.0, x => 1.0]
 
@@ -301,7 +306,8 @@ injection = (t == tinject) => [N ~ Pre(N) + M]
 u0 = [N => 0.0]
 tspan = (0.0, 20.0)
 p = [α => 100.0, tinject => 10.0, M => 50]
-@mtkcompile osys = System(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
+@named osys = System(eqs, t, [N], [α, M, tinject]; discrete_events = injection)
+osys = mtkcompile(osys)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -320,7 +326,8 @@ to
 ```@example events
 injection = ((t == tinject) & (N < 50)) => [N ~ Pre(N) + M]
 
-@mtkcompile osys = System(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
+@named osys = System(eqs, t, [N], [M, tinject, α]; discrete_events = injection)
+osys = mtkcompile(osys)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
@@ -347,8 +354,9 @@ killing = ModelingToolkit.SymbolicDiscreteCallback(
 
 tspan = (0.0, 30.0)
 p = [α => 100.0, tinject => 10.0, M => 50, tkill => 20.0]
-@mtkcompile osys = System(eqs, t, [N], [α, M, tinject, tkill];
+@named osys = System(eqs, t, [N], [α, M, tinject, tkill];
     discrete_events = [injection, killing])
+osys = mtkcompile(osys)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5(); tstops = [10.0, 20.0])
 plot(sol)
@@ -376,8 +384,9 @@ killing = ModelingToolkit.SymbolicDiscreteCallback(
     [20.0] => [α ~ 0.0], discrete_parameters = α, iv = t)
 
 p = [α => 100.0, M => 50]
-@mtkcompile osys = System(eqs, t, [N], [α, M];
+@named osys = System(eqs, t, [N], [α, M];
     discrete_events = [injection, killing])
+osys = mtkcompile(osys)
 oprob = ODEProblem(osys, u0, tspan, p)
 sol = solve(oprob, Tsit5())
 plot(sol)
@@ -416,8 +425,9 @@ example:
 
 ev = ModelingToolkit.SymbolicDiscreteCallback(
     1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
-@mtkcompile sys = System(
+@named sys = System(
     D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [ev])
+sys = mtkcompile(sys)
 
 prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
 sol = solve(prob, Tsit5())

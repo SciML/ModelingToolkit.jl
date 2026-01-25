@@ -248,7 +248,8 @@ Adding the `Restrictor` to the original system example will cause a break in the
     System(eqs, t, [], []; systems, name)
 end
 
-@mtkcompile ressys = RestrictorSystem()
+@named ressys = RestrictorSystem()
+ressys = mtkcompile(ressys)
 nothing #hide
 ```
 
@@ -281,7 +282,8 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
     System(eqs, t, [], pars; systems, name)
 end
 
-@mtkcompile ressys = RestrictorSystem()
+@named ressys = RestrictorSystem()
+ressys = mtkcompile(ressys)
 nothing #hide
 ```
 

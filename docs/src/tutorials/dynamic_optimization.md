@@ -140,7 +140,8 @@ Let's demonstrate this with the Lotka-Volterra equations. First, we'll generate 
 eqs_pe = [D(x_pe) ~ α * x_pe - β * x_pe * y_pe,
     D(y_pe) ~ -γ * y_pe + δ * x_pe * y_pe]
 
-@mtkcompile sys0_pe = System(eqs_pe, t)
+@named sys0_pe = System(eqs_pe, t)
+sys0_pe = mtkcompile(sys0_pe)
 tspan_pe = (0.0, 1.0)
 u0map_pe = [x_pe => 4.0, y_pe => 2.0]
 
@@ -160,7 +161,8 @@ Now we'll set up the parameter estimation problem. We use `EvalAt` to evaluate t
 ```@example dynamic_opt
 costs_pe = [abs2(EvalAt(ti)(x_pe) - data_pe[i]) for (i, ti) in enumerate(ts_pe)]
 
-@mtkcompile sys_pe = System(eqs_pe, t; costs = costs_pe)
+@named sys_pe = System(eqs_pe, t; costs = costs_pe)
+sys_pe = mtkcompile(sys_pe)
 ```
 
 By default the cost values are sumed up, if a different behaviour is desired, the `consolidate` keyword can be set in the `System` definition.

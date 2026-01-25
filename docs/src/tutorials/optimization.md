@@ -24,7 +24,8 @@ using ModelingToolkit, Optimization, OptimizationOptimJL
 end
 @parameters a=1.0 b=1.0
 rosenbrock = (a - x)^2 + b * (y - x^2)^2
-@mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
+@named sys = OptimizationSystem(rosenbrock, [x, y], [a, b])
+sys = mtkcompile(sys)
 ```
 
 Every optimization problem consists of a set of optimization variables.
@@ -86,7 +87,8 @@ rosenbrock = (a - x)^2 + b * (y - x^2)^2
 cons = [
     x^2 + y^2 ≲ 1
 ]
-@mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
+@named sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
+sys = mtkcompile(sys)
 prob = OptimizationProblem(sys, [], grad = true, hess = true, cons_j = true, cons_h = true)
 u_opt = solve(prob, IPNewton())
 ```

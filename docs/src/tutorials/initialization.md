@@ -44,7 +44,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 eqs = [D(D(x)) ~ λ * x
        D(D(y)) ~ λ * y - g
        x^2 + y^2 ~ 1]
-@mtkcompile pend = System(eqs, t)
+@named pend = System(eqs, t)
+pend = mtkcompile(pend)
 ```
 
 While we defined the system using second derivatives and a length constraint,
@@ -312,8 +313,9 @@ using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
 
 @variables x(t) y(t)
 @parameters total
-@mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t;
+@named sys = System([D(x) ~ -x, total ~ x + y], t;
     bindings = [total => missing], guesses = [total => 1.0])
+sys = mtkcompile(sys)
 ```
 
 Given any two of `x`, `y` and `total` we can determine the remaining variable.

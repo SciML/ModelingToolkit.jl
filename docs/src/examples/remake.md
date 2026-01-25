@@ -14,7 +14,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables x(t) y(t)
 eqs = [D(x) ~ (α - β * y) * x
        D(y) ~ (δ * x - γ) * y]
-@mtkcompile odesys = System(eqs, t)
+@named odesys = System(eqs, t)
+odesys = mtkcompile(odesys)
 ```
 
 To create the "data" for optimization, we will solve the system with a known set of

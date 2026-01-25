@@ -237,7 +237,8 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 sts = @variables x1(t) = 0.0
 eqs = [D(x1) ~ 1.1 * x1]
-@mtkcompile sys = System(eqs, t)
+@named sys = System(eqs, t)
+sys = mtkcompile(sys)
 prob = ODEProblem{false}(sys, [], (0, 1); u0_constructor = x -> SVector(x...))
 ```
 
