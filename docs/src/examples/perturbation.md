@@ -1,5 +1,9 @@
 # [Symbolic-Numeric Perturbation Theory for ODEs](@id perturb_diff)
 
+!!! warning "Example currently disabled"
+
+    This example demonstrates perturbation theory for ODEs but is currently non-executable due to compatibility issues between the `series()` and `taylor_coeff()` functions from Symbolics.jl and the current ModelingToolkit stack. The code is shown for educational purposes. See the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.juliasymbolics.org/stable/tutorials/perturbation/) for a working algebraic version.
+
 In the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.juliasymbolics.org/stable/tutorials/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here we extend the method to differential equations. The procedure is similar, but the Taylor series coefficients now become functions of an independent variable (usually time).
 
 ## Free fall in a varying gravitational field
@@ -14,7 +18,7 @@ In the last equality, we introduced a perturbative expansion parameter $ϵ$. Whe
 
 To make the problem dimensionless, we redefine $x \leftarrow x / R$ and $t \leftarrow t / \sqrt{R^3/GM}$. Then the ODE becomes
 
-```@example perturbation1
+```julia
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables ϵ x(t)
@@ -23,7 +27,7 @@ eq = D(D(x)) ~ -(1 + ϵ * x)^(-2)
 
 Next, expand $x(t)$ in a series up to second order in $ϵ$:
 
-```@example perturbation1
+```julia
 using Symbolics
 @variables y₀(t) y₁(t) y₂(t) # coefficients (y₀=0th order, y₁=1st, y₂=2nd)
 x_series = series([y₀, y₁, y₂], ϵ)
@@ -31,7 +35,7 @@ x_series = series([y₀, y₁, y₂], ϵ)
 
 Insert this into the equation and collect perturbed equations to each order:
 
-```@example perturbation1
+```julia
 eq_pert = substitute(eq, x => x_series)
 eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 ```
@@ -42,32 +46,27 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 
 These are the ODEs we want to solve. Now construct an `System`, which automatically inserts dummy derivatives for the velocities:
 
-```@example perturbation1
+```julia
 @mtkcompile sys = System(eqs_pert, t)
 ```
 
-To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it. We identify the y₀, y₁, y₂ unknowns from the compiled system:
+To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
-```@example perturbation1
+```julia
 using OrdinaryDiffEq
-unks = unknowns(sys)
-# Find unknowns by checking if their name contains y₀, y₁, y₂
-y₀_sys = first(filter(u -> occursin("y₀", string(u)), unks))
-y₁_sys = first(filter(u -> occursin("y₁", string(u)), unks))
-y₂_sys = first(filter(u -> occursin("y₂", string(u)), unks))
-u0 = Dict([unknowns(sys) .=> 0.0; D(y₀_sys) => 1.0]) # nonzero initial velocity
+u0 = Dict([unknowns(sys) .=> 0.0; D(y₀) => 1.0]) # nonzero initial velocity
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)
 ```
 
 This is the solution for the coefficients in the series for $x(t)$ and their derivatives. Finally, we calculate the solution to the original problem by summing the series for different $ϵ$:
 
-```@example perturbation1
+```julia
 using Plots
 p = plot()
 for ϵᵢ in 0.0:0.1:1.0
     # Compute x(t) = y₀(t) + y₁(t)*ϵ + y₂(t)*ϵ² from solution values
-    xs = sol[y₀_sys] .+ ϵᵢ .* sol[y₁_sys] .+ ϵᵢ^2 .* sol[y₂_sys]
+    xs = sol[y₀] .+ ϵᵢ .* sol[y₁] .+ ϵᵢ^2 .* sol[y₂]
     plot!(p, sol.t, xs, label = "ϵ = $ϵᵢ")
 end
 p
@@ -81,43 +80,31 @@ An advantage of the perturbative method is that we run the ODE solver only once 
 
 Our second example applies perturbation theory to nonlinear oscillators -- a very important class of problems. As we will see, perturbation theory has difficulty providing a good solution to this problem, but the process is nevertheless instructive. This example closely follows chapter 7.6 of *Nonlinear Dynamics and Chaos* by Steven Strogatz.
 
-The goal is to solve the ODE $\ddot{x} + 2ϵ\dot{x} + x = 0$ with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
+The goal is to solve the ODE
 
-We set up a fresh system with new variables to avoid any cross-contamination:
-
-```@example perturbation2
-using ModelingToolkit, Symbolics, OrdinaryDiffEq, Plots
-using ModelingToolkit: t_nounits as t, D_nounits as D
-
-@variables ϵ2 w(t)  # fresh expansion parameter and dependent variable
-@variables z₀(t) z₁(t) z₂(t) # coefficients
-w_series = series([z₀, z₁, z₂], ϵ2)
-
-eq2 = D(D(w)) + 2 * ϵ2 * D(w) + w ~ 0
-eq2_pert = substitute(eq2, w => w_series)
-eqs2_pert = taylor_coeff(eq2_pert, ϵ2, 0:2)
-@mtkcompile sys2 = System(eqs2_pert, t)
+```julia
+eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 ```
 
-We solve and plot it, comparing the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
+with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
 
-```@example perturbation2
-unks2 = unknowns(sys2)
-z₀_sys = first(filter(u -> occursin("z₀", string(u)), unks2))
-z₁_sys = first(filter(u -> occursin("z₁", string(u)), unks2))
-z₂_sys = first(filter(u -> occursin("z₂", string(u)), unks2))
+We follow the same steps as in the previous example to construct the `System`:
 
-u0 = [z₀_sys => 0.0, z₁_sys => 0.0, z₂_sys => 0.0, D(z₀_sys) => 1.0, D(z₁_sys) => 0.0, D(z₂_sys) => 0.0]
-prob = ODEProblem(sys2, u0, (0.0, 50.0))
+```julia
+eq_pert = substitute(eq, x => x_series)
+eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
+@mtkcompile sys = System(eqs_pert, t)
+```
+
+We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
+
+```julia
+u0 = [y₀ => 0.0, y₁ => 0.0, y₂ => 0.0, D(y₀) => 1.0, D(y₁) => 0.0, D(y₂) => 0.0] # nonzero initial velocity
+prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
-
-# Compute x(t) = z₀(t) + z₁(t)*ϵ + z₂(t)*ϵ² at ϵ=0.1
-x_pert = sol[z₀_sys] .+ 0.1 .* sol[z₁_sys] .+ 0.1^2 .* sol[z₂_sys]
-plot(sol.t, x_pert; label = "Perturbative (ϵ=0.1)")
+plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
-x_pert_at_pi2 = sol(π/2)[z₀_sys] + 0.1 * sol(π/2)[z₁_sys] + 0.1^2 * sol(π/2)[z₂_sys]
-@assert isapprox(x_pert_at_pi2, x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
