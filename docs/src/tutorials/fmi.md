@@ -96,6 +96,7 @@ fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
 @named inner = ModelingToolkit.FMIComponent(
     Val(3); fmu, communication_step_size = 0.001, type = :CS,
     reinitializealg = BrownFullBasicInit())
+nothing # hide
 ```
 
 This FMU has fewer equations, partly due to missing aliasing variables and partly due to being a CS FMU.
