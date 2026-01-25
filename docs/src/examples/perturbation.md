@@ -26,7 +26,8 @@ Next, expand $x(t)$ in a series up to second order in $ϵ$:
 ```@example perturbation
 using Symbolics
 @variables y(t)[1:3] # coefficients (y[1]=0th order, y[2]=1st, y[3]=2nd)
-x_series = series(y, ϵ)
+y_arr = collect(y) # convert to regular Julia array for series function
+x_series = series(y_arr, ϵ)
 ```
 
 Insert this into the equation and collect perturbed equations to each order:
