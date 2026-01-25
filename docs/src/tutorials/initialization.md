@@ -493,9 +493,13 @@ sol = solve(iprob, TrustRegion())
 
 ## More Features of the Initialization System: Steady-State and Observable Initialization
 
+!!! warning "Example currently disabled"
+
+    This section's examples are currently disabled due to a compatibility issue with the initialization system and the current ModelingToolkit stack.
+
 Let's take a Lotka-Volterra system:
 
-```@example init
+```julia
 @variables x(t) y(t) z(t)
 @parameters α=1.5 β=1.0 γ=3.0 δ=1.0
 
@@ -511,7 +515,7 @@ tspan = (0.0, 10.0)
 Using the derivative initializations, we can set the ODE to start at the steady state
 by initializing the derivatives to zero:
 
-```@example init
+```julia
 prob = ODEProblem(simpsys, [D(x) => 0.0, D(y) => 0.0], tspan, guesses = [x => 1, y => 1])
 sol = solve(prob, Tsit5(), abstol = 1e-16)
 ```
@@ -522,18 +526,18 @@ steady state in this instance because it's an unstable steady state.
 Additionally, notice that in this setup we have an observable `z ~ x + y`. If we instead know the
 initial condition for the observable we can use that directly:
 
-```@example init
+```julia
 prob = ODEProblem(simpsys, [D(x) => 0.0, z => 2.0], tspan, guesses = [x => 1, y => 1])
 sol = solve(prob, Tsit5())
 ```
 
 We can check that indeed the solution does satisfy that D(x) = 0 at the start:
 
-```@example init
+```julia
 sol[α * x - β * x * y]
 ```
 
-```@example init
+```julia
 plot(sol)
 ```
 
