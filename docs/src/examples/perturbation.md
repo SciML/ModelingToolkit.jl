@@ -4,13 +4,13 @@ In the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.j
 
 ## Free fall in a varying gravitational field
 
-Our first ODE example is a well-known physics problem: what is the altitude $x(t)$ of an object (say, a ball or a rocket) thrown vertically with initial velocity $ẋ(0)$ from the surface of a planet with mass $M$ and radius $R$? According to Newton's second law and law of gravity, it is the solution of the ODE
+Our first ODE example is a well-known physics problem: what is the altitude $x(t)$ of an object (say, a ball or a rocket) thrown vertically with initial velocity $ẋ(0)$ from the surface of a planet with mass $M$ and radius $R$? According to Newton's second law and law of gravity, it is the solution of the ODE
 
 ```math
-ẍ = -\frac{GM}{(R+x)^2} = -\frac{GM}{R^2} \frac{1}{\left(1+ϵ\frac{x}{R}\right)^2}.
+ẍ = -\frac{GM}{(R+x)^2} = -\frac{GM}{R^2} \frac{1}{\left(1+ϵ\frac{x}{R}\right)^2}.
 ```
 
-In the last equality, we introduced a perturbative expansion parameter $ϵ$. When $ϵ=1$, we recover the original problem. When $ϵ=0$, the problem reduces to the trivial problem $ẍ = -g$ with constant gravitational acceleration $g = GM/R^2$ and solution $x(t) = x(0) + ẋ(0) t - \frac{1}{2} g t^2$. This is a good setup for perturbation theory.
+In the last equality, we introduced a perturbative expansion parameter $ϵ$. When $ϵ=1$, we recover the original problem. When $ϵ=0$, the problem reduces to the trivial problem $ẍ = -g$ with constant gravitational acceleration $g = GM/R^2$ and solution $x(t) = x(0) + ẋ(0) t - \frac{1}{2} g t^2$. This is a good setup for perturbation theory.
 
 To make the problem dimensionless, we redefine $x \leftarrow x / R$ and $t \leftarrow t / \sqrt{R^3/GM}$. Then the ODE becomes
 
@@ -37,7 +37,7 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 ```
 
 !!! note
-    
+
     The 0-th order equation can be solved analytically, but ModelingToolkit does currently not feature automatic analytical solution of ODEs, so we proceed with solving it numerically.
 
 These are the ODEs we want to solve. Now construct an `System`, which automatically inserts dummy derivatives for the velocities:
@@ -46,7 +46,7 @@ These are the ODEs we want to solve. Now construct an `System`, which automatica
 @mtkcompile sys = System(eqs_pert, t)
 ```
 
-To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
+To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
 ```@example perturbation
 using OrdinaryDiffEq
@@ -59,10 +59,9 @@ This is the solution for the coefficients in the series for $x(t)$ and their der
 
 ```@example perturbation
 using Plots
-x_series_sys = series([sys.y₀, sys.y₁, sys.y₂], ϵ) # rebuild series with system variables
 p = plot()
 for ϵᵢ in 0.0:0.1:1.0
-    plot!(p, sol, idxs = substitute(x_series_sys, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
+    plot!(p, sol, idxs = substitute(x_series, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
 end
 p
 ```
@@ -78,31 +77,32 @@ Our second example applies perturbation theory to nonlinear oscillators -- a ver
 The goal is to solve the ODE
 
 ```@example perturbation
-eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
+eq2 = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 ```
 
-with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
+with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$.
 
-We follow the same steps as in the previous example to construct the `System`:
+We follow the same steps as in the previous example to construct the `System`, using new coefficients `z₀`, `z₁`, `z₂`:
 
 ```@example perturbation
-eq_pert = substitute(eq, x => x_series)
-eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
-@mtkcompile sys = System(eqs_pert, t)
+@variables z₀(t) z₁(t) z₂(t) # new coefficients for this example
+x_series2 = series([z₀, z₁, z₂], ϵ)
+eq2_pert = substitute(eq2, x => x_series2)
+eqs2_pert = taylor_coeff(eq2_pert, ϵ, 0:2)
+@mtkcompile sys2 = System(eqs2_pert, t)
 ```
 
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
 ```@example perturbation
-u0 = [y₀ => 0.0, y₁ => 0.0, y₂ => 0.0, D(y₀) => 1.0, D(y₁) => 0.0, D(y₂) => 0.0] # nonzero initial velocity
-prob = ODEProblem(sys, u0, (0.0, 50.0))
+u0 = [z₀ => 0.0, z₁ => 0.0, z₂ => 0.0, D(z₀) => 1.0, D(z₁) => 0.0, D(z₂) => 0.0] # nonzero initial velocity
+prob = ODEProblem(sys2, u0, (0.0, 50.0))
 sol = solve(prob)
-x_series_sys = series([sys.y₀, sys.y₁, sys.y₂], ϵ) # rebuild series with system variables
-plot(sol, idxs = substitute(x_series_sys, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
+plot(sol, idxs = substitute(x_series2, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
 @assert isapprox(
-    sol(π/2; idxs = substitute(x_series_sys, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
+    sol(π/2; idxs = substitute(x_series2, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
