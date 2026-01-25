@@ -61,7 +61,9 @@ This is the solution for the coefficients in the series for $x(t)$ and their der
 using Plots
 p = plot()
 for ϵᵢ in 0.0:0.1:1.0
-    plot!(p, sol, idxs = substitute(x_series, ϵ => ϵᵢ), label = "ϵ = $ϵᵢ")
+    # Compute x(t) = y₀(t) + y₁(t)*ϵ + y₂(t)*ϵ² from solution values
+    xs = sol[y₀] .+ ϵᵢ .* sol[y₁] .+ ϵᵢ^2 .* sol[y₂]
+    plot!(p, sol.t, xs, label = "ϵ = $ϵᵢ")
 end
 p
 ```
@@ -98,11 +100,13 @@ We solve and plot it as in the previous example, and compare the solution with $
 u0 = [z₀ => 0.0, z₁ => 0.0, z₂ => 0.0, D(z₀) => 1.0, D(z₁) => 0.0, D(z₂) => 0.0] # nonzero initial velocity
 prob = ODEProblem(sys2, u0, (0.0, 50.0))
 sol = solve(prob)
-plot(sol, idxs = substitute(x_series2, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
+# Compute x(t) = z₀(t) + z₁(t)*ϵ + z₂(t)*ϵ² at ϵ=0.1
+x_pert = sol[z₀] .+ 0.1 .* sol[z₁] .+ 0.1^2 .* sol[z₂]
+plot(sol.t, x_pert; label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
-@assert isapprox(
-    sol(π/2; idxs = substitute(x_series2, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
+x_pert_at_pi2 = sol(π/2)[z₀] + 0.1 * sol(π/2)[z₁] + 0.1^2 * sol(π/2)[z₂]
+@assert isapprox(x_pert_at_pi2, x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
