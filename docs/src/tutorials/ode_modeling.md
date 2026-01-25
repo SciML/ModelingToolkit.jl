@@ -21,6 +21,7 @@ But if you want to just see some code and run it, here's an example:
 ```@example first-mtkmodel
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using SciCompDSL
 
 @mtkmodel FOL begin
     @parameters begin
@@ -64,6 +65,7 @@ independent variable ``t`` is automatically added by `@mtkmodel`.
 ```@example ode2
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using SciCompDSL
 
 @mtkmodel FOL begin
     @parameters begin
