@@ -43,20 +43,30 @@ sys = mtkcompile(model)
 
 prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
-plot(sol)</code></pre><img src="9784a505.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-components"><a class="docs-heading-anchor" href="#Building-the-components">Building the components</a><a id="Building-the-components-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-components" title="Permalink"></a></h3><p>For each component, we use a Julia function that returns an <code>System</code>. At the top, we define the fundamental properties of a <code>Mass</code>: it has a mass <code>m</code>, a position <code>pos</code> and a velocity <code>v</code>. We also define that the velocity is the rate of change of position with respect to time.</p><pre><code class="language-julia hljs">function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
+plot(sol)</code></pre><img src="e5192cdc.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-components"><a class="docs-heading-anchor" href="#Building-the-components">Building the components</a><a id="Building-the-components-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-components" title="Permalink"></a></h3><p>For each component, we use a Julia function that returns an <code>System</code>. At the top, we define the fundamental properties of a <code>Mass</code>: it has a mass <code>m</code>, a position <code>pos</code> and a velocity <code>v</code>. We also define that the velocity is the rate of change of position with respect to time.</p><pre><code class="language-julia hljs">function Mass(; name, m = 1.0, xy = [0.0, 0.0], u = [0.0, 0.0])
     ps = @parameters m = m
     sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
     eqs = scalarize(D.(pos) .~ v)
     System(eqs, t, [pos..., v...], ps; name)
-end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Mass (generic function with 1 method)</code></pre><p>Note that this is an incompletely specified <code>System</code>. It cannot be simulated on its own, since the equations for the velocity <code>v[1:2](t)</code> are unknown. Notice the addition of a <code>name</code> keyword. This allows us to generate different masses with different names. A <code>Mass</code> can now be constructed as:</p><pre><code class="language-julia hljs">Mass(name = :mass1)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= v\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= v\_{2}\left( t \right)
-\end{align}
- \]</p><p>Or using the <code>@named</code> helper macro</p><pre><code class="language-julia hljs">@named mass1 = Mass()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= v\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= v\_{2}\left( t \right)
-\end{align}
- \]</p><p>Next, we build the spring component. It is characterized by the spring constant <code>k</code> and the length <code>l</code> of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.</p><pre><code class="language-julia hljs">function Spring(; name, k = 1e4, l = 1.0)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Mass (generic function with 1 method)</code></pre><p>Note that this is an incompletely specified <code>System</code>. It cannot be simulated on its own, since the equations for the velocity <code>v[1:2](t)</code> are unknown. Notice the addition of a <code>name</code> keyword. This allows us to generate different masses with different names. A <code>Mass</code> can now be constructed as:</p><pre><code class="language-julia hljs">Mass(name = :mass1)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model mass1:</span>
+<span class="sgr1">Equations (2):</span>
+  2 standard: see equations(mass1)
+<span class="sgr1">Unknowns (4):</span> see unknowns(mass1)
+  (pos(t))[<span class="sgr34">1</span>]
+  (pos(t))[<span class="sgr34">2</span>]
+  (v(t))[<span class="sgr34">1</span>]
+  (v(t))[<span class="sgr34">2</span>]
+<span class="sgr1">Parameters (1):</span> see parameters(mass1)
+  m</code></pre><p>Or using the <code>@named</code> helper macro</p><pre><code class="language-julia hljs">@named mass1 = Mass()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model mass1:</span>
+<span class="sgr1">Equations (2):</span>
+  2 standard: see equations(mass1)
+<span class="sgr1">Unknowns (4):</span> see unknowns(mass1)
+  (pos(t))[<span class="sgr34">1</span>]
+  (pos(t))[<span class="sgr34">2</span>]
+  (v(t))[<span class="sgr34">1</span>]
+  (v(t))[<span class="sgr34">2</span>]
+<span class="sgr1">Parameters (1):</span> see parameters(mass1)
+  m</code></pre><p>Next, we build the spring component. It is characterized by the spring constant <code>k</code> and the length <code>l</code> of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.</p><pre><code class="language-julia hljs">function Spring(; name, k = 1e4, l = 1.0)
     ps = @parameters k=k l=l
     @variables x(t), dir(t)[1:2]
     System(Equation[], t, [x, dir...], ps; name)
@@ -72,76 +82,73 @@ l = 1.0
 center = [0.0, 0.0]
 g = [0.0, -9.81]
 @named mass = Mass(m = m, xy = xy)
-@named spring = Spring(k = k, l = l)</code></pre><p class="math-container">\[ \begin{align}
-\end{align}
- \]</p><p>We can now create the equations describing this system, by connecting <code>spring</code> to <code>mass</code> and a fixed point.</p><pre><code class="language-julia hljs">eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]</code></pre><p class="math-container">\[ \begin{align}
-\mathtt{spring.x}\left( t \right) &amp;= \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \\
-\mathtt{spring.dir}\_{1}\left( t \right) &amp;= \mathtt{mass.pos}\_{1}\left( t \right) \\
-\mathtt{spring.dir}\_{2}\left( t \right) &amp;= \mathtt{mass.pos}\_{2}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{spring.dir}\_{1}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= -9.81 + \frac{ - \mathtt{spring.dir}\_{2}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)}
-\end{align}
- \]</p><p>Finally, we can build the model using these equations and components.</p><pre><code class="language-julia hljs">@named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
-@named model = compose(_model, mass, spring)</code></pre><p class="math-container">\[ \begin{align}
-\mathtt{spring.x}\left( t \right) &amp;= \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \\
-\mathtt{spring.dir}\_{1}\left( t \right) &amp;= \mathtt{mass.pos}\_{1}\left( t \right) \\
-\mathtt{spring.dir}\_{2}\left( t \right) &amp;= \mathtt{mass.pos}\_{2}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{spring.dir}\_{1}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= -9.81 + \frac{ - \mathtt{spring.dir}\_{2}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{2}\left( t \right)
-\end{align}
- \]</p><p>We can take a look at the equations in the model using the <code>equations</code> function.</p><pre><code class="language-julia hljs">equations(model)</code></pre><p class="math-container">\[ \begin{align}
-\mathtt{spring.x}\left( t \right) &amp;= \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \\
-\mathtt{spring.dir}\_{1}\left( t \right) &amp;= \mathtt{mass.pos}\_{1}\left( t \right) \\
-\mathtt{spring.dir}\_{2}\left( t \right) &amp;= \mathtt{mass.pos}\_{2}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{spring.dir}\_{1}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= -9.81 + \frac{ - \mathtt{spring.dir}\_{2}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{2}\left( t \right)
-\end{align}
- \]</p><p>The unknowns of this model are:</p><pre><code class="language-julia hljs">unknowns(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">7-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+@named spring = Spring(k = k, l = l)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model spring:</span>
+<span class="sgr1">Unknowns (3):</span> see unknowns(spring)
+  x(t)
+  (dir(t))[<span class="sgr34">1</span>]
+  (dir(t))[<span class="sgr34">2</span>]
+<span class="sgr1">Parameters (2):</span> see parameters(spring)
+  k
+  l</code></pre><p>We can now create the equations describing this system, by connecting <code>spring</code> to <code>mass</code> and a fixed point.</p><pre><code class="language-julia hljs">eqs = [connect_spring(spring, mass.pos, center)
+       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">5-element Vector{Equation}:
+ spring₊x(t) ~ sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>]))
+ (spring₊dir(t))[<span class="sgr34">1</span>] ~ (mass₊pos(t))[<span class="sgr34">1</span>]
+ (spring₊dir(t))[<span class="sgr34">2</span>] ~ (mass₊pos(t))[<span class="sgr34">2</span>]
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">1</span>]) ~ (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">1</span>]) / (mass₊m*spring₊x(t))
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">2</span>]) ~ -<span class="sgr34">9.81</span> + (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">2</span>]) / (mass₊m*spring₊x(t))</code></pre><p>Finally, we can build the model using these equations and components.</p><pre><code class="language-julia hljs">@named _model = System(eqs, t, [spring.x; spring.dir; mass.pos], [])
+@named model = compose(_model, mass, spring)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model model:</span>
+<span class="sgr1">Subsystems (2):</span> see hierarchy(model)
+  mass
+  spring
+<span class="sgr1">Equations (7):</span>
+  7 standard: see equations(model)
+<span class="sgr1">Unknowns (12):</span> see unknowns(model)
+  spring₊x(t)
+  (spring₊dir(t))[<span class="sgr34">1</span>]
+  (spring₊dir(t))[<span class="sgr34">2</span>]
+  (mass₊pos(t))[<span class="sgr34">1</span>]
+  ⋮
+<span class="sgr1">Parameters (3):</span> see parameters(model)
+  mass₊m
+  spring₊k
+  spring₊l</code></pre><p>We can take a look at the equations in the model using the <code>equations</code> function.</p><pre><code class="language-julia hljs">equations(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">7-element Vector{Equation}:
+ spring₊x(t) ~ sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>]))
+ (spring₊dir(t))[<span class="sgr34">1</span>] ~ (mass₊pos(t))[<span class="sgr34">1</span>]
+ (spring₊dir(t))[<span class="sgr34">2</span>] ~ (mass₊pos(t))[<span class="sgr34">2</span>]
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">1</span>]) ~ (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">1</span>]) / (mass₊m*spring₊x(t))
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">2</span>]) ~ -<span class="sgr34">9.81</span> + (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">2</span>]) / (mass₊m*spring₊x(t))
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">1</span>]) ~ (mass₊v(t))[<span class="sgr34">1</span>]
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">2</span>]) ~ (mass₊v(t))[<span class="sgr34">2</span>]</code></pre><p>The unknowns of this model are:</p><pre><code class="language-julia hljs">unknowns(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">12-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
  spring₊x(t)
- (spring₊dir(t))[1]
- (spring₊dir(t))[2]
- (mass₊pos(t))[1]
- (mass₊pos(t))[2]
- (mass₊v(t))[1]
- (mass₊v(t))[2]</code></pre><p>And the parameters of this model are:</p><pre><code class="language-julia hljs">parameters(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Any}:
+ (spring₊dir(t))[<span class="sgr34">1</span>]
+ (spring₊dir(t))[<span class="sgr34">2</span>]
+ (mass₊pos(t))[<span class="sgr34">1</span>]
+ (mass₊pos(t))[<span class="sgr34">2</span>]
+ (mass₊pos(t))[<span class="sgr34">1</span>]
+ (mass₊pos(t))[<span class="sgr34">2</span>]
+ (mass₊v(t))[<span class="sgr34">1</span>]
+ (mass₊v(t))[<span class="sgr34">2</span>]
+ spring₊x(t)
+ (spring₊dir(t))[<span class="sgr34">1</span>]
+ (spring₊dir(t))[<span class="sgr34">2</span>]</code></pre><p>And the parameters of this model are:</p><pre><code class="language-julia hljs">parameters(model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymReal}}:
  mass₊m
  spring₊k
  spring₊l</code></pre><h3 id="Simplifying-and-solving-this-system"><a class="docs-heading-anchor" href="#Simplifying-and-solving-this-system">Simplifying and solving this system</a><a id="Simplifying-and-solving-this-system-1"></a><a class="docs-heading-anchor-permalink" href="#Simplifying-and-solving-this-system" title="Permalink"></a></h3><p>This system can be solved directly as a DAE using <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/">one of the DAE solvers from DifferentialEquations.jl</a>. However, we can symbolically simplify the system first beforehand. Running <code>mtkcompile</code> eliminates unnecessary variables from the model to give the leanest numerical representation of the system.</p><pre><code class="language-julia hljs">sys = mtkcompile(model)
-equations(sys)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{mass.pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{2}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= -9.81 + \frac{ - \mathtt{spring.dir}\_{2}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{spring.dir}\_{1}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \mathtt{spring.x}\left( t \right) \right)}{\mathtt{mass.m} \mathtt{spring.x}\left( t \right)}
-\end{align}
- \]</p><p>We are left with only 4 equations involving 4 unknown variables (<code>mass.pos[1]</code>, <code>mass.pos[2]</code>, <code>mass.v[1]</code>, <code>mass.v[2]</code>). We can solve the system by converting it to an <code>ODEProblem</code>. Some observed variables are not expanded by default. To view the complete equations, one can do</p><pre><code class="language-julia hljs">full_equations(sys)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{mass.pos}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{2}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.pos}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{mass.v}\_{1}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{2}\left( t \right)}{\mathrm{d}t} &amp;= -9.81 + \frac{ - \mathtt{mass.pos}\_{2}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \right)}{\mathtt{mass.m} \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}}} \\
-\frac{\mathrm{d} \mathtt{mass.v}\_{1}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{mass.pos}\_{1}\left( t \right) \mathtt{spring.k} \left(  - \mathtt{spring.l} + \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \right)}{\mathtt{mass.m} \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}}}
-\end{align}
- \]</p><p>This is done as follows:</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [], (0.0, 3.0))
+equations(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Equation}:
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">2</span>]) ~ (mass₊v(t))[<span class="sgr34">2</span>]
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">1</span>]) ~ (mass₊v(t))[<span class="sgr34">1</span>]
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">2</span>]) ~ -<span class="sgr34">9.81</span> + (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">2</span>]) / (mass₊m*spring₊x(t))
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">1</span>]) ~ (-spring₊k*(-spring₊l + spring₊x(t))*(spring₊dir(t))[<span class="sgr34">1</span>]) / (mass₊m*spring₊x(t))</code></pre><p>We are left with only 4 equations involving 4 unknown variables (<code>mass.pos[1]</code>, <code>mass.pos[2]</code>, <code>mass.v[1]</code>, <code>mass.v[2]</code>). We can solve the system by converting it to an <code>ODEProblem</code>. Some observed variables are not expanded by default. To view the complete equations, one can do</p><pre><code class="language-julia hljs">full_equations(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Equation}:
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">2</span>]) ~ (mass₊v(t))[<span class="sgr34">2</span>]
+ Differential(t, 1)((mass₊pos(t))[<span class="sgr34">1</span>]) ~ (mass₊v(t))[<span class="sgr34">1</span>]
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">2</span>]) ~ -<span class="sgr34">9.81</span> + (-spring₊k*(-spring₊l + sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>])))*(mass₊pos(t))[<span class="sgr34">2</span>]) / (mass₊m*sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>])))
+ Differential(t, 1)((mass₊v(t))[<span class="sgr34">1</span>]) ~ (-spring₊k*(-spring₊l + sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>])))*(mass₊pos(t))[<span class="sgr34">1</span>]) / (mass₊m*sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>])))</code></pre><p>This is done as follows:</p><pre><code class="language-julia hljs">prob = ODEProblem(sys, [], (0.0, 3.0))
 sol = solve(prob, Rosenbrock23())
-plot(sol)</code></pre><img src="a1268dc0.svg" alt="Example block output"/><p>What if we want the timeseries of a different variable? That information is not lost! Instead, <code>mtkcompile</code> simply changes unknown variables into <code>observed</code> variables.</p><pre><code class="language-julia hljs">observed(sys)</code></pre><p class="math-container">\[ \begin{align}
-\mathtt{spring.dir}\_{2}\left( t \right) &amp;= \mathtt{mass.pos}\_{2}\left( t \right) \\
-\mathtt{spring.x}\left( t \right) &amp;= \sqrt{\left|\mathtt{mass.pos}\_{2}\left( t \right)\right|^{2} + \left|\mathtt{mass.pos}\_{1}\left( t \right)\right|^{2}} \\
-\mathtt{spring.dir}\_{1}\left( t \right) &amp;= \mathtt{mass.pos}\_{1}\left( t \right) \\
-\mathtt{spring.dir}\left( t \right) &amp;= change\_origin\left( \left[
-\begin{array}{c}
-1 \\
-\end{array}
-\right], \left[
-\begin{array}{c}
-\mathtt{spring.dir}\_{1}\left( t \right) \\
-\mathtt{spring.dir}\_{2}\left( t \right) \\
-\end{array}
-\right] \right)
-\end{align}
- \]</p><p>These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer unknowns are significantly better!</p><p>We can access these variables using the solution object. For example, let&#39;s retrieve the x-position of the mass over time:</p><pre><code class="language-julia hljs">sol[mass.pos[1]]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1319-element Vector{Float64}:
+plot(sol)</code></pre><img src="4e77d37b.svg" alt="Example block output"/><p>What if we want the timeseries of a different variable? That information is not lost! Instead, <code>mtkcompile</code> simply changes unknown variables into <code>observed</code> variables.</p><pre><code class="language-julia hljs">observed(sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">4-element Vector{Equation}:
+ (spring₊dir(t))[<span class="sgr34">2</span>] ~ (mass₊pos(t))[<span class="sgr34">2</span>]
+ spring₊x(t) ~ sqrt(abs2((mass₊pos(t))[<span class="sgr34">1</span>]) + abs2((mass₊pos(t))[<span class="sgr34">2</span>]))
+ (spring₊dir(t))[<span class="sgr34">1</span>] ~ (mass₊pos(t))[<span class="sgr34">1</span>]
+ spring₊dir(t) ~ ModelingToolkitTearing.change_origin(<span class="sgr34">(1,)</span>, SymbolicUtils.array_literal(<span class="sgr34">(2,)</span>, (spring₊dir(t))[<span class="sgr34">1</span>], (spring₊dir(t))[<span class="sgr34">2</span>]))</code></pre><p>These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer unknowns are significantly better!</p><p>We can access these variables using the solution object. For example, let&#39;s retrieve the x-position of the mass over time:</p><pre><code class="language-julia hljs">sol[mass.pos[1]]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1319-element Vector{Float64}:
   1.0
   0.9999999998290586
   0.999999979316097
@@ -161,4 +168,4 @@ plot(sol)</code></pre><img src="a1268dc0.svg" alt="Example block output"/><p>Wha
  -0.28771394535229905
  -0.30336673708472106
  -0.32595748418231446
- -0.32969310657730083</code></pre><p>We can also plot the path of the mass:</p><pre><code class="language-julia hljs">plot(sol, idxs = (mass.pos[1], mass.pos[2]))</code></pre><img src="1da8d796.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 19 September 2025 13:42">Friday 19 September 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ -0.32969310657730083</code></pre><p>We can also plot the path of the mass:</p><pre><code class="language-julia hljs">plot(sol, idxs = (mass.pos[1], mass.pos[2]))</code></pre><img src="6545a7b7.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Monday 26 January 2026 16:17">Monday 26 January 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -28,19 +28,17 @@ equations(connected)
 
 simplified_sys = mtkcompile(connected)
 
-equations(simplified_sys)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{decay2.x}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{decay2.f}\left( t \right) - \mathtt{decay2.a} \mathtt{decay2.x}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{decay1.x}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{decay1.f}\left( t \right) - \mathtt{decay1.a} \mathtt{decay1.x}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{decay1.f}\left( t \right)}{\mathrm{d}t} &amp;= -0
-\end{align}
- \]</p><p>Now we can solve the system:</p><pre><code class="language-julia hljs">x0 = [decay1.x =&gt; 1.0
+equations(simplified_sys)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Equation}:
+ Differential(t, 1)(decay2₊x(t)) ~ decay2₊f(t) - decay2₊a*decay2₊x(t)
+ Differential(t, 1)(decay1₊x(t)) ~ decay1₊f(t) - decay1₊a*decay1₊x(t)
+ Differential(t, 1)(decay1₊f(t)) ~ <span class="sgr34">-0.0</span></code></pre><p>Now we can solve the system:</p><pre><code class="language-julia hljs">x0 = [decay1.x =&gt; 1.0
       decay1.f =&gt; 0.0
       decay2.x =&gt; 1.0]
 p = [decay1.a =&gt; 0.1
      decay2.a =&gt; 0.2]
 
 using OrdinaryDiffEq
-prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
+prob = ODEProblem(simplified_sys, [x0; p], (0.0, 100.0))
 sol = solve(prob, Tsit5())
 sol[decay2.f]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">23-element Vector{Float64}:
  1.0
@@ -124,33 +122,36 @@ sir = compose(
         t,
         [S, I, R],
         [β, γ],
-        defaults = [seqn.β =&gt; β
+        bindings = [seqn.β =&gt; β
                     ieqn.β =&gt; β
                     ieqn.γ =&gt; γ
                     reqn.γ =&gt; γ], name = :sir),
     seqn,
     ieqn,
-    reqn)</code></pre><p class="math-container">\[ \begin{align}
-S\left( t \right) &amp;= \mathtt{ieqn.S}\left( t \right) \\
-I\left( t \right) &amp;= \mathtt{seqn.I}\left( t \right) \\
-R\left( t \right) &amp;= \mathtt{ieqn.R}\left( t \right) \\
-\mathtt{ieqn.S}\left( t \right) &amp;= \mathtt{seqn.S}\left( t \right) \\
-\mathtt{seqn.I}\left( t \right) &amp;= \mathtt{ieqn.I}\left( t \right) \\
-\mathtt{seqn.R}\left( t \right) &amp;= \mathtt{reqn.R}\left( t \right) \\
-\mathtt{ieqn.R}\left( t \right) &amp;= \mathtt{reqn.R}\left( t \right) \\
-\mathtt{reqn.I}\left( t \right) &amp;= \mathtt{ieqn.I}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{seqn.S}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{seqn.\beta} \mathtt{seqn.S}\left( t \right) \mathtt{seqn.I}\left( t \right)}{\mathtt{seqn.S}\left( t \right) + \mathtt{seqn.I}\left( t \right) + \mathtt{seqn.R}\left( t \right)} \\
-\frac{\mathrm{d} \mathtt{ieqn.I}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{ieqn.\beta} \mathtt{ieqn.S}\left( t \right) \mathtt{ieqn.I}\left( t \right)}{\mathtt{ieqn.S}\left( t \right) + \mathtt{ieqn.I}\left( t \right) + \mathtt{ieqn.R}\left( t \right)} - \mathtt{ieqn.\gamma} \mathtt{ieqn.I}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{reqn.R}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{reqn.\gamma} \mathtt{reqn.I}\left( t \right)
-\end{align}
- \]</p><p>Note that the unknowns are forwarded by an equality relationship, while the parameters are forwarded through a relationship in their default values. The user of this model can then solve this model simply by specifying the values at the highest level:</p><pre><code class="language-julia hljs">sireqn_simple = mtkcompile(sir)
+    reqn)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model sir:</span>
+<span class="sgr1">Subsystems (3):</span> see hierarchy(sir)
+  seqn
+  ieqn
+  reqn
+<span class="sgr1">Equations (11):</span>
+  11 standard: see equations(sir)
+<span class="sgr1">Unknowns (11):</span> see unknowns(sir)
+  S(t)
+  I(t)
+  R(t)
+  seqn₊S(t)
+  ⋮
+<span class="sgr1">Parameters (6):</span> see parameters(sir)
+  β
+  γ
+  seqn₊β [defaults to β]
+  ieqn₊γ [defaults to γ]
+  ⋮</code></pre><p>Note that the unknowns are forwarded by an equality relationship, while the parameters are forwarded through a relationship in their default values. The user of this model can then solve this model simply by specifying the values at the highest level:</p><pre><code class="language-julia hljs">sireqn_simple = mtkcompile(sir)
 
-equations(sireqn_simple)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{reqn.R}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{reqn.\gamma} \mathtt{reqn.I}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{ieqn.I}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{ieqn.\beta} \mathtt{ieqn.S}\left( t \right) \mathtt{ieqn.I}\left( t \right)}{\mathtt{ieqn.S}\left( t \right) + \mathtt{ieqn.I}\left( t \right) + \mathtt{ieqn.R}\left( t \right)} - \mathtt{ieqn.\gamma} \mathtt{ieqn.I}\left( t \right) \\
-\frac{\mathrm{d} \mathtt{seqn.S}\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - \mathtt{seqn.\beta} \mathtt{seqn.S}\left( t \right) \mathtt{seqn.I}\left( t \right)}{\mathtt{seqn.S}\left( t \right) + \mathtt{seqn.I}\left( t \right) + \mathtt{seqn.R}\left( t \right)}
-\end{align}
- \]</p><pre><code class="language-julia hljs">## User Code
+equations(sireqn_simple)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Equation}:
+ Differential(t, 1)(reqn₊R(t)) ~ reqn₊γ*reqn₊I(t)
+ Differential(t, 1)(ieqn₊I(t)) ~ (ieqn₊β*ieqn₊S(t)*ieqn₊I(t)) / (ieqn₊S(t) + ieqn₊I(t) + ieqn₊R(t)) - ieqn₊γ*ieqn₊I(t)
+ Differential(t, 1)(seqn₊S(t)) ~ (seqn₊β*seqn₊I(t)*seqn₊S(t)) / (-seqn₊R(t) - seqn₊I(t) - seqn₊S(t))</code></pre><pre><code class="language-julia hljs">## User Code
 
 u0 = [seqn.S =&gt; 990.0,
     ieqn.I =&gt; 10.0,
@@ -168,16 +169,16 @@ sol[reqn.R]</code></pre><pre class="documenter-example-output"><code class="nohi
    0.015567426114815186
    0.1581830690301042
    1.0627159962527783
-   3.3906766074140706
-   7.785038823291203
-  15.476270570721187
-  30.10218714997552
+   3.39067660741407
+   7.785038823291197
+  15.476270570721189
+  30.10218714997556
   58.804758738885994
- 116.64583849419007
+ 116.64583849419031
  221.07867749201975
  368.86570081874015
- 519.3989571642148
- 655.4762160875096
+ 519.3989571642146
+ 655.4762160875093
  723.9496310639512
- 772.9457994133218
- 775.6835919143084</code></pre><h2 id="Tearing-Problem-Construction"><a class="docs-heading-anchor" href="#Tearing-Problem-Construction">Tearing Problem Construction</a><a id="Tearing-Problem-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Tearing-Problem-Construction" title="Permalink"></a></h2><p>Some system types (specifically <code>NonlinearSystem</code>) can be further reduced if <code>mtkcompile</code> has already been applied to them. This is done by using the alternative problem constructors (<code>BlockNonlinearProblem</code>). In these cases, the constructor uses the knowledge of the strongly connected components calculated during the process of simplification as the basis for building pre-simplified nonlinear systems in the implicit solving. In summary: these problems are structurally modified, but could be more efficient and more stable.</p><h2 id="Components-with-discontinuous-dynamics"><a class="docs-heading-anchor" href="#Components-with-discontinuous-dynamics">Components with discontinuous dynamics</a><a id="Components-with-discontinuous-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Components-with-discontinuous-dynamics" title="Permalink"></a></h2><p>When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the unknown or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to <code>dt &lt;= dt_min</code>. The correct way to handle such dynamics is to tell the solver about the discontinuity by a root-finding equation, which can be modeling using <a href="../../API/System/#ModelingToolkit.System"><code>System</code></a>&#39;s event support. Please see the tutorial on <a href="../Events/#events">Callbacks and Events</a> for details and examples.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../API/PDESystem/">« PDESystem</a><a class="docs-footer-nextpage" href="../Events/">Event Handling and Callback Functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 19 September 2025 13:41">Friday 19 September 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ 772.9457994133213
+ 775.683591914308</code></pre><h2 id="Tearing-Problem-Construction"><a class="docs-heading-anchor" href="#Tearing-Problem-Construction">Tearing Problem Construction</a><a id="Tearing-Problem-Construction-1"></a><a class="docs-heading-anchor-permalink" href="#Tearing-Problem-Construction" title="Permalink"></a></h2><p>Some system types (specifically <code>NonlinearSystem</code>) can be further reduced if <code>mtkcompile</code> has already been applied to them. This is done by using the alternative problem constructors (<code>BlockNonlinearProblem</code>). In these cases, the constructor uses the knowledge of the strongly connected components calculated during the process of simplification as the basis for building pre-simplified nonlinear systems in the implicit solving. In summary: these problems are structurally modified, but could be more efficient and more stable.</p><h2 id="Components-with-discontinuous-dynamics"><a class="docs-heading-anchor" href="#Components-with-discontinuous-dynamics">Components with discontinuous dynamics</a><a id="Components-with-discontinuous-dynamics-1"></a><a class="docs-heading-anchor-permalink" href="#Components-with-discontinuous-dynamics" title="Permalink"></a></h2><p>When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the unknown or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to <code>dt &lt;= dt_min</code>. The correct way to handle such dynamics is to tell the solver about the discontinuity by a root-finding equation, which can be modeling using <a href="@ref"><code>System</code></a>&#39;s event support. Please see the tutorial on <a href="../Events/#events">Callbacks and Events</a> for details and examples.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../API/PDESystem/">« PDESystem</a><a class="docs-footer-nextpage" href="../Events/">Event Handling and Callback Functions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Monday 26 January 2026 16:16">Monday 26 January 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

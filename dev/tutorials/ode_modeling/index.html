@@ -3,78 +3,57 @@
 Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Copy-Pastable-Simplified-Example"><a class="docs-heading-anchor" href="#Copy-Pastable-Simplified-Example">Copy-Pastable Simplified Example</a><a id="Copy-Pastable-Simplified-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Copy-Pastable-Simplified-Example" title="Permalink"></a></h2><p>A much deeper tutorial with forcing functions and sparse Jacobians is below. But if you want to just see some code and run it, here&#39;s an example:</p><pre><code class="language-julia hljs">using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables
-    end
-    @equations begin
-        D(x) ~ (1 - x) / τ
-    end
-end
+@parameters τ = 3.0 # parameters
+@variables x(t) = 0.0 # dependent variables
+eqs = [D(x) ~ (1 - x) / τ]
+
+@named fol_model = System(eqs, t)
 
 using OrdinaryDiffEq
-@mtkcompile fol = FOL()
-prob = ODEProblem(fol, [], (0.0, 10.0), [])
+fol = mtkcompile(fol_model)
+prob = ODEProblem(fol, [], (0.0, 10.0))
 sol = solve(prob)
 
 using Plots
-plot(sol)</code></pre><img src="285f67a6.svg" alt="Example block output"/><p>Now let&#39;s start digging into MTK!</p><h2 id="Your-very-first-ODE"><a class="docs-heading-anchor" href="#Your-very-first-ODE">Your very first ODE</a><a id="Your-very-first-ODE-1"></a><a class="docs-heading-anchor-permalink" href="#Your-very-first-ODE" title="Permalink"></a></h2><p>Let us start with a minimal example. The system to be modelled is a first-order lag element:</p><p class="math-container">\[\dot{x} = \frac{f(t) - x(t)}{\tau}\]</p><p>Here, <span>$t$</span> is the independent variable (time), <span>$x(t)$</span> is the (scalar) unknown variable, <span>$f(t)$</span> is an external forcing function, and <span>$\tau$</span> is a parameter. In MTK, this system can be modelled as follows. For simplicity, we first set the forcing function to a time-independent value <span>$1$</span>. And the independent variable <span>$t$</span> is automatically added by <code>@mtkmodel</code>.</p><pre><code class="language-julia hljs">using ModelingToolkit
+plot(sol)</code></pre><img src="fee87ab0.svg" alt="Example block output"/><p>Now let&#39;s start digging into MTK!</p><h2 id="Your-very-first-ODE"><a class="docs-heading-anchor" href="#Your-very-first-ODE">Your very first ODE</a><a id="Your-very-first-ODE-1"></a><a class="docs-heading-anchor-permalink" href="#Your-very-first-ODE" title="Permalink"></a></h2><p>Let us start with a minimal example. The system to be modelled is a first-order lag element:</p><p class="math-container">\[\dot{x} = \frac{f(t) - x(t)}{\tau}\]</p><p>Here, <span>$t$</span> is the independent variable (time), <span>$x(t)$</span> is the (scalar) unknown variable, <span>$f(t)$</span> is an external forcing function, and <span>$\tau$</span> is a parameter. In MTK, this system can be modelled as follows. For simplicity, we first set the forcing function to a time-independent value <span>$1$</span>.</p><pre><code class="language-julia hljs">using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-    end
-    @equations begin
-        D(x) ~ (1 - x) / τ
-    end
-end
+@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 # dependent variables and their initial conditions
+eqs = [D(x) ~ (1 - x) / τ]
 
-@mtkcompile fol = FOL()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= \frac{1 - x\left( t \right)}{\tau}
+@named fol_model = System(eqs, t)
+fol = mtkcompile(fol_model)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= \frac{-1 + x\left( t \right)}{ - \tau}
 \end{align}
- \]</p><p>Note that equations in MTK use the tilde character (<code>~</code>) as equality sign.</p><p><code>@mtkcompile</code> creates an instance of <code>FOL</code> named as <code>fol</code>.</p><p>After construction of the ODE, you can solve it using <a href="https://docs.sciml.ai/DiffEqDocs/stable/">OrdinaryDiffEq.jl</a>:</p><pre><code class="language-julia hljs">using OrdinaryDiffEq
+ \]</p><p>Note that equations in MTK use the tilde character (<code>~</code>) as equality sign.</p><p><code>mtkcompile</code> transforms the <code>System</code> into a simplified form ready for numerical solving.</p><p>After construction of the ODE, you can solve it using <a href="https://docs.sciml.ai/DiffEqDocs/stable/">OrdinaryDiffEq.jl</a>:</p><pre><code class="language-julia hljs">using OrdinaryDiffEq
 using Plots
 
 prob = ODEProblem(fol, [], (0.0, 10.0))
-plot(solve(prob))</code></pre><img src="7543730b.svg" alt="Example block output"/><p>The parameter values are determined using the right hand side of the expressions in the <code>@parameters</code> block, and similarly initial conditions are determined using the right hand side of the expressions in the <code>@variables</code> block.</p><h2 id="Using-different-values-for-parameters-and-initial-conditions"><a class="docs-heading-anchor" href="#Using-different-values-for-parameters-and-initial-conditions">Using different values for parameters and initial conditions</a><a id="Using-different-values-for-parameters-and-initial-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Using-different-values-for-parameters-and-initial-conditions" title="Permalink"></a></h2><p>If you want to simulate the same model, but with different values for the parameters and initial conditions than the default values, you likely do not want to write an entirely new <code>@mtkmodel</code>. ModelingToolkit supports overwriting the default values:</p><pre><code class="language-julia hljs">@mtkcompile fol_different_values = FOL(; τ = 1 / 3, x = 0.5)
-prob = ODEProblem(fol_different_values, [], (0.0, 10.0))
-plot(solve(prob))</code></pre><img src="e041b19b.svg" alt="Example block output"/><p>Alternatively, this overwriting could also have occurred at the <code>ODEProblem</code> level.</p><pre><code class="language-julia hljs">prob = ODEProblem(fol, [fol.x =&gt; 0.5, fol.τ =&gt; 1 / 3], (0.0, 10.0))
-plot(solve(prob))</code></pre><img src="8fc1b5b4.svg" alt="Example block output"/><p>Here, the second argument of <code>ODEProblem</code> is an array of <code>Pairs</code>. The left hand side of each Pair is the parameter you want to overwrite, and the right hand side is the value to overwrite it with. Similarly, the initial conditions are overwritten in the fourth argument. One important difference with the previous method is that the parameter has to be referred to as <code>fol.τ</code> instead of just <code>τ</code>.</p><h2 id="Algebraic-relations-and-structural-simplification"><a class="docs-heading-anchor" href="#Algebraic-relations-and-structural-simplification">Algebraic relations and structural simplification</a><a id="Algebraic-relations-and-structural-simplification-1"></a><a class="docs-heading-anchor-permalink" href="#Algebraic-relations-and-structural-simplification" title="Permalink"></a></h2><p>You could separate the calculation of the right-hand side, by introducing an intermediate variable <code>RHS</code>:</p><pre><code class="language-julia hljs">using ModelingToolkit
+plot(solve(prob))</code></pre><img src="8621a9df.svg" alt="Example block output"/><p>The parameter values are determined using the right hand side of the expressions in <code>@parameters</code>, and similarly initial conditions are determined using the right hand side of the expressions in <code>@variables</code>.</p><h2 id="Using-different-values-for-parameters-and-initial-conditions"><a class="docs-heading-anchor" href="#Using-different-values-for-parameters-and-initial-conditions">Using different values for parameters and initial conditions</a><a id="Using-different-values-for-parameters-and-initial-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Using-different-values-for-parameters-and-initial-conditions" title="Permalink"></a></h2><p>If you want to simulate the same model, but with different values for the parameters and initial conditions than the default values, you can overwrite them at the <code>ODEProblem</code> level:</p><pre><code class="language-julia hljs">prob = ODEProblem(fol, [fol.x =&gt; 0.5, fol.τ =&gt; 1 / 3], (0.0, 10.0))
+plot(solve(prob))</code></pre><img src="7c1860e7.svg" alt="Example block output"/><p>Here, the second argument of <code>ODEProblem</code> is an array of <code>Pairs</code>. The left hand side of each Pair is the parameter or variable you want to overwrite, and the right hand side is the value to overwrite it with. Note that variables and parameters must be referred to with their namespaced form (e.g., <code>fol.τ</code>).</p><h2 id="Algebraic-relations-and-structural-simplification"><a class="docs-heading-anchor" href="#Algebraic-relations-and-structural-simplification">Algebraic relations and structural simplification</a><a id="Algebraic-relations-and-structural-simplification-1"></a><a class="docs-heading-anchor-permalink" href="#Algebraic-relations-and-structural-simplification" title="Permalink"></a></h2><p>You could separate the calculation of the right-hand side, by introducing an intermediate variable <code>RHS</code>:</p><pre><code class="language-julia hljs">using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        RHS(t)
-    end
-    @equations begin
-        RHS ~ (1 - x) / τ
-        D(x) ~ RHS
-    end
-end
+@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 RHS(t) # dependent variables and their initial conditions
+eqs = [
+    RHS ~ (1 - x) / τ
+    D(x) ~ RHS
+]
 
-@mtkcompile fol = FOL()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{RHS}\left( t \right)
+@named fol_model = System(eqs, t)
+fol = mtkcompile(fol_model)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{RHS}\left( t \right)
 \end{align}
  \]</p><p>If you copy this block of code to your REPL, you will not see the above LaTeX equations. Instead, you can look at the equations by using the <code>equations</code> function:</p><pre><code class="language-julia hljs">equations(fol)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{RHS}\left( t \right)
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{RHS}\left( t \right)
 \end{align}
  \]</p><p>Notice that there is only one equation in this system, <code>Differential(t)(x(t)) ~ RHS(t)</code>. The other equation was removed from the system and was transformed into an <code>observed</code> variable. Observed equations are variables that can be computed on-demand but are not necessary for the solution of the system, and thus MTK tracks them separately. For this reason, we also did not need to specify an initial condition for <code>RHS</code>. You can check the observed equations via the <code>observed</code> function:</p><pre><code class="language-julia hljs">observed(fol)</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{RHS}\left( t \right) &amp;= \frac{1 - x\left( t \right)}{\tau}
 \end{align}
  \]</p><p>For more information on this process, see <a href="@ref">Observables and Variable Elimination</a>.</p><p>MTK still knows how to calculate them out of the information available in a simulation result. The intermediate variable <code>RHS</code> therefore can be plotted along with the unknown variable. Note that this has to be requested explicitly:</p><pre><code class="language-julia hljs">prob = ODEProblem(fol, [], (0.0, 10.0))
 sol = solve(prob)
-plot(sol, idxs = [fol.x, fol.RHS])</code></pre><img src="48ef66bd.svg" alt="Example block output"/><h2 id="Named-Indexing-of-Solutions"><a class="docs-heading-anchor" href="#Named-Indexing-of-Solutions">Named Indexing of Solutions</a><a id="Named-Indexing-of-Solutions-1"></a><a class="docs-heading-anchor-permalink" href="#Named-Indexing-of-Solutions" title="Permalink"></a></h2><p>Note that the indexing of the solution also works via the symbol, and so to get the time series for <code>x</code>, you would do:</p><pre><code class="language-julia hljs">sol[fol.x]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">14-element Vector{Float64}:
+plot(sol, idxs = [fol.x, fol.RHS])</code></pre><img src="62f81de6.svg" alt="Example block output"/><h2 id="Named-Indexing-of-Solutions"><a class="docs-heading-anchor" href="#Named-Indexing-of-Solutions">Named Indexing of Solutions</a><a id="Named-Indexing-of-Solutions-1"></a><a class="docs-heading-anchor-permalink" href="#Named-Indexing-of-Solutions" title="Permalink"></a></h2><p>Note that the indexing of the solution also works via the symbol, and so to get the time series for <code>x</code>, you would do:</p><pre><code class="language-julia hljs">sol[fol.x]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">14-element Vector{Float64}:
  0.0
  3.333277778395056e-5
  0.00036659945265974064
@@ -102,76 +81,62 @@ plot(sol, idxs = [fol.x, fol.RHS])</code></pre><img src="48ef66bd.svg" alt="Exam
  0.05445453814448353
  0.030222307099188644
  0.01506029955022122
- 0.011891981488296214</code></pre><h2 id="Specifying-a-time-variable-forcing-function"><a class="docs-heading-anchor" href="#Specifying-a-time-variable-forcing-function">Specifying a time-variable forcing function</a><a id="Specifying-a-time-variable-forcing-function-1"></a><a class="docs-heading-anchor-permalink" href="#Specifying-a-time-variable-forcing-function" title="Permalink"></a></h2><p>What if the forcing function (the “external input”) <span>$f(t)$</span> is not constant? Obviously, one could use an explicit, symbolic function of time:</p><pre><code class="language-julia hljs">@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        f(t)
-    end
-    @equations begin
-        f ~ sin(t)
-        D(x) ~ (f - x) / τ
-    end
-end
+ 0.011891981488296214</code></pre><h2 id="Specifying-a-time-variable-forcing-function"><a class="docs-heading-anchor" href="#Specifying-a-time-variable-forcing-function">Specifying a time-variable forcing function</a><a id="Specifying-a-time-variable-forcing-function-1"></a><a class="docs-heading-anchor-permalink" href="#Specifying-a-time-variable-forcing-function" title="Permalink"></a></h2><p>What if the forcing function (the &quot;external input&quot;) <span>$f(t)$</span> is not constant? Obviously, one could use an explicit, symbolic function of time:</p><pre><code class="language-julia hljs">@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 f(t) # dependent variables and their initial conditions
+eqs = [
+    f ~ sin(t)
+    D(x) ~ (f - x) / τ
+]
 
-@mtkcompile fol_variable_f = FOL()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - x\left( t \right) + f\left( t \right)}{\tau}
+@named fol_model = System(eqs, t)
+fol_variable_f = mtkcompile(fol_model)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= \frac{x\left( t \right) - f\left( t \right)}{ - \tau}
 \end{align}
- \]</p><p>However, this function might not be available in an explicit form. Instead, the function might be provided as time-series data. MTK handles this situation by allowing us to “register” arbitrary Julia functions, which are excluded from symbolic transformations and thus used as-is. For example, you could interpolate given the time-series using <a href="https://github.com/SciML/DataInterpolations.jl">DataInterpolations.jl</a>. Here, we illustrate this option with a simple lookup (&quot;zero-order hold&quot;) of a vector of random values:</p><pre><code class="language-julia hljs">value_vector = randn(10)
+ \]</p><p>However, this function might not be available in an explicit form. Instead, the function might be provided as time-series data. MTK handles this situation by allowing us to &quot;register&quot; arbitrary Julia functions, which are excluded from symbolic transformations and thus used as-is. For example, you could interpolate given the time-series using <a href="https://github.com/SciML/DataInterpolations.jl">DataInterpolations.jl</a>. Here, we illustrate this option with a simple lookup (&quot;zero-order hold&quot;) of a vector of random values:</p><pre><code class="language-julia hljs">value_vector = randn(10)
 f_fun(t) = t &gt;= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 @register_symbolic f_fun(t)
 
-@mtkmodel FOLExternalFunction begin
-    @parameters begin
-        τ = 0.75 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        f(t)
-    end
-    @equations begin
-        f ~ f_fun(t)
-        D(x) ~ (f - x) / τ
-    end
-end
+@parameters τ = 0.75 # parameters and their values
+@variables x(t) = 0.0 f(t) # dependent variables and their initial conditions
+eqs = [
+    f ~ f_fun(t)
+    D(x) ~ (f - x) / τ
+]
 
-@mtkcompile fol_external_f = FOLExternalFunction()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} &amp;= \frac{ - x\left( t \right) + f\left( t \right)}{\tau}
+@named fol_model = System(eqs, t)
+fol_external_f = mtkcompile(fol_model)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ x\left( t \right)}{\mathrm{d}t} &amp;= \frac{x\left( t \right) - f\left( t \right)}{ - \tau}
 \end{align}
  \]</p><pre><code class="language-julia hljs">prob = ODEProblem(fol_external_f, [], (0.0, 10.0))
 sol = solve(prob)
-plot(sol, idxs = [fol_external_f.x, fol_external_f.f])</code></pre><img src="8b8854f5.svg" alt="Example block output"/><h2 id="Building-component-based,-hierarchical-models"><a class="docs-heading-anchor" href="#Building-component-based,-hierarchical-models">Building component-based, hierarchical models</a><a id="Building-component-based,-hierarchical-models-1"></a><a class="docs-heading-anchor-permalink" href="#Building-component-based,-hierarchical-models" title="Permalink"></a></h2><p>Working with simple one-equation systems is already fun, but composing more complex systems from simple ones is even more fun. The best practice for such a “modeling framework” is to use the <code>@components</code> block in the <code>@mtkmodel</code> macro:</p><pre><code class="language-julia hljs">@mtkmodel FOLUnconnectedFunction begin
-    @parameters begin
-        τ # parameters
-    end
-    @variables begin
-        x(t) # dependent variables
-        f(t)
-        RHS(t)
-    end
-    @equations begin
+plot(sol, idxs = [fol_external_f.x, fol_external_f.f])</code></pre><img src="5d3e3efa.svg" alt="Example block output"/><h2 id="Building-component-based,-hierarchical-models"><a class="docs-heading-anchor" href="#Building-component-based,-hierarchical-models">Building component-based, hierarchical models</a><a id="Building-component-based,-hierarchical-models-1"></a><a class="docs-heading-anchor-permalink" href="#Building-component-based,-hierarchical-models" title="Permalink"></a></h2><p>Working with simple one-equation systems is already fun, but composing more complex systems from simple ones is even more fun. The best practice for such a &quot;modeling framework&quot; is to define reusable component systems and compose them:</p><pre><code class="language-julia hljs"># Define a reusable component function that creates a first-order lag system
+function FOLComponent(; name, τ = 1.0, x0 = 0.0)
+    @parameters τ = τ
+    @variables x(t) = x0 f(t) RHS(t)
+    eqs = [
         RHS ~ f
         D(x) ~ (RHS - x) / τ
-    end
+    ]
+    return System(eqs, t, [x, f, RHS], [τ]; name)
 end
-@mtkmodel FOLConnected begin
-    @components begin
-        fol_1 = FOLUnconnectedFunction(; τ = 2.0, x = -0.5)
-        fol_2 = FOLUnconnectedFunction(; τ = 4.0, x = 1.0)
-    end
-    @equations begin
-        fol_1.f ~ 1.5
-        fol_2.f ~ fol_1.x
-    end
-end
-@mtkcompile connected = FOLConnected()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} \mathtt{fol\_2.x}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{fol\_2.RHS}\left( t \right) - \mathtt{fol\_2.x}\left( t \right)}{\mathtt{fol\_2.\tau}} \\
-\frac{\mathrm{d} \mathtt{fol\_1.x}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{fol\_1.RHS}\left( t \right) - \mathtt{fol\_1.x}\left( t \right)}{\mathtt{fol\_1.\tau}}
+
+# Create two instances of the component with different parameters
+@named fol_1 = FOLComponent(τ = 2.0, x0 = -0.5)
+@named fol_2 = FOLComponent(τ = 4.0, x0 = 1.0)
+
+# Connect them: fol_1 has constant input, fol_2 uses fol_1&#39;s output
+connection_eqs = [
+    fol_1.f ~ 1.5
+    fol_2.f ~ fol_1.x
+]
+
+@named connected_model = System(connection_eqs, t, [], []; systems = [fol_1, fol_2])
+connected = mtkcompile(connected_model)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ \mathtt{fol\_2.x}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{fol\_2.x}\left( t \right) - \mathtt{fol\_2.RHS}\left( t \right)}{ - \mathtt{fol\_2.\tau}} \\
+\frac{\mathrm{d} ~ \mathtt{fol\_1.x}\left( t \right)}{\mathrm{d}t} &amp;= \frac{\mathtt{fol\_1.x}\left( t \right) - \mathtt{fol\_1.RHS}\left( t \right)}{ - \mathtt{fol\_1.\tau}}
 \end{align}
- \]</p><p>Here the total model consists of two of the same submodels (components), but with a different input function, parameter values and initial conditions. The first model has a constant input, and the second model uses the state <code>x</code> of the first system as an input. To avoid having to type the same differential equation multiple times, we define the submodel in a separate <code>@mtkmodel</code>. We then reuse this submodel twice in the total model <code>@components</code> block. The inputs of two submodels then still have to be specified in the <code>@equations</code> block.</p><p>All equations, variables, and parameters are collected, but the structure of the hierarchical model is still preserved. This means you can still get information about <code>fol_1</code> by addressing it by <code>connected.fol_1</code>, or its parameter by <code>connected.fol_1.τ</code>.</p><p>As expected, only the two equations with the derivatives of unknowns remain, as if you had manually eliminated as many variables as possible from the equations. Some observed variables are not expanded unless <code>full_equations</code> is used. As mentioned above, the hierarchical structure is preserved. So, the initial unknown and the parameter values can be specified accordingly when building the <code>ODEProblem</code>:</p><pre><code class="language-julia hljs">prob = ODEProblem(connected, [], (0.0, 10.0))
-plot(solve(prob))</code></pre><img src="be103368.svg" alt="Example block output"/><p>More on this topic may be found in <a href="../acausal_components/#acausal">Composing Models and Building Reusable Components</a>.</p><h2 id="Symbolic-and-sparse-derivatives"><a class="docs-heading-anchor" href="#Symbolic-and-sparse-derivatives">Symbolic and sparse derivatives</a><a id="Symbolic-and-sparse-derivatives-1"></a><a class="docs-heading-anchor-permalink" href="#Symbolic-and-sparse-derivatives" title="Permalink"></a></h2><p>One advantage of a symbolic toolkit is that derivatives can be calculated explicitly, and that the incidence matrix of partial derivatives (the “sparsity pattern”) can also be explicitly derived. These two facts lead to a substantial speedup of all model calculations, e.g. when simulating a model over time using an ODE solver.</p><p>By default, analytical derivatives and sparse matrices, e.g. for the Jacobian, the matrix of first partial derivatives, are not used. Let&#39;s benchmark this (<code>prob</code> still is the problem using the <code>connected</code> system above):</p><pre><code class="language-julia hljs">using BenchmarkTools
-@btime solve(prob, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  72.185 μs (222 allocations: 20.31 KiB)</code></pre><p>Now have MTK provide sparse, analytical derivatives to the solver. This has to be specified during the construction of the <code>ODEProblem</code>:</p><pre><code class="language-julia hljs">prob_an = ODEProblem(connected, [], (0.0, 10.0); jac = true)
-@btime solve(prob_an, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  62.497 μs (226 allocations: 18.34 KiB)</code></pre><pre><code class="language-julia hljs">prob_sparse = ODEProblem(connected, [], (0.0, 10.0); jac = true, sparse = true)
-@btime solve(prob_sparse, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  184.094 μs (1351 allocations: 78.56 KiB)</code></pre><p>The speedup using the analytical Jacobian is significant. For this small dense model (3 of 4 entries populated), using sparse matrices is counterproductive in terms of required memory allocations. For large, hierarchically built models, which tend to be sparse, speedup and the reduction of memory allocation can also be expected to be substantial. In addition, these problem builders allow for automatic parallelism by exploiting the structural information. For more information, see the <a href="../../API/System/#ModelingToolkit.System">System</a> page.</p><h2 id="Notes-and-pointers-how-to-go-on"><a class="docs-heading-anchor" href="#Notes-and-pointers-how-to-go-on">Notes and pointers how to go on</a><a id="Notes-and-pointers-how-to-go-on-1"></a><a class="docs-heading-anchor-permalink" href="#Notes-and-pointers-how-to-go-on" title="Permalink"></a></h2><p>Here are some notes that may be helpful during your initial steps with MTK:</p><ul><li>The <code>@mtkmodel</code> macro is for high-level usage of MTK. However, in many cases you may need to programmatically generate <code>System</code>s. If that&#39;s the case, check out the <a href="../programmatically_generating/#programmatically">Programmatically Generating and Scripting Systems Tutorial</a>.</li><li>Vector-valued parameters and variables are possible. A cleaner, more consistent treatment of these is still a work in progress, however. Once finished, this introductory tutorial will also cover this feature.</li></ul><p>Where to go next?</p><ul><li>Not sure how MTK relates to similar tools and packages? Read <a href="../../comparison/#Comparison-of-ModelingToolkit-vs-Equation-Based-and-Block-Modeling-Languages">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a>.</li><li>For a more detailed explanation of <code>@mtkmodel</code> checkout <a href="../../basics/MTKLanguage/#mtk_language">Defining components with <code>@mtkmodel</code> and connectors with <code>@connectors</code></a></li><li>Depending on what you want to do with MTK, have a look at some of the other <strong>Symbolic Modeling Tutorials</strong>.</li><li>If you want to automatically convert an existing function to a symbolic representation, you might go through the <strong>ModelingToolkitize Tutorials</strong>.</li><li>To learn more about the inner workings of MTK, consider the sections under <strong>Basics</strong> and <strong>System Types</strong>.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« Home</a><a class="docs-footer-nextpage" href="../acausal_components/">Acausal Component-Based Modeling »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Friday 19 September 2025 13:41">Friday 19 September 2025</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p><p>Here the total model consists of two of the same submodels (components), but with a different input function, parameter values and initial conditions. The first model has a constant input, and the second model uses the state <code>x</code> of the first system as an input. To avoid having to type the same differential equation multiple times, we define the submodel in a function that returns a <code>System</code>. We then reuse this function twice to create the component systems. The inputs of two submodels then still have to be specified in connection equations.</p><p>All equations, variables, and parameters are collected, but the structure of the hierarchical model is still preserved. This means you can still get information about <code>fol_1</code> by addressing it by <code>connected.fol_1</code>, or its parameter by <code>connected.fol_1.τ</code>.</p><p>As expected, only the two equations with the derivatives of unknowns remain, as if you had manually eliminated as many variables as possible from the equations. Some observed variables are not expanded unless <code>full_equations</code> is used. As mentioned above, the hierarchical structure is preserved. So, the initial unknown and the parameter values can be specified accordingly when building the <code>ODEProblem</code>:</p><pre><code class="language-julia hljs">prob = ODEProblem(connected, [], (0.0, 10.0))
+plot(solve(prob))</code></pre><img src="26960a4b.svg" alt="Example block output"/><p>More on this topic may be found in <a href="../acausal_components/#acausal">Composing Models and Building Reusable Components</a>.</p><h2 id="Symbolic-and-sparse-derivatives"><a class="docs-heading-anchor" href="#Symbolic-and-sparse-derivatives">Symbolic and sparse derivatives</a><a id="Symbolic-and-sparse-derivatives-1"></a><a class="docs-heading-anchor-permalink" href="#Symbolic-and-sparse-derivatives" title="Permalink"></a></h2><p>One advantage of a symbolic toolkit is that derivatives can be calculated explicitly, and that the incidence matrix of partial derivatives (the &quot;sparsity pattern&quot;) can also be explicitly derived. These two facts lead to a substantial speedup of all model calculations, e.g. when simulating a model over time using an ODE solver.</p><p>By default, analytical derivatives and sparse matrices, e.g. for the Jacobian, the matrix of first partial derivatives, are not used. Let&#39;s benchmark this (<code>prob</code> still is the problem using the <code>connected</code> system above):</p><pre><code class="language-julia hljs">using BenchmarkTools
+@btime solve(prob, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  72.306 μs (202 allocations: 19.80 KiB)</code></pre><p>Now have MTK provide sparse, analytical derivatives to the solver. This has to be specified during the construction of the <code>ODEProblem</code>:</p><pre><code class="language-julia hljs">prob_an = ODEProblem(connected, [], (0.0, 10.0); jac = true)
+@btime solve(prob_an, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  62.276 μs (206 allocations: 17.81 KiB)</code></pre><pre><code class="language-julia hljs">prob_sparse = ODEProblem(connected, [], (0.0, 10.0); jac = true, sparse = true)
+@btime solve(prob_sparse, Rodas4());</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">  174.657 μs (1245 allocations: 71.90 KiB)</code></pre><p>The speedup using the analytical Jacobian is significant. For this small dense model (3 of 4 entries populated), using sparse matrices is counterproductive in terms of required memory allocations. For large, hierarchically built models, which tend to be sparse, speedup and the reduction of memory allocation can also be expected to be substantial. In addition, these problem builders allow for automatic parallelism by exploiting the structural information. For more information, see the <a href="@ref System">System</a> page.</p><h2 id="Notes-and-pointers-how-to-go-on"><a class="docs-heading-anchor" href="#Notes-and-pointers-how-to-go-on">Notes and pointers how to go on</a><a id="Notes-and-pointers-how-to-go-on-1"></a><a class="docs-heading-anchor-permalink" href="#Notes-and-pointers-how-to-go-on" title="Permalink"></a></h2><p>Here are some notes that may be helpful during your initial steps with MTK:</p><ul><li>For high-level component-based modeling with convenient macros like <code>@mtkmodel</code>, see the <a href="../../basics/MTKLanguage/#mtk_language">ModelingToolkit Language Tutorial</a> which covers <code>@mtkmodel</code> and <code>@connector</code>.</li><li>The approach shown in this tutorial using direct <code>System</code> construction is useful when you need to programmatically generate systems. For more details, check out the <a href="../programmatically_generating/#programmatically">Programmatically Generating and Scripting Systems Tutorial</a>.</li><li>Vector-valued parameters and variables are possible. A cleaner, more consistent treatment of these is still a work in progress, however. Once finished, this introductory tutorial will also cover this feature.</li></ul><p>Where to go next?</p><ul><li>Not sure how MTK relates to similar tools and packages? Read <a href="../../comparison/#Comparison-of-ModelingToolkit-vs-Equation-Based-and-Block-Modeling-Languages">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a>.</li><li>For a more detailed explanation of <code>@mtkmodel</code> checkout <a href="../../basics/MTKLanguage/#mtk_language">Defining components with <code>@mtkmodel</code> and connectors with <code>@connectors</code></a></li><li>Depending on what you want to do with MTK, have a look at some of the other <strong>Symbolic Modeling Tutorials</strong>.</li><li>If you want to automatically convert an existing function to a symbolic representation, you might go through the <strong>ModelingToolkitize Tutorials</strong>.</li><li>To learn more about the inner workings of MTK, consider the sections under <strong>Basics</strong> and <strong>System Types</strong>.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« Home</a><a class="docs-footer-nextpage" href="../acausal_components/">Acausal Component-Based Modeling »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Monday 26 January 2026 16:16">Monday 26 January 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
