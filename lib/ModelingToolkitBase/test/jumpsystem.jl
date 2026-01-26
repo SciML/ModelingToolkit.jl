@@ -602,3 +602,77 @@ end
     sys = complete(sys)
     @test_nowarn JumpProblem(sys, [:X => 0.1, :p => 1.0, :d => 2.0], (0.0, 1.0))
 end
+
+@testset "Issue#4216: Discrete events fire once in hybrid JumpProblems" begin
+    @variables X(t)
+    @parameters a b
+
+    # Create ODE equation
+    eq = D(X) ~ a
+
+    # Create jump
+    crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+
+    # Discrete event: at t=1.0, add 5.0 to X
+    discrete_event = [1.0] => [X ~ Pre(X) + 5.0]
+
+    # Create hybrid JumpSystem with ODE + jump + discrete event
+    @named jsys = JumpSystem([crj, eq], t, [X], [a, b]; discrete_events = [discrete_event])
+    jsys = complete(jsys)
+
+    # Create JumpProblem
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 1.0, :b => 0.01], (0.0, 3.0); rng)
+
+    # Callback should NOT be stored in the underlying problem (only in JumpProblem)
+    @test !haskey(jprob.prob.kwargs, :callback)
+    @test haskey(jprob.kwargs, :callback)
+
+    # Solve and verify discrete event fires exactly once
+    sol = solve(jprob, Tsit5())
+    X_before = sol(0.99; idxs = X)
+    X_after = sol(1.01; idxs = X)
+    change = X_after - X_before
+
+    # The change should be approximately 5.0 (not ~10.0 which would indicate double firing)
+    @test isapprox(change, 5.0, atol = 0.1)
+end
+
+@testset "Issue#4216: Continuous events not duplicated in hybrid JumpProblems" begin
+    @variables X(t)
+    @parameters a b
+
+    # Create ODE equation: X grows linearly
+    eq = D(X) ~ a
+
+    # Create jump
+    crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+
+    # Continuous event: when X crosses 15.0, add 5.0 to X
+    continuous_event = [X ~ 15.0] => [X ~ Pre(X) + 5.0]
+
+    # Create hybrid JumpSystem with ODE + jump + continuous event
+    @named jsys = JumpSystem(
+        [crj, eq], t, [X], [a, b]; continuous_events = [continuous_event]
+    )
+    jsys = complete(jsys)
+
+    # Create JumpProblem (starting at X=10, with a=10 so X grows quickly)
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 10.0, :b => 0.001], (0.0, 3.0); rng)
+
+    # Callback should NOT be stored in the underlying problem (only in JumpProblem)
+    @test !haskey(jprob.prob.kwargs, :callback)
+    @test haskey(jprob.kwargs, :callback)
+
+    # Solve - the continuous event should fire when X crosses 15.0
+    sol = solve(jprob, Tsit5())
+
+    # After crossing 15.0, X should jump by 5.0 (to ~20.0), not by 10.0 (which would be ~25.0)
+    # With a=10, X reaches 15 at t≈0.5, then jumps to ~20, continues growing
+    # At t=1.0, X should be around 20 + 5 = 25 (not 30 which would indicate double firing)
+    X_at_1 = sol(1.0; idxs = X)
+
+    # X starts at 10, grows at rate 10, crosses 15 at t≈0.5, jumps by 5 to ~20
+    # Then continues growing: at t=1.0, X ≈ 20 + 10*(1.0-0.5) = 25
+    # If event fired twice: X ≈ 25 + 10*(1.0-0.5) = 30
+    @test X_at_1 < 28.0  # Should be ~25, not ~30
+end
