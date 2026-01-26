@@ -22,8 +22,7 @@ recovery = rate_to_proportion(γ * h, δt) * I(k - 1)
 eqs = [S(k) ~ S(k - 1) - infection * h,
     I(k) ~ I(k - 1) + infection - recovery,
     R(k) ~ R(k - 1) + recovery]
-@named sys = System(eqs, t)
-sys = mtkcompile(sys)
+@mtkcompile sys = System(eqs, t)
 
 u0 = [S(k - 1) => 990.0, I(k - 1) => 10.0, R(k - 1) => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1]
@@ -39,8 +38,7 @@ the Fibonacci series:
 
 ```@example discrete
 @variables x(t) = 1.0
-@named sys = System([x ~ x(k - 1) + x(k - 2)], t)
-sys = mtkcompile(sys)
+@mtkcompile sys = System([x ~ x(k - 1) + x(k - 2)], t)
 ```
 
 The "default value" here should be interpreted as the value of `x` at all past timesteps.

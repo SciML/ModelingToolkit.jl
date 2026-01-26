@@ -53,8 +53,7 @@ eqs = [D(x) ~ σ * (y - x) + 0.3x * B,
     D(y) ~ x * (ρ - z) - y + 0.3y * B,
     D(z) ~ x * y - β * z + 0.3z * B]
 
-@named de = System(eqs, t)
-de = mtkcompile(de)
+@mtkcompile de = System(eqs, t)
 ```
 
 Even though we did not explicitly use `SDESystem`, ModelingToolkit can still infer this from the equations.
@@ -88,8 +87,7 @@ multiple `@brownians` variables have to be declared.
 eqs = [D(x) ~ σ * (y - x) + 0.3x * Bx,
     D(y) ~ x * (ρ - z) - y + 0.3y * By,
     D(z) ~ x * y - β * z + 0.3z * Bz]
-@named de = System(eqs, t)
-de = mtkcompile(de)
+@mtkcompile de = System(eqs, t)
 prob = SDEProblem(de, [], (0.0, 100.0))
 sol = solve(prob, SRIW1())
 plot(sol)

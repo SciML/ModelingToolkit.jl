@@ -69,8 +69,7 @@ Tspline = typeof(spline)
 @variables x(t)
 @parameters (interp::Tspline)(..)
 
-@named sys = System(D(x) ~ interp(t), t)
-sys = mtkcompile(sys)
+@mtkcompile sys = System(D(x) ~ interp(t), t)
 ```
 
 The derivative of `x` is obtained via an interpolation from DataInterpolations.jl. Note

@@ -38,8 +38,7 @@ We could have figured that out ourselves, but it is not always so obvious for mo
 Suppose we also want to validate that `u1 + u2 >= 2.0`. We can do this via the assertions functionality.
 
 ```@example debug
-@named sys = System(eqs, t; initial_conditions, assertions = [(u1 + u2 >= 2.0) => "Oh no!"])
-sys = mtkcompile(sys)
+@mtkcompile sys = System(eqs, t; initial_conditions, assertions = [(u1 + u2 >= 2.0) => "Oh no!"])
 ```
 
 The assertions must be an iterable of pairs, where the first element is the symbolic condition and

@@ -118,8 +118,7 @@ trigger the callback. Thus, we wrap this system in a trivial system with a diffe
 
 ```@example fmi
 @variables x(t) = 1.0
-@named sys = System([D(x) ~ x], t; systems = [inner])
-sys = mtkcompile(sys)
+@mtkcompile sys = System([D(x) ~ x], t; systems = [inner])
 ```
 
 We can now simulate `sys`.
@@ -151,14 +150,23 @@ fmu.modelDescription.modelVariables
 This FMU is equivalent to the following model:
 
 ```julia
-@variables a(t) b(t) c(t) out(t) out2(t)
-@parameters value = 1.0
-eqs = [
-    out ~ a + b + value
-    D(c) ~ out
-    out2 ~ 2c
-]
-@named simple_adder = System(eqs, t)
+@mtkmodel SimpleAdder begin
+    @variables begin
+        a(t)
+        b(t)
+        c(t)
+        out(t)
+        out2(t)
+    end
+    @parameters begin
+        value = 1.0
+    end
+    @equations begin
+        out ~ a + b + value
+        D(c) ~ out
+        out2 ~ 2c
+    end
+end
 ```
 
 `a` and `b` are inputs, `c` is a state, and `out` and `out2` are outputs of the component.
@@ -177,12 +185,11 @@ metadata. We can now use this component as a subcomponent of a larger system.
 
 ```@repl fmi
 @variables a(t) b(t) c(t) [guess = 1.0];
-@named sys = System(
+@mtkcompile sys = System(
     [adder.a ~ a, adder.b ~ b, D(a) ~ t,
         D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
     t;
     systems = [adder])
-sys = mtkcompile(sys)
 equations(sys)
 ```
 
@@ -212,12 +219,11 @@ fmu = loadFMU(
 @named adder = ModelingToolkit.FMIComponent(
     Val(2); fmu, type = :CS, communication_step_size = 1e-3,
     reinitializealg = BrownFullBasicInit())
-@named sys = System(
+@mtkcompile sys = System(
     [adder.a ~ a, adder.b ~ b, D(a) ~ t,
         D(b) ~ adder.out + adder.c, c^2 ~ adder.out + adder.value],
     t;
     systems = [adder])
-sys = mtkcompile(sys)
 prob = ODEProblem(
     sys, [sys.adder.c => 2.0, sys.a => 1.0, sys.b => 1.0, sys.adder.value => 2.0],
     (0.0, 1.0))
