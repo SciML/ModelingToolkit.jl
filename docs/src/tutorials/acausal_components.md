@@ -55,7 +55,7 @@ end
 function Resistor(; name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    @parameters R = R
+    @parameters R = R # Sets the default resistance
     eqs = [v ~ i * R]
     extend(System(eqs, t, [], [R]; name), oneport)
 end
@@ -183,7 +183,7 @@ zero. This leads to our resistor equations:
 function Resistor(; name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    @parameters R = R
+    @parameters R = R # Sets the default resistance
     eqs = [v ~ i * R]
     extend(System(eqs, t, [], [R]; name), oneport)
 end
