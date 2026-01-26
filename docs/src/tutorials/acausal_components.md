@@ -20,13 +20,15 @@ equalities before solving. Let's see this in action.
 ## Copy-Paste Example
 
 ```@example acausal
-using ModelingToolkit, Plots, OrdinaryDiffEq
+using ModelingToolkit, Plots, OrdinaryDiffEq, Setfield
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 # Define the Pin connector
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
-    System(Equation[], t, [v, i], []; name)
+    sys = System(Equation[], t, [v, i], []; name)
+    @set! sys.connector_type = ModelingToolkit.connector_type(sys)
+    return sys
 end
 
 # Define Ground component
@@ -121,7 +123,9 @@ default, variables are equal in a connection.
 ```@example acausal
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
-    System(Equation[], t, [v, i], []; name)
+    sys = System(Equation[], t, [v, i], []; name)
+    @set! sys.connector_type = ModelingToolkit.connector_type(sys)
+    return sys
 end
 ```
 
