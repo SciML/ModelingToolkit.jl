@@ -27,7 +27,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
     sys = System(Equation[], t, [v, i], []; name)
-    @set! sys.connector_type = ModelingToolkit.connector_type(sys)
+    sys = @set sys.connector_type = ModelingToolkit.connector_type(sys)
     return sys
 end
 
@@ -124,7 +124,7 @@ default, variables are equal in a connection.
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
     sys = System(Equation[], t, [v, i], []; name)
-    @set! sys.connector_type = ModelingToolkit.connector_type(sys)
+    sys = @set sys.connector_type = ModelingToolkit.connector_type(sys)
     return sys
 end
 ```
