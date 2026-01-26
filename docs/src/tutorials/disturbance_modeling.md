@@ -12,26 +12,29 @@ We will consider a simple system consisting of two inertias connected through a 
 using ModelingToolkit, OrdinaryDiffEq, LinearAlgebra, Test
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
+using SciCompDSL
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 
-# Define the SystemModel component
-function SystemModel(; name, m1 = 1, m2 = 1, k = 10, c = 3)
-    @named inertia1 = Inertia(; J = m1, phi = 0, w = 0)
-    @named inertia2 = Inertia(; J = m2, phi = 0, w = 0)
-    @named spring = Spring(; c = k)
-    @named damper = Damper(; d = c)
-    @named torque = Torque(use_support = false)
-
-    eqs = [
+@mtkmodel SystemModel begin
+    @parameters begin
+        m1 = 1
+        m2 = 1
+        k = 10 # Spring stiffness
+        c = 3  # Damping coefficient
+    end
+    @components begin
+        inertia1 = Inertia(; J = m1, phi = 0, w = 0)
+        inertia2 = Inertia(; J = m2, phi = 0, w = 0)
+        spring = Spring(; c = k)
+        damper = Damper(; d = c)
+        torque = Torque(use_support = false)
+    end
+    @equations begin
         connect(torque.flange, inertia1.flange_a)
         connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
         connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
-    ]
-
-    System(eqs, t;
-        systems = [inertia1, inertia2, spring, damper, torque],
-        name)
+    end
 end
 ```
 
@@ -42,27 +45,22 @@ In order to simulate this system in the presence of disturbances, we must 1. Rea
 We create a new model that includes disturbance inputs and signals, and attach those to the already defined plant model. We assume that each of the two inertias can be affected by a disturbance torque, such as due to friction or an unknown load on the output inertia.
 
 ```@example DISTURBANCE_MODELING
-# Define a model with inputs
-function ModelWithInputs(; name)
-    @named input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
-    @named disturbance_signal1 = Blocks.Step(height = -1, start_time = 2)
-    @named disturbance_signal2 = Blocks.Step(height = 2, start_time = 4)
-    @named disturbance_torque1 = Torque(use_support = false)
-    @named disturbance_torque2 = Torque(use_support = false)
-    @named system_model = SystemModel()
-
-    eqs = [
+@mtkmodel ModelWithInputs begin
+    @components begin
+        input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
+        disturbance_signal1 = Blocks.Step(height = -1, start_time = 2) # We add an input signal that equals zero by default so that it has no effect during normal simulation
+        disturbance_signal2 = Blocks.Step(height = 2, start_time = 4)
+        disturbance_torque1 = Torque(use_support = false)
+        disturbance_torque2 = Torque(use_support = false)
+        system_model = SystemModel()
+    end
+    @equations begin
         connect(input_signal.output, :u, system_model.torque.tau)
-        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau)
+        connect(disturbance_signal1.output, :d1, disturbance_torque1.tau) # When we connect the input _signals_, we do so through an analysis point. This allows us to easily disconnect the input signals in situations when we do not need them. 
         connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
         connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
         connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
-    ]
-
-    System(eqs, t;
-        systems = [input_signal, disturbance_signal1, disturbance_signal2,
-            disturbance_torque1, disturbance_torque2, system_model],
-        name)
+    end
 end
 ```
 
@@ -91,7 +89,7 @@ It's worth noting at this point that the fact that we could connect disturbance 
 We summarize the findings so far as a number of best practices:
 
 !!! tip "Best practices"
-
+    
       - Use a component-based workflow to model the plant
       - If possible, model the plant without explicit disturbance inputs to make it as generic as possible
       - When disturbance inputs are needed, create a new model that includes the plant model and the disturbance inputs
@@ -111,7 +109,7 @@ y &= g(x, p, t)
 \end{aligned}
 ```
 
-where ``x`` is the state, ``y`` are observed variables, ``p`` are parameters, and ``t`` is time. When using MTK, which variables constitute ``x`` and which are considered part of the output, ``y``, is up to the tool rather than the user, this choice is made by MTK during the call to `mtkcompile`.
+where ``x`` is the state, ``y`` are observed variables, ``p`` are parameters, and ``t`` is time. When using MTK, which variables constitute ``x`` and which are considered part of the output, ``y``, is up to the tool rather than the user, this choice is made by MTK during the call to `@mtkcompile` or the lower-level function `mtkcompile`.
 
 If we further consider external inputs to the system, such as controlled input signals ``u`` and disturbance inputs ``w``, we can write the system as
 
@@ -138,42 +136,40 @@ Below, we demonstrate
  2. how to generate the functions ``f`` and ``g`` for a typical nonlinear state estimator with explicit disturbance inputs
 
 ```@example DISTURBANCE_MODELING
-# Define an integrating disturbance model
-function IntegratingDisturbance(; name)
-    @variables x(t) = 0.0 w(t) = 0.0 [disturbance = true, input = true]
-    @named input = RealInput()
-    @named output = RealOutput()
-    eqs = [
+@mtkmodel IntegratingDisturbance begin
+    @variables begin
+        x(t) = 0.0
+        w(t) = 0.0, [disturbance = true, input = true]
+    end
+    @components begin
+        input = RealInput()
+        output = RealOutput()
+    end
+    @equations begin
         D(x) ~ w
         w ~ input.u
         output.u ~ x
-    ]
-    System(eqs, t; systems = [input, output], name)
+    end
 end
 
-# Define a system model with disturbance model
-function SystemModelWithDisturbanceModel(; name)
-    @named input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
-    @named disturbance_signal1 = Blocks.Constant(k = 0)
-    @named disturbance_signal2 = Blocks.Constant(k = 0)
-    @named disturbance_torque1 = Torque(use_support = false)
-    @named disturbance_torque2 = Torque(use_support = false)
-    @named disturbance_model = Blocks.Integrator()
-    @named system_model = SystemModel()
-
-    eqs = [
+@mtkmodel SystemModelWithDisturbanceModel begin
+    @components begin
+        input_signal = Blocks.Sine(frequency = 1, amplitude = 1)
+        disturbance_signal1 = Blocks.Constant(k = 0)
+        disturbance_signal2 = Blocks.Constant(k = 0)
+        disturbance_torque1 = Torque(use_support = false)
+        disturbance_torque2 = Torque(use_support = false)
+        disturbance_model = Blocks.Integrator()
+        system_model = SystemModel()
+    end
+    @equations begin
         connect(input_signal.output, :u, system_model.torque.tau)
         connect(disturbance_signal1.output, :d1, disturbance_model.input)
         connect(disturbance_model.output, disturbance_torque1.tau)
         connect(disturbance_signal2.output, :d2, disturbance_torque2.tau)
         connect(disturbance_torque1.flange, system_model.inertia1.flange_b)
         connect(disturbance_torque2.flange, system_model.inertia2.flange_b)
-    ]
-
-    System(eqs, t;
-        systems = [input_signal, disturbance_signal1, disturbance_signal2,
-            disturbance_torque1, disturbance_torque2, disturbance_model, system_model],
-        name)
+    end
 end
 
 @named model_with_disturbance = SystemModelWithDisturbanceModel()
@@ -191,11 +187,7 @@ using Test
 
 but we may also generate the functions ``f`` and ``g`` for state estimation:
 
-!!! warning "Example currently disabled"
-
-    This example is currently disabled due to compatibility issues with `generate_control_function` and analysis points in the current ModelingToolkit stack.
-
-```julia
+```@example DISTURBANCE_MODELING
 inputs = [ssys.u]
 disturbance_inputs = [ssys.d1, ssys.d2]
 P = ssys.system_model
