@@ -66,7 +66,7 @@ same reference, and hence refer to the same quantity. Correspondingly, there is 
     creates them to manage the FMU. Unexpected usage of these variables/parameters can lead to errors.
 
 ```@example fmi
-defaults(model)
+initial_conditions(model)
 ```
 
 All parameters in the FMU are given a default equal to their start value, if present. Unknowns are not
@@ -96,6 +96,7 @@ fmu = loadFMU("SpringPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
 @named inner = ModelingToolkit.FMIComponent(
     Val(3); fmu, communication_step_size = 0.001, type = :CS,
     reinitializealg = BrownFullBasicInit())
+nothing # hide
 ```
 
 This FMU has fewer equations, partly due to missing aliasing variables and partly due to being a CS FMU.

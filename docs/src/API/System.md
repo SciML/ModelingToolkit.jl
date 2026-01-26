@@ -72,9 +72,8 @@ nameof
 ModelingToolkit.has_description
 ModelingToolkit.get_description
 ModelingToolkit.description
-ModelingToolkit.has_defaults
-ModelingToolkit.get_defaults
-defaults
+bindings
+initial_conditions
 ModelingToolkit.has_guesses
 ModelingToolkit.get_guesses
 guesses

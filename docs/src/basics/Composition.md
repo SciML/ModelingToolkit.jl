@@ -212,7 +212,7 @@ sir = compose(
         t,
         [S, I, R],
         [β, γ],
-        defaults = [seqn.β => β
+        bindings = [seqn.β => β
                     ieqn.β => β
                     ieqn.γ => γ
                     reqn.γ => γ], name = :sir),

@@ -25,7 +25,7 @@ jobs:
           version: 'lts'
       - run: sudo apt-get update && sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
       - name: Install dependencies
-        run: DISPLAY=:0 xvfb-run -s '-screen 0 1024x768x24' julia --project=docs/ -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path=joinpath(pwd(), "lib", "ModelingToolkitBase"))]); Pkg.instantiate()'
+        run: DISPLAY=:0 xvfb-run -s '-screen 0 1024x768x24' julia --project=docs/ -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path=joinpath(pwd(), "lib", "ModelingToolkitBase")), PackageSpec(path=joinpath(pwd(), "lib", "SciCompDSL"))]); Pkg.instantiate()'
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token

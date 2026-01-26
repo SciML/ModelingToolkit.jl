@@ -15,24 +15,16 @@ We utilize the derivative operator twice here to define the second order:
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel SECOND_ORDER begin
-    @parameters begin
-        σ = 28.0
-        ρ = 10.0
-        β = 8 / 3
-    end
-    @variables begin
-        x(t) = 1.0
-        y(t) = 0.0
-        z(t) = 0.0
-    end
-    @equations begin
-        D(D(x)) ~ σ * (y - x)
-        D(y) ~ x * (ρ - z) - y
-        D(z) ~ x * y - β * z
-    end
-end
-@mtkcompile sys = SECOND_ORDER()
+@parameters σ = 28.0 ρ = 10.0 β = 8 / 3
+@variables x(t) = 1.0 y(t) = 0.0 z(t) = 0.0
+eqs = [
+    D(D(x)) ~ σ * (y - x)
+    D(y) ~ x * (ρ - z) - y
+    D(z) ~ x * y - β * z
+]
+
+@named sys_model = System(eqs, t)
+sys = mtkcompile(sys_model)
 ```
 
 The second order ODE has been automatically transformed to two first order ODEs.
@@ -48,7 +40,7 @@ We do this by calling `mtkcompile`:
 Now we can directly numerically solve the lowered system. Note that,
 following the original problem, the solution requires knowing the
 initial condition for both `x` and `D(x)`.
-The former already got assigned a default value in the `@mtkmodel`,
+The former already got assigned a default value,
 but we still have to provide a value for the latter.
 
 ```@example orderlowering
