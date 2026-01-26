@@ -233,7 +233,7 @@ function FOLComponent(; name, τ = 1.0, x0 = 0.0)
         RHS ~ f
         D(x) ~ (RHS - x) / τ
     ]
-    return System(eqs, t; name)
+    return System(eqs, t, [x, f, RHS], [τ]; name)
 end
 
 # Create two instances of the component with different parameters
@@ -246,7 +246,7 @@ connection_eqs = [
     fol_2.f ~ fol_1.x
 ]
 
-@named connected_model = System(connection_eqs, t; systems = [fol_1, fol_2])
+@named connected_model = System(connection_eqs, t, [], []; systems = [fol_1, fol_2])
 connected = mtkcompile(connected_model)
 ```
 

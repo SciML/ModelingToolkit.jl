@@ -26,14 +26,14 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 # Define the Pin connector
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
-    System(Equation[], t; name)
+    System(Equation[], t, [v, i], []; name)
 end
 
 # Define Ground component
 function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    System(eqs, t; systems = [g], name)
+    System(eqs, t, [], []; systems = [g], name)
 end
 
 # Define OnePort base component
@@ -46,7 +46,7 @@ function OnePort(; name)
         0 ~ p.i + n.i
         i ~ p.i
     ]
-    System(eqs, t; systems = [p, n], name)
+    System(eqs, t, [v, i], []; systems = [p, n], name)
 end
 
 # Define Resistor component
@@ -55,7 +55,7 @@ function Resistor(; name, R = 1.0)
     @unpack v, i = oneport
     @parameters R = R
     eqs = [v ~ i * R]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [R]; name), oneport)
 end
 
 # Define Capacitor component
@@ -64,7 +64,7 @@ function Capacitor(; name, C = 1.0)
     @unpack v, i = oneport
     @parameters C = C
     eqs = [D(v) ~ i / C]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [C]; name), oneport)
 end
 
 # Define ConstantVoltage source
@@ -73,7 +73,7 @@ function ConstantVoltage(; name, V = 1.0)
     @unpack v = oneport
     @parameters V = V
     eqs = [V ~ v]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [V]; name), oneport)
 end
 
 # Build the RC circuit
@@ -121,7 +121,7 @@ default, variables are equal in a connection.
 ```@example acausal
 function Pin(; name)
     @variables v(t) i(t) [connect = Flow]
-    System(Equation[], t; name)
+    System(Equation[], t, [v, i], []; name)
 end
 ```
 
@@ -144,7 +144,7 @@ that the voltage in such a `Pin` is equal to zero. This gives:
 function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    System(eqs, t; systems = [g], name)
+    System(eqs, t, [], []; systems = [g], name)
 end
 ```
 
@@ -164,7 +164,7 @@ function OnePort(; name)
         0 ~ p.i + n.i
         i ~ p.i
     ]
-    System(eqs, t; systems = [p, n], name)
+    System(eqs, t, [v, i], []; systems = [p, n], name)
 end
 ```
 
@@ -181,7 +181,7 @@ function Resistor(; name, R = 1.0)
     @unpack v, i = oneport
     @parameters R = R
     eqs = [v ~ i * R]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [R]; name), oneport)
 end
 ```
 
@@ -201,7 +201,7 @@ function Capacitor(; name, C = 1.0)
     @unpack v, i = oneport
     @parameters C = C
     eqs = [D(v) ~ i / C]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [C]; name), oneport)
 end
 ```
 
@@ -216,7 +216,7 @@ function ConstantVoltage(; name, V = 1.0)
     @unpack v = oneport
     @parameters V = V
     eqs = [V ~ v]
-    extend(System(eqs, t; name), oneport)
+    extend(System(eqs, t, [], [V]; name), oneport)
 end
 ```
 
