@@ -64,17 +64,24 @@ do not matter and can be changed by subsequent operating points.
 One approach to batch linearization would be to call `linearize` in a loop, providing a different operating point each time. For example:
 
 ```@example LINEARIZE
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Blocks
+
 @parameters k=10 k3=2 c=1
-@variables x(t)=0 v(t)=0 u(t) y(t)
+@variables x(t)=0 [bounds = (-0.5, 1.5)]
+@variables v(t) = 0
+
+@named y = Blocks.RealOutput()
+@named u = Blocks.RealInput()
 
 eqs = [D(x) ~ v
-       D(v) ~ -k * x - k3 * x^3 - c * v + 10u
-       y ~ x]
+       D(v) ~ -k * x - k3 * x^3 - c * v + 10u.u
+       y.u ~ x]
 
-@named duffing = System(eqs, t)
+@named duffing = System(eqs, t, systems = [y, u], defaults = [u.u => 0])
 
-# pass values for all variables that appear in the operating point
-linfun, simplified_sys = linearization_function(duffing, [u], [y]; op = Dict(x => 0.0, u => 0.0, v => 0.0));
+# pass a constant value for `x`, since it is the variable we will change in operating points
+linfun, simplified_sys = linearization_function(duffing, [u.u], [y.u]; op = Dict(x => NaN));
 
 println(linearize(simplified_sys, linfun; op = Dict(x => 1.0)))
 println(linearize(simplified_sys, linfun; op = Dict(x => 0.0)))
@@ -113,9 +120,9 @@ nothing # hide
 Note that `linprob` above can be interacted with similar to a normal `ODEProblem`.
 
 ```@repl LINEARIZE
-linprob[x]
-linprob[x] = 1.5
-linprob[x]
+prob[x]
+prob[x] = 1.5
+prob[x]
 ```
 
 ## Symbolic linearization
