@@ -567,3 +567,142 @@ csys = complete(one_fluid_system)
 if @isdefined(ModelingToolkit)
     @test_nowarn mtkcompile(one_fluid_system)
 end
+
+@testset "Issue#4219: `instream` of array variables handled with `instream_rt`" begin
+    @connector function FluidPort(; name, Ns = 1)
+        vars = @variables begin
+            p(t), [guess = 0.0, description = "Pressure, Pa"]
+            md(t), [connect = Flow, guess = 0.0, description = "Mass flow, kg/s"]
+            x(t)[1:Ns], [connect = Stream, guess = 1 / Ns, description = "Mass fractions, -"]
+        end
+        System(Equation[], t, vars, []; name = name)
+    end
+
+    @component function PressureBoundary(; name, Ns = 1, p_set = 101325.0)
+        @named a = FluidPort(Ns = Ns)
+        x_p = ones(Ns) ./ Ns
+        pars = @parameters begin
+            p = p_set
+            x[1:Ns] = x_p
+        end
+        eqs = [
+            a.p ~ p
+            a.x ~ x
+        ]
+        compose(System(eqs, t, [], pars; name = name), a)
+    end
+
+    @component function PressureReference(; name, Ns = 1, p_set = 101325.0)
+        @named a = FluidPort(Ns = Ns)
+        x_p = ones(Ns) ./ Ns
+        pars = @parameters begin
+            p = p_set
+            x[1:Ns] = x_p
+        end
+        eqs = [
+            a.p ~ p
+            a.md ~ 0.0
+            a.x ~ x
+        ]
+        compose(System(eqs, t, [], pars; name = name), a)
+    end
+
+    @component function PumpFixed(; name, md_set = 1.0, x_set = [1])
+        Ns = length(x_set)
+        @named a = FluidPort(Ns = Ns)
+        pars = @parameters begin
+            md = md_set, [description = "Specified mass flow rate"]
+            x[1:Ns] = x_set, [description = "Specified mass fractions"]
+        end
+        eqs = [
+            # Inflow to system means outflow from component (negative md)
+            a.md ~ -md,
+            # Define the stream variables for the port
+            a.x ~ x,
+        ]
+        compose(System(eqs, t, [], pars; name = name), a)
+    end
+
+    @component function Valve(; name, Ns = 1, Kv = 1.0)
+        @named a = FluidPort(Ns = Ns)
+        @named b = FluidPort(Ns = Ns)
+        pars = @parameters begin
+            # Units must be (mass flow) / (pressure^0.5)
+            K = Kv, [description = "Flow coefficient"]
+            eps = 1.0e-4, [description = "Regularization factor"]
+        end
+        vars = @variables begin
+            Dp(t), [description = "Pressure drop a-b"]
+        end
+        eqs = [
+            # 1. Pressure drop
+            Dp ~ a.p - b.p
+            # 2. Valve quasi-turbulent flow
+            a.md ~ K * Dp / (Dp^2 + eps)^(1 / 4)
+            # 3. Continuity: No storage
+            a.md + b.md ~ 0
+            # 4. Stream Propagation: Same composition on both sides
+            a.x ~ instream(b.x)
+            b.x ~ instream(a.x)
+        ]
+        compose(System(eqs, t, vars, pars; name = name), a, b)
+    end
+
+    @component function Tank(; name, Ap = 1.0, rho_p = 1000.0, m0 = [1])
+        Ns = length(m0)
+        m0 = abs.(m0) .+ 1.0e-9 # Prevent zero initial mass
+        @named a = FluidPort(Ns = Ns) # Top Port (Headspace)
+        @named b = FluidPort(Ns = Ns) # Bottom Port (Drain)
+        gp = 9.81
+        pars = @parameters begin
+            A = Ap
+            rho = rho_p
+            g = gp
+        end
+        # Symbolic variables
+        vars = @variables begin
+            m(t)[1:Ns] = m0
+            h(t)
+            x(t)[1:Ns]
+        end
+        xa = [ifelse(a.md > 0, instream(a.x[i]), x[i]) for i in 1:Ns]
+        xb = [ifelse(b.md > 0, instream(b.x[i]), x[i]) for i in 1:Ns]
+        eqs = [
+            # --- Geometry ---
+            h ~ sum(m) / (rho * A)
+            # --- Pressure
+            b.p ~ a.p + rho * g * h
+            # --- Mass fractions ---
+            x ~ m ./ sum(m)
+            # --- Streams ---
+            a.x ~ x
+            b.x ~ x
+            # --- Dynamics ---
+            D(m) ~ a.md * xa + b.md * xb
+        ]
+        compose(System(eqs, t, vars, pars; name = name), a, b)
+    end
+    m0_1 = [2, 1]
+    Ns = length(m0_1)
+    md_in_1 = 2.0
+    x_in_1 = [0.8, 0.2]
+    p_a = 101325.0
+    A_1 = 0.3
+    rho = 1000.0
+    K_12 = 0.1
+    @named mp_1 = PumpFixed(; md_set = md_in_1, x_set = x_in_1)
+    @named pr_1 = PressureReference(; Ns = Ns, p_set = p_a)
+    @named pb_1 = PressureBoundary(; Ns = Ns, p_set = p_a)
+    @named va_1e = Valve(; Ns = Ns, Kv = K_12)
+    @named tnk_1 = Tank(; Ap = A_1, rho_p = rho, m0 = m0_1)
+
+    eqs = [
+        connect(mp_1.a, pr_1.a, tnk_1.a)
+        connect(tnk_1.b, va_1e.a)
+        connect(va_1e.b, pb_1.a)
+    ]
+
+    @named __sys = System(eqs, t)
+    @named _sys = compose(__sys, [mp_1, pr_1, pb_1, va_1e, tnk_1])
+    @test_nowarn expand_connections(_sys)
+end
