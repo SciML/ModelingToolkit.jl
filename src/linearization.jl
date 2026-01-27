@@ -37,14 +37,14 @@ function linearization_function(
         initializealg = nothing,
         initialization_abstol = 1.0e-5,
         initialization_reltol = 1.0e-3,
-        op = Dict(),
+        op = Dict{SymbolicT, SymbolicT}(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
-        guesses = Dict(),
+        guesses = Dict{SymbolicT, SymbolicT}(),
         warn_empty_op = true,
         t = 0.0,
         kwargs...
@@ -55,19 +55,14 @@ function linearization_function(
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
-    inputs = mapreduce(vcat, inputs; init = []) do var
-        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
-    end
-    outputs = mapreduce(vcat, outputs; init = []) do var
-        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
-    end
     ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
-        defs = Dict(x => 0.0 for x in dummyder)
-        @set! ssys.defaults = merge(defs, defaults(ssys))
-        op = merge(defs, op)
+        ics = initial_conditions(ssys)
+        for x in dummyder
+            ics[x] = Symbolics.COMMON_ZERO
+        end
     end
     sys = ssys
 
