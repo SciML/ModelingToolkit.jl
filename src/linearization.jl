@@ -64,6 +64,25 @@ function linearization_function(
             ics[x] = Symbolics.COMMON_ZERO
         end
     end
+
+    _inputs = SymbolicT[]
+    _outputs = SymbolicT[]
+    for x in inputs
+        if SU.is_array_shape(SU.shape(x))
+            append!(_inputs, vec(collect(x)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(_inputs, x)
+        end
+    end
+    for x in outputs
+        if SU.is_array_shape(SU.shape(x))
+            append!(_outputs, vec(collect(x)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(_outputs, x)
+        end
+    end
+    inputs = _inputs
+    outputs = _outputs
     sys = ssys
 
     if initializealg === nothing
