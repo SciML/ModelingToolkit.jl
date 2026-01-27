@@ -192,7 +192,7 @@ Instead, the function might be provided as time-series data.
 MTK handles this situation by allowing us to "register" arbitrary Julia functions,
 which are excluded from symbolic transformations and thus used as-is.
 For example, you could interpolate given the time-series using
-[DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl). Here,
+[DataInterpolations.jl](https://docs.sciml.ai/DataInterpolations/stable/). Here,
 we illustrate this option with a simple lookup ("zero-order hold") of a vector
 of random values:
 
