@@ -263,7 +263,7 @@ end
 
 @testset "Indexing with symbols work for discrete parameters" begin
     @variables x(t) = 1.
-    @parameters p(t) = 1.
+    @discretes p(t) = 1.
     ev = SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p)*2], discrete_parameters = p)
     @mtkcompile sys = System([D(x) ~ p], t; discrete_events = ev)
     prob = ODEProblem(sys, [], (0., 2.))
