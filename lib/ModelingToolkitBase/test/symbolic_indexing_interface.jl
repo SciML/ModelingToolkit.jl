@@ -1,6 +1,6 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, ParameterIndex,
-    SymbolicContinuousCallback
+    SymbolicContinuousCallback, SymbolicDiscreteCallback
 using SciMLStructures: Tunable
 using OrdinaryDiffEq
 using Test
@@ -262,10 +262,10 @@ end
 end
 
 @testset "Indexing with symbols work for discrete parameters" begin
-    t = ModelingToolkit.t_nounits; D = ModelingToolkit.D_nounits
+    t = t_nounits; D = D_nounits
     @variables x(t) = 1.
     @parameters p(t) = 1.
-    ev = ModelingToolkit.SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p)*2], discrete_parameters = p)
+    ev = SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p)*2], discrete_parameters = p)
     @mtkcompile sys = System([D(x) ~ p], t; discrete_events = ev)
     prob = ODEProblem(sys, [], (0., 2.))
     sol = solve(prob, Tsit5())
