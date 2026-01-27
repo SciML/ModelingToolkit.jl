@@ -262,7 +262,6 @@ end
 end
 
 @testset "Indexing with symbols work for discrete parameters" begin
-    t = t_nounits; D = D_nounits
     @variables x(t) = 1.
     @parameters p(t) = 1.
     ev = SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p)*2], discrete_parameters = p)
