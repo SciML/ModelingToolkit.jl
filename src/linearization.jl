@@ -586,10 +586,10 @@ function linearize_symbolic(
         B = f_u
         C = h_x
     else
-        gz = lu(g_z; check = false)
+        gz = lu(Num.(g_z); check = false)
         issuccess(gz) ||
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
-        gzgx = -(gz \ g_x)
+        gzgx = -(gz \ Num.(g_x))
         A = [
             f_x f_z
             gzgx * f_x gzgx * f_z
@@ -600,7 +600,7 @@ function linearize_symbolic(
         ] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
+        Bs = -(gz \ Num.(g_u)) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!iszero, Bs, dims = 1)))
