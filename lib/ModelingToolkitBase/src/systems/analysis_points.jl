@@ -540,7 +540,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
                         @set! outsys.unknowns = new_dvs
                         new_ps = copy(get_ps(outsys))
                         @set! outsys.ps = new_ps
-                        
+
                         out_var = ap_var(toggle_namespacing(outsys, false))
                         deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
                         push!(new_ps, out_var)
