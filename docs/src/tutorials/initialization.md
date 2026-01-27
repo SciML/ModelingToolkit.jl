@@ -30,14 +30,75 @@ are satisfied. This is even more complicated when taking into account ModelingTo
 simplification engine, given that variables can be eliminated and equations can be
 changed. If this happens, how do you know how to initialize the system?
 
+## [Bindings and Initial Conditions](@id bindings_and_ics)
+
+ModelingToolkit represents initialization constraints in two different ways: bindings and
+initial conditions. Both of these are stored as stored as key-value pairs, similar to
+`defaults` in prior versions of ModelingToolkit. Bindings represent immutable relations
+between variables (and parameters) of a system. They cannot be changed after constructing
+a system. Initial conditions are simply a convenience to avoid repeatedly passing the
+same values to problem constructors.
+
+```@example init
+using ModelingToolkit, Test
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters p q
+@mtkcompile sys = System([D(x) ~ p * x + y, y ~ q * x], t; bindings = [y => x, q => 2p],
+                         initial_conditions = [x => 1, p => 1])
+```
+
+```@repl init
+bindings(sys)
+@test_throws Exception bindings(sys)[y] = 2x # throws
+initial_conditions(sys)
+initial_conditions(sys)[x] = 2
+initial_conditions(sys)
+```
+
+Variables/parameters which have an entry in bindings are referred to as "bound" variables/
+parameters. The term "bound symbolics" is used to refer to such symbolic variables, regardless
+of whether they are variables or parameters.
+
+Bindings for variables can be constants or functions of other variables/parameters. Bindings
+for parameters can only be constants or functions of other parameters. It is often
+useful to bind a parameter to the initial value of a variable. In this case, the `Initial`
+operator can be used. In the above example, `q => Initial(y)` is a valid binding, whereas
+`q => y` is not.
+
+Bound symbolics cannot be given initial conditions. No symbolic can have an entry in both
+`bindings` and `initial_conditions`. Since `initial_conditions` is a convenience for passing
+values to problem constructors, bound symbolics cannot be given values in the problem
+constructor either. The exception is solvable parameters, which have a binding of `missing`.
+Solving for parameter values is covered in more detail in a later section.
+
+```@repl init
+ODEProblem(sys, [], (0.0, 1.0)) # fine
+ODEProblem(sys, [x => 2, p => 2.5]) # fine
+@test_throws Exception ODEProblem(sys, [y => 1]) # errors
+@test_throws Exception ODEProblem(sys, [q => 2]) # errors
+```
+
+Bindings and initial conditions should not be cyclic. In other words, the binding or
+initial condition for a symbolic should not (directly or indirectly) be a function of itself.
+
+Bindings for variables are treated equivalently to initial conditions when building
+problems. They form constraints in the initialization system. Bindings for
+floating-point-valued discrete variables (created via `@discretes` and used in events) are
+also treated in the same way. Bindings for non-floating-point discrete variables (such as
+ones with integer types) do not turn into constraints in the initialization system, since
+this would lead to mixed-integer problems. Bindings for these variables are still used to
+calculate initial conditions as if they were parameters. Bindings for parameters participate
+in initialization. The bound parameters are treated as unknowns of the initialization system.
+
 ## Initialization By Example: The Cartesian Pendulum
 
 To illustrate how to perform the initialization, let's take a look at the Cartesian
 pendulum:
 
 ```@example init
-using ModelingToolkit, OrdinaryDiffEq, Plots
-using ModelingToolkit: t_nounits as t, D_nounits as D
+using OrdinaryDiffEq, Plots
 
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t)
@@ -145,8 +206,18 @@ prob = ODEProblem(pend, [x => 1, y => 0, g => 1], (0.0, 1.5); guesses = [y => 0,
 ```
 
 we have two extra conditions to satisfy, `x ~ 1` and `y ~ 0` at the initial point. That gives
-5 equations for 5 variables and thus the system is well-formed. What happens if that's not the
-case?
+5 equations for 5 variables. However, this is not sufficient for a well-formed system. This
+initialization is singular, which means that at least one of the initial conditions is redundant
+and provides no extra information. Here, one of `x ~ 1` or `y ~ 0` is redundant, since the other
+can be inferred using the algebraic equation `x ^ 2 + y ^ 2 ~ 1`. Thus, this is similar to
+an underdetermined system. To make the system well-formed, we need to give an initial value
+for a derivative. For example:
+
+```@example init
+prob = ODEProblem(pend, [x => 1, D(y) => 0, g => 1], (0.0, 1.5); guesses = [y => 0, λ => 1])
+```
+
+Now the system is well-formed. What happens if that's not the case?
 
 ```@example init
 prob = ODEProblem(pend, [x => 1, g => 1], (0.0, 1.5); guesses = [y => 0, λ => 1])
@@ -270,36 +341,39 @@ provided initial conditions. Since `remake` is a partial update, the constraints
 to it are merged with the ones already present in the problem. Existing constraints can be
 removed by providing a value of `nothing`.
 
+## Initial variables
+
+The `Initial` form used above is only available for a specific set of variables.
+ModelingToolkit allows using the `Initial` form on:
+
+- Unknowns (`unknowns(sys)`).
+- Observables (`observables(sys)`).
+- First derivatives of unknowns (even if the unknown in question is itself the
+  derivative of another unknown/observable).
+- First derivatives of observables (likewise).
+- Discrete variables (created via `@discretes` and updated via events).
+- Bound parameters (`bound_parameters(sys)`).
+
 ## Initialization of parameters
 
-Parameters may also be treated as unknowns in the initialization system. Doing so works
-almost identically to the standard case. For a parameter to be an initialization unknown
-(henceforth referred to as "solved parameter") it must represent a floating point number
-(have a `symtype` of `Real` or `<:AbstractFloat`) or an array of such numbers. Additionally,
-it must have a guess and one of the following conditions must be satisfied:
-
- 1. The value of the parameter as passed to `ODEProblem` is an expression involving other
-    variables/parameters. For example, if `[p => 2q + x]` is passed to `ODEProblem`. In
-    this case, `p ~ 2q + x` is used as an equation during initialization.
- 2. The parameter has a default (and no value for it is given to `ODEProblem`, since
-    that is condition 1). The default will be used as an equation during initialization.
- 3. The parameter has a default of `missing`. If `ODEProblem` is given a value for this
-    parameter, it is used as an equation during initialization (whether the value is an
-    expression or not).
- 4. `ODEProblem` is given a value of `missing` for the parameter. If the parameter has a
-    default, it will be used as an equation during initialization.
-
-All parameter dependencies (where the dependent parameter is a floating point number or
-array thereof) also become equations during initialization, and the dependent parameters
-become unknowns.
+Parameters may also be treated as unknowns in the initialization system. This is automatically
+the case for any floating-point-typed (a symtype of `Real` or `<:AbstractFloat`) bound
+parameter. The binding is used as an initialization equation. It is also often useful
+to solve for parameters that are not explicitly bound to functions of other parameters. For
+example, a model for the fluid flow in a circular pipe might use the cross-sectional area `A`
+of the pipe. For convenience, the model may want to allow specifying either the area `A`
+directly or the radius `r` of the pipe. Binding `A => pi * r * r` prevents directly
+specifying the value of `A`. In such cases, the required parameters can be marked as
+initialization unknowns by giving them a binding of `missing`. These parameters are
+henceforth referred to as "solvable parameters". In the previous example, this would entail
+passing `[A => missing, r => missing]` to the `bindings` keyword of the `System`
+constructor. The relation between them can be passed as an equation `A ~ pi * r * r`
+to the `initialization_eqs` keyword of the `System` constructor.
 
 `remake` will reconstruct the initialization system and problem, given the new
 constraints provided to it. The new values will be combined with the original
 variable-value mapping provided to `ODEProblem` and used to construct the initialization
 problem.
-
-The variable on the left hand side of all parameter dependencies also has an `Initial`
-variant, which is used if a constant constraint is provided for the variable.
 
 ### Parameter initialization by example
 
@@ -312,8 +386,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D # hidden
 
 @variables x(t) y(t)
 @parameters total
-@mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t;
-    bindings = [total => missing], guesses = [total => 1.0])
+@mtkcompile sys = System([D(x) ~ -x, total ~ x + y], t; bindings = [total => missing])
 ```
 
 Given any two of `x`, `y` and `total` we can determine the remaining variable.
@@ -353,6 +426,34 @@ The system is fully determined, and the equations are solvable.
 ```@example paraminit
 [equations(initsys); observed(initsys)]
 ```
+
+## What constitutes an initialization system?
+
+The initialization system considers the following as unknowns:
+
+- All unknowns of the system (`unknowns(sys)`).
+- First derivatives of all differential variables in the system.
+- All observables of the system (`observables(sys)`).
+- All bound parameters of the system (`bound_parameters(sys)`).
+- All parameters with a binding of `missing`.
+
+The equations of the initialization system are:
+
+- All equations of the system (`equations(sys)`). Differential equations are used to solve
+  for the first derivatives of differential variables.
+- All observed equations of the system (`observed(sys)`).
+- All bindings in the system, excluding bindings for solvable parameters (since the value
+  is `missing`).
+- All additional initialization equations (`initialization_equations(sys)`). This also includes
+  additional equations passed to the `initialization_eqs` keyword of the problem constructor.
+- All initial conditions, formed by combinding `initial_conditions(sys)` with those passed
+  to the problem. Initial conditions passed to the problem override those in the system in
+  case of conflict.
+
+ModelingToolkit's improved simplification and index reduction may also be able to analytically
+find the derivatives of some algebraic variables, typically ones corresponding to algebraic
+equations that arise from index reduction. In such a case, these variables (along with the
+corresponding equations) are also present in the initialization system.
 
 ## Diving Deeper: Constructing the Initialization System
 

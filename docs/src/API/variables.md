@@ -20,8 +20,19 @@ additional types of metadata.
 
 ## Variable defaults
 
-Variables can be assigned default values to avoid having to specify defaults to the
-[`System`](@ref) constructor.
+Variables can be assigned default values during construction. For example:
+
+```julia
+@variables x(t) = 1 y(t) = x
+```
+
+Here `x` has a default of `1`, and `y` has a default of `x`. While both of these cases are
+stored under the same metadata key, ModelingToolkit treats them differently. Constant
+(non-symbolic) defaults (such as that of `x`) are translated to initial conditions
+([`initial_conditions`](@ref)). Symbolic defaults (such as that of `y`) are translated to
+bindings ([`bindings`](@ref)). For more information on the difference between bindings and
+initial conditions, please refer to the documentation on [initialization](@ref initialization)
+of systems, and specifically the section on [bindings and initial conditions](@ref bindings_and_ics).
 
 ```@docs
 ModelingToolkit.hasdefault
