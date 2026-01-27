@@ -113,10 +113,15 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     @set! structure.var_to_diff = complete(new_var_to_diff)
     @set! structure.graph = complete(new_graph)
 
+    binds = copy(parent(bindings(sys)))
+    for var in inputsyms
+        binds[split_indexed_var(var)[1]] = COMMON_MISSING
+    end
     @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
     ps = copy(parameters(sys))
     append!(ps, inputsyms)
     @set! sys.ps = ps
+    @set! sys.bindings = ROSymmapT(binds)
     @set! state.sys = sys
     @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
     @set! state.structure = structure

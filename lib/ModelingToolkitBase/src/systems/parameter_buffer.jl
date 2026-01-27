@@ -74,7 +74,8 @@ function MTKParameters(
         bound_ps = bound_parameters(sys)
         bound_ics = intersect(bound_ps, keys(op))
         isempty(bound_ics) || throw(BoundInitialConditionsError(collect(bound_ics)))
-        no_override_merge!(op, bindings(sys))
+        binds = filter(!Base.Fix2(===, COMMON_MISSING) ∘ last, parent(bindings(sys)))
+        no_override_merge!(op, binds)
         missing_ps = setdiff(all_ps, keys(op))
         to_rm = Set{SymbolicT}()
         for p in missing_ps

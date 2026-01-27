@@ -5,12 +5,14 @@ Given a list of analysis points, break the connection for each and set the outpu
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
     for ap in canonicalize_ap(sys, aps)
-        sys, (d_v,) = apply_transformation(Break(ap, true, true, true), sys)
+        sys, (d_vs,) = apply_transformation(Break(ap, true), sys)
         guesses = copy(get_guesses(sys))
-        guesses[d_v] = if symbolic_type(d_v) == ArraySymbolic()
-            fill(NaN, size(d_v))
-        else
-            NaN
+        for d_v in d_vs
+            guesses[d_v] = if symbolic_type(d_v) == ArraySymbolic()
+                fill(NaN, size(d_v))
+            else
+                NaN
+            end
         end
         @set! sys.guesses = guesses
     end
@@ -46,14 +48,24 @@ All other keyword arguments are forwarded to `linearization_function`.
 function get_linear_analysis_function(
         sys::AbstractSystem, transform, aps; system_modifier = identity, loop_openings = [], kwargs...
     )
-    dus = []
-    us = []
+    dus = SymbolicT[]
+    us = SymbolicT[]
     sys = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
-        push!(dus, du)
-        push!(us, u)
+        du = du::Union{SymbolicT, Vector{SymbolicT}}
+        u = u::Union{SymbolicT, Vector{SymbolicT}}
+        if du isa SymbolicT
+            push!(dus, du)
+        else
+            append!(dus, du)
+        end
+        if u isa SymbolicT
+            push!(us, u)
+        else
+            append!(us, u)
+        end
     end
     return linearization_function(system_modifier(sys), dus, us; kwargs...)
 end
@@ -141,17 +153,18 @@ function linearization_ap_transform(
     loop_openings = Set(map(nameof, canonicalize_ap(sys, loop_openings)))
     inputs = canonicalize_ap(sys, inputs)
     outputs = canonicalize_ap(sys, outputs)
-    input_vars = []
+    input_vars = SymbolicT[]
     for input in inputs
         if nameof(input) in loop_openings
             delete!(loop_openings, nameof(input))
-            sys, (input_var,) = apply_transformation(Break(input, true, true), sys)
+            sys, (input_vs,) = apply_transformation(Break(input), sys)
+            append!(input_vars, input_vs)
         else
             sys, (input_var,) = apply_transformation(PerturbOutput(input), sys)
+            push!(input_vars, input_var)
         end
-        push!(input_vars, input_var)
     end
-    output_vars = []
+    output_vars = SymbolicT[]
     for output in outputs
         if output isa AnalysisPoint
             sys, (output_var,) = apply_transformation(AddVariable(output), sys)
