@@ -2213,9 +2213,9 @@ version = "1.7.0"
 
 [[deps.ModelingToolkitStandardLibrary]]
 deps = ["ChainRulesCore", "DiffEqBase", "IfElse", "LinearAlgebra", "ModelingToolkitBase", "PreallocationTools", "Symbolics"]
-git-tree-sha1 = "ff1e204cdb5973dade16d397ec0c7020695666d4"
+git-tree-sha1 = "f81e19513ea8f29ac7edaebad5071f57c6aef394"
 uuid = "16a59e39-deab-5bd0-87e4-056b12336739"
-version = "2.26.0"
+version = "2.27.0"
 
 [[deps.ModelingToolkitTearing]]
 deps = ["BipartiteGraphs", "CommonSolve", "DocStringExtensions", "Graphs", "LinearAlgebra", "ModelingToolkitBase", "Moshi", "OffsetArrays", "OrderedCollections", "SciMLBase", "Setfield", "SparseArrays", "StateSelection", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics"]
