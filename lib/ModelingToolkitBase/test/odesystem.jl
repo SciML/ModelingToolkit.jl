@@ -1192,7 +1192,7 @@ end
     ps = zeros(8)
     setp(sys2, x)(ps, 2ones(2))
     setp(sys2, p)(ps, 2ones(2, 2))
-    @test_nowarn fn2(ones(4), 2ones(14), 4.0)
+    @test_nowarn fn2(ones(4), 2ones(length(ModelingToolkitBase.get_ps(sys2))), 4.0)
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/2969
@@ -1330,7 +1330,8 @@ end
         sys1, u + x + p[1:2]; inputs = [x...]
     )
 
-    @test obsfn(ones(length(unknowns(sys))), 2ones(2), 3ones(12), 4.0) == 6ones(2)
+    n_ps = length(ModelingToolkitBase.get_ps(sys1))
+    @test obsfn(ones(length(unknowns(sys))), 2ones(2), 3ones(n_ps), 4.0) == 6ones(2)
 end
 
 @testset "Passing `nothing` to `u0`" begin

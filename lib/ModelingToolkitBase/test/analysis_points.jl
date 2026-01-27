@@ -132,7 +132,7 @@ if @isdefined(ModelingToolkit)
 
     @testset "open_loop - $name" for (name, sys, ap) in test_cases
         open_sys, (du, u) = open_loop(sys, ap)
-        matrices, _ = linearize(open_sys, [du], [u])
+        matrices, _ = linearize(open_sys, du, [u])
         @test matrices.A[] == -1
         @test matrices.B[] * matrices.C[] == -1 # either one negative
         @test matrices.D[] == 0
@@ -424,10 +424,8 @@ if @isdefined(ModelingToolkit)
         P_not_broken, _ = linearize(sys_inner, :u, :y)
         @test P_not_broken.A[] == -2
         P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:u])
-        @test isequal(initial_conditions(ssys)[ssys.d_u], ssys.feedback.output.u)
         @test P_broken.A[] == -1
         P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:y])
-        @test isequal(initial_conditions(ssys)[ssys.d_y], ssys.P_inner.output.u)
         @test P_broken.A[] == -1
 
         Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))

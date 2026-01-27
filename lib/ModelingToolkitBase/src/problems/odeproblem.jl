@@ -129,7 +129,7 @@ end
         p = process_SciMLProblem(
         ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
-        time_dependent_init = false, kwargs...
+        is_steadystateprob = true, kwargs...
     )
 
     kwargs = process_kwargs(sys; expression, kwargs...)

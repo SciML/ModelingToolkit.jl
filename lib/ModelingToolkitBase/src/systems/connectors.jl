@@ -194,6 +194,7 @@ end
 instream(a::Num) = Num(instream(unwrap(a)))
 instream(a::Symbolics.Arr{T, N}) where {T, N} = Symbolics.Arr{T, N}(instream(unwrap(a)))
 SymbolicUtils.promote_symtype(::typeof(instream), ::Type{T}) where {T} = T
+SymbolicUtils.promote_shape(::typeof(instream), @nospecialize(sh::SU.ShapeT)) = sh
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 
@@ -1203,21 +1204,28 @@ function expand_instream(
                 args = SArgsT()
                 push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
                 push!(args, SU.Const{VartypeT}(Val(n_outer)))
-                for i in eachindex(inner_cverts)
-                    i == inner_i && continue
-                    push!(args, inner_flowvars[i])
+                svar_unscal = SymbolicT[]
+                for svar_idx in SU.stable_eachindex(svar)
+                    for i in eachindex(inner_cverts)
+                        i == inner_i && continue
+                        push!(args, inner_flowvars[i])
+                    end
+                    for i in eachindex(inner_cverts)
+                        i == inner_i && continue
+                        push!(args, inner_streamvars[i][svar_idx])
+                    end
+                    append!(args, outer_flowvars)
+                    append!(args, outer_streamvars)
+                    expr = BSImpl.Term{VartypeT}(
+                        instream_rt, args;
+                        type = Real, shape = SU.ShapeVecT()
+                    )
+                    instream_subs[instream(svar)[svar_idx]] = expr
+                    push!(svar_unscal, expr)
                 end
-                for i in eachindex(inner_cverts)
-                    i == inner_i && continue
-                    push!(args, inner_streamvars[i])
+                if SU.is_array_shape(SU.shape(svar))
+                    instream_subs[instream(svar)] = Symbolics.SConst(svar_unscal)
                 end
-                append!(args, outer_flowvars)
-                append!(args, outer_streamvars)
-                expr = BSImpl.Term{VartypeT}(
-                    instream_rt, args;
-                    type = Real, shape = SU.ShapeVecT()
-                )
-                instream_subs[instream(svar)] = expr
             end
 
             for q in 1:n_outer
@@ -1324,4 +1332,7 @@ function instream_rt(
                   for k in 1:M and ck.m_flow.max > 0
     =#
 end
-SymbolicUtils.promote_symtype(::typeof(instream_rt), _...) = Real
+SymbolicUtils.promote_symtype(::typeof(instream_rt), _::SU.TypeT...) = Real
+function SymbolicUtils.promote_shape(::typeof(instream_rt), @nospecialize(_::SU.ShapeT...))
+    return SU.ShapeVecT()
+end
