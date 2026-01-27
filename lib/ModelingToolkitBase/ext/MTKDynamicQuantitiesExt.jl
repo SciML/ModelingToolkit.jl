@@ -17,7 +17,18 @@ function __init__()
         only(@independent_variables t [unit = DQ.u"s"])
     end
     SymbolicUtils.hashcons(unwrap(MTK.t), true)
-    return MTK.D = Differential(MTK.t)
+    MTK.D = Differential(MTK.t)
+    # Workaround for Julia 1.10 compiler bug
+    # See https://github.com/SciML/ModelingToolkit.jl/issues/4211
+    return @static if VERSION < v"1.11"
+        # Force collect_var! compilation to fix collect_vars!
+        @variables _dummy_t
+        @parameters _dummy_p
+        @variables _dummy_x(_dummy_t) = _dummy_p
+        _us = OrderedSet{SymbolicT}()
+        _ps = OrderedSet{SymbolicT}()
+        MTK.collect_var!(_us, _ps, unwrap(_dummy_x), unwrap(_dummy_t); depth = 0)
+    end
 end
 #For dispatching get_unit
 const Conditional = Union{typeof(ifelse)}
