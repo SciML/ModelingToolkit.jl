@@ -2,7 +2,7 @@
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, cse = true, aggregator = JumpProcesses.NullAggregator(),
-        callback = nothing, rng = nothing, kwargs...
+        callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
@@ -108,7 +108,7 @@
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,
-        callback = cbs, kwargs...
+        callback = cbs, save_positions, kwargs...
     )
 end
 
