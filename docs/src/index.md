@@ -36,10 +36,10 @@ If you use ModelingToolkit in your work, please cite the following:
 
 ## Feature Summary
 
-!!! danger "ModelingToolkit version 10"
+!!! danger "ModelingToolkit version 11"
     
-    ModelingToolkit version 10 just released. Please refer to the [changelog](https://github.com/SciML/ModelingToolkit.jl/blob/master/NEWS.md)
-    for a summary of the changes. Some documentation pages may be broken while downstram
+    ModelingToolkit version 11 just released. Please refer to the [changelog](https://github.com/SciML/ModelingToolkit.jl/blob/master/NEWS.md)
+    for a summary of the changes. Some documentation pages may be broken while downstream
     packages update to the new version.
 
 ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some
