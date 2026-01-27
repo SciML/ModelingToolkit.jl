@@ -403,6 +403,10 @@ function parse_atomicset(vars)
     return result
 end
 
+function __get_new_tag()
+    return Threads.atomic_add!(SYSTEM_COUNT, UInt(1))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -600,7 +604,7 @@ function System(
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
     return System(
-        Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
+        __get_new_tag(), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
@@ -1432,4 +1436,26 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
         isequal(get_state_priorities(sysa), get_state_priorities(sysb)) &&
         isequal(get_isscheduled(sysa), get_isscheduled(sysb))
+end
+
+_maybe_copy(x) = applicable(copy, x) ? copy(x) : x
+
+function Base.copy(sys::System)
+    return System(
+        __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
+        copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
+        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)), get_iv(sys),
+        copy(get_observed(sys)), copy(get_var_to_name(sys)), nameof(sys), get_description(sys),
+        copy(get_bindings(sys)), copy(get_initial_conditions(sys)), copy(get_guesses(sys)),
+        map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
+        copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
+        copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
+        get_is_dde(sys), copy(get_tstops(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
+        get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
+        _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
+        _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
+        get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
+        copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
+    )
 end

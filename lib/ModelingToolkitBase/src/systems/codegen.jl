@@ -1173,7 +1173,8 @@ function build_explicit_observed_function(
         throw = true,
         cse = true,
         mkarray = nothing,
-        wrap_delays = is_dde(sys) && !param_only
+        wrap_delays = is_dde(sys) && !param_only,
+        force_time_independent = false,
     )
     if inputs === nothing
         inputs = ()
@@ -1309,7 +1310,7 @@ function build_explicit_observed_function(
         known_disturbance_inputs = (known_disturbance_inputs,)
     end
     rps::ReorderedParametersT = reorder_parameters(sys, ps)
-    iv = if is_time_dependent(sys)
+    iv = if is_time_dependent(sys) && !force_time_independent
         (get_iv(sys),)
     else
         ()
