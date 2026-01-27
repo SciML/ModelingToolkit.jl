@@ -17,7 +17,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 connect = ModelingToolkit.connect;
 rc = 0.25 # Reference concentration
 
-@component function MixingTank(; name, c0 = 0.8, T0 = 308.5, a1 = 0.2674, a21 = 1.815, a22 = 0.4682, b = 1.5476, k0 = 1.05e14, ϵ = 34.2894)
+@component function MixingTank(; name, c0 = 0.8, T0 = 308.5, a1 = 0.2674, a21 = 1.815, a22 = 0.4682, b = 1.5476, k0 = 1.05e14, ϵ = 34.2894, xc = nothing, xT = nothing)
     pars = @parameters begin
         c0 = c0, [description = "Nominal concentration"]
         T0 = T0, [description = "Nominal temperature"]
@@ -34,11 +34,13 @@ rc = 0.25 # Reference concentration
         c = RealOutput()
         T = RealOutput()
     end
-
+    
+    xc = @something(xc, c0)
+    xT = @something(xT, T0)
     vars = @variables begin
         gamma(t), [description = "Reaction speed"]
-        xc(t) = c0, [description = "Concentration"]
-        xT(t) = T0, [description = "Temperature"]
+        xc(t) = xc, [description = "Concentration"]
+        xT(t) = xT, [description = "Temperature"]
         xT_c(t), [description = "Cooling temperature"]
     end
 
@@ -73,7 +75,7 @@ begin
     function RefFilter(; name)
         sys = System(Fss; name)
         "Compute initial state that yields y0 as output"
-        empty!(ModelingToolkit.get_defaults(sys))
+        empty!(ModelingToolkit.get_initial_conditions(sys))
         return sys
     end
 end
@@ -96,7 +98,7 @@ end
     systems = @named begin
         ref = Constant(k = 0.25) # Concentration reference
         ff_gain = Gain(k = 1) # To allow turning ff off
-        controller = PI(gainPI.k = 10, T = 500)
+        controller = PI(k = 10, T = 500)
         tank = MixingTank(xc = c_start, xT = T_start, c0 = c0, T0 = T0)
         inverse_tank = MixingTank(xc = nothing, xT = T_start, c0 = c0, T0 = T0)
         feedback = Feedback()
@@ -132,7 +134,9 @@ cm = complete(model)
 
 op = Dict(
     cm.filter.y.u => 0.8 * (1 - 0.42),
-    D(cm.filter.y.u) => 0
+    D(cm.filter.y.u) => 0,
+    cm.noise_filter.x => nothing,
+    cm.controller.int.x => nothing,
 )
 tspan = (0.0, 1000.0)
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
@@ -178,18 +182,23 @@ nsys = get_named_comp_sensitivity(model, :y; op)
 @testset "Issue #3319" begin
     op1 = Dict(
         cm.filter.y.u => 0.8 * (1 - 0.42),
-        cm.tank.xc => 0.65
+        cm.tank.xc => 0.65,
+        cm.noise_filter.x => nothing,
     )
 
     op2 = Dict(
         cm.filter.y.u => 0.8 * (1 - 0.42),
-        cm.tank.xc => 0.45
+        cm.tank.xc => 0.45,
+        cm.noise_filter.x => nothing,
     )
 
     output = :y
     # we need to provide `op` so the initialization system knows which
     # values to hold constant
-    lin_fun, ssys = get_sensitivity_function(model, output; op = op1)
+    #
+    # Printing `lin_fun` in a tuple (so it doesn't hit the pretty-printing method)
+    # will likely segfault Julia. Somehow.
+    lin_fun, ssys = get_sensitivity_function(model, output; op = op1);
     matrices1, extras1 = linearize(ssys, lin_fun, op = op1)
     matrices2, extras2 = linearize(ssys, lin_fun, op = op2)
     @test extras1.x != extras2.x
