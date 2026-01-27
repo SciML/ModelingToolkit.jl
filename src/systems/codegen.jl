@@ -587,7 +587,6 @@ const SCP_BASIC = [
 const SCP_AGGRESSIVE = [
     SCP_BASIC;
     HVNCAT_STATIC_RULE;
-    ORTHO_INV_RULE;
 ]
 
 const SCP_OPTIONS = Dict(:basic => SCP_BASIC,
