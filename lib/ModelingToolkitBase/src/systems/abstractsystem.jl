@@ -2730,6 +2730,17 @@ macro namespace(expr)
     return esc(_config(expr, true))
 end
 
+function assign_metadata!(sys::System, isconnector::Bool, name::Symbol, mod::Module)
+    if isdefined(sys, :gui_metadata) && getfield(sys, :gui_metadata) === nothing
+        if isconnector
+            @set! sys.connector_type = connector_type(sys)
+        end
+        @set! sys.gui_metadata = GUIMetadata(GlobalRef(mod, name))
+    else
+        sys
+    end
+end
+
 function component_post_processing(__source__, expr, isconnector)
     @assert expr isa Expr && (
         expr.head == :function || (
@@ -2745,25 +2756,15 @@ function component_post_processing(__source__, expr, isconnector)
     fname = sig.args[1]
     args = sig.args[2:end]
 
+    @gensym create_component
     out = quote
         $Base.@__doc__ function $fname($(args...))
             # we need to create a closure to escape explicit return in `body`.
-            res = (() -> $body)()
-            if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
-                name = $(Meta.quot(fname))
-                if $isconnector
-                    $Setfield.@set!(res.connector_type = $connector_type(res))
-                end
-                $Setfield.@set!(
-                    res.gui_metadata = $GUIMetadata(
-                        $GlobalRef(
-                            @__MODULE__, name
-                        )
-                    )
-                )
-            else
-                res
+            function $create_component()
+                $body
             end
+            return $assign_metadata!($create_component(), $isconnector,
+                                     $(Meta.quot(fname)), @__MODULE__)
         end
     end
     return set_component_line_number!(__source__, out)
