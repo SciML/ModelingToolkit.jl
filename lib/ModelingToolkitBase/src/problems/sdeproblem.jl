@@ -79,7 +79,7 @@ end
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
-        sparsenoise = sparse, expression = Val{false}, kwargs...
+        sparsenoise = sparse, expression = Val{false}, _skip_events = false, kwargs...
     ) where {iip, spec}
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
@@ -107,7 +107,7 @@ end
 
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module,
-        op, kwargs...
+        op, _skip_events, kwargs...
     )
 
     args = (; f, u0, tspan, p)

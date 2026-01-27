@@ -16,13 +16,13 @@
             prob = SDEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
                 build_initializeprob = false, checkbounds, cse, check_length = false,
-                kwargs...
+                _skip_events = true, kwargs...
             )
         elseif has_eqs
             prob = ODEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
                 build_initializeprob = false, checkbounds, cse, check_length = false,
-                kwargs...
+                _skip_events = true, kwargs...
             )
         else
             _, u0,

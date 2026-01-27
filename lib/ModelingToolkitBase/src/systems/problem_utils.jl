@@ -1641,13 +1641,14 @@ end
 
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        eval_expression = false, eval_module = @__MODULE__,
+        _skip_events = false, kwargs...
     )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
-        if expression == Val{false}
+        if expression == Val{false} && !_skip_events
             cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
             if cbs !== nothing
                 kwargs1 = merge(kwargs1, (callback = cbs,))
