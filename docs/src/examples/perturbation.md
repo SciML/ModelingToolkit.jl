@@ -1,9 +1,5 @@
 # [Symbolic-Numeric Perturbation Theory for ODEs](@id perturb_diff)
 
-!!! warning "Example currently disabled"
-
-    This example demonstrates perturbation theory for ODEs but is currently non-executable due to compatibility issues between the `series()` and `taylor_coeff()` functions from Symbolics.jl and the current ModelingToolkit stack. The code is shown for educational purposes. See the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.juliasymbolics.org/stable/tutorials/perturbation/) for a working algebraic version.
-
 In the [Mixed Symbolic-Numeric Perturbation Theory tutorial](https://symbolics.juliasymbolics.org/stable/tutorials/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here we extend the method to differential equations. The procedure is similar, but the Taylor series coefficients now become functions of an independent variable (usually time).
 
 ## Free fall in a varying gravitational field
@@ -18,7 +14,7 @@ In the last equality, we introduced a perturbative expansion parameter $ϵ$. Whe
 
 To make the problem dimensionless, we redefine $x \leftarrow x / R$ and $t \leftarrow t / \sqrt{R^3/GM}$. Then the ODE becomes
 
-```julia
+```@example perturbation
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 @variables ϵ x(t)
@@ -27,16 +23,16 @@ eq = D(D(x)) ~ -(1 + ϵ * x)^(-2)
 
 Next, expand $x(t)$ in a series up to second order in $ϵ$:
 
-```julia
+```@example perturbation
 using Symbolics
-@variables y₀(t) y₁(t) y₂(t) # coefficients (y₀=0th order, y₁=1st, y₂=2nd)
-x_series = series([y₀, y₁, y₂], ϵ)
+x_coeffs = @variables x₀(t) x₁(t) x₂(t) # 0th, 1st and 2nd order coefficients
+x_series = series(x_coeffs, ϵ)
 ```
 
 Insert this into the equation and collect perturbed equations to each order:
 
-```julia
-eq_pert = substitute(eq, x => x_series)
+```@example perturbation
+eq_pert = substitute_in_deriv(eq, x => x_series) # also substitute inside D(D(x))
 eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 ```
 
@@ -46,30 +42,25 @@ eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 
 These are the ODEs we want to solve. Now construct an `System`, which automatically inserts dummy derivatives for the velocities:
 
-```julia
+```@example perturbation
 @mtkcompile sys = System(eqs_pert, t)
 ```
 
 To solve the `System`, we generate an `ODEProblem` with initial conditions $x(0) = 0$, and $ẋ(0) = 1$, and solve it:
 
-```julia
+```@example perturbation
 using OrdinaryDiffEq
-u0 = Dict([unknowns(sys) .=> 0.0; D(y₀) => 1.0]) # nonzero initial velocity
+u0 = [x₀ => 0.0, x₁ => 0.0, x₂ => 0.0, D(x₀) => 1.0, D(x₁) => 0.0, D(x₂) => 0.0]
 prob = ODEProblem(sys, u0, (0.0, 3.0))
 sol = solve(prob)
 ```
 
 This is the solution for the coefficients in the series for $x(t)$ and their derivatives. Finally, we calculate the solution to the original problem by summing the series for different $ϵ$:
 
-```julia
+```@example perturbation
 using Plots
-p = plot()
-for ϵᵢ in 0.0:0.1:1.0
-    # Compute x(t) = y₀(t) + y₁(t)*ϵ + y₂(t)*ϵ² from solution values
-    xs = sol[y₀] .+ ϵᵢ .* sol[y₁] .+ ϵᵢ^2 .* sol[y₂]
-    plot!(p, sol.t, xs, label = "ϵ = $ϵᵢ")
-end
-p
+ϵs = 0.0:0.1:1.0
+plot(sol; idxs = [substitute(x_series, ϵ => ϵᵢ) for ϵᵢ in ϵs], label = permutedims(["ϵ = $ϵᵢ" for ϵᵢ in ϵs]))
 ```
 
 This makes sense: for larger $ϵ$, gravity weakens with altitude, and the trajectory goes higher for a fixed initial velocity.
@@ -82,7 +73,7 @@ Our second example applies perturbation theory to nonlinear oscillators -- a ver
 
 The goal is to solve the ODE
 
-```julia
+```@example perturbation
 eq = D(D(x)) + 2 * ϵ * D(x) + x ~ 0
 ```
 
@@ -90,21 +81,23 @@ with initial conditions $x(0) = 0$ and $ẋ(0) = 1$. With $ϵ = 0$, the problem 
 
 We follow the same steps as in the previous example to construct the `System`:
 
-```julia
-eq_pert = substitute(eq, x => x_series)
+```@example perturbation
+eq_pert = substitute_in_deriv(eq, x => x_series)
 eqs_pert = taylor_coeff(eq_pert, ϵ, 0:2)
 @mtkcompile sys = System(eqs_pert, t)
 ```
 
 We solve and plot it as in the previous example, and compare the solution with $ϵ=0.1$ to the exact solution $x(t, ϵ) = e^{-ϵ t} \sin(\sqrt{(1-ϵ^2)}\,t) / \sqrt{1-ϵ^2}$ of the unperturbed equation:
 
-```julia
-u0 = [y₀ => 0.0, y₁ => 0.0, y₂ => 0.0, D(y₀) => 1.0, D(y₁) => 0.0, D(y₂) => 0.0] # nonzero initial velocity
+```@example perturbation
+u0 = [x₀ => 0.0, x₁ => 0.0, x₂ => 0.0, D(x₀) => 1.0, D(x₁) => 0.0, D(x₂) => 0.0]
 prob = ODEProblem(sys, u0, (0.0, 50.0))
 sol = solve(prob)
 plot(sol, idxs = substitute(x_series, ϵ => 0.1); label = "Perturbative (ϵ=0.1)")
 
 x_exact(t, ϵ) = exp(-ϵ * t) * sin(√(1 - ϵ^2) * t) / √(1 - ϵ^2)
+@assert isapprox(
+    sol(π/2; idxs = substitute(x_series, ϵ => 0.1)), x_exact(π/2, 0.1); atol = 1e-2) # compare around 1st peak # hide
 plot!(sol.t, x_exact.(sol.t, 0.1); label = "Exact (ϵ=0.1)")
 ```
 
