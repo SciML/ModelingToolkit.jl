@@ -429,3 +429,14 @@ end
     sim_cond = [Y => 100.0, p => 1.0, d => 0.01, k1 => 3.0, k2 => 4.0]
     @test_nowarn ODEProblem(sys, sim_cond, 1.0; guesses = [:A => 1.0])
 end
+
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4235: Duplicate initial conditions error" begin
+        @variables X(t)
+        @parameters p d
+        eqs = [D(X) ~ p - d * X]
+        @mtkcompile sys = System(eqs, t)
+        sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a misstake
+        @test_throws ["duplicate entries", "X(t)"] ODEProblem(sys, sim_cond, (0.0, 10.0))
+    end
+end

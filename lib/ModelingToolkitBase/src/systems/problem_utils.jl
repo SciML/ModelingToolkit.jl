@@ -12,7 +12,24 @@ anydict(::SciMLBase.NullParameters) = AnyDict()
 anydict(::Nothing) = AnyDict()
 anydict(::Missing) = AnyDict()
 anydict(x::AnyDict) = x
-anydict(x) = AnyDict(x)
+anydict(x::AbstractDict) = AnyDict(x)
+function anydict(x)
+    op = AnyDict()
+    for (k, v) in x
+        if haskey(op, k)
+            throw(
+                ArgumentError(
+                    """
+                    Found duplicate entries in symbolic map. Key $k is provided multiple \
+                    times.
+                    """
+                )
+            )
+        end
+        op[k] = v
+    end
+    return op
+end
 
 """
     $(TYPEDSIGNATURES)
