@@ -595,21 +595,21 @@ const SCP_OPTIONS = Dict(:basic => SCP_BASIC,
                     )
 
 function MTKBase.resolve_optimize_option(o::Bool)
-    resolve_optimize_option(o ? SCP_BASIC : nothing)
+    MTKBase.resolve_optimize_option(o ? SCP_BASIC : nothing)
 end
 
 function MTKBase.resolve_optimize_option(o::Symbol)
     rules = get(SCP_OPTIONS, o, nothing)
-    resolve_optimize_option(rules)
+    MTKBase.resolve_optimize_option(rules)
 end
 
 function MTKBase.resolve_optimize_option(o::Int)
     if o == 0
-        return resolve_optimize_option(false)
+        return MTKBase.resolve_optimize_option(false)
     elseif o == 1
-        return resolve_optimize_option(:basic)
+        return MTKBase.resolve_optimize_option(:basic)
     elseif o == 2
-        return resolve_optimize_option(:aggressive)
+        return MTKBase.resolve_optimize_option(:aggressive)
     end
     throw(ArgumentError("Invalid optimize option integer: $o"))
 end
