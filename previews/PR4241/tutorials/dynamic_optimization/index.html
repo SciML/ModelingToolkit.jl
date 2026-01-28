@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Solving Dynamic Optimization Problems · ModelingToolkit.jl</title><meta name="title" content="Solving Dynamic Optimization Problems · ModelingToolkit.jl"/><meta property="og:title" content="Solving Dynamic Optimization Problems · ModelingToolkit.jl"/><meta property="twitter:title" content="Solving Dynamic Optimization Problems · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/dynamic_optimization/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/dynamic_optimization/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/dynamic_optimization/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of Systems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting Systems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li class="is-active"><a class="tocitem" href>Solving Dynamic Optimization Problems</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../change_independent_variable/">Changing the independent variable of ODEs</a></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../attractors/">Multi- and Nonlocal- Continuation</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li><li><a class="tocitem" href="../callable_params/">Callable parameters and interpolating data</a></li><li><a class="tocitem" href="../linear_analysis/">Linear Analysis</a></li><li><a class="tocitem" href="../disturbance_modeling/">Disturbance and input modeling modeling</a></li><li><a class="tocitem" href="../fmi/">Importing FMUs</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in Systems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">API</span><ul><li><a class="tocitem" href="../../API/System/">The <code>System</code> type</a></li><li><a class="tocitem" href="../../API/variables/">Symbolic variables and variable metadata</a></li><li><a class="tocitem" href="../../API/model_building/">Model building reference</a></li><li><a class="tocitem" href="../../API/problems/">Building and solving numerical problems</a></li><li><a class="tocitem" href="../../API/dynamic_opt/">Dynamic Optimization Solvers</a></li><li><a class="tocitem" href="../../API/codegen/">Code generation utilities</a></li><li><a class="tocitem" href="../../API/PDESystem/">PDESystem</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkcompile</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/Debugging/">Debugging</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><span class="tocitem">Internal Details</span><ul><li><a class="tocitem" href="../../internals/">Internal Details</a></li><li><a class="tocitem" href="../../internals/structural_transformation/">Structural Transformation</a></li><li><a class="tocitem" href="../../internals/bipartite_graph/">Bipartite Graphs</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Solving Dynamic Optimization Problems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Solving Dynamic Optimization Problems</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/dynamic_optimization.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Solving-Dynamic-Optimization-Problems"><a class="docs-heading-anchor" href="#Solving-Dynamic-Optimization-Problems">Solving Dynamic Optimization Problems</a><a id="Solving-Dynamic-Optimization-Problems-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-Dynamic-Optimization-Problems" title="Permalink"></a></h1><p>Systems in ModelingToolkit.jl can be directly converted to dynamic optimization or optimal control problems. In such systems, one has one or more input variables that are externally controlled to control the dynamics of the system. A dynamic optimization solves for the optimal time trajectory of the input variables in order to maximize or minimize a desired objective function. For example, a car driver might like to know how to step on the accelerator if the goal is to finish a race while using the least gas.</p><p>To begin, let us take a rocket launch example. The input variable here is the thrust exerted by the engine. The rocket state is described by its current height, mass, and velocity. The mass decreases as the rocket loses fuel while thrusting.</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq
+t = ModelingToolkit.t_nounits
+D = ModelingToolkit.D_nounits
+
+@parameters h_c m₀ h₀ g₀ D_c c Tₘ m_c
+@variables begin
+    h(..)
+    v(..)
+    m(..), [bounds = (m_c, 1)]
+    T(..), [input = true, bounds = (0, Tₘ)]
+end
+
+drag(h, v) = D_c * v^2 * exp(-h_c * (h - h₀) / h₀)
+gravity(h) = g₀ * (h₀ / h)
+
+eqs = [D(h(t)) ~ v(t),
+    D(v(t)) ~ (T(t) - drag(h(t), v(t))) / m(t) - gravity(h(t)),
+    D(m(t)) ~ -T(t) / c]
+
+(ts, te) = (0.0, 0.2)
+costs = [-h(te)]
+cons = [T(te) ~ 0, m(te) ~ m_c]
+
+@named rocket = System(eqs, t; costs, constraints = cons)
+rocket = mtkcompile(rocket, inputs = [T(t)])
+
+u0map = [h(t) =&gt; h₀, m(t) =&gt; m₀, v(t) =&gt; 0]
+pmap = [
+    g₀ =&gt; 1, m₀ =&gt; 1.0, h_c =&gt; 500, c =&gt; 0.5 * √(g₀ * h₀), D_c =&gt; 0.5 * 620 * m₀ / g₀,
+    Tₘ =&gt; 3.5 * g₀ * m₀, T(t) =&gt; 0.0, h₀ =&gt; 1, m_c =&gt; 0.6]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">9-element Vector{Pair{Num, Num}}:
+   g₀ =&gt; 1
+   m₀ =&gt; 1.0
+  h_c =&gt; 500
+    c =&gt; <span class="sgr34">0.5</span>sqrt(g₀*h₀)
+  D_c =&gt; (<span class="sgr34">310.0</span>m₀) / g₀
+   Tₘ =&gt; <span class="sgr34">3.5</span>g₀*m₀
+ T(t) =&gt; 0.0
+   h₀ =&gt; 1
+  m_c =&gt; 0.6</code></pre><p>What we would like to optimize here is the final height of the rocket. We do this by providing a vector of expressions corresponding to the costs. By default, the sense of the optimization is to minimize the provided cost. So to maximize the rocket height at the final time, we write <code>-h(te)</code> as the cost.</p><p>Now we can construct a problem and solve it. Let us use JuMP as our backend here. Note that the package trigger is actually <a href="https://infiniteopt.github.io/InfiniteOpt.jl/stable/">InfiniteOpt</a>, and not JuMP - this package includes JuMP but is designed for optimization on function spaces. Additionally we need to load the solver package - we will use <a href="https://github.com/jump-dev/Ipopt.jl">Ipopt</a> here (a good choice in general).</p><p>Here we have also loaded DiffEqDevTools because we will need to construct the ODE tableau. This is only needed if one desires a custom ODE tableau for the collocation - by default the solver will use RadauIIA5.</p><pre><code class="language-julia hljs">using InfiniteOpt, Ipopt, DiffEqDevTools
+jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
+jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()));</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"></code></pre><p>The solution has three fields: <code>jsol.sol</code> is the ODE solution for the states, <code>jsol.input_sol</code> is the ODE solution for the inputs, and <code>jsol.model</code> is the wrapped model that we can use to query things like objective and constraint residuals.</p><p>Let&#39;s plot the final solution and the controller here:</p><pre><code class="language-julia hljs">using CairoMakie
+fig = Figure(resolution = (800, 400))
+ax1 = Axis(fig[1, 1], title = &quot;Rocket trajectory&quot;, xlabel = &quot;Time&quot;)
+ax2 = Axis(fig[1, 2], title = &quot;Control trajectory&quot;, xlabel = &quot;Time&quot;)
+
+for u in unknowns(rocket)
+    lines!(ax1, jsol.sol.t, jsol.sol[u], label = string(u))
+end
+lines!(ax2, jsol.input_sol, label = &quot;Thrust&quot;)
+axislegend(ax1)
+axislegend(ax2)
+fig</code></pre><img src="f9ebc146.png" alt="Example block output"/><h3 id="Free-final-time-problems"><a class="docs-heading-anchor" href="#Free-final-time-problems">Free final time problems</a><a id="Free-final-time-problems-1"></a><a class="docs-heading-anchor-permalink" href="#Free-final-time-problems" title="Permalink"></a></h3><p>There are additionally a class of dynamic optimization problems where we would like to know how to control our system to achieve something in the least time. Such problems are called free final time problems, since the final time is unknown. To model these problems in ModelingToolkit, we declare the final time as a parameter.</p><p>Below we have a model system called the double integrator. We control the acceleration of a block in order to reach a desired destination in the least time.</p><pre><code class="language-julia hljs">@variables begin
+    x(..)
+    v(..)
+    u(..), [bounds = (-1.0, 1.0), input = true]
+end
+
+@parameters tf
+
+constr = [v(tf) ~ 0, x(tf) ~ 0]
+cost = [tf] # Minimize time
+
+@named block = System(
+    [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr)
+
+block = mtkcompile(block; inputs = [u(t)])
+
+u0map = [x(t) =&gt; 1.0, v(t) =&gt; 0.0]
+tspan = (0.0, tf)
+parammap = [u(t) =&gt; 0.0, tf =&gt; 1.0]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">2-element Vector{Pair{Num, Float64}}:
+ u(t) =&gt; 0.0
+   tf =&gt; 1.0</code></pre><p>The <code>tf</code> mapping in the parameter map is treated as an initial guess.</p><p>Please note that, at the moment, free final time problems cannot support constraints defined at definite time values, like <code>x(3) ~ 2</code>.</p><div class="admonition is-warning" id="Warning-bd39d23aae82c524"><header class="admonition-header">Warning<a class="admonition-anchor" href="#Warning-bd39d23aae82c524" title="Permalink"></a></header><div class="admonition-body"><p>The Pyomo collocation methods (LagrangeRadau, LagrangeLegendre) currently are bugged for free final time problems. Strongly suggest using BackwardEuler() for such problems when using Pyomo as the backend.</p></div></div><p>When declaring the problem in this case we need to provide the number of steps, since dt can&#39;t be known in advanced. Let&#39;s solve plot our final solution and the controller for the block, using InfiniteOpt as the backend:</p><pre><code class="language-julia hljs">iprob = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; steps = 100)
+isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer));</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"></code></pre><p>Let&#39;s plot the final solution and the controller here:</p><pre><code class="language-julia hljs">fig = Figure(resolution = (800, 400))
+ax1 = Axis(fig[1, 1], title = &quot;Block trajectory&quot;, xlabel = &quot;Time&quot;)
+ax2 = Axis(fig[1, 2], title = &quot;Control trajectory&quot;, xlabel = &quot;Time&quot;)
+
+for u in unknowns(block)
+    lines!(ax1, isol.sol.t, isol.sol[u], label = string(u))
+end
+lines!(ax2, isol.input_sol, label = &quot;Acceleration&quot;)
+axislegend(ax1)
+axislegend(ax2)
+fig</code></pre><img src="dad5163e.png" alt="Example block output"/><h3 id="Parameter-estimation"><a class="docs-heading-anchor" href="#Parameter-estimation">Parameter estimation</a><a id="Parameter-estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-estimation" title="Permalink"></a></h3><p>The dynamic optimization framework can also be used for parameter estimation. In this approach, we treat unknown parameters as tunable variables and minimize the difference between model predictions and observed data.</p><p>Let&#39;s demonstrate this with the Lotka-Volterra equations. First, we&#39;ll generate some synthetic data by solving the system with known parameter values:</p><pre><code class="language-julia hljs">@parameters α = 1.5 β = 1.0 [tunable=false] γ = 3.0 δ = 1.0
+@variables x_pe(t) y_pe(t)
+
+eqs_pe = [D(x_pe) ~ α * x_pe - β * x_pe * y_pe,
+    D(y_pe) ~ -γ * y_pe + δ * x_pe * y_pe]
+
+@mtkcompile sys0_pe = System(eqs_pe, t)
+tspan_pe = (0.0, 1.0)
+u0map_pe = [x_pe =&gt; 4.0, y_pe =&gt; 2.0]
+
+# True parameter values (these are what we&#39;ll try to recover)
+parammap_pe = [α =&gt; 2.5, δ =&gt; 1.8]
+
+oprob_pe = ODEProblem(sys0_pe, [u0map_pe; parammap_pe], tspan_pe)
+osol_pe = solve(oprob_pe, Tsit5())
+
+# Generate synthetic data at 51 time points
+ts_pe = range(tspan_pe..., length=51)
+data_pe = osol_pe(ts_pe, idxs=x_pe).u</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">51-element Vector{Float64}:
+ 4.0
+ 4.033188529297993
+ 4.051589539498085
+ 4.0535385305548255
+ 4.037525368230605
+ 4.0022875247869685
+ 3.946984767817523
+ 3.8712447408627892
+ 3.7752731693385577
+ 3.659977816802768
+ ⋮
+ 0.5210872034425348
+ 0.5099326749729216
+ 0.5004714566378294
+ 0.4925705181014689
+ 0.4861203523601839
+ 0.4810222214807003
+ 0.4771832830626637
+ 0.474527436292926
+ 0.47298920296524516</code></pre><p>Now we&#39;ll set up the parameter estimation problem. We use <code>EvalAt</code> to evaluate the state at specific time points and construct a least-squares cost function:</p><pre><code class="language-julia hljs">costs_pe = [abs2(EvalAt(ti)(x_pe) - data_pe[i]) for (i, ti) in enumerate(ts_pe)]
+
+@mtkcompile sys_pe = System(eqs_pe, t; costs = costs_pe)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ \mathtt{y\_pe}\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{y\_pe}\left( t \right) ~ \gamma + \mathtt{x\_pe}\left( t \right) ~ \mathtt{y\_pe}\left( t \right) ~ \delta \\
+\frac{\mathrm{d} ~ \mathtt{x\_pe}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{x\_pe}\left( t \right) ~ \alpha - \mathtt{x\_pe}\left( t \right) ~ \mathtt{y\_pe}\left( t \right) ~ \beta
+\end{align}
+ \]</p><p>By default the cost values are sumed up, if a different behaviour is desired, the <code>consolidate</code> keyword can be set in the <code>System</code> definition.</p><p>Next, we select which parameters to tune using <code>subset_tunables</code>. Here we&#39;ll estimate <code>α</code> and <code>δ</code> while keeping <code>β</code> and <code>γ</code> fixed:</p><pre><code class="language-julia hljs">sys_pe′ = subset_tunables(sys_pe, [α, δ])</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} ~ \mathtt{y\_pe}\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{y\_pe}\left( t \right) ~ \gamma + \mathtt{x\_pe}\left( t \right) ~ \mathtt{y\_pe}\left( t \right) ~ \delta \\
+\frac{\mathrm{d} ~ \mathtt{x\_pe}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{x\_pe}\left( t \right) ~ \alpha - \mathtt{x\_pe}\left( t \right) ~ \mathtt{y\_pe}\left( t \right) ~ \beta
+\end{align}
+ \]</p><p>Now we can solve the parameter estimation problem. Note the <code>tune_parameters=true</code> flag:</p><pre><code class="language-julia hljs">iprob_pe = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe; dt=1/50, tune_parameters=true)
+isol_pe = solve(iprob_pe, InfiniteOptCollocation(Ipopt.Optimizer, InfiniteOpt.OrthogonalCollocation(3)))
+
+println(&quot;Estimated α = &quot;, isol_pe.sol.ps[α], &quot; (true value: 2.5)&quot;)
+println(&quot;Estimated δ = &quot;, isol_pe.sol.ps[δ], &quot; (true value: 1.8)&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌ Warning: No unbound inputs were found in system.
+└ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/inputoutput.jl:236
+Estimated α = 2.50047007548032 (true value: 2.5)
+Estimated δ = 1.7996676351728231 (true value: 1.8)</code></pre><p>Let&#39;s visualize the fit:</p><pre><code class="language-julia hljs">fig = Figure(resolution = (800, 400))
+ax = Axis(fig[1, 1], title = &quot;Parameter Estimation Results&quot;, xlabel = &quot;Time&quot;, ylabel = &quot;Prey Population&quot;)
+scatter!(ax, ts_pe, data_pe, label = &quot;Data&quot;, markersize = 8)
+lines!(ax, isol_pe.sol.t, isol_pe.sol[x_pe], label = &quot;Fitted Model&quot;, linewidth = 2)
+axislegend(ax)
+fig</code></pre><img src="a8759979.png" alt="Example block output"/><div class="admonition is-info" id="Time-Alignment-for-Cost-Evaluation-d3cfe27b4262b8ef"><header class="admonition-header">Time Alignment for Cost Evaluation<a class="admonition-anchor" href="#Time-Alignment-for-Cost-Evaluation-d3cfe27b4262b8ef" title="Permalink"></a></header><div class="admonition-body"><p>When using <code>EvalAt</code> for parameter estimation, different backends handle the case when evaluation times don&#39;t align with collocation points differently:</p><ul><li><strong>JuMP</strong>: Will throw an error asking you to adjust <code>dt</code> if evaluation times don&#39;t match collocation points exactly.</li><li><strong>CasADi</strong>: Uses linear interpolation between collocation points for cost evaluations at intermediate times.</li><li><strong>InfiniteOpt</strong>: Automatically adds support points for the evaluation times, handling mismatched grids gracefully.</li></ul><p>For example, InfiniteOpt can use a different <code>dt</code> than what the data spacing requires:</p><pre><code class="language-julia hljs"># With InfiniteOpt, dt doesn&#39;t need to match the data points:
+iprob_pe2 = InfiniteOptDynamicOptProblem(sys_pe′, u0map_pe, tspan_pe,
+                                         dt = 1/120, tune_parameters=true)
+isol_pe2 = solve(iprob_pe2, InfiniteOptCollocation(Ipopt.Optimizer,
+                            InfiniteOpt.OrthogonalCollocation(3)))
+
+println(&quot;With dt=1/120: Estimated α = &quot;, isol_pe2.sol.ps[α], &quot; (true value: 2.5)&quot;)
+println(&quot;With dt=1/120: Estimated δ = &quot;, isol_pe2.sol.ps[δ], &quot; (true value: 1.8)&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌ Warning: No unbound inputs were found in system.
+└ @ ModelingToolkitBase ~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase/src/inputoutput.jl:236
+With dt=1/120: Estimated α = 2.5001294315721307 (true value: 2.5)
+With dt=1/120: Estimated δ = 1.799996498243119 (true value: 1.8)</code></pre><p>This flexibility makes InfiniteOpt particularly convenient for parameter estimation when your data points don&#39;t naturally align with a uniform collocation grid.</p></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../stochastic_diffeq/">« Modeling with Stochasticity</a><a class="docs-footer-nextpage" href="../discrete_system/">(Experimental) Modeling Discrete Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Wednesday 28 January 2026 15:16">Wednesday 28 January 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
