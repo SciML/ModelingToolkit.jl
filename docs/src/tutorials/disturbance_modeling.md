@@ -204,24 +204,23 @@ using Test
 but we may also generate the functions ``f`` and ``g`` for state estimation:
 
 ```@example DISTURBANCE_MODELING
-inputs = [:u]
-disturbance_inputs = [:d1, :d2]
 P = model_with_disturbance.system_model
 outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 
 (f_oop, f_ip), x_sym,
 p_sym,
 io_sys = ModelingToolkit.generate_control_function(
-    model_with_disturbance, inputs; known_disturbance_inputs = disturbance_inputs)
+    model_with_disturbance, [:u]; known_disturbance_inputs = [:d1, :d2])
 
+inputs = ModelingToolkit.inputs(io_sys)
 g = ModelingToolkit.build_explicit_observed_function(
-    io_sys, outputs; inputs = ModelingToolkit.inputs(io_sys)[1:1])
+    io_sys, outputs; inputs = inputs[1:1])
 
-op = ModelingToolkit.inputs(io_sys) .=> 0
+op = inputs .=> 0
 x0 = ModelingToolkit.get_u0(io_sys, op)
 p = MTKParameters(io_sys, op)
 u = zeros(1) # Control input
-w = zeros(length(disturbance_inputs)) # Disturbance input (known disturbances are provided as arguments)
+w = zeros(length(inputs) - 1) # Disturbance input (known disturbances are provided as arguments)
 @test f_oop(x0, u, p, 0.0, w) == zeros(5)
 @test g(x0, u, p, 0.0) == [0, 0, 0, 0]
 
