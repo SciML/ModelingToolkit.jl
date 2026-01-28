@@ -97,7 +97,7 @@ end
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
-        kwargs...
+        _skip_events = false, kwargs...
     ) where {iip, spec}
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
@@ -110,7 +110,7 @@ end
     )
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, kwargs...
+        sys; expression, callback, eval_expression, eval_module, op, _skip_events, kwargs...
     )
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
@@ -129,7 +129,7 @@ end
         p = process_SciMLProblem(
         ODEFunction{iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
-        time_dependent_init = false, kwargs...
+        is_steadystateprob = true, kwargs...
     )
 
     kwargs = process_kwargs(sys; expression, kwargs...)

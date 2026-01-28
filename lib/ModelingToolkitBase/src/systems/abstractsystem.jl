@@ -256,7 +256,7 @@ function SymbolicIndexingInterface.parameter_index(sys::AbstractSystem, sym::Sym
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         idx = parameter_index(ic, sym)
         if idx === nothing ||
-                idx.portion isa SciMLStructures.Discrete && idx.idx[2] == idx.idx[3] == 0
+                idx.portion isa SciMLStructures.Discrete && idx.idx[1] == idx.idx[2] == 0
             return nothing
         else
             return idx
@@ -1276,6 +1276,7 @@ renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL,
 renamespace(sys, x::Num) = Num(renamespace(sys, unwrap(x)))
 renamespace(sys, x::Arr{T, N}) where {T, N} = Arr{T, N}(renamespace(sys, unwrap(x)))
 renamespace(sys, x::CallAndWrap{T}) where {T} = CallAndWrap{T}(renamespace(sys, unwrap(x)))
+renamespace(sys, x::AbstractArray{SymbolicT}) = map(Base.Fix1(renamespace, sys), x)
 
 """
     $(TYPEDSIGNATURES)
@@ -1916,7 +1917,7 @@ Recursively substitute `dict` into `expr`. Use `Symbolics.simplify` on the expre
 if `simplify == true`.
 """
 function substitute_and_simplify(expr, dict::AbstractDict, simplify::Bool)
-    expr = Symbolics.fixpoint_sub(expr, dict, Union{Initial, Pre})
+    expr = substitute(expr, dict; filterer = Symbolics.FPSubFilterer{Union{Initial, Pre}}())
     return simplify ? Symbolics.simplify(expr) : expr
 end
 

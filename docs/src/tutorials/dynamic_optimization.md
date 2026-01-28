@@ -5,7 +5,7 @@ Systems in ModelingToolkit.jl can be directly converted to dynamic optimization 
 To begin, let us take a rocket launch example. The input variable here is the thrust exerted by the engine. The rocket state is described by its current height, mass, and velocity. The mass decreases as the rocket loses fuel while thrusting.
 
 ```@example dynamic_opt
-using ModelingToolkit
+using ModelingToolkit, OrdinaryDiffEq
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 

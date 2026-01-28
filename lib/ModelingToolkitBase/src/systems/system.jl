@@ -403,6 +403,10 @@ function parse_atomicset(vars)
     return result
 end
 
+function __get_new_tag()
+    return Threads.atomic_add!(SYSTEM_COUNT, UInt(1))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -462,7 +466,7 @@ function System(
     ps = vec(unwrap_vars(ps))
     dvs = vec(unwrap_vars(dvs))
     if iv !== nothing
-        filter!(!Base.Fix2(isdelay, iv), dvs)
+        filter!(!Base.Fix2(_is_unknown_delay_or_evalat, iv), dvs)
     end
     brownians = unwrap_vars(brownians)
 
@@ -520,7 +524,10 @@ function System(
         buffer = SymbolicT[]
         for eq in observed
             push!(buffer, eq.lhs)
-            push!(buffer, eq.rhs)
+            if !(iv isa SymbolicT && _is_unknown_delay_or_evalat(eq.rhs, iv)) &&
+                    !iscalledparameter(eq.rhs)
+                push!(buffer, eq.rhs)
+            end
         end
         process_variables!(var_to_name, initial_conditions, bindings, guesses, buffer)
 
@@ -597,7 +604,7 @@ function System(
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
     return System(
-        Threads.atomic_add!(SYSTEM_COUNT, UInt(1)), eqs, noise_eqs, jumps, constraints,
+        __get_new_tag(), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
@@ -605,6 +612,25 @@ function System(
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
     )
+end
+
+function _is_unknown_delay_or_evalat(x::SymbolicT, iv::SymbolicT)
+    x = split_indexed_var(x)[1]
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa SymbolicT end => begin
+            !isequal(args[1], iv) && Moshi.Match.@match args[1] begin
+                BSImpl.Term(; f = f2) => !(f2 isa SymbolicT) || SU.is_function_symbolic(f2)
+                _ => true
+            end
+        end
+        BSImpl.Term(; f, args) && if f === real || f === imag end => begin
+            _is_unknown_delay_or_evalat(args[1], iv)
+        end
+        BSImpl.Term(; f, args) && if f isa Differential end => begin
+            _is_unknown_delay_or_evalat(args[1], iv)
+        end
+        _ => false
+    end
 end
 
 @noinline function nonunique_subsystems(systems)
@@ -679,7 +705,23 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     setdiff!(allunknowns, brownians)
 
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
-    cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
+    cstrunknowns = empty(_cstrunknowns)
+    for var in _cstrunknowns
+        op, inner = Moshi.Match.@match var begin
+            BSImpl.Term(; f, args) && if f isa Differential end => (f, args[1])
+            _ => begin
+                push!(cstrunknowns, var)
+                continue
+            end
+        end
+        Moshi.Match.@match inner begin
+            BSImpl.Term(; f, args) && if f isa SymbolicT && SU.isconst(args[1]) end => begin
+                push!(cstrunknowns, op(f(iv)))
+            end
+            _ => push!(cstrunknowns, var)
+        end
+    end
     union!(allunknowns, cstrunknowns)
     union!(ps, cstrps)
 
@@ -781,19 +823,52 @@ function gather_array_params(ps)
     return new_ps
 end
 
+struct ConstraintValidator
+    innervars::Set{SymbolicT}
+end
+ConstraintValidator() = ConstraintValidator(Set{SymbolicT}())
+
+function (cv::ConstraintValidator)(x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            empty!(cv.innervars)
+            SU.search_variables!(cv.innervars, args[1])
+            for var in cv.innervars
+                Moshi.Match.@match var begin
+                    BSImpl.Term() => throw(
+                        ArgumentError(
+                            """
+                            Arguments of a delayed or evaluated (via `EvalAt`) variable \
+                            cannot be other dependent variables. Found $x which \
+                            contains $var.
+                            """
+                        )
+                    )
+                    _ => nothing
+                end
+            end
+        end
+        _ => nothing
+    end
+    return false
+end
+
 """
 Process variables in constraints of the (ODE) System.
 """
 function process_constraint_system(
-        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true
+        constraints::Vector{Union{Equation, Inequality}}, sts, ps, iv; validate = true,
     )
     isempty(constraints) && return OrderedSet{SymbolicT}(), OrderedSet{SymbolicT}()
 
     constraintsts = OrderedSet{SymbolicT}()
     constraintps = OrderedSet{SymbolicT}()
+    validator = ConstraintValidator()
     for cons in constraints
         collect_vars!(constraintsts, constraintps, cons, iv)
         union!(constraintsts, collect_applied_operators(cons, Differential))
+        SU.query(validator, cons.lhs)
+        SU.query(validator, cons.rhs)
     end
 
     # Validate the states.
@@ -1361,4 +1436,26 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
         isequal(get_state_priorities(sysa), get_state_priorities(sysb)) &&
         isequal(get_isscheduled(sysa), get_isscheduled(sysb))
+end
+
+_maybe_copy(x) = applicable(copy, x) ? copy(x) : x
+
+function Base.copy(sys::System)
+    return System(
+        __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
+        copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
+        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)), get_iv(sys),
+        copy(get_observed(sys)), copy(get_var_to_name(sys)), nameof(sys), get_description(sys),
+        copy(get_bindings(sys)), copy(get_initial_conditions(sys)), copy(get_guesses(sys)),
+        map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
+        copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
+        copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
+        get_is_dde(sys), copy(get_tstops(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
+        get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
+        _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
+        _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
+        get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
+        copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
+    )
 end

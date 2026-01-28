@@ -602,3 +602,232 @@ end
     sys = complete(sys)
     @test_nowarn JumpProblem(sys, [:X => 0.1, :p => 1.0, :d => 2.0], (0.0, 1.0))
 end
+
+@testset "Issue#4216: Discrete events fire once in hybrid JumpProblems" begin
+    @variables X(t)
+    @parameters a b
+
+    # Create ODE equation
+    eq = D(X) ~ a
+
+    # Create jump
+    crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+
+    # Discrete event: at t=1.0, add 5.0 to X
+    discrete_event = [1.0] => [X ~ Pre(X) + 5.0]
+
+    # Create hybrid JumpSystem with ODE + jump + discrete event
+    @named jsys = JumpSystem([crj, eq], t, [X], [a, b]; discrete_events = [discrete_event])
+    jsys = complete(jsys)
+
+    # Create JumpProblem
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 1.0, :b => 0.01], (0.0, 3.0); rng)
+
+    # Callback should NOT be stored in the underlying problem (only in JumpProblem)
+    @test !haskey(jprob.prob.kwargs, :callback)
+    @test haskey(jprob.kwargs, :callback)
+
+    # Solve and verify discrete event fires exactly once
+    sol = solve(jprob, Tsit5())
+    X_before = sol(0.99; idxs = X)
+    X_after = sol(1.01; idxs = X)
+    change = X_after - X_before
+
+    # The change should be approximately 5.0 (not ~10.0 which would indicate double firing)
+    @test isapprox(change, 5.0, atol = 0.1)
+end
+
+@testset "Issue#4216: Continuous events not duplicated in hybrid JumpProblems" begin
+    @variables X(t)
+    @parameters a b
+
+    # Create ODE equation: X grows linearly
+    eq = D(X) ~ a
+
+    # Create jump
+    crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+
+    # Continuous event: when X crosses 15.0, add 5.0 to X
+    continuous_event = [X ~ 15.0] => [X ~ Pre(X) + 5.0]
+
+    # Create hybrid JumpSystem with ODE + jump + continuous event
+    @named jsys = JumpSystem(
+        [crj, eq], t, [X], [a, b]; continuous_events = [continuous_event]
+    )
+    jsys = complete(jsys)
+
+    # Create JumpProblem (starting at X=10, with a=10 so X grows quickly)
+    jprob = JumpProblem(jsys, [:X => 10.0, :a => 10.0, :b => 0.001], (0.0, 3.0); rng)
+
+    # Callback should NOT be stored in the underlying problem (only in JumpProblem)
+    @test !haskey(jprob.prob.kwargs, :callback)
+    @test haskey(jprob.kwargs, :callback)
+
+    # Solve - the continuous event should fire when X crosses 15.0
+    sol = solve(jprob, Tsit5())
+
+    # After crossing 15.0, X should jump by 5.0 (to ~20.0), not by 10.0 (which would be ~25.0)
+    # With a=10, X reaches 15 at t≈0.5, then jumps to ~20, continues growing
+    # At t=1.0, X should be around 20 + 5 = 25 (not 30 which would indicate double firing)
+    X_at_1 = sol(1.0; idxs = X)
+
+    # X starts at 10, grows at rate 10, crosses 15 at t≈0.5, jumps by 5 to ~20
+    # Then continues growing: at t=1.0, X ≈ 20 + 10*(1.0-0.5) = 25
+    # If event fired twice: X ≈ 25 + 10*(1.0-0.5) = 30
+    @test X_at_1 < 28.0  # Should be ~25, not ~30
+end
+
+# Test save_positions kwarg is correctly forwarded to JumpProcesses for discrete jumps
+# Note: save_positions to JumpProblem controls MAJs and CRJs only.
+# VRJs have their own save_positions set at construction time.
+@testset "save_positions kwarg forwarding" begin
+    # Test 1: DiscreteProblem-based JumpProblem with MassActionJumps
+    @testset "MassActionJump with DiscreteProblem" begin
+        @variables A(t)
+        @parameters k
+        maj = MassActionJump(k, [A => 1], [A => -1])
+        @named jsys = JumpSystem([maj], t, [A], [k])
+        jsys = complete(jsys)
+
+        # With save_positions=(false, false) and saveat, should get exact number of points
+        jprob = JumpProblem(
+            jsys, [A => 100, k => 1.0], (0.0, 10.0);
+            aggregator = Direct(), save_positions = (false, false), rng
+        )
+        @test jprob.prob isa DiscreteProblem
+
+        # Verify save_positions reaches the aggregator
+        @test jprob.discrete_jump_aggregation.save_positions == (false, false)
+
+        # Solve with saveat and verify no extra points from jumps
+        times = 0.0:1.0:10.0
+        sol = solve(jprob, SSAStepper(); saveat = times)
+        @test length(sol.t) == length(times)
+        @test all(sol.t .== collect(times))
+    end
+
+    # Test 2: DiscreteProblem-based JumpProblem with ConstantRateJumps
+    @testset "ConstantRateJump with DiscreteProblem" begin
+        @variables A(t)
+        @parameters k
+        crj = ConstantRateJump(k * A, [A ~ Pre(A) - 1])
+        @named jsys = JumpSystem([crj], t, [A], [k])
+        jsys = complete(jsys)
+
+        jprob = JumpProblem(
+            jsys, [A => 100, k => 0.1], (0.0, 10.0);
+            aggregator = Direct(), save_positions = (false, false), rng
+        )
+        @test jprob.prob isa DiscreteProblem
+
+        # Verify save_positions reaches the aggregator
+        @test jprob.discrete_jump_aggregation.save_positions == (false, false)
+
+        times = 0.0:1.0:10.0
+        sol = solve(jprob, SSAStepper(); saveat = times)
+        @test length(sol.t) == length(times)
+    end
+
+    # Test 3: ODEProblem-based JumpProblem with VariableRateJumps only
+    # VRJs have their own save_positions - the JumpProblem-level save_positions
+    # should not cause an error (i.e., should not be passed to ODEProblem)
+    @testset "VariableRateJump with ODEProblem" begin
+        @variables A(t)
+        @parameters k
+        vrj = VariableRateJump(k * (1 + sin(t)), [A ~ Pre(A) + 1])
+        @named jsys = JumpSystem([vrj], t, [A], [k])
+        jsys = complete(jsys)
+
+        # This previously errored because save_positions was passed to ODEProblem
+        jprob = JumpProblem(
+            jsys, [A => 0, k => 1.0], (0.0, 10.0);
+            aggregator = Direct(), save_positions = (false, false), rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        # Verify save_positions is NOT in the ODEProblem kwargs (this was the bug)
+        @test !haskey(jprob.prob.kwargs, :save_positions)
+
+        # Should solve without error
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    # Test 4: Hybrid system with ODEs and ConstantRateJumps
+    @testset "Hybrid ODE + ConstantRateJump" begin
+        @variables X(t)
+        @parameters a b
+        eq = D(X) ~ a
+        crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+        @named jsys = JumpSystem([crj, eq], t, [X], [a, b])
+        jsys = complete(jsys)
+
+        jprob = JumpProblem(
+            jsys, [X => 10.0, a => 1.0, b => 0.1], (0.0, 10.0);
+            save_positions = (false, false), rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        # Verify save_positions is NOT in the ODEProblem kwargs
+        @test !haskey(jprob.prob.kwargs, :save_positions)
+
+        # Verify save_positions reaches the discrete aggregator
+        @test jprob.discrete_jump_aggregation.save_positions == (false, false)
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+
+        times = 0.0:1.0:10.0
+        sol = solve(jprob, Tsit5(); saveat = times)
+        @test length(sol.t) == length(times)
+    end
+
+    # Test 5: Hybrid system with ODEs, VRJs, CRJs, and MAJs
+    # save_positions should reach the discrete aggregator for CRJs/MAJs
+    # VRJs use their own save_positions from construction
+    @testset "Hybrid ODE + all jump types" begin
+        @variables X(t) Y(t)
+        @parameters a b c d
+        eq = D(X) ~ a
+        # VRJ with its own save_positions
+        vrj = VariableRateJump(b * (1 + sin(t)), [X ~ Pre(X) + 1]; save_positions = (false, false))
+        crj = ConstantRateJump(c * Y, [Y ~ Pre(Y) - 1])
+        maj = MassActionJump(d, [0 => 1], [Y => 1])
+        @named jsys = JumpSystem([vrj, crj, maj, eq], t, [X, Y], [a, b, c, d])
+        jsys = complete(jsys)
+
+        jprob = JumpProblem(
+            jsys, [X => 0.0, Y => 10, a => 0.1, b => 0.5, c => 0.1, d => 1.0], (0.0, 10.0);
+            save_positions = (false, false), rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        # Verify save_positions is NOT in the ODEProblem kwargs
+        @test !haskey(jprob.prob.kwargs, :save_positions)
+
+        # Verify save_positions reaches the discrete aggregator (for CRJs/MAJs)
+        @test jprob.discrete_jump_aggregation.save_positions == (false, false)
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+
+        # With all jumps having save_positions=(false,false), saveat should give exact points
+        times = 0.0:1.0:10.0
+        sol = solve(jprob, Tsit5(); saveat = times)
+        @test length(sol.t) == length(times)
+    end
+
+    # Test 6: Default save_positions for discrete jumps should be (true, true)
+    @testset "Default save_positions for discrete jumps" begin
+        @variables A(t)
+        @parameters k
+        maj = MassActionJump(k, [A => 1], [A => -1])
+        @named jsys = JumpSystem([maj], t, [A], [k])
+        jsys = complete(jsys)
+
+        # No save_positions specified - should default to (true, true) for discrete aggregator
+        jprob = JumpProblem(jsys, [A => 100, k => 1.0], (0.0, 10.0); rng)
+
+        @test jprob.discrete_jump_aggregation.save_positions == (true, true)
+    end
+end

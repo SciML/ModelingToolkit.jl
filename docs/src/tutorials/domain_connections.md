@@ -20,7 +20,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
         dm(t), [connect = Flow]
     end
 
-    System(Equation[], t, vars, pars; name, defaults = [dm => 0])
+    System(Equation[], t, vars, pars; name, bindings = [dm => 0])
 end
 nothing #hide
 ```
@@ -47,7 +47,7 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
         dm ~ 0
     ]
 
-    System(eqs, t, vars, pars; name, defaults = [dm => 0])
+    System(eqs, t, vars, pars; name, bindings = [dm => 0])
 end
 nothing #hide
 ```
@@ -119,7 +119,7 @@ To see how the domain works, we can examine the set parameter values for each of
 
 ```@repl domain
 sys = mtkcompile(odesys)
-ModelingToolkit.defaults(sys)[odesys.vol.port.ρ]
+ModelingToolkit.bindings(sys)[odesys.vol.port.ρ]
 ```
 
 ## Multiple Domain Networks
@@ -255,9 +255,9 @@ nothing #hide
 When `mtkcompile()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
 ```@repl domain
-ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
-ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
-ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
+ModelingToolkit.bindings(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.bindings(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.bindings(ressys)[ressys.vol.port.ρ]
 ```
 
 To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the unknown variables.
@@ -288,7 +288,7 @@ nothing #hide
 Now that the `Restrictor` component is properly defined using `domain_connect()`, the defaults for `res.port_b` and `vol.port` are properly defined.
 
 ```@repl domain
-ModelingToolkit.defaults(ressys)[ressys.res.port_a.ρ]
-ModelingToolkit.defaults(ressys)[ressys.res.port_b.ρ]
-ModelingToolkit.defaults(ressys)[ressys.vol.port.ρ]
+ModelingToolkit.bindings(ressys)[ressys.res.port_a.ρ]
+ModelingToolkit.bindings(ressys)[ressys.res.port_b.ρ]
+ModelingToolkit.bindings(ressys)[ressys.vol.port.ρ]
 ```

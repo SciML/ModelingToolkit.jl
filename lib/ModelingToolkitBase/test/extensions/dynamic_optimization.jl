@@ -334,7 +334,7 @@ end
     u0map = [h => h₀, v => 0]
     pmap = [
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
-        h₀ => 1,
+        h₀ => 1, m_c => 0.6,
     ]
     oprob = ODEProblem(rocket_ode, merge(Dict(u0map), Dict(pmap), interpmap), (ts, te))
     osol = solve(oprob, RadauIIA5(); adaptive = false, dt = 0.001)

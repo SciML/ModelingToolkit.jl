@@ -22,20 +22,14 @@ But if you want to just see some code and run it, here's an example:
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables
-    end
-    @equations begin
-        D(x) ~ (1 - x) / τ
-    end
-end
+@parameters τ = 3.0 # parameters
+@variables x(t) = 0.0 # dependent variables
+eqs = [D(x) ~ (1 - x) / τ]
+
+@named fol_model = System(eqs, t)
 
 using OrdinaryDiffEq
-@mtkcompile fol = FOL()
+fol = mtkcompile(fol_model)
 prob = ODEProblem(fol, [], (0.0, 10.0))
 sol = solve(prob)
 
@@ -58,31 +52,23 @@ Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) unknown
 variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter.
 In MTK, this system can be modelled as follows. For simplicity, we
-first set the forcing function to a time-independent value ``1``. And the
-independent variable ``t`` is automatically added by `@mtkmodel`.
+first set the forcing function to a time-independent value ``1``.
 
 ```@example ode2
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-    end
-    @equations begin
-        D(x) ~ (1 - x) / τ
-    end
-end
+@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 # dependent variables and their initial conditions
+eqs = [D(x) ~ (1 - x) / τ]
 
-@mtkcompile fol = FOL()
+@named fol_model = System(eqs, t)
+fol = mtkcompile(fol_model)
 ```
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
 
-`@mtkcompile` creates an instance of `FOL` named as `fol`.
+`mtkcompile` transforms the `System` into a simplified form ready for numerical solving.
 
 After construction of the ODE, you can solve it using [OrdinaryDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
@@ -94,23 +80,14 @@ prob = ODEProblem(fol, [], (0.0, 10.0))
 plot(solve(prob))
 ```
 
-The parameter values are determined using the right hand side of the expressions in the `@parameters` block,
-and similarly initial conditions are determined using the right hand side of the expressions in the `@variables` block.
+The parameter values are determined using the right hand side of the expressions in `@parameters`,
+and similarly initial conditions are determined using the right hand side of the expressions in `@variables`.
 
 ## Using different values for parameters and initial conditions
 
 If you want to simulate the same model,
 but with different values for the parameters and initial conditions than the default values,
-you likely do not want to write an entirely new `@mtkmodel`.
-ModelingToolkit supports overwriting the default values:
-
-```@example ode2
-@mtkcompile fol_different_values = FOL(; τ = 1 / 3, x = 0.5)
-prob = ODEProblem(fol_different_values, [], (0.0, 10.0))
-plot(solve(prob))
-```
-
-Alternatively, this overwriting could also have occurred at the `ODEProblem` level.
+you can overwrite them at the `ODEProblem` level:
 
 ```@example ode2
 prob = ODEProblem(fol, [fol.x => 0.5, fol.τ => 1 / 3], (0.0, 10.0))
@@ -118,11 +95,9 @@ plot(solve(prob))
 ```
 
 Here, the second argument of `ODEProblem` is an array of `Pairs`.
-The left hand side of each Pair is the parameter you want to overwrite,
+The left hand side of each Pair is the parameter or variable you want to overwrite,
 and the right hand side is the value to overwrite it with.
-Similarly, the initial conditions are overwritten in the fourth argument.
-One important difference with the previous method is
-that the parameter has to be referred to as `fol.τ` instead of just `τ`.
+Note that variables and parameters must be referred to with their namespaced form (e.g., `fol.τ`).
 
 ## Algebraic relations and structural simplification
 
@@ -133,21 +108,15 @@ intermediate variable `RHS`:
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        RHS(t)
-    end
-    @equations begin
-        RHS ~ (1 - x) / τ
-        D(x) ~ RHS
-    end
-end
+@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 RHS(t) # dependent variables and their initial conditions
+eqs = [
+    RHS ~ (1 - x) / τ
+    D(x) ~ RHS
+]
 
-@mtkcompile fol = FOL()
+@named fol_model = System(eqs, t)
+fol = mtkcompile(fol_model)
 ```
 
 If you copy this block of code to your REPL, you will not see the above LaTeX equations.
@@ -203,33 +172,27 @@ sol[fol.RHS]
 
 ## Specifying a time-variable forcing function
 
-What if the forcing function (the “external input”) ``f(t)`` is not constant?
+What if the forcing function (the "external input") ``f(t)`` is not constant?
 Obviously, one could use an explicit, symbolic function of time:
 
 ```@example ode2
-@mtkmodel FOL begin
-    @parameters begin
-        τ = 3.0 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        f(t)
-    end
-    @equations begin
-        f ~ sin(t)
-        D(x) ~ (f - x) / τ
-    end
-end
+@parameters τ = 3.0 # parameters and their values
+@variables x(t) = 0.0 f(t) # dependent variables and their initial conditions
+eqs = [
+    f ~ sin(t)
+    D(x) ~ (f - x) / τ
+]
 
-@mtkcompile fol_variable_f = FOL()
+@named fol_model = System(eqs, t)
+fol_variable_f = mtkcompile(fol_model)
 ```
 
 However, this function might not be available in an explicit form.
 Instead, the function might be provided as time-series data.
-MTK handles this situation by allowing us to “register” arbitrary Julia functions,
+MTK handles this situation by allowing us to "register" arbitrary Julia functions,
 which are excluded from symbolic transformations and thus used as-is.
 For example, you could interpolate given the time-series using
-[DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl). Here,
+[DataInterpolations.jl](https://docs.sciml.ai/DataInterpolations/stable/). Here,
 we illustrate this option with a simple lookup ("zero-order hold") of a vector
 of random values:
 
@@ -238,21 +201,15 @@ value_vector = randn(10)
 f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 @register_symbolic f_fun(t)
 
-@mtkmodel FOLExternalFunction begin
-    @parameters begin
-        τ = 0.75 # parameters and their values
-    end
-    @variables begin
-        x(t) = 0.0 # dependent variables and their initial conditions
-        f(t)
-    end
-    @equations begin
-        f ~ f_fun(t)
-        D(x) ~ (f - x) / τ
-    end
-end
+@parameters τ = 0.75 # parameters and their values
+@variables x(t) = 0.0 f(t) # dependent variables and their initial conditions
+eqs = [
+    f ~ f_fun(t)
+    D(x) ~ (f - x) / τ
+]
 
-@mtkcompile fol_external_f = FOLExternalFunction()
+@named fol_model = System(eqs, t)
+fol_external_f = mtkcompile(fol_model)
 ```
 
 ```@example ode2
@@ -265,43 +222,41 @@ plot(sol, idxs = [fol_external_f.x, fol_external_f.f])
 
 Working with simple one-equation systems is already fun, but composing more
 complex systems from simple ones is even more fun. The best practice for such a
-“modeling framework” is to use the `@components` block in the `@mtkmodel` macro:
+"modeling framework" is to define reusable component systems and compose them:
 
 ```@example ode2
-@mtkmodel FOLUnconnectedFunction begin
-    @parameters begin
-        τ # parameters
-    end
-    @variables begin
-        x(t) # dependent variables
-        f(t)
-        RHS(t)
-    end
-    @equations begin
+# Define a reusable component function that creates a first-order lag system
+function FOLComponent(; name, τ = 1.0, x0 = 0.0)
+    @parameters τ = τ
+    @variables x(t) = x0 f(t) RHS(t)
+    eqs = [
         RHS ~ f
         D(x) ~ (RHS - x) / τ
-    end
+    ]
+    return System(eqs, t, [x, f, RHS], [τ]; name)
 end
-@mtkmodel FOLConnected begin
-    @components begin
-        fol_1 = FOLUnconnectedFunction(; τ = 2.0, x = -0.5)
-        fol_2 = FOLUnconnectedFunction(; τ = 4.0, x = 1.0)
-    end
-    @equations begin
-        fol_1.f ~ 1.5
-        fol_2.f ~ fol_1.x
-    end
-end
-@mtkcompile connected = FOLConnected()
+
+# Create two instances of the component with different parameters
+@named fol_1 = FOLComponent(τ = 2.0, x0 = -0.5)
+@named fol_2 = FOLComponent(τ = 4.0, x0 = 1.0)
+
+# Connect them: fol_1 has constant input, fol_2 uses fol_1's output
+connection_eqs = [
+    fol_1.f ~ 1.5
+    fol_2.f ~ fol_1.x
+]
+
+@named connected_model = System(connection_eqs, t, [], []; systems = [fol_1, fol_2])
+connected = mtkcompile(connected_model)
 ```
 
 Here the total model consists of two of the same submodels (components),
 but with a different input function, parameter values and initial conditions.
 The first model has a constant input, and the second model uses the state `x` of the first system as an input.
 To avoid having to type the same differential equation multiple times,
-we define the submodel in a separate `@mtkmodel`.
-We then reuse this submodel twice in the total model `@components` block.
-The inputs of two submodels then still have to be specified in the `@equations` block.
+we define the submodel in a function that returns a `System`.
+We then reuse this function twice to create the component systems.
+The inputs of two submodels then still have to be specified in connection equations.
 
 All equations, variables, and parameters are collected, but the structure of the
 hierarchical model is still preserved. This means you can still get information about
@@ -326,7 +281,7 @@ More on this topic may be found in [Composing Models and Building Reusable Compo
 
 One advantage of a symbolic toolkit is that derivatives can be calculated
 explicitly, and that the incidence matrix of partial derivatives (the
-“sparsity pattern”) can also be explicitly derived. These two facts lead to a
+"sparsity pattern") can also be explicitly derived. These two facts lead to a
 substantial speedup of all model calculations, e.g. when simulating a model
 over time using an ODE solver.
 
@@ -368,8 +323,10 @@ exploiting the structural information. For more information, see the
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
-  - The `@mtkmodel` macro is for high-level usage of MTK. However, in many cases you
-    may need to programmatically generate `System`s. If that's the case, check out
+  - For high-level component-based modeling with convenient macros like `@mtkmodel`, see the
+    [ModelingToolkit Language Tutorial](@ref mtk_language) which covers `@mtkmodel` and `@connector`.
+  - The approach shown in this tutorial using direct `System` construction is useful when you
+    need to programmatically generate systems. For more details, check out
     the [Programmatically Generating and Scripting Systems Tutorial](@ref programmatically).
   - Vector-valued parameters and variables are possible. A cleaner, more
     consistent treatment of these is still a work in progress, however. Once finished,

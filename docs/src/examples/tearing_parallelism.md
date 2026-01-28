@@ -152,12 +152,8 @@ investigate what this means:
 using ModelingToolkit.BipartiteGraphs
 ts = TearingState(expand_connections(big_rc))
 inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
-blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs = true,
-    only_algvars = true)
-blt_reduced = StructuralTransformations.sorted_incidence_matrix(
-    ModelingToolkit.get_tearing_state(sys),
-    only_algeqs = true,
-    only_algvars = true)
+# Note: sorted_incidence_matrix requires the system and matrix dimensions to match
+# blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys)
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG)

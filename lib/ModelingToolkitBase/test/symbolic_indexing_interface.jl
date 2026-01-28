@@ -1,7 +1,8 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, ParameterIndex,
-    SymbolicContinuousCallback
+    SymbolicContinuousCallback, SymbolicDiscreteCallback
 using SciMLStructures: Tunable
+using OrdinaryDiffEq
 using Test
 
 @testset "System" begin
@@ -258,4 +259,14 @@ end
     @test timeseries_parameter_index(sys, p) === ParameterTimeseriesIndex(1, (1, 1))
     @test timeseries_parameter_index(sys, p[1, 1]) ===
         ParameterTimeseriesIndex(1, (1, 1, 1, 1))
+end
+
+@testset "Indexing with symbols work for discrete parameters" begin
+    @variables x(t) = 1.0
+    @discretes p(t) = 1.0
+    ev = SymbolicDiscreteCallback((t == 1) => [p ~ Pre(p) * 2], discrete_parameters = p)
+    @mtkcompile sys = System([D(x) ~ p], t; discrete_events = ev)
+    prob = ODEProblem(sys, [], (0.0, 2.0))
+    sol = solve(prob, Tsit5())
+    @test sol[p] == sol[:p] == sol.ps[p] == sol.ps[:p]
 end

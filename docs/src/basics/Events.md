@@ -289,7 +289,8 @@ Suppose we have a population of `N(t)` cells that can grow and die, and at time
 `t1` we want to inject `M` more cells into the population. We can model this by
 
 ```@example events
-@parameters M tinject α(t)
+@parameters M tinject
+@discretes α(t)
 @variables N(t)
 Dₜ = Differential(t)
 eqs = [Dₜ(N) ~ α - N]
@@ -411,7 +412,7 @@ example:
 
 ```@example events
 @variables x(t)
-@parameters c(t)
+@discretes c(t)
 
 ev = ModelingToolkit.SymbolicDiscreteCallback(
     1.0 => [c ~ Pre(c) + 1], discrete_parameters = c, iv = t)
@@ -430,21 +431,9 @@ sol([1.0, 2.0], idxs = [c, c * cos(x)])
 ```
 
 Note that only time-dependent parameters that are explicitly passed as `discrete_parameters`
-will be saved. If we repeat the above example with `c` not a `discrete_parameter`:
-
-```@example events
-@variables x(t)
-@parameters c(t)
-
-@mtkcompile sys = System(
-    D(x) ~ c * cos(x), t, [x], [c]; discrete_events = [1.0 => [c ~ Pre(c) + 1]])
-
-prob = ODEProblem(sys, [x => 0.0, c => 1.0], (0.0, 2pi))
-sol = solve(prob, Tsit5())
-sol.ps[c] # sol[c] will error, since `c` is not a timeseries value
-```
-
-It can be seen that the timeseries for `c` is not saved.
+will be saved. The `discrete_parameters` argument is also required for the callback to compile
+successfully - omitting it will result in an error because the equation modifying the discrete
+would have no unknowns/observables.
 
 ## [(Experimental) Imperative affects](@id imp_affects)
 
@@ -464,7 +453,9 @@ Bang-bang control of a heater connected to a leaky plant requires hysteresis in 
 
 ```@example events
 @variables temp(t)
-params = @parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1 furnace_on(t)::Bool=false
+@parameters furnace_on_threshold=0.5 furnace_off_threshold=0.7 furnace_power=1.0 leakage=0.1
+@discretes furnace_on(t)::Bool = false
+params = [furnace_on_threshold, furnace_off_threshold, furnace_power, leakage, furnace_on]
 eqs = [
     D(temp) ~ furnace_on * furnace_power - temp^2 * leakage
 ]

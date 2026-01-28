@@ -12,7 +12,24 @@ anydict(::SciMLBase.NullParameters) = AnyDict()
 anydict(::Nothing) = AnyDict()
 anydict(::Missing) = AnyDict()
 anydict(x::AnyDict) = x
-anydict(x) = AnyDict(x)
+anydict(x::AbstractDict) = AnyDict(x)
+function anydict(x)
+    op = AnyDict()
+    for (k, v) in x
+        if haskey(op, k)
+            throw(
+                ArgumentError(
+                    """
+                    Found duplicate entries in symbolic map. Key $k is provided multiple \
+                    times.
+                    """
+                )
+            )
+        end
+        op[k] = v
+    end
+    return op
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -654,12 +671,16 @@ function.
 Note that the getter ONLY works for problem-like objects, since it generates an observed
 function. It does NOT work for solutions.
 """
-Base.@nospecializeinfer function concrete_getu(indp, syms; eval_expression, eval_module)
+Base.@nospecializeinfer function concrete_getu(
+        indp, syms;
+        eval_expression, eval_module, force_time_independent = false
+    )
     @nospecialize
     obsfn = build_explicit_observed_function(
-        indp, syms; wrap_delays = false, eval_expression, eval_module
+        indp, syms; wrap_delays = false, eval_expression, eval_module,
+        force_time_independent
     )
-    return ObservedWrapper{is_time_dependent(indp)}(obsfn)
+    return ObservedWrapper{is_time_dependent(indp) && !force_time_independent}(obsfn)
 end
 
 """
@@ -714,7 +735,7 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 function get_mtkparameters_reconstructor(
         srcsys::AbstractSystem, dstsys::AbstractSystem;
         initials = false, unwrap_initials = false, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__
+        eval_expression = false, eval_module = @__MODULE__, force_time_independent = false
     )
     _p_constructor = p_constructor
     p_constructor = PConstructorApplicator(p_constructor)
@@ -732,7 +753,10 @@ function get_mtkparameters_reconstructor(
     tunable_getter = if isempty(tunable_syms)
         Returns(SVector{0, Float64}())
     else
-        p_constructor ∘ concrete_getu(srcsys, tunable_syms; eval_expression, eval_module)
+        p_constructor ∘ concrete_getu(
+            srcsys, tunable_syms; eval_expression, eval_module,
+            force_time_independent
+        )
     end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = Vector{Any}(syms[2])
@@ -751,7 +775,10 @@ function get_mtkparameters_reconstructor(
                 end
             end
         end
-        p_constructor ∘ concrete_getu(srcsys, initsyms; eval_expression, eval_module)
+        p_constructor ∘ concrete_getu(
+            srcsys, initsyms; eval_expression, eval_module,
+            force_time_independent
+        )
     else
         Returns(SVector{0, Float64}())
     end
@@ -773,12 +800,18 @@ function get_mtkparameters_reconstructor(
             Base.Fix1(broadcast, p_constructor) ∘
             # This `broadcast.(collect, ...)` avoids `ReshapedArray`/`SubArray`s from
             # appearing in the result.
-            concrete_getu(srcsys, Tuple(broadcast.(collect, syms[3])); eval_expression, eval_module)
+            concrete_getu(
+            srcsys, Tuple(broadcast.(collect, syms[3]));
+            eval_expression, eval_module, force_time_independent
+        )
     end
     const_getter = if syms[4] == ()
         Returns(())
     else
-        Base.Fix1(broadcast, p_constructor) ∘ getu(srcsys, Tuple(syms[4]))
+        Base.Fix1(broadcast, p_constructor) ∘ concrete_getu(
+            srcsys, Tuple(syms[4]);
+            eval_expression, eval_module, force_time_independent
+        )
     end
     nonnumeric_getter = if syms[5] == ()
         Returns(())
@@ -792,7 +825,10 @@ function get_mtkparameters_reconstructor(
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
             Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
-            concrete_getu(srcsys, Tuple(syms[5]); eval_expression, eval_module)
+            concrete_getu(
+            srcsys, Tuple(syms[5]);
+            eval_expression, eval_module, force_time_independent
+        )
     end
     getters = (
         tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter,
@@ -823,18 +859,25 @@ with values from `srcsys`.
 """
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem; u0_constructor = identity, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__
+        eval_expression = false, eval_module = @__MODULE__, is_steadystateprob = false,
     )
     @assert is_initializesystem(dstsys)
     ugetter = u0_constructor ∘
-        concrete_getu(srcsys, unknowns(dstsys); eval_expression, eval_module)
+        concrete_getu(
+        srcsys, unknowns(dstsys);
+        eval_expression, eval_module, force_time_independent = is_steadystateprob
+    )
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
-            srcsys, dstsys; p_constructor, eval_expression, eval_module
+            srcsys, dstsys; p_constructor, eval_expression, eval_module,
+            force_time_independent = is_steadystateprob,
         )
     else
         syms = parameters(dstsys)
-        pgetter = let inner = concrete_getu(srcsys, syms; eval_expression, eval_module),
+        pgetter = let inner = concrete_getu(
+                srcsys, syms;
+                eval_expression, eval_module, force_time_independent = is_steadystateprob
+            ),
                 p_constructor = p_constructor
 
             function _getter2(valp, initprob)
@@ -1112,7 +1155,7 @@ function maybe_build_initialization_problem(
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
         missing_guess_value = default_missing_guess_value(),
-        implicit_dae = false, kwargs...
+        implicit_dae = false, is_steadystateprob = false, kwargs...
     )
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
 
@@ -1124,7 +1167,7 @@ function maybe_build_initialization_problem(
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
         sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
-        missing_guess_value, kwargs...
+        missing_guess_value, is_steadystateprob, kwargs...
     )
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
@@ -1166,7 +1209,7 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
-            p_constructor, eval_expression, eval_module
+            p_constructor, eval_expression, eval_module, is_steadystateprob
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
@@ -1208,8 +1251,8 @@ function maybe_build_initialization_problem(
     for (k, v) in op
         v === COMMON_MISSING && push!(missingvars, k)
     end
+    binds = bindings(sys)
     if time_dependent_init
-        binds = bindings(sys)
         for v in unknowns(sys)
             has_possibly_indexed_key(parent(binds), v) && continue
             if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
@@ -1234,10 +1277,11 @@ function maybe_build_initialization_problem(
         has_possibly_indexed_key(parent(binds), v) && continue
         has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
     end
-    for (k, v) in bindings(sys)
+    for (k, v) in binds
         v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
     end
     for p in as_atomic_array_set(parameters(sys))
+        haskey(binds, p) && continue
         haskey(op, p) || push!(missingvars, p)
     end
     missingvars = collect(missingvars)
@@ -1355,12 +1399,12 @@ end
 
 abstract type ProblemConstructionHook end
 
-function operating_point_preprocess(sys::AbstractSystem, op)
+function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_point")
     if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
         throw(
             ArgumentError(
                 """
-                The operating point passed to the problem constructor must be a symbolic map.
+                The $name passed to the problem constructor must be a symbolic map.
                 """
             )
         )
@@ -1432,7 +1476,7 @@ function process_SciMLProblem(
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
-        allow_incomplete = false, is_initializeprob = false, kwargs...
+        allow_incomplete = false, is_initializeprob = false, is_steadystateprob = false, kwargs...
     )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1460,6 +1504,7 @@ function process_SciMLProblem(
     _sys = unhack_system(sys)
     obs = observed(_sys)
 
+    guesses = operating_point_preprocess(sys, guesses; name = "guesses")
 
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs, bindings(sys))
@@ -1477,7 +1522,7 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init, missing_guess_value, implicit_dae
+            time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae
         )
 
         kwargs = merge(kwargs, kws)
@@ -1641,13 +1686,14 @@ end
 
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        eval_expression = false, eval_module = @__MODULE__,
+        _skip_events = false, kwargs...
     )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
-        if expression == Val{false}
+        if expression == Val{false} && !_skip_events
             cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
             if cbs !== nothing
                 kwargs1 = merge(kwargs1, (callback = cbs,))
