@@ -1234,8 +1234,8 @@ function maybe_build_initialization_problem(
     for (k, v) in op
         v === COMMON_MISSING && push!(missingvars, k)
     end
+    binds = bindings(sys)
     if time_dependent_init
-        binds = bindings(sys)
         for v in unknowns(sys)
             has_possibly_indexed_key(parent(binds), v) && continue
             if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
@@ -1260,10 +1260,11 @@ function maybe_build_initialization_problem(
         has_possibly_indexed_key(parent(binds), v) && continue
         has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
     end
-    for (k, v) in bindings(sys)
+    for (k, v) in binds
         v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
     end
     for p in as_atomic_array_set(parameters(sys))
+        haskey(binds, p) && continue
         haskey(op, p) || push!(missingvars, p)
     end
     missingvars = collect(missingvars)

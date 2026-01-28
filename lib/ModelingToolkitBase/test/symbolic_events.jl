@@ -1805,3 +1805,23 @@ end
     @test sol[model.X[1]][end] ≈ 2.0 atol = 1.0e-8 rtol = 1.0e-8
     @test sol[model.X[2]][end] ≈ 6.0 atol = 1.0e-8 rtol = 1.0e-8
 end
+
+# Let's not duplicate tests unnecessarily
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4231: bound discretes are not given extra initial values" begin
+        @variables X(t)
+        @parameters p Kᵢ Kₐ
+        @discretes K(t) = Kᵢ
+        discrete_events = [
+            ModelingToolkitBase.SymbolicDiscreteCallback(
+                [0.0] => [K ~ Kₐ];
+                discrete_parameters = [K]
+            ),
+        ]
+        eqs = [
+            D(X) ~ p - K * X,
+        ]
+        @mtkcompile sys = System(eqs, t, [X], [p, Kᵢ, Kₐ, K]; discrete_events)
+        @test_nowarn ODEProblem(sys, [X => 1, p => 1, Kᵢ => 1, Kₐ => 2], (0.0, 1.0))
+    end
+end
