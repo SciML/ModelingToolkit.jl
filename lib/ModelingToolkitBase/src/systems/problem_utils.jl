@@ -12,7 +12,24 @@ anydict(::SciMLBase.NullParameters) = AnyDict()
 anydict(::Nothing) = AnyDict()
 anydict(::Missing) = AnyDict()
 anydict(x::AnyDict) = x
-anydict(x) = AnyDict(x)
+anydict(x::AbstractDict) = AnyDict(x)
+function anydict(x)
+    op = AnyDict()
+    for (k, v) in x
+        if haskey(op, k)
+            throw(
+                ArgumentError(
+                    """
+                    Found duplicate entries in symbolic map. Key $k is provided multiple \
+                    times.
+                    """
+                )
+            )
+        end
+        op[k] = v
+    end
+    return op
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -1234,8 +1251,8 @@ function maybe_build_initialization_problem(
     for (k, v) in op
         v === COMMON_MISSING && push!(missingvars, k)
     end
+    binds = bindings(sys)
     if time_dependent_init
-        binds = bindings(sys)
         for v in unknowns(sys)
             has_possibly_indexed_key(parent(binds), v) && continue
             if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
@@ -1260,10 +1277,11 @@ function maybe_build_initialization_problem(
         has_possibly_indexed_key(parent(binds), v) && continue
         has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
     end
-    for (k, v) in bindings(sys)
+    for (k, v) in binds
         v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
     end
     for p in as_atomic_array_set(parameters(sys))
+        haskey(binds, p) && continue
         haskey(op, p) || push!(missingvars, p)
     end
     missingvars = collect(missingvars)
