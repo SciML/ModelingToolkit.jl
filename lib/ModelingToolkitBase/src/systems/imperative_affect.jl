@@ -238,7 +238,7 @@ function compile_functional_affect(
         for oexpr in obs_exprs
             invalid_vars = invalid_variables(sys, oexpr)
             if length(invalid_vars) > 0
-                error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
+                error(lazy"Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
             end
         end
     end
@@ -253,7 +253,7 @@ function compile_functional_affect(
             end
             invalid_vars = unassignable_variables(sys, mexpr)
             if length(invalid_vars) > 0
-                error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+                error(lazy"Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
             end
         end
     end

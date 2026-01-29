@@ -246,8 +246,8 @@ generated functions, and `args` are the arguments.
 
 All other keyword arguments are forwarded to `build_function`.
 """
-function build_function_wrapper(
-        sys::AbstractSystem, expr, args...; p_start = 2,
+Base.@nospecializeinfer function build_function_wrapper(
+        sys::AbstractSystem, @nospecialize(expr), @nospecialize(args...); p_start = 2,
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),

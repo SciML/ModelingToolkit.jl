@@ -121,17 +121,17 @@ function (xn::Num)(k::ShiftIndex)
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)
     if length(vars) != 1
-        error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
+        error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
     var = only(vars)
     if operation(var) === getindex
         var = arguments(var)[1]
     end
     if !iscall(var)
-        throw(ArgumentError("Cannot shift time-independent variable $var"))
+        throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end
     if length(arguments(var)) != 1
-        error("Cannot shift an expression with multiple independent variables $x.")
+        error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
     t = only(arguments(var))
 
@@ -154,14 +154,14 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     vars = Set{SymbolicT}()
     SU.search_variables!(vars, x)
     if length(vars) != 1
-        error("Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
+        error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
     var = only(vars)
     if !iscall(var)
-        throw(ArgumentError("Cannot shift time-independent variable $var"))
+        throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end
     if length(arguments(var)) != 1
-        error("Cannot shift an expression with multiple independent variables $x.")
+        error(lazy"Cannot shift an expression with multiple independent variables $x.")
     end
     t = only(arguments(var))
 

@@ -67,7 +67,7 @@ tovar(s::Union{Num, Symbolics.Arr}) = wrap(tovar(unwrap(s)))
 function toparam_validate(s::SymbolicT)
     if iscall(s)
         error(
-            """
+            lazy"""
             `@parameters` cannot create time-dependent parameters. Encountered $s. Use \
             `@discretes` for this purpose.
             """

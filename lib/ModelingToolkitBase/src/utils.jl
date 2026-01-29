@@ -122,7 +122,7 @@ end
 function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
-            throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+            throw(ArgumentError(lazy"Independent variable $iv not allowed in parameters."))
     end
     return
 end
@@ -142,9 +142,9 @@ end
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) &&
-            throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
+            throw(ArgumentError(lazy"Independent variable $iv not allowed in dependent variables."))
         (is_delay_var(iv, dv) || SU.query(isequal(iv), dv)) ||
-            throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+            throw(ArgumentError(lazy"Variable $dv is not a function of independent variable $iv."))
     end
     return
 end
@@ -154,7 +154,7 @@ function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     _iszero(v) && return
     op = operation(v)
     op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
-    error("$v is not a valid LHS. Please run mtkcompile before simulation.")
+    error(lazy"$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
 function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
     for eq in eqs
@@ -199,7 +199,7 @@ function (icp::IndepvarCheckPredicate)(ex::SymbolicT)
 end
 
 @noinline function throw_multiple_iv(iv, newiv)
-    throw(ArgumentError("Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
+    throw(ArgumentError(lazy"Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
 end
 
 """
@@ -590,10 +590,10 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
             is_tmp_fine = iszero(nd)
         end
         is_tmp_fine ||
-            error("The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
+            error(lazy"The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
         for v in tmp
             v in ops &&
-                error("The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
+                error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
             push!(ops, v)
         end
         empty!(tmp)
@@ -1048,7 +1048,7 @@ function get_substitutions(sys)
 end
 
 @noinline function throw_missingvars_in_sys(vars)
-    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
+    throw(ArgumentError(lazy"$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
 
 function promote_to_concrete(vs; tofloat = true, use_union = true)
@@ -1165,7 +1165,7 @@ Return the `DiCMOBiGraph` denoting the dependencies between observed equations `
 function observed_dependency_graph(eqs::Vector{Equation})
     for eq in eqs
         if symbolic_type(eq.lhs) == NotSymbolic()
-            error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
+            error(lazy"All equations must be observed equations of the form `var ~ expr`. Got $eq")
         end
     end
     graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
@@ -1518,7 +1518,7 @@ function get_stable_index(x::SymbolicT)
     return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
-        _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
+        _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
     end
 end
 

@@ -710,8 +710,9 @@ end
 
 Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` returning the `condition(cb)`.
 """
-function compile_condition(
-        cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}, sys, dvs, ps;
+Base.@nospecializeinfer function compile_condition(
+        @nospecialize(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}),
+        sys, @nospecialize(dvs), @nospecialize(ps);
         eval_expression = false, eval_module = @__MODULE__, kwargs...
     )
     u = map(value, dvs)
@@ -760,10 +761,11 @@ function generate_continuous_callbacks(
         push!(_cbs, cb)
     end
     sort!(OrderedDict(cb_classes), by = cb -> cb[1])
-    compiled_callbacks = [
-        generate_callback(cb, sys; kwargs...)
-            for ((rf, reinit), cb) in cb_classes
-    ]
+    # Use explicit loop to avoid Generator type inference overhead
+    compiled_callbacks = Vector{Any}(undef, length(cb_classes))
+    for (i, ((rf, reinit), cb)) in enumerate(cb_classes)
+        compiled_callbacks[i] = generate_callback(cb, sys; kwargs...)
+    end
     if length(compiled_callbacks) == 1
         return only(compiled_callbacks)
     else
@@ -777,7 +779,12 @@ function generate_discrete_callbacks(
     )
     dbs = discrete_events(sys)
     isempty(dbs) && return nothing
-    return [generate_callback(db, sys; kwargs...) for db in dbs]
+    # Use explicit loop to avoid Generator type inference overhead
+    result = Vector{Any}(undef, length(dbs))
+    for (i, db) in enumerate(dbs)
+        result[i] = generate_callback(db, sys; kwargs...)
+    end
+    return result
 end
 
 EMPTY_AFFECT(args...) = nothing
@@ -985,9 +992,9 @@ end
 """
 Compile an affect defined by a set of equations. Systems with algebraic equations will solve implicit discrete problems to obtain their next state. Systems without will generate functions that perform explicit updates.
 """
-function compile_equational_affect(
-        aff::Union{AffectSystem, Vector{Equation}}, sys; reset_jumps = false,
-        eval_expression = false, eval_module = @__MODULE__, op = nothing, kwargs...
+Base.@nospecializeinfer function compile_equational_affect(
+        @nospecialize(aff::Union{AffectSystem, Vector{Equation}}), sys; reset_jumps = false,
+        eval_expression = false, eval_module = @__MODULE__, @nospecialize(op = nothing), kwargs...
     )
     if aff isa AbstractVector
         aff = make_affect(aff; iv = get_iv(sys))
