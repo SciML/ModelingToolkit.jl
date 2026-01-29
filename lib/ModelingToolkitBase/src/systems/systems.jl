@@ -120,18 +120,20 @@ function scalarized_vars(vars)
 end
 
 function _mtkcompile(sys::AbstractSystem; kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
-    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
-        sys = noise_to_brownians(sys; names = :αₘₜₖ)
-    end
+    # For systems with jumps, skip full structural simplification to preserve
+    # variables that only appear in jumps.
     if !isempty(jumps(sys))
-        # For systems with jumps, skip full structural simplification to preserve
-        # variables that only appear in jumps. But if brownians are present,
-        # we still need to extract them into noise_eqs for SDEProblem construction.
+        # If brownians are present, extract them to noise_eqs for SDEProblem construction.
+        # If noise_eqs is already set, return as-is (no need to convert).
         if !isempty(brownians(sys))
             return extract_brownians_to_noise_eqs(sys)
         end
         return sys
+    end
+
+    # For non-jump systems, convert noise_eqs to brownians for simplification
+    if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
+        sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
         return simplify_optimization_system(sys; kwargs...)::System
