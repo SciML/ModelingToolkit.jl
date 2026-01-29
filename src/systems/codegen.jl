@@ -575,3 +575,42 @@ function get_semiquadratic_W_sparsity(
         SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end
+
+const SCP_BASIC = [
+    MATMUL_ADD_RULE,
+    TRIU_RULE,
+    TRIL_RULE,
+    NORMALIZE_RULE,
+    LDIV_RULE,
+]
+
+const SCP_AGGRESSIVE = [
+    SCP_BASIC;
+    HVNCAT_STATIC_RULE;
+]
+
+const SCP_OPTIONS = Dict(
+    :basic => SCP_BASIC,
+    :aggressive => SCP_AGGRESSIVE,
+    :none => nothing
+)
+
+function MTKBase.resolve_optimize_option(o::Bool)
+    return MTKBase.resolve_optimize_option(o ? SCP_BASIC : nothing)
+end
+
+function MTKBase.resolve_optimize_option(o::Symbol)
+    rules = get(SCP_OPTIONS, o, nothing)
+    return MTKBase.resolve_optimize_option(rules)
+end
+
+function MTKBase.resolve_optimize_option(o::Int)
+    if o == 0
+        return MTKBase.resolve_optimize_option(false)
+    elseif o == 1
+        return MTKBase.resolve_optimize_option(:basic)
+    elseif o == 2
+        return MTKBase.resolve_optimize_option(:aggressive)
+    end
+    throw(ArgumentError("Invalid optimize option integer: $o"))
+end
