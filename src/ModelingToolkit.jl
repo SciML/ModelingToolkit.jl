@@ -75,6 +75,10 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
     scalarize, hasderiv
 import ModelingToolkitBase as MTKBase
 
+import SymbolicCompilerPasses as SCP
+import SymbolicCompilerPasses: MATMUL_ADD_RULE, LDIV_RULE, HVNCAT_STATIC_RULE,
+    TRIU_RULE, TRIL_RULE, NORMALIZE_RULE
+
 import DiffEqBase: @add_kwonly
 @reexport using Symbolics
 @reexport using UnPack

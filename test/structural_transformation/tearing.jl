@@ -219,6 +219,8 @@ prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
+@test_throws ArgumentError ODEProblem(sys, u0, (0, 1.0), optimize = 7)
+
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks: Constant
 

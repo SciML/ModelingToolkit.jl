@@ -252,7 +252,8 @@ function build_function_wrapper(
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, filter_observed = Returns(true),
         create_bindings = false, output_type = nothing, mkarray = nothing,
-        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true, kwargs...
+        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
+        optimize = nothing, kwargs...
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     # filter observed equations
@@ -375,8 +376,13 @@ function build_function_wrapper(
     if wrap_code isa Tuple && symbolic_type(expr) == ScalarSymbolic()
         wrap_code = wrap_code[1]
     end
-    return build_function(expr, args...; wrap_code, similarto, cse, kwargs...)
+
+    optimize = resolve_optimize_option(optimize)
+    return build_function(expr, args...; wrap_code, similarto, cse, optimize, kwargs...)
 end
+
+resolve_optimize_option(x) = x
+resolve_optimize_option(::Nothing) = nothing
 
 """
     $(TYPEDEF)
