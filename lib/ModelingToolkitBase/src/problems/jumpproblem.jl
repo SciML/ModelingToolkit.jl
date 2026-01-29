@@ -9,7 +9,7 @@
 
     has_vrjs = any(x -> x isa VariableRateJump, jumps(sys))
     has_eqs = !isempty(equations(sys))
-    has_noise = get_noise_eqs(sys) !== nothing
+    has_noise = get_noise_eqs(sys) !== nothing || !isempty(brownians(sys))
 
     if (has_vrjs || has_eqs)
         if has_eqs && has_noise

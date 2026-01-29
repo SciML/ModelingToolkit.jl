@@ -1,7 +1,7 @@
 using ModelingToolkitBase, DiffEqBase, JumpProcesses, Test, LinearAlgebra
 using SymbolicIndexingInterface, OrderedCollections
 using Random, StableRNGs, NonlinearSolve
-using OrdinaryDiffEq
+using OrdinaryDiffEq, StochasticDiffEq, Statistics
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using BenchmarkTools
 using Symbolics: SymbolicT, unwrap
@@ -829,5 +829,276 @@ end
         jprob = JumpProblem(jsys, [A => 100, k => 1.0], (0.0, 10.0); rng)
 
         @test jprob.discrete_jump_aggregation.save_positions == (true, true)
+    end
+end
+
+# Test that JumpProblem correctly detects brownians and creates SDEProblem
+# Issue: JumpProblem was only checking get_noise_eqs(sys), not brownians(sys)
+# Also tests that mtkcompile properly processes brownians for systems with jumps
+@testset "JumpProblem with brownians creates SDEProblem" begin
+    # Test 1: System with brownians and a mass action jump
+    @testset "Brownians + MassActionJump" begin
+        @variables X(t) = 10.0
+        @parameters k = 1.0
+        @brownians B
+
+        # Equation with Brownian noise: dX = -k*X*dt + sqrt(k)*dB
+        eqs = [D(X) ~ -k * X + sqrt(k) * B]
+
+        # A simple mass action jump: X -> 0 with rate k
+        jump = MassActionJump(k, [X => 1], [X => -1])
+
+        # Build the system with @mtkcompile - this properly processes brownians
+        @mtkcompile sys = System(eqs, t; jumps = [jump])
+
+        # After mtkcompile, brownians are converted to noise_eqs
+        @test MT.get_noise_eqs(sys) !== nothing
+
+        # Create JumpProblem - should create SDEProblem
+        op = [X => 10.0, k => 1.0]
+        tspan = (0.0, 1.0)
+        jprob = JumpProblem(sys, op, tspan; rng)
+
+        # The underlying problem should be SDEProblem, not ODEProblem
+        @test jprob.prob isa SDEProblem
+
+        # Should be solvable without error
+        sol = solve(jprob, SOSRI())
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    # Test 2: System with brownians and a constant rate jump
+    @testset "Brownians + ConstantRateJump" begin
+        @variables X(t) = 5.0
+        @parameters k = 0.5
+        @brownians B
+
+        eqs = [D(X) ~ k + 0.1 * B]
+        crj = ConstantRateJump(k * X, [X ~ Pre(X) - 1])
+
+        @mtkcompile sys = System(eqs, t; jumps = [crj])
+
+        @test MT.get_noise_eqs(sys) !== nothing
+
+        op = [X => 5.0, k => 0.5]
+        tspan = (0.0, 1.0)
+        jprob = JumpProblem(sys, op, tspan; rng)
+
+        @test jprob.prob isa SDEProblem
+
+        sol = solve(jprob, SOSRI())
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    # Test 3: System with brownians and a variable rate jump
+    @testset "Brownians + VariableRateJump" begin
+        @variables X(t) = 5.0
+        @parameters k = 0.5
+        @brownians B
+
+        eqs = [D(X) ~ k + 0.1 * B]
+        vrj = VariableRateJump(k * (1 + sin(t)), [X ~ Pre(X) + 1])
+
+        @mtkcompile sys = System(eqs, t; jumps = [vrj])
+
+        @test MT.get_noise_eqs(sys) !== nothing
+
+        op = [X => 5.0, k => 0.5]
+        tspan = (0.0, 1.0)
+        jprob = JumpProblem(sys, op, tspan; rng)
+
+        @test jprob.prob isa SDEProblem
+
+        sol = solve(jprob, SOSRI())
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    # Test 4: System with brownians and multiple jump types
+    @testset "Brownians + mixed jump types" begin
+        @variables X(t) = 10.0 Y(t) = 5.0
+        @parameters k1 = 1.0 k2 = 0.5
+        @brownians B
+
+        eqs = [D(X) ~ -k1 * X + 0.1 * B, D(Y) ~ k2]
+        maj = MassActionJump(k1, [X => 1], [X => -1])
+        crj = ConstantRateJump(k2 * Y, [Y ~ Pre(Y) - 1])
+
+        @mtkcompile sys = System(eqs, t; jumps = [maj, crj])
+
+        @test MT.get_noise_eqs(sys) !== nothing
+
+        op = [X => 10.0, Y => 5.0, k1 => 1.0, k2 => 0.5]
+        tspan = (0.0, 1.0)
+        jprob = JumpProblem(sys, op, tspan; rng)
+
+        @test jprob.prob isa SDEProblem
+
+        sol = solve(jprob, SOSRI())
+        @test SciMLBase.successful_retcode(sol)
+    end
+
+    # Test 5: Ensure systems WITHOUT brownians still work correctly
+    # (i.e., VRJ-only systems should create ODEProblem, not SDEProblem)
+    @testset "No brownians, VRJ only -> ODEProblem" begin
+        @variables X(t) = 5.0
+        @parameters k = 0.5
+
+        # No brownians, but has equations and variable rate jump
+        eqs = [D(X) ~ k]
+        vrj = VariableRateJump(k * (1 + sin(t)), [X ~ Pre(X) + 1])
+
+        @mtkcompile sys = System(eqs, t; jumps = [vrj])
+
+        @test isempty(MT.brownians(sys))
+        @test MT.get_noise_eqs(sys) === nothing
+
+        op = [X => 5.0, k => 0.5]
+        tspan = (0.0, 1.0)
+        jprob = JumpProblem(sys, op, tspan; rng)
+
+        # Should be ODEProblem since there are no brownians
+        @test jprob.prob isa ODEProblem
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+end
+
+# Correctness tests: verify symbolic SDE+jump solutions match analytical/direct expectations
+@testset "Brownians + Jumps correctness" begin
+    # Test 1: Pure diffusion + constant rate jump
+    # dX = sig*dB, X(0) = 0, with jumps X → X + delta at rate lam
+    # E[X(T)] = lam*delta*T (diffusion has zero mean)
+    @testset "Diffusion + CRJ mean" begin
+        @variables X(t) = 0.0
+        @parameters sig = 0.3 lam = 2.0 delta = 1.0
+        @brownians B
+
+        eqs = [D(X) ~ sig * B]
+        crj = ConstantRateJump(lam, [X ~ Pre(X) + delta])
+
+        # Must pass all parameters explicitly since System doesn't auto-collect from jumps
+        @mtkcompile sys = System(eqs, t, [X], [sig, lam, delta], [B]; jumps = [crj])
+
+        T = 2.0
+        Nsims = 4000
+        sig_val, lam_val, delta_val = 0.3, 2.0, 1.0
+        E_X = lam_val * delta_val * T  # = 4.0
+
+        # Create JumpProblem once, use seed parameter to vary randomness
+        jprob = JumpProblem(sys, [X => 0.0, sig => sig_val, lam => lam_val, delta => delta_val],
+            (0.0, T); rng, save_positions = (false, false))
+
+        seed = 1111
+        Xfinal = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            Xfinal[i] = sol[X, end]
+            seed += 1
+        end
+
+        sample_mean = mean(Xfinal)
+        rel_error = abs(sample_mean - E_X) / E_X
+        @test rel_error < 0.05  # 5% relative error
+    end
+
+    # Test 2: Compare symbolic vs direct JumpProcesses construction
+    # Verifies that the symbolic system produces the same statistics as manual construction
+    @testset "Symbolic vs Direct JumpProcesses" begin
+        sig_val = 0.2
+        lam_val = 3.0
+        delta_val = 0.5
+        X0 = 1.0
+        T = 1.5
+        Nsims = 3000
+
+        # Build symbolically
+        @variables X(t) = X0
+        @parameters sig = sig_val lam = lam_val delta = delta_val
+        @brownians B
+
+        eqs = [D(X) ~ sig * B]
+        crj = ConstantRateJump(lam, [X ~ Pre(X) + delta])
+
+        # Must pass all parameters explicitly since System doesn't auto-collect from jumps
+        @mtkcompile sys = System(eqs, t, [X], [sig, lam, delta], [B]; jumps = [crj])
+
+        # Create JumpProblem once for symbolic version
+        jprob_sym = JumpProblem(sys, [X => X0, sig => sig_val, lam => lam_val, delta => delta_val],
+            (0.0, T); rng, save_positions = (false, false))
+
+        seed = 2222
+        Xfinal_sym = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            Xfinal_sym[i] = sol[X, end]
+            seed += 1
+        end
+
+        # Build directly with JumpProcesses
+        f_direct(du, u, p, t) = (du[1] = 0.0)
+        g_direct(du, u, p, t) = (du[1] = sig_val)
+        sprob = SDEProblem(f_direct, g_direct, [X0], (0.0, T))
+        rate_direct(u, p, t) = lam_val
+        affect_direct!(integ) = (integ.u[1] += delta_val)
+        crj_direct = ConstantRateJump(rate_direct, affect_direct!)
+
+        jprob_direct = JumpProblem(sprob, Direct(), crj_direct; rng, save_positions = (false, false))
+
+        seed = 2222  # Use same seeds for comparison
+        Xfinal_direct = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_direct, SOSRI(); save_everystep = false, seed)
+            Xfinal_direct[i] = sol[end][1]
+            seed += 1
+        end
+
+        # Expected mean: X0 + lam*delta*T = 1.0 + 3.0*0.5*1.5 = 3.25
+        E_X = X0 + lam_val * delta_val * T
+
+        mean_sym = mean(Xfinal_sym)
+        mean_direct = mean(Xfinal_direct)
+
+        # Both should match each other and the analytical value within 5%
+        @test abs(mean_sym - mean_direct) / E_X < 0.05
+        @test abs(mean_sym - E_X) / E_X < 0.05
+        @test abs(mean_direct - E_X) / E_X < 0.05
+    end
+
+    # Test 3: Drift + diffusion + MassActionJump (birth-death with noise)
+    # dX = (alph - bet*X)*dt + sig*dB
+    # Birth: ∅ → X at rate gam
+    # At steady state (long time), E[X] ≈ (alph + gam) / bet
+    @testset "Drift + diffusion + MAJ steady state" begin
+        @variables X(t) = 5.0
+        @parameters alph = 2.0 bet = 0.5 gam = 3.0 sig = 0.1
+        @brownians B
+
+        # ODE part drives toward alph/bet, MAJ adds gam births per unit time
+        eqs = [D(X) ~ alph - bet * X + sig * B]
+        birth = MassActionJump(gam, [0 => 1], [X => 1])
+
+        # Must pass all parameters explicitly since System doesn't auto-collect from jumps
+        @mtkcompile sys = System(eqs, t, [X], [alph, bet, gam, sig], [B]; jumps = [birth])
+
+        T = 20.0  # Long enough to reach steady state
+        Nsims = 2000
+        alph_val, bet_val, gam_val, sig_val = 2.0, 0.5, 3.0, 0.1
+        E_X_ss = (alph_val + gam_val) / bet_val  # = 10
+
+        jprob = JumpProblem(sys, [X => 5.0, alph => alph_val, bet => bet_val, gam => gam_val, sig => sig_val],
+            (0.0, T); rng, save_positions = (false, false))
+
+        seed = 3333
+        Xfinal = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob, SOSRI(); save_everystep = false, seed)
+            Xfinal[i] = sol[X, end]
+            seed += 1
+        end
+
+        sample_mean = mean(Xfinal)
+        rel_error = abs(sample_mean - E_X_ss) / E_X_ss
+        @test rel_error < 0.05  # 5% relative error
     end
 end
