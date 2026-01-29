@@ -79,6 +79,8 @@ jobs:
           elseif PKG == "ModelingToolkit"
             @info "Testing ModelingToolkit"
             Pkg.activate(".")
+            @info "`dev`ing ModelingToolkitBase"
+            Pkg.develop(PackageSpec(; path = "lib/ModelingToolkitBase"))
             @info "Running tests" GROUP
             Pkg.test()
           elseif PKG == "SciCompDSL"
