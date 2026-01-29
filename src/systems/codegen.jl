@@ -589,18 +589,19 @@ const SCP_AGGRESSIVE = [
     HVNCAT_STATIC_RULE;
 ]
 
-const SCP_OPTIONS = Dict(:basic => SCP_BASIC,
-                        :aggressive => SCP_AGGRESSIVE,
-                        :none => nothing
-                    )
+const SCP_OPTIONS = Dict(
+    :basic => SCP_BASIC,
+    :aggressive => SCP_AGGRESSIVE,
+    :none => nothing
+)
 
 function MTKBase.resolve_optimize_option(o::Bool)
-    MTKBase.resolve_optimize_option(o ? SCP_BASIC : nothing)
+    return MTKBase.resolve_optimize_option(o ? SCP_BASIC : nothing)
 end
 
 function MTKBase.resolve_optimize_option(o::Symbol)
     rules = get(SCP_OPTIONS, o, nothing)
-    MTKBase.resolve_optimize_option(rules)
+    return MTKBase.resolve_optimize_option(rules)
 end
 
 function MTKBase.resolve_optimize_option(o::Int)
