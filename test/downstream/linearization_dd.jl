@@ -7,16 +7,23 @@ using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
 using ModelingToolkitStandardLibrary.Mechanical.TranslationalPosition
 using Test
+import Symbolics
 import NonlinearSolve
+using Setfield: @set
 
 using ControlSystemsMTK
 using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
 connect = ModelingToolkit.connect
 
+function rm_bindings(sys)
+    @set sys.bindings = empty(bindings(sys))
+end
+
 @independent_variables t
 D = Differential(t)
 
 @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
+link1 = rm_bindings(link1)
 @named cart = TranslationalPosition.Mass(; m = 1, s = 0)
 @named fixed = Fixed()
 @named force = Force(use_support = false)
@@ -64,13 +71,13 @@ lsyss,
 
 dummyder = setdiff(unknowns(sysss), unknowns(model))
 # op2 = merge(ModelingToolkit.guesses(model), op, Dict(x => 0.0 for x in dummyder))
-op2 = merge(ModelingToolkit.defaults(syss), op)
+op2 = merge(ModelingToolkit.initial_conditions(syss), op)
 op2[link1.fy1] = -op2[link1.g] * op2[link1.m]
 op2[cart.f] = 0
 
-@test substitute(lsyss.A, op2) ≈ lsys.A
+@test Symbolics.value.(substitute(lsyss.A, op2; fold = Val(true))) ≈ lsys.A
 # We cannot pivot symbolically, so the part where a linear solve is required
 # is not reliable.
-@test substitute(lsyss.B, op2)[1:6, 1] ≈ lsys.B[1:6, 1]
-@test substitute(lsyss.C, op2) ≈ lsys.C
-@test substitute(lsyss.D, op2) ≈ lsys.D
+@test Symbolics.value.(substitute(lsyss.B, op2; fold = Val(true)))[1:6, 1] ≈ lsys.B[1:6, 1]
+@test Symbolics.value.(substitute(lsyss.C, op2; fold = Val(true))) ≈ lsys.C
+@test Symbolics.value.(substitute(lsyss.D, op2; fold = Val(true))) ≈ lsys.D

@@ -880,20 +880,20 @@ function generate_control_function(
         kwargs...
     )
     input_ap_name = canonicalize_ap(sys, input_ap_name)
-    u = []
+    u = SymbolicT[]
     for input_ap in input_ap_name
         sys, (du, _) = open_loop(sys, input_ap)
-        push!(u, du)
+        append!(u, du)
     end
     if dist_ap_name === nothing
         return ModelingToolkitBase.generate_control_function(system_modifier(sys), u; kwargs...)
     end
 
     dist_ap_name = canonicalize_ap(sys, dist_ap_name)
-    d = []
+    d = SymbolicT[]
     for dist_ap in dist_ap_name
         sys, (du, _) = open_loop(sys, dist_ap)
-        push!(d, du)
+        append!(d, du)
     end
 
     return ModelingToolkitBase.generate_control_function(system_modifier(sys), u, d; kwargs...)
