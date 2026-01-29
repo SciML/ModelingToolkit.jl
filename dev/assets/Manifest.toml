@@ -1130,9 +1130,9 @@ uuid = "442a2c76-b920-505d-bb47-c5924d526838"
 version = "1.1.0"
 
 [[deps.FastPower]]
-git-tree-sha1 = "1dd291358e0e3a31f77dbbb76ce7abbcca38d410"
+git-tree-sha1 = "862831f78c7a48681a074ecc9aac09f2de563f71"
 uuid = "a4df4552-cc26-4903-aec0-212e50a0e84b"
-version = "1.3.0"
+version = "1.3.1"
 
     [deps.FastPower.extensions]
     FastPowerEnzymeExt = "Enzyme"
@@ -1238,9 +1238,9 @@ version = "1.3.7"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
-git-tree-sha1 = "b2977f86ed76484de6f29d5b36f2fa686f085487"
+git-tree-sha1 = "eef4c86803f47dcb61e9b8790ecaa96956fdd8ae"
 uuid = "f6369f11-7733-5829-9624-2563aa707210"
-version = "1.3.1"
+version = "1.3.2"
 weakdeps = ["StaticArrays"]
 
     [deps.ForwardDiff.extensions]
@@ -1736,9 +1736,9 @@ version = "1.29.4"
 
 [[deps.JumpProcesses]]
 deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "DiffEqCallbacks", "DocStringExtensions", "FunctionWrappers", "Graphs", "LinearAlgebra", "PoissonRandom", "Random", "RecursiveArrayTools", "Reexport", "SciMLBase", "Setfield", "StaticArrays", "SymbolicIndexingInterface"]
-git-tree-sha1 = "0593944281222db3b3f3bc1cfe2c464a17f9eea1"
+git-tree-sha1 = "c19bb0be5fe979b4476ab5531393b4fb0752ace5"
 uuid = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
-version = "9.21.0"
+version = "9.21.1"
 
     [deps.JumpProcesses.extensions]
     JumpProcessesKernelAbstractionsExt = ["Adapt", "KernelAbstractions"]
@@ -2497,9 +2497,9 @@ version = "1.6.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f19301ae653233bc88b1810ae908194f07f8db9d"
+git-tree-sha1 = "c9cbeda6aceffc52d8a0017e71db27c7a7c0beaf"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.4+0"
+version = "3.5.5+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]
@@ -3154,9 +3154,9 @@ version = "0.5.1+0"
 
 [[deps.RobustAndOptimalControl]]
 deps = ["ChainRulesCore", "ComponentArrays", "ControlSystemsBase", "DescriptorSystems", "Distributions", "GenericSchur", "LinearAlgebra", "MatrixEquations", "MatrixPencils", "MonteCarloMeasurements", "Optim", "Printf", "Random", "RecipesBase", "SparseArrays", "Statistics", "UUIDs", "UnPack"]
-git-tree-sha1 = "319f6b9c12dac634acc55f5e69c5a860a8538b07"
+git-tree-sha1 = "9732e06085b55036d9ec1c97ae6e27dff7e763ba"
 uuid = "21fd56a4-db03-40ee-82ee-a87907bee541"
-version = "0.4.48"
+version = "0.4.49"
 
     [deps.RobustAndOptimalControl.extensions]
     RobustAndOptimalControlLinearMPCExt = "LinearMPC"
@@ -3663,15 +3663,16 @@ version = "4.14.0"
 
 [[deps.Symbolics]]
 deps = ["ADTypes", "AbstractPlutoDingetjes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "Moshi", "MultivariatePolynomials", "MutableArithmetics", "NaNMath", "PrecompileTools", "Preferences", "Primes", "RecipesBase", "Reexport", "RuntimeGeneratedFunctions", "SciMLPublic", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
-git-tree-sha1 = "53d84d58e5fd1dfab5446d2b31eb1153bcc9f554"
+git-tree-sha1 = "e60b08135fa765004b30c2f3aebb84b76e502d95"
 uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-version = "7.9.1"
+version = "7.10.0"
 
     [deps.Symbolics.extensions]
     SymbolicsD3TreesExt = "D3Trees"
     SymbolicsDistributionsExt = "Distributions"
     SymbolicsForwardDiffExt = "ForwardDiff"
     SymbolicsGroebnerExt = "Groebner"
+    SymbolicsHypergeometricFunctionsExt = "HypergeometricFunctions"
     SymbolicsLatexifyExt = ["Latexify", "LaTeXStrings"]
     SymbolicsLuxExt = "Lux"
     SymbolicsNemoExt = "Nemo"
@@ -3684,6 +3685,7 @@ version = "7.9.1"
     Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
     ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
     Groebner = "0b43b601-686d-58a3-8a1c-6623616c7cd4"
+    HypergeometricFunctions = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
     LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
     Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
     Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
