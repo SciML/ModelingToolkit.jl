@@ -377,6 +377,7 @@ function unwrap_vars(vars::AbstractArray)
 end
 
 defsdict(x::SymmapT) = x
+defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
