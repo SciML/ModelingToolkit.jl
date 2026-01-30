@@ -1102,3 +1102,16 @@ end
         @test rel_error < 0.05  # 5% relative error
     end
 end
+
+# Test that specifying both brownians and noise_eqs throws an error
+@testset "Both brownians and noise_eqs throws error" begin
+    @variables X(t) = 1.0
+    @parameters k = 1.0
+    @brownians B
+
+    eqs = [D(X) ~ -k * X]
+    noise_eqs = reshape([sqrt(k)], (1, 1))
+
+    # brownians is 5th positional arg: System(eqs, iv, unknowns, params, brownians; ...)
+    @test_throws ArgumentError System(eqs, t, [X], [k], [B]; noise_eqs)
+end
