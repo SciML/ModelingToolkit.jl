@@ -1000,6 +1000,11 @@ end
         sample_mean = mean(Xfinal)
         rel_error = abs(sample_mean - E_X) / E_X
         @test rel_error < 0.05  # 5% relative error
+
+        # Also check variance: Var[X(T)] = sig^2 * T + lam * delta^2 * T
+        sample_var = var(Xfinal)
+        E_var = sig_val^2 * T + lam_val * delta_val^2 * T  # = 0.09*2 + 2*1*2 = 4.18
+        @test abs(sample_var - E_var) < 0.10 * E_var  # 10% tolerance for variance estimates
     end
 
     # Test 2: Compare symbolic vs direct JumpProcesses construction
@@ -1063,6 +1068,11 @@ end
         @test abs(mean_sym - mean_direct) / E_X < 0.05
         @test abs(mean_sym - E_X) / E_X < 0.05
         @test abs(mean_direct - E_X) / E_X < 0.05
+
+        # Also check variances match between implementations
+        var_sym = var(Xfinal_sym)
+        var_direct = var(Xfinal_direct)
+        @test abs(var_sym - var_direct) < 0.10 * var_direct
     end
 
     # Test 3: Drift + diffusion + MassActionJump (birth-death with noise)
