@@ -326,6 +326,13 @@ struct System <: IntermediateDeprecationSystem
                 error()
             end
             N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
+            if noise_eqs !== nothing && !isempty(brownians)
+                throw(ArgumentError(
+                    "A system cannot have both `noise_eqs` and `brownians` specified. " *
+                    "Use either `noise_eqs` (a matrix of noise coefficients) or " *
+                    "`brownians` (symbolic brownian variables in equations), but not both."
+                ))
+            end
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
         end

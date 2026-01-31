@@ -120,12 +120,20 @@ function scalarized_vars(vars)
 end
 
 function _mtkcompile(sys::AbstractSystem; kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
+    # For systems with jumps, skip full structural simplification to preserve
+    # variables that only appear in jumps.
+    if !isempty(jumps(sys))
+        # If brownians are present, extract them to noise_eqs for SDEProblem construction.
+        # If noise_eqs is already set, return as-is (no need to convert).
+        if !isempty(brownians(sys))
+            return extract_brownians_to_noise_eqs(sys)
+        end
+        return sys
+    end
+
+    # For non-jump systems, convert noise_eqs to brownians for simplification
     if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
-    end
-    if !isempty(jumps(sys))
-        return sys
     end
     if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
         return simplify_optimization_system(sys; kwargs...)::System
@@ -524,15 +532,20 @@ function add_array_observed!(obseqs::Vector{Equation})
     return
 end
 
-function simplify_sde_system(sys::AbstractSystem; kwargs...)
-    brown_vars = brownians(sys)
-    @set! sys.brownians = SymbolicT[]
-    sys = __mtkcompile(sys; kwargs...)
+"""
+    _brownians_to_noise_eqs(eqs::Vector{Equation}, brown_vars::Vector)
 
-    new_eqs = copy(equations(sys))
+Extract brownian coefficients from equations and return (new_eqs, noise_eqs).
+The brownian terms are removed from the equations and collected into a noise matrix.
+This is a helper function used by both `extract_brownians_to_noise_eqs` and
+`simplify_sde_system`.
+"""
+function _brownians_to_noise_eqs(eqs::Vector{Equation}, brown_vars::Vector)
+    new_eqs = copy(eqs)
     Is = Int[]
     Js = Int[]
     vals = SymbolicT[]
+
     for (i, eq) in enumerate(new_eqs)
         resid = eq.rhs
         for (j, bvar) in enumerate(brown_vars)
@@ -557,23 +570,47 @@ function simplify_sde_system(sys::AbstractSystem; kwargs...)
     end
 
     g = Matrix(sparse(Is, Js, vals, length(new_eqs), length(brown_vars)))
-    @set! sys.eqs = new_eqs
+
+    # Determine noise type (scalar, diagonal, or general)
     # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
-    if size(g, 2) == 1
-        # If there's only one brownian variable referenced across all the equations,
-        # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
-        noise_eqs = reshape(g[:, 1], (:, 1))
-        is_scalar_noise = true
+    noise_eqs = if size(g, 2) == 1
+        # Scalar noise: Nx1 matrix
+        reshape(g[:, 1], (:, 1))
     elseif __num_isdiag_noise(g)
-        # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
-        # In this case, the solver just takes a vector column of equations and it interprets that to
-        # mean that each noise process is independent
-        noise_eqs = __get_num_diag_noise(g)
-        is_scalar_noise = false
+        # Diagonal noise: each column has 0 or 1 non-zero entry
+        __get_num_diag_noise(g)
     else
-        noise_eqs = g
-        is_scalar_noise = false
+        g
     end
+
+    return new_eqs, noise_eqs
+end
+
+"""
+    extract_brownians_to_noise_eqs(sys::AbstractSystem)
+
+Extract brownian variables from equations and convert them to a noise_eqs matrix,
+without performing structural simplification. This is used for systems with both
+jumps and brownians, where full simplification could eliminate variables that
+only appear in jumps.
+"""
+function extract_brownians_to_noise_eqs(sys::AbstractSystem)
+    brown_vars = brownians(sys)
+    new_eqs, noise_eqs = _brownians_to_noise_eqs(equations(sys), brown_vars)
+
+    @set! sys.eqs = new_eqs
+    @set! sys.noise_eqs = noise_eqs
+    @set! sys.brownians = SymbolicT[]
+
+    return sys
+end
+
+function simplify_sde_system(sys::AbstractSystem; kwargs...)
+    brown_vars = brownians(sys)
+    @set! sys.brownians = SymbolicT[]
+    sys = __mtkcompile(sys; kwargs...)
+
+    new_eqs, noise_eqs = _brownians_to_noise_eqs(equations(sys), brown_vars)
 
     dummy_sub = Dict{SymbolicT, SymbolicT}()
     for eq in new_eqs
