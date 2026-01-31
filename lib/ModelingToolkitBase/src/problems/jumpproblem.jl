@@ -98,8 +98,11 @@
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
+    # preprocess op to convert Symbol keys to Symbolic using main system before passing
+    # to process_events (which may create ImplicitDiscreteProblems for affect subsystems)
+    op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
-        sys; callback, eval_expression, eval_module, op, reset_jumps = true
+        sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true
     )
 
     if rng !== nothing
