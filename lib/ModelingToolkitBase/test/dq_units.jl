@@ -272,3 +272,31 @@ let
     @test MT.get_unit(x_vec) == u"1"
     @test MT.get_unit(x_mat) == u"1"
 end
+
+# Issue #4211: collect_vars! must discover parameters in defaults with DynamicQuantities loaded
+# On Julia 1.10, loading DynamicQuantities could cause collect_vars! to fail to discover
+# parameters used in variable defaults due to a method invalidation bug.
+@testset "Issue #4211: collect_vars! discovers parameters in defaults" begin
+    using DataStructures: OrderedSet
+
+    @parameters X0_test
+    @variables X_test(t) = X0_test
+
+    us = OrderedSet{Symbolics.SymbolicT}()
+    ps = OrderedSet{Symbolics.SymbolicT}()
+    MT.collect_vars!(us, ps, Symbolics.unwrap(X_test), Symbolics.unwrap(t), Symbolics.Operator; depth = 0)
+
+    # X0_test should be discovered in X_test's default value
+    @test Symbolics.unwrap(X0_test) in ps
+
+    # Test with expression in default
+    @parameters a_test b_test
+    @variables Y_test(t) = a_test + 2 * b_test
+
+    empty!(us)
+    empty!(ps)
+    MT.collect_vars!(us, ps, Symbolics.unwrap(Y_test), Symbolics.unwrap(t), Symbolics.Operator; depth = 0)
+
+    @test Symbolics.unwrap(a_test) in ps
+    @test Symbolics.unwrap(b_test) in ps
+end
