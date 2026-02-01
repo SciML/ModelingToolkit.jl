@@ -510,6 +510,7 @@ function TwoFluidSystem(; name)
         connect(fluid_b, source_b.H)
         connect(source_b.H, pipe_b.HA)
         connect(pipe_b.HB, volume_b.H)
+        source_a.H.dm ~ 0
     ]
 
     return System(eqs, t, vars, pars; name, systems)
