@@ -876,6 +876,7 @@ function generate_control_function(
         dist_ap_name::Union{
             Nothing, Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint},
         } = nothing;
+        known_disturbance_inputs = nothing,
         system_modifier = identity,
         kwargs...
     )
@@ -885,16 +886,32 @@ function generate_control_function(
         sys, (du, _) = open_loop(sys, input_ap)
         push!(u, du)
     end
-    if dist_ap_name === nothing
+
+    # Handle known disturbance inputs
+    kd = []
+    if known_disturbance_inputs !== nothing
+        known_dist_ap = canonicalize_ap(sys, known_disturbance_inputs)
+        for dist_ap in known_dist_ap
+            sys, (du, _) = open_loop(sys, dist_ap)
+            push!(kd, du)
+        end
+    end
+
+    if dist_ap_name === nothing && isempty(kd)
         return ModelingToolkitBase.generate_control_function(system_modifier(sys), u; kwargs...)
     end
 
-    dist_ap_name = canonicalize_ap(sys, dist_ap_name)
     d = []
-    for dist_ap in dist_ap_name
-        sys, (du, _) = open_loop(sys, dist_ap)
-        push!(d, du)
+    if dist_ap_name !== nothing
+        dist_ap_name = canonicalize_ap(sys, dist_ap_name)
+        for dist_ap in dist_ap_name
+            sys, (du, _) = open_loop(sys, dist_ap)
+            push!(d, du)
+        end
     end
 
-    return ModelingToolkitBase.generate_control_function(system_modifier(sys), u, d; kwargs...)
+    return ModelingToolkitBase.generate_control_function(
+        system_modifier(sys), u, isempty(d) ? nothing : d;
+        known_disturbance_inputs = isempty(kd) ? nothing : kd,
+        kwargs...)
 end
