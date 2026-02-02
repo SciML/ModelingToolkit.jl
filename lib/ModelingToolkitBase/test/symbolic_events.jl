@@ -1824,4 +1824,11 @@ if !@isdefined(ModelingToolkit)
         @mtkcompile sys = System(eqs, t, [X], [p, Kᵢ, Kₐ, K]; discrete_events)
         @test_nowarn ODEProblem(sys, [X => 1, p => 1, Kᵢ => 1, Kₐ => 2], (0.0, 1.0))
     end
+
+    @testset "Issue:4095: `Pre` recurses into expressions" begin
+        @variables x(t)
+        @parameters p (f::Function)(..)
+        @discretes d(t)
+        @test isequal(Pre(2x^2 + 3sin(f(x)) - ifelse(p < 0, d, d + 2) + 2p), 2Pre(x)^2 + 3sin(f(Pre(x))) - ifelse(p < 0, Pre(d), Pre(d) + 2) + 2p)
+    end
 end

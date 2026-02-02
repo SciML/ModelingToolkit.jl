@@ -217,35 +217,42 @@ unPre(x::Symbolics.Arr) = unPre(unwrap(x))
 unPre(x::SymbolicT) = (iscall(x) && operation(x) isa Pre) ? only(arguments(x)) : x
 distribute_shift_into_operator(::Pre) = false
 
-function (p::Pre)(x)
-    iw = Symbolics.iswrapped(x)
-    x = unwrap(x)
-    # non-symbolic values don't change
-    SU.isconst(x) && return x
-    if symbolic_type(x) == NotSymbolic()
-        return x
+(p::Pre)(x::Num) = Num(p(unwrap(x)))
+(p::Pre)(x::Symbolics.Arr{T, N}) where {T, N} = Symbolics.Arr{T, N}(p(unwrap(x)))
+(p::Pre)(x::Symbolics.SymStruct{T}) where {T} = Symbolics.SymStruct{T}(p(unwrap(x)))
+(p::Pre)(x::Symbolics.CallAndWrap{T}) where {T} = Symbolics.CallAndWrap{T}(p(unwrap(x)))
+function (p::Pre)(x::SymbolicT)
+    iscall(x) || return x
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f) && if f isa Pre end => return x
+        BSImpl.Term(; f) && if f isa Differential end => begin
+            return p(default_toterm(x))
+        end
+        BSImpl.Term(; f, args, type, shape) && if f === getindex end => begin
+            arrpre = p(args[1])
+            Moshi.Match.@match arrpre begin
+                BSImpl.Term(; f = f2) && if f2 isa Pre end => begin
+                    newargs = SArgsT((x,))
+                    return toparam(BSImpl.Term{VartypeT}(p, newargs; type, shape))
+                end
+                _ => begin
+                    newargs = copy(parent(args))
+                    newargs[1] = arrpre
+                    return toparam(BSImpl.Term{VartypeT}(f, newargs; type, shape))
+                end
+            end
+        end
+        BSImpl.Term(; f, type, shape) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+            return toparam(BSImpl.Term{VartypeT}(p, SArgsT((x,)); type, shape))
+        end
+        _ => begin
+            op = operation(x)
+            args = map(p, arguments(x))
+            return toparam(maketerm(SymbolicT, op, args, nothing; type = symtype(x)))
+        end
     end
-    # differential variables are default-toterm-ed
-    if iscall(x) && operation(x) isa Differential
-        x = default_toterm(x)
-    end
-    # don't double wrap
-    iscall(x) && operation(x) isa Pre && return x
-    result = if iscall(x) && operation(x) === getindex
-        # instead of `Pre(x[1])` create `Pre(x)[1]`
-        # which allows parameter indexing to handle this case automatically.
-        arr = arguments(x)[1]
-        p(arr)[arguments(x)[2:end]...]
-    else
-        term(p, x; type = symtype(x), shape = SU.shape(x))
-    end
-    # the result should be a parameter
-    result = toparam(result)
-    if iw
-        result = wrap(result)
-    end
-    return result
 end
+(::Pre)(x) = x
 haspre(eq::Equation) = haspre(eq.lhs) || haspre(eq.rhs)
 haspre(O) = recursive_hasoperator(Pre, O)
 
