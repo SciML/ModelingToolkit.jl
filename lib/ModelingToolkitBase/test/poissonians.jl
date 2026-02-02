@@ -435,6 +435,70 @@ end
         sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
         @test length(sys_jumps) == 1
     end
+
+    @testset "save_positions forwarded to VRJs from poissonians" begin
+        @parameters k
+        @variables X(t)
+        @poissonians dN(k * X)  # State-dependent → VRJ
+
+        eqs = [D(X) ~ -dN]
+        @named sys = System(eqs, t)
+
+        # Default save_positions = (false, true)
+        compiled_default = mtkcompile(sys)
+        vrj_default = ModelingToolkitBase.jumps(compiled_default)[1]
+        @test vrj_default isa VariableRateJump
+        @test vrj_default.save_positions == (false, true)
+
+        # Custom save_positions = (true, false)
+        compiled_custom = mtkcompile(sys; save_positions = (true, false))
+        vrj_custom = ModelingToolkitBase.jumps(compiled_custom)[1]
+        @test vrj_custom isa VariableRateJump
+        @test vrj_custom.save_positions == (true, false)
+
+        # Custom save_positions = (false, false)
+        compiled_none = mtkcompile(sys; save_positions = (false, false))
+        vrj_none = ModelingToolkitBase.jumps(compiled_none)[1]
+        @test vrj_none.save_positions == (false, false)
+    end
+
+    @testset "save_positions does not affect user-provided VRJs" begin
+        @parameters λ k
+        @variables X(t) Y(t)
+        @poissonians dN(λ)  # Constant rate → CRJ (no save_positions field)
+
+        # User-provided VRJ with explicit save_positions
+        user_vrj = VariableRateJump(k * Y, [Y ~ Pre(Y) - 1]; save_positions = (true, true))
+
+        eqs = [D(X) ~ dN]
+        @named sys = System(eqs, t; jumps = [user_vrj])
+
+        # Compile with different save_positions - should NOT affect user VRJ
+        compiled = mtkcompile(sys; save_positions = (false, false))
+        sys_jumps = ModelingToolkitBase.jumps(compiled)
+
+        # Find the user VRJ (it's the one with rate k*Y)
+        user_vrj_compiled = filter(j -> j isa VariableRateJump, sys_jumps)
+        @test length(user_vrj_compiled) == 1
+        @test user_vrj_compiled[1].save_positions == (true, true)  # Unchanged!
+    end
+
+    @testset "Error when JumpProblem receives uncompiled system with poissonians" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        eqs = [D(X) ~ dN]
+        @named sys = System(eqs, t)
+
+        # complete() but NOT mtkcompile() - poissonians are still unprocessed
+        sys_complete = complete(sys)
+
+        # Should error because poissonians haven't been converted to jumps
+        @test_throws ModelingToolkitBase.SystemCompatibilityError JumpProblem(
+            sys_complete, [X => 0.0, λ => 1.0], (0.0, 1.0)
+        )
+    end
 end
 
 # ============================================================================

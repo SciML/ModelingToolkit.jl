@@ -122,7 +122,7 @@ end
 function _mtkcompile(sys::AbstractSystem; kwargs...)
     # Extract poissonians to jumps first (before checking for existing jumps)
     if !isempty(poissonians(sys))
-        sys = extract_poissonians_to_jumps(sys)
+        sys = extract_poissonians_to_jumps(sys; kwargs...)
     end
 
     # For systems with jumps, skip full structural simplification to preserve
@@ -611,16 +611,21 @@ function extract_brownians_to_noise_eqs(sys::AbstractSystem)
 end
 
 """
-    _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns)
+    _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns; save_positions)
 
 Extract poissonian coefficients from equations and return (new_eqs, jumps, eqs_to_remove).
 Each poissonian is converted to a Jump (ConstantRateJump or VariableRateJump) with affects
 collected from all equations where it appears. Equations that become `D(X) ~ 0` after
 extraction are marked for removal.
 
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
+
 This is a helper function used by `extract_poissonians_to_jumps`.
 """
-function _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns)
+function _poissonians_to_jumps(
+        eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns;
+        save_positions = (false, true)
+    )
     new_eqs = copy(eqs)
     generated_jumps = JumpType[]
     eqs_to_remove = Set{Int}()
@@ -674,7 +679,7 @@ function _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, 
         is_variable_rate = _is_variable_rate_jump(rate, iv, sys_unknowns)
 
         jump = if is_variable_rate
-            VariableRateJump(rate, affects)
+            VariableRateJump(rate, affects; save_positions)
         else
             ConstantRateJump(rate, affects)
         end
@@ -715,7 +720,7 @@ function _is_variable_rate_jump(rate, iv, sys_unknowns)
 end
 
 """
-    extract_poissonians_to_jumps(sys::AbstractSystem)
+    extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
 
 Extract poissonian variables from equations and convert them to Jump objects.
 Returns a modified system with:
@@ -723,8 +728,10 @@ Returns a modified system with:
 - Pure-jump equations (D(X) ~ 0) removed
 - Generated jumps merged with any existing jumps
 - Poissonians list cleared
+
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
 """
-function extract_poissonians_to_jumps(sys::AbstractSystem)
+function extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
     poisson_vars = poissonians(sys)
     isempty(poisson_vars) && return sys
 
@@ -733,7 +740,7 @@ function extract_poissonians_to_jumps(sys::AbstractSystem)
     existing_jumps = jumps(sys)
 
     new_eqs, generated_jumps, eqs_to_remove = _poissonians_to_jumps(
-        equations(sys), poisson_vars, iv_sym, sys_unknowns
+        equations(sys), poisson_vars, iv_sym, sys_unknowns; save_positions
     )
 
     # Remove pure-jump equations
