@@ -1,6 +1,7 @@
 using Test
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using OrdinaryDiffEq
 
 @connector function TwoPhaseFluidPort(; name, P = 0.0, m_flow = 0.0, h_outflow = 0.0)
     pars = @parameters begin
@@ -705,4 +706,11 @@ end
     @named __sys = System(eqs, t)
     @named _sys = compose(__sys, [mp_1, pr_1, pb_1, va_1e, tnk_1])
     @test_nowarn expand_connections(_sys)
+
+    if @isdefined(ModelingToolkit)
+        sys = mtkcompile(_sys)
+        prob = ODEProblem(sys, nothing, (0.0, 30.0))
+        sol = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
 end
