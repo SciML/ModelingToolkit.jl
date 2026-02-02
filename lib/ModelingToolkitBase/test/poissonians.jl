@@ -1,6 +1,7 @@
-using ModelingToolkitBase, Test
+using ModelingToolkitBase, Test, JumpProcesses
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using ModelingToolkitBase: ispoissonian, getpoissonianrate, POISSONIAN, getvariabletype
+using JumpProcesses: ConstantRateJump, VariableRateJump
 using Symbolics: unwrap
 
 # ============================================================================
@@ -179,5 +180,173 @@ end
         @named sys = System(eqs, t)
 
         @test isempty(ModelingToolkitBase.poissonians(sys))
+    end
+end
+
+# ============================================================================
+# Phase 3: Poissonian to Jump Conversion Tests
+# ============================================================================
+
+@testset "Poissonian to Jump Conversion" begin
+    @testset "Pure-jump SIR model - VariableRateJumps" begin
+        @parameters β γ
+        @variables S(t) I(t) R(t)
+        @poissonians dN_inf(β * S * I) dN_rec(γ * I)
+
+        eqs = [
+            D(S) ~ -dN_inf,
+            D(I) ~ dN_inf - dN_rec,
+            D(R) ~ dN_rec
+        ]
+
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # All equations should be removed (pure-jump system)
+        @test isempty(equations(compiled_sys))
+
+        # Should have 2 jumps
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 2
+
+        # Both should be VariableRateJumps (state-dependent rates)
+        @test all(j -> j isa VariableRateJump, sys_jumps)
+
+        # Poissonians should be cleared after compilation
+        @test isempty(ModelingToolkitBase.poissonians(compiled_sys))
+    end
+
+    @testset "Constant rate jump" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        eqs = [D(X) ~ dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Should have 1 jump
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+
+        # Should be ConstantRateJump (rate is parameter only)
+        @test sys_jumps[1] isa ConstantRateJump
+
+        # Equation should be removed (pure-jump)
+        @test isempty(equations(compiled_sys))
+    end
+
+    @testset "Mixed continuous and jump dynamics" begin
+        @parameters a λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # X has continuous decay AND jumps
+        eqs = [D(X) ~ -a * X + dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Should have 1 jump
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump
+
+        # Continuous part should be retained
+        compiled_eqs = equations(compiled_sys)
+        @test length(compiled_eqs) == 1
+        # The equation should be D(X) ~ -a*X (poissonian term removed)
+    end
+
+    @testset "Time-dependent rate becomes VariableRateJump" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ * t)  # Rate depends on t
+
+        eqs = [D(X) ~ dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa VariableRateJump
+    end
+
+    @testset "State-dependent rate becomes VariableRateJump" begin
+        @parameters k
+        @variables X(t)
+        @poissonians dN(k * X)  # Rate depends on unknown X
+
+        eqs = [D(X) ~ -dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa VariableRateJump
+    end
+
+    @testset "Non-unit jump size (coefficient)" begin
+        @parameters λ δ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # X jumps by δ, not by 1
+        eqs = [D(X) ~ δ * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+
+        # Check that the affect includes the coefficient
+        jump = sys_jumps[1]
+        @test length(jump.affect!) == 1
+    end
+
+    @testset "Same poissonian in multiple equations creates single jump" begin
+        @parameters λ
+        @variables X(t) Y(t)
+        @poissonians dN(λ)
+
+        eqs = [
+            D(X) ~ dN,
+            D(Y) ~ -dN
+        ]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Should create ONE jump with TWO affects
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test length(sys_jumps[1].affect!) == 2
+    end
+
+    @testset "Error on nonlinear poissonian usage" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # dN^2 is nonlinear - should error
+        eqs = [D(X) ~ dN * dN]
+        @named sys = System(eqs, t)
+
+        @test_throws ArgumentError mtkcompile(sys)
+    end
+
+    @testset "Merging with explicit jumps" begin
+        @parameters λ₁ λ₂
+        @variables X(t) Y(t)
+        @poissonians dN(λ₁)
+
+        # Create an explicit jump
+        explicit_jump = ConstantRateJump(λ₂, [Y ~ Pre(Y) + 1])
+
+        eqs = [D(X) ~ dN]
+        @named sys = System(eqs, t; jumps = [explicit_jump])
+        compiled_sys = mtkcompile(sys)
+
+        # Should have both jumps
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 2
     end
 end
