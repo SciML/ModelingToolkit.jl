@@ -374,6 +374,45 @@ end
         @test length(ModelingToolkitBase.jumps(compiled3)) == 1
     end
 
+    @testset "State-dependent coefficient (unknown in coefficient)" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # Jump size is proportional to current state: X jumps by X (i.e., doubles)
+        eqs = [D(X) ~ X * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump  # Rate is λ (parameter only)
+
+        # Verify the affect exists and targets X
+        @test length(sys_jumps[1].affect!) == 1
+        affect_eq = sys_jumps[1].affect![1]
+        @test isequal(affect_eq.lhs, X)
+    end
+
+    @testset "Mixed parameter and unknown coefficient" begin
+        @parameters λ α
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # Jump size is α*X (parameter times state)
+        eqs = [D(X) ~ α * X * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+
+        # Verify the affect exists and targets X
+        @test length(sys_jumps[1].affect!) == 1
+        affect_eq = sys_jumps[1].affect![1]
+        @test isequal(affect_eq.lhs, X)
+    end
+
     @testset "Jump-diffusion with brownian and poissonian" begin
         @parameters μ σ λ γ
         @variables X(t)
