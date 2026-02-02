@@ -1125,3 +1125,200 @@ end
     # brownians is 5th positional arg: System(eqs, iv, unknowns, params, brownians; ...)
     @test_throws ArgumentError System(eqs, t, [X], [k], [B]; noise_eqs)
 end
+
+# Test Symbol keys work with discrete events in JumpProblems
+# This tests the fix for the bug where Symbol keys in op failed to convert
+# when process_events created ImplicitDiscreteProblems for affect subsystems
+@testset "Symbol keys with discrete events in JumpProblem" begin
+    # Test 1: Pure discrete jump system with Symbol keys and discrete event
+    # The main test is that JumpProblem construction doesn't error with Symbol keys
+    @testset "Pure discrete jumps with Symbol keys and discrete events" begin
+        @variables X(t)
+        @parameters k X0
+
+        # A discrete event that resets X to parameter X0
+        discrete_event = [5.0] => [X ~ X0]
+
+        # Mass action jump: X decays
+        maj = MassActionJump(k, [X => 1], [X => -1])
+
+        @named jsys = JumpSystem([maj], t, [X], [k, X0]; discrete_events = [discrete_event])
+        jsys = complete(jsys)
+
+        # Using Symbol keys - this previously failed with TypeError because :X0
+        # couldn't be found in the affect system's symbol table
+        jprob = JumpProblem(
+            jsys, [:X => 50, :k => 0.1, :X0 => 100], (0.0, 10.0);
+            aggregator = Direct(), rng
+        )
+        @test jprob.prob isa DiscreteProblem
+
+        # Solve and verify the discrete event fires correctly
+        sol = solve(jprob, SSAStepper())
+        @test SciMLBase.successful_retcode(sol)
+
+        # After t=5.0, X should have been reset to X0=100
+        # (may be off by a few due to jumps occurring after the reset)
+        idx_after = findfirst(t -> t > 5.0, sol.t)
+        if idx_after !== nothing
+            # X should be close to 100 (reset value), allow for a few jumps
+            @test sol[X][idx_after] >= 95  # reset to 100, minus a few jumps
+        end
+    end
+
+    # Test 2: Constant rate jump with Symbol keys and discrete event
+    @testset "ConstantRateJump with Symbol keys and discrete events" begin
+        @variables X(t)
+        @parameters k reset_val
+
+        discrete_event = [2.0] => [X ~ reset_val]
+        crj = ConstantRateJump(k * X, [X ~ Pre(X) - 1])
+
+        @named jsys = JumpSystem([crj], t, [X], [k, reset_val]; discrete_events = [discrete_event])
+        jsys = complete(jsys)
+
+        # Using Symbol keys - main test is that this doesn't error
+        jprob = JumpProblem(
+            jsys, [:X => 20, :k => 0.5, :reset_val => 50], (0.0, 5.0);
+            aggregator = Direct(), rng
+        )
+        @test jprob.prob isa DiscreteProblem
+
+        sol = solve(jprob, SSAStepper())
+        @test SciMLBase.successful_retcode(sol)
+
+        # Verify X was reset at t=2.0 (allow for a few jumps)
+        idx_after = findfirst(t -> t > 2.0, sol.t)
+        if idx_after !== nothing
+            @test sol[X][idx_after] >= 45  # reset to 50, minus a few jumps
+        end
+    end
+
+    # Test 3: Hybrid system (ODE + jumps) with Symbol keys and discrete events
+    @testset "Hybrid ODE + jumps with Symbol keys and discrete events" begin
+        @variables X(t)
+        @parameters a b X0
+
+        eq = D(X) ~ a
+        crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+        discrete_event = [1.5] => [X ~ X0]
+
+        @named jsys = JumpSystem([crj, eq], t, [X], [a, b, X0]; discrete_events = [discrete_event])
+        jsys = complete(jsys)
+
+        # Using Symbol keys
+        jprob = JumpProblem(
+            jsys, [:X => 10.0, :a => 1.0, :b => 0.01, :X0 => 50.0], (0.0, 3.0); rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+
+        # Verify the reset happened - X should be ~50 just after t=1.5
+        X_after = sol(1.51; idxs = X)
+        @test isapprox(X_after, 50.0, atol = 1.0)
+    end
+
+    # Test 4: Multiple discrete events with Symbol keys
+    @testset "Multiple discrete events with Symbol keys" begin
+        @variables X(t)
+        @parameters k val1 val2
+
+        event1 = [2.0] => [X ~ val1]
+        event2 = [4.0] => [X ~ val2]
+        maj = MassActionJump(k, [X => 1], [X => -1])
+
+        @named jsys = JumpSystem([maj], t, [X], [k, val1, val2]; discrete_events = [event1, event2])
+        jsys = complete(jsys)
+
+        # Main test: construction with Symbol keys doesn't error
+        jprob = JumpProblem(
+            jsys, [:X => 100, :k => 0.05, :val1 => 200, :val2 => 50], (0.0, 6.0);
+            aggregator = Direct(), rng
+        )
+
+        sol = solve(jprob, SSAStepper())
+        @test SciMLBase.successful_retcode(sol)
+
+        # Check first reset at t=2 (allow for jumps to occur)
+        idx1 = findfirst(t -> t > 2.0, sol.t)
+        if idx1 !== nothing
+            @test sol[X][idx1] >= 195  # reset to 200, minus a few jumps
+        end
+
+        # Check second reset at t=4 (allow for jumps)
+        idx2 = findfirst(t -> t > 4.0, sol.t)
+        if idx2 !== nothing
+            @test sol[X][idx2] >= 45  # reset to 50, minus a few jumps
+        end
+    end
+
+    # Test 5: VariableRateJump with Symbol keys and discrete events
+    @testset "VariableRateJump with Symbol keys and discrete events" begin
+        @variables X(t)
+        @parameters k X0
+
+        vrj = VariableRateJump(k * (1 + sin(t)), [X ~ Pre(X) + 1])
+        discrete_event = [3.0] => [X ~ X0]
+
+        @named jsys = JumpSystem([vrj], t, [X], [k, X0]; discrete_events = [discrete_event])
+        jsys = complete(jsys)
+
+        # VRJ systems get an ODEProblem
+        jprob = JumpProblem(
+            jsys, [:X => 0, :k => 1.0, :X0 => 100], (0.0, 5.0); rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+
+        # Verify reset at t=3
+        X_after = sol(3.01; idxs = X)
+        @test isapprox(X_after, 100.0, atol = 2.0)
+    end
+
+    # Test 6: Continuous events with Symbol keys
+    # The fix also affects continuous events since process_events handles both types
+    @testset "Continuous events with Symbol keys" begin
+        @variables X(t)
+        @parameters a b threshold
+
+        eq = D(X) ~ a
+        crj = ConstantRateJump(b * X, [X ~ Pre(X) - 1])
+
+        # Continuous event with parameter in condition
+        continuous_event = [X ~ threshold] => [X ~ Pre(X) + 5.0]
+
+        @named jsys = JumpSystem(
+            [crj, eq], t, [X], [a, b, threshold];
+            continuous_events = [continuous_event]
+        )
+        jsys = complete(jsys)
+
+        # Using Symbol keys - main test is that JumpProblem construction doesn't error
+        # Previously this would fail with TypeError when Symbol keys couldn't be
+        # converted in compile_equational_affect
+        jprob = JumpProblem(
+            jsys, [:X => 10.0, :a => 10.0, :b => 0.001, :threshold => 15.0],
+            (0.0, 3.0); rng
+        )
+        @test jprob.prob isa ODEProblem
+
+        # Callbacks should be in the JumpProblem (same pattern as existing tests)
+        @test !haskey(jprob.prob.kwargs, :callback)
+        @test haskey(jprob.kwargs, :callback)
+
+        sol = solve(jprob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+
+        # Correctness test matching Issue#4216 pattern:
+        # X starts at 10, grows at rate 10, crosses 15 at t≈0.5
+        # If event fires once: X jumps to ~20, continues to ~25 at t=1
+        # If event fires twice: X would be ~30 at t=1
+        # If event doesn't fire: X = 10 + 10*1 = 20 at t=1
+        X_at_1 = sol(1.0; idxs = X)
+        @test X_at_1 < 28.0  # Should not fire twice (same check as Issue#4216)
+    end
+end
