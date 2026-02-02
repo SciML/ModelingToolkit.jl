@@ -92,6 +92,35 @@ this would lead to mixed-integer problems. Bindings for these variables are stil
 calculate initial conditions as if they were parameters. Bindings for parameters participate
 in initialization. The bound parameters are treated as unknowns of the initialization system.
 
+The following table summarizes the differences. For each feature involved in initialization,
+it lists the mutability of that feature and for each type of value on the LHS, it lists the
+allowed values on the RHS along with its behavior during initialization. For this table, the
+nomenclature "FP parameter" or "FP variable" is used to refer to parameters/variables which
+take continuous values, determined by their `SymbolicUtils.symtype` being `Real`, or a
+subtype of `AbstractFloat`, or an array thereof. The term "variable" in this table is used
+to refer to both continously-varying quantities such as the unknowns of a DAE (created
+via `@variables`) as well as discretely-varying quantities updated in events (created by
+`@discretes`). Note that all FP variables are solved for by initialization. Any quantity
+that initialization solves for is referred to as an "initialization unknown".
+
+
+| Feature                  | Mutability | LHS                                          | RHS/Value                                         | Initialization behavior                                                                   |
+|--------------------------|------------|----------------------------------------------|---------------------------------------------------|-------------------------------------------------------------------------------------------|
+| Bindings                 | Immutable  | FP parameter                                 | Constant/expression of other parameters           | The LHS is considered an initialization unknown and the mapping is a constraint equation. |
+| Bindings                 | Immutable  | FP parameter                                 | `missing`                                         | The LHS is considered an initialization unknown                                           |
+| Bindings                 | Immutable  | FP variable                                  | Constant/expression of other variables/parameters | The mapping is a constraint equation.                                                     |
+| Bindings                 | Immutable  | Non-FP parameter                             | Constant/expression of other parameters           | A mapping determining the value of the parameter. Not involved in initialization.         |
+| Bindings                 | Immutable  | Non-FP variable                              | Constant/expression of other variables/parameters | A mapping determining the initial value of the variable. Not involved in initialization.  |
+| Initial conditions       | Mutable    | FP variable not in bindings                  | Constant/expression of other variables/parameters | The mapping is a constraint equation.                                                     |
+| Initial conditions       | Mutable    | Non-FP variable not in bindings              | Constant/expression of other variables/parameters | A mapping determining the initial value of the variable                                   |
+| Initial conditions       | Mutable    | Parameter not in bindings                    | Constant/expression of other variables/parameters | A mapping determining the value of the parameter                                          |
+| Initial conditions       | Mutable    | Parameter bound to `missing`                 | Constant/expression of other variables/parameters | The mapping acts as a constraint equation                                                 |
+| Initial conditions       | Mutable    | Variable in bindings                         | Invalid. Will error.                              | N/A                                                                                       |
+| Initial conditions       | Mutable    | Parameter in bindings not bound to `missing` | Invalid. Will error.                              | N/A                                                                                       |
+| Initialization equations | Immutable  | N/A                                          | Any equation of variables/parameters              | Acts as a constraint in initialization                                                    |
+
+The variable-value mapping provided to problem constructors (such as `ODEProblem`) is merged with (and overrides) initial conditions.
+
 ## Initialization By Example: The Cartesian Pendulum
 
 To illustrate how to perform the initialization, let's take a look at the Cartesian
