@@ -349,4 +349,90 @@ end
         sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
         @test length(sys_jumps) == 2
     end
+
+    @testset "Various coefficient forms" begin
+        @parameters λ a b
+        @variables X(t) Y(t) Z(t)
+        @poissonians dN(λ)
+
+        # Test dN*a form (poissonian first)
+        eqs = [D(X) ~ dN * a]
+        @named sys1 = System(eqs, t)
+        compiled1 = mtkcompile(sys1)
+        @test length(ModelingToolkitBase.jumps(compiled1)) == 1
+
+        # Test (a+b)*dN form (compound coefficient)
+        eqs2 = [D(Y) ~ (a + b) * dN]
+        @named sys2 = System(eqs2, t)
+        compiled2 = mtkcompile(sys2)
+        @test length(ModelingToolkitBase.jumps(compiled2)) == 1
+
+        # Test -dN form (negative coefficient)
+        eqs3 = [D(Z) ~ -dN]
+        @named sys3 = System(eqs3, t)
+        compiled3 = mtkcompile(sys3)
+        @test length(ModelingToolkitBase.jumps(compiled3)) == 1
+    end
+
+    @testset "Jump-diffusion with brownian and poissonian" begin
+        @parameters μ σ λ γ
+        @variables X(t)
+        @brownians dW
+        @poissonians dN(λ)
+
+        # dX = μX dt + σX dW + γ dN
+        eqs = [D(X) ~ μ * X + σ * X * dW + γ * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Should have 1 jump from poissonian
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump
+
+        # Should have 1 equation (SDE with drift and diffusion)
+        @test length(equations(compiled_sys)) == 1
+
+        # Brownian should be converted to noise equations
+        @test !isempty(ModelingToolkitBase.get_noise_eqs(compiled_sys))
+    end
+
+    @testset "Hierarchical systems with poissonians" begin
+        @parameters λ₁ λ₂
+        @variables X(t) Y(t)
+        @poissonians dN₁(λ₁) dN₂(λ₂)
+
+        # Create subsystem
+        eqs_sub = [D(X) ~ dN₁]
+        @named subsys = System(eqs_sub, t)
+
+        # Create parent system
+        eqs_parent = [D(Y) ~ dN₂]
+        @named parent = System(eqs_parent, t; systems = [subsys])
+
+        # Check poissonians are collected from hierarchy
+        all_poissonians = ModelingToolkitBase.poissonians(parent)
+        @test length(all_poissonians) == 2
+
+        # Compile and verify both jumps are generated
+        compiled = mtkcompile(parent)
+        sys_jumps = ModelingToolkitBase.jumps(compiled)
+        @test length(sys_jumps) == 2
+    end
+
+    @testset "Zero coefficient poissonian is dropped" begin
+        @parameters λ₁ λ₂
+        @variables X(t)
+        @poissonians dN₁(λ₁) dN₂(λ₂)
+
+        # dN₂ has zero coefficient (it appears but with 0 multiplier)
+        # Only dN₁ should generate a jump
+        eqs = [D(X) ~ dN₁ + 0 * dN₂]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Should only have 1 jump (from dN₁, not dN₂)
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+    end
 end
