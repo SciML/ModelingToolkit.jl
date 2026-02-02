@@ -1201,11 +1201,11 @@ function expand_instream(
 
             for inner_i in eachindex(inner_cverts)
                 svar = inner_streamvars[inner_i]
-                args = SArgsT()
-                push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
-                push!(args, SU.Const{VartypeT}(Val(n_outer)))
                 svar_unscal = SymbolicT[]
                 for svar_idx in SU.stable_eachindex(svar)
+                    args = SArgsT()
+                    push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
+                    push!(args, SU.Const{VartypeT}(Val(n_outer)))
                     for i in eachindex(inner_cverts)
                         i == inner_i && continue
                         push!(args, inner_flowvars[i])
