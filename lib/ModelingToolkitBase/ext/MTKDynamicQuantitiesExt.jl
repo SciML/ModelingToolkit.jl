@@ -8,6 +8,7 @@ using ModelingToolkitBase: get_unit, check_units, __get_unit_type, validate, Var
     JumpType, setdefault, ValidationError, _validate
 using SymbolicUtils: isconst, issym, isadd, ismul, ispow, unwrap
 using Symbolics: SymbolicT, value
+using DataStructures: OrderedSet
 import SciMLBase
 import ModelingToolkitBase as MTK
 import SymbolicUtils as SU
@@ -17,7 +18,29 @@ function __init__()
         only(@independent_variables t [unit = DQ.u"s"])
     end
     SymbolicUtils.hashcons(unwrap(MTK.t), true)
-    return MTK.D = Differential(MTK.t)
+    MTK.D = Differential(MTK.t)
+
+    # Workaround for Julia 1.10 compiler bug (Issue #4211)
+    # On Julia 1.10, loading this extension can cause collect_vars! to fail
+    # to properly call collect_var! until collect_var! has been called directly.
+    # This forces correct method compilation before user code runs.
+    if VERSION < v"1.11"
+        _force_collect_var_compilation()
+    end
+    return nothing
+end
+
+# Helper function to force collect_var! compilation on Julia 1.10.
+# This works around a method invalidation bug where the mutual recursion between
+# collect_vars! and collect_var! breaks after this extension loads.
+function _force_collect_var_compilation()
+    @variables _dummy_t
+    @parameters _dummy_p
+    @variables _dummy_x(_dummy_t) = _dummy_p
+    _us = OrderedSet{SymbolicT}()
+    _ps = OrderedSet{SymbolicT}()
+    MTK.collect_var!(_us, _ps, unwrap(_dummy_x), unwrap(_dummy_t); depth = 0)
+    return nothing
 end
 #For dispatching get_unit
 const Conditional = Union{typeof(ifelse)}
