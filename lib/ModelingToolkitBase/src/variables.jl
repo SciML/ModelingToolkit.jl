@@ -666,6 +666,85 @@ macro brownians(xs...)
     )
 end
 
+## Poissonian ==================================================================
+"""
+    topoissonian(s::Sym, rate)
+
+Maps the variable to a poissonian with the given rate expression stored in metadata.
+"""
+function topoissonian(s::SymbolicT, rate)
+    s = setmetadata(s, MTKVariableTypeCtx, POISSONIAN)
+    s = setmetadata(s, PoissonianRateCtx, rate)
+    return s
+end
+topoissonian(s::Num, rate) = Num(topoissonian(value(s), rate))
+ispoissonian(s) = getvariabletype(s) === POISSONIAN
+
+"""
+$(SIGNATURES)
+
+Define one or more Poissonian variables with their rate expressions.
+
+Each poissonian represents the differential of a Poisson counting process with
+the specified rate. Unlike `@brownians`, a rate expression is required for each
+poissonian.
+
+# Examples
+```julia
+@poissonians dN(λ)              # Single declaration with constant rate
+@poissonians dN₁(λ₁) dN₂(λ₂)    # Multiple inline declarations
+@poissonians begin              # Block syntax
+    dN₁(λ₁)
+    dN₂(β*S*I)
+end
+```
+"""
+macro poissonians(exprs...)
+    return esc(_poissonians(exprs...))
+end
+
+function _poissonians(exprs...)
+    # Handle block syntax: @poissonians begin ... end
+    if length(exprs) == 1 && exprs[1] isa Expr && exprs[1].head == :block
+        # Filter out LineNumberNodes and process each expression
+        inner_exprs = filter(x -> !(x isa LineNumberNode), exprs[1].args)
+        return _poissonians(inner_exprs...)
+    end
+
+    assignments = Expr[]
+    names = Symbol[]
+    for expr in exprs
+        # Must be a call expression: dN(rate)
+        if !(expr isa Expr && expr.head == :call)
+            error("@poissonians requires a rate expression: use @poissonians dN(rate)")
+        end
+
+        name = expr.args[1]
+        if length(expr.args) < 2
+            error("@poissonians requires a rate expression: use @poissonians $name(rate)")
+        end
+        rate = expr.args[2]
+
+        if !(name isa Symbol)
+            error("@poissonians variable name must be a symbol, got: $name")
+        end
+
+        push!(names, name)
+        # Create the symbolic variable using Symbolics.variable and set poissonian metadata
+        # Symbolics.variable creates a proper Sym{VartypeT} with VariableSource metadata
+        push!(assignments, quote
+            $name = $topoissonian($(Symbolics.variable)($(QuoteNode(name))), $rate)
+        end)
+    end
+
+    # Return the variables as a tuple (or single if only one)
+    if length(names) == 1
+        return Expr(:block, assignments..., names[1])
+    else
+        return Expr(:block, assignments..., Expr(:tuple, names...))
+    end
+end
+
 ## Guess ======================================================================
 struct VariableGuess end
 Symbolics.option_to_metadata_type(::Val{:guess}) = VariableGuess

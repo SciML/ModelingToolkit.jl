@@ -901,6 +901,7 @@ const SYS_PROPS = [
     :ps
     :tspan
     :brownians
+    :poissonians
     :jumps
     :name
     :description
@@ -1415,6 +1416,17 @@ function namespace_brownians(sys::AbstractSystem)
         bs[i] = renamespace(sys, bs[i])
     end
     return bs
+end
+
+function namespace_poissonians(sys::AbstractSystem)
+    ps = poissonians(sys)
+    if ps === get_poissonians(sys)
+        ps = copy(ps)
+    end
+    for i in eachindex(ps)
+        ps[i] = renamespace(sys, ps[i])
+    end
+    return ps
 end
 
 function namespace_assignment(eq::Assignment, sys)
@@ -1997,6 +2009,25 @@ function brownians(sys::AbstractSystem)
         append!(bs, namespace_brownians(subsys))
     end
     return bs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Get all of the poissonian variables involved in the system `sys` and all subsystems,
+appropriately namespaced.
+"""
+function poissonians(sys::AbstractSystem)
+    ps = get_poissonians(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return ps
+    end
+    ps = copy(ps)
+    for subsys in systems
+        append!(ps, namespace_poissonians(subsys))
+    end
+    return ps
 end
 
 """

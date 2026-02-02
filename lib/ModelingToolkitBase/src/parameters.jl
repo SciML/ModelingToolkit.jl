@@ -6,7 +6,7 @@ import SymbolicUtils: symtype, term, hasmetadata, issym
 The type of the declared variable, used for automatic identification of
 variables/parameters/brownians/etc. by the `System` constructor.
 """
-@enum VariableType VARIABLE PARAMETER BROWNIAN
+@enum VariableType VARIABLE PARAMETER BROWNIAN POISSONIAN
 
 """
     $TYPEDEF
@@ -16,6 +16,24 @@ The symbolic metadata key for storing the `VariableType`.
 struct MTKVariableTypeCtx end
 
 getvariabletype(x, def = VARIABLE) = safe_getmetadata(MTKVariableTypeCtx, unwrap(x), def)::Union{typeof(def), VariableType}
+
+"""
+    $TYPEDEF
+
+The symbolic metadata key for storing the rate expression of a poissonian variable.
+"""
+struct PoissonianRateCtx end
+
+"""
+    getpoissonianrate(x)
+
+Get the rate expression associated with poissonian variable `x`. Returns `nothing`
+if `x` is not a poissonian or has no rate.
+"""
+getpoissonianrate(x::Union{Num, Symbolics.Arr}) = getpoissonianrate(Symbolics.unwrap(x))
+function getpoissonianrate(x)
+    return Symbolics.getmetadata(unwrap(x), PoissonianRateCtx, nothing)
+end
 
 """
     $TYPEDEF
