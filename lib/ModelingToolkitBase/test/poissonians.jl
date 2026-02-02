@@ -436,3 +436,255 @@ end
         @test length(sys_jumps) == 1
     end
 end
+
+# ============================================================================
+# Phase 4: Mathematical Correctness / Integration Tests
+# ============================================================================
+
+using Random, StableRNGs, Statistics
+using OrdinaryDiffEq, StochasticDiffEq
+
+@testset "Poissonian Mathematical Correctness" begin
+    rng = StableRNG(12345)
+
+    @testset "Pure Poisson counter: E[N(t)] = λt, Var[N(t)] = λt" begin
+        # Simple counting process: dN = dN(λ)
+        # N(t) ~ Poisson(λt), so E[N(t)] = λt, Var[N(t)] = λt
+        # Rate is parameter-only → ConstantRateJump → can use SSAStepper
+        @parameters λ
+        @variables N(t)
+        @poissonians dN(λ)
+
+        eqs = [D(N) ~ dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Verify we got a ConstantRateJump (rate depends only on parameters)
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump
+
+        λ_val = 5.0
+        T = 2.0
+        Nsims = 2000
+
+        # Pure jump system with ConstantRateJump → use SSAStepper
+        # SSAStepper accepts seed kwarg for reproducibility (not save_everystep!)
+        jprob = JumpProblem(compiled_sys, [N => 0.0, λ => λ_val], (0.0, T);
+            aggregator = Direct(), save_positions = (false, false))
+
+        seed = 1111
+        Nfinal = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob, SSAStepper(); seed)
+            Nfinal[i] = sol[N, end]
+            seed += 1
+        end
+
+        E_N = λ_val * T  # = 10
+        Var_N = λ_val * T  # = 10
+
+        sample_mean = mean(Nfinal)
+        sample_var = var(Nfinal)
+
+        @test abs(sample_mean - E_N) / E_N < 0.05  # 5% relative error
+        @test abs(sample_var - Var_N) / Var_N < 0.10  # 10% for variance
+    end
+
+    @testset "Birth-death process: compare to analytical steady state" begin
+        # Birth at constant rate b, death at state-dependent rate d*X
+        # State-dependent rate → VariableRateJump → needs ODE solver (Tsit5)
+        # E[X(∞)] = b/d (steady state)
+        @parameters b d
+        @variables X(t)
+        @poissonians dN_birth(b) dN_death(d * X)
+
+        eqs = [D(X) ~ dN_birth - dN_death]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Verify we have both CRJ and VRJ (birth is constant, death is variable)
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 2
+        @test any(j -> j isa ConstantRateJump, sys_jumps)
+        @test any(j -> j isa VariableRateJump, sys_jumps)
+
+        b_val = 5.0
+        d_val = 0.1
+        X0 = 10.0
+        T = 100.0  # Long time to reach steady state
+        Nsims = 1000
+
+        # VariableRateJumps require ODE solver
+        jprob_sym = JumpProblem(compiled_sys, [X => X0, b => b_val, d => d_val], (0.0, T);
+            save_positions = (false, false), rng)
+
+        seed = 2222
+        Xfinal_sym = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_sym, Tsit5(); save_everystep = false, seed)
+            Xfinal_sym[i] = sol[X, end]
+            seed += 1
+        end
+
+        E_X_ss = b_val / d_val  # = 50
+
+        mean_sym = mean(Xfinal_sym)
+
+        # Should match analytical steady state
+        @test abs(mean_sym - E_X_ss) / E_X_ss < 0.10
+    end
+
+    @testset "SIR model: compare symbolic @poissonians to direct JumpProcesses" begin
+        # Classic SIR: S + I --(β*S*I)--> 2I, I --(γ*I)--> R
+        # State-dependent rates → VariableRateJumps → needs ODE solver
+        @parameters β γ
+        @variables S(t) I(t) R(t)
+        @poissonians dN_inf(β * S * I) dN_rec(γ * I)
+
+        eqs = [
+            D(S) ~ -dN_inf,
+            D(I) ~ dN_inf - dN_rec,
+            D(R) ~ dN_rec
+        ]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Both rates depend on unknowns → both are VariableRateJumps
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 2
+        @test all(j -> j isa VariableRateJump, sys_jumps)
+
+        β_val = 0.1 / 1000
+        γ_val = 0.01
+        S0, I0, R0 = 999.0, 1.0, 0.0
+        T = 250.0
+        Nsims = 500
+
+        jprob_sym = JumpProblem(compiled_sys,
+            [S => S0, I => I0, R => R0, β => β_val, γ => γ_val], (0.0, T);
+            save_positions = (false, false), rng)
+
+        seed = 3333
+        Rfinal_sym = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_sym, Tsit5(); save_everystep = false, seed)
+            Rfinal_sym[i] = sol[R, end]
+            seed += 1
+        end
+
+        # Build directly with JumpProcesses using VariableRateJumps for fair comparison
+        f_direct(du, u, p, t) = (du .= 0)  # No continuous dynamics
+        oprob_direct = ODEProblem(f_direct, [S0, I0, R0], (0.0, T), (β_val, γ_val))
+        r1(u, p, t) = p[1] * u[1] * u[2]
+        function a1!(integ)
+            integ.u[1] -= 1
+            integ.u[2] += 1
+        end
+        j1 = VariableRateJump(r1, a1!)
+        r2(u, p, t) = p[2] * u[2]
+        function a2!(integ)
+            integ.u[2] -= 1
+            integ.u[3] += 1
+        end
+        j2 = VariableRateJump(r2, a2!)
+        jprob_direct = JumpProblem(oprob_direct, Direct(), j1, j2;
+            rng, save_positions = (false, false))
+
+        seed = 3333
+        Rfinal_direct = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_direct, Tsit5(); save_everystep = false, seed)
+            Rfinal_direct[i] = sol[end][3]
+            seed += 1
+        end
+
+        mean_sym = mean(Rfinal_sym)
+        mean_direct = mean(Rfinal_direct)
+
+        # Both should produce similar final R counts
+        @test abs(mean_sym - mean_direct) / max(mean_direct, 1.0) < 0.10
+    end
+
+    @testset "Jump-diffusion: @brownians + @poissonians vs analytical" begin
+        # dX = σ*dW + δ*dN(λ)
+        # E[X(T)] = δ*λ*T (diffusion has zero mean)
+        # Var[X(T)] = σ²*T + δ²*λ*T
+        @parameters σ λ δ
+        @variables X(t)
+        @brownians dW
+        @poissonians dN(λ)
+
+        eqs = [D(X) ~ σ * dW + δ * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        σ_val = 0.3
+        λ_val = 2.0
+        δ_val = 1.0
+        T = 2.0
+        Nsims = 2000
+
+        jprob_sym = JumpProblem(compiled_sys,
+            [X => 0.0, σ => σ_val, λ => λ_val, δ => δ_val], (0.0, T);
+            save_positions = (false, false), rng)
+
+        seed = 4444
+        Xfinal_sym = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_sym, SOSRI(); save_everystep = false, seed)
+            Xfinal_sym[i] = sol[X, end]
+            seed += 1
+        end
+
+        E_X = δ_val * λ_val * T  # = 4.0
+        Var_X = σ_val^2 * T + δ_val^2 * λ_val * T  # = 0.18 + 4 = 4.18
+
+        sample_mean = mean(Xfinal_sym)
+        sample_var = var(Xfinal_sym)
+
+        @test abs(sample_mean - E_X) / E_X < 0.10
+        @test abs(sample_var - Var_X) / Var_X < 0.15
+    end
+
+    @testset "Mixed continuous + jump: decay with immigration" begin
+        # dX = -a*X*dt + dN(λ)
+        # At steady state: E[X(∞)] = λ/a
+        # λ is parameter-only → ConstantRateJump, but has ODE part
+        @parameters a λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        eqs = [D(X) ~ -a * X + dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Jump should be ConstantRateJump (rate is just λ)
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump
+
+        a_val = 0.5
+        λ_val = 5.0
+        X0 = 0.0
+        T = 50.0  # Long time to reach steady state
+        Nsims = 1000
+
+        # Has ODE part, so needs ODE solver
+        jprob = JumpProblem(compiled_sys, [X => X0, a => a_val, λ => λ_val], (0.0, T);
+            save_positions = (false, false), rng)
+
+        seed = 5555
+        Xfinal = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob, Tsit5(); save_everystep = false, seed)
+            Xfinal[i] = sol[X, end]
+            seed += 1
+        end
+
+        E_X_ss = λ_val / a_val  # = 10
+
+        sample_mean = mean(Xfinal)
+        @test abs(sample_mean - E_X_ss) / E_X_ss < 0.10
+    end
+end
