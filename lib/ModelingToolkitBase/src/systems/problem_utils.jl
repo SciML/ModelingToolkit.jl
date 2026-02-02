@@ -1070,6 +1070,7 @@ struct GetUpdatedU0{GG, GIU}
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinearProblem, op::AbstractDict)
+    @nospecialize initprob
     dvs = unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
@@ -1959,7 +1960,8 @@ end
 
 Construct SciMLFunction `T` with positional arguments `args` and keywords `kwargs`.
 """
-function maybe_codegen_scimlfn(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+function maybe_codegen_scimlfn(::Type{Val{false}}, ::Type{T}, args::NamedTuple; kwargs...) where {T}
+    @nospecialize args kwargs
     return T(args...; kwargs...)
 end
 
@@ -1978,7 +1980,8 @@ end
 
 Construct SciMLProblem `T` with positional arguments `args` and keywords `kwargs`.
 """
-function maybe_codegen_scimlproblem(::Type{Val{false}}, T, args::NamedTuple; kwargs...)
+function maybe_codegen_scimlproblem(::Type{Val{false}}, ::Type{T}, args::NamedTuple; kwargs...) where {T}
+    @nospecialize args kwargs
     # Call `remake` so it runs initialization if it is trivial
     # Use `@invokelatest` to avoid world-age issues with `eval_expression = true`
     return @invokelatest remake(T(args...; kwargs...))
