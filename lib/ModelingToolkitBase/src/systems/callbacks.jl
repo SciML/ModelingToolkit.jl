@@ -85,13 +85,14 @@ end
 
 function AffectSystem(
         affect::Vector{Equation}; discrete_parameters = SymbolicT[],
-        iv = nothing, kwargs...
+        iv = nothing, extra_eqs = Equation[], kwargs...
     )
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
+    append!(affect, extra_eqs)
 
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
 

@@ -691,7 +691,7 @@ function complete(
         if has_continuous_events(sys) && is_time_dependent(sys)
             cevts = SymbolicContinuousCallback[]
             for ev in get_continuous_events(sys)
-                ev = complete(ev; iv = get_iv(sys)::SymbolicT, alg_eqs = cb_alg_eqs)
+                ev = complete(ev; iv = get_iv(sys)::SymbolicT, extra_eqs = cb_alg_eqs)
                 push!(cevts, ev)
             end
             @set! sys.continuous_events = cevts
@@ -699,7 +699,7 @@ function complete(
         if has_discrete_events(sys) && is_time_dependent(sys)
             devts = SymbolicDiscreteCallback[]
             for ev in get_discrete_events(sys)
-                ev = complete(ev; iv = get_iv(sys)::SymbolicT, alg_eqs = cb_alg_eqs)
+                ev = complete(ev; iv = get_iv(sys)::SymbolicT, extra_eqs = cb_alg_eqs)
                 push!(devts, ev)
             end
             @set! sys.discrete_events = devts
