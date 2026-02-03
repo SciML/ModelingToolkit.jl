@@ -77,6 +77,7 @@ const PROBLEM_INTERNAL_KWARGS = """
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
   forwarded to `check_eqs_u0`.
+- `return_operating_point`: Whether to also return the updated operating point.
 $INTERNAL_INITIALIZEPROB_KWARGS
 """
 
