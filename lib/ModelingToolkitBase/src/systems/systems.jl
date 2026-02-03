@@ -637,11 +637,14 @@ function _poissonians_to_jumps(
         affects = Equation[]
 
         for (i, eq) in enumerate(new_eqs)
-            # Skip non-differential equations
-            isdiffeq(eq) || continue
+            # Skip non-differential equations (only handle Differential, not Shift)
+            (iscall(eq.lhs) && operation(eq.lhs) isa Differential) || continue
 
-            # Get the variable being differentiated
-            var = arguments(eq.lhs)[1]
+            # Get the variable being differentiated (handles nested derivatives)
+            var, order = var_from_nested_derivative(eq.lhs)
+
+            # Skip higher-order derivatives - jumps only work with first-order ODEs
+            order == 1 || continue
 
             # Extract coefficient of dN using linear_expansion
             coeff, resid, islin = Symbolics.linear_expansion(eq.rhs, dN)
