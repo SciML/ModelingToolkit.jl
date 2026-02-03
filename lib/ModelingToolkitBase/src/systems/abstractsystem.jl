@@ -686,7 +686,8 @@ function complete(
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split)::T
         end
-        cb_alg_eqs = Equation[alg_equations(sys); observed(sys)]
+        _unhack_sys = unhack_system(sys)
+        cb_alg_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
         if has_continuous_events(sys) && is_time_dependent(sys)
             cevts = SymbolicContinuousCallback[]
             for ev in get_continuous_events(sys)
