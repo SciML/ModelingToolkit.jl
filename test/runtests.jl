@@ -57,6 +57,7 @@ end
             @mtktestset("Modelingtoolkitize Test", "modelingtoolkitize.jl")
             @mtktestset("Constants Test", "constants.jl")
             @mtktestset("System Accessor Functions Test", "accessor_functions.jl")
+            @mtktestset("MTK respects ICs", "mtkbase_set_ics.jl")
         end
     end
 
