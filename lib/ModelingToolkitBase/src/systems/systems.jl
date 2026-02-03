@@ -641,19 +641,30 @@ function _poissonians_to_jumps(
         rate === nothing && continue
 
         affects = Equation[]
+        expander = Symbolics.LinearExpander(dN)
 
         for (i, eq) in enumerate(new_eqs)
             # Skip non-differential equations (only handle Differential, not Shift)
             (iscall(eq.lhs) && operation(eq.lhs) isa Differential) || continue
 
-            # Get the variable being differentiated (handles nested derivatives)
-            var, order = var_from_nested_derivative(eq.lhs)
+            # Get the differential operator and check its order
+            # Note: D(D(X)) is represented as Differential(t, 2)(X(t)), so we check the
+            # operator's order field directly rather than using var_from_nested_derivative
+            diff_op = operation(eq.lhs)
+            if diff_op.order != 1
+                throw(ArgumentError(
+                    """
+                    Higher-order derivative equation $eq found in system with poissonians. \
+                    Poissonians are only supported in first-order differential equations.
+                    """
+                ))
+            end
 
-            # Skip higher-order derivatives - jumps only work with first-order ODEs
-            order == 1 || continue
+            # Get the variable being differentiated
+            var, _ = var_from_nested_derivative(eq.lhs)
 
-            # Extract coefficient of dN using linear_expansion
-            coeff, resid, islin = Symbolics.linear_expansion(eq.rhs, dN)
+            # Extract coefficient of dN using cached LinearExpander
+            coeff, resid, islin = expander(eq.rhs)
 
             if !islin
                 throw(

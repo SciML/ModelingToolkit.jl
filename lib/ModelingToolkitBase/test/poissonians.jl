@@ -393,6 +393,23 @@ end
         @test_throws ArgumentError mtkcompile(sys)
     end
 
+    @testset "Error on higher-order derivatives with poissonians" begin
+        @parameters λ
+        @variables X(t) Y(t)
+        @poissonians dN(λ)
+
+        # Any higher-order derivative in a system with poissonians should error
+        # (model is not well-defined with jumps and higher-order derivatives)
+        eqs = [D(D(X)) ~ dN]
+        @named sys = System(eqs, t)
+        @test_throws ArgumentError mtkcompile(sys)
+
+        # Even if poissonian is in a different equation, higher-order derivative errors
+        eqs2 = [D(D(X)) ~ 0, D(Y) ~ dN]
+        @named sys2 = System(eqs2, t)
+        @test_throws ArgumentError mtkcompile(sys2)
+    end
+
     @testset "Merging with explicit jumps" begin
         @parameters λ₁ λ₂
         @variables X(t) Y(t)
