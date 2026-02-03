@@ -666,8 +666,8 @@ end
         # Verify we have both CRJ and VRJ (birth is constant, death is variable)
         sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
         @test length(sys_jumps) == 2
-        @test any(j -> j isa ConstantRateJump, sys_jumps)
-        @test any(j -> j isa VariableRateJump, sys_jumps)
+        @test count(j -> j isa ConstantRateJump, sys_jumps) == 1
+        @test count(j -> j isa VariableRateJump, sys_jumps) == 1
 
         b_val = 5.0
         d_val = 0.1
@@ -719,17 +719,21 @@ end
         γ_val = 0.01
         S0, I0, R0 = 999.0, 1.0, 0.0
         T = 250.0
-        Nsims = 500
+        Nsims = 2000
+        save_times = 1.0:1.0:T
+        Ntimes = length(save_times)
 
         jprob_sym = JumpProblem(compiled_sys,
             [S => S0, I => I0, R => R0, β => β_val, γ => γ_val], (0.0, T);
             save_positions = (false, false), rng)
 
         seed = 3333
-        Rfinal_sym = zeros(Nsims)
+        R_sym = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_sym, Tsit5(); save_everystep = false, seed)
-            Rfinal_sym[i] = sol[R, end]
+            sol = solve(jprob_sym, Tsit5(); seed)
+            for (k, t_) in enumerate(save_times)
+                R_sym[i, k] = sol(t_; idxs = R)
+            end
             seed += 1
         end
 
@@ -752,18 +756,22 @@ end
             rng, save_positions = (false, false))
 
         seed = 3333
-        Rfinal_direct = zeros(Nsims)
+        R_direct = zeros(Nsims, Ntimes)
         for i in 1:Nsims
-            sol = solve(jprob_direct, Tsit5(); save_everystep = false, seed)
-            Rfinal_direct[i] = sol[end][3]
+            sol = solve(jprob_direct, Tsit5(); seed)
+            for (k, t_) in enumerate(save_times)
+                R_direct[i, k] = sol(t_)[3]
+            end
             seed += 1
         end
 
-        mean_sym = mean(Rfinal_sym)
-        mean_direct = mean(Rfinal_direct)
+        # Compare means at every saved time point
+        mean_sym = vec(mean(R_sym; dims = 1))
+        mean_direct = vec(mean(R_direct; dims = 1))
 
-        # Both should produce similar final R counts
-        @test abs(mean_sym - mean_direct) < 0.10 * max(mean_direct, 1.0)
+        # All time points should match within tolerance
+        @test all(abs(mean_sym[k] - mean_direct[k]) < 0.10 * max(mean_direct[k], 1.0)
+                  for k in 1:Ntimes)
     end
 
     @testset "Jump-diffusion: @brownians + @poissonians vs analytical" begin
