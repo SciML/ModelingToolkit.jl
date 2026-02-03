@@ -630,6 +630,12 @@ function _poissonians_to_jumps(
     generated_jumps = JumpType[]
     eqs_to_remove = Set{Int}()
 
+    # Pre-allocate sets to avoid repeated allocations in _is_variable_rate_jump!
+    # Include iv in the set so get_variables! can filter to unknowns + iv directly
+    unknowns_and_iv = Set(sys_unknowns)
+    iv !== nothing && push!(unknowns_and_iv, iv)
+    rate_vars_set = Set{SymbolicT}()
+
     for dN in poisson_vars
         rate = getpoissonianrate(dN)
         rate === nothing && continue
@@ -679,7 +685,7 @@ function _poissonians_to_jumps(
         isempty(affects) && continue
 
         # Classify jump type based on rate expression
-        is_variable_rate = _is_variable_rate_jump(rate, iv, sys_unknowns)
+        is_variable_rate = _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
 
         jump = if is_variable_rate
             VariableRateJump(rate, affects; save_positions)
@@ -693,7 +699,7 @@ function _poissonians_to_jumps(
 end
 
 """
-    _is_variable_rate_jump(rate, iv, sys_unknowns)
+    _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
 
 Determine if a jump rate expression results in a VariableRateJump or ConstantRateJump.
 
@@ -702,24 +708,14 @@ Returns `true` (VariableRateJump) if:
 - The rate depends on any system unknowns
 
 Returns `false` (ConstantRateJump) if the rate depends only on parameters.
+
+The `rate_vars_set` is a reusable set that will be emptied and filled with variables from the rate.
+The `unknowns_and_iv` should be a Set containing system unknowns and the independent variable.
 """
-function _is_variable_rate_jump(rate, iv, sys_unknowns)
-    rate_vars = Symbolics.get_variables(rate)
-
-    # If rate explicitly depends on independent variable, it's variable rate
-    if iv !== nothing && any(v -> isequal(v, iv), rate_vars)
-        return true
-    end
-
-    # If rate depends on any unknowns, it's variable rate
-    for v in rate_vars
-        if any(u -> isequal(v, u), sys_unknowns)
-            return true
-        end
-    end
-
-    # Rate depends only on parameters - constant rate
-    return false
+function _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+    empty!(rate_vars_set)
+    Symbolics.get_variables!(rate_vars_set, rate, unknowns_and_iv)
+    return !isempty(rate_vars_set)
 end
 
 """
