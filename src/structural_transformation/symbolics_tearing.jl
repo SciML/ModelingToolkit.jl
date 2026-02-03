@@ -21,7 +21,7 @@ function tearing(
         fully_determined = true, kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
-    return invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
+    return invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined, kwargs...))
 end
 
 function safe_isinteger(@nospecialize(x::Number))
@@ -95,5 +95,5 @@ function dummy_derivative(
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
         state, jac; state_priority, kwargs...
     )
-    return reassemble_alg(state, tearing_result, mm; fully_determined)
+    return reassemble_alg(state, tearing_result, mm; fully_determined, kwargs...)
 end
