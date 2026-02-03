@@ -170,6 +170,15 @@ SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
     @test clkmap[ZeroArgOp()()] == clk
 end
 
+@testset "`InferredDiscrete` validation" begin
+    k = ShiftIndex()
+    @variables x(t) y(t)
+    @named sys = System([x(k) ~ x(k-1) + x(k-2), D(y) ~ Hold(x) + t], t)
+    @test_throws ModelingToolkit.ExpectedDiscreteClockPartitionError mtkcompile(sys)
+    @named sys = System([x(k) ~ x(k-1) + x(k-2), D(y) ~ x + t], t)
+    @test_throws ModelingToolkit.ExpectedDiscreteClockPartitionError mtkcompile(sys)
+end
+
 @test_skip begin
     Tf = 1.0
     prob = ODEProblem(

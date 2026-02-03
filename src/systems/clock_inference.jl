@@ -3,6 +3,7 @@
     Equation(Int)
     InitEquation(Int)
     Clock(SciMLBase.AbstractClock)
+    AssertDiscrete
 end
 
 struct ClockInference{S}
@@ -202,6 +203,10 @@ function infer_clocks!(ci::ClockInference)
                     InferredClock.InferredDiscrete(i) => begin
                         relative_edge = get!(() -> Set{ClockVertex.Type}(), relative_hyperedges, i)
                         union!(relative_edge, arg_hyperedge)
+                        # Ensure that this clock partition will be discrete. This is a separate
+                        # variant because I don't want to give `InferredDiscrete` too many meanings.
+                        push!(arg_hyperedge, ClockVertex.AssertDiscrete())
+                        add_edge!(inference_graph, arg_hyperedge)
                     end
                 end
             end
@@ -218,6 +223,7 @@ function infer_clocks!(ci::ClockInference)
                         union!(hyperedge, buffer)
                         delete!(relative_hyperedges, i)
                     end
+                    push!(hyperedge, ClockVertex.AssertDiscrete())
                 end
             end
 
@@ -239,6 +245,9 @@ function infer_clocks!(ci::ClockInference)
     for partition in clock_partitions
         clockidxs = findall(vert -> Moshi.Data.isa_variant(vert, ClockVertex.Clock), partition)
         if isempty(clockidxs)
+            if any(isequal(ClockVertex.AssertDiscrete()), partition)
+                throw(ExpectedDiscreteClockPartitionError(ts, partition, true))
+            end
             push!(partition, ClockVertex.Clock(ContinuousClock()))
             push!(clockidxs, length(partition))
         end
@@ -254,18 +263,65 @@ function infer_clocks!(ci::ClockInference)
         end
 
         clock = partition[only(clockidxs)].:1
+        if clock == ContinuousClock() && any(isequal(ClockVertex.AssertDiscrete()), partition)
+            throw(ExpectedDiscreteClockPartitionError(ts, partition, false))
+        end
         for vert in partition
             Moshi.Match.@match vert begin
                 ClockVertex.Variable(i) => (var_domain[i] = clock)
                 ClockVertex.Equation(i) => (eq_domain[i] = clock)
                 ClockVertex.InitEquation(i) => (init_eq_domain[i] = clock)
                 ClockVertex.Clock(_) => nothing
+                ClockVertex.AssertDiscrete() => nothing
             end
         end
     end
 
     ci = substitute_sample_time(ci, ts)
     return ci
+end
+
+struct ExpectedDiscreteClockPartitionError <: Exception
+    state::TearingState
+    partition::Vector{ClockVertex.Type}
+    has_no_clock::Bool
+end
+
+function Base.showerror(io::IO, err::ExpectedDiscreteClockPartitionError)
+    if err.has_no_clock
+        println(io, """
+        Found a clock partition that must be discrete (due to the presence of an \
+        `InferredDiscrete`) but does not have any associated clock (and would otherwise \
+        then default to being on the continuous clock). This likely means that the \
+        partition was not assigned a valid discrete clock and the model is incorrect.
+        """)
+    else
+        println(io, """
+        Found a clock partition that must be discrete (due to the presence of an \
+        `InferredDiscrete`) but is associated with a continuous clock. This is likely \
+        a modeling error.
+        """)
+    end
+
+    vars = filter(Base.Fix2(Moshi.Data.isa_variant, ClockVertex.Variable), err.partition)
+    println(io, "Variables in the partition:")
+    for var in vars
+        println(io, "  ", err.state.fullvars[var.:1])
+    end
+    println(io)
+
+    eqs = filter(Base.Fix2(Moshi.Data.isa_variant, ClockVertex.Equation), err.partition)
+    println(io, "Equations in the partition:")
+    for eq in eqs
+        println(io, "  ", equations(err.state)[eq.:1])
+    end
+    println(io)
+
+    ieqs = filter(Base.Fix2(Moshi.Data.isa_variant, ClockVertex.InitEquation), err.partition)
+    println(io, "Initialization equations in the partition:")
+    for ieq in ieqs
+        println(io, "  ", initialization_equations(err.state.sys)[ieq.:1])
+    end
 end
 
 function resize_or_push!(v, val, idx)
