@@ -76,7 +76,10 @@ end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)
     affect = spec.affect
-    if !isempty(alg_eqs)
+    # Only append alg_eqs if the affect itself is non-empty, otherwise we'd be creating
+    # an AffectSystem from unrelated observed equations which can cause spurious cycle
+    # detection (e.g., when array variables are involved). See issue #4259.
+    if !isempty(affect) && !isempty(alg_eqs)
         depwarn_alg_eqs()
         affect = [affect; alg_eqs]
     end
@@ -224,14 +227,18 @@ distribute_shift_into_operator(::Pre) = false
 function (p::Pre)(x::SymbolicT)
     iscall(x) || return x
     return Moshi.Match.@match x begin
-        BSImpl.Term(; f) && if f isa Pre end => return x
-        BSImpl.Term(; f) && if f isa Differential end => begin
+        BSImpl.Term(; f) && if f isa Pre
+        end => return x
+        BSImpl.Term(; f) && if f isa Differential
+        end => begin
             return p(default_toterm(x))
         end
-        BSImpl.Term(; f, args, type, shape) && if f === getindex end => begin
+        BSImpl.Term(; f, args, type, shape) && if f === getindex
+        end => begin
             arrpre = p(args[1])
             Moshi.Match.@match arrpre begin
-                BSImpl.Term(; f = f2) && if f2 isa Pre end => begin
+                BSImpl.Term(; f = f2) && if f2 isa Pre
+                end => begin
                     newargs = SArgsT((x,))
                     return toparam(BSImpl.Term{VartypeT}(p, newargs; type, shape))
                 end
@@ -242,7 +249,8 @@ function (p::Pre)(x::SymbolicT)
                 end
             end
         end
-        BSImpl.Term(; f, type, shape) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
+        BSImpl.Term(; f, type, shape) && if f isa SymbolicT && !SU.is_function_symbolic(f)
+        end => begin
             return toparam(BSImpl.Term{VartypeT}(p, SArgsT((x,)); type, shape))
         end
         _ => begin
@@ -265,7 +273,7 @@ end
 const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
-    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing;
                                affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind)
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
@@ -306,7 +314,7 @@ Affects (i.e. `affect` and `affect_neg`) can be specified as either:
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
 * A [`ImperativeAffect`](@ref); refer to its documentation for details.
 
-`reinitializealg` is used to set how the system will be reinitialized after the callback. 
+`reinitializealg` is used to set how the system will be reinitialized after the callback.
 - Symbolic affects have reinitialization built in. In this case the algorithm will default to SciMLBase.NoInit(), and should **not** be provided.
 - Functional and imperative affects will default to SciMLBase.CheckInit(), which will error if the system is not properly reinitialized after the callback. If your system is a DAE, pass in an algorithm like SciMLBase.BrownBasicFullInit() to properly re-initialize.
 
@@ -472,12 +480,12 @@ end
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
-The condition can be one of: 
+The condition can be one of:
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
 - eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
 
-Arguments: 
+Arguments:
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback

@@ -892,8 +892,7 @@ if @isdefined(ModelingToolkit)
                 port = LiquidPort()
             end
 
-            vars = @variables begin
-            end
+            vars = @variables begin end
 
             equations = Equation[
                 port.p ~ p_set,
@@ -941,8 +940,7 @@ if @isdefined(ModelingToolkit)
 
         # Test System
         @component function TestSystem(; name)
-            pars = @parameters begin
-            end
+            pars = @parameters begin end
 
             systems = @named begin
                 pressure_source_1 = PressureSource(p_set = 2.0)
@@ -951,8 +949,7 @@ if @isdefined(ModelingToolkit)
                 pressure_source_2 = PressureSource(p_set = 1.0)
             end
 
-            vars = @variables begin
-            end
+            vars = @variables begin end
 
             equations = Equation[
                 connect(pressure_source_1.port, binary_valve_1.port_in)
@@ -1342,8 +1339,7 @@ end
             k(t) = k
         end
 
-        systems = @named begin
-        end
+        systems = @named begin end
 
         vars = @variables begin
             x(t) = 10.0
@@ -1639,15 +1635,13 @@ end
 
 @testset "Non-`Real` symtype parameters in callback with unknown" begin
     @component function MWE(; name, p = 1)
-        pars = @parameters begin
-        end
+        pars = @parameters begin end
 
         discretes = @discretes begin
             p(t)::Int = p
         end
 
-        systems = @named begin
-        end
+        systems = @named begin end
 
         vars = @variables begin
             x(t) = 1.0
@@ -1830,5 +1824,21 @@ if !@isdefined(ModelingToolkit)
         @parameters p (f::Function)(..)
         @discretes d(t)
         @test isequal(Pre(2x^2 + 3sin(f(x)) - ifelse(p < 0, d, d + 2) + 2p), 2Pre(x)^2 + 3sin(f(Pre(x))) - ifelse(p < 0, Pre(d), Pre(d) + 2) + 2p)
+    end
+
+    @testset "Issue#4259: Array variables with empty continuous events" begin
+        # Array variables combined with continuous_events that have empty affects
+        # should not cause spurious cycle detection errors
+        @variables s(t) arr(t)[1:2]
+        eqs = [
+            D(s) ~ 0.1
+            arr[1] ~ s
+            arr[2] ~ 2s
+        ]
+        # Empty affect (Equation[]) should not pick up observed equations from the parent
+        continuous_events = [[s ~ 0.5] => Equation[]]
+        @named sys = System(eqs, t, [s; collect(arr)], []; continuous_events)
+        # This should not throw "The equations have at least one cycle"
+        @test_nowarn mtkcompile(sys)
     end
 end
