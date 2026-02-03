@@ -102,7 +102,12 @@ function generate_initializesystem_timevarying(
     for v in bound_parameters(sys)
         push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
     end
-    initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, guesses)
+    op::SymmapT = if fast_path
+        op
+    else
+        build_operating_point(sys, op)
+    end
+    initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, op, guesses)
 
     derivative_rules = DerivativeDict()
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
@@ -153,11 +158,6 @@ function generate_initializesystem_timevarying(
         if !has_possibly_indexed_key(guesses, eq.lhs)
             write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
-    end
-    op::SymmapT = if fast_path
-        op
-    else
-        build_operating_point(sys, op)
     end
     timevaring_initsys_process_op!(init_vars_set, init_ps, eqs_ics, op, derivative_rules, guesses)
 
@@ -373,13 +373,15 @@ function initsys_sort_system_bindings!(
         init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         eqs_ics::Vector{Equation}, binds::ROSymmapT,
-        newbinds::SymmapT, guesses::SymmapT
+        newbinds::SymmapT, op::SymmapT, guesses::SymmapT
     )
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
         if v === COMMON_MISSING
             push!(init_vars_set, k)
             delete!(init_ps, k)
+            @assert Initial(k) in init_ps
+            op[Initial(k)] = k
             continue
         end
         if is_variable_floatingpoint(k)
