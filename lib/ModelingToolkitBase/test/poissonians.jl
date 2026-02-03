@@ -144,6 +144,67 @@ end
         @test γ in sys_params
     end
 
+    @testset "Unknown in coefficient is auto-discovered" begin
+        @parameters λ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # X appears in coefficient, not in rate expression
+        eqs = [D(X) ~ X * dN]
+
+        @named sys = System(eqs, t)
+
+        # X should be in unknowns
+        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
+        @test X in sys_unknowns
+
+        # λ should be in parameters (from rate expression)
+        sys_params = Set(ModelingToolkitBase.parameters(sys))
+        @test λ in sys_params
+    end
+
+    @testset "Parameter in coefficient is auto-discovered" begin
+        @parameters λ α
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # α appears in coefficient, λ in rate
+        eqs = [D(X) ~ α * dN]
+
+        @named sys = System(eqs, t)
+
+        # Both parameters should be extracted
+        sys_params = Set(ModelingToolkitBase.parameters(sys))
+        @test λ in sys_params  # From rate
+        @test α in sys_params  # From coefficient
+
+        # X should be in unknowns (from LHS)
+        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
+        @test X in sys_unknowns
+    end
+
+    @testset "Mixed parameter and unknown in coefficient auto-discovered" begin
+        @parameters λ α β
+        @variables X(t) Y(t)
+        @poissonians dN(λ)
+
+        # α*X + β*Y in coefficient
+        eqs = [D(X) ~ (α * X + β * Y) * dN]
+
+        @named sys = System(eqs, t)
+
+        # All parameters should be extracted
+        sys_params = Set(ModelingToolkitBase.parameters(sys))
+        @test λ in sys_params  # From rate
+        @test α in sys_params  # From coefficient
+        @test β in sys_params  # From coefficient
+
+        # Both unknowns should be extracted
+        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
+        @test X in sys_unknowns
+        @test Y in sys_unknowns
+    end
+
     @testset "Poissonians are not included in unknowns" begin
         @parameters λ
         @variables X(t)
@@ -590,8 +651,8 @@ using OrdinaryDiffEq, StochasticDiffEq
         sample_mean = mean(Nfinal)
         sample_var = var(Nfinal)
 
-        @test abs(sample_mean - E_N) / E_N < 0.05  # 5% relative error
-        @test abs(sample_var - Var_N) / Var_N < 0.10  # 10% for variance
+        @test abs(sample_mean - E_N) < 0.05 * E_N  # 5% relative error
+        @test abs(sample_var - Var_N) < 0.10 * Var_N  # 10% for variance
     end
 
     @testset "Birth-death process: compare to analytical steady state" begin
@@ -635,7 +696,7 @@ using OrdinaryDiffEq, StochasticDiffEq
         mean_sym = mean(Xfinal_sym)
 
         # Should match analytical steady state
-        @test abs(mean_sym - E_X_ss) / E_X_ss < 0.10
+        @test abs(mean_sym - E_X_ss) < 0.10 * E_X_ss
     end
 
     @testset "SIR model: compare symbolic @poissonians to direct JumpProcesses" begin
@@ -706,7 +767,7 @@ using OrdinaryDiffEq, StochasticDiffEq
         mean_direct = mean(Rfinal_direct)
 
         # Both should produce similar final R counts
-        @test abs(mean_sym - mean_direct) / max(mean_direct, 1.0) < 0.10
+        @test abs(mean_sym - mean_direct) < 0.10 * max(mean_direct, 1.0)
     end
 
     @testset "Jump-diffusion: @brownians + @poissonians vs analytical" begin
@@ -746,8 +807,8 @@ using OrdinaryDiffEq, StochasticDiffEq
         sample_mean = mean(Xfinal_sym)
         sample_var = var(Xfinal_sym)
 
-        @test abs(sample_mean - E_X) / E_X < 0.10
-        @test abs(sample_var - Var_X) / Var_X < 0.15
+        @test abs(sample_mean - E_X) < 0.10 * E_X
+        @test abs(sample_var - Var_X) < 0.15 * Var_X
     end
 
     @testset "Mixed continuous + jump: decay with immigration" begin
@@ -788,6 +849,107 @@ using OrdinaryDiffEq, StochasticDiffEq
         E_X_ss = λ_val / a_val  # = 10
 
         sample_mean = mean(Xfinal)
-        @test abs(sample_mean - E_X_ss) / E_X_ss < 0.10
+        @test abs(sample_mean - E_X_ss) < 0.10 * E_X_ss
+    end
+
+    @testset "State-dependent coefficient: geometric decay X ~ -δ*X*dN(λ)" begin
+        # Jump size is -δ*X (proportional decay)
+        # After n jumps: X(t) = X₀ * (1-δ)^n
+        # E[X(T)] = X₀ * E[(1-δ)^N] where N ~ Poisson(λT)
+        # Using MGF of Poisson: E[e^{θN}] = exp(λT(e^θ - 1))
+        # Set θ = ln(1-δ): E[(1-δ)^N] = exp(λT((1-δ) - 1)) = exp(-λTδ)
+        # So: E[X(T)] = X₀ * exp(-λ*δ*T)
+        @parameters λ δ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        # Jump decreases X by δ*X (fractional decay)
+        eqs = [D(X) ~ -δ * X * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        # Jump should be ConstantRateJump (rate is λ, parameter-only)
+        # but the affect has state-dependent coefficient
+        sys_jumps = ModelingToolkitBase.jumps(compiled_sys)
+        @test length(sys_jumps) == 1
+        @test sys_jumps[1] isa ConstantRateJump
+
+        λ_val = 2.0
+        δ_val = 0.2  # 20% decay per jump
+        X0 = 100.0
+        T = 3.0
+        Nsims = 2000
+
+        # Pure jump system with CRJ → can use SSAStepper
+        jprob = JumpProblem(compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
+            aggregator = Direct(), save_positions = (false, false))
+
+        seed = 6666
+        Xfinal = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob, SSAStepper(); seed)
+            Xfinal[i] = sol[X, end]
+            seed += 1
+        end
+
+        # Analytical: E[X(T)] = X₀ * exp(-λ*δ*T)
+        E_X_T = X0 * exp(-λ_val * δ_val * T)  # = 100 * exp(-1.2) ≈ 30.12
+
+        sample_mean = mean(Xfinal)
+
+        @test abs(sample_mean - E_X_T) < 0.10 * E_X_T
+    end
+
+    @testset "State-dependent coefficient: compare to direct JumpProcesses" begin
+        # Same geometric decay model, compare symbolic to direct JumpProcesses
+        @parameters λ δ
+        @variables X(t)
+        @poissonians dN(λ)
+
+        eqs = [D(X) ~ -δ * X * dN]
+        @named sys = System(eqs, t)
+        compiled_sys = mtkcompile(sys)
+
+        λ_val = 3.0
+        δ_val = 0.15
+        X0 = 50.0
+        T = 2.0
+        Nsims = 1000
+
+        # Symbolic version
+        jprob_sym = JumpProblem(compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
+            aggregator = Direct(), save_positions = (false, false))
+
+        seed = 7777
+        Xfinal_sym = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_sym, SSAStepper(); seed)
+            Xfinal_sym[i] = sol[X, end]
+            seed += 1
+        end
+
+        # Direct JumpProcesses version
+        u0 = [X0]
+        dprob = DiscreteProblem(u0, (0.0, T), (λ_val, δ_val))
+        rate_direct(u, p, t) = p[1]  # λ
+        function affect_direct!(integ)
+            integ.u[1] -= integ.p[2] * integ.u[1]  # X -= δ*X
+        end
+        crj_direct = ConstantRateJump(rate_direct, affect_direct!)
+        jprob_direct = JumpProblem(dprob, Direct(), crj_direct)
+
+        seed = 7777
+        Xfinal_direct = zeros(Nsims)
+        for i in 1:Nsims
+            sol = solve(jprob_direct, SSAStepper(); seed)
+            Xfinal_direct[i] = sol[end][1]
+            seed += 1
+        end
+
+        mean_sym = mean(Xfinal_sym)
+        mean_direct = mean(Xfinal_direct)
+
+        # Both should give same results (same seeds)
+        @test abs(mean_sym - mean_direct) < 0.05 * mean_direct
     end
 end
