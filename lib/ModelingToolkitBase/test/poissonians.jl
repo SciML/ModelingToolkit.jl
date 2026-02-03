@@ -144,16 +144,11 @@ end
 
         @named sys = System(eqs, t)
 
-        # S, I, R should be in unknowns (extracted from rate expressions and equations)
-        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
-        @test S in sys_unknowns
-        @test I in sys_unknowns
-        @test R in sys_unknowns
+        # Exactly S, I, R should be in unknowns (no poissonians or extras)
+        @test Set(ModelingToolkitBase.unknowns(sys)) == Set([S, I, R])
 
-        # β, γ should be in parameters (extracted from rate expressions)
-        sys_params = Set(ModelingToolkitBase.parameters(sys))
-        @test β in sys_params
-        @test γ in sys_params
+        # Exactly β, γ should be in parameters (from rate expressions)
+        @test Set(ModelingToolkitBase.parameters(sys)) == Set([β, γ])
     end
 
     @testset "Unknown in coefficient is auto-discovered" begin
@@ -166,13 +161,11 @@ end
 
         @named sys = System(eqs, t)
 
-        # X should be in unknowns
-        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
-        @test X in sys_unknowns
+        # Exactly X should be in unknowns (no poissonian)
+        @test Set(ModelingToolkitBase.unknowns(sys)) == Set([X])
 
-        # λ should be in parameters (from rate expression)
-        sys_params = Set(ModelingToolkitBase.parameters(sys))
-        @test λ in sys_params
+        # Exactly λ should be in parameters (from rate expression)
+        @test Set(ModelingToolkitBase.parameters(sys)) == Set([λ])
     end
 
     @testset "Parameter in coefficient is auto-discovered" begin
@@ -185,14 +178,11 @@ end
 
         @named sys = System(eqs, t)
 
-        # Both parameters should be extracted
-        sys_params = Set(ModelingToolkitBase.parameters(sys))
-        @test λ in sys_params  # From rate
-        @test α in sys_params  # From coefficient
+        # Exactly λ and α should be in parameters
+        @test Set(ModelingToolkitBase.parameters(sys)) == Set([λ, α])
 
-        # X should be in unknowns (from LHS)
-        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
-        @test X in sys_unknowns
+        # Exactly X should be in unknowns (from LHS, no poissonian)
+        @test Set(ModelingToolkitBase.unknowns(sys)) == Set([X])
     end
 
     @testset "Mixed parameter and unknown in coefficient auto-discovered" begin
@@ -205,16 +195,11 @@ end
 
         @named sys = System(eqs, t)
 
-        # All parameters should be extracted
-        sys_params = Set(ModelingToolkitBase.parameters(sys))
-        @test λ in sys_params  # From rate
-        @test α in sys_params  # From coefficient
-        @test β in sys_params  # From coefficient
+        # Exactly λ, α, β should be in parameters
+        @test Set(ModelingToolkitBase.parameters(sys)) == Set([λ, α, β])
 
-        # Both unknowns should be extracted
-        sys_unknowns = Set(ModelingToolkitBase.unknowns(sys))
-        @test X in sys_unknowns
-        @test Y in sys_unknowns
+        # Exactly X and Y should be in unknowns (no poissonian)
+        @test Set(ModelingToolkitBase.unknowns(sys)) == Set([X, Y])
     end
 
     @testset "Poissonians are not included in unknowns" begin
@@ -226,10 +211,12 @@ end
 
         @named sys = System(eqs, t)
 
-        # dN should not be in unknowns
-        @test !any(x -> isequal(x, dN), ModelingToolkitBase.unknowns(sys))
-        # dN should be in poissonians
-        @test any(x -> isequal(x, dN), ModelingToolkitBase.poissonians(sys))
+        # Exactly X should be in unknowns (dN should not be)
+        @test Set(ModelingToolkitBase.unknowns(sys)) == Set([X])
+        # Exactly dN should be in poissonians
+        @test Set(ModelingToolkitBase.poissonians(sys)) == Set([dN])
+        # Exactly λ should be in parameters
+        @test Set(ModelingToolkitBase.parameters(sys)) == Set([λ])
     end
 
     @testset "get_poissonians accessor" begin
