@@ -66,6 +66,16 @@ using OrdinaryDiffEq, StochasticDiffEq
         @test isequal(getpoissonianrate(dN), λ)
     end
 
+    @testset "Rate from local variable expression" begin
+        # Test that a locally computed rate expression works
+        @parameters a b
+        rate_expr = a * b^2
+        @poissonians dN(rate_expr)
+
+        # Rate should be the evaluated symbolic expression, not the variable name
+        @test isequal(getpoissonianrate(dN), a * b^2)
+    end
+
     @testset "Non-poissonian returns nothing for rate" begin
         @variables x(t)
 
