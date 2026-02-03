@@ -145,10 +145,11 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     eqs = equations(sys)
     obs = observed(sys)
 
-    _, u0,
-        p = process_SciMLProblem(
-        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true, kwargs...
+    _, u0, p = process_SciMLProblem(
+        EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
+        kwargs...
     )
+    op = calculate_op_from_u0_p(sys, u0, p)
 
     explicitfuns = []
     nlfuns = []
@@ -307,6 +308,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     # will retain the shape of `A`
     u0_constructor = get_p_constructor(u0_constructor, typeof(u0), u0_eltype)
     subprobs = []
+    subber = Symbolics.FixpointSubstituter{true}(AtomicArrayDictSubstitutionWrapper(op))
     for (i, (f, vscc)) in enumerate(zip(nlfuns, var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
             typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...
@@ -315,11 +317,21 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         if f isa LinearFunction
             _u0 = isempty(symbolic_idxs) ? _u0 : zeros(u0_eltype, length(_u0))
             _u0 = u0_eltype.(_u0)
+            cachevars = scc_cachevars[i]
+            cacheexprs = scc_cacheexprs[i]
+            for T in keys(cachevars)
+                for (var, expr) in zip(cachevars[T], cacheexprs[T])
+                    isequal(var, expr) && continue
+                    write_possibly_indexed_array!(op, var, expr, COMMON_NOTHING)
+                end
+            end
             symbolic_interface = f.interface
-            A,
-                b = get_A_b_from_LinearFunction(
-                sys, f, p; eval_expression, eval_module, u0_constructor, u0_eltype
+            A, b = get_A_b_from_LinearFunction(
+                sys, f, subber; eval_expression, eval_module, u0_constructor, u0_eltype
             )
+            for (j, val) in zip(vscc, _u0)
+                write_possibly_indexed_array!(op, dvs[j], Symbolics.SConst(val), COMMON_NOTHING)
+            end
             prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
             isempty(symbolic_idxs) || throw(MissingGuessError(dvs[vscc], _u0))
@@ -337,4 +349,29 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,))
     )
     return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
+end
+
+function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)
+    op = SymmapT()
+    if u0 !== nothing
+        for (var, val) in zip(unknowns(sys), u0)
+            val === nothing && continue
+            write_possibly_indexed_array!(op, var, Symbolics.SConst(val), COMMON_NOTHING)
+        end
+    end
+    rps = reorder_parameters(sys)
+    @assert length(rps) == length(p)
+
+    for (i, pvars) in enumerate(rps)
+        for (var, val) in zip(pvars, p[i])
+            write_possibly_indexed_array!(op, var, Symbolics.SConst(val), COMMON_NOTHING)
+        end
+    end
+
+    _ss = unhack_system(sys)
+    for eq in observed(_ss)
+        write_possibly_indexed_array!(op, eq.lhs, eq.rhs, COMMON_NOTHING)
+    end
+    merge!(op, bindings(sys))
+    return op
 end
