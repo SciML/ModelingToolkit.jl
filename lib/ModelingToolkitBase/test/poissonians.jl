@@ -3,6 +3,8 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using ModelingToolkitBase: ispoissonian, getpoissonianrate, POISSONIAN, getvariabletype
 using JumpProcesses: ConstantRateJump, VariableRateJump
 using Symbolics: unwrap
+using Random, StableRNGs, Statistics
+using OrdinaryDiffEq, StochasticDiffEq
 
 # ============================================================================
 # Phase 1: Macro and Metadata Tests
@@ -605,9 +607,6 @@ end
 # Phase 4: Mathematical Correctness / Integration Tests
 # ============================================================================
 
-using Random, StableRNGs, Statistics
-using OrdinaryDiffEq, StochasticDiffEq
-
 @testset "Poissonian Mathematical Correctness" begin
     rng = StableRNG(12345)
 
@@ -635,7 +634,7 @@ using OrdinaryDiffEq, StochasticDiffEq
         # Pure jump system with ConstantRateJump → use SSAStepper
         # SSAStepper accepts seed kwarg for reproducibility (not save_everystep!)
         jprob = JumpProblem(compiled_sys, [N => 0.0, λ => λ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false))
+            aggregator = Direct(), save_positions = (false, false), rng)
 
         seed = 1111
         Nfinal = zeros(Nsims)
@@ -882,7 +881,7 @@ using OrdinaryDiffEq, StochasticDiffEq
 
         # Pure jump system with CRJ → can use SSAStepper
         jprob = JumpProblem(compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false))
+            aggregator = Direct(), save_positions = (false, false), rng)
 
         seed = 6666
         Xfinal = zeros(Nsims)
@@ -918,7 +917,7 @@ using OrdinaryDiffEq, StochasticDiffEq
 
         # Symbolic version
         jprob_sym = JumpProblem(compiled_sys, [X => X0, λ => λ_val, δ => δ_val], (0.0, T);
-            aggregator = Direct(), save_positions = (false, false))
+            aggregator = Direct(), save_positions = (false, false), rng)
 
         seed = 7777
         Xfinal_sym = zeros(Nsims)
@@ -936,7 +935,7 @@ using OrdinaryDiffEq, StochasticDiffEq
             integ.u[1] -= integ.p[2] * integ.u[1]  # X -= δ*X
         end
         crj_direct = ConstantRateJump(rate_direct, affect_direct!)
-        jprob_direct = JumpProblem(dprob, Direct(), crj_direct)
+        jprob_direct = JumpProblem(dprob, Direct(), crj_direct; rng)
 
         seed = 7777
         Xfinal_direct = zeros(Nsims)
