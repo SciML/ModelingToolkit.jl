@@ -74,6 +74,7 @@ end
             @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Poissonians Test" include("poissonians.jl")
+            @safetestset "Extend SDE/Jump Test" include("extend_sde_jump.jl")
             @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Analysis Points Test" include("analysis_points.jl")
