@@ -3081,7 +3081,7 @@ function extend(
         meta = Base.ImmutableDict(meta, kvp)
     end
     syss = union(get_systems(basesys), get_systems(sys))
-    args = length(ivs) == 0 ? (eqs, sts, ps, brs) : (eqs, ivs[1], sts, ps, brs)
+    args = length(ivs) == 0 ? (eqs, nothing, sts, ps, brs) : (eqs, ivs[1], sts, ps, brs)
     kwargs = (
         observed = obs, continuous_events = cevs,
         discrete_events = devs, bindings = binds, initial_conditions = ics, systems = syss,
