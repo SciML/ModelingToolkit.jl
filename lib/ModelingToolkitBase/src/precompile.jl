@@ -111,6 +111,7 @@ PrecompileTools.@compile_workload begin
     v = [p]
     isempty(v)
     # mtkcompile(sys)
+    ODEProblem(mtkcompile(System([ModelingToolkitBase.D_nounits(x) ~ 2x + 1], ModelingToolkitBase.t_nounits; name = :a)), [x => 1], (0.0, 1.0))
 end
 
 precompile(Tuple{typeof(SymbolicUtils.isequal_somescalar), Float64, Float64})
