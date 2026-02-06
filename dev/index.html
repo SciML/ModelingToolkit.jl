@@ -24,7 +24,7 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [724179cf] FMIZoo v1.2.2
   [20393b10] InfiniteOpt v0.6.1
   [b6b21f68] Ipopt v1.14.0
-  [ccbc3e58] JumpProcesses v9.21.1
+  [ccbc3e58] JumpProcesses v9.21.2
   [961ee093] ModelingToolkit v11.9.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [7771a370] ModelingToolkitBase v1.10.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase`
   [16a59e39] ModelingToolkitStandardLibrary v2.27.0
@@ -33,7 +33,7 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [7f7a1694] Optimization v5.4.0
 ⌃ [36348300] OptimizationOptimJL v0.4.8
   [1dea7af3] OrdinaryDiffEq v6.108.0
-  [91a5bcdd] Plots v1.41.4
+  [91a5bcdd] Plots v1.41.5
   [d236fae5] PreallocationTools v1.1.2
   [91a8cdf1] SciCompDSL v1.0.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/SciCompDSL`
   [53ae85a6] SciMLStructures v1.10.0
@@ -41,7 +41,7 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [789caeaf] StochasticDiffEq v6.93.0
   [2efcf032] SymbolicIndexingInterface v0.3.46
   [d1185830] SymbolicUtils v4.17.0
-  [0c5d862f] Symbolics v7.12.0
+  [0c5d862f] Symbolics v7.13.0
   [37e2e46d] LinearAlgebra
 Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.10.10
 Commit 95f30e51f41 (2025-06-27 09:51 UTC)
@@ -49,10 +49,10 @@ Build Info:
   Official https://julialang.org/ release
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 4 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+  CPU: 4 × AMD EPYC 7763 64-Core Processor
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-15.0.7 (ORCJIT, icelake-server)
+  LLVM: libLLVM-15.0.7 (ORCJIT, znver3)
 Threads: 1 default, 0 interactive, 1 GC (on 4 virtual cores)
 Environment:
   JULIA_DEBUG = Documenter</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
@@ -230,7 +230,7 @@ Environment:
   [ae98c720] Jieko v0.2.1
   [b835a17e] JpegTurbo v0.1.6
   [4076af6c] JuMP v1.29.4
-  [ccbc3e58] JumpProcesses v9.21.1
+  [ccbc3e58] JumpProcesses v9.21.2
   [5ab0869b] KernelDensity v0.6.11
   [ba0b0d4f] Krylov v0.10.5
   [0b1a1467] KrylovKit v0.10.2
@@ -244,7 +244,7 @@ Environment:
   [87fe0de2] LineSearch v0.1.6
 ⌃ [d3d80556] LineSearches v7.5.1
   [7a12625a] LinearMaps v3.11.4
-  [7ed4a6bd] LinearSolve v3.57.0
+  [7ed4a6bd] LinearSolve v3.58.0
   [2ab3a3ac] LogExpFunctions v0.3.29
   [e6f89c97] LoggingExtras v1.2.0
 ⌅ [23992714] MAT v0.10.7
@@ -266,7 +266,7 @@ Environment:
   [961ee093] ModelingToolkit v11.9.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [7771a370] ModelingToolkitBase v1.10.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl/lib/ModelingToolkitBase`
   [16a59e39] ModelingToolkitStandardLibrary v2.27.0
-  [6bb917b9] ModelingToolkitTearing v1.2.5
+  [6bb917b9] ModelingToolkitTearing v1.2.6
   [0987c9cc] MonteCarloMeasurements v1.5.2
   [e94cdb99] MosaicViews v0.3.4
   [2e0e35c7] Moshi v0.3.7
@@ -276,7 +276,7 @@ Environment:
 ⌅ [d41bc354] NLSolversBase v7.10.0
   [2774e3e8] NLsolve v4.5.1
   [77ba4419] NaNMath v1.1.3
-  [b8a86587] NearestNeighbors v0.4.26
+  [b8a86587] NearestNeighbors v0.4.27
   [645ca80c] Neighborhood v0.2.4
   [f09324ee] Netpbm v1.1.1
   [8913a72c] NonlinearSolve v4.15.0
@@ -297,7 +297,7 @@ Environment:
   [1dea7af3] OrdinaryDiffEq v6.108.0
   [89bda076] OrdinaryDiffEqAdamsBashforthMoulton v1.9.0
   [6ad6398a] OrdinaryDiffEqBDF v1.16.0
-  [bbf590c4] OrdinaryDiffEqCore v3.4.0
+  [bbf590c4] OrdinaryDiffEqCore v3.4.2
   [50262376] OrdinaryDiffEqDefault v1.12.0
   [4302a76b] OrdinaryDiffEqDifferentiation v2.0.0
   [9286f039] OrdinaryDiffEqExplicitRK v1.8.0
@@ -335,7 +335,7 @@ Environment:
   [eebad327] PkgVersion v0.3.3
   [ccf2f8ad] PlotThemes v3.3.0
   [995b91a9] PlotUtils v1.4.4
-  [91a5bcdd] Plots v1.41.4
+  [91a5bcdd] Plots v1.41.5
   [e409e4f3] PoissonRandom v0.4.7
   [f517fe37] Polyester v0.7.18
   [1d0040c9] PolyesterWeave v0.2.2
@@ -394,7 +394,7 @@ Environment:
   [699a6c99] SimpleTraits v0.9.5
   [45858cf5] Sixel v0.1.5
   [a2af1166] SortingAlgorithms v1.2.2
-  [9f842d2f] SparseConnectivityTracer v1.1.3
+  [9f842d2f] SparseConnectivityTracer v1.2.0
   [0a514795] SparseMatrixColorings v0.4.23
   [d4ead438] SpatialIndexing v0.1.6
   [276daf66] SpecialFunctions v2.6.1
@@ -418,7 +418,7 @@ Environment:
   [2efcf032] SymbolicIndexingInterface v0.3.46
   [19f23fe9] SymbolicLimits v1.1.0
   [d1185830] SymbolicUtils v4.17.0
-  [0c5d862f] Symbolics v7.12.0
+  [0c5d862f] Symbolics v7.13.0
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.12.1
   [ed4db957] TaskLocalValues v0.1.3
@@ -465,7 +465,7 @@ Environment:
   [61579ee1] Ghostscript_jll v9.55.1+0
   [59f7168a] Giflib_jll v5.2.3+0
   [020c3dae] Git_LFS_jll v3.7.0+0
-  [f8c6e375] Git_jll v2.52.0+0
+  [f8c6e375] Git_jll v2.53.0+0
   [7746bdde] Glib_jll v2.86.2+0
   [3b182d85] Graphite2_jll v1.3.15+0
 ⌅ [0234f1f7] HDF5_jll v1.14.6+0
@@ -482,9 +482,9 @@ Environment:
 ⌅ [e9f186c6] Libffi_jll v3.4.7+0
   [7e76a0d4] Libglvnd_jll v1.7.1+1
   [94ce4f54] Libiconv_jll v1.18.0+0
-  [4b2f31a3] Libmount_jll v2.41.2+0
+  [4b2f31a3] Libmount_jll v2.41.3+0
   [89763e89] Libtiff_jll v4.7.2+0
-  [38a345b3] Libuuid_jll v2.41.2+0
+  [38a345b3] Libuuid_jll v2.41.3+0
   [d00139f3] METIS_jll v5.1.3+0
   [856f044c] MKL_jll v2025.2.0+0
   [7cb0a576] MPICH_jll v4.3.2+0
@@ -605,4 +605,4 @@ Environment:
   [8e850b90] libblastrampoline_jll v5.11.0+0
   [8e850ede] nghttp2_jll v1.52.0+1
   [3f19e933] p7zip_jll v17.4.0+2
-Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v11.9.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v11.9.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Tuesday 3 February 2026 09:19">Tuesday 3 February 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details><p>You can also download the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v11.9.0/assets/Manifest.toml">manifest</a> file and the <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v11.9.0/assets/Project.toml">project</a> file.</p></article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Friday 6 February 2026 14:18">Friday 6 February 2026</span>. Using Julia version 1.10.10.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
