@@ -120,6 +120,7 @@ function check_compatible_system(T::Union{Type{JumpProblem}}, sys::System)
     check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_constraints(sys, T)
+    check_no_poissonians(sys, T)
     check_has_jumps(sys, T)
     return check_is_continuous(sys, T)
 end

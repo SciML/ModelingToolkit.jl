@@ -102,6 +102,13 @@ struct System <: IntermediateDeprecationSystem
     """
     brownians::Vector{SymbolicT}
     """
+    The poissonian variables of the system, created via `@poissonians`. Each poissonian
+    variable represents an independent Poisson counting process with an associated rate.
+    A system with poissonians cannot be simulated directly. It needs to be compiled using
+    `mtkcompile` which converts poissonians into jump equations.
+    """
+    poissonians::Vector{SymbolicT}
+    """
     The independent variable for a time-dependent system, or `nothing` for a time-independent
     system.
     """
@@ -286,7 +293,7 @@ struct System <: IntermediateDeprecationSystem
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
-            brownians, iv, observed, var_to_name, name, description, bindings,
+            brownians, poissonians, iv, observed, var_to_name, name, description, bindings,
             initial_conditions, guesses, systems, initialization_eqs, continuous_events,
             discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
             metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
@@ -350,7 +357,7 @@ struct System <: IntermediateDeprecationSystem
         end
         return new(
             tag, eqs, noise_eqs, jumps, constraints, costs,
-            consolidate, unknowns, ps, brownians, iv,
+            consolidate, unknowns, ps, brownians, poissonians, iv,
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
@@ -433,6 +440,7 @@ All other keyword arguments are named identically to the corresponding fields in
 """
 function System(
         eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
+        poissonians = SymbolicT[],
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
@@ -477,6 +485,7 @@ function System(
         filter!(!Base.Fix2(_is_unknown_delay_or_evalat, iv), dvs)
     end
     brownians = unwrap_vars(brownians)
+    poissonians = unwrap_vars(poissonians)
 
     if noise_eqs !== nothing
         noise_eqs = unwrap_vars(noise_eqs)
@@ -613,7 +622,7 @@ function System(
     jumps = Vector{JumpType}(jumps)
     return System(
         __get_new_tag(), eqs, noise_eqs, jumps, constraints,
-        costs, consolidate, dvs, ps, brownians, iv, observed,
+        costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
@@ -704,13 +713,25 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     eqs = [diffeqs; othereqs]
 
     brownians = Set{SymbolicT}()
+    poissonians = Set{SymbolicT}()
     for x in allunknowns
         x = unwrap(x)
         if getvariabletype(x) == BROWNIAN
             push!(brownians, x)
+        elseif getvariabletype(x) == POISSONIAN
+            push!(poissonians, x)
         end
     end
     setdiff!(allunknowns, brownians)
+    setdiff!(allunknowns, poissonians)
+
+    # Extract variables and parameters from poissonian rate expressions
+    for p in poissonians
+        rate = getpoissonianrate(p)
+        if rate !== nothing
+            collect_vars!(allunknowns, ps, rate, iv)
+        end
+    end
 
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
@@ -764,7 +785,8 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     end
 
     return System(
-        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...
+        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians);
+        poissonians = collect(poissonians), kwargs...
     )
 end
 
@@ -995,6 +1017,7 @@ function flatten(sys::System, noeqs = false)
     return System(
         noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
+        poissonians = poissonians(sys),
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
         bindings = bindings(sys), initial_conditions = initial_conditions(sys),
@@ -1424,6 +1447,7 @@ function Base.isapprox(sysa::System, sysb::System)
         issetequal(get_unknowns(sysa), get_unknowns(sysb)) &&
         issetequal(get_ps(sysa), get_ps(sysb)) &&
         issetequal(get_brownians(sysa), get_brownians(sysb)) &&
+        issetequal(get_poissonians(sysa), get_poissonians(sysb)) &&
         issetequal(get_observed(sysa), get_observed(sysb)) &&
         isequal(get_description(sysa), get_description(sysb)) &&
         isequal(get_bindings(sysa), get_bindings(sysb)) &&
@@ -1452,7 +1476,8 @@ function Base.copy(sys::System)
     return System(
         __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
         copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
-        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)), get_iv(sys),
+        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)),
+        copy(get_poissonians(sys)), get_iv(sys),
         copy(get_observed(sys)), copy(get_var_to_name(sys)), nameof(sys), get_description(sys),
         copy(get_bindings(sys)), copy(get_initial_conditions(sys)), copy(get_guesses(sys)),
         map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),

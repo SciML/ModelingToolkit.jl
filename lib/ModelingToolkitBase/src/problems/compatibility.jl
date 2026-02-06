@@ -167,6 +167,19 @@ function check_has_noise(sys::System, T)
     end
 end
 
+function check_no_poissonians(sys::System, T)
+    return if !isempty(poissonians(sys))
+        throw(
+            SystemCompatibilityError(
+                """
+                Systems with unprocessed poissonians cannot be used to construct a `$T`. \
+                Call `mtkcompile` on the system first to convert poissonians to jumps.
+                """
+            )
+        )
+    end
+end
+
 function check_is_discrete(sys::System, T)
     return if !is_discrete_system(sys)
         throw(

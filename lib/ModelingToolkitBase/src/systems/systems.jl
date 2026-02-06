@@ -120,6 +120,11 @@ function scalarized_vars(vars)
 end
 
 function _mtkcompile(sys::AbstractSystem; kwargs...)
+    # Extract poissonians to jumps first (before checking for existing jumps)
+    if !isempty(poissonians(sys))
+        sys = extract_poissonians_to_jumps(sys; kwargs...)
+    end
+
     # For systems with jumps, skip full structural simplification to preserve
     # variables that only appear in jumps.
     if !isempty(jumps(sys))
@@ -601,6 +606,162 @@ function extract_brownians_to_noise_eqs(sys::AbstractSystem)
     @set! sys.eqs = new_eqs
     @set! sys.noise_eqs = noise_eqs
     @set! sys.brownians = SymbolicT[]
+
+    return sys
+end
+
+"""
+    _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns; save_positions)
+
+Extract poissonian coefficients from equations and return (new_eqs, jumps, eqs_to_remove).
+Each poissonian is converted to a Jump (ConstantRateJump or VariableRateJump) with affects
+collected from all equations where it appears. Equations that become `D(X) ~ 0` after
+extraction are marked for removal.
+
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
+
+This is a helper function used by `extract_poissonians_to_jumps`.
+"""
+function _poissonians_to_jumps(
+        eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns;
+        save_positions = (false, true)
+    )
+    new_eqs = copy(eqs)
+    generated_jumps = JumpType[]
+    eqs_to_remove = Set{Int}()
+
+    # Pre-allocate sets to avoid repeated allocations in _is_variable_rate_jump!
+    # Include iv in the set so get_variables! can filter to unknowns + iv directly
+    unknowns_and_iv = Set(sys_unknowns)
+    iv !== nothing && push!(unknowns_and_iv, iv)
+    rate_vars_set = Set{SymbolicT}()
+
+    for dN in poisson_vars
+        rate = getpoissonianrate(dN)
+        rate === nothing && continue
+
+        affects = Equation[]
+        expander = Symbolics.LinearExpander(dN)
+
+        for (i, eq) in enumerate(new_eqs)
+            # Skip non-differential equations (only handle Differential, not Shift)
+            (iscall(eq.lhs) && operation(eq.lhs) isa Differential) || continue
+
+            # Get the differential operator and check its order
+            # Note: D(D(X)) is represented as Differential(t, 2)(X(t)), so we check the
+            # operator's order field directly rather than using var_from_nested_derivative
+            diff_op = operation(eq.lhs)
+            if diff_op.order != 1
+                throw(ArgumentError(
+                    """
+                    Higher-order derivative equation $eq found in system with poissonians. \
+                    Poissonians are only supported in first-order differential equations.
+                    """
+                ))
+            end
+
+            # Get the variable being differentiated
+            var, _ = var_from_nested_derivative(eq.lhs)
+
+            # Extract coefficient of dN using cached LinearExpander
+            coeff, resid, islin = expander(eq.rhs)
+
+            if !islin
+                throw(
+                    ArgumentError(
+                        """
+                        Poissonian $dN appears non-linearly in equation $eq. \
+                        Poissonians may only appear as linear terms (coeff * dN).
+                        """
+                    )
+                )
+            end
+
+            _iszero(coeff) && continue
+
+            # Build affect using Pre() for pre-jump values
+            # The affect is: var ~ Pre(var) + Pre(coeff)
+            push!(affects, var ~ Pre(var) + Pre(coeff))
+
+            # Update equation with poissonian term removed
+            if _iszero(resid)
+                # Pure-jump equation: D(X) ~ 0, mark for removal
+                push!(eqs_to_remove, i)
+            else
+                new_eqs[i] = eq.lhs ~ resid
+            end
+        end
+
+        # Skip if no affects (coefficient was zero everywhere)
+        isempty(affects) && continue
+
+        # Classify jump type based on rate expression
+        is_variable_rate = _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+
+        jump = if is_variable_rate
+            VariableRateJump(rate, affects; save_positions)
+        else
+            ConstantRateJump(rate, affects)
+        end
+        push!(generated_jumps, jump)
+    end
+
+    return new_eqs, generated_jumps, eqs_to_remove
+end
+
+"""
+    _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+
+Determine if a jump rate expression results in a VariableRateJump or ConstantRateJump.
+
+Returns `true` (VariableRateJump) if:
+- The rate depends on the independent variable `t`
+- The rate depends on any system unknowns
+
+Returns `false` (ConstantRateJump) if the rate depends only on parameters.
+
+The `rate_vars_set` is a reusable set that will be emptied and filled with variables from the rate.
+The `unknowns_and_iv` should be a Set containing system unknowns and the independent variable.
+"""
+function _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+    empty!(rate_vars_set)
+    Symbolics.get_variables!(rate_vars_set, rate, unknowns_and_iv)
+    return !isempty(rate_vars_set)
+end
+
+"""
+    extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
+
+Extract poissonian variables from equations and convert them to Jump objects.
+Returns a modified system with:
+- Poissonian terms removed from equations
+- Pure-jump equations (D(X) ~ 0) removed
+- Generated jumps merged with any existing jumps
+- Poissonians list cleared
+
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
+"""
+function extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
+    poisson_vars = poissonians(sys)
+    isempty(poisson_vars) && return sys
+
+    iv_sym = get_iv(sys)
+    sys_unknowns = unknowns(sys)
+    existing_jumps = jumps(sys)
+
+    new_eqs, generated_jumps, eqs_to_remove = _poissonians_to_jumps(
+        equations(sys), poisson_vars, iv_sym, sys_unknowns; save_positions
+    )
+
+    # Remove pure-jump equations
+    final_eqs = [eq for (i, eq) in enumerate(new_eqs) if i ∉ eqs_to_remove]
+
+    # Merge generated jumps with existing jumps
+    all_jumps = vcat(generated_jumps, existing_jumps)
+
+    @set! sys.eqs = final_eqs
+    @set! sys.jumps = all_jumps
+    @set! sys.poissonians = SymbolicT[]
 
     return sys
 end
