@@ -261,8 +261,12 @@ function IndexCache(sys::AbstractSystem)
             idxs = reshape(idxs, size(arrsym))::AbstractArray{Int}
         end
         rsym = renamespace(sys, arrsym)
-        tunable_idxs[arrsym] = idxs
-        tunable_idxs[rsym] = idxs
+        for idx in eachindex(arrsym)
+            tunable_idxs[arrsym[idx]] = idxs[idx]
+        end
+        for idx in eachindex(rsym)
+            tunable_idxs[rsym[idx]] = idxs[idx]
+        end
     end
 
     initials_idxs = TunableIndexMap()
