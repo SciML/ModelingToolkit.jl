@@ -84,6 +84,51 @@ using OrdinaryDiffEq, StochasticDiffEq
         @test !ispoissonian(x)
     end
 
+    @testset "Return type consistency with @variables" begin
+        @parameters λ₁ λ₂ λ₃
+
+        # Single inline: should return a 1-element Vector
+        result_single = @poissonians dN_a(λ₁)
+        @test result_single isa Vector
+        @test length(result_single) == 1
+        @test ispoissonian(result_single[1])
+        @test isequal(result_single[1], dN_a)
+
+        # Multiple inline: should return a Vector
+        result_multi = @poissonians dN_b(λ₁) dN_c(λ₂)
+        @test result_multi isa Vector
+        @test length(result_multi) == 2
+        @test all(ispoissonian, result_multi)
+        @test isequal(result_multi[1], dN_b)
+        @test isequal(result_multi[2], dN_c)
+
+        # Single in block: should return a 1-element Vector
+        result_block_single = @poissonians begin
+            dN_d(λ₁)
+        end
+        @test result_block_single isa Vector
+        @test length(result_block_single) == 1
+        @test ispoissonian(result_block_single[1])
+        @test isequal(result_block_single[1], dN_d)
+
+        # Multiple in block: should return a Vector
+        result_block_multi = @poissonians begin
+            dN_e(λ₂)
+            dN_f(λ₃)
+        end
+        @test result_block_multi isa Vector
+        @test length(result_block_multi) == 2
+        @test all(ispoissonian, result_block_multi)
+        @test isequal(result_block_multi[1], dN_e)
+        @test isequal(result_block_multi[2], dN_f)
+
+        # Three inline: should return a Vector of length 3
+        result_three = @poissonians dN_g(λ₁) dN_h(λ₂) dN_i(λ₃)
+        @test result_three isa Vector
+        @test length(result_three) == 3
+        @test all(ispoissonian, result_three)
+    end
+
     @testset "Error on missing rate" begin
         # This should error - rate is required
         @test_throws Exception @macroexpand @poissonians dN
