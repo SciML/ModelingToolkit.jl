@@ -737,12 +737,8 @@ function _poissonians(exprs...)
         end)
     end
 
-    # Return the variables as a tuple (or single if only one)
-    if length(names) == 1
-        return Expr(:block, assignments..., names[1])
-    else
-        return Expr(:block, assignments..., Expr(:tuple, names...))
-    end
+    # Return the variables as a Vector, consistent with @variables and @brownians
+    return Expr(:block, assignments..., Expr(:vect, names...))
 end
 
 ## Guess ======================================================================
