@@ -70,7 +70,7 @@ scatter!([u_opt[1]], [u_opt[2]], ms = 10, label = "minimum")
 
 ## Rosenbrock Function with Constraints
 
-ModelingToolkit is also capable of handing more complicated constraints than box constraints.
+ModelingToolkit is also capable of handling more complicated constraints than box constraints.
 Non-linear equality and inequality constraints can be added to the `OptimizationSystem`.
 Let's add an inequality constraint to the previous example:
 
