@@ -48,11 +48,9 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 [weakdeps]
 FMIImport = "9fcbc62e-52a0-44e9-a616-1359a0008194"
 
-[sources.ModelingToolkitBase]
-subdir = "lib/ModelingToolkitBase"
-
-[sources.SciCompDSL]
-subdir = "lib/SciCompDSL"
+[sources]
+ModelingToolkitBase = {path = "/home/crackauc/sandbox/tmp_ModelingToolkit/lib/ModelingToolkitBase", subdir = "lib/ModelingToolkitBase"}
+SciCompDSL = {subdir = "lib/SciCompDSL"}
 
 [extensions]
 MTKFMIExt = "FMIImport"
@@ -108,8 +106,8 @@ StateSelection = "1.1.1"
 StaticArrays = "1.9.14"
 StochasticDelayDiffEq = "1.11"
 StochasticDiffEq = "6.82.0"
-SymbolicIndexingInterface = "0.3.39"
 SymbolicCompilerPasses = "0.1.0"
+SymbolicIndexingInterface = "0.3.39"
 SymbolicUtils = "4.13"
 Symbolics = "7"
 UnPack = "0.1, 1.0"
