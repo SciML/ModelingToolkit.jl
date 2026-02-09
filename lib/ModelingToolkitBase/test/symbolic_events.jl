@@ -1602,7 +1602,7 @@ end
 if @isdefined(ModelingToolkit)
     @testset "Symbolic affects are compiled in `complete`" begin
         @parameters g
-        @variables x(t) [state_priority = 10.0] y(t) [guess = 1.0]
+        @variables x(t) [state_priority = 10] y(t) [guess = 1.0]
         @variables λ(t) [guess = 1.0]
         eqs = [
             D(D(x)) ~ λ * x
