@@ -20,7 +20,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         steady_state = false, checkbounds = false, sparsity = false, @nospecialize(analytic = nothing),
         simplify = false, cse = true, @nospecialize(initialization_data = nothing), expression = Val{false},
         check_compatibility = true, nlstep = false, nlstep_compile = true, nlstep_scc = false,
-        kwargs...
+        optimize = nothing, kwargs...
     ) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
@@ -28,7 +28,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
         eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+        optimize, kwargs...
     )
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
@@ -45,7 +45,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     if tgrad
         _tgrad = generate_tgrad(
             sys; expression, wrap_gfw = Val{true},
-            simplify, cse, eval_expression, eval_module, checkbounds, kwargs...
+            simplify, cse, eval_expression, eval_module, checkbounds, optimize, kwargs...
         )
     else
         _tgrad = nothing
@@ -54,7 +54,8 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     if jac
         _jac = generate_jacobian(
             sys; expression, wrap_gfw = Val{true},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...
+            simplify, sparse, cse, eval_expression, eval_module, checkbounds, optimize,
+            kwargs...
         )
     else
         _jac = nothing
@@ -70,7 +71,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
     )
 
     _W_sparsity = W_sparsity(sys)

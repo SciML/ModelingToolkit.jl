@@ -1175,6 +1175,7 @@ function build_explicit_observed_function(
         mkarray = nothing,
         wrap_delays = is_dde(sys) && !param_only,
         force_time_independent = false,
+        kwargs...
     )
     if inputs === nothing
         inputs = ()
@@ -1321,10 +1322,10 @@ function build_explicit_observed_function(
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays, extra_assignments
+        wrap_delays, extra_assignments, kwargs...
     )
     if fns isa Tuple
-        if expression
+        if expression == true || expression === Val{true}
             return return_inplace ? fns : fns[1]
         end
         oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
@@ -1337,7 +1338,7 @@ function build_explicit_observed_function(
         )
         return return_inplace ? (f, f) : f
     else
-        if expression
+        if expression == true || expression === Val{true}
             return fns
         end
         f = eval_or_rgf(fns; eval_expression, eval_module)
