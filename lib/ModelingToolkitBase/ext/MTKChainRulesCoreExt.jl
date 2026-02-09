@@ -6,7 +6,7 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, Ab
 import ModelingToolkitBase
 import ModelingToolkitBase as MTK
 import SciMLStructures
-import SymbolicIndexingInterface: remake_buffer
+import SymbolicIndexingInterface: remake_buffer, parameter_index
 import SciMLBase: AbstractNonlinearProblem, remake
 
 function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
