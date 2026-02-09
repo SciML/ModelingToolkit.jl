@@ -1,6 +1,6 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-version = "11.9.0"
+version = "11.9.1"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
@@ -81,7 +81,7 @@ Libdl = "1"
 LinearAlgebra = "1"
 LinearSolve = "3.56"
 Logging = "1"
-ModelingToolkitBase = "1.8.1"
+ModelingToolkitBase = "1.12.0"
 ModelingToolkitStandardLibrary = "2.20"
 ModelingToolkitTearing = "1.2.5"
 Moshi = "0.3.6"
