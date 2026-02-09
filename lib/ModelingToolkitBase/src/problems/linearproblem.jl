@@ -1,7 +1,7 @@
 struct LinearFunction{iip, I} <: SciMLBase.AbstractSciMLFunction{iip}
     interface::I
-    A::AbstractMatrix
-    b::AbstractVector
+    A::Union{Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int}}
+    b::Vector{SymbolicT}
 end
 
 function LinearFunction{iip}(
@@ -62,18 +62,17 @@ function SciMLBase.LinearProblem{iip}(
     check_complete(sys, LinearProblem)
     check_compatibility && check_compatible_system(LinearProblem, sys)
 
-    f, u0,
-        p = process_SciMLProblem(
+    u0Type = typeof(op)
+    f, u0, p, op = process_SciMLProblem(
         LinearFunction{iip}, sys, op; check_length, expression,
         build_initializeprob = false, symbolic_u0 = true, u0_constructor, u0_eltype,
-        kwargs...
+        return_operating_point = true, sparse, kwargs...
     )
 
     if any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
-    u0Type = typeof(op)
     floatT = if u0 === nothing
         calculate_float_type(op, u0Type)
     else
@@ -83,9 +82,8 @@ function SciMLBase.LinearProblem{iip}(
 
     u0_constructor = get_p_constructor(u0_constructor, u0Type, u0_eltype)
     symbolic_interface = f.interface
-    A,
-        b = get_A_b_from_LinearFunction(
-        sys, f, p; eval_expression, eval_module, expression, u0_constructor, sparse
+    A, b = get_A_b_from_LinearFunction(
+        sys, f, op; eval_expression, eval_module, expression, u0_constructor
     )
 
     kwargs = (; u0, process_kwargs(sys; kwargs...)..., f = symbolic_interface)
@@ -95,35 +93,44 @@ function SciMLBase.LinearProblem{iip}(
 end
 
 function get_A_b_from_LinearFunction(
-        sys::System, f::LinearFunction, p; eval_expression = false,
+        sys::System, f::LinearFunction, op; kws...
+    )
+    return get_A_b_from_LinearFunction(sys, f, Symbolics.FixpointSubstituter{true}(op); kws...)
+end
+
+function get_A_b_from_LinearFunction(
+        sys::System, f::LinearFunction, subber::Symbolics.FixpointSubstituter{true}; eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, u0_constructor = identity,
-        u0_eltype = float, sparse = false
+        u0_eltype = float
     )
     @unpack A, b, interface = f
-    if expression == Val{true}
-        get_A = build_explicit_observed_function(
-            sys, A; param_only = true, eval_expression, eval_module
-        )
-        get_b = build_explicit_observed_function(
-            sys, b; param_only = true, eval_expression, eval_module
-        )
-        A = u0_constructor(u0_eltype.(get_A(p)))
-        b = u0_constructor(u0_eltype.(get_b(p)))
-    else
-        A = u0_eltype.(interface.update_A!(p))
-        szA = size(A)::NTuple{2, Int}
+    if A isa Matrix{SymbolicT}
+        _A = similar(A, Any)
+        for i in eachindex(A)
+            _A[i] = unwrap_const(subber(A[i]))
+        end
+        A = u0_eltype.(_A)
         _A = u0_constructor(A)
         if ArrayInterface.ismutable(_A)
-            A = similar(_A, szA)
+            A = similar(_A, size(A))
             copyto!(A, _A)
         else
-            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(szA))(_A)
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(size(A)))(_A)
         end
-        b = u0_constructor(u0_eltype.(interface.update_b!(p)))
+    else
+        I, J, V = findnz(A)
+        _V = similar(V, Any)
+        for i in eachindex(V)
+            _V[i] = unwrap_const(subber(V[i]))
+        end
+        V = u0_constructor(u0_eltype.(_V))
+        A = SparseArrays.sparse(I, J, V, size(A)...)
     end
-    if sparse
-        A = SparseArrays.sparse(A)
+    _b = similar(b, Any)
+    for i in eachindex(b)
+        _b[i] = unwrap_const(subber(b[i]))
     end
+    b = u0_constructor(u0_eltype.(_b))
 
     return A, b
 end

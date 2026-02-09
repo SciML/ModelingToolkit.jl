@@ -14,7 +14,8 @@ function LoggedFunctionException(lf::LoggedFun, args, msg)
 end
 Base.showerror(io::IO, err::LoggedFunctionException) = print(io, err.msg)
 Base.nameof(lf::LoggedFun) = nameof(lf.f)
-SymbolicUtils.promote_symtype(::LoggedFun, Ts...) = Real
+SymbolicUtils.promote_symtype(f::LoggedFun, Ts::SU.TypeT...) = SU.promote_symtype(f.f, Ts...)
+SU.promote_shape(f::LoggedFun, @nospecialize(shs::SU.ShapeT...)) = SU.promote_shape(f.f, shs...)
 function (lf::LoggedFun)(args...)
     val = try
         lf.f(args...) # try to call with numerical input, as usual
@@ -29,7 +30,7 @@ end
 
 function logged_fun(f, args...; error_nonfinite = true) # remember to update error_nonfinite in debug_system() docstring
     # Currently we don't really support complex numbers
-    return term(LoggedFun(f, args, error_nonfinite), args..., type = Real)
+    return maketerm(SymbolicT, LoggedFun(f, args, error_nonfinite), args, nothing)
 end
 
 function debug_sub(eq::Equation, funcs; kw...)

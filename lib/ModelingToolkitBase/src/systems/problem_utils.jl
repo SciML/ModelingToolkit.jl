@@ -1477,7 +1477,8 @@ function process_SciMLProblem(
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
-        allow_incomplete = false, is_initializeprob = false, is_steadystateprob = false, kwargs...
+        allow_incomplete = false, is_initializeprob = false, is_steadystateprob = false,
+        return_operating_point = false, kwargs...
     )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1646,7 +1647,11 @@ function process_SciMLProblem(
         eval_module = eval_module,
         kwargs...
     )
-    return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
+    if return_operating_point
+        return implicit_dae ? (f, du0, u0, p, op) : (f, u0, p, op)
+    else
+        return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
+    end
 end
 
 # Check that the keys of a u0map or pmap are valid
