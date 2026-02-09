@@ -1602,7 +1602,7 @@ end
 if @isdefined(ModelingToolkit)
     @testset "Symbolic affects are compiled in `complete`" begin
         @parameters g
-        @variables x(t) [state_priority = 10.0] y(t) [guess = 1.0]
+        @variables x(t) [state_priority = 10] y(t) [guess = 1.0]
         @variables λ(t) [guess = 1.0]
         eqs = [
             D(D(x)) ~ λ * x
@@ -1830,5 +1830,28 @@ if !@isdefined(ModelingToolkit)
         @parameters p (f::Function)(..)
         @discretes d(t)
         @test isequal(Pre(2x^2 + 3sin(f(x)) - ifelse(p < 0, d, d + 2) + 2p), 2Pre(x)^2 + 3sin(f(Pre(x))) - ifelse(p < 0, Pre(d), Pre(d) + 2) + 2p)
+    end
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "Issue#4259: Array variables and empty affects" begin
+        @component function MinimalBug(; name)
+            vars = @variables begin
+                s(t), [guess = 1.0]
+                arr(t)[1:2]
+            end
+            eqs = [
+                D(s) ~ 0.1
+                arr[1] ~ s
+                arr[2] ~ 2s
+            ]
+            continuous_events = [
+                [s ~ 0.5] => Symbolics.Equation[]
+            ]
+            System(eqs, t, [s; collect(arr)], []; name, continuous_events)
+        end
+
+        @named sys = MinimalBug()
+        @test_nowarn mtkcompile(sys)
     end
 end
