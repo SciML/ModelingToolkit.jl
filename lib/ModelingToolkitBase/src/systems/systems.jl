@@ -652,12 +652,14 @@ function _poissonians_to_jumps(
             # operator's order field directly rather than using var_from_nested_derivative
             diff_op = operation(eq.lhs)
             if diff_op.order != 1
-                throw(ArgumentError(
-                    """
-                    Higher-order derivative equation $eq found in system with poissonians. \
-                    Poissonians are only supported in first-order differential equations.
-                    """
-                ))
+                throw(
+                    ArgumentError(
+                        """
+                        Higher-order derivative equation $eq found in system with poissonians. \
+                        Poissonians are only supported in first-order differential equations.
+                        """
+                    )
+                )
             end
 
             # Get the variable being differentiated

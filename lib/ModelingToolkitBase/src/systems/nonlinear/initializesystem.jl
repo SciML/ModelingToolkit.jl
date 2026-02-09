@@ -419,12 +419,12 @@ function timevaring_initsys_process_op!(
         Expected an `Initial` parameter to exist for variable `$k`, but did not find one. \
         This can be because:
         1. The problem constructor was passed an initial condition \
-           for `$k` but the variable does not exist in the system. Either ensure that `$k` \
-           is a variable/parameter of the system, or change the set of initial conditions \
-           provided to the problem constructor.
+        for `$k` but the variable does not exist in the system. Either ensure that `$k` \
+        is a variable/parameter of the system, or change the set of initial conditions \
+        provided to the problem constructor.
         2. An initial condition was provided for a bound parameter. Bound parameters cannot \
-           be given intial conditions. Their values are determined solely by the binding \
-           relation.
+        be given intial conditions. Their values are determined solely by the binding \
+        relation.
 
         In case neither of these is the case, please open an issue in ModelingToolkit.jl \
         with a reproducible example.
