@@ -832,7 +832,7 @@ Create a `System` with a single equation `eq`.
 """
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
-function gather_array_params(ps)
+function gather_array_params(ps::AbstractSet{SymbolicT})
     new_ps = OrderedSet{SymbolicT}()
     for p in ps
         arr, isarr = split_indexed_var(p)
