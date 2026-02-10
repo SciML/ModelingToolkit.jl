@@ -34,87 +34,30 @@ for T in [
         :ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,
         :BVProblem, :DiscreteProblem, :ImplicitDiscreteProblem,
     ]
-    for (pType, pCanonical) in [
-                (AbstractDict, :p),
-                (AbstractArray{<:Pair}, :(Dict(p))),
-                (AbstractArray, :(isempty(p) ? Dict() : Dict(parameters(sys) .=> p))),
-            ],
-            (uType, uCanonical) in [
-                (Nothing, :(Dict())),
-                (AbstractDict, :u0),
-                (AbstractArray{<:Pair}, :(Dict(u0))),
-                (AbstractArray, :(isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0))),
-            ]
-
-        @eval function SciMLBase.$T(sys::System, u0::$uType, tspan, p::$pType; kw...)
-            ctor = string($T)
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
-            `$ctor(sys, merge($uCan, $pCan), tspan)` instead.
-            """
-            return SciMLBase.$T(sys, merge($uCanonical, $pCanonical), tspan; kw...)
+    @eval @fallback_iip_specialize function SciMLBase.$T{iip, spec}(sys::System, u0, tspan, p; kw...) where {iip, spec}
+        @warn """
+        `$($T)(sys, u0, tspan, p)` is deprecated. Use `$($T)(sys, op, tspan)` instead and provide
+        both unknown and parameter values in the operating point `op`.
+        """
+        if u0 === nothing
+            u0 = Dict()
+        elseif u0 isa AbstractDict
+            u0 = u0
+        elseif u0 isa AbstractArray{<:Pair}
+            u0 = Dict(u0)
+        elseif u0 isa AbstractArray
+            u0 = isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0)
         end
-        @eval function SciMLBase.$T{iip}(
-                sys::System, u0::$uType, tspan, p::$pType; kw...
-            ) where {iip}
-            ctor = string($T{iip})
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
-            `$ctor(sys, merge($uCan, $pCan), tspan)` instead.
-            """
-            return SciMLBase.$T{iip}(sys, merge($uCanonical, $pCanonical), tspan; kw...)
+        if p === nothing || p isa SciMLBase.NullParameters
+            p = Dict()
+        elseif p isa AbstractDict
+            p = p
+        elseif p isa AbstractArray{<:Pair}
+            p = Dict(p)
+        elseif p isa AbstractArray
+            p = isempty(p) ? Dict() : Dict(parameters(sys) .=> p)
         end
-        @eval function SciMLBase.$T{iip, spec}(
-                sys::System, u0::$uType, tspan, p::$pType; kw...
-            ) where {iip, spec}
-            ctor = string($T{iip, spec})
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
-            `$ctor(sys, merge($uCan, $pCan), tspan)` instead.
-            """
-            return $T{iip, spec}(sys, merge($uCanonical, $pCanonical), tspan; kw...)
-        end
-    end
-
-    for pType in [SciMLBase.NullParameters, Nothing], uType in [Any, Nothing]
-
-        @eval function SciMLBase.$T(sys::System, u0::$uType, tspan, p::$pType; kw...)
-            ctor = string($T)
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
-            `$ctor(sys, u0, tspan)` instead.
-            """
-            return $T(sys, u0, tspan; kw...)
-        end
-        @eval function SciMLBase.$T{iip}(
-                sys::System, u0::$uType, tspan, p::$pType; kw...
-            ) where {iip}
-            ctor = string($T{iip})
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
-            `$ctor(sys, u0, tspan)` instead.
-            """
-            return $T{iip}(sys, u0, tspan; kw...)
-        end
-        @eval function SciMLBase.$T{iip, spec}(
-                sys::System, u0::$uType, tspan, p::$pType; kw...
-            ) where {iip, spec}
-            ctor = string($T{iip, spec})
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
-            `$ctor(sys, u0, tspan)` instead.
-            """
-            return $T{iip, spec}(sys, u0, tspan; kw...)
-        end
+        return SciMLBase.$T{iip, spec}(sys, merge(u0, p), tspan; kw...)
     end
 end
 
@@ -122,83 +65,30 @@ for T in [
         :NonlinearProblem, :NonlinearLeastSquaresProblem,
         :SCCNonlinearProblem, :OptimizationProblem, :SteadyStateProblem,
     ]
-    for (pType, pCanonical) in [
-                (AbstractDict, :p),
-                (AbstractArray{<:Pair}, :(Dict(p))),
-                (AbstractArray, :(isempty(p) ? Dict() : Dict(parameters(sys) .=> p))),
-            ],
-            (uType, uCanonical) in [
-                (Nothing, :(Dict())),
-                (AbstractDict, :u0),
-                (AbstractArray{<:Pair}, :(Dict(u0))),
-                (AbstractArray, :(isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0))),
-            ]
-
-        @eval function SciMLBase.$T(sys::System, u0::$uType, p::$pType; kw...)
-            ctor = string($T)
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, p; kw...)` is deprecated. Use `$ctor(sys, merge($uCan, $pCan))`
-            instead.
-            """
-            return $T(sys, merge($uCanonical, $pCanonical); kw...)
+    @eval @fallback_iip_specialize function SciMLBase.$T{iip, spec}(sys::System, u0, p; kw...) where {iip, spec}
+        @warn """
+        `$($T)(sys, u0, p)` is deprecated. Use `$($T)(sys, op)` instead and provide
+        both unknown and parameter values in the operating point `op`.
+        """
+        if u0 === nothing
+            u0 = Dict()
+        elseif u0 isa AbstractDict
+            u0 = u0
+        elseif u0 isa AbstractArray{<:Pair}
+            u0 = Dict(u0)
+        elseif u0 isa AbstractArray
+            u0 = isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0)
         end
-        @eval function SciMLBase.$T{iip}(
-                sys::System, u0::$uType, p::$pType; kw...
-            ) where {iip}
-            ctor = string($T{iip})
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, p; kw...)` is deprecated. Use `$ctor(sys, merge($uCan, $pCan))`
-            instead.
-            """
-            return $T{iip}(sys, merge($uCanonical, $pCanonical); kw...)
+        if p === nothing || p isa SciMLBase.NullParameters
+            p = Dict()
+        elseif p isa AbstractDict
+            p = p
+        elseif p isa AbstractArray{<:Pair}
+            p = Dict(p)
+        elseif p isa AbstractArray
+            p = isempty(p) ? Dict() : Dict(parameters(sys) .=> p)
         end
-        @eval function SciMLBase.$T{iip, spec}(
-                sys::System, u0::$uType, p::$pType; kw...
-            ) where {iip, spec}
-            ctor = string($T{iip, spec})
-            uCan = string($(QuoteNode(uCanonical)))
-            pCan = string($(QuoteNode(pCanonical)))
-            @warn """
-            `$ctor(sys, u0, p; kw...)` is deprecated. Use `$ctor(sys, merge($uCan, $pCan))`
-            instead.
-            """
-            return $T{iip, spec}(sys, merge($uCanonical, $pCanonical); kw...)
-        end
-    end
-    for pType in [SciMLBase.NullParameters, Nothing], uType in [Any, Nothing]
-
-        @eval function SciMLBase.$T(sys::System, u0::$uType, p::$pType; kw...)
-            ctor = string($T)
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, p::$pT; kw...)` is deprecated. Use `$ctor(sys, u0)` instead
-            """
-            return $T(sys, u0; kw...)
-        end
-        @eval function SciMLBase.$T{iip}(
-                sys::System, u0::$uType, p::$pType; kw...
-            ) where {iip}
-            ctor = string($T{iip})
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, p::$pT; kw...)` is deprecated. Use `$ctor(sys, u0)` instead
-            """
-            return $T{iip}(sys, u0; kw...)
-        end
-        @eval function SciMLBase.$T{iip, spec}(
-                sys::System, u0::$uType, p::$pType; kw...
-            ) where {iip, spec}
-            ctor = string($T{iip, spec})
-            pT = string($(QuoteNode(pType)))
-            @warn """
-            `$ctor(sys, u0, p::$pT; kw...)` is deprecated. Use `$ctor(sys, u0)` instead
-            """
-            return $T{iip, spec}(sys, u0; kw...)
-        end
+        return SciMLBase.$T{iip, spec}(sys, merge(u0, p); kw...)
     end
 end
 
