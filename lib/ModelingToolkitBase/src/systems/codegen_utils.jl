@@ -311,6 +311,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         bound_parameters_used_by!(reqd_bound_pars, sys, dervars[dervar]; bgraph)
         union!(obsidxs, observed_equations_used_by(sys, dervars[dervar]; obs))
     end
+    bound_parameters_used_by!(reqd_bound_pars, sys, extra_assignments; bgraph)
     sort_bound_parameters!(reqd_bound_pars, sys; bgraph)
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)
