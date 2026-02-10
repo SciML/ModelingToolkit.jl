@@ -605,7 +605,14 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     end
 
     for (k, v) in bindings(sys)
-        v === COMMON_MISSING && push!(all_initialvars, k)
+        v === COMMON_MISSING || continue
+        if split
+            push!(all_initialvars, k)
+        else
+            for i in SU.stable_eachindex(k)
+                push!(all_initialvars, k[i])
+            end
+        end
     end
 
     initials = collect(all_initialvars)
