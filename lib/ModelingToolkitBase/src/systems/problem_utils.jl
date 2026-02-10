@@ -2024,7 +2024,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     add_observed_equations!(op, obs)
 
     return if split
-        MTKParameters(sys, op; kwargs...)
+        MTKParameters(sys, op; fast_path = true, kwargs...)
     else
         varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)
     end
