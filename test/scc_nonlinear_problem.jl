@@ -294,6 +294,7 @@ import ModelingToolkitStandardLibrary.Hydraulic.IsothermalCompressible as IC
         connect(vol1.flange, mass.flange, vol2.flange)
         connect(src1.p, sin1.output)
         connect(src2.p, sin2.output)
+        src2.port.dm ~ 0
     ]
 
     initialization_eqs = [
