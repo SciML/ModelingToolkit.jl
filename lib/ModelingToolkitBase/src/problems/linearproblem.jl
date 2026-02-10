@@ -135,6 +135,40 @@ function get_A_b_from_LinearFunction(
     return A, b
 end
 
+# Deprecation path for older MTK and newer MTKBase
+function get_A_b_from_LinearFunction(
+        sys::System, f::LinearFunction, p::MTKParameters; eval_expression = false,
+        eval_module = @__MODULE__, expression = Val{false}, u0_constructor = identity,
+        u0_eltype = float, sparse = false,
+    )
+    (; A, b, interface) = f
+    if expression == Val{true}
+        get_A = build_explicit_observed_function(
+            sys, A; param_only = true, eval_expression, eval_module
+        )
+        get_b = build_explicit_observed_function(
+            sys, b; param_only = true, eval_expression, eval_module
+        )
+        A = u0_constructor(u0_eltype.(get_A(p)))
+        b = u0_constructor(u0_eltype.(get_b(p)))
+    else
+        A = u0_eltype.(interface.update_A!(p))
+        szA = size(A)::NTuple{2, Int}
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, szA)
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(szA))(_A)
+        end
+    end
+    b = u0_constructor(u0_eltype.(interface.update_b!(p)))
+    if sparse
+        A = SparseArrays.sparse(A)
+    end
+    return A, b
+end
+
 # For remake
 function SciMLBase.get_new_A_b(
         sys::AbstractSystem, f::SciMLBase.SymbolicLinearInterface, p, A, b; kw...
