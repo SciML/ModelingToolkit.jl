@@ -1207,7 +1207,10 @@ function observed_equations_used_by(
     )
     if involved_vars === nothing
         involved_vars = Set{SymbolicT}()
-        SU.search_variables!(involved_vars, exprs; is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial}}())
+        SU.search_variables!(
+            involved_vars, exprs;
+            is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial, Hold}}()
+        )
     elseif !(involved_vars isa Set{SymbolicT})
         involved_vars = Set{SymbolicT}(involved_vars)
     end
