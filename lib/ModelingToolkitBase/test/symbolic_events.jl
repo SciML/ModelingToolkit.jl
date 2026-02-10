@@ -11,6 +11,7 @@ using StableRNGs
 import SciMLBase
 using SymbolicIndexingInterface
 using Setfield
+using LinearAlgebra
 rng = StableRNG(12345)
 
 function get_callback(prob)
@@ -1830,6 +1831,26 @@ if !@isdefined(ModelingToolkit)
         @parameters p (f::Function)(..)
         @discretes d(t)
         @test isequal(Pre(2x^2 + 3sin(f(x)) - ifelse(p < 0, d, d + 2) + 2p), 2Pre(x)^2 + 3sin(f(Pre(x))) - ifelse(p < 0, Pre(d), Pre(d) + 2) + 2p)
+    end
+
+    @testset "Issue#4272: Scalarized array params in `AffectSystem`" begin
+        @variables u(t)
+        @variables (x(t))[1:2]
+        @variables y(t)
+
+        @parameters A[1:4]
+        @parameters b[1:2]
+        @parameters c[1:2]
+
+        eqs = [
+            u ~ x[1] + x[2] * sin(t)
+            D(x) ~ reshape(A, 2, 2) * x + b * u;
+            y ~ dot(c, x)
+        ]
+
+        event1 = SymbolicDiscreteCallback([1.0], [x[1] ~ 1.0]; iv = t)
+        @named sys = System(eqs, t, [u, x..., y], [A, b, c]; discrete_events = [event1])
+        @test_nowarn complete(sys)
     end
 end
 

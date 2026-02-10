@@ -732,9 +732,11 @@ function _poissonians(exprs...)
         push!(names, name)
         # Create the symbolic variable using Symbolics.variable and set poissonian metadata
         # Symbolics.variable creates a proper Sym{VartypeT} with VariableSource metadata
-        push!(assignments, quote
-            $name = $topoissonian($(Symbolics.variable)($(QuoteNode(name))), $rate)
-        end)
+        push!(
+            assignments, quote
+                $name = $topoissonian($(Symbolics.variable)($(QuoteNode(name))), $rate)
+            end
+        )
     end
 
     # Return the variables as a Vector, consistent with @variables and @brownians

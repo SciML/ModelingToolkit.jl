@@ -334,11 +334,13 @@ struct System <: IntermediateDeprecationSystem
             end
             N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
             if noise_eqs !== nothing && !isempty(brownians)
-                throw(ArgumentError(
-                    "A system cannot have both `noise_eqs` and `brownians` specified. " *
-                    "Use either `noise_eqs` (a matrix of noise coefficients) or " *
-                    "`brownians` (symbolic brownian variables in equations), but not both."
-                ))
+                throw(
+                    ArgumentError(
+                        "A system cannot have both `noise_eqs` and `brownians` specified. " *
+                            "Use either `noise_eqs` (a matrix of noise coefficients) or " *
+                            "`brownians` (symbolic brownian variables in equations), but not both."
+                    )
+                )
             end
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
@@ -830,7 +832,7 @@ Create a `System` with a single equation `eq`.
 """
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
-function gather_array_params(ps)
+function gather_array_params(ps::AbstractSet{SymbolicT})
     new_ps = OrderedSet{SymbolicT}()
     for p in ps
         arr, isarr = split_indexed_var(p)

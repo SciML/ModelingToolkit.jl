@@ -1783,7 +1783,7 @@ parameters for `iip` and `specialize`. Generates fallbacks with
 # Returns the argument unchanged if not wrapped in @nospecialize.
 function _unwrap_nospecialize(arg)
     if Meta.isexpr(arg, :macrocall) && length(arg.args) >= 3 &&
-       arg.args[1] in (Symbol("@nospecialize"), GlobalRef(Base, Symbol("@nospecialize")))
+            arg.args[1] in (Symbol("@nospecialize"), GlobalRef(Base, Symbol("@nospecialize")))
         return arg.args[3]
     end
     return arg
