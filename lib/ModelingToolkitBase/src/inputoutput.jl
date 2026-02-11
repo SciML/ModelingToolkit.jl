@@ -267,7 +267,13 @@ function generate_control_function(
     inputs = vec(unwrap_vars(inputs))
     dvs = unknowns(sys)
     ps::Vector{SymbolicT} = parameters(sys; initial_parameters = true)
-    ps = setdiff(ps, inputs)
+    inputs_set = Set{SymbolicT}(inputs)
+    for v in inputs
+        arr, isarr = split_indexed_var(v)
+        isarr || continue
+        push!(inputs_set, arr)
+    end
+    ps = setdiff(ps, inputs_set)
 
     # Remove unknown disturbances from inputs (we don't want them as actual inputs to the dynamics)
     if disturbance_inputs !== nothing
