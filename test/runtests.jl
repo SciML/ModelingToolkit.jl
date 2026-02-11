@@ -65,6 +65,7 @@ end
         @safetestset "Hierarchical Initialization Equations" include("hierarchical_initialization_eqs.jl")
         @mtktestset("InitializationSystem Test", "initializationsystem.jl")
         @mtktestset("Initial Values Test", "initial_values.jl")
+        @mtktestset("MTK respects ICs", "respect_ics.jl")
     end
 
     if GROUP == "All" || GROUP == "InterfaceII"

@@ -39,6 +39,7 @@ All other keyword arguments are forwarded to the wrapped nonlinear problem const
     end
     if !fast_path
         op = build_operating_point(sys, op)
+        fast_path = true
     end
     has_u0_ics = false
     for k in keys(op)
