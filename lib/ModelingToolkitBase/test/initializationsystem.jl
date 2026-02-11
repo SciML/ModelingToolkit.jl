@@ -1524,7 +1524,11 @@ end
     prob.ps[Initial(y[1])] = 0.5
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 0.5
-    @test integ[y] ≈ [0.5, sqrt(3.5)] atol = 1.0e-6
+    if VERSION < v"1.11" && !@isdefined(ModelingToolkit) # on lts with MTKBase, this flips sign
+        @test integ[y] ≈ [0.5, -sqrt(3.5)] atol = 1.0e-6
+    else
+        @test integ[y] ≈ [0.5, sqrt(3.5)] atol = 1.0e-6
+    end
 end
 
 @testset "Issue#3342" begin
