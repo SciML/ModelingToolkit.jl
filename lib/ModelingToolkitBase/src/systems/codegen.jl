@@ -1293,7 +1293,7 @@ function build_explicit_observed_function(
                 "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
             :build_explicit_observed_function
         )
-        if known_disturbance_inputs !== nothing
+        if known_disturbance_inputs !== ()
             error("Cannot specify both `disturbance_argument=true` and `known_disturbance_inputs`")
         end
         known_disturbance_inputs = disturbance_inputs
