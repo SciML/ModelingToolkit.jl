@@ -198,6 +198,21 @@ f, x_sym,
     disturbance_argument = true, split = false
 )
 
+# Test symbol-based API with known_disturbance_inputs keyword
+f_kd, x_sym_kd, p_sym_kd, io_sys_kd = ModelingToolkit.generate_control_function(
+    model_with_disturbance, [:u];
+    known_disturbance_inputs = [:d1, :d2], split = false
+)
+@test length(ModelingToolkit.inputs(io_sys_kd)) == 1 + 2 # 1 control + 2 known disturbance
+op_kd = ModelingToolkit.inputs(io_sys_kd) .=> 0
+x0_kd = ModelingToolkit.get_u0(io_sys_kd, op_kd)
+p_kd = ModelingToolkit.get_p(io_sys_kd, op_kd)
+u_kd = zeros(1)
+w_kd = zeros(2)
+@test f_kd[1](x0_kd, u_kd, p_kd, 0.0, w_kd) == zeros(length(x0_kd))
+w_kd = [1.0, 2.0]
+@test sort(f_kd[1](x0_kd, u_kd, p_kd, 0.0, w_kd)) == [0, 0, 0, 1, 2]
+
 measurement = ModelingToolkit.build_explicit_observed_function(
     io_sys, outputs, inputs = ModelingToolkit.inputs(io_sys)[1:1]
 )
