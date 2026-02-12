@@ -936,6 +936,7 @@ const SYS_PROPS = [
     :is_discrete
     :state_priorities
     :irreducibles
+    :maybe_zeros
     :assertions
     :ignored_connections
     :parent
@@ -1773,6 +1774,17 @@ function irreducibles(sys::AbstractSystem)
         union!(ircs, namespace_expr(irreducibles(s), s))
     end
     return ircs
+end
+
+function maybe_zeros(sys::AbstractSystem)
+    dds = get_maybe_zeros(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return dds
+    dds = copy(dds)
+    for s in systems
+        union!(dds, namespace_expr(maybe_zeros(s), s))
+    end
+    return dds
 end
 
 function initial_conditions_and_guesses(sys::AbstractSystem)
