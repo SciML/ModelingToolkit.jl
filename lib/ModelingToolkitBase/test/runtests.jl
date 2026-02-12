@@ -26,6 +26,7 @@ end
             @safetestset "Variable binding semantics" include("binding_semantics.jl")
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "System Building Tests" include("system_building.jl")
+            @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
