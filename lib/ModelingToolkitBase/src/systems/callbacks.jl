@@ -45,6 +45,54 @@ function SymbolicAffect(affect::SymbolicAffect; kwargs...)
 end
 SymbolicAffect(affect; kwargs...) = make_affect(affect; kwargs...)
 
+"""
+    AssignmentAffect(assignments)
+
+A special shorthand affect usable in symbolic callbacks. `assignments` is an array of
+`Pair`s, where the LHS of each pair is the variable/discrete to assign and the RHS is
+the value to assign it. The RHS is evaluated using the values of variables and parameters
+before the callback. In other words, it is evaluated as if the entire expression is enclosed
+in [`Pre`](@ref). In addition, if the LHS is created using `@discretes` it will automatically
+be added to the list of `discrete_parameters` typically provided when manually creating
+events.
+"""
+function AssignmentAffect(affect::AbstractArray{T}) where {T <: Pair}
+    discrete_parameters = SymbolicT[]
+    new_affect = Equation[]
+    for (lhs, rhs) in affect
+        lhs = unwrap(lhs)::SymbolicT
+        rhs = unwrap(rhs)
+        push!(new_affect, lhs ~ Pre(rhs))
+        if first(getmetadata(lhs, Symbolics.VariableSource)::NTuple{2, Symbol}) == :discretes
+            push!(discrete_parameters, lhs)
+        end
+    end
+    return SymbolicAffect(new_affect; discrete_parameters)
+end
+
+function SymbolicAffect(affect::Vector; discrete_parameters = SymbolicT[], kwargs...)
+    assigns = Pair{SymbolicT, SymbolicT}[]
+    eqs = Equation[]
+    for aff in affect
+        if aff isa Equation
+            push!(eqs, aff)
+        elseif aff isa Pair
+            push!(assigns, aff)
+        else
+            throw(
+                ArgumentError(
+                    lazy"""
+                    Unrecognized affect format $aff. Affects must be equations or `Pair`s.
+                    """
+                )
+            )
+        end
+    end
+    aff1 = SymbolicAffect(eqs; discrete_parameters, kwargs...)
+    aff2 = AssignmentAffect(assigns; kwargs...)
+    return SymbolicAffect([aff1.affect; aff2.affect], [aff1.discrete_parameters; aff2.discrete_parameters])
+end
+
 function (s::SymbolicUtils.Substituter)(aff::SymbolicAffect)
     return SymbolicAffect(s(aff.affect), s(aff.discrete_parameters))
 end
@@ -300,7 +348,10 @@ by their `rootfind` value into separate VectorContinuousCallbacks in the enumera
 active at the same instant. See the `SciMLBase` documentation for more information on the semantic rules.
 
 Affects (i.e. `affect` and `affect_neg`) can be specified as either:
-* A list of equations that should be applied when the callback is triggered (e.g. `x ~ 3, y ~ 7`) which must be of the form `unknown ~ observed value` where each `unknown` appears only once. Equations will be applied in the order that they appear in the vector; parameters and state updates will become immediately visible to following equations.
+* A list of equations that should be applied when the callback is triggered (e.g. `x ~ 3, y ~ 7`) which must be of the form `unknown ~ observed value` where each `unknown` appears only once. Equations will be applied in the order that they appear in the vector; parameters and state updates will become immediately visible to following equations. Instead of
+equations, elements can also be `Pair`s. These are parsed according to the [`AssignmentAffect`](@ref) semantics
+and combined with the remaining `Equation`s.
+* An [`AssignmentAffect`](@ref).
 * A tuple `(f!, unknowns, read_parameters, modified_parameters, ctx)`, where:
     + `f!` is a function with signature `(integ, u, p, ctx)` that is called with the integrator, a state *index* vector `u` derived from `unknowns`, a parameter *index* vector `p` derived from `read_parameters`, and the `ctx` that was given at construction time. Note that `ctx` is aliased between instances.
     + `unknowns` is a vector of symbolic unknown variables and optionally their aliases (e.g. if the model was defined with `@variables x(t)` then a valid value for `unknowns` would be `[x]`). A variable can be aliased with a pair `x => :y`. The indices of these `unknowns` will be passed to `f!` in `u` in a named tuple; in the earlier example, if we pass `[x]` as `unknowns` then `f!` can access `x` as `integ.u[u.x]`. If no alias is specified the name of the index will be the symbol version of the variable name.
