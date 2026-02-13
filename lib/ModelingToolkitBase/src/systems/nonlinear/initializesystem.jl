@@ -192,6 +192,7 @@ function generate_initializesystem_timevarying(
         initial_conditions = guesses,
         checks = check_units,
         name,
+        maybe_zeros = maybe_zeros(sys),
         is_initializesystem = true,
         discover_from_metadata = false,
         kwargs...
