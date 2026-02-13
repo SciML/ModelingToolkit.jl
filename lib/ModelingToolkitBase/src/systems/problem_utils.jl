@@ -1175,33 +1175,50 @@ function maybe_build_initialization_problem(
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
         missing_guess_value, is_steadystateprob, kwargs...
     )
+    needs_remake = false
     if state_values(initializeprob) !== nothing
         _u0 = state_values(initializeprob)
         if ArrayInterface.ismutable(_u0)
-            _u0 = floatT.(_u0)
+            __u0 = floatT.(_u0)
         else
-            _u0 = similar_type(_u0, floatT)(_u0)
+            __u0 = similar_type(_u0, floatT)(_u0)
         end
-        initializeprob = remake(initializeprob; u0 = _u0)
+        if eltype(__u0) != eltype(_u0)
+            _u0 = __u0
+            needs_remake = true
+        end
     end
     initp = parameter_values(initializeprob)
     if is_split(sys)
         buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), initp)
-        initp = repack(floatT.(buffer))
+        _initp = repack(floatT.(buffer))
         if !(initp.initials isa StaticVector{0})
-            buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), initp)
-            initp = repack(floatT.(buffer))
+            buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), _initp)
+            _initp = repack(floatT.(buffer))
+        end
+        if eltype(_initp.tunable) != eltype(initp.tunable) || eltype(_initp.initials) != eltype(initp.initials)
+            initp = _initp
+            needs_remake = true
         end
     elseif initp isa AbstractArray
         if ArrayInterface.ismutable(initp)
             initp′ = similar(initp, floatT)
-            copyto!(initp′, initp)
-            initp = initp′
+            if eltype(initp′) != eltype(initp)
+                copyto!(initp′, initp)
+                initp = initp′
+                needs_remake = true
+            end
         else
-            initp = similar_type(initp, floatT)(initp)
+            initp′ = similar_type(initp, floatT)(initp)
+            if eltype(initp′) != eltype(initp)
+                initp = initp′
+                needs_remake = true
+            end
         end
     end
-    initializeprob = remake(initializeprob; p = initp)
+    if needs_remake
+        initializeprob = remake(initializeprob; u0 = _u0, p = initp)
+    end
 
     get_initial_unknowns = if time_dependent_init
         GetUpdatedU0(sys, initializeprob, op)
