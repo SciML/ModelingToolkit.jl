@@ -1456,7 +1456,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), kwargs...
+        similarto = typeof(A), add_observed = false, kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
@@ -1484,7 +1484,7 @@ function generate_update_b(
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), kwargs...
+        similarto = typeof(b), add_observed = false, kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
