@@ -1852,6 +1852,22 @@ if !@isdefined(ModelingToolkit)
         @named sys = System(eqs, t, [u, x..., y], [A, b, c]; discrete_events = [event1])
         @test_nowarn complete(sys)
     end
+    @testset "Issue#4031, #4239: `AssignmentAffect`" begin
+        @variables x(t) y(t)
+        @discretes d(t)
+
+        aff = AssignmentAffect([y => y + 1, d => d+y+1])
+        @test aff isa ModelingToolkitBase.SymbolicAffect
+        @test issetequal(aff.affect, [y ~ Pre(y) + 1, d ~ Pre(d) + Pre(y) + 1])
+        @test issetequal(aff.discrete_parameters, [d])
+
+        evt = [x ~ 1.0] => [y => y + 1, d => d + 5, x ~ 3Pre(x)]
+        @mtkcompile sys = System([D(x) ~ 1, D(y) ~ 2 + d], t; continuous_events = [evt])
+        prob = ODEProblem(sys, [x => 0, y => 0, d => 1], (0.0, 2.0))
+        sol = solve(prob, Tsit5())
+        @test sol(1 - eps(); idxs = [x, y, d]) ≈ [1.0, 3.0, 1.0]
+        @test all(sol(1.001; idxs = [x, y, d]) .>= [3.0, 4.0, 6.0])
+    end
 end
 
 if @isdefined(ModelingToolkit)
