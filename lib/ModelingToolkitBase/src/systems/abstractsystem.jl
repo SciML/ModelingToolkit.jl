@@ -410,7 +410,7 @@ SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = true, cse = true
+        checkbounds = true, cse = true, optimize = nothing,
     )
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
@@ -437,7 +437,7 @@ function SymbolicIndexingInterface.observed(
         end
     end
     return build_explicit_observed_function(
-        sys, sym; eval_expression, eval_module, checkbounds, cse
+        sys, sym; eval_expression, eval_module, checkbounds, cse, optimize
     )
 end
 
@@ -605,7 +605,14 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     end
 
     for (k, v) in bindings(sys)
-        v === COMMON_MISSING && push!(all_initialvars, k)
+        v === COMMON_MISSING || continue
+        if split
+            push!(all_initialvars, k)
+        else
+            for i in SU.stable_eachindex(k)
+                push!(all_initialvars, k[i])
+            end
+        end
     end
 
     initials = collect(all_initialvars)
@@ -929,6 +936,7 @@ const SYS_PROPS = [
     :is_discrete
     :state_priorities
     :irreducibles
+    :maybe_zeros
     :assertions
     :ignored_connections
     :parent
@@ -1768,6 +1776,17 @@ function irreducibles(sys::AbstractSystem)
     return ircs
 end
 
+function maybe_zeros(sys::AbstractSystem)
+    dds = get_maybe_zeros(sys)
+    systems = get_systems(sys)
+    isempty(systems) && return dds
+    dds = copy(dds)
+    for s in systems
+        union!(dds, namespace_expr(maybe_zeros(s), s))
+    end
+    return dds
+end
+
 function initial_conditions_and_guesses(sys::AbstractSystem)
     return merge(guesses(sys), initial_conditions(sys))
 end
@@ -2171,7 +2190,7 @@ end
 ###
 ### System utils
 ###
-struct ObservedFunctionCache{S}
+struct ObservedFunctionCache{S, O}
     sys::S
     dict::Dict{Any, Any}
     steady_state::Bool
@@ -2179,22 +2198,24 @@ struct ObservedFunctionCache{S}
     eval_module::Module
     checkbounds::Bool
     cse::Bool
+    optimize::O
 end
 
 function ObservedFunctionCache(
         sys; expression = Val{false}, steady_state = false, eval_expression = false,
-        eval_module = @__MODULE__, checkbounds = true, cse = true
+        eval_module = @__MODULE__, checkbounds = true, cse = true, optimize = nothing,
     )
     return if expression == Val{true}
         :(
             $ObservedFunctionCache(
                 $sys, Dict(), $steady_state, $eval_expression,
-                $eval_module, $checkbounds, $cse
+                $eval_module, $checkbounds, $cse, $optimize
             )
         )
     else
         ObservedFunctionCache(
-            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse,
+            optimize,
         )
     end
 end
@@ -2208,8 +2229,9 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     eval_module = ofc.eval_module
     checkbounds = ofc.checkbounds
     cse = ofc.cse
+    optimize = ofc.optimize
     newofc = ObservedFunctionCache(
-        sys, dict, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
     )
     stackdict[ofc] = newofc
     return newofc
@@ -2219,7 +2241,8 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds, cse = ofc.cse
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds, cse = ofc.cse,
+            optimize = ofc.optimize
         )
     end
     if ofc.steady_state

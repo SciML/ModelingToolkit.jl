@@ -986,8 +986,10 @@ end
         E_X = lam_val * delta_val * T  # = 4.0
 
         # Create JumpProblem once, use seed parameter to vary randomness
-        jprob = JumpProblem(sys, [X => 0.0, sig => sig_val, lam => lam_val, delta => delta_val],
-            (0.0, T); rng, save_positions = (false, false))
+        jprob = JumpProblem(
+            sys, [X => 0.0, sig => sig_val, lam => lam_val, delta => delta_val],
+            (0.0, T); rng, save_positions = (false, false)
+        )
 
         seed = 1111
         Xfinal = zeros(Nsims)
@@ -1004,7 +1006,7 @@ end
         # Also check variance: Var[X(T)] = sig^2 * T + lam * delta^2 * T
         sample_var = var(Xfinal)
         E_var = sig_val^2 * T + lam_val * delta_val^2 * T  # = 0.09*2 + 2*1*2 = 4.18
-        @test abs(sample_var - E_var) < 0.10 * E_var  # 10% tolerance for variance estimates
+        @test abs(sample_var - E_var) < 0.1 * E_var  # 10% tolerance for variance estimates
     end
 
     # Test 2: Compare symbolic vs direct JumpProcesses construction
@@ -1029,8 +1031,10 @@ end
         @mtkcompile sys = System(eqs, t, [X], [sig, lam, delta], [B]; jumps = [crj])
 
         # Create JumpProblem once for symbolic version
-        jprob_sym = JumpProblem(sys, [X => X0, sig => sig_val, lam => lam_val, delta => delta_val],
-            (0.0, T); rng, save_positions = (false, false))
+        jprob_sym = JumpProblem(
+            sys, [X => X0, sig => sig_val, lam => lam_val, delta => delta_val],
+            (0.0, T); rng, save_positions = (false, false)
+        )
 
         seed = 2222
         Xfinal_sym = zeros(Nsims)
@@ -1072,7 +1076,7 @@ end
         # Also check variances match between implementations
         var_sym = var(Xfinal_sym)
         var_direct = var(Xfinal_direct)
-        @test abs(var_sym - var_direct) < 0.10 * var_direct
+        @test abs(var_sym - var_direct) < 0.1 * var_direct
     end
 
     # Test 3: Drift + diffusion + MassActionJump (birth-death with noise)
@@ -1096,8 +1100,10 @@ end
         alph_val, bet_val, gam_val, sig_val = 2.0, 0.5, 3.0, 0.1
         E_X_ss = (alph_val + gam_val) / bet_val  # = 10
 
-        jprob = JumpProblem(sys, [X => 5.0, alph => alph_val, bet => bet_val, gam => gam_val, sig => sig_val],
-            (0.0, T); rng, save_positions = (false, false))
+        jprob = JumpProblem(
+            sys, [X => 5.0, alph => alph_val, bet => bet_val, gam => gam_val, sig => sig_val],
+            (0.0, T); rng, save_positions = (false, false)
+        )
 
         seed = 3333
         Xfinal = zeros(Nsims)

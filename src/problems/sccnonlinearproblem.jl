@@ -83,7 +83,8 @@ end
 
 function SciMLBase.SCCNonlinearProblem{iip}(
         sys::System, op; eval_expression = false,
-        eval_module = @__MODULE__, cse = true, u0_constructor = identity, kwargs...
+        eval_module = @__MODULE__, cse = true, u0_constructor = identity,
+        missing_guess_value = default_missing_guess_value(), kwargs...
     ) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
@@ -147,7 +148,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
-        kwargs...
+        missing_guess_value, kwargs...
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
@@ -334,7 +335,27 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             end
             prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
-            isempty(symbolic_idxs) || throw(MissingGuessError(dvs[vscc], _u0))
+            if !isempty(symbolic_idxs)
+                Moshi.Match.@match missing_guess_value begin
+                    MissingGuessValue.Constant(val) => begin
+                        _u0[symbolic_idxs] .= val
+                        cval = Symbolics.SConst(val)
+                        for j in symbolic_idxs
+                            write_possibly_indexed_array!(op, dvs[vscc[j]], cval, COMMON_NOTHING)
+                        end
+                    end
+                    MissingGuessValue.Random(rng) => begin
+                        newval = rand(rng, length(symbolic_ixs))
+                        _u0[dvs[vscc]] .= newval
+                        for j in symbolic_idxs
+                            write_possibly_indexed_array!(
+                                op, dvs[vscc[j]], Symbolics.SConst(newval[j]), COMMON_NOTHING
+                            )
+                        end
+                    end
+                    MissingGuessValue.Error() => throw(MissingGuessError(dvs[vscc], _u0))
+                end
+            end
             _u0 = u0_eltype.(_u0)
             prob = NonlinearProblem(f, _u0, p)
         end

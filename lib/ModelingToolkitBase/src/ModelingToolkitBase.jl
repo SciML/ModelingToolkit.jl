@@ -272,7 +272,7 @@ export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
-export state_priorities, irreducibles
+export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
 export solve
 export Pre

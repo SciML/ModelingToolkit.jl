@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.12.0"
+version = "1.12.3"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -158,7 +158,7 @@ StaticArrays = "1.9.14"
 StochasticDelayDiffEq = "1.11"
 StochasticDiffEq = "6.82.0"
 SymbolicIndexingInterface = "0.3.39"
-SymbolicUtils = "4.17"
+SymbolicUtils = "4.18"
 Symbolics = "7.12"
 UnPack = "0.1, 1.0"
 julia = "1.9"

@@ -184,3 +184,11 @@ SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
     ci, clkmap = infer_clocks(sys)
     @test clkmap[ZeroArgOp()()] == clk
 end
+
+@testset "Allow `Hold` on the LHS of observed equations" begin
+    # Typically relevant for initialization systems
+    @variables x(t)
+    @mtkcompile sys = System(Hold(x) ~ 3)
+    prob = NonlinearProblem(sys, nothing)
+    @test prob.ps[Hold(x)] ≈ 3
+end

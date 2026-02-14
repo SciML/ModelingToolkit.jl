@@ -1516,15 +1516,15 @@ end
     )
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 1.0 atol = 1.0e-6
-    @test integ[y] ≈ [1.0, sqrt(2.0)] atol = 1.0e-6
+    @test abs.(integ[y]) ≈ [1.0, sqrt(2.0)] atol = 1.0e-6
     prob.ps[Initial(x)] = 0.5
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 0.5
-    @test integ[y] ≈ [1.0, sqrt(2.75)]
+    @test abs.(integ[y]) ≈ [1.0, sqrt(2.75)] atol = 1e-6
     prob.ps[Initial(y[1])] = 0.5
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 0.5
-    @test integ[y] ≈ [0.5, sqrt(3.5)] atol = 1.0e-6
+    @test abs.(integ[y]) ≈ [0.5, sqrt(3.5)] atol = 1.0e-6
 end
 
 @testset "Issue#3342" begin

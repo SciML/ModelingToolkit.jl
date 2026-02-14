@@ -177,6 +177,15 @@ function __mtkcompile(
             push!(_all_dvs, v)
         end
     end
+    original_obs = observed(sys)
+    for eq in original_obs
+        delete!(original_vars, eq.lhs)
+        delete!(all_dvs, eq.lhs)
+        arr, isarr = split_indexed_var(eq.lhs)
+        isarr || continue
+        delete!(original_vars, arr)
+        delete!(all_dvs, arr)
+    end
     all_dvs = _all_dvs
     filter!(all_dvs) do v
         v in original_vars || split_indexed_var(v)[1] in original_vars
@@ -250,6 +259,7 @@ function __mtkcompile(
     iv = get_iv(sys)::SymbolicT
     total_sub = Dict{SymbolicT, SymbolicT}()
     subst = SU.Substituter{false}(total_sub, SU.default_substitute_filter)
+    obseqs = copy(original_obs)
     if has_derivatives
         D = Differential(iv)
 
@@ -274,8 +284,6 @@ function __mtkcompile(
 
             diffeqs[i] = D(cur) ~ eq.rhs
         end
-
-        obseqs = Equation[]
     else
         # The "most differentiated" variable in `x(k) ~ x(k - 1) + x(k - 2)` is `x(k)`.
         # To find how many times it is "differentiated", find the lowest shift.
@@ -314,7 +322,7 @@ function __mtkcompile(
             diffeq_idxs[i] = get(lowest_shift, eqs[i].lhs, typemax(Int)) <= 0
         end
         # They actually become observed.
-        obseqs = eqs[diffeq_idxs]
+        append!(obseqs, eqs[diffeq_idxs])
         alg_eqs = eqs[.!diffeq_idxs]
         diffeqs = Equation[]
         for (var, order) in lowest_shift
@@ -652,12 +660,14 @@ function _poissonians_to_jumps(
             # operator's order field directly rather than using var_from_nested_derivative
             diff_op = operation(eq.lhs)
             if diff_op.order != 1
-                throw(ArgumentError(
-                    """
-                    Higher-order derivative equation $eq found in system with poissonians. \
-                    Poissonians are only supported in first-order differential equations.
-                    """
-                ))
+                throw(
+                    ArgumentError(
+                        """
+                        Higher-order derivative equation $eq found in system with poissonians. \
+                        Poissonians are only supported in first-order differential equations.
+                        """
+                    )
+                )
             end
 
             # Get the variable being differentiated

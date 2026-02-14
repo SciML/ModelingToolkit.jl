@@ -280,7 +280,7 @@ Base.@nospecializeinfer function build_function_wrapper(
             isequal(ttk, v) && continue
             dervars[default_toterm(k)] = v
         end
-    else
+    elseif is_time_dependent(sys)
         for eq in equations(sys)
             isdiffeq(eq) || continue
             ttk = default_toterm(eq.lhs)
@@ -288,7 +288,9 @@ Base.@nospecializeinfer function build_function_wrapper(
             dervars[ttk] = eq.rhs
         end
     end
-    Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
+    if is_time_dependent(sys)
+        Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
+    end
     # only get the necessary observed equations, avoiding extra computation
     if add_observed && !isempty(obs)
         obsidxs = BitSet(observed_equations_used_by(sys, expr; obs))
@@ -311,6 +313,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         bound_parameters_used_by!(reqd_bound_pars, sys, dervars[dervar]; bgraph)
         union!(obsidxs, observed_equations_used_by(sys, dervars[dervar]; obs))
     end
+    bound_parameters_used_by!(reqd_bound_pars, sys, extra_assignments; bgraph)
     sort_bound_parameters!(reqd_bound_pars, sys; bgraph)
     # assignments for reconstructing scalarized array symbolics
     assignments = array_variable_assignments(args...)

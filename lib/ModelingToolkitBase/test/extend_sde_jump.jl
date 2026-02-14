@@ -329,12 +329,16 @@ end
         @brownians w
 
         # Base system with initial condition
-        @named base = System([D(x) ~ a * x + w], t, [x], [a], [w];
-            initial_conditions = Dict(x => 1.0))
+        @named base = System(
+            [D(x) ~ a * x + w], t, [x], [a], [w];
+            initial_conditions = Dict(x => 1.0)
+        )
 
         # Extending system with different initial condition
-        @named ext = System(Equation[], t, [], [], [];
-            initial_conditions = Dict(x => 2.0))
+        @named ext = System(
+            Equation[], t, [], [], [];
+            initial_conditions = Dict(x => 2.0)
+        )
 
         extended = extend(ext, base; name = :result)
 

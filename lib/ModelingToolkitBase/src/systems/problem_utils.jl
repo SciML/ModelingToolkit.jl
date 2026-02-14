@@ -673,12 +673,12 @@ function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(
         indp, syms;
-        eval_expression, eval_module, force_time_independent = false
+        eval_expression, eval_module, force_time_independent = false, kwargs...
     )
     @nospecialize
     obsfn = build_explicit_observed_function(
         indp, syms; wrap_delays = false, eval_expression, eval_module,
-        force_time_independent
+        force_time_independent, kwargs...
     )
     return ObservedWrapper{is_time_dependent(indp) && !force_time_independent}(obsfn)
 end
@@ -735,7 +735,8 @@ takes a value provider of `srcsys` and a value provider of `dstsys` and returns 
 function get_mtkparameters_reconstructor(
         srcsys::AbstractSystem, dstsys::AbstractSystem;
         initials = false, unwrap_initials = false, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__, force_time_independent = false
+        eval_expression = false, eval_module = @__MODULE__, force_time_independent = false,
+        kwargs...
     )
     _p_constructor = p_constructor
     p_constructor = PConstructorApplicator(p_constructor)
@@ -755,7 +756,7 @@ function get_mtkparameters_reconstructor(
     else
         p_constructor ∘ concrete_getu(
             srcsys, tunable_syms; eval_expression, eval_module,
-            force_time_independent
+            force_time_independent, kwargs...
         )
     end
     initials_getter = if initials && !isempty(syms[2])
@@ -777,7 +778,7 @@ function get_mtkparameters_reconstructor(
         end
         p_constructor ∘ concrete_getu(
             srcsys, initsyms; eval_expression, eval_module,
-            force_time_independent
+            force_time_independent, kwargs...
         )
     else
         Returns(SVector{0, Float64}())
@@ -802,7 +803,7 @@ function get_mtkparameters_reconstructor(
             # appearing in the result.
             concrete_getu(
             srcsys, Tuple(broadcast.(collect, syms[3]));
-            eval_expression, eval_module, force_time_independent
+            eval_expression, eval_module, force_time_independent, kwargs...
         )
     end
     const_getter = if syms[4] == ()
@@ -810,7 +811,7 @@ function get_mtkparameters_reconstructor(
     else
         Base.Fix1(broadcast, p_constructor) ∘ concrete_getu(
             srcsys, Tuple(syms[4]);
-            eval_expression, eval_module, force_time_independent
+            eval_expression, eval_module, force_time_independent, kwargs...
         )
     end
     nonnumeric_getter = if syms[5] == ()
@@ -827,7 +828,7 @@ function get_mtkparameters_reconstructor(
             Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
             concrete_getu(
             srcsys, Tuple(syms[5]);
-            eval_expression, eval_module, force_time_independent
+            eval_expression, eval_module, force_time_independent, kwargs...
         )
     end
     getters = (
@@ -856,27 +857,29 @@ end
 
 Construct a `ReconstructInitializeprob` which reconstructs the `u0` and `p` of `dstsys`
 with values from `srcsys`.
+
+Extra keyword arguments are forwarded to `build_function_wrapper`.
 """
 function ReconstructInitializeprob(
         srcsys::AbstractSystem, dstsys::AbstractSystem; u0_constructor = identity, p_constructor = identity,
-        eval_expression = false, eval_module = @__MODULE__, is_steadystateprob = false,
+        eval_expression = false, eval_module = @__MODULE__, is_steadystateprob = false, kwargs...
     )
     @assert is_initializesystem(dstsys)
     ugetter = u0_constructor ∘
         concrete_getu(
         srcsys, unknowns(dstsys);
-        eval_expression, eval_module, force_time_independent = is_steadystateprob
+        eval_expression, eval_module, force_time_independent = is_steadystateprob, kwargs...
     )
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
             srcsys, dstsys; p_constructor, eval_expression, eval_module,
-            force_time_independent = is_steadystateprob,
+            force_time_independent = is_steadystateprob, kwargs...
         )
     else
         syms = parameters(dstsys)
         pgetter = let inner = concrete_getu(
-                srcsys, syms;
-                eval_expression, eval_module, force_time_independent = is_steadystateprob
+                srcsys, syms; eval_expression, eval_module,
+                force_time_independent = is_steadystateprob, kwargs...
             ),
                 p_constructor = p_constructor
 
@@ -943,13 +946,14 @@ Given `sys` and its corresponding initialization system `initsys`, return the
 `initializeprobpmap` function in `OverrideInitData` for the systems.
 """
 function construct_initializeprobpmap(
-        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module
+        sys::AbstractSystem, initsys::AbstractSystem; p_constructor = identity, eval_expression, eval_module,
+        kwargs...
     )
     @assert is_initializesystem(initsys)
     if is_split(sys)
         return let getter = get_mtkparameters_reconstructor(
                 initsys, sys; initials = true, unwrap_initials = true, p_constructor,
-                eval_expression, eval_module
+                eval_expression, eval_module, kwargs...
             )
             function initprobpmap_split(prob, initsol)
                 return getter(initsol, prob)
@@ -958,7 +962,7 @@ function construct_initializeprobpmap(
     else
         return let getter = concrete_getu(
                 initsys, parameters(sys; initial_parameters = true);
-                eval_expression, eval_module
+                eval_expression, eval_module, kwargs...
             ), p_constructor = p_constructor
 
             function initprobpmap_nosplit(prob, initsol)
@@ -1156,7 +1160,8 @@ function maybe_build_initialization_problem(
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
         missing_guess_value = default_missing_guess_value(),
-        implicit_dae = false, is_steadystateprob = false, kwargs...
+        # Intercept `expression` because we don't support it here yet
+        implicit_dae = false, is_steadystateprob = false, expression = Val{false}, kwargs...
     )
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
 
@@ -1210,7 +1215,7 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initializeprob.f.sys; u0_constructor,
-            p_constructor, eval_expression, eval_module, is_steadystateprob
+            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
@@ -1237,7 +1242,7 @@ function maybe_build_initialization_problem(
         initializeprobpmap = nothing
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module
+            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module, kwargs...
         )
     end
 
@@ -1292,7 +1297,7 @@ function maybe_build_initialization_problem(
     # `eval_expression == true`, this then runs into world-age issues. Building an
     # RGF here is fine since it is always discarded. We can't use `eval_module` for
     # the RGF since the user may not have run RGF's init.
-    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars)
+    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars; kwargs...)
     pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
     for (p, pval) in zip(missingvars, pvals)
         op[p] = pval
@@ -1524,7 +1529,8 @@ function process_SciMLProblem(
             warn_cyclic_dependency, check_units = check_initialization_units,
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae
+            time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
+            kwargs...
         )
 
         kwargs = merge(kwargs, kws)
@@ -1783,7 +1789,7 @@ parameters for `iip` and `specialize`. Generates fallbacks with
 # Returns the argument unchanged if not wrapped in @nospecialize.
 function _unwrap_nospecialize(arg)
     if Meta.isexpr(arg, :macrocall) && length(arg.args) >= 3 &&
-       arg.args[1] in (Symbol("@nospecialize"), GlobalRef(Base, Symbol("@nospecialize")))
+            arg.args[1] in (Symbol("@nospecialize"), GlobalRef(Base, Symbol("@nospecialize")))
         return arg.args[3]
     end
     return arg
@@ -2024,7 +2030,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     add_observed_equations!(op, obs)
 
     return if split
-        MTKParameters(sys, op; kwargs...)
+        MTKParameters(sys, op; fast_path = true, kwargs...)
     else
         varmap_to_vars(op, parameters(sys; initial_parameters = true); kwargs...)
     end

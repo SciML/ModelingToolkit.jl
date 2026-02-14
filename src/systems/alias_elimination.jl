@@ -2,11 +2,21 @@ using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
-function alias_elimination!(state::TearingState; fully_determined = true, kwargs...)
+function alias_elimination!(state::TearingState; fully_determined = true,
+                            print_underconstrained_variables = false, kwargs...)
     sys = state.sys
     StateSelection.complete!(state.structure)
-    variable_underconstrained! = ZeroVariablesIfFullyDetermined!(fully_determined === true)
+    # Previously, underconstrained variables were zeroed out. This leads to significant
+    # unintuitive behavior, especially for intialization systems. The underconstrained variables
+    # should constitute an underdetermined error, and hence the behavior is removed. This pass
+    # continues to remove redundant equations, since it is essential for adding analysis points
+    # to existing connections.
+    variable_underconstrained! = IgnoreUnderconstrainedVariable()
     mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
+    if print_underconstrained_variables
+        underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
+        @info "Found underconstrained variables in the system" underconstrained_vars
+    end
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
@@ -111,12 +121,15 @@ function alias_elimination!(state::TearingState; fully_determined = true, kwargs
     end
 end
 
-struct ZeroVariablesIfFullyDetermined!
-    fully_determined::Bool
+struct IgnoreUnderconstrainedVariable
+    underconstrained::Vector{Int}
 end
 
-function (zvifd::ZeroVariablesIfFullyDetermined!)(structure::SystemStructure, ils::CLIL.SparseMatrixCLIL, v::Int)
-    return zvifd.fully_determined ? StateSelection.force_var_to_zero!(structure, ils, v) : ils
+IgnoreUnderconstrainedVariable() = IgnoreUnderconstrainedVariable(Int[])
+
+function (iuv::IgnoreUnderconstrainedVariable)(structure::SystemStructure, ils::CLIL.SparseMatrixCLIL, v::Int)
+    push!(iuv.underconstrained, v)
+    return ils
 end
 
 function exactdiv(a::Integer, b)

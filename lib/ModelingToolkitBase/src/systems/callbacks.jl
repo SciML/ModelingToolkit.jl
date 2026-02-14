@@ -131,9 +131,11 @@ function AffectSystem(
     subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
     affect = substitute(affect, subs)
 
+    ps = collect(gather_array_params(union(pre_params, sys_params)))
+
     @named affectsys = System(
         affect, iv, collect(union(_dvs, discretes)),
-        collect(union(pre_params, sys_params)); is_discrete = true
+        ps; is_discrete = true
     )
     # This `@invokelatest` should not be necessary, but it works around the inference bug
     # in https://github.com/JuliaLang/julia/issues/59943. Remove it at your own risk, the

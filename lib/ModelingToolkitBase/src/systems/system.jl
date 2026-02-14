@@ -281,6 +281,10 @@ struct System <: IntermediateDeprecationSystem
     """
     irreducibles::AtomicSetT
     """
+    Expressions which may be zero and should be given special consideration during simplification.
+    """
+    maybe_zeros::AtomicSetT
+    """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
     """
@@ -303,8 +307,8 @@ struct System <: IntermediateDeprecationSystem
             ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
-            irreducibles = AtomicSetT(), isscheduled = false,
-            schedule = nothing; checks::Union{Bool, Int} = true
+            irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
+            isscheduled = false, schedule = nothing; checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
             throw(
@@ -366,7 +370,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            state_priorities, irreducibles,
+            state_priorities, irreducibles, maybe_zeros,
             isscheduled, schedule
         )
     end
@@ -470,7 +474,7 @@ function System(
         is_dde = nothing, inputs = OrderedSet{SymbolicT}(),
         outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing, state_priorities = AtomicMapT{Int}(),
-        irreducibles = AtomicSetT(),
+        irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
         checks = true, __legacy_defaults__ = nothing
@@ -583,6 +587,7 @@ function System(
         collect_metadata!(VariableStatePriority, state_priorities, dvs)
         collect_metadata!(VariableIrreducible, irreducibles, dvs)
     end
+    maybe_zeros = as_atomic_array_set(maybe_zeros)
 
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
@@ -647,7 +652,8 @@ function System(
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
+        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
+        maybe_zeros; checks
     )
 end
 
@@ -850,7 +856,7 @@ Create a `System` with a single equation `eq`.
 """
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
-function gather_array_params(ps)
+function gather_array_params(ps::AbstractSet{SymbolicT})
     new_ps = OrderedSet{SymbolicT}()
     for p in ps
         arr, isarr = split_indexed_var(p)
@@ -1049,6 +1055,7 @@ function flatten(sys::System, noeqs = false)
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
         irreducibles = irreducibles(sys),
+        maybe_zeros = maybe_zeros(sys),
         # without this, any initial conditions/bindings/guesses obtained from metadata that
         # were later removed by the user will be re-added. Right now, we just want to
         # retain `initial_conditions(sys)` as-is.
@@ -1487,6 +1494,8 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
         isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
         isequal(get_state_priorities(sysa), get_state_priorities(sysb)) &&
+        isequal(get_irreducibles(sysa), get_irreducibles(sysb)) &&
+        isequal(get_maybe_zeros(sysa), get_maybe_zeros(sysb)) &&
         isequal(get_isscheduled(sysa), get_isscheduled(sysb))
 end
 
@@ -1509,6 +1518,7 @@ function Base.copy(sys::System)
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
         _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
         get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
+        copy(get_maybe_zeros(sys)),
         copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
     )
 end
