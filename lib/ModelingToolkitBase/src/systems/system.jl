@@ -398,10 +398,25 @@ end
 
 defsdict(x::SymmapT) = x
 defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
+
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
         result[unwrap(k)] = SU.Const{VartypeT}(v)
+    end
+    return result
+end
+
+function defsdict(
+        x::Union{AbstractDict, AbstractArray{<:Pair}}, var_to_name::Dict{Symbol, SymbolicT}
+    )
+    result = SymmapT()
+    for (k, v) in x
+        k_unwrapped = unwrap(k)
+        if k_unwrapped isa Symbol
+            k_unwrapped = get(var_to_name, k_unwrapped, k_unwrapped)
+        end
+        result[k_unwrapped] = SU.Const{VartypeT}(v)
     end
     return result
 end
@@ -517,9 +532,12 @@ function System(
     end
     var_to_name = Dict{Symbol, SymbolicT}()
 
-    bindings = defsdict(bindings)
-    initial_conditions = defsdict(initial_conditions)
-    guesses = defsdict(guesses)
+    # Populate var_to_name early so defsdict can resolve Symbol keys (e.g. :X => 1.0)
+    collect_var_to_name!(var_to_name, dvs)
+    collect_var_to_name!(var_to_name, ps)
+    bindings = defsdict(bindings, var_to_name)
+    initial_conditions = defsdict(initial_conditions, var_to_name)
+    guesses = defsdict(guesses, var_to_name)
     all_dvs = as_atomic_array_set(dvs)
     if iv === nothing
         for k in keys(bindings)
