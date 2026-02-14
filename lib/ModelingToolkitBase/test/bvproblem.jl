@@ -324,6 +324,15 @@ end
     _t = tspan[2]
     @test costfn(sol, prob.p, _t) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
 
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
+    sol = solve(bvp, MIRK4(), dt = 0.05)
+    @test SciMLBase.successful_retcode(sol)
+
+    costfn = ModelingToolkitBase.generate_bvp_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+    @test costfn(sol, bvp.p) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
+
     ### With a parameter
     @parameters t_c
     costs = [y(t_c) + x(0.0), x(0.4)^2]
@@ -338,4 +347,13 @@ end
     )
     @test costfn(sol, prob.p, _t) ≈
         log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
+    sol = solve(bvp, MIRK4(), dt = 0.05)
+    @test SciMLBase.successful_retcode(sol)
+
+    costfn = ModelingToolkitBase.generate_bvp_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+    @test costfn(sol, bvp.p) ≈ log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
 end
