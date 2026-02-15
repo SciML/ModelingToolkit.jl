@@ -89,6 +89,10 @@ struct PDESystem <: AbstractSystem
     Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
+    """
+    Mapping from variable names to symbolic variables, enabling the `sys.x` accessor pattern.
+    """
+    var_to_name::Dict{Symbol, SymbolicT}
     @add_kwonly function PDESystem(
             eqs, bcs, domain, ivs, dvs,
             ps = SciMLBase.NullParameters();
@@ -136,30 +140,76 @@ struct PDESystem <: AbstractSystem
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
 
+        var_to_name = Dict{Symbol, SymbolicT}()
+        dvs_vec = SymbolicT[unwrap(v) for v in dvs]
+        collect_var_to_name!(var_to_name, dvs_vec)
+        if !(ps isa SciMLBase.NullParameters)
+            ps_vec = SymbolicT[unwrap(p) for p in ps]
+            collect_var_to_name!(var_to_name, ps_vec)
+        end
+
         new(
             eqs, bcs, domain, ivs, dvs, ps, initial_conditions, connector_type, systems, analytic,
-            analytic_func, name, description, metadata, gui_metadata
+            analytic_func, name, description, metadata, gui_metadata, var_to_name
         )
     end
 end
 
-function Base.getproperty(x::PDESystem, sym::Symbol)
+function Base.getproperty(
+        x::PDESystem, sym::Symbol; namespace = does_namespacing(x)
+    )
     if sym == :indvars
-        return getfield(x, :ivs)
         Base.depwarn(
             "`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
             force = true
         )
-
+        return getfield(x, :ivs)
     elseif sym == :depvars
-        return getfield(x, :dvs)
         Base.depwarn(
             "`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
             force = true
         )
-
-    else
+        return getfield(x, :dvs)
+    elseif hasfield(PDESystem, sym)
         return getfield(x, sym)
+    end
+    # Check independent variables first (IVs are not namespaced, matching System behavior)
+    for iv in getfield(x, :ivs)
+        if getname(unwrap(iv)) == sym
+            return iv
+        end
+    end
+    # Fall through to AbstractSystem's getvar for variable lookup (sys.x pattern)
+    return wrap(getvar(x, sym; namespace = namespace))
+end
+
+# Accessor bridges: PDESystem stores dependent variables as `dvs` and independent
+# variables as `ivs` (plural), whereas the AbstractSystem API expects `unknowns` and `iv`.
+get_unknowns(sys::PDESystem) = getfield(sys, :dvs)
+has_unknowns(::PDESystem) = true
+
+function Base.propertynames(sys::PDESystem; private = false)
+    if private
+        return fieldnames(PDESystem)
+    else
+        names = Symbol[]
+        for s in get_systems(sys)
+            push!(names, getname(s))
+        end
+        for s in get_dvs(sys)
+            push!(names, getname(s))
+        end
+        ps = get_ps(sys)
+        if !(ps isa SciMLBase.NullParameters)
+            for s in ps
+                hasname(s) || continue
+                push!(names, getname(s))
+            end
+        end
+        for s in get_ivs(sys)
+            push!(names, getname(s))
+        end
+        return names
     end
 end
 
