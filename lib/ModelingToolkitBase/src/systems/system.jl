@@ -61,6 +61,8 @@ struct System <: IntermediateDeprecationSystem
     """
     Jumps associated with the system. Each jump can be a `VariableRateJump`,
     `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
+    `MassActionJump`s must use `scale_rates = false` (pre-scaled rate expressions); see
+    [`SymbolicMassActionJump`](@ref).
     """
     jumps::Vector{JumpType}
     """
@@ -1261,12 +1263,37 @@ function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
 end
 
 """
+    SymbolicMassActionJump(rate, reactant_stoch, net_stoch; kwargs...)
+
+Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
+`JumpSystem`. The rate expression must already include any combinatorial scaling
+(e.g. `k / factorial(n)` for an n-th order homotrimerization reaction).
+
+Returns a `MassActionJump` — this is a convenience constructor, not a new type.
+"""
+function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...)
+    if scale_rates
+        throw(ArgumentError(
+            "SymbolicMassActionJump requires pre-scaled rate expressions " *
+            "(scale_rates = false). scale_rates = true is not supported in " *
+            "ModelingToolkitBase."))
+    end
+    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Construct a [`System`](@ref) to solve a system of jump equations. `jumps` is an array of
-jumps, expressed using `JumpProcesses.MassActionJump`, `JumpProcesses.ConstantRateJump`
-and `JumpProcesses.VariableRateJump`. It can also include standard equations to simulate
+jumps, expressed using `JumpProcesses.ConstantRateJump`, `JumpProcesses.VariableRateJump`,
+and `JumpProcesses.MassActionJump`. It can also include standard equations to simulate
 jump-diffusion processes. `iv` should be the independent variable of the system.
+
+`MassActionJump`s must be constructed with `scale_rates = false` (pre-scaled rate
+expressions). Use [`SymbolicMassActionJump`](@ref) for convenience, which handles this
+automatically. JumpProcesses will not re-apply factorial scaling on parameter updates for
+jumps constructed through the MTK pipeline.
 
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
@@ -1282,6 +1309,8 @@ end
 
 Identical to the 2-argument `JumpSystem` constructor, but uses the explicitly provided
 `dvs` and `ps` for unknowns and parameters of the system.
+
+See the 2-argument [`JumpSystem`](@ref) for details on `MassActionJump` requirements.
 """
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)

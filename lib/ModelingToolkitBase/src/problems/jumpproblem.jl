@@ -1,23 +1,3 @@
-"""
-    SymbolicMassActionJump(rate, reactant_stoch, net_stoch; kwargs...)
-
-Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
-`JumpSystem`. The rate expression must already include any combinatorial scaling
-(e.g. `k / factorial(n)` for an n-th order homotrimerization reaction).
-
-Returns a `MassActionJump` — this is a convenience constructor, not a new type.
-"""
-function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
-        kwargs...)
-    if scale_rates
-        throw(ArgumentError(
-            "SymbolicMassActionJump requires pre-scaled rate expressions " *
-            "(scale_rates = false). scale_rates = true is not supported in " *
-            "ModelingToolkitBase."))
-    end
-    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
-end
-
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
