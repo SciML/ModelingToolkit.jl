@@ -193,9 +193,9 @@ entry for `eq.lhs`, insert the reverse mapping if `eq.rhs` is not a number.
 """
 function add_observed_equations!(varmap::AtomicArrayDict{SymbolicT}, eqs::Vector{Equation}, bound_ps::Union{Nothing, ROSymmapT} = nothing)
     for eq in eqs
-        if has_possibly_indexed_key(varmap, eq.lhs)
+        if get_possibly_indexed(varmap, eq.lhs, COMMON_NOTHING) !== COMMON_NOTHING
             SU.isconst(eq.rhs) && continue
-            has_possibly_indexed_key(varmap, eq.rhs) && continue
+            get_possibly_indexed(varmap, eq.rhs, COMMON_NOTHING) !== COMMON_NOTHING && continue
             bound_ps isa ROSymmapT && has_possibly_indexed_key(parent(bound_ps), eq.rhs) && continue
             Moshi.Match.@match eq.rhs begin
                 BSImpl.Term(; f, args) && if f isa SymbolicT end => nothing
@@ -1278,7 +1278,8 @@ function maybe_build_initialization_problem(
     if time_dependent_init
         for v in unknowns(sys)
             has_possibly_indexed_key(parent(binds), v) && continue
-            if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING
+            val = get_possibly_indexed(op, v, COMMON_NOTHING)
+            if !SU.isconst(val) || val === COMMON_NOTHING
                 push_as_atomic_array!(missingvars, v)
             end
         end
