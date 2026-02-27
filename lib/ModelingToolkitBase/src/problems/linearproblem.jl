@@ -1,18 +1,41 @@
 struct LinearFunction{iip, I} <: SciMLBase.AbstractSciMLFunction{iip}
     interface::I
-    A::Union{Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int}}
+    A::Union{
+        Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int},
+        Diagonal{SymbolicT, Vector{SymbolicT}},
+        BandedMatrix{SymbolicT, Matrix{SymbolicT}, Base.OneTo{Int}},
+    }
     b::Vector{SymbolicT}
 end
+
+Moshi.Data.@data StructuralHint begin
+    NoHint
+    Diagonal
+    struct Banded
+        lower_band_size::Int
+        upper_band_size::Int
+    end
+end
+
+Moshi.Derive.@derive StructuralHint[Show]
 
 function LinearFunction{iip}(
         sys::System; expression = Val{false}, check_compatibility = true,
         sparse = false, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true, kwargs...
+        checkbounds = false, cse = true,
+        structural_hint::StructuralHint.Type = StructuralHint.NoHint(), kwargs...
     ) where {iip}
     check_complete(sys, LinearProblem)
     check_compatibility && check_compatible_system(LinearProblem, sys)
 
     A, b = calculate_A_b(sys; sparse)
+    A = Moshi.Match.@match structural_hint begin
+        StructuralHint.NoHint() => A
+        StructuralHint.Diagonal() => Diagonal{SymbolicT, Vector{SymbolicT}}(A)
+        StructuralHint.Banded(; lower_band_size, upper_band_size) => begin
+            BandedMatrix{SymbolicT, Matrix{SymbolicT}}(A, (lower_band_size, upper_band_size))
+        end
+    end
     update_A = generate_update_A(
         sys, A; expression, wrap_gfw = Val{true}, eval_expression,
         eval_module, checkbounds, cse, kwargs...
@@ -117,6 +140,40 @@ function get_A_b_from_LinearFunction(
         else
             A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(size(A)))(_A)
         end
+    elseif A isa BandedMatrix{SymbolicT, Matrix{SymbolicT}, Base.OneTo{Int}}
+        pA = parent(A)
+        _pA = similar(pA, Any)
+        for i in eachindex(pA)
+            isassigned(pA, i) || continue
+            try
+                _pA[i] = u0_eltype(unwrap_const(subber(pA[i])))
+            catch e
+                @info i
+                rethrow()
+            end
+        end
+        _pA = u0_constructor(_pA)
+        if ArrayInterface.ismutable(_pA)
+            A = BandedMatrix{eltype(_pA), typeof(_pA)}(undef, size(A), bandwidths(A))
+            copyto!(parent(A), _pA)
+        else
+            throw(ArgumentError("BandedMatrices doesn't support StaticArrays"))
+        end
+    elseif A isa Diagonal{SymbolicT, Vector{SymbolicT}}
+        A = parent(A)
+        _A = similar(A, Any)
+        for i in eachindex(A)
+            _A[i] = unwrap_const(subber(A[i]))
+        end
+        A = u0_eltype.(_A)
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, size(A))
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(size(A)))(_A)
+        end
+        A = Diagonal(A)
     else
         I, J, V = findnz(A)
         _V = similar(V, Any)
