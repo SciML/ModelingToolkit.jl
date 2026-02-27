@@ -635,7 +635,7 @@ function System(
         if j isa MassActionJump && j.rescale_rates_on_update
             throw(ArgumentError(
                 "MassActionJump with rescale_rates_on_update = true is not supported " *
-                "in JumpSystem. Rate expressions must be pre-scaled (e.g. " *
+                "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
                 "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
                 "or pass scale_rates = false when constructing the MassActionJump."))
         end
