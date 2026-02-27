@@ -1414,7 +1414,7 @@ function build_explicit_observed_function(
 end
 
 struct CachedLinearAb
-    A::Matrix{SymbolicT}
+    A::SparseMatrixCSC{SymbolicT, Int}
     b::Vector{SymbolicT}
 end
 
@@ -1450,7 +1450,7 @@ Return matrix `A` and vector `b` such that the system `sys` can be represented a
 function calculate_A_b(sys::System; sparse = false, throw = true)
     cached_ab = check_mutable_cache(sys, CachedLinearAb, Union{CachedLinearAb, NotAffineError}, nothing)
     if cached_ab isa CachedLinearAb
-        return sparse ? SparseArrays.sparse(cached_ab.A) : cached_ab.A, cached_ab.b
+        return sparse ? cached_ab.A : collect(cached_ab.A), cached_ab.b
     elseif cached_ab isa NotAffineError
         throw || return nothing
         Base.throw(cached_ab)
@@ -1466,7 +1466,9 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         push!(rhss, -eq.rhs)
     end
     dvs = unknowns(sys)
-    A = Matrix{SymbolicT}(undef, length(rhss), length(dvs))
+    I = Int[]
+    J = Int[]
+    V = SymbolicT[]
     b = Vector{SymbolicT}(undef, length(rhss))
     query_predicate = in(Set{SymbolicT}(dvs))
     # `linear_expansion` caches values based on `var`. This loop ordering helps
@@ -1483,7 +1485,11 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
                 throw || return nothing
                 Base.throw(err)
             end
-            A[i, j] = p
+            if !SU._iszero(p)
+                push!(I, i)
+                push!(J, j)
+                push!(V, p)
+            end
             rhss[i] = q
         end
     end
@@ -1492,12 +1498,11 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         b[i] = -rhss[i]
     end
 
-    @assert all(Base.Fix1(isassigned, A), eachindex(A))
-    @assert all(Base.Fix1(isassigned, A), eachindex(b))
+    A = SparseArrays.sparse(I, J, V, length(rhss), length(dvs))
 
     store_to_mutable_cache!(sys, CachedLinearAb, CachedLinearAb(A, b))
-    if sparse
-        A = SparseArrays.sparse(A)
+    if !sparse
+        A = collect(A)
     end
     return A, b
 end
