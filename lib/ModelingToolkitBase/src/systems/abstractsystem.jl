@@ -1686,7 +1686,7 @@ function guesses(sys::AbstractSystem)
     isempty(systems) && return guess
     guess = copy(guess)
     for subsys in systems
-        guess = merge(namespace_guesses(subsys), guess)
+        guess = left_merge!(guess, namespace_guesses(subsys))
     end
     return guess
 end
