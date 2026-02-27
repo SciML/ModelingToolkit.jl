@@ -781,6 +781,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
 
+    for pair in get(kwargs, :initial_conditions, ())
+        collect_vars!(allunknowns, ps, pair, iv)
+    end
+    for pair in get(kwargs, :bindings, ())
+        collect_vars!(allunknowns, ps, pair, iv)
+    end
+
     new_ps = gather_array_params(ps)
 
     noiseeqs = get(kwargs, :noise_eqs, nothing)
@@ -827,6 +834,13 @@ function System(eqs::Vector{Equation}; kwargs...)
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     for eq in cstrs
         collect_vars!(allunknowns, ps, eq, nothing)
+    end
+
+    for pair in get(kwargs, :initial_conditions, ())
+        collect_vars!(allunknowns, ps, pair, nothing)
+    end
+    for pair in get(kwargs, :bindings, ())
+        collect_vars!(allunknowns, ps, pair, nothing)
     end
 
     new_ps = gather_array_params(ps)

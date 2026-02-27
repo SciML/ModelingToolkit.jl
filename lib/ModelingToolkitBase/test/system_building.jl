@@ -18,3 +18,32 @@ end
     @mtkcompile sys = System(eqs, t)
     @test isequal(bindings(sys)[Γ], Initial(X1) + Initial(X2))
 end
+
+@testset "Variable discovery from `initial_conditions` and `bindings` kwargs (time-dependent)" begin
+    @variables x(t) y(t)   # y is NOT in any equation
+    @parameters p q         # q is NOT in any equation
+
+    # Only x and p appear in the equations
+    eqs = [D(x) ~ p * x]
+
+    # y appears only as the RHS of an initial_conditions pair
+    # q appears only as the RHS of a bindings pair
+    # p appears only as the LHS of a bindings pair (already in eqs, but verifying no breakage)
+    @named sys = System(eqs, t; initial_conditions = [x => y], bindings = [p => q])
+
+    @test y ∈ Set(unknowns(sys))
+    @test q ∈ Set(parameters(sys))
+end
+
+@testset "Variable discovery from `initial_conditions` and `bindings` kwargs (time-independent)" begin
+    @variables x y          # y is NOT in any equation
+    @parameters p q         # q is NOT in any equation
+
+    # Only x and p appear in the equations
+    eqs = [0 ~ p * x + 1]
+
+    @named sys = System(eqs; initial_conditions = [x => y], bindings = [p => q])
+
+    @test y ∈ Set(unknowns(sys))
+    @test q ∈ Set(parameters(sys))
+end
