@@ -1045,7 +1045,7 @@ function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassAct
     rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
     return MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true,
-        rescale_rates_on_update = false)
+        scale_rates = false, rescale_rates_on_update = false)
 end
 
 function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
