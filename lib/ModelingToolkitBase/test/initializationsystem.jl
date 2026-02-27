@@ -1503,7 +1503,7 @@ end
     affect₂ = [I ~ Pre(I) - 1, R ~ Pre(R) + 1]
     j₁ = ConstantRateJump(rate₁, affect₁)
     j₂ = ConstantRateJump(rate₂, affect₂)
-    j₃ = MassActionJump(2 * β + γ, [R => 1], [S => 1, R => -1])
+    j₃ = SymbolicMassActionJump(2 * β + γ, [R => 1], [S => 1, R => -1])
     @mtkcompile js = JumpSystem([j₁, j₂, j₃], t, [S, I, R], [β, γ, S0])
 
     u0s = [I => 1, R => 0]

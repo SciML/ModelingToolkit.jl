@@ -627,6 +627,17 @@ function System(
     end
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
+    # MTK requires symbolic MassActionJumps to have pre-scaled rate expressions.
+    # JumpProcesses must not re-apply factorial scaling on parameter updates.
+    for j in jumps
+        if j isa MassActionJump && j.rescale_rates_on_update
+            throw(ArgumentError(
+                "MassActionJump with rescale_rates_on_update = true is not supported " *
+                "in JumpSystem. Rate expressions must be pre-scaled (e.g. " *
+                "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
+                "or pass scale_rates = false when constructing the MassActionJump."))
+        end
+    end
     return System(
         __get_new_tag(), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,

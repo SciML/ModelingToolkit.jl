@@ -157,8 +157,8 @@ m2 = getmean(jprob, Nsims)
 @test abs(m - m2) / m < 0.01
 
 # mass action jump tests for SIR model
-maj1 = MassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
-maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
+maj1 = SymbolicMassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
+maj2 = SymbolicMassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 js3 = complete(js3)
 jprob = JumpProblem(js3, [u₀map; parammap], tspan; aggregator = Direct(), rng)
@@ -179,8 +179,8 @@ m4 = getmean(jprobc, Nsims)
 @test abs(m - m4) / m < 0.01
 
 # mass action jump tests for other reaction types (zero order, decay)
-maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
-maj2 = MassActionJump(γ, [S => 1], [S => -1])
+maj1 = SymbolicMassActionJump(2.0, [0 => 1], [S => 1])
+maj2 = SymbolicMassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
@@ -191,8 +191,8 @@ m4 = getmean(jprob, Nsims)
 @test abs(m4 - 2.0 / 0.01) * 0.01 / 2.0 < 0.01
 
 # test second order rx runs
-maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
-maj2 = MassActionJump(γ, [S => 2], [S => -1])
+maj1 = SymbolicMassActionJump(2.0, [0 => 1], [S => 1])
+maj2 = SymbolicMassActionJump(γ, [S => 2], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], t, [S], [β, γ])
 js4 = complete(js4)
 jprob = JumpProblem(
@@ -215,8 +215,8 @@ end
 @testset "Parammapper with callbacks" begin
     @parameters k1 k2 k3
     @variables A(t) B(t)
-    maj1 = MassActionJump(k1 * k3, [0 => 1], [A => -1, B => 1])
-    maj2 = MassActionJump(k2, [B => 1], [A => 1, B => -1])
+    maj1 = SymbolicMassActionJump(k1 * k3, [0 => 1], [A => -1, B => 1])
+    maj2 = SymbolicMassActionJump(k2, [B => 1], [A => 1, B => -1])
     @named js5 = JumpSystem([maj1, maj2], t, [A, B], [k1, k2, k3])
     js5 = complete(js5)
     p = [k1 => 2.0, k2 => 0.0, k3 => 0.5]
@@ -257,10 +257,10 @@ end
     # X --> B
     @variables A(t) X(t) B(t)
     jumps = [
-        MassActionJump(1.0, [A => 1, X => 2], [A => -1, X => 1]),
-        MassActionJump(1.0, [X => 3], [A => 1, X => -1]),
-        MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
-        MassActionJump(1.0, [X => 1], [B => 1, X => -1]),
+        SymbolicMassActionJump(1.0, [A => 1, X => 2], [A => -1, X => 1]),
+        SymbolicMassActionJump(1.0, [X => 3], [A => 1, X => -1]),
+        SymbolicMassActionJump(1.0, [B => 1], [B => -1, X => 1]),
+        SymbolicMassActionJump(1.0, [X => 1], [B => 1, X => -1]),
     ]
     @named js = JumpSystem(jumps, t, [A, X, B], [])
     jdeps = asgraph(js; eqs = MT.jumps(js))
@@ -284,7 +284,7 @@ crj = ConstantRateJump(1.0, [X ~ Pre(X) - 1])
 js1 = complete(JumpSystem([crj], t, [X], [k]; name = :js1))
 js2 = complete(JumpSystem([crj], t, [X], []; name = :js2))
 
-maj = MassActionJump(1.0, [X => 1], [X => -1])
+maj = SymbolicMassActionJump(1.0, [X => 1], [X => -1])
 js3 = complete(JumpSystem([maj], t, [X], [k]; name = :js2))
 js4 = complete(JumpSystem([maj], t, [X], []; name = :js3))
 
@@ -375,9 +375,9 @@ end
     @variables x1(t) x2(t) x3(t) x4(t) x5(t)
     @parameters p1 p2 p3 p4 p5
     j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
-    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j2 = SymbolicMassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
-    j4 = MassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
+    j4 = SymbolicMassActionJump(p4 * p5, [x1 => 1, x5 => 1], [x1 => -1, x5 => -1, x2 => 1])
     us = OrderedSet{SymbolicT}()
     ps = OrderedSet{SymbolicT}()
     iv = unwrap(t)
@@ -417,9 +417,9 @@ end
     p4 = GlobalScope(p4)
 
     j1 = ConstantRateJump(p1, [x1 ~ Pre(x1) + 1])
-    j2 = MassActionJump(p2, [x2 => 1], [x3 => -1])
+    j2 = SymbolicMassActionJump(p2, [x2 => 1], [x3 => -1])
     j3 = VariableRateJump(p3, [x3 ~ Pre(x3) + 1, x4 ~ Pre(x4) + 1])
-    j4 = MassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
+    j4 = SymbolicMassActionJump(p4 * p4, [x1 => 1, x4 => 1], [x1 => -1, x4 => -1, x2 => 1])
     @named js = JumpSystem([j1, j2, j3, j4], t, [x1, x2, x3, x4], [p1, p2, p3, p4])
 
     us = OrderedSet{SymbolicT}()
@@ -499,7 +499,7 @@ end
     @parameters α β
     vrj = VariableRateJump(β * X, [X ~ Pre(X) - 1]; save_positions = (false, false))
     crj = ConstantRateJump(β * Y, [Y ~ Pre(Y) - 1])
-    maj = MassActionJump(α, [0 => 1], [Y => 1])
+    maj = SymbolicMassActionJump(α, [0 => 1], [Y => 1])
     eqs = [D(X) ~ α * (1 + Y)]
     @named jsys = JumpSystem([maj, crj, vrj, eqs[1]], t, [X, Y], [α, β])
     jsys = complete(jsys)
@@ -596,7 +596,7 @@ end
 @testset "Proper substitution in `JumpSysMajParamWrapper`" begin
     @variables X(t)
     @parameters p d
-    jump1 = MassActionJump(exp(p), Pair{Num, Real}[], [X => 1], nothing)
+    jump1 = SymbolicMassActionJump(exp(p), Pair{Num, Real}[], [X => 1])
     jump2 = ConstantRateJump(d * exp(X) * X, [X ~ Pre(X) - 1])
     @named sys = JumpSystem([jump1, jump2], t, [X], [p, d])
     sys = complete(sys)
@@ -685,7 +685,7 @@ end
     @testset "MassActionJump with DiscreteProblem" begin
         @variables A(t)
         @parameters k
-        maj = MassActionJump(k, [A => 1], [A => -1])
+        maj = SymbolicMassActionJump(k, [A => 1], [A => -1])
         @named jsys = JumpSystem([maj], t, [A], [k])
         jsys = complete(jsys)
 
@@ -792,7 +792,7 @@ end
         # VRJ with its own save_positions
         vrj = VariableRateJump(b * (1 + sin(t)), [X ~ Pre(X) + 1]; save_positions = (false, false))
         crj = ConstantRateJump(c * Y, [Y ~ Pre(Y) - 1])
-        maj = MassActionJump(d, [0 => 1], [Y => 1])
+        maj = SymbolicMassActionJump(d, [0 => 1], [Y => 1])
         @named jsys = JumpSystem([vrj, crj, maj, eq], t, [X, Y], [a, b, c, d])
         jsys = complete(jsys)
 
@@ -821,7 +821,7 @@ end
     @testset "Default save_positions for discrete jumps" begin
         @variables A(t)
         @parameters k
-        maj = MassActionJump(k, [A => 1], [A => -1])
+        maj = SymbolicMassActionJump(k, [A => 1], [A => -1])
         @named jsys = JumpSystem([maj], t, [A], [k])
         jsys = complete(jsys)
 
@@ -846,7 +846,7 @@ end
         eqs = [D(X) ~ -k * X + sqrt(k) * B]
 
         # A simple mass action jump: X -> 0 with rate k
-        jump = MassActionJump(k, [X => 1], [X => -1])
+        jump = SymbolicMassActionJump(k, [X => 1], [X => -1])
 
         # Build the system with @mtkcompile - this properly processes brownians
         @mtkcompile sys = System(eqs, t; jumps = [jump])
@@ -920,7 +920,7 @@ end
         @brownians B
 
         eqs = [D(X) ~ -k1 * X + 0.1 * B, D(Y) ~ k2]
-        maj = MassActionJump(k1, [X => 1], [X => -1])
+        maj = SymbolicMassActionJump(k1, [X => 1], [X => -1])
         crj = ConstantRateJump(k2 * Y, [Y ~ Pre(Y) - 1])
 
         @mtkcompile sys = System(eqs, t; jumps = [maj, crj])
@@ -1090,7 +1090,7 @@ end
 
         # ODE part drives toward alph/bet, MAJ adds gam births per unit time
         eqs = [D(X) ~ alph - bet * X + sig * B]
-        birth = MassActionJump(gam, [0 => 1], [X => 1])
+        birth = SymbolicMassActionJump(gam, [0 => 1], [X => 1])
 
         # Must pass all parameters explicitly since System doesn't auto-collect from jumps
         @mtkcompile sys = System(eqs, t, [X], [alph, bet, gam, sig], [B]; jumps = [birth])
@@ -1146,7 +1146,7 @@ end
         discrete_event = [5.0] => [X ~ X0]
 
         # Mass action jump: X decays
-        maj = MassActionJump(k, [X => 1], [X => -1])
+        maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
 
         @named jsys = JumpSystem([maj], t, [X], [k, X0]; discrete_events = [discrete_event])
         jsys = complete(jsys)
@@ -1233,7 +1233,7 @@ end
 
         event1 = [2.0] => [X ~ val1]
         event2 = [4.0] => [X ~ val2]
-        maj = MassActionJump(k, [X => 1], [X => -1])
+        maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
 
         @named jsys = JumpSystem([maj], t, [X], [k, val1, val2]; discrete_events = [event1, event2])
         jsys = complete(jsys)
@@ -1368,7 +1368,7 @@ end
     @testset "Pure MAJ with symbolic tstops" begin
         @variables X(t)
         @parameters k t1 t2
-        maj = MassActionJump(k, [X => 1], [X => -1])
+        maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
         ev1 = (t == t1) => [X ~ Pre(X) + 500]
         ev2 = (t == t2) => [X ~ Pre(X) + 500]
         @mtkcompile jsys = System(Equation[], t, [X], [k, t1, t2]; jumps = [maj],
@@ -1573,4 +1573,71 @@ end
         sol = solve(jprob, SSAStepper())
         @test SciMLBase.successful_retcode(sol)
     end
+end
+
+# Tests for rescale_rates_on_update enforcement and higher-order MAJ correctness
+
+@testset "Higher-order MassActionJump parameter updates (pre-scaled)" begin
+    @parameters k
+    @variables X(t) Y(t)
+
+    # 3X → Y: rate expression pre-scaled by 1/3!
+    maj = SymbolicMassActionJump(k / factorial(3), [X => 3], [X => -3, Y => 1])
+
+    @named js = JumpSystem([maj], t, [X, Y], [k])
+    js = complete(js)
+
+    u0 = [:X => 100, :Y => 0]
+    ps = [:k => 6.0]
+    tspan = (0.0, 10.0)
+
+    jprob = JumpProblem(js, [u0; ps], tspan)
+    # Contract: rescale_rates_on_update must be false for MTK-constructed MAJ
+    @test jprob.massaction_jump.rescale_rates_on_update == false
+    @test jprob.massaction_jump.scaled_rates[1] ≈ 6.0 / factorial(3)  # 1.0
+
+    # remake
+    jprob2 = remake(jprob; p = [:k => 12.0])
+    @test jprob2.massaction_jump.scaled_rates[1] ≈ 12.0 / factorial(3)  # 2.0, NOT 2.0/6
+
+    # remake round-trip
+    jprob3 = remake(jprob2; p = [:k => 6.0])
+    @test jprob3.massaction_jump.scaled_rates[1] ≈ 6.0 / factorial(3)
+
+    # callback with reset_aggregated_jumps!
+    jprob_cb = JumpProblem(js, [u0; ps], (0.0, 200.0);
+        save_positions = (false, false))
+    condit(u, t, integrator) = t == 100.0
+    function affect!(integrator)
+        integrator.ps[:k] = 24.0
+        reset_aggregated_jumps!(integrator)
+    end
+    cb = DiscreteCallback(condit, affect!)
+    sol = solve(jprob_cb, SSAStepper(); tstops = [100.0], callback = cb)
+    @test jprob_cb.massaction_jump.scaled_rates[1] ≈ 24.0 / factorial(3)  # 4.0
+
+    # symbolic indexing on integrator
+    jprob_integ = JumpProblem(js, [u0; ps], tspan)
+    integ = init(jprob_integ, SSAStepper())
+    integ.ps[:k] = 18.0
+    reset_aggregated_jumps!(integ)
+    @test jprob_integ.massaction_jump.scaled_rates[1] ≈ 18.0 / factorial(3)  # 3.0
+end
+
+@testset "JumpSystem rejects rescale_rates_on_update = true" begin
+    @parameters k
+    @variables X(t) Y(t)
+
+    # raw rate — not pre-scaled, scale_rates = true (JumpProcesses default)
+    maj = MassActionJump(k, [X => 3], [X => -3, Y => 1])
+
+    @test_throws ArgumentError JumpSystem([maj], t, [X, Y], [k]; name = :test)
+end
+
+@testset "SymbolicMassActionJump rejects scale_rates = true" begin
+    @parameters k
+    @variables X(t) Y(t)
+
+    @test_throws ArgumentError SymbolicMassActionJump(
+        k, [X => 3], [X => -3, Y => 1]; scale_rates = true)
 end

@@ -1,3 +1,23 @@
+"""
+    SymbolicMassActionJump(rate, reactant_stoch, net_stoch; kwargs...)
+
+Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
+`JumpSystem`. The rate expression must already include any combinatorial scaling
+(e.g. `k / factorial(n)` for an n-th order homotrimerization reaction).
+
+Returns a `MassActionJump` — this is a convenience constructor, not a new type.
+"""
+function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...)
+    if scale_rates
+        throw(ArgumentError(
+            "SymbolicMassActionJump requires pre-scaled rate expressions " *
+            "(scale_rates = false). scale_rates = true is not supported in " *
+            "ModelingToolkitBase."))
+    end
+    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+end
+
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
@@ -121,6 +141,7 @@
     if tstops !== nothing
         kwargs = (; kwargs..., tstops)
     end
+    # MTK requires pre-scaled rate expressions; never ask JumpProcesses to rescale.
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,
@@ -190,7 +211,7 @@ end
 # update a maj with parameter vectors
 function (ratemap::JumpSysMajParamMapper{U, V, W})(
         maj::MassActionJump, newparams;
-        scale_rates,
+        scale_rates = false,
         kwargs...
     ) where {
         U <: AbstractArray,
@@ -208,7 +229,8 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(
             )
         )
     end
-    scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
+    # No scalerates! call — MTK requires pre-scaled rate expressions.
+    # The scale_rates kwarg is accepted but ignored for JumpProcesses API compatibility.
     return nothing
 end
 

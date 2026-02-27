@@ -30,12 +30,12 @@ begin
     ]
     noise_eqs = fill(0.01, 3, 6)
     jumps = [
-        MassActionJump(kp, Pair{Symbolics.SymbolicT, Int64}[], [X => 1]),
-        MassActionJump(kd, [X => 1], [X => -1]),
-        MassActionJump(k1, [X => 1], [X => -1, Y => 1]),
-        MassActionJump(k2, [Y => 1], [X => 1, Y => -1]),
-        MassActionJump(k1, [Y => 1], [Y => -1, Z => 1]),
-        MassActionJump(k2, [Z => 1], [Y => 1, Z => -1]),
+        SymbolicMassActionJump(kp, Pair{Symbolics.SymbolicT, Int64}[], [X => 1]),
+        SymbolicMassActionJump(kd, [X => 1], [X => -1]),
+        SymbolicMassActionJump(k1, [X => 1], [X => -1, Y => 1]),
+        SymbolicMassActionJump(k2, [Y => 1], [X => 1, Y => -1]),
+        SymbolicMassActionJump(k1, [Y => 1], [Y => -1, Z => 1]),
+        SymbolicMassActionJump(k2, [Z => 1], [Y => 1, Z => -1]),
     ]
 
     # Create systems (without mtkcompile, since that might modify systems to affect intended tests).
