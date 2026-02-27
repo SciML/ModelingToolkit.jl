@@ -1266,8 +1266,8 @@ end
     SymbolicMassActionJump(rate, reactant_stoch, net_stoch; kwargs...)
 
 Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
-`JumpSystem`. The rate expression must already include any combinatorial scaling
-(e.g. `k / factorial(n)` for an n-th order homotrimerization reaction).
+`JumpSystem`. The rate expression must already include any desired combinatorial scaling
+(e.g. `k / factorial(n)` for a reaction like `n*A --> ...`).
 
 Returns a `MassActionJump` — this is a convenience constructor, not a new type.
 """
