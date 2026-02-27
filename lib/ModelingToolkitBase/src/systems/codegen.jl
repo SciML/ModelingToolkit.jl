@@ -1535,6 +1535,89 @@ function generate_update_A(
     )
 end
 
+struct DiagonalAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+
+    function DiagonalAMatrixWrapper(f::GeneratedFunctionWrapper{P}) where {P}
+        return new{P[2], typeof(f)}(f)
+    end
+end
+
+function DiagonalAMatrixWrapper(f::Expr)
+    return Expr(:call, DiagonalAMatrixWrapper, f)
+end
+
+function (f::DiagonalAMatrixWrapper{OOPArgs})(out::Diagonal, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::DiagonalAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return Diagonal(f.f(args...))
+end
+
+function generate_update_A(
+        sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}}; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
+    ps = reorder_parameters(sys)
+
+    res = build_function_wrapper(
+        sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
+        similarto = Vector{SymbolicT}, add_observed = false, kwargs...
+    )
+    return DiagonalAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            eval_expression, eval_module
+        )
+    )
+end
+
+struct BandedAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+    nrows::Int
+    bands::NTuple{2, Int}
+
+    function BandedAMatrixWrapper(f::GeneratedFunctionWrapper{P}, nr, bands) where {P}
+        return new{P[2], typeof(f)}(f, nr, bands)
+    end
+end
+
+function BandedAMatrixWrapper(f::Expr, nr::Int, bands::NTuple{2, Int})
+    return Expr(:call, BandedAMatrixWrapper, f, sz, bands)
+end
+
+function (f::BandedAMatrixWrapper{OOPArgs})(out::BandedMatrix, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::BandedAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return BandedMatrices._BandedMatrix(f.f(args...), f.nrows, f.bands...)
+end
+
+function generate_update_A(
+        sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}}; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
+    ps = reorder_parameters(sys)
+
+    parA = parent(A)
+    for i in eachindex(parA)
+        isassigned(parA, i) && continue
+        parA[i] = Symbolics.COMMON_ZERO
+    end
+    res = build_function_wrapper(
+        sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
+        similarto = Matrix{SymbolicT}, add_observed = false, kwargs...
+    )
+    return BandedAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            eval_expression, eval_module
+        ), size(A, 1), BandedMatrices.bandwidths(A)
+    )
+end
+
 """
     $(TYPEDSIGNATURES)
 
