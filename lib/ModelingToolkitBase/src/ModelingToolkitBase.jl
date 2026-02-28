@@ -249,7 +249,7 @@ export IntervalNonlinearFunction
 export IntervalNonlinearProblem
 export OptimizationProblem, constraints
 export SteadyStateProblem
-export JumpProblem
+export JumpProblem, SymbolicMassActionJump
 export flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
     instream

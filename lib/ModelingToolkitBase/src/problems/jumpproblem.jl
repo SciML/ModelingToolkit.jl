@@ -121,6 +121,7 @@
     if tstops !== nothing
         kwargs = (; kwargs..., tstops)
     end
+    # MTK requires pre-scaled rate expressions; never ask JumpProcesses to rescale.
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,
@@ -190,7 +191,7 @@ end
 # update a maj with parameter vectors
 function (ratemap::JumpSysMajParamMapper{U, V, W})(
         maj::MassActionJump, newparams;
-        scale_rates,
+        scale_rates = false,
         kwargs...
     ) where {
         U <: AbstractArray,
@@ -208,7 +209,8 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(
             )
         )
     end
-    scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
+    # No scalerates! call — MTK requires pre-scaled rate expressions.
+    # The scale_rates kwarg is accepted but ignored for JumpProcesses API compatibility.
     return nothing
 end
 

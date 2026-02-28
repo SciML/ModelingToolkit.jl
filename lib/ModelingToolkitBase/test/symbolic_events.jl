@@ -626,7 +626,7 @@ end
     @discretes k(t)
     @variables A(t) B(t)
 
-    eqs = [MassActionJump(k, [A => 1], [A => -1])]
+    eqs = [SymbolicMassActionJump(k, [A => 1], [A => -1])]
     cond1 = (t == t1)
     affect1 = [A ~ Pre(A) + 1]
     cb1 = cond1 => affect1

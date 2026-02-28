@@ -199,10 +199,10 @@ end
         @variables A(t) B(t)
         @parameters k1 k2
 
-        maj1 = MassActionJump(k1, [A => 1], [A => -1, B => 1])
+        maj1 = SymbolicMassActionJump(k1, [A => 1], [A => -1, B => 1])
         @named sys1 = JumpSystem([maj1], t, [A, B], [k1])
 
-        maj2 = MassActionJump(k2, [B => 1], [B => -1, A => 1])
+        maj2 = SymbolicMassActionJump(k2, [B => 1], [B => -1, A => 1])
         @named sys2 = JumpSystem([maj2], t, [A, B], [k2])
 
         extended = extend(sys2, sys1; name = :extended)

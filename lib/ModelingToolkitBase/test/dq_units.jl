@@ -188,16 +188,16 @@ j_wrong = ConstantRateJump(rate_wrong, affect₂)
 @test_throws MT.ValidationError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ], name = :sys)
 
 # mass action jump tests for SIR model
-maj1 = MassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
-maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
+maj1 = SymbolicMassActionJump(2 * β / 2, [S => 1, I => 1], [S => -1, I => 1])
+maj2 = SymbolicMassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3 = JumpSystem([maj1, maj2], t, [S, I, R], [β, γ])
 
 #Test unusual jump system
 @parameters β γ
 @variables S(t) I(t) R(t)
 
-maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
-maj2 = MassActionJump(γ, [S => 1], [S => -1])
+maj1 = SymbolicMassActionJump(2.0, [0 => 1], [S => 1])
+maj2 = SymbolicMassActionJump(γ, [S => 1], [S => -1])
 @named js4 = JumpSystem([maj1, maj2], ModelingToolkitBase.t_nounits, [S], [β, γ])
 
 @testset "Initialization checks" begin

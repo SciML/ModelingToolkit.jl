@@ -1412,7 +1412,8 @@ function namespace_jump(j::MassActionJump, sys)
     return MassActionJump(
         namespace_expr(j.scaled_rates, sys),
         [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.reactant_stoch],
-        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch]
+        [namespace_expr(k, sys) => namespace_expr(v, sys) for (k, v) in j.net_stoch];
+        scale_rates = false
     )
 end
 
