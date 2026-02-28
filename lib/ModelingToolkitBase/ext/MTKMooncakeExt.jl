@@ -1,7 +1,7 @@
 module MTKMooncakeExt
 
 using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, AbstractSystem,
-    SetInitialUnknowns, GeneratedFunctionWrapper, ObservedFunctionCache
+    SetInitialUnknowns, GeneratedFunctionWrapper, ObservedFunctionCache, MissingGuessValue
 using ModelingToolkitBase: System
 import ModelingToolkitBase as MTK
 import Mooncake
@@ -23,6 +23,13 @@ Mooncake.tangent_type(::Type{<:GeneratedFunctionWrapper}) = NoTangent
 
 # ObservedFunctionCache contains System reference and Dict{Any,Any}.
 Mooncake.tangent_type(::Type{<:ObservedFunctionCache}) = NoTangent
+
+# MissingGuessValue is a Moshi @data tagged union with a
+# Union{Error, Constant, Random} storage field. Mooncake's FData/RData
+# decomposition cannot handle Union-typed tangent fields where the member
+# tangent types are distinct Tangent{NamedTuple{...}} structs.
+# This is not differentiable anyway — it's a configuration enum.
+Mooncake.tangent_type(::Type{<:MissingGuessValue.Type}) = NoTangent
 
 # Port ChainRules rrules to Mooncake using @from_rrule.
 # These mirror the rules in MTKChainRulesCoreExt.jl.
