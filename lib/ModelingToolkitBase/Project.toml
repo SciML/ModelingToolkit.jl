@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.18.0"
+version = "1.19.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -133,7 +133,7 @@ LinearAlgebra = "1"
 LinearSolve = "3.19.2"
 Logging = "1"
 ModelingToolkitStandardLibrary = "2.20"
-Mooncake = "0.4"
+Mooncake = "0.5"
 Moshi = "0.3.6"
 NaNMath = "0.3, 1"
 NonlinearSolve = "4.3"
