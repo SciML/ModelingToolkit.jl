@@ -69,7 +69,7 @@ function SciMLBase.LinearProblem{iip}(
         return_operating_point = true, sparse, kwargs...
     )
 
-    if any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
+    if u0 !== nothing && any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
