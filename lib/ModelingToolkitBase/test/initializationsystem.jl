@@ -1978,3 +1978,23 @@ end
         @test iprob.ps[Initial(x)] == 1.0
     end
 end
+
+@testset "LinearProblem for linear initialization system" begin
+    # When initialization equations are linear in the unknowns, InitializationProblem
+    # should produce a LinearProblem instead of a NonlinearProblem.
+    @variables u(t)
+    # initialization_eqs = [2u ~ 1] is linear in u, so x(0) = 0.5
+    @named linsys = System([D(u) ~ -u], t;
+        initialization_eqs = [2u ~ 1], guesses = [u => 0.5])
+    linsys = mtkcompile(linsys)
+
+    initprob = ModelingToolkitBase.InitializationProblem(linsys, 0.0)
+    @test initprob isa LinearProblem
+
+    prob = ODEProblem(linsys, [], (0.0, 1.0))
+    @test prob.f.initializeprob isa SCCNonlinearProblem
+    @test prob.f.initializeprob.probs isa Tuple{<:LinearProblem}
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[u][1] ≈ 0.5 atol = 1e-10
+end
