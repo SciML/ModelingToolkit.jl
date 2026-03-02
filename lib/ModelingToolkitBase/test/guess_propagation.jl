@@ -92,3 +92,22 @@ prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 @test prob[x] == 1.0
 @test prob[y] == 1.0
+
+
+@testset "Parent guess overrides child variable-metadata guess" begin
+    @component function Child(; name)
+        @variables x(t), [guess = 0.5]
+        eqs = [x^2 ~ 1]
+        System(eqs, t; name)
+    end
+
+    @component function Parent(; name)
+        @named child = Child()
+        System(Equation[], t; systems=[child], guesses=[child.x => 0.9], name)
+    end
+
+    @named parent = Parent()
+    gs = guesses(parent)
+    val = gs[only(keys(gs))]
+    @test isequal(unwrap_const(val), 0.9)
+end
