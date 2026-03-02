@@ -519,3 +519,14 @@ if @isdefined(ModelingToolkit)
         @test f[1](x0, zeros(2), p, 0) != f[1](x0, ones(2), p, 0)
     end
 end
+
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4352: mtkcompile turns inputs to parameters in purely algebraic systems" begin
+        @variables inp(t) out(t)
+        @parameters K
+        sys_alg = System([out ~ K * inp], t, [inp, out], [K]; name = :io)
+        reduced_alg = mtkcompile(sys_alg, inputs = [inp], outputs = [out])
+        @test inp in Set(parameters(reduced_alg))
+        @test out in Set(unknowns(reduced_alg)) || out in Set(observables(reduced_alg))
+    end
+end
