@@ -989,9 +989,25 @@ A function to be used as `update_initializeprob!` in `OverrideInitData`. Require
 
 Any changes to this method should also be made to the one in ChainRulesCoreExt.
 """
-function update_initializeprob!(initprob, prob)
-    pgetter = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
-    p = pgetter(prob, initprob)
+function update_initializeprob!(initprob, valp)
+    initdata = get_scimlfn(valp).initialization_data
+    meta = initdata.metadata
+
+    # Sync Initial(x) := current u for all unknowns
+    if meta isa InitializationMetadata
+        u0 = state_values(valp)
+        if u0 !== nothing && meta.set_initial_unknowns! !== nothing
+            meta.set_initial_unknowns!(parameter_values(valp), u0)
+        end
+        # Sync Initial(sigma) := current sigma for all inputs
+        if meta.set_initial_inputs! !== nothing
+            meta.set_initial_inputs!(valp)
+        end
+    end
+
+    # pgetter now copies the corrected Initial() values
+    pgetter = meta.oop_reconstruct_u0_p.pgetter
+    p = pgetter(valp, initprob)
     return remake(initprob; p)
 end
 
@@ -1005,7 +1021,7 @@ properly.
 
 $(TYPEDFIELDS)
 """
-struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
+struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU, SII}
     """
     The operating point used to construct the initialization.
     """
@@ -1040,6 +1056,11 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
+    """
+    A callable which takes a value provider and syncs `Initial.(inputs(sys))`
+    from the current input parameter values.
+    """
+    set_initial_inputs!::SII
     """
     The value of the `missing_guess_value` keyword indicating how to handle missing guesses.
     """
@@ -1141,6 +1162,29 @@ function (siu::SetInitialUnknowns)(p::AbstractVector, u0)
     return p
 end
 
+struct SetInitialInputs{G, S}
+    getter::G   # reads current input values from integrator ps
+    setter!::S  # writes them into Initial() slots in integrator ps
+end
+
+function SetInitialInputs(sys::AbstractSystem)
+    inps = collect(get_inputs(sys))
+    isempty(inps) && return nothing
+    init_inps = Initial.(inps)
+    # Only include inputs that have Initial() parameters
+    valid = [i for (i, ip) in enumerate(init_inps) if is_parameter(sys, ip)]
+    isempty(valid) && return nothing
+    return SetInitialInputs(
+        getu(sys, inps[valid]),
+        setu(sys, init_inps[valid])
+    )
+end
+
+function (sii::SetInitialInputs)(valp)
+    vals = sii.getter(valp)
+    sii.setter!(valp, vals)
+end
+
 safe_float(x) = x
 safe_float(x::AbstractArray) = isempty(x) ? x : float(x)
 
@@ -1234,7 +1278,8 @@ function maybe_build_initialization_problem(
             sys, initializeprob.f.sys; u0_constructor,
             p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
         ),
-        get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
+        get_initial_unknowns, SetInitialUnknowns(sys), SetInitialInputs(sys),
+        missing_guess_value
     )
 
     if time_dependent_init

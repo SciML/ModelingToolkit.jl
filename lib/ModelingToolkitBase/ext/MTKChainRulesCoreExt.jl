@@ -6,7 +6,7 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, Ab
 import ModelingToolkitBase
 import ModelingToolkitBase as MTK
 import SciMLStructures
-import SymbolicIndexingInterface: remake_buffer, parameter_index
+import SymbolicIndexingInterface: remake_buffer, parameter_index, state_values, parameter_values
 import SciMLBase: AbstractNonlinearProblem, remake
 
 function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
@@ -127,9 +127,25 @@ end
 
 ChainRulesCore.@non_differentiable Base.getproperty(sys::AbstractSystem, x::Symbol)
 
-function ModelingToolkitBase.update_initializeprob!(initprob::AbstractNonlinearProblem, prob)
-    pgetter = ChainRulesCore.@ignore_derivatives MTK.get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
-    p = pgetter(prob, initprob)
+function ModelingToolkitBase.update_initializeprob!(initprob::AbstractNonlinearProblem, valp)
+    initdata = ChainRulesCore.@ignore_derivatives MTK.get_scimlfn(valp).initialization_data
+    meta = ChainRulesCore.@ignore_derivatives initdata.metadata
+
+    # Sync Initial(x) := current u for all unknowns
+    if meta isa MTK.InitializationMetadata
+        u0 = ChainRulesCore.@ignore_derivatives state_values(valp)
+        if u0 !== nothing && meta.set_initial_unknowns! !== nothing
+            ChainRulesCore.@ignore_derivatives meta.set_initial_unknowns!(parameter_values(valp), u0)
+        end
+        # Sync Initial(sigma) := current sigma for all inputs
+        if meta.set_initial_inputs! !== nothing
+            ChainRulesCore.@ignore_derivatives meta.set_initial_inputs!(valp)
+        end
+    end
+
+    # pgetter now copies the corrected Initial() values
+    pgetter = ChainRulesCore.@ignore_derivatives meta.oop_reconstruct_u0_p.pgetter
+    p = pgetter(valp, initprob)
     return remake(initprob; p)
 end
 
