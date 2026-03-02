@@ -109,5 +109,5 @@ prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
     @named parent = Parent()
     gs = guesses(parent)
     val = gs[only(keys(gs))]
-    @test isequal(val, 0.9)
+    @test isequal(unwrap_const(val), 0.9)
 end
