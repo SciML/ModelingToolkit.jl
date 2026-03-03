@@ -499,7 +499,7 @@ if @isdefined(ModelingToolkit)
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(T)
 
         matrices, _ = get_looptransfer(
-            sys, :plant_input
+            sys, :plant_input; guesses = [MTK.D_nounits(P.x) => ones(2)]
         )
         L = Kss * Pss
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(L)
