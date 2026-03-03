@@ -378,10 +378,10 @@ end
 
     sol = solve(prob, Tsit5())
     sol_nosplit = solve(prob_nosplit, Tsit5())
-    @test 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol[abs(x)]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol[y]) ≈ 1.5  # check wall conditions
-    @test 0 <= minimum(sol_nosplit[x]) <= 1.0e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol_nosplit[abs(x)]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
 

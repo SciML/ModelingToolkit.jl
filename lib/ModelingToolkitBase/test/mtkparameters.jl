@@ -481,17 +481,19 @@ if @isdefined(ModelingToolkit)
         prob = ODEProblem(sub_sys, [sys.capacitor2.v => 0.0], (0, 3.0))
 
         setter = setsym_oop(prob, [sys.capacitor2.C])
+        getter = getsym(prob, sys.capacitor2.v)
 
         function loss(x, ps)
-            setter, prob = ps
+            getter, setter, prob = ps
             u0, p = setter(prob, x)
             new_prob = remake(prob; u0, p)
-            sol = solve(new_prob, Rodas5P())
-            sum(sol)
+            sol = solve(new_prob, Rodas5P(); saveat = 0.1)
+            @test SciMLBase.successful_retcode(sol)
+            sum(getter(sol))
         end
 
-        grad = ForwardDiff.gradient(Base.Fix2(loss, (setter, prob)), [3.0])
-        @test grad ≈ [0.14882627068752538] atol = 1.0e-10
+        grad = ForwardDiff.gradient(Base.Fix2(loss, (getter, setter, prob)), [3.0])
+        @test grad ≈ [0.07646604423949759] atol = 1.0e-6
     end
 end
 

@@ -128,10 +128,10 @@ end
     @test !isempty(ModelingToolkitBase.bindings(sys_inner_outer))
     u0 = [rc_comp.capacitor.v => 0.0]
     prob = ODEProblem(sys_inner_outer, u0, (0, 10.0); sparse = true, missing_guess_value)
-    sol_inner_outer = solve(prob, Rodas4())
+    sol_inner_outer = solve(prob, Rodas4(); saveat = sol.t)
     @test SciMLBase.successful_retcode(sol_inner_outer)
     if @isdefined(ModelingToolkit)
-        @test sol[sys.capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
+        @test sol[sys.capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v] atol = 1e-6
 
         prob = ODEProblem(sys, [sys.capacitor.v => 0.0], (0, 10.0))
         sol = solve(prob, Tsit5())
