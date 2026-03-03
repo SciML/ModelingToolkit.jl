@@ -455,7 +455,8 @@ if @isdefined(ModelingToolkit)
         Sinner2 = sminreal(
             ss(
                 get_sensitivity(
-                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2]
+                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2],
+                    op = [P_outer.input.u => 0]
                 )[1]...
             )
         )
