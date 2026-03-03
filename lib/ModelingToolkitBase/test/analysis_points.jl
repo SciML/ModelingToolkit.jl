@@ -455,7 +455,8 @@ if @isdefined(ModelingToolkit)
         Sinner2 = sminreal(
             ss(
                 get_sensitivity(
-                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2]
+                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2],
+                    op = [P_outer.input.u => 0]
                 )[1]...
             )
         )
@@ -498,7 +499,7 @@ if @isdefined(ModelingToolkit)
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(T)
 
         matrices, _ = get_looptransfer(
-            sys, :plant_input
+            sys, :plant_input; guesses = [MTK.D_nounits(P.x) => ones(2)]
         )
         L = Kss * Pss
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(L)

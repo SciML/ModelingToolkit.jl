@@ -390,7 +390,7 @@ end
 
 @testset "Type promotion of `p` works with non-dual types" begin
     @variables x(t) y(t)
-    @mtkcompile sys = System([D(x) ~ x + y, x^3 + y^3 ~ 5], t; guesses = [y => 1.0])
+    @mtkcompile sys = System([D(x) ~ x + y, y^3 ~ 5t + 3], t; guesses = [y => 1.0])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     prob2 = remake(prob; u0 = BigFloat.(prob.u0))
     @test prob2.p.initials isa Vector{BigFloat}

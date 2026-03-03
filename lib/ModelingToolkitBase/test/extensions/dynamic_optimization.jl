@@ -263,12 +263,12 @@ end
         ),
         tspan
     )
-    osol = solve(oprob, Tsit5(); dt = 0.01, adaptive = false)
+    osol = solve(oprob, Tsit5(); saveat = 0.01)
     @test ≈(osol.u, jsol.sol.u, rtol = 0.01)
     if ENABLE_CASADI
         @test ≈(osol.u, csol.sol.u, rtol = 0.01)
     end
-    osol2 = solve(oprob, ImplicitEuler(); dt = 0.01, adaptive = false)
+    osol2 = solve(oprob, ImplicitEuler(); saveat = 0.01)
     @test ≈(osol2.u, isol.sol.u, rtol = 0.01)
 
     if @isdefined(Pyomo)
