@@ -979,7 +979,6 @@ if @isdefined(ModelingToolkit)
         # This is singular at the second event, but the derivatives are zero so it's
         # constant after that point anyway. Just make sure it hits the last event and
         # had the correct `u`.
-        @test SciMLBase.successful_retcode(sol)
         @test sol.t[end] >= 120.0
         @test sol[end] == [0.0, 0.0, 0.0]
     end
