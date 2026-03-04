@@ -1074,6 +1074,12 @@ struct GetUpdatedU0{GG, GIU}
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinearProblem, op::AbstractDict)
+    @show "!!! DEBUG BEGIN !!!"
+    @show unknowns(initprob.f.sys)
+    @show observables(initprob.f.sys)
+    @show parameters(initprob.f.sys)
+    @show bound_parameters(initprob.f.sys)
+    @show "!!! DEBUG END !!!"
     @nospecialize initprob
     dvs = unknowns(sys)
     eqs = equations(sys)
