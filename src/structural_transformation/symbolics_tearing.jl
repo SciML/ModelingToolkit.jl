@@ -77,21 +77,7 @@ function dummy_derivative(
             return J
         end
     end
-    state_priority = let state = state
-        var -> begin
-            p = 0.0
-            var_to_diff = state.structure.var_to_diff
-            diff_to_var = invview(var_to_diff)
-            while var_to_diff[var] !== nothing
-                var = var_to_diff[var]
-            end
-            while true
-                p = max(p, ModelingToolkit.state_priority(state.fullvars[var]))
-                (var = diff_to_var[var]) === nothing && break
-            end
-            p
-        end
-    end
+    state_priority = Base.Fix1(getindex, state.structure.state_priorities)
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
         state, jac; state_priority, kwargs...
     )
