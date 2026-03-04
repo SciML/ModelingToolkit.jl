@@ -578,17 +578,7 @@ function System(
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
     if iv === nothing
-        filterer = let initial_conditions = initial_conditions, all_dvs = all_dvs
-            function _filterer(kvp)
-                k = kvp[1]
-                if k in all_dvs
-                    initial_conditions[k] = kvp[2]
-                    return false
-                end
-                return true
-            end
-        end
-        filter!(filterer, bindings)
+        move_variable_bindings_to_ics!(all_dvs, initial_conditions, bindings)
     end
 
     check_bindings(ps, bindings)
