@@ -28,7 +28,11 @@ jobs:
         package:
           - {user: SciML, repo: SciMLBase.jl, group: Downstream}
           - {user: SciML, repo: SciMLBase.jl, group: SymbolicIndexingInterface}
-          - {user: SciML, repo: Catalyst.jl, group: All}
+          - {user: SciML, repo: Catalyst.jl, group: Modeling}
+          - {user: SciML, repo: Catalyst.jl, group: Simulation}
+          - {user: SciML, repo: Catalyst.jl, group: Hybrid}
+          - {user: SciML, repo: Catalyst.jl, group: Misc}
+          - {user: SciML, repo: Catalyst.jl, group: Spatial}
           - {user: SciML, repo: CellMLToolkit.jl, group: Core}
           - {user: SciML, repo: SBMLToolkit.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
