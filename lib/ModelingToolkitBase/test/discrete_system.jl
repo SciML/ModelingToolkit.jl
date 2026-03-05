@@ -258,7 +258,7 @@ if @isdefined(ModelingToolkit)
         ]
         return System(eqs, t; name)
     end
-    function System(; name, buffer)
+    function DiscSystem(; name, buffer)
         @named y_sys = SampledData(; buffer = buffer)
         pars = @parameters begin
             α = 0.5, [description = "alpha"]
@@ -275,7 +275,7 @@ if @isdefined(ModelingToolkit)
         return System(eqs, t, vars, pars; systems = [y_sys], name = name)
     end
 
-    @test_nowarn @mtkcompile sys = System(; buffer = ones(10))
+    @test_nowarn @mtkcompile sys = DiscSystem(; buffer = ones(10))
 end
 
 @testset "Passing `nothing` to `u0`" begin
