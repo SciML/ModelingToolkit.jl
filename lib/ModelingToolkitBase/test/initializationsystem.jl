@@ -1,5 +1,7 @@
 using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
-using StochasticDiffEq, DelayDiffEq, StochasticDelayDiffEq, JumpProcesses
+using StochasticDiffEq, DelayDiffEq, JumpProcesses
+# FIXME: Disabled due to failing precompilation
+# using StochasticDelayDiffEq
 using ForwardDiff, StaticArrays
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
@@ -750,7 +752,8 @@ end
                 (ODEProblem, Tsit5(), zeros(2)),
                 (SDEProblem, ImplicitEM(), [a, b]),
                 (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-                (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+                # FIXME: Disabled due to failing precompilation
+                # (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
             ],
             [(identity, Any), (sarray_ctor, SVector)]
         )
@@ -1032,7 +1035,8 @@ end
             (ODEProblem, Tsit5(), zeros(2)),
             (SDEProblem, ImplicitEM(), [a, b]),
             (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-            (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+            # FIXME: Disabled due to failing precompilation
+            # (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
         ]
         browns = alg === ImplicitEM() ? [a, b] : []
         @named sys = System(
@@ -1067,7 +1071,8 @@ end
             (ODEProblem, Tsit5(), zeros(2)),
             (SDEProblem, ImplicitEM(), [a, b]),
             (DDEProblem, MethodOfSteps(Tsit5()), [_x(t - 0.1), 0.0]),
-            (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
+            # FIXME: Disabled due to failing precompilation
+            # (SDDEProblem, ImplicitEM(), [_x(t - 0.1) + a, b]),
         ]
         browns = alg === ImplicitEM() ? [a, b] : []
         @named sys = System(
@@ -1113,7 +1118,8 @@ end
             (ODEProblem, Tsit5(), 0),
             (SDEProblem, ImplicitEM(), a),
             (DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
-            (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
+            # FIXME: Disabled due to failing precompilation
+            # (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
         ]
         alge_eqs = [y^2 * q + q^2 * x ~ 0, z * p - p^2 * x * z ~ 0]
 
@@ -1186,7 +1192,8 @@ end
             (ODEProblem, Tsit5(), 0),
             (SDEProblem, ImplicitEM(), a),
             (DDEProblem, MethodOfSteps(Tsit5()), _x(t - 0.1)),
-            (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
+            # FIXME: Disabled due to failing precompilation
+            # (SDDEProblem, ImplicitEM(), _x(t - 0.1) + a),
         ]
         alge_eqs = [y^2 + 4y * p^2 ~ x^3]
         @mtkcompile sys = System(
@@ -1610,7 +1617,8 @@ if @isdefined(ModelingToolkit)
                 (ODEProblem, 0.0),
                 (SDEProblem, a),
                 (DDEProblem, _x(t - 0.1)),
-                (SDDEProblem, _x(t - 0.1) + a),
+                # FIXME: Disabled due to failing precompilation
+                # (SDDEProblem, _x(t - 0.1) + a),
             ]
             @mtkcompile sys = ModelingToolkitBase.System(
                 [D(x) ~ x + rhs, x + y ~ tot], t;
