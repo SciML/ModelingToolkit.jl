@@ -1076,7 +1076,9 @@ end
 function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinearProblem, op::AbstractDict)
     @show "!!! DEBUG BEGIN !!!"
     @show unknowns(initprob.f.sys)
+    @show equations(initprob.f.sys)
     @show observables(initprob.f.sys)
+    @show observed(initprob.f.sys)
     @show parameters(initprob.f.sys)
     @show bound_parameters(initprob.f.sys)
     @show "!!! DEBUG END !!!"
