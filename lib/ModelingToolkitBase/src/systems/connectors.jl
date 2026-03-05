@@ -390,6 +390,21 @@ struct RotationMatrix
 
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Compute the angular velocity `w` from the rotation matrix `R` and its derivative
+`DR = Differential(t)(R)`.
+"""
+@inline get_w(R::Arr{Num, 2}, t) = get_w(unwrap(R), t)::Vector{SymbolicT}
+@inline get_w(R::SymbolicT, t::Num) = get_w(R, unwrap(t))::Vector{SymbolicT}
+
+function get_w(R::SymbolicT, t::SymbolicT)
+    R = collect(R)::Matrix{SymbolicT}
+    DR = map(Differential(t), R)
+    return [R[3, :]'DR[2, :], -R[3, :]'DR[1, :], R[2, :]'DR[1, :]]::Vector{SymbolicT}
+end
+
 "Return orientation object of a multibody frame."
 function ori(sys)
     return getmetadata(sys, FrameOrientation, nothing)::Union{RotationMatrix, Nothing}
