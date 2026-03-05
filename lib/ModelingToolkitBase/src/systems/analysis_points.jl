@@ -556,12 +556,18 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
             for out in outs
                 out_var = ap_var(out)
                 if tf.outputs_to_params
-                    new_dvs = copy(get_unknowns(breaksys))
-                    @set! breaksys.unknowns = new_dvs
-                    new_ps = copy(get_ps(breaksys))
-                    @set! breaksys.ps = new_ps
-                    deleteat!(new_dvs, findfirst(isequal(out_var), new_dvs)::Int)
-                    push!(new_ps, out_var)
+                    namespace = namespace_hierarchy(getname(out_var))
+                    insert!(namespace, 1, nameof(breaksys))
+                    breaksys, _ = modify_nested_subsystem(breaksys, @view(namespace[1:end-1])) do apsys
+                        new_dvs = copy(get_unknowns(apsys))
+                        var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
+                        deleteat!(new_dvs, findfirst(isequal(var_in_apsys), new_dvs)::Int)
+                        @set! apsys.unknowns = new_dvs
+                        new_ps = copy(get_ps(apsys))
+                        push!(new_ps, var_in_apsys)
+                        @set! apsys.ps = new_ps
+                        return apsys, ()
+                    end
                 end
                 push!(out_vars, ap_var(out))
             end
