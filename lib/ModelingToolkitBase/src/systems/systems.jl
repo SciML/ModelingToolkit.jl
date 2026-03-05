@@ -251,9 +251,13 @@ function __mtkcompile(
             push!(observables, eq.lhs)
         end
         setdiff!(flat_dvs, observables)
+        new_ps = [get_ps(sys); collect(inputs)]
         @set! sys.eqs = eqs
         @set! sys.unknowns = flat_dvs
         @set! sys.observed = obseqs
+        @set! sys.ps = new_ps
+        @set! sys.inputs = inputs
+        @set! sys.outputs = outputs
         return sys
     end
     iv = get_iv(sys)::SymbolicT
