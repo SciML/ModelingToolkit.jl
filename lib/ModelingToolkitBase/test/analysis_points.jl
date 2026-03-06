@@ -869,3 +869,22 @@ using DynamicQuantities
     @named sys2 = TestAPWithNoOutputs()
     @test sys2 isa System
 end
+
+@testset "Loop openings work with causal variable analysis points" begin
+    @named P = FirstOrder(k = 1, T = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
+
+    ap = AnalysisPoint(:plant_input)
+    eqs = [
+        connect(P.output, C.input)
+        connect(C.output.u, ap, P.input.u)
+    ]
+    @named sys = System(eqs, t; systems = [P, C])
+
+    newsys, (apvars,) = MTK.apply_transformation(MTK.Break(ap, true), sys)
+
+    @test isequal(only(apvars), P.input.u)
+    @test any(isequal(only(apvars)), parameters(newsys))
+    @test length(equations(expand_connections(sys))) == 9
+    @test length(equations(expand_connections(newsys))) == 8
+end
