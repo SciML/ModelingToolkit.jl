@@ -1,5 +1,7 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLStructures
-using ModelingToolkitBase: t_nounits as t
+using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback
+using Symbolics: unwrap
+using Setfield: @set!
 using Test
 
 # Ensure indexes of array symbolics are cached appropriately
@@ -122,4 +124,18 @@ end
     ss = @test_nowarn complete(sys)
     @test length(parameters(ss)) == 1
     @test !is_timeseries_parameter(ss, p_1)
+end
+
+@testset "Old index cache doesn't influence new index cache construction" begin
+    @variables x(t)
+    @discretes d(t)
+    @named sys = System([D(x) ~ t + 2], t)
+    sys = complete(sys)
+    @set! sys.discrete_events = [SymbolicDiscreteCallback(x > 1, [d ~ Pre(d) + 1]; discrete_parameters = [d])]
+    @set! sys.ps = [unwrap(d)]
+    # This used to throw, since `d` wasn't a parameter before and thus not present in
+    # the `IndexCache`. This failed the construction of the subsequent `IndexCache`, since
+    # it uses `is_parameter` to check if `discrete_parameters` are in the parameters of
+    # the system.
+    @test_nowarn complete(sys)
 end
