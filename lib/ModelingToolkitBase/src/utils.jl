@@ -936,6 +936,10 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
         )
     end
     arr, isarr = split_indexed_var(var)
+    if isarr && SU.is_array_shape(SU.shape(var))
+        # `var` is indexed, and it is an array, so it must be a slice. Replace it with `arr`.
+        var = arr
+    end
     check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
