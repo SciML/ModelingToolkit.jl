@@ -328,6 +328,8 @@ export DynamicOptSolution
 export MissingGuessValue
 export MiscSystemData
 
+export AssignmentAffect
+
 const set_scalar_metadata = setmetadata
 
 @public apply_to_variables, equations_toplevel, unknowns_toplevel, parameters_toplevel
