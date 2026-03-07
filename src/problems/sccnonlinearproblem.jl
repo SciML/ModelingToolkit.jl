@@ -43,7 +43,7 @@ end
     $TYPEDSIGNATURES
 
 Subset a system to have only the given unknowns `vscc` and equations `escc`. Observed
-equations are subset accordingly. Requires that `sys` is complete and flattened.
+equations are subset, delete accordingly. Requires that `sys` is complete and flattened.
 
 # Keyword arguments
 
@@ -105,26 +105,468 @@ end
 
 const BlockIdxsT = typeof(BlockVector{Int}(undef_blocks, Int[]))
 
-struct SCCDecomposition
-    subsystems::Vector{System}
-    islinear::BitVector
+mutable struct SCCDecomposition
+    const subsystems::Vector{System}
+    const var_sccs::Vector{Vector{Int}}
+    const eq_sccs::Vector{Vector{Int}}
+    const islinear::BitVector
+    const hints::Vector{StructuralHint.Type}
     # Cache buffer types and corresponding sizes. Stored as a pair of arrays instead of a
     # dict to maintain a consistent order of buffers across SCCs
-    cachetypes::Vector{TypeT}
-    cachesizes::Vector{Int}
+    const cachetypes::Vector{TypeT}
+    const cachesizes::Vector{Int}
     # explicitfun! related information for each SCC
     # We need to compute buffer sizes before doing any codegen
-    scc_cachevars::Vector{SCCCacheVarsExprsElT}
-    scc_cacheexprs::Vector{SCCCacheVarsExprsElT}
+    const scc_cachevars::Vector{SCCCacheVarsExprsElT}
+    const scc_cacheexprs::Vector{SCCCacheVarsExprsElT}
     obsidxs::BlockIdxsT
-    obsidxs_for_cacheexprs::Vector{Vector{Int}}
+    const obsidxs_for_cacheexprs::Vector{Vector{Int}}
 end
 
 function SCCDecomposition()
     return SCCDecomposition(
-        System[], BitVector(), TypeT[], Int[], SCCCacheVarsExprsElT[],
-        SCCCacheVarsExprsElT[], BlockVector{Int}(undef_blocks, Int[]), Vector{Int}[]
+        System[], Vector{Int}[], Vector{Int}[], BitVector(), StructuralHint.Type[],
+        TypeT[], Int[], SCCCacheVarsExprsElT[], SCCCacheVarsExprsElT[],
+        BlockVector{Int}(undef_blocks, Int[]), Vector{Int}[]
     )
+end
+
+function SCCDecomposition(sys::System, var_sccs::Vector{Vector{Int}}, eq_sccs::Vector{Vector{Int}})
+    active_decomposition = SCCDecomposition()
+    final_decomposition = SCCDecomposition()
+    available_vars = Set{SymbolicT}()
+    ts = get_tearing_state(sys)::TearingState
+    icg = BipartiteGraphs.InducedCondensationGraph(ts.structure.graph, var_sccs)
+    active = Set{Int}()
+    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+        nbors = Set{Int}(collect(Graphs.inneighbors(icg, i)))
+        intersect!(nbors, active)
+        while !isempty(nbors)
+            finalize_scc!(final_decomposition, active_decomposition, first(nbors), active, nbors)
+        end
+        blockpush!(active_decomposition.obsidxs, Int[])
+        subsys = subset_system(sys, vscc, escc; available_vars, prevobsidxs = active_decomposition.obsidxs)
+        push!(active_decomposition.subsystems, subsys)
+        push!(active_decomposition.var_sccs, vscc)
+        push!(active_decomposition.eq_sccs, escc)
+        push!(active_decomposition.hints, StructuralHint.NoHint())
+        push!(active_decomposition.islinear, calculate_A_b(subsys; throw = false) !== nothing)
+        push!(active, i)
+    end
+
+    while !isempty(active)
+        finalize_scc!(final_decomposition, active_decomposition, first(active), active, active)
+    end
+
+    return final_decomposition
+end
+
+function copy_scc!(dst::SCCDecomposition, src::SCCDecomposition, tgt::Int)
+    blockpush!(dst.obsidxs, copy(view(src.obsidxs, Block(tgt))))
+    push!(dst.subsystems, src.subsystems[tgt])
+    push!(dst.var_sccs, src.var_sccs[tgt])
+    push!(dst.eq_sccs, src.eq_sccs[tgt])
+    push!(dst.hints, src.hints[tgt])
+    push!(dst.islinear, src.islinear[tgt])
+    return dst
+end
+
+function finalize_scc!(final_decomposition::SCCDecomposition, active_decomposition::SCCDecomposition, i::Int, active::Set{Int}, nbors::Set{Int}; linear_scc_combine_range::Int = 2)
+    if !active_decomposition.islinear[i]
+        copy_scc!(final_decomposition, active_decomposition, i)
+        delete!(active, i)
+        delete!(nbors, i)
+        return
+    end
+
+    subsys = active_decomposition.subsystems[i]
+    neqs = length(equations(subsys))
+    if neqs == 1
+        to_merge = Int[]
+        for j in active
+            if active_decomposition.islinear[j] && length(equations(active_decomposition.subsystems[j])) == 1
+                push!(to_merge, j)
+            end
+        end
+        if length(to_merge) > 1
+            active_decomposition.hints[to_merge[1]] = StructuralHint.Diagonal()
+        end
+        # Don't remove old to avoid affecting ordering
+        _collapse_into!(active_decomposition, to_merge[1], @view(to_merge[2:end]))
+        copy_scc!(final_decomposition, active_decomposition, to_merge[1])
+        setdiff!(active, to_merge)
+        setdiff!(nbors, to_merge)
+        # TODO: Merge this SCC again if it is small
+        return
+    end
+
+    merge_candidates = Int[]
+    for j in active
+        active_decomposition.islinear[j] || continue
+        neqs_j = length(equations(active_decomposition.subsystems[j]))
+        neqs_j == 1 && continue
+        push!(merge_candidates, j)
+    end
+
+    comparator = length ∘ equations ∘ Base.Fix1(getindex, active_decomposition.subsystems)
+    sort!(merge_candidates; by = comparator)
+    # mapping from size of SCC to number of times it occurs in the range `low..high`.
+    # Effectively a sorted multiset.
+    sizes_in_range = DataStructures.SortedDict{Int, Int}()
+    while i in active
+        empty!(sizes_in_range)
+        low = 1
+        high = 1
+        best_low = 1
+        best_high = 1
+        while checkbounds(Bool, merge_candidates, high)
+            neqs_high = comparator(high)
+            sizes_in_range[neqs_high] = get(sizes_in_range, neqs_high, 0) + 1
+            absdiff = first(last(sizes_in_range)) - first(first(sizes_in_range))
+            while absdiff > linear_scc_combine_range
+                neqs_low = comparator(low)
+                low += 1
+                n_low = sizes_in_range[neqs_low] -= 1
+                if iszero(n_low)
+                    delete!(sizes_in_range, neqs_low)
+                end
+                absdiff = first(last(sizes_in_range)) - first(first(sizes_in_range))
+            end
+            if (high - low) > (best_high - best_low)
+                best_high = high
+                best_low = low
+            end
+            high += 1
+        end
+
+        if best_low == best_high
+            copy_scc!(final_decomposition, active_decomposition, merge_candidates[best_low])
+            delete!(active, merge_candidates[best_low])
+            delete!(nbors, merge_candidates[best_low])
+            deleteat!(merge_candidates, best_low)
+            continue
+        end
+
+        merge_target = merge_candidates[best_low]
+        to_merge = view(merge_candidates, (best_low + 1):best_high)
+        largest_collapsed_scc = max(maximum(comparator, to_merge), comparator(merge_target))
+        band_size = largest_collapsed_scc - 1
+        active_decomposition.hints[merge_target] = StructuralHint.Banded(band_size, band_size)
+        _collapse_into!(active_decomposition, merge_target, to_merge)
+        copy_scc!(final_decomposition, active_decomposition, merge_target)
+        setdiff!(active, to_merge)
+        setdiff!(nbors, to_merge)
+        delete!(active, merge_target)
+        delete!(nbors, merge_target)
+        deleteat!(merge_candidates, best_low:best_high)
+    end
+
+    return nothing
+end
+
+function build_caches!(sys::System, decomposition::SCCDecomposition)
+    banned_vars = Set{SymbolicT}()
+    state = Dict()
+    prev_obseqs = Equation[]
+    unhacked_sys = unhack_system(sys)
+    @show length(decomposition.subsystems)
+    for i in eachindex(decomposition.subsystems)
+        empty!(banned_vars)
+        empty!(state)
+        
+        subsys = decomposition.subsystems[i]
+        union!(banned_vars, unknowns(subsys))
+        union!(banned_vars, observables(subsys))
+
+        append!(prev_obseqs, observed(subsys))
+
+        _obs = get_observed(subsys)
+        for i in eachindex(_obs)
+            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
+                _obs[i].rhs, banned_vars, state
+            )
+        end
+        _eqs = get_eqs(subsys)
+        for i in eachindex(_eqs)
+            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
+                _eqs[i].rhs, banned_vars, state
+            )
+        end
+
+        if decomposition.islinear[i]
+            store_to_mutable_cache!(subsys, CachedLinearAb, nothing)
+            # cached_ab = check_mutable_cache(
+            #     subsys, CachedLinearAb, CachedLinearAb, nothing
+            # )
+            # if cached_ab isa CachedLinearAb
+            #     subber = SU.Substituter{false}(state)
+            #     I, J, V = findnz(cached_ab.A)
+            #     map!(subber, V, V)
+            #     map!(subber, cached_ab.b, cached_ab.b)
+            # end
+        end
+
+        # map from symtype to cached variables and their expressions
+        cachevars = SCCCacheVarsExprsElT()
+        cacheexprs = SCCCacheVarsExprsElT()
+        push!(decomposition.scc_cachevars, cachevars)
+        push!(decomposition.scc_cacheexprs, cacheexprs)
+        # observed of previous SCCs are in the cache
+        # NOTE: When we get proper CSE, we can substitute these
+        # and then use `subexpressions_not_involving_vars!`
+        for eq in prev_obseqs
+            T = symtype(eq.lhs)
+            buf = get!(() -> SymbolicT[], cachevars, T)
+            push!(buf, eq.lhs)
+
+            buf = get!(() -> SymbolicT[], cacheexprs, T)
+            push!(buf, eq.lhs)
+        end
+
+        for (k, v) in state
+            k = unwrap(k)
+            v = unwrap(v)
+            T = symtype(k)
+            buf = get!(() -> SymbolicT[], cachevars, T)
+            push!(buf, v)
+            buf = get!(() -> SymbolicT[], cacheexprs, T)
+            push!(buf, k)
+        end
+        all_cacheexprs = reduce(vcat, values(cacheexprs); init = SymbolicT[])
+        obsidxs_for_scc_cacheexprs = observed_equations_used_by(unhacked_sys, all_cacheexprs)
+        push!(decomposition.obsidxs_for_cacheexprs, obsidxs_for_scc_cacheexprs)
+        # update the sizes of cache buffers
+        for (T, buf) in cachevars
+            idx = findfirst(isequal(T), decomposition.cachetypes)
+            if idx === nothing
+                push!(decomposition.cachetypes, T)
+                push!(decomposition.cachesizes, 0)
+                idx = lastindex(decomposition.cachetypes)
+            end
+            decomposition.cachesizes[idx] = max(decomposition.cachesizes[idx], length(buf))
+        end
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Make SCC `i` a combination of SCC `i` and SCCs in `js`, where `js` is an iterable of
+integers. Only modifies SCC `i`. Does not change the number of SCCs stored.
+"""
+function _collapse_into!(decomposition::SCCDecomposition, i::Int, js)
+    parent = decomposition.subsystems[i]
+    new_eqs = copy(equations(parent))
+    new_dvs = copy(unknowns(parent))
+    new_obs = copy(observed(parent))
+    cached_ab::Union{CachedLinearAb, Nothing} = if decomposition.islinear[i]
+        calculate_A_b(parent)
+        check_mutable_cache(parent, CachedLinearAb, CachedLinearAb, nothing)::CachedLinearAb
+    else
+        nothing
+    end
+    for j in js
+        cur = decomposition.subsystems[j]
+        append!(new_eqs, equations(cur))
+        append!(new_dvs, unknowns(cur))
+        append!(new_obs, observed(cur))
+        decomposition.islinear[i] &= decomposition.islinear[j]
+        if cached_ab isa CachedLinearAb && decomposition.islinear[j]
+            @show "A"
+            A = cached_ab.A
+            b = cached_ab.b
+            calculate_A_b(cur)
+            jcache = check_mutable_cache(cur, CachedLinearAb, CachedLinearAb, nothing)::CachedLinearAb
+            A = blockdiag(A, jcache.A)
+            b = vcat(b, jcache.b)
+            cached_ab = CachedLinearAb(A, b)
+        end
+
+        append!(decomposition.var_sccs[i], decomposition.var_sccs[j])
+        append!(decomposition.eq_sccs[i], decomposition.eq_sccs[j])
+    end
+    unique!(new_obs)
+    new_parent = decomposition.subsystems[i] = ConstructionBase.setproperties(
+        parent; eqs = new_eqs, unknowns = new_dvs, observed = new_obs
+    )
+    if cached_ab isa CachedLinearAb
+        store_to_mutable_cache!(new_parent, CachedLinearAb, cached_ab)
+    end
+
+    parent_obsidxs = view(decomposition.obsidxs, Block(i))
+    for j in js
+        append!(parent_obsidxs, view(decomposition.obsidxs, Block(j)))
+    end
+    sort!(parent_obsidxs)
+    unique!(parent_obsidxs)
+
+    return nothing
+end
+
+function remove_sccs!(decomposition::SCCDecomposition, js)
+    deleteat!(decomposition.subsystems, js)
+    deleteat!(decomposition.var_sccs, js)
+    deleteat!(decomposition.eq_sccs, js)
+    deleteat!(decomposition.islinear, js)
+    deleteat!(decomposition.hints, js)
+    obsidxs_blocks = blocks(decomposition.obsidxs)
+    deleteat!(obsidxs_blocks, js)
+    decomposition.obsidxs = mortar(obsidxs_blocks)
+    
+    return nothing
+end
+
+function collapse_into!(decomposition::SCCDecomposition, i::Int, js)
+    _collapse_into!(decomposition, i, js)
+    remove_sccs!(decomposition, js)
+end
+function collapse_into!(decomposition::SCCDecomposition, i::Int, j::Int)
+    collapse_into!(decomposition, i, (j,))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Combine SCCs in `decomposition` to reduce the number of problems that have to be generated.
+Combination happens according to the following heuristics:
+
+- Nonlinear SCCs are never combined.
+- A first pass combines consecutive single-equation linear SCCs into a larger diagonal SCC.
+- Diagonal SCCs thus formed are never combined with non-diagonal SCCs unless the diagonal
+  SCC's size is `<= collapse_diagonal_threshold`.
+- A second pass combines consecutive linear SCCs if the difference in size between the
+  largest and smallest SCC thus combined is `<= linear_scc_combine_range`.
+"""
+function combine_sccs!(
+        decomposition::SCCDecomposition; collapse_diagonal_threshold::Int = 3,
+        linear_scc_combine_range::Int = 2
+    )
+    # Current SCC we're looking at. This doesn't use a `for` loop since we're changing the
+    # length of the vector as we iterate.
+    i = 1
+    # Mask for linear SCCs we're not allowed to collapse into others
+    is_uncollapsible = BitVector()
+    sizehint!(is_uncollapsible, length(decomposition.subsystems))
+    while checkbounds(Bool, decomposition.subsystems, i)
+        # Everything is collapsible by default.
+        # We don't mark nonlinear SCCs as uncollapsible to enable a future heuristic which
+        # does so.
+        push!(is_uncollapsible, false)
+        subsys = decomposition.subsystems[i]
+        neqs = length(equations(subsys))
+        # This pass only collapses consecutive unit-length linear SCCs
+        if !decomposition.islinear[i] || !isone(neqs)
+            i += 1
+            continue
+        end
+        # `j` is "the system after `i`"
+        j = i + 1
+        while checkbounds(Bool, decomposition.subsystems, j) && decomposition.islinear[j]
+            subsys_j = decomposition.subsystems[j]
+            neqs_j = length(equations(subsys_j))
+            isone(neqs_j) || break
+            collapse_into!(decomposition, i, j)
+            neqs += 1
+            # This doesn't need to increment `j` because `collapse_into!` deleted SCC `j`,
+            # so it automatically points to the next SCC now.
+        end
+        # Don't collapse large diagonal SCCs
+        is_uncollapsible[i] = neqs > 3
+        decomposition.hints[i] = neqs > 1 ? StructuralHint.Diagonal() : StructuralHint.NoHint()
+        i += 1
+    end
+
+    @assert length(is_uncollapsible) == length(decomposition.subsystems)
+    i = 1
+    while checkbounds(Bool, decomposition.subsystems, i)
+        subsys = decomposition.subsystems[i]
+        neqs = length(equations(subsys))
+        # Don't collapse nonlinear or uncollapsible SCCs
+        if !decomposition.islinear[i] || is_uncollapsible[i]
+            i += 1
+            continue
+        end
+        # `i` is now the beginning of a collapsible range.
+        j = i
+        # mapping from size of SCC to number of times it occurs in the range `i..j`.
+        # Effectively a sorted multiset.
+        sizes_in_range = DataStructures.SortedDict{Int, Int}()
+        # In the collapsible range beginning at `i`, the start and end indices of the
+        # longest subrange we can collapse.
+        longest_collapsible_i = i
+        longest_collapsible_j = i
+        while checkbounds(Bool, decomposition.subsystems, j)
+            # Ensure the SCC we're considering collapsing is within the collapsible range
+            if !decomposition.islinear[j] || is_uncollapsible[j] && neqs > collapse_diagonal_threshold
+                # Collapsible range ends here
+                break
+            end
+            # If the current collapsible range is larger than our largest
+            if (j - i) > (longest_collapsible_j - longest_collapsible_i)
+                # Update the largest
+                longest_collapsible_i = i
+                longest_collapsible_j = j
+            end
+            subsys_j = decomposition.subsystems[j]
+            neqs_j = length(equations(subsys_j))
+            # Add the size of SCC `j` to the sorted multiset
+            sizes_in_range[neqs_j] = get(sizes_in_range, neqs_j, 0) + 1
+            # Find the maximum absolute difference in SCC sizes
+            absdiff = first(last(sizes_in_range)) - first(first(sizes_in_range))
+            # If we're trying to collapse SCCs too different in size
+            while absdiff > linear_scc_combine_range
+                # Bump the starting point of the range
+                neqs_i = length(equations(decomposition.subsystems[i]))
+                i += 1
+                # Remove the entry from the sorted multiset
+                new_cnt = sizes_in_range[neqs_i] -= 1
+                if iszero(new_cnt)
+                    delete!(sizes_in_range, neqs_i)
+                end
+                # Update the maximum absolute difference
+                absdiff = first(last(sizes_in_range)) - first(first(sizes_in_range))
+            end
+            j += 1
+        end
+
+        if longest_collapsible_i != longest_collapsible_j
+            largest_collapsed_scc = 0
+            for k in longest_collapsible_i:longest_collapsible_j
+                neqs_k = length(equations(decomposition.subsystems[k]))
+                largest_collapsed_scc = max(largest_collapsed_scc, neqs_k)
+            end
+
+            band_size = largest_collapsed_scc - 1
+            decomposition.hints[longest_collapsible_i] = StructuralHint.Banded(band_size, band_size)
+        end
+
+        # Collapse the relevant SCCs
+        collapse_into!(
+            decomposition, longest_collapsible_i,
+            (longest_collapsible_i + 1):longest_collapsible_j
+        )
+        
+        # Don't collapse this SCC again, otherwise this is equivalent to just collapsing
+        # the entire range
+        is_uncollapsible[longest_collapsible_i] = true
+        # Don't update `i` here, it will be done in the beginning of this loop.
+        # Case 1: `longest_collapsible_i == i`: Then `is_uncollapsible[i] == true` which
+        # means the check at the very beginning of the loop will fail and subsequently
+        # increment `i` until it is collapsible again.
+        #
+        # Case 2: `longest_collapsible_i > i`: We collapsed the longest range we could, but
+        # it may still be possible to collapse a range beginning at `i`. For example, given
+        # the sequence of consecutive, collapsible SCC sizes `[2, 2, 2, 3, 4, 4, 5, 5]`. This
+        # will first collapse into `[2, 2, 2, 21]` where the last SCC is uncollapsible. Since
+        # `i` is unchanged, the next iteration will collapse into `[6, 21]` where neither is
+        # collapsible. Changing `i` to `longest_collapsible_j + 1` would avoid the second
+        # collapse. If the sequence was instead `[2, 3, 4, 4, 5, 5]` it would collapse first
+        # to `[2, 21]`. Then in the next iteration,
+        # `longest_collapsible_i == longest_collapsible_j == i`. This means we effectively
+        # collapse nothing, mark the 2-length SCC as uncollapsible, and move on.
+    end
+
+    return nothing
 end
 
 struct SCCNonlinearFunction{iip} end
@@ -138,7 +580,8 @@ function SCCNonlinearFunction{iip}(
     # generate linear problem instead
     if islin
         return LinearFunction{iip}(
-            subsys; eval_expression, eval_module, cse, cachesyms, kwargs...
+            subsys; eval_expression, eval_module, cse, cachesyms,
+            structural_hint = decomposition.hints[i], kwargs...
         )
     end
     rps = reorder_parameters(subsys)
@@ -157,7 +600,7 @@ end
 function SciMLBase.SCCNonlinearProblem{iip}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, cse = true, u0_constructor = identity,
-        missing_guess_value = default_missing_guess_value(), kwargs...
+        missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
@@ -227,85 +670,15 @@ function SciMLBase.SCCNonlinearProblem{iip}(
 
     explicitfuns = []
     nlfuns = []
-    decomposition = SCCDecomposition()
-    # variables solved in previous SCCs
-    available_vars = Set{SymbolicT}()
-    unhacked_sys = unhack_system(sys)
-    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
-        blockpush!(decomposition.obsidxs, Int[])
-        subsys = subset_system(sys, vscc, escc; available_vars, prevobsidxs = decomposition.obsidxs)
-        push!(decomposition.subsystems, subsys)
+    decomposition = SCCDecomposition(sys, var_sccs, eq_sccs)
 
-        # get all subexpressions in the RHS which we can precompute in the cache
-        # precomputed subexpressions should not contain `banned_vars`
-        banned_vars = Set{SymbolicT}()
-        union!(banned_vars, unknowns(subsys))
-        union!(banned_vars, observables(subsys))
-        state = Dict()
+    # Invalidate the SCC information - `decomposition` is the source of truth now
+    var_sccs = nothing
+    eq_sccs = nothing
 
-        _obs = get_observed(subsys)
-        for i in eachindex(_obs)
-            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
-                _obs[i].rhs, banned_vars, state
-            )
-        end
-        _eqs = get_eqs(subsys)
-        for i in eachindex(_eqs)
-            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
-                _eqs[i].rhs, banned_vars, state
-            )
-        end
+    build_caches!(sys, decomposition)
 
-        # map from symtype to cached variables and their expressions
-        cachevars = SCCCacheVarsExprsElT()
-        cacheexprs = SCCCacheVarsExprsElT()
-        push!(decomposition.scc_cachevars, cachevars)
-        push!(decomposition.scc_cacheexprs, cacheexprs)
-        # NOTE: This has to happen after `subexpressions_not_involving_vars!`
-        # so that the cached linear decomposition uses the subexpression variables
-        push!(decomposition.islinear, calculate_A_b(subsys; throw = false) !== nothing)
-
-        # observed of previous SCCs are in the cache
-        # NOTE: When we get proper CSE, we can substitute these
-        # and then use `subexpressions_not_involving_vars!`
-        for block_idx in 1:(i - 1)
-            for j in view(decomposition.obsidxs, Block(block_idx))
-                T = symtype(obs[j].lhs)
-                buf = get!(() -> SymbolicT[], cachevars, T)
-                push!(buf, obs[j].lhs)
-
-                buf = get!(() -> SymbolicT[], cacheexprs, T)
-                push!(buf, obs[j].lhs)
-            end
-        end
-
-        for (k, v) in state
-            k = unwrap(k)
-            v = unwrap(v)
-            T = symtype(k)
-            buf = get!(() -> SymbolicT[], cachevars, T)
-            push!(buf, v)
-            buf = get!(() -> SymbolicT[], cacheexprs, T)
-            push!(buf, k)
-        end
-
-        all_cacheexprs = reduce(vcat, values(cacheexprs); init = SymbolicT[])
-        obsidxs_for_scc_cacheexprs = observed_equations_used_by(unhacked_sys, all_cacheexprs)
-        push!(decomposition.obsidxs_for_cacheexprs, obsidxs_for_scc_cacheexprs)
-
-        # update the sizes of cache buffers
-        for (T, buf) in cachevars
-            idx = findfirst(isequal(T), decomposition.cachetypes)
-            if idx === nothing
-                push!(decomposition.cachetypes, T)
-                push!(decomposition.cachesizes, 0)
-                idx = lastindex(decomposition.cachetypes)
-            end
-            decomposition.cachesizes[idx] = max(decomposition.cachesizes[idx], length(buf))
-        end
-    end
-
-    for (i, (escc, vscc)) in enumerate(zip(eq_sccs, var_sccs))
+    for i in eachindex(decomposition.subsystems)
         cachevars = decomposition.scc_cachevars[i]
         cacheexprs = decomposition.scc_cacheexprs[i]
         subsys = decomposition.subsystems[i]
@@ -313,7 +686,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
         else
-            solsyms = view.((dvs,), view(var_sccs, 1:(i - 1)))
+            solsyms = view.((dvs,), view(decomposition.var_sccs, 1:(i - 1)))
             push!(
                 explicitfuns,
                 CacheWriter(
@@ -375,6 +748,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             for T in keys(cachevars)
                 for (var, expr) in zip(cachevars[T], cacheexprs[T])
                     isequal(var, expr) && continue
+                    has_possibly_indexed_key(op, var) && continue
                     write_possibly_indexed_array!(op, var, expr, COMMON_NOTHING)
                 end
             end
@@ -414,8 +788,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         push!(subprobs, prob)
     end
 
-    new_dvs = dvs[reduce(vcat, var_sccs)]
-    new_eqs = eqs[reduce(vcat, eq_sccs)]
+    new_dvs = dvs[reduce(vcat, decomposition.var_sccs)]
+    new_eqs = eqs[reduce(vcat, decomposition.eq_sccs)]
     sys = ConstructionBase.setproperties(
         sys; unknowns = new_dvs, eqs = new_eqs, index_cache = subset_unknowns_observed(
             get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,))

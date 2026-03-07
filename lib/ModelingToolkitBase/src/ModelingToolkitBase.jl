@@ -13,6 +13,7 @@ using PrecompileTools, Reexport
     using OffsetArrays: Origin
     import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
         undef_blocks, blocks
+    import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
 import SymbolicUtils
@@ -75,7 +76,7 @@ using Symbolics: parse_vars, value, @derivatives, get_variables,
     exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
     VariableSource, getname, variable,
     NAMESPACE_SEPARATOR, setdefaultval, Arr,
-    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
+    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm, SConst
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
     jacobian_sparsity, isaffine, islinear, _iszero, _isone,

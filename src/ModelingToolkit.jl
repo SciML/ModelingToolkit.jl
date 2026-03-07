@@ -10,7 +10,7 @@ using PrecompileTools, Reexport
     import REPL
     using OffsetArrays: Origin
     import BlockArrays: BlockArray, BlockVector, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-        undef_blocks, blocks, eachblock
+        undef_blocks, blocks, mortar
 end
 
 import SymbolicUtils
