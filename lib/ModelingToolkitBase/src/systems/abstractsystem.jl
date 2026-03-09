@@ -717,6 +717,9 @@ function complete(
         @set! sys.parameter_bindings_graph = nothing
     end
     if split && has_index_cache(sys)
+        # The `IndexCache` constructor uses `is_parameter` and family. If the system already
+        # contains an index cache, it'll get wrong results.
+        @set! sys.index_cache = nothing
         @set! sys.index_cache = IndexCache(sys)
         # Ideally we'd do `get_ps` but if `flatten = false`
         # we don't get all of them. So we call `parameters`.
