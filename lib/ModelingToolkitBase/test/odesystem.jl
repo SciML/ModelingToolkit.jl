@@ -243,7 +243,11 @@ eqs = [
     0 ~ y₁ + y₂ + y₃ - 1,
     D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ,
 ]
-@named sys = System(eqs, t, initial_conditions = [k₁ => 100, k₂ => 3.0e7, y₁ => 1.0])
+# `maybe_zeros` prevents the initialization from putting `k₁` in the denominator,
+# unnecessarily making the system stiffer.
+@named sys = System(
+    eqs, t, initial_conditions = [k₁ => 100, k₂ => 3.0e7, y₁ => 1.0], maybe_zeros = [k₁]
+)
 sys = complete(sys)
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
