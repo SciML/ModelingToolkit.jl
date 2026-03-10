@@ -311,19 +311,22 @@ end
     @parameters σ ρ β
     eqs = [
         0 ~ σ * (y - x)
-        0 ~ x * (ρ - z) - y
         0 ~ x * y - β * z
     ]
-    guesses = [x => 1.0, y => 1.0, z => 0.0]
+    obs = [
+        y ~ x * (ρ - z)
+    ]
+    guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkcompile ns = System(eqs)
+    @named ns = System(eqs, [x, z], [σ, ρ, β]; observed = obs)
+    ns = complete(ns)
 
     @test isequal(
         calculate_jacobian(ns), [
             (-1 - z + ρ) * σ -x * σ
             2x * (-z + ρ) -β - (x^2)
         ]
-    ) broken = !@isdefined(ModelingToolkit)
+    )
     # solve without analytical jacobian
     prob = NonlinearProblem(ns, [guesses; ps])
     sol = solve(prob, NewtonRaphson())
@@ -336,17 +339,22 @@ end
 
     # system that contains a chain of observed variables when simplified
     @variables x y z
-    eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
+    eqs = [
+        0 ~ y - z
+    ]
+    obs = [
+        y ~ x
+        z ~ (x^2 + y) / (-2)
+    ]
+    @named ns = System(eqs, [x], []; observed = obs) # solve for y with observed chain z -> y -> x
+    ns = complete(ns)
     mtkjac = expand.(calculate_jacobian(ns))
-    jac1 = unwrap.([3 // 2 + y;;])
-    jac2 = unwrap.([-3 // 2 - x;;])
-    @test isequal(mtkjac, jac1) || isequal(mtkjac, jac2) broken = !@isdefined(ModelingToolkit)
+    jac1 = unwrap.([3//2 + x;;])
+    @test isequal(mtkjac, jac1)
     mtkhess = calculate_hessian(ns)
     hess1 = [Num[1;;]]
-    hess2 = [Num[-1;;]]
-    @test isequal(mtkhess, hess1) || isequal(mtkhess, hess2) broken = !@isdefined(ModelingToolkit)
-    prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
+    @test isequal(mtkhess, hess1)
+    prob = NonlinearProblem(ns, [x => -4.0]) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
 end
