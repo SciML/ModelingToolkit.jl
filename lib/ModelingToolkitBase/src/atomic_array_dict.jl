@@ -198,6 +198,7 @@ end
 Convert an array of possibly scalarized variables into an `AtomicArraySet`.
 """
 as_atomic_array_set(vars::Vector{SymbolicT}) = as_atomic_array_set(Dict{SymbolicT, Nothing}, vars)
+as_atomic_array_set(vars::Vector) = as_atomic_array_set(Vector{SymbolicT}(map(unwrap, vars)))
 as_atomic_array_set(vars::AtomicArraySet) = vars
 function as_atomic_array_set(
         ::Type{D},
