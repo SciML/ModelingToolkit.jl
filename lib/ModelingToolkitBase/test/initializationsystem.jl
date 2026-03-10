@@ -914,15 +914,13 @@ end
     nlls_algs = [FastShortcutNLLSPolyalg(), LevenbergMarquardt(), SimpleGaussNewton()]
 
     @testset "No initialization for variables" begin
-        @variables x = 1.0 y = 0.0 z = 0.0
-        @parameters σ = 10.0 ρ = 26.0 β = 8 / 3
+        @variables x = 1.0
+        @parameters p = 10.0 
 
         eqs = [
-            0 ~ σ * (y - x),
-            0 ~ x * (ρ - z) - y,
-            0 ~ x * y - β * z,
+            0 ~ x^2 + 2p * x + 3p
         ]
-        @mtkcompile ns = System(eqs, [x, y, z], [σ, ρ, β])
+        @mtkcompile ns = System(eqs, [x], [p])
 
         prob = NonlinearProblem(ns, [])
         @test prob.f.initialization_data.update_initializeprob! === nothing
