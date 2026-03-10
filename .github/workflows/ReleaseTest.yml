@@ -26,7 +26,11 @@ jobs:
         julia-version: [1]
         os: [ubuntu-latest]
         package:
-          - {package: Catalyst, group: All}
+          - {package: Catalyst, group: Modeling}
+          - {package: Catalyst, group: Simulation}
+          - {package: Catalyst, group: Hybrid}
+          - {package: Catalyst, group: Misc}
+          - {package: Catalyst, group: Spatial}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
@@ -46,7 +50,7 @@ jobs:
             Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
             Pkg.add("${{ matrix.package.package }}")
             Pkg.update()
-            Pkg.test("Catalyst"; coverage=true)  # resolver may fail with test time deps
+            Pkg.test("${{ matrix.package.package }}"; coverage=true)  # resolver may fail with test time deps
           catch err
             err isa Pkg.Resolve.ResolverError || rethrow()
             # If we can't resolve that means this is incompatible by SemVer and this is fine
