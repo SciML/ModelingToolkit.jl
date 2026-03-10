@@ -54,6 +54,7 @@ pages = [
         "basics/Debugging.md",
         "basics/DependencyGraphs.md",
         "basics/Precompilation.md",
+        "basics/PrecompileComponents.md",
         "basics/FAQ.md",
     ],
     "comparison.md",
