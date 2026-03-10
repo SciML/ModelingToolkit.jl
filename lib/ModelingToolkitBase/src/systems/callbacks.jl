@@ -317,7 +317,8 @@ const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
     SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
-                               affect_neg = affect, initialize = nothing, finalize = nothing, rootfind = SciMLBase.LeftRootFind)
+                               affect_neg = affect, initialize = nothing, finalize = nothing,
+                               rootfind = SciMLBase.LeftRootFind, initialize_save_discretes = true)
 
 A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
@@ -364,6 +365,9 @@ and combined with the remaining `Equation`s.
 - Symbolic affects have reinitialization built in. In this case the algorithm will default to SciMLBase.NoInit(), and should **not** be provided.
 - Functional and imperative affects will default to SciMLBase.CheckInit(), which will error if the system is not properly reinitialized after the callback. If your system is a DAE, pass in an algorithm like SciMLBase.BrownBasicFullInit() to properly re-initialize.
 
+`initialize_save_discretes` is a flag indicating whether the discrete variables modified by this
+callback should be saved at the start of the integration (when the `initialize` runs).
+
 Initial and final affects can also be specified identically to positive and negative edge affects. Initialization affects
 will run as soon as the solver starts, while finalization affects will be executed after termination.
 """
@@ -376,6 +380,7 @@ struct SymbolicContinuousCallback <: AbstractCallback
     rootfind::Union{Nothing, SciMLBase.RootfindOpt}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
     zero_crossing_id::Symbol
+    initialize_save_discretes::Bool
 end
 
 function SymbolicContinuousCallback(
@@ -387,6 +392,7 @@ function SymbolicContinuousCallback(
         rootfind = SciMLBase.LeftRootFind,
         reinitializealg = nothing,
         zero_crossing_id = gensym(),
+        initialize_save_discretes = true,
         kwargs...
     )
     conditions = (conditions isa AbstractVector) ? conditions : [conditions]
@@ -408,7 +414,7 @@ function SymbolicContinuousCallback(
         SymbolicAffect(initialize; kwargs...), SymbolicAffect(
             finalize; kwargs...
         ),
-        rootfind, reinitializealg, zero_crossing_id
+        rootfind, reinitializealg, zero_crossing_id, initialize_save_discretes
     )
 end # Default affect to nothing
 
@@ -429,7 +435,8 @@ function complete(cb::SymbolicContinuousCallback; kwargs...)
     return SymbolicContinuousCallback(
         cb.conditions, make_affect(cb.affect; kwargs...),
         make_affect(cb.affect_neg; kwargs...), make_affect(cb.initialize; kwargs...),
-        make_affect(cb.finalize; kwargs...), cb.rootfind, cb.reinitializealg, cb.zero_crossing_id
+        make_affect(cb.finalize; kwargs...), cb.rootfind, cb.reinitializealg,
+        cb.zero_crossing_id, cb.initialize_save_discretes
     )
 end
 
@@ -540,12 +547,13 @@ struct SymbolicDiscreteCallback <: AbstractCallback
     initialize::Union{Affect, SymbolicAffect, Nothing}
     finalize::Union{Affect, SymbolicAffect, Nothing}
     reinitializealg::SciMLBase.DAEInitializationAlgorithm
+    initialize_save_discretes::Bool
 end
 
 function SymbolicDiscreteCallback(
         condition::Union{SymbolicT, Number, Vector{<:Number}}, affect = nothing;
         initialize = nothing, finalize = nothing,
-        reinitializealg = nothing, kwargs...
+        reinitializealg = nothing, initialize_save_discretes = true, kwargs...
     )
     # Manual error check (to prevent events like `[X < 5.0] => [X ~ Pre(X) + 10.0]` from being created).
     (condition isa Vector) && (eltype(condition) <: Num) &&
@@ -567,7 +575,8 @@ function SymbolicDiscreteCallback(
     return SymbolicDiscreteCallback(
         c, SymbolicAffect(affect; kwargs...),
         SymbolicAffect(initialize; kwargs...),
-        SymbolicAffect(finalize; kwargs...), reinitializealg
+        SymbolicAffect(finalize; kwargs...), reinitializealg,
+        initialize_save_discretes
     )
 end # Default affect to nothing
 
@@ -588,7 +597,8 @@ function complete(cb::SymbolicDiscreteCallback; kwargs...)
     return SymbolicDiscreteCallback(
         cb.conditions, make_affect(cb.affect; kwargs...),
         make_affect(cb.initialize; kwargs...),
-        make_affect(cb.finalize; kwargs...), cb.reinitializealg
+        make_affect(cb.finalize; kwargs...), cb.reinitializealg,
+        cb.initialize_save_discretes
     )
 end
 
@@ -809,7 +819,7 @@ function generate_continuous_callbacks(
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     cb_classes = Dict{
-        Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm},
+        Tuple{SciMLBase.RootfindOpt, SciMLBase.DAEInitializationAlgorithm, Bool},
         Vector{SymbolicContinuousCallback},
     }()
 
@@ -817,7 +827,7 @@ function generate_continuous_callbacks(
     for cb in cbs
         _cbs = get!(
             () -> SymbolicContinuousCallback[],
-            cb_classes, (cb.rootfind, cb.reinitializealg)
+            cb_classes, (cb.rootfind, cb.reinitializealg, cb.initialize_save_discretes)
         )
         push!(_cbs, cb)
     end
@@ -927,7 +937,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     return VectorContinuousCallback(
         trigger, affect, affect_neg, length(eqs); initialize, finalize,
         rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-        saved_clock_partitions
+        saved_clock_partitions, initialize_save_discretes = cbs[1].initialize_save_discretes
     )
 end
 
@@ -964,23 +974,26 @@ function generate_callback(cb, sys; kwargs...)
         if is_timed && conditions(cb) isa AbstractVector
             return PresetTimeCallback(
                 trigger, affect; initialize,
-                finalize, initializealg = cb.reinitializealg, saved_clock_partitions
+                finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
+                initialize_save_discretes = cb.initialize_save_discretes
             )
         elseif is_timed
             return PeriodicCallback(
                 affect, trigger; initialize, finalize, initializealg = cb.reinitializealg,
-                saved_clock_partitions
+                saved_clock_partitions, initialize_save_discretes = cb.initialize_save_discretes
             )
         else
             return DiscreteCallback(
                 trigger, affect; initialize,
-                finalize, initializealg = cb.reinitializealg, saved_clock_partitions
+                finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
+                initialize_save_discretes = cb.initialize_save_discretes
             )
         end
     else
         return ContinuousCallback(
             trigger, affect, affect_neg; initialize, finalize,
-            rootfind = cb.rootfind, initializealg = cb.reinitializealg, saved_clock_partitions
+            rootfind = cb.rootfind, initializealg = cb.reinitializealg, saved_clock_partitions,
+            initialize_save_discretes = cb.initialize_save_discretes
         )
     end
 end

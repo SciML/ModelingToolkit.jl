@@ -1891,3 +1891,23 @@ if @isdefined(ModelingToolkit)
         @test_nowarn mtkcompile(sys)
     end
 end
+
+if !@isdefined(ModelingToolkit)
+    @testset "`initialize_save_discretes` support" begin
+        @variables x(t)
+        @discretes d1(t) d2(t)
+        cevt = SymbolicContinuousCallback(
+            [x ~ 0.5], [d1 ~ Pre(d1) + 0.1]; discrete_parameters = [d1], initialize_save_discretes = false
+        )
+        devt = SymbolicDiscreteCallback(
+            0.1, [d2 ~ Pre(d2) + 0.1]; discrete_parameters = [d2], initialize_save_discretes = false
+        )
+        @mtkcompile sys = System(
+            [D(x) ~ sin(d1 * d2 * t)], t; continuous_events = [cevt], discrete_events = [devt]
+        )
+        prob = ODEProblem(sys, [x => 0.0, d1 => 1.0, d2 => 1.0], (0.0, 10.0))
+        sol = solve(prob, Tsit5())
+        @test sol.discretes[1].t[1] > 0.0
+        @test sol.discretes[2].t[1] > 0.0
+    end
+end
