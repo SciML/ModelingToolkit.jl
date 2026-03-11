@@ -873,13 +873,6 @@ EvalAt(1.0)(p)  # Returns p
 # Works with derivatives
 D = Differential(t)
 EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
-
-# Use in optimization constraints
-@optimization_model model begin
-    @constraints begin
-        EvalAt(0.5)(x) ~ 2.0  # x must equal 2.0 at t=0.5
-    end
-end
 ```
 
 # Errors
