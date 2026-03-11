@@ -326,13 +326,9 @@ end
 initprob = ModelingToolkitBase.InitializationProblem(sys, 0.0; missing_guess_value)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
-@test initprob isa NonlinearLeastSquaresProblem
+@test initprob isa SCCNonlinearProblem
+@test initprob.probs isa Tuple{<:LinearProblem}
 if @isdefined(ModelingToolkit)
-    @test length(initprob.u0) == 4
-    initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
-    @test SciMLBase.successful_retcode(initsol)
-    @test maximum(abs.(initsol[conditions])) < 5.0e-14
-else
     @test length(initprob.u0) == 8
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
     @test SciMLBase.successful_retcode(initsol)
