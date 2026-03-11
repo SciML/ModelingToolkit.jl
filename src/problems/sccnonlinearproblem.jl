@@ -391,6 +391,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                 Moshi.Match.@match missing_guess_value begin
                     MissingGuessValue.Constant(val) => begin
                         _u0[symbolic_idxs] .= val
+                        _u0 = unwrap_const.(_u0)
                         cval = Symbolics.SConst(val)
                         for j in symbolic_idxs
                             write_possibly_indexed_array!(op, dvs[vscc[j]], cval, COMMON_NOTHING)

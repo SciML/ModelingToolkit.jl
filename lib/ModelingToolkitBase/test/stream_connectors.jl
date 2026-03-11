@@ -575,7 +575,7 @@ end
         vars = @variables begin
             p(t), [guess = 0.0, description = "Pressure, Pa"]
             md(t), [connect = Flow, guess = 0.0, description = "Mass flow, kg/s"]
-            x(t)[1:Ns], [connect = Stream, guess = 1 / Ns, description = "Mass fractions, -"]
+            x(t)[1:Ns], [connect = Stream, guess = ones(Ns) / Ns, description = "Mass fractions, -"]
         end
         System(Equation[], t, vars, []; name = name)
     end

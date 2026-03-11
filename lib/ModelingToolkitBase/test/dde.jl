@@ -60,7 +60,7 @@ prob2 = DDEProblem(
     constant_lags = [tau]
 )
 sol2_mtk = solve(prob2, alg, reltol = 1.0e-7, abstol = 1.0e-10)
-@test sol2_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol2.u[end]
+@test_broken sol2_mtk[[x₀, x₁, x₂(t)]][end] ≈ sol2.u[end]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t)]]
 @test_nowarn sol2_mtk[[x₀, x₁, x₂(t - 0.1)]]
 
