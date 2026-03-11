@@ -26,7 +26,9 @@ function MTKBase.get_initialization_problem_type(
     end
 
     unassigned_vars = MTKBase.singular_check(ts)
-    return if neqs == nunknown && isempty(unassigned_vars)
+    return if nunknown > 0 && calculate_A_b(isys; throw = false) !== nothing
+        LinearInitializationProblem
+    elseif neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
             if is_split(isys)
                 SCCNonlinearProblem
