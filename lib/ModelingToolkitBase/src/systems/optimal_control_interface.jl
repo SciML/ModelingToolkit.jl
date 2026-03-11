@@ -579,9 +579,15 @@ function add_equational_constraints!(model, sys, pmap, tspan, scales = Dict())
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
     get_param_substitution_rules!(rules, pmap)
     get_differential_substitution_rules!(rules, model, sys)
+    dvs = unknowns(sys)
     diff_eqs = fixpoint_sub(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
-    for eq in diff_eqs
-        add_constraint!(model, eq.lhs ~ unwrap_const(eq.rhs) * model.tₛ)
+    for (i, eq) in enumerate(diff_eqs)
+        # User-provided scales override metadata scales
+        s = get(scales, dvs[i], getnominal(dvs[i]))
+        # Scale the entire residual, not each side independently.
+        # (∂x - tₛ*f(x)) / scale == 0 keeps the derivative term unscaled by tₛ,
+        # preventing degenerate solutions where tₛ → 0 trivially satisfies dynamics.
+        add_constraint!(model, (unwrap_const(eq.lhs) - unwrap_const(eq.rhs) * model.tₛ) / s ~ 0)
     end
 
     alg_eqs = fixpoint_sub(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))
