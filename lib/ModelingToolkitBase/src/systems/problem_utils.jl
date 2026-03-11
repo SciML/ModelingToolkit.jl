@@ -823,6 +823,14 @@ function get_mtkparameters_reconstructor(
                 Vector{bufsize.type}
             end
         )
+        
+        diffcache_params = SU.getmetadata(dstsys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+        diffcache_buffer_idx = 0
+        if !isempty(diffcache_params)
+            representative = first(keys(diffcache_params))
+            diffcache_buffer_idx, _ = ic.nonnumeric_idx[representative]
+            @set! buftypes[diffcache_buffer_idx] = identity
+        end
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
             Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘
@@ -834,12 +842,17 @@ function get_mtkparameters_reconstructor(
     getters = (
         tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter,
     )
-    getter = let getters = getters
+    getter = let getters = getters, diffcache_buffer_idx = diffcache_buffer_idx
         function _getter(valp, initprob)
             oldcache = parameter_values(initprob).caches
+            initialvals = getters[2](valp)
+            nonnumerics = getters[5](valp)
+            if !iszero(diffcache_buffer_idx)
+                @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{eltype(initialvals)}.(nonnumerics[diffcache_buffer_idx])
+            end
             return MTKParameters(
-                getters[1](valp), getters[2](valp), getters[3](valp),
-                getters[4](valp), getters[5](valp), oldcache isa Tuple{} ? () :
+                getters[1](valp), initialvals, getters[3](valp),
+                getters[4](valp), nonnumerics, oldcache isa Tuple{} ? () :
                     copy.(oldcache)
             )
         end

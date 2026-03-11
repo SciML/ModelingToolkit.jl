@@ -178,7 +178,15 @@ function IndexCache(sys::AbstractSystem)
         push!(disc_buffer_templates, map(Base.Fix1(BufferTemplate, symtype) ∘ length, disc_syms_by_partition))
     end
 
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    # Diffcache params added via `add_diffcache` are special.
+    for p in keys(diffcache_params)
+        buffer = get!(Set{SymbolicT}, nonnumeric_buffers, DiffCacheAllocatorAPIWrapper{Number})
+        push!(buffer, p)
+    end
+
     for p in parameters(sys; initial_parameters = true)
+        haskey(diffcache_params, p) && continue
         ctype = symtype(p)
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)::TypeT

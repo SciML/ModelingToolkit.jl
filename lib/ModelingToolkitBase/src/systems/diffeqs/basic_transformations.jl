@@ -1138,3 +1138,67 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     sys = complete(sys; split = is_split(sys))
     return sys
 end
+
+const DIFFCACHE_PREFIX = Vector{UInt8}("__diffcacheₘₜₖ#")
+
+function get_diffcache_parameter_name(cnt::Int)
+    buffer = Vector{UInt8}()
+    sizehint!(buffer, length(DIFFCACHE_PREFIX) + ndigits(cnt))
+    append!(buffer, DIFFCACHE_PREFIX)
+    while cnt > 0
+        push!(buffer, '0' + (cnt % 10))
+        cnt = div(cnt, 10)
+    end
+    reverse!(@view(buffer[(length(DIFFCACHE_PREFIX) + 1):end]))
+    return Symbol(buffer)
+end
+
+abstract type DiffCacheParams end
+
+"""
+    $TYPEDEF
+
+A wrapper around a `DiffCache` enabling it to be used with SymbolicUtils' `with_allocator`.
+"""
+struct DiffCacheAllocatorAPIWrapper{T}
+    cache::DiffCache{Vector{T}, Vector{T}}
+end
+
+DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper{T}) where {T} = dcapiw
+
+function (dcapiw::DiffCacheAllocatorAPIWrapper)(reference, sz::NTuple{N, Int}) where {N}
+    return reshape(get_tmp(dcapiw.cache, reference), sz)
+end
+
+(dcapiw::DiffCacheAllocatorAPIWrapper)(reference) = Base.Fix1(dcapiw, reference)
+
+function Base.convert(::Type{DiffCacheAllocatorAPIWrapper{T}}, dcapiw::DiffCacheAllocatorAPIWrapper{R}) where {T, R}
+    buffer = get_tmp(dcapiw.cache, one(R))
+    len = length(buffer)
+    new_cache = DiffCache(zeros(T, len))
+    return DiffCacheAllocatorAPIWrapper(new_cache)
+end
+
+"""
+    $TYPEDEF
+
+Add a symbolic `DiffCache` containing a buffer of length `len` to `sys`. Return the new system
+and the symbolic parameter in it representing the added `DiffCache` wrapped in a
+[`DiffCacheAllocatorAPIWrapper`](@ref).
+
+Only intended for internal use by ModelingToolkitBase, ModelingToolkitTearing and ModelingToolkit.
+"""
+function add_diffcache(sys::AbstractSystem, len::Int)
+    diffcaches = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    cnt = length(diffcaches) + 1
+    name = get_diffcache_parameter_name(cnt)
+    param = unwrap(only(@parameters ($name::Any)(..)::Any))
+
+    diffcaches[param] = len
+    sys = SU.setmetadata(sys, DiffCacheParams, diffcaches)
+
+    ps = copy(get_ps(sys))
+    push!(ps, param)
+    @set! sys.ps = ps
+    return sys, param
+end
