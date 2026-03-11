@@ -172,6 +172,32 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     end
 end
 
+function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunable_params)
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params)
+    t = MTK.get_iv(sys)
+    for (i, (lo, hi)) in state_bounds
+        var = MTK.lowered_var(m, :U, i, t)
+        MTK.add_constraint!(m, var ≳ lo)
+        MTK.add_constraint!(m, var ≲ hi)
+    end
+    for (i, (lo, hi)) in input_bounds
+        var = MTK.lowered_var(m, :V, i, t)
+        MTK.add_constraint!(m, var ≳ lo)
+        MTK.add_constraint!(m, var ≲ hi)
+    end
+    for (i, (lo, hi)) in param_bounds
+        P_sym = Symbolics.value(pysym_getproperty(m.model_sym, :P))
+        p_var = P_sym[i]
+        MTK.add_constraint!(m, p_var ≳ lo)
+        MTK.add_constraint!(m, p_var ≲ hi)
+    end
+    if !isnothing(tf_bounds)
+        tₛ_sym = pysym_getproperty(m.model_sym, :tₛ)
+        MTK.add_constraint!(m, tₛ_sym ≳ tf_bounds[1])
+        MTK.add_constraint!(m, tₛ_sym ≲ tf_bounds[2])
+    end
+end
+
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
     expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = false)
