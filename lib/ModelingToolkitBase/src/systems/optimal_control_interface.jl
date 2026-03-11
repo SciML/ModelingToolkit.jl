@@ -344,6 +344,12 @@ function process_DynamicOptProblem(
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
+    # Apply function-valued start trajectories
+    for (var, traj) in initial_trajectory
+        idx = get(stidxmap, var, nothing)
+        idx === nothing && continue
+        set_initial_trajectory!(model, U, idx, traj)
+    end
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     P = generate_tunable_params!(model, p0, length(tunable_params))
     # Add the symbolic representation of the tunable parameters to the map
@@ -375,6 +381,7 @@ function process_DynamicOptProblem(
 end
 
 function register_operator! end
+function set_initial_trajectory! end
 function generate_time_variable! end
 function generate_internal_model end
 function generate_state_variable! end
