@@ -562,8 +562,9 @@ function add_user_constraints!(model, sys, tspan, pmap)
     rules = Dict{Any, Any}()
     get_toterm_substitution_rules!(rules, cons_dvs)
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
-    get_param_substitution_rules!(rules, pmap)
     get_observed_substitution_rules!(rules, sys)
+    # substitute parameters at the end
+    get_param_substitution_rules!(rules, pmap)
     # `fixpoint_sub` to recursively substitute into `toterm` rules
     jconstraints = fixpoint_sub(jconstraints, rules; fold = Val(true), filterer = Returns(true))
 
