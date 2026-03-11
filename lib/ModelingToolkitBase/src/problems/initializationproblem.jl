@@ -202,7 +202,8 @@ struct LinearInitializationProblem{iip} end
 function LinearInitializationProblem{iip}(
         sys::AbstractSystem, op; u0_constructor = identity, kwargs...
     ) where {iip}
-    linprob = LinearProblem{iip}(sys, op; u0_constructor, kwargs...)
+    # check_length = false allows using this for non-square systems
+    linprob = LinearProblem{iip}(sys, op; u0_constructor, check_length = false, kwargs...)
     # Required for filling missing parameter values when this is an initialization
     # problem
     if state_values(linprob) === nothing
