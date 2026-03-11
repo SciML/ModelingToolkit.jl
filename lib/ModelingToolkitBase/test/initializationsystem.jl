@@ -1982,10 +1982,21 @@ end
         initialization_eqs = [2u ~ 1], guesses = [u => 0.5])
     linsys = mtkcompile(linsys)
 
-    initprob = ModelingToolkitBase.InitializationProblem(linsys, 0.0)
-    @test initprob isa LinearProblem
+    if @isdefined(ModelingToolkit)
+        initprob = ModelingToolkitBase.InitializationProblem(
+            linsys, 0.0; initsys_mtkcompile_kwargs = (; conservative = true)
+        )
+    else
+        initprob = ModelingToolkitBase.InitializationProblem(linsys, 0.0)
+    end
+    @test initprob isa SCCNonlinearProblem
+    @test initprob.probs isa Tuple{<:LinearProblem}
 
-    prob = ODEProblem(linsys, [], (0.0, 1.0))
+    if @isdefined(ModelingToolkit)
+        prob = ODEProblem(linsys, [], (0.0, 1.0); initsys_mtkcompile_kwargs = (; conservative = true))
+    else
+        prob = ODEProblem(linsys, [], (0.0, 1.0))
+    end
     @test prob.f.initializeprob isa SCCNonlinearProblem
     @test prob.f.initializeprob.probs isa Tuple{<:LinearProblem}
     sol = solve(prob, Tsit5())
