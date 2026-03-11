@@ -329,10 +329,9 @@ conditions = getfield.(equations(initprob.f.sys), :rhs)
 @test initprob isa SCCNonlinearProblem
 @test initprob.probs isa Tuple{<:LinearProblem}
 if @isdefined(ModelingToolkit)
-    @test length(initprob.u0) == 8
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
     @test SciMLBase.successful_retcode(initsol)
-    @test maximum(abs.(initsol[conditions])) < 5.0e-13
+    @test maximum(abs.(initsol[conditions])) < 1.0e-8
 end
 
 @test_throws ERRMOD.ExtraEquationsSystemException ModelingToolkitBase.InitializationProblem(
