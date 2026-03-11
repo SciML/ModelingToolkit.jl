@@ -322,7 +322,6 @@ function MTK.prepare_and_optimize!(
         prob::JuMPDynamicOptProblem, solver::JuMPCollocation; verbose = false, kwargs...
     )
     model = prob.wrapped_model.model
-    verbose || set_silent(model)
     # Unregister current solver constraints
     for con in all_constraints(model)
         if occursin("solve", JuMP.name(con))
@@ -339,6 +338,11 @@ function MTK.prepare_and_optimize!(
     end
     add_solve_constraints!(prob, solver.tableau)
     set_optimizer(model, solver.solver)
+    # `set_optimizer` resets the backend, so the silent flag must be applied
+    # afterwards or it is discarded. `unset_silent` (rather than an
+    # optimizer-specific option such as Ipopt's `print_level`) keeps this
+    # working with any optimizer.
+    verbose ? unset_silent(model) : set_silent(model)
     optimize!(model)
     return model
 end
@@ -348,9 +352,13 @@ function MTK.prepare_and_optimize!(
         solver::InfiniteOptCollocation; verbose = false, kwargs...
     )
     model = prob.wrapped_model.model
-    verbose || set_silent(model)
     set_derivative_method(model[:t], solver.derivative_method)
     set_optimizer(model, solver.solver)
+    # `set_optimizer` resets the backend, so the silent flag must be applied
+    # afterwards or it is discarded. `unset_silent` (rather than an
+    # optimizer-specific option such as Ipopt's `print_level`) keeps this
+    # working with any optimizer.
+    verbose ? unset_silent(model) : set_silent(model)
     optimize!(model)
     return model
 end
