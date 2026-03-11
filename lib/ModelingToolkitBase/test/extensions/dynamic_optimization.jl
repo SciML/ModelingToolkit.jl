@@ -356,6 +356,31 @@ end
     end
 end
 
+@testset "Composed system with bound inputs" begin
+    # When subsystems are connected, inputs become "bound" in equations.
+    # Optimal control should still treat them as control variables.
+    @variables x(t) u(t) [input = true, bounds = (-1, 1)]
+    costs = [EvalAt(2.0)(x)^2]
+    cons = [EvalAt(0.0)(x) ~ 1.0]
+    @named plant = System([D(x) ~ u], t; costs, constraints = cons)
+
+    @variables y(t) [output = true] v(t) [input = true, bounds = (-1, 1)]
+    @named gain = System([y ~ v], t)
+
+    @named composed = System(
+        [connect(gain.y, plant.u)], t; systems = [plant, gain])
+    sys = mtkcompile(composed; inputs = [gain.v])
+
+    # After mtkcompile with connect, the input is bound but should still be a control
+    @test !isempty(M.inputs(sys))
+    @test isempty(M.unbound_inputs(sys))
+
+    jprob = JuMPDynamicOptProblem(sys, [plant.x => 1.0, gain.v => 0.0], (0.0, 2.0); dt = 0.1)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
+    # Minimizing x(2)² with D(x) = u, x(0) = 1 → x(2) = 0 is achievable and optimal
+    @test jsol.sol[plant.x][end] ≈ 0.0 atol=1e-5
+end
+
 @testset "Free final time problems" begin
 
     @variables x(..) u(..) [input = true, bounds = (0, 1)]
