@@ -365,6 +365,8 @@ function process_DynamicOptProblem(
         dim = fieldcount(typeof(val).parameters[2])  # number of args from Tuple type
         pmap[sym] = register_operator!(fullmodel, dim, val, nameof(sym))
     end
+
+    set_variable_bounds!(fullmodel, sys, pmap, tspan[2], tunable_params, bounds)
     add_cost_function!(fullmodel, sys, tspan, pmap)
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
@@ -400,31 +402,46 @@ function f_wrapper(f, Uₙ, Vₙ, p, P, t)
     end
 end
 
-function set_variable_bounds!(m, sys, pmap, tf)
-    @unpack model, U, V, tₛ = m
-    t = get_iv(sys)
-    for (i, u) in enumerate(unknowns(sys))
-        var = lowered_var(m, :U, i, t)
-        if hasbounds(u)
-            lo, hi = getbounds(u)
-            add_constraint!(m, var ≳ Symbolics.fixpoint_sub(lo, pmap))
-            add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
-        end
+"""
+    extract_variable_bounds(sys, pmap, tf, tunable_params)
+
+Extract and parameter-substitute variable bounds from the system.
+Returns `(; state_bounds, input_bounds, param_bounds, tf_bounds)` where each
+`*_bounds` is a `Dict{Int, Tuple{Any, Any}}` mapping variable index to `(lo, hi)`,
+and `tf_bounds` is either `nothing` or a `(lo, hi)` tuple.
+"""
+function extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds = Dict())
+    state_bounds = _extract_bounds(unknowns(sys), pmap)
+    input_bounds = _extract_bounds(inputs(sys), pmap)
+    param_bounds = _extract_bounds(tunable_params, pmap)
+    # Merge user-provided bounds (override metadata bounds)
+    dvs = unknowns(sys)
+    for (var, (lo, hi)) in user_bounds
+        idx = findfirst(v -> isequal(v, var), dvs)
+        idx === nothing && continue
+        state_bounds[idx] = (lo, hi)
     end
-    for (i, v) in enumerate(unbound_inputs(sys))
-        var = lowered_var(m, :V, i, t)
+    tf_bounds = if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
+        lo, hi = getbounds(tf)
+        (Symbolics.fixpoint_sub(lo, pmap), Symbolics.fixpoint_sub(hi, pmap))
+    else
+        nothing
+    end
+    return (; state_bounds, input_bounds, param_bounds, tf_bounds)
+end
+
+function _extract_bounds(vars, pmap)
+    bounds = Dict{Int, Tuple{Any, Any}}()
+    for (i, v) in enumerate(vars)
         if hasbounds(v)
             lo, hi = getbounds(v)
-            add_constraint!(m, var ≳ Symbolics.fixpoint_sub(lo, pmap))
-            add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
+            bounds[i] = (Symbolics.fixpoint_sub(lo, pmap), Symbolics.fixpoint_sub(hi, pmap))
         end
     end
-    return if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
-        lo, hi = getbounds(tf)
-        set_lower_bound(tₛ, Symbolics.fixpoint_sub(lo, pmap))
-        set_upper_bound(tₛ, Symbolics.fixpoint_sub(hi, pmap))
-    end
+    return bounds
 end
+
+function set_variable_bounds! end
 
 is_free_final(model) = model.is_free_final
 

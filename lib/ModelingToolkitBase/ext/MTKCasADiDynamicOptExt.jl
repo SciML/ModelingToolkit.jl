@@ -154,6 +154,26 @@ end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params)
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params)
+    for (i, (lo, hi)) in state_bounds
+        subject_to!(m.model, m.U.u[i, :] >= lo)
+        subject_to!(m.model, m.U.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in input_bounds
+        subject_to!(m.model, m.V.u[i, :] >= lo)
+        subject_to!(m.model, m.V.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in param_bounds
+        subject_to!(m.model, m.P[i] >= lo)
+        subject_to!(m.model, m.P[i] <= hi)
+    end
+    if !isnothing(tf_bounds)
+        subject_to!(m.model, m.tₛ >= tf_bounds[1])
+        subject_to!(m.model, m.tₛ <= tf_bounds[2])
+    end
+end
+
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     @unpack model, U = m
     for i in u0_idxs
