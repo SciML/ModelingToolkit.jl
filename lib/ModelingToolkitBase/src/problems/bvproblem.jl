@@ -45,7 +45,7 @@
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
     end
 
-    kwargs = process_kwargs(sys; expression, kwargs...)
+    kwargs = process_kwargs(sys; expression, tspan, kwargs...)
     args = (; bvpfn, u0, tspan, p)
 
     return maybe_codegen_scimlproblem(expression, BVProblem{iip}, args; kwargs...)

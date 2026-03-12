@@ -112,7 +112,8 @@
     # to process_events (which may create ImplicitDiscreteProblems for affect subsystems)
     op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
-        sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true
+        sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
+        tspan
     )
 
     if rng !== nothing

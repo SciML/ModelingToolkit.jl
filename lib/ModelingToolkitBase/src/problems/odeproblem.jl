@@ -115,7 +115,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
     )
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, _skip_events, kwargs...
+        sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
     )
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
@@ -137,7 +137,7 @@ end
         is_steadystateprob = true, kwargs...
     )
 
-    kwargs = process_kwargs(sys; expression, kwargs...)
+    kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
 
     maybe_codegen_scimlproblem(expression, SteadyStateProblem{iip}, args; kwargs...)
