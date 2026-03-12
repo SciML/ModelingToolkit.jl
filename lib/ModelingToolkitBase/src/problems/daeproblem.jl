@@ -85,7 +85,7 @@ end
 
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module,
-        op, kwargs...
+        op, tspan, kwargs...
     )
 
     diffvars = collect_differential_variables(sys)
