@@ -184,7 +184,7 @@ function generate_initializesystem_timevarying(
 
     vars = collect(init_vars_set)
     pars = collect(init_ps)
-    return System(
+    isys = System(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
@@ -197,6 +197,9 @@ function generate_initializesystem_timevarying(
         discover_from_metadata = false,
         kwargs...
     )
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    isys = SU.setmetadata(isys, DiffCacheParams, diffcache_params)
+    return isys
 end
 
 get_maxiters(subrules::AbstractDict) = max(3, min(1000, length(subrules)))
@@ -341,7 +344,7 @@ function generate_initializesystem_timeindependent(
 
     vars = collect(init_vars_set)
     pars = collect(init_ps)
-    return System(
+    isys = System(
         Vector{Equation}(eqs_ics),
         vars,
         pars;
@@ -352,6 +355,9 @@ function generate_initializesystem_timeindependent(
         discover_from_metadata = false,
         kwargs...
     )
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    isys = SU.setmetadata(isys, DiffCacheParams, diffcache_params)
+    return isys
 end
 
 function add_trivial_initsys_vars!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}}, dvs::Vector{SymbolicT}, trueobs::Vector{Equation})

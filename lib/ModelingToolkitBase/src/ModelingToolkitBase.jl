@@ -97,7 +97,7 @@ import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 import SciMLPublic: @public
 import PreallocationTools
-import PreallocationTools: DiffCache
+import PreallocationTools: DiffCache, get_tmp
 import FillArrays
 using BipartiteGraphs
 import Random: AbstractRNG

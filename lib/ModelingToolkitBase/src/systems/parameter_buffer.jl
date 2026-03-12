@@ -65,6 +65,7 @@ function MTKParameters(
         error("Cannot create MTKParameters if system does not have index_cache")
     end
     all_ps = Set(get_ps(sys))
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
     if !fast_path
         op = operating_point_preprocess(sys, op)
         if floatT === nothing
@@ -91,7 +92,7 @@ function MTKParameters(
             haskey(op, arr) || continue
             push!(to_rm, p)
         end
-        setdiff!(missing_ps, keys(op), to_rm)
+        setdiff!(missing_ps, keys(op), to_rm, keys(diffcache_params))
         isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
     end
 
@@ -152,7 +153,20 @@ function MTKParameters(
         end
         return done
     end
+
+    diffcaches_buffer_idx = 0
+    diffcache_sizes = zeros(Int, length(diffcache_params))
+    if !isempty(diffcache_params)
+        representative = first(keys(diffcache_params))
+        diffcaches_buffer_idx, _ = ic.nonnumeric_idx[representative]
+        for (param, len) in diffcache_params
+            _, j = ic.nonnumeric_idx[param]
+            diffcache_sizes[j] = len
+        end
+    end
+
     for sym in all_ps
+        haskey(diffcache_params, sym) && continue
         val = fixpoint_sub(sym, op; maxiters = max(div(substitution_limit, 2), 2), fold = Val(true))
         ctype = symtype(sym)
         if !SU.isconst(val)
@@ -198,6 +212,15 @@ function MTKParameters(
     end
     disc_buffer = narrow_buffer_type.(disc_buffer; p_constructor)
     const_buffer = narrow_buffer_type.(const_buffer; p_constructor)
+
+    if !iszero(diffcaches_buffer_idx)
+        cache_elT = eltype(initials_buffer)
+        diffcaches_elT = DiffCacheAllocatorAPIWrapper{cache_elT}
+        @set! nonnumeric_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(nonnumeric_buffer[diffcaches_buffer_idx])
+        for (i, len) in enumerate(diffcache_sizes)
+            nonnumeric_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
+        end
+    end
     # Don't narrow nonnumeric types
     if !isempty(nonnumeric_buffer)
         nonnumeric_buffer = map(p_constructor, nonnumeric_buffer)

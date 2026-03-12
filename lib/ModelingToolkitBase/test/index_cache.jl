@@ -1,5 +1,9 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLStructures
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback
+using OrdinaryDiffEq
+import SymbolicUtils as SU
+using PreallocationTools: DiffCache
+using ForwardDiff
 using Symbolics: unwrap
 using Setfield: @set!
 using Test
@@ -138,4 +142,26 @@ end
     # it uses `is_parameter` to check if `discrete_parameters` are in the parameters of
     # the system.
     @test_nowarn complete(sys)
+end
+
+@testset "Special `DiffCache` params" begin
+    @variables x(t)
+    @named sys = System([D(x) ~ 2x + t], t)
+    sys, dcp = ModelingToolkitBase.add_diffcache(sys, 8)
+
+    @test SU.symtype(dcp) === Any
+    sys = complete(sys)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    diffcachewrapper = prob.ps[dcp]
+    arr = diffcachewrapper(1.0, (2, 2, 2))
+    @test arr isa Array{Float64, 3}
+    @test size(arr) == (2, 2, 2)
+    dual = ForwardDiff.Dual(1.0)
+    arr = diffcachewrapper(dual, (4, 2))
+    @test arr isa AbstractMatrix{typeof(dual)}
+    @test size(arr) == (4, 2)
+
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+    idata = prob.f.initialization_data
+    @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(prob, idata.initializeprob)
 end
