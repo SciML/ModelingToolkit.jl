@@ -537,12 +537,16 @@ The condition can be one of:
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
 - eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
+- A `SciMLBase.Clock(dt; phase)` - events trigger with period `dt` and phase `phase`.
+  Note that this form will ignore the `initialize_save_discretes` keyword argument in the
+  interest of correctness. The callback will trigger and save at `tspan[1]` if the clock
+  would tick at `tspan[1]`.
 
 Arguments: 
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback
-    conditions::Union{Number, Vector{<:Number}, SymbolicT}
+    conditions::Union{Number, Vector{<:Number}, SymbolicT, SciMLBase.TimeDomain}
     affect::Union{Affect, SymbolicAffect, Nothing}
     initialize::Union{Affect, SymbolicAffect, Nothing}
     finalize::Union{Affect, SymbolicAffect, Nothing}
@@ -551,17 +555,26 @@ struct SymbolicDiscreteCallback <: AbstractCallback
 end
 
 function SymbolicDiscreteCallback(
-        condition::Union{SymbolicT, Number, Vector{<:Number}}, affect = nothing;
-        initialize = nothing, finalize = nothing,
+        condition::Union{SymbolicT, Number, Vector{<:Number}, SciMLBase.TimeDomain},
+        affect = nothing; initialize = nothing, finalize = nothing,
         reinitializealg = nothing, initialize_save_discretes = true, kwargs...
     )
     # Manual error check (to prevent events like `[X < 5.0] => [X ~ Pre(X) + 10.0]` from being created).
     (condition isa Vector) && (eltype(condition) <: Num) &&
         error("Vectors of symbolic conditions are not allowed for `SymbolicDiscreteCallback`.")
-    @assert !(condition isa SymbolicT && symtype(condition) != Bool)
-    c = is_timed_condition(condition) ? condition : value(scalarize(condition))
+    if condition isa SciMLBase.TimeDomain
+        if !SciMLBase.isclock(condition)
+            throw(
+                ArgumentError("Clock given to `SymbolicDiscreteCallback` must be a `SciMLBase.Clock`.")
+            )
+        end
+        c = condition
+    else
+        @assert !(condition isa SymbolicT && symtype(condition) != Bool)
+        c = is_timed_condition(condition) ? condition : value(scalarize(condition))
 
-    c = is_timed_condition(condition) ? condition : value(scalarize(condition))
+        c = is_timed_condition(condition) ? condition : value(scalarize(condition))
+    end
     if isnothing(reinitializealg)
         if any(
                 a -> a isa ImperativeAffect,
@@ -609,6 +622,8 @@ function is_timed_condition(condition::T) where {T}
         true
     elseif T <: AbstractVector
         eltype(condition) <: Real
+    elseif T <: SciMLBase.TimeDomain
+        true
     else
         false
     end
@@ -941,7 +956,7 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     )
 end
 
-function generate_callback(cb, sys; kwargs...)
+function generate_callback(cb, sys; tspan = nothing, kwargs...)
     is_timed = is_timed_condition(conditions(cb))
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -976,6 +991,14 @@ function generate_callback(cb, sys; kwargs...)
                 trigger, affect; initialize,
                 finalize, initializealg = cb.reinitializealg, saved_clock_partitions,
                 initialize_save_discretes = cb.initialize_save_discretes
+            )
+        elseif is_timed && trigger isa SciMLBase.TimeDomain
+            trigger_at_init = iszero((tspan[1] - trigger.phase) % trigger.dt)
+            return PeriodicCallback(
+                affect, trigger.dt; phase = trigger.phase, initial_affect = trigger_at_init,
+                initialize, finalize,
+                initializealg = cb.reinitializealg, saved_clock_partitions,
+                initialize_save_discretes = trigger_at_init
             )
         elseif is_timed
             return PeriodicCallback(
@@ -1202,9 +1225,9 @@ merge_cb(x, y) = CallbackSet(x, y)
 """
 Generate the CallbackSet for a ODESystem or SDESystem.
 """
-function process_events(sys; callback = nothing, kwargs...)
+function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
-    discrete_cbs = generate_discrete_callbacks(sys; kwargs...)
+    discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
     cb = merge_cb(contin_cbs, callback)
     return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
 end

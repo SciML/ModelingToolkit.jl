@@ -1706,14 +1706,16 @@ end
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
-        _skip_events = false, _skip_tstops = false, kwargs...
+        _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
     )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
 
     if is_time_dependent(sys)
         if expression == Val{false} && !_skip_events
-            cbs = process_events(sys; callback, eval_expression, eval_module, kwargs...)
+            cbs = process_events(
+                sys; callback, eval_expression, eval_module, tspan, kwargs...
+            )
             if cbs !== nothing
                 kwargs1 = merge(kwargs1, (callback = cbs,))
             end

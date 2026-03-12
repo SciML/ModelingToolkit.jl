@@ -1910,4 +1910,31 @@ if !@isdefined(ModelingToolkit)
         @test sol.discretes[1].t[1] > 0.0
         @test sol.discretes[2].t[1] > 0.0
     end
+
+    @testset "`SciMLBase.Clock(dt; phase)` as `SymbolicDiscreteCallback` condition" begin
+        @variables x(t)
+        @discretes d(t)
+
+        @testset "Zero phase" begin
+            devt = SymbolicDiscreteCallback(
+                SciMLBase.Clock(0.1; phase = 0.0), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.0, 1.0))
+            sol = solve(prob, Tsit5())
+            # It shouldn't tick at `tspan[2]`
+            @test sol.discretes[1].t ≈ 0.0:0.1:0.999
+            @test sol[d] ≈ 1:10
+        end
+        @testset "Nonzero phase" begin
+            devt = SymbolicDiscreteCallback(
+                SciMLBase.Clock(0.1; phase = 0.05), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.0, 1.0))
+            sol = solve(prob, Tsit5())
+            @test sol.discretes[1].t ≈ 0.05:0.1:1.0
+            @test sol[d] ≈ 1:10
+        end
+    end
 end
