@@ -154,8 +154,8 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, SymbolicUtils.unwrap_const(expr))
 
-function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tspan, tunable_params, user_bounds = Dict(), scales = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds, observed_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     for (i, (lo, hi)) in state_bounds
         set_lower_bound(m.U[i], lo)
         set_upper_bound(m.U[i], hi)
@@ -171,6 +171,26 @@ function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_pa
     if !isnothing(tf_bounds)
         set_lower_bound(m.tₛ, tf_bounds[1])
         set_upper_bound(m.tₛ, tf_bounds[2])
+    end
+
+    # Observed variable bounds: create auxiliary bounded variables + equality constraints.
+    # This "lifts" what would be nonlinear inequality constraints into variable bounds,
+    # which interior-point solvers (Ipopt) handle much more efficiently.
+    if !isempty(observed_bounds)
+        # Build JuMP substitution rules for constraint expressions
+        rules = Dict{Any, Any}()
+        MTK.get_model_vars_substitution_rules!(rules, m, sys, tspan)
+        MTK.get_observed_substitution_rules!(rules, sys)
+        MTK.get_param_substitution_rules!(rules, pmap)
+
+        for (var, (lo, hi)) in observed_bounds
+            expr = Symbolics.fixpoint_sub(var, rules; fold = Val(true), filterer = Returns(true))
+            s = get(scales, var, MTK.getnominal(var))
+            aux = @variable(m.model, variable_type = Infinite(m.model[:t]))
+            isfinite(lo) && set_lower_bound(aux, lo)
+            isfinite(hi) && set_upper_bound(aux, hi)
+            @constraint(m.model, (SymbolicUtils.unwrap_const(Symbolics.value(expr)) - aux) / s == 0)
+        end
     end
 end
 
@@ -222,7 +242,7 @@ end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
-        fix(m.U[i](0), u0[i], force = true)
+        @constraint(m.model, m.U[i](ts) == u0[i])
     end
     return
 end
