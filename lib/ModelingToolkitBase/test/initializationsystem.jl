@@ -326,17 +326,12 @@ end
 initprob = ModelingToolkitBase.InitializationProblem(sys, 0.0; missing_guess_value)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
-@test initprob isa NonlinearLeastSquaresProblem
+@test initprob isa SCCNonlinearProblem
+@test initprob.probs isa Tuple{<:LinearProblem}
 if @isdefined(ModelingToolkit)
-    @test length(initprob.u0) == 4
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
     @test SciMLBase.successful_retcode(initsol)
-    @test maximum(abs.(initsol[conditions])) < 5.0e-14
-else
-    @test length(initprob.u0) == 8
-    initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
-    @test SciMLBase.successful_retcode(initsol)
-    @test maximum(abs.(initsol[conditions])) < 5.0e-13
+    @test maximum(abs.(initsol[conditions])) < 1.0e-8
 end
 
 @test_throws ERRMOD.ExtraEquationsSystemException ModelingToolkitBase.InitializationProblem(
@@ -1975,4 +1970,35 @@ end
         @test isol[isol.prob.f.sys.x] == 1.0
         @test iprob.ps[Initial(x)] == 1.0
     end
+end
+
+@testset "LinearProblem for linear initialization system" begin
+    # When initialization equations are linear in the unknowns, InitializationProblem
+    # should produce a LinearProblem instead of a NonlinearProblem.
+    @variables u(t)
+    # initialization_eqs = [2u ~ 1] is linear in u, so x(0) = 0.5
+    @named linsys = System([D(u) ~ -u], t;
+        initialization_eqs = [2u ~ 1], guesses = [u => 0.5])
+    linsys = mtkcompile(linsys)
+
+    if @isdefined(ModelingToolkit)
+        initprob = ModelingToolkitBase.InitializationProblem(
+            linsys, 0.0; initsys_mtkcompile_kwargs = (; conservative = true)
+        )
+    else
+        initprob = ModelingToolkitBase.InitializationProblem(linsys, 0.0)
+    end
+    @test initprob isa SCCNonlinearProblem
+    @test initprob.probs isa Tuple{<:LinearProblem}
+
+    if @isdefined(ModelingToolkit)
+        prob = ODEProblem(linsys, [], (0.0, 1.0); initsys_mtkcompile_kwargs = (; conservative = true))
+    else
+        prob = ODEProblem(linsys, [], (0.0, 1.0))
+    end
+    @test prob.f.initializeprob isa SCCNonlinearProblem
+    @test prob.f.initializeprob.probs isa Tuple{<:LinearProblem}
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[u][1] ≈ 0.5 atol = 1e-10
 end

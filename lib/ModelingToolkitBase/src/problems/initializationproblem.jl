@@ -5,16 +5,18 @@ struct InitializationProblem{iip, specialization} end
     InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
 
-Generate a `NonlinearProblem`, `SCCNonlinearProblem` or `NonlinearLeastSquaresProblem` to
-represent a consistent initialization of `sys` given the initial time `t` and operating
-point `op`. The initial time can be `nothing` for time-independent systems.
+Generate a `LinearProblem`, `NonlinearProblem`, `SCCNonlinearProblem` or
+`NonlinearLeastSquaresProblem` to represent a consistent initialization of `sys` given the
+initial time `t` and operating point `op`. The initial time can be `nothing` for
+time-independent systems. A `LinearProblem` is used when the initialization system is
+linear (affine).
 
 # Keyword arguments
 
 $INITIALIZEPROB_KWARGS
 $INTERNAL_INITIALIZEPROB_KWARGS
 
-All other keyword arguments are forwarded to the wrapped nonlinear problem constructor.
+All other keyword arguments are forwarded to the wrapped problem constructor.
 """ InitializationProblem
 
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
@@ -163,7 +165,9 @@ function get_initialization_problem_type(
         @warn underdetermined_initialization_message(neqs, nunknown, "")
     end
 
-    return if neqs == nunknown
+    return if isys isa System && nunknown > 0 && calculate_A_b(isys; throw = false) !== nothing
+        LinearInitializationProblem
+    elseif neqs == nunknown
         NonlinearProblem
     else
         NonlinearLeastSquaresProblem
@@ -191,4 +195,22 @@ end
 function Base.showerror(io::IO, e::IncompleteInitializationError)
     println(io, INCOMPLETE_INITIALIZATION_MESSAGE)
     return println(io, underscore_to_D(collect(e.uninit), e.sys))
+end
+
+struct LinearInitializationProblem{iip} end
+
+function LinearInitializationProblem{iip}(
+        sys::AbstractSystem, op; u0_constructor = identity, kwargs...
+    ) where {iip}
+    # check_length = false allows using this for non-square systems
+    linprob = LinearProblem{iip}(sys, op; u0_constructor, check_length = false, kwargs...)
+    # Required for filling missing parameter values when this is an initialization
+    # problem
+    if state_values(linprob) === nothing
+        linprob = remake(
+            linprob;
+            u0 = u0_constructor(ones(eltype(linprob.A), size(linprob.A, 2)))
+        )
+    end
+    return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
 end
