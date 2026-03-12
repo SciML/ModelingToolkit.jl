@@ -372,7 +372,7 @@ function process_DynamicOptProblem(
         pmap[sym] = register_operator!(fullmodel, dim, val, nameof(sym))
     end
 
-    set_variable_bounds!(fullmodel, sys, pmap, tspan[2], tunable_params, bounds)
+    set_variable_bounds!(fullmodel, sys, pmap, tspan, tunable_params, bounds, scales)
     add_cost_function!(fullmodel, sys, tspan, pmap)
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
@@ -413,16 +413,23 @@ end
     extract_variable_bounds(sys, pmap, tf, tunable_params)
 
 Extract and parameter-substitute variable bounds from the system.
-Returns `(; state_bounds, input_bounds, param_bounds, tf_bounds)` where each
-`*_bounds` is a `Dict{Int, Tuple{Any, Any}}` mapping variable index to `(lo, hi)`,
-and `tf_bounds` is either `nothing` or a `(lo, hi)` tuple.
+Returns `(; state_bounds, input_bounds, param_bounds, tf_bounds, observed_bounds)` where
+`state_bounds`, `input_bounds`, `param_bounds` are `Dict{Int, Tuple{Any, Any}}` mapping
+variable index to `(lo, hi)`, `tf_bounds` is either `nothing` or a `(lo, hi)` tuple,
+and `observed_bounds` is a `Dict{Any, Tuple{Any, Any}}` mapping observed variable symbols
+to `(lo, hi)`. Observed bounds are sourced from variable metadata and the `user_bounds` dict
+(user bounds take priority). The backend is responsible for lifting observed bounds into
+auxiliary bounded decision variables with equality constraints.
 """
-function extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds = Dict())
+function extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    tf = last(tspan)
     state_bounds = _extract_bounds(unknowns(sys), pmap)
     input_bounds = _extract_bounds(inputs(sys), pmap)
     param_bounds = _extract_bounds(tunable_params, pmap)
     # Merge user-provided bounds (override metadata bounds)
     dvs = unknowns(sys)
+    dvs_set = Set(default_toterm.(dvs))
+    ctrls_set = Set(default_toterm.(inputs(sys)))
     for (var, (lo, hi)) in user_bounds
         idx = findfirst(v -> isequal(v, var), dvs)
         idx === nothing && continue
@@ -434,7 +441,23 @@ function extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds = Di
     else
         nothing
     end
-    return (; state_bounds, input_bounds, param_bounds, tf_bounds)
+
+    # Collect bounds on observed variables: metadata first, user overrides
+    observed_bounds = Dict{Any, Tuple{Any, Any}}()
+    for eq in observed(unhack_system(sys))
+        v = default_toterm(unwrap(eq.lhs))
+        if hasbounds(v)
+            lo, hi = getbounds(v)
+            observed_bounds[v] = (Symbolics.fixpoint_sub(lo, pmap), Symbolics.fixpoint_sub(hi, pmap))
+        end
+    end
+    for (var, (lo, hi)) in user_bounds
+        var ∈ dvs_set && continue
+        var ∈ ctrls_set && continue
+        observed_bounds[var] = (lo, hi)
+    end
+
+    return (; state_bounds, input_bounds, param_bounds, tf_bounds, observed_bounds)
 end
 
 function _extract_bounds(vars, pmap)
