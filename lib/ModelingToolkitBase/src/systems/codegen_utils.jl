@@ -379,6 +379,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     sort!(obsidxs)
     for eq in obs[obsidxs]
         push!(assignments, eq.lhs ← eq.rhs)
+        delete!(dervars_in_expr, eq.lhs)
     end
 
     for dervar in dervars_in_expr

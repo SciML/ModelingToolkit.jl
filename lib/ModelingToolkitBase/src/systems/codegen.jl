@@ -1414,7 +1414,7 @@ function build_explicit_observed_function(
 end
 
 struct CachedLinearAb
-    A::Matrix{SymbolicT}
+    A::SparseMatrixCSC{SymbolicT, Int}
     b::Vector{SymbolicT}
 end
 
@@ -1450,7 +1450,7 @@ Return matrix `A` and vector `b` such that the system `sys` can be represented a
 function calculate_A_b(sys::System; sparse = false, throw = true)
     cached_ab = check_mutable_cache(sys, CachedLinearAb, Union{CachedLinearAb, NotAffineError}, nothing)
     if cached_ab isa CachedLinearAb
-        return sparse ? SparseArrays.sparse(cached_ab.A) : cached_ab.A, cached_ab.b
+        return sparse ? cached_ab.A : collect(cached_ab.A), cached_ab.b
     elseif cached_ab isa NotAffineError
         throw || return nothing
         Base.throw(cached_ab)
@@ -1466,7 +1466,9 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         push!(rhss, -eq.rhs)
     end
     dvs = unknowns(sys)
-    A = Matrix{SymbolicT}(undef, length(rhss), length(dvs))
+    I = Int[]
+    J = Int[]
+    V = SymbolicT[]
     b = Vector{SymbolicT}(undef, length(rhss))
     query_predicate = in(Set{SymbolicT}(dvs))
     # `linear_expansion` caches values based on `var`. This loop ordering helps
@@ -1483,7 +1485,11 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
                 throw || return nothing
                 Base.throw(err)
             end
-            A[i, j] = p
+            if !SU._iszero(p)
+                push!(I, i)
+                push!(J, j)
+                push!(V, p)
+            end
             rhss[i] = q
         end
     end
@@ -1492,12 +1498,11 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         b[i] = -rhss[i]
     end
 
-    @assert all(Base.Fix1(isassigned, A), eachindex(A))
-    @assert all(Base.Fix1(isassigned, A), eachindex(b))
+    A = SparseArrays.sparse(I, J, V, length(rhss), length(dvs))
 
     store_to_mutable_cache!(sys, CachedLinearAb, CachedLinearAb(A, b))
-    if sparse
-        A = SparseArrays.sparse(A)
+    if !sparse
+        A = collect(A)
     end
     return A, b
 end
@@ -1527,6 +1532,89 @@ function generate_update_A(
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
         eval_expression, eval_module
+    )
+end
+
+struct DiagonalAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+
+    function DiagonalAMatrixWrapper(f::GeneratedFunctionWrapper{P}) where {P}
+        return new{P[2], typeof(f)}(f)
+    end
+end
+
+function DiagonalAMatrixWrapper(f::Expr)
+    return Expr(:call, DiagonalAMatrixWrapper, f)
+end
+
+function (f::DiagonalAMatrixWrapper{OOPArgs})(out::Diagonal, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::DiagonalAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return Diagonal(f.f(args...))
+end
+
+function generate_update_A(
+        sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}}; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
+    ps = reorder_parameters(sys)
+
+    res = build_function_wrapper(
+        sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
+        similarto = Vector{SymbolicT}, add_observed = false, kwargs...
+    )
+    return DiagonalAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            eval_expression, eval_module
+        )
+    )
+end
+
+struct BandedAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+    nrows::Int
+    bands::NTuple{2, Int}
+
+    function BandedAMatrixWrapper(f::GeneratedFunctionWrapper{P}, nr, bands) where {P}
+        return new{P[2], typeof(f)}(f, nr, bands)
+    end
+end
+
+function BandedAMatrixWrapper(f::Expr, nr::Int, bands::NTuple{2, Int})
+    return Expr(:call, BandedAMatrixWrapper, f, sz, bands)
+end
+
+function (f::BandedAMatrixWrapper{OOPArgs})(out::BandedMatrix, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::BandedAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return BandedMatrices._BandedMatrix(f.f(args...), f.nrows, f.bands...)
+end
+
+function generate_update_A(
+        sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}}; expression = Val{true},
+        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+    )
+    ps = reorder_parameters(sys)
+
+    parA = parent(A)
+    for i in eachindex(parA)
+        isassigned(parA, i) && continue
+        parA[i] = Symbolics.COMMON_ZERO
+    end
+    res = build_function_wrapper(
+        sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
+        similarto = Matrix{SymbolicT}, add_observed = false, kwargs...
+    )
+    return BandedAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            eval_expression, eval_module
+        ), size(A, 1), BandedMatrices.bandwidths(A)
     )
 end
 
