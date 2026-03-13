@@ -211,7 +211,7 @@ A = reshape(1:(N^2), N, N)
 eqs = xs ~ A * xs
 @named sys′ = System(eqs, [xs], [])
 sys = mtkcompile(sys′)
-@test length(equations(sys)) == 3 && length(observed(sys)) == 3
+@test isempty(equations(sys)) && length(observed(sys)) == 6 # 5 + 1 for change_origin
 
 # issue 958
 @parameters k₁ k₂ k₋₁ E₀
