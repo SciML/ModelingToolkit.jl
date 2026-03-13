@@ -365,12 +365,18 @@ function process_DynamicOptProblem(
 
     merge!(pmap, Dict(tunable_params .=> P_syms))
 
-    # Register callable parameters
+    # Register callable parameters and update MTKParameters for numerical tracing (e.g. JuMP)
+    new_nonnumeric = Tuple(convert(Vector{Any}, copy(v)) for v in p.nonnumeric)
+    p = MTKParameters(p.tunable, p.initials, p.discrete, p.constant, new_nonnumeric, p.caches)
     for (sym, val) in pmap
         val isa FunctionWrapper || continue
         dim = fieldcount(typeof(val).parameters[2])  # number of args from Tuple type
-        pmap[sym] = register_operator!(fullmodel, dim, val, nameof(sym))
+        reg_op = register_operator!(fullmodel, dim, val, nameof(sym))
+        pmap[sym] = reg_op
+        setp(sys, sym)(p, reg_op)
     end
+    narrow_nn = Tuple(map(identity, v) for v in p.nonnumeric)
+    @set! p.nonnumeric = narrow_nn
 
     set_variable_bounds!(fullmodel, sys, pmap, tspan, tunable_params, bounds, scales)
     add_cost_function!(fullmodel, sys, tspan, pmap)
