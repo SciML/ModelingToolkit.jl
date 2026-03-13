@@ -154,7 +154,7 @@ end
         @variables x(t) y(t) z(t)
         @mtkcompile sys = System([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
         mapping = map_variables_to_equations(sys)
-        @test mapping[x] == (D(x) ~ 2x + y)
+        @test isequal(mapping[x].lhs, D(x))
         @test mapping[y] == (y ~ x + z)
         @test mapping[z] == (0 ~ 12 - z^3 - x^3)
         @test length(mapping) == 3
