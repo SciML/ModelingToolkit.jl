@@ -26,7 +26,7 @@ function MTKBase.get_initialization_problem_type(
     end
 
     unassigned_vars = MTKBase.singular_check(ts)
-    return if nunknown > 0 && calculate_A_b(isys; throw = false) !== nothing
+    return if nunknown > 0 && nunknown <= neqs && calculate_A_b(isys; throw = false) !== nothing
         LinearInitializationProblem
     elseif neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0

@@ -165,7 +165,8 @@ function get_initialization_problem_type(
         @warn underdetermined_initialization_message(neqs, nunknown, "")
     end
 
-    return if isys isa System && nunknown > 0 && calculate_A_b(isys; throw = false) !== nothing
+    # Avoid using this for underdetermined systems
+    return if isys isa System && nunknown > 0 && nunknown <= neqs && calculate_A_b(isys; throw = false) !== nothing
         LinearInitializationProblem
     elseif neqs == nunknown
         NonlinearProblem
