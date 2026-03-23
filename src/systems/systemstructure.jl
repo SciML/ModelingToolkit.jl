@@ -238,8 +238,8 @@ function _mtkcompile!(
     union!(inputs, disturbance_inputs)
     state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
     state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
-    StateSelection.trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+    state, mm = StateSelection.trivial_tearing!(state, mm)
     if check_consistency
         fully_determined = StateSelection.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing
