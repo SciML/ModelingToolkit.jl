@@ -347,3 +347,9 @@ ss = alias_elimination(sys)
 @test length(equations(ss)) == length(unknowns(ss)) == 1
 ss = mtkcompile(sys)
 @test length(equations(ss)) == length(unknowns(ss)) == 2
+
+@testset "Aliases of differential variables with higher state priority are swapped" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ 2x, y ~ x], t; state_priorities = [y => 10])
+    @test isequal(only(unknowns(sys)), y)
+end
