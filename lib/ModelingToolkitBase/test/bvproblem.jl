@@ -67,25 +67,21 @@ end
     tspan = (0.0, 6.0)
 
     op = ODEProblem(pend, [u0map; parammap], tspan)
-    osol = solve(op, Vern9())
+    osol = solve(op, Vern9(), abstol=1e-10, reltol=1e-10)
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
-        pend, [u0map; parammap], tspan
-    )
+    bvp = BVProblem(pend, [u0map; parammap], tspan)
     for solver in solvers
-        sol = solve(bvp, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        sol = solve(bvp, solver(), dt = 1e-2)
+        @test isapprox(sol.u[end], osol.u[end])
         @test sol.u[1] == [π / 2, π / 2]
     end
 
     # Test out-of-place
-    bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
-        pend, [u0map; parammap], tspan
-    )
+    bvp2 = BVProblem{false, SciMLBase.FullSpecialize}(pend, [u0map; parammap], tspan)
 
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        @test isapprox(sol.u[end], osol.u[end])
         @test sol.u[1] == [π / 2, π / 2]
     end
 end
