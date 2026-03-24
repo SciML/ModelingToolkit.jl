@@ -2001,4 +2001,14 @@ end
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
     @test sol[u][1] ≈ 0.5 atol = 1e-10
+
+    @testset "Is not used for underdetermined system" begin
+        @mtkcompile linsys = System([D(u) ~ -u], t; guesses = [u => 0.5])
+        if @isdefined(ModelingToolkit)
+            prob = ODEProblem(linsys, [], (0.0, 1.0); initsys_mtkcompile_kwargs = (; conservative = true))
+        else
+            prob = ODEProblem(linsys, [], (0.0, 1.0))
+        end
+        @test !(prob.f.initialization_data.initializeprob isa SCCNonlinearProblem)
+    end
 end
