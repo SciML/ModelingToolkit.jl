@@ -149,24 +149,17 @@ end
 end
 
 function test_solvers(
-        solvers, prob, u0map, constraints, equations = []; dt = 0.005, atol = 1.0e-2
+        solvers, prob, u0map, constraints, equations = []; dt = 0.005, atol = 5.0e-6
     )
     for solver in solvers
         println("Solver: $solver")
-        sol = solve(prob, solver(), dt = dt, abstol = 1.0e-8, reltol = 1.0e-8)
+        sol = solve(prob, solver(), dt = dt)
         @test SciMLBase.successful_retcode(sol.retcode)
         p = prob.p
         t = sol.t
         bc = prob.f.bc
         ns = length(prob.u0)
 
-        cache = init(prob, solver(), dt = dt, abstol = 1.0e-8, reltol = 1.0e-8)
-        eval_sol = BoundaryValueDiffEqMIRK.EvalSol(
-            BoundaryValueDiffEqMIRK.__restructure_sol(
-                sol.u, cache.in_size
-            ), cache.mesh, cache
-        )
-        @test bc(zeros(ns), eval_sol, p, t) ≈ zeros(ns)
         if isinplace(prob.f)
             resid = zeros(ns)
             bc(resid, sol, p, t)
@@ -211,7 +204,7 @@ end
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
         lksys, u0map, tspan; guesses = guess, cse = false
     )
-    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-4)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 
     # Testing that more complicated constraints give correct solutions.
     constr = [EvalAt(0.2)(y) + EvalAt(0.8)(x) ~ 3.0, EvalAt(0.3)(y) ~ 2.0]
@@ -219,14 +212,14 @@ end
     bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
         lksys, u0map, tspan; guesses = guess
     )
-    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-4)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 
     constr = [α * β - EvalAt(0.6)(x) ~ 0.0, EvalAt(0.2)(y) ~ 3.0]
     @mtkcompile lksys = System(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
         lksys, u0map, tspan; guesses = guess
     )
-    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-4)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 end
 
 # Cartesian pendulum from the docs.
