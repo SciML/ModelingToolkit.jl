@@ -120,7 +120,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
 @fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(
         sys::System;
-        inputs = unbound_inputs(sys),
+        inputs = inputs(sys),
         disturbance_inputs = disturbances(sys),
         u0 = nothing, tgrad = false,
         jac = false, controljac = false,
@@ -299,7 +299,7 @@ function process_DynamicOptProblem(
         guesses = Dict(), kwargs...
     )
     warn_overdetermined(sys, op)
-    ctrls = unbound_inputs(sys)
+    ctrls = inputs(sys)
     states = unknowns(sys)
     tunable_params = tune_parameters ? tunable_parameters(sys) : []
 
@@ -402,7 +402,7 @@ function set_variable_bounds!(m, sys, pmap, tf)
             add_constraint!(m, var ≲ Symbolics.fixpoint_sub(hi, pmap))
         end
     end
-    for (i, v) in enumerate(unbound_inputs(sys))
+    for (i, v) in enumerate(inputs(sys))
         var = lowered_var(m, :V, i, t)
         if hasbounds(v)
             lo, hi = getbounds(v)
@@ -470,7 +470,7 @@ end
 
 function get_model_vars_substitution_rules!(rules::Dict{Any, Any}, model, sys, tspan)
     x_ops = [operation(unwrap(st)) for st in unknowns(sys)]
-    c_ops = [operation(unwrap(ct)) for ct in unbound_inputs(sys)]
+    c_ops = [operation(unwrap(ct)) for ct in inputs(sys)]
     t = get_iv(sys)
     merge!(rules, whole_t_map(model, t, x_ops, c_ops))
     (ti, tf) = tspan
