@@ -1066,7 +1066,7 @@ function DiffEqBase.anyeltypedual(
         p::Type{<:MTKParameters{T}},
         ::Type{Val{counter}} = Val{0}
     ) where {counter} where {T}
-    return DiffEqBase.__anyeltypedual(T)
+    return DiffEqBase.anyeltypedual(T)
 end
 
 # for compiling callbacks
