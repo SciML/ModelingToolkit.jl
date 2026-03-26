@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, DataInterpolations, DynamicQuantities, Test
+using LinearAlgebra, Symbolics
 using ModelingToolkitStandardLibrary.Blocks: RealInput, RealOutput
 using Symbolics: value
 using SymbolicUtils: symtype, _iszero
@@ -457,4 +458,20 @@ foofn(x) = 4
 
     @parameters foo::AbstractFoo
     @test_throws ["does not exist"] respecialize(sys, [foo => Bar()])
+end
+
+@testset "`truncate_constant_floats`" begin
+    @variables x(t) y(t)
+    eqs = [
+        D(x) ~ sum(Symbolics.SConst([1.23456, 2.34567])) ^ y
+    ]
+    obs = [
+        y ~ norm(Symbolics.SConst(2.3564 + 12.34345im))
+    ]
+    @named sys = System(eqs, t; observed = obs)
+
+    sys32 = ModelingToolkitBase.truncate_constant_floats(sys, Val{32}())
+    eqrhs = equations(sys32)[1].rhs
+    @test arguments(arguments(eqrhs)[1])[1] === Symbolics.SConst(Symbolics.SConst(Float32[1.23456, 2.34567]))
+    @test observed(sys32)[1].rhs === norm(Symbolics.SConst(ComplexF32(2.3564 + 12.34345im)))
 end
