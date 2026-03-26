@@ -5,6 +5,7 @@ using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constan
 using ModelingToolkitStandardLibrary.Electrical, ModelingToolkitStandardLibrary.Blocks
 using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
+using DiffEqBase
 using ForwardDiff
 using JET
 using Test
@@ -505,4 +506,18 @@ end
     prob = ODEProblem(sys, SA[x => 1.0, p => 1.0], (0.0, 1.0))
     @test isbits(prob.p)
     @test isbits(prob.f.initialization_data.initializeprob.p)
+end
+
+@testset "`anyeltypedual`" begin
+    @variables x(t)
+    @parameters p
+    @named sys = System(D(x) ~ x * p, t)
+    sys = complete(sys)
+    ps = MTKParameters(sys, [p => 1.0])
+    @test !(DiffEqBase.anyeltypedual(ps) <: ForwardDiff.Dual)
+    @test !(DiffEqBase.anyeltypedual(typeof(ps)) <: ForwardDiff.Dual)
+    buf, reset, alias = canonicalize(Tunable(), ps)
+    fps = reset(ForwardDiff.Dual.(buf))
+    @test DiffEqBase.anyeltypedual(fps) <: ForwardDiff.Dual
+    @test DiffEqBase.anyeltypedual(typeof(fps)) <: ForwardDiff.Dual
 end
