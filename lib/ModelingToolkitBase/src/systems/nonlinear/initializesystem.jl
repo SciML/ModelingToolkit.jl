@@ -729,7 +729,7 @@ function SciMLBase.late_binding_update_u0_p(
         newp = meta.set_initial_unknowns!(newp, newu0)
     end
 
-    if eltype(p) <: Pair
+    if eltype(p) <: Pair && !isempty(p)
         syms = []
         vals = []
         if allsyms === nothing
