@@ -1202,3 +1202,53 @@ function add_diffcache(sys::AbstractSystem, len::Int)
     @set! sys.ps = ps
     return sys, param
 end
+
+struct LiteralRewriter{BW} end
+
+(::LiteralRewriter{16})(x::AbstractFloat) = convert(Float16, x)
+(::LiteralRewriter{32})(x::AbstractFloat) = convert(Float32, x)
+(::LiteralRewriter{64})(x::AbstractFloat) = convert(Float64, x)
+function (rw::LiteralRewriter{BW})(x::Complex{F}) where {BW, F <: AbstractFloat}
+    return convert(Complex{typeof(rw(one(F)))}, x)
+end
+function (rw::LiteralRewriter{BW})(x::AbstractArray{F}) where {BW, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
+    return map(rw, x)
+end
+(::LiteralRewriter)(x) = x
+
+function (rw::LiteralRewriter)(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Const(; val) => BSImpl.Const{VartypeT}(rw(val))
+        _ => x
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Convert floating point literals (including ones inside arrays or complex numbers) in the equations
+and observed of `sys` to ones of the specified bitwidth. The bitwidth must be one of 16, 32
+or 64.
+"""
+function truncate_constant_floats(sys::System, ::Val{BitWidth}) where {BitWidth}
+    if !isempty(get_systems(sys))
+        throw(
+            ArgumentError(
+                """
+                This pass expects a flattened system.
+                """
+            )
+        )
+    end
+    rw = SU.Rewriters.Postwalk(LiteralRewriter{BitWidth}())
+    eqs = copy(get_eqs(sys))
+    for i in eachindex(eqs)
+        eqs[i] = rw(eqs[i].lhs) ~ rw(eqs[i].rhs)
+    end
+    obs = copy(get_observed(sys))
+    for i in eachindex(obs)
+        obs[i] = rw(obs[i].lhs) ~ rw(obs[i].rhs)
+    end
+
+    return ConstructionBase.setproperties(sys; eqs = eqs, observed = obs)
+end
