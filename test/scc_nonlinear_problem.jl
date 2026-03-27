@@ -366,3 +366,24 @@ end
     @test issetequal(bound_parameters(prob.probs[1].f.sys), [q, s])
     @test issetequal(bound_parameters(prob.probs[2].f.sys), [q, s])
 end
+
+@testset "SCCs are sorted when combined" begin
+    # NOTE: This test is best-effort. It depends on the `active::Set{Int}` in the
+    # `SCCDecomposition` constructor hashing `2` before `1`. In other words,
+    # ```julia
+    # active = Set{Int}([1, 2])
+    # @assert collect(active) == [2, 1]
+    # ```
+    # But I can't guarantee that.
+    @variables x [irreducible = true] y [irreducible = true] z [irreducible = true] a b
+    @mtkcompile sys = System([2x ~ 4 + b, 3y ~ 7 + a, x^2 + z^2 ~ 100, a ~ 3, b ~ sin(a)])
+    # Ensure the system simplifies the way we expect
+    dvs = unknowns(sys)
+    @test issetequal(dvs, [y, x, z])
+    sched = ModelingToolkit.get_schedule(sys)
+    # NOTE: Intentionally not `var_sccs`
+    @test isequal(dvs[reduce(vcat, sched.var_sccs)], [y, x, z])
+    prob = SCCNonlinearProblem(sys, [z => 1])
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+end
