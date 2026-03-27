@@ -203,6 +203,12 @@ function finalize_scc!(
                 push!(to_merge, j)
             end
         end
+        # The way we run `subset_system`, if a later SCC (later index in `.subsystems`)
+        # needs an observed from a previous SCC, that equation won't be present in `obsidxs`
+        # and it will rely on `explicitfun!` for the required value. This means that if we
+        # don't merge SCCs in sorted order, the observed equations of the resultant bigger
+        # system won't be topologically sorted.
+        sort!(to_merge)
         if length(to_merge) > 1
             active_decomposition.hints[to_merge[1]] = StructuralHint.Diagonal()
         end
@@ -264,6 +270,8 @@ function finalize_scc!(
 
         merge_target = merge_candidates[best_low]
         to_merge = view(merge_candidates, (best_low + 1):best_high)
+        # See the note in the diagonal SCC case above to know why sorting is necessary
+        sort!(to_merge)
         largest_collapsed_scc = max(maximum(comparator, to_merge), comparator(merge_target))
         band_size = largest_collapsed_scc - 1
         active_decomposition.hints[merge_target] = StructuralHint.Banded(band_size, band_size)
