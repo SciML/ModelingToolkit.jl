@@ -211,6 +211,21 @@ end
     oprob = ODEProblem(block_ode, [u0map; u_interp => spline], tspan)
     @test ≈(isol.sol.u, osol.u, rtol = 0.05)
 
+    # Test user-provided bounds kwarg overriding metadata bounds
+    # With u ∈ (-0.5, 0.5) instead of (-1, 1), optimal x(1) = 0.125
+    jprob_b = JuMPDynamicOptProblem(
+        block, [u0map; parammap], tspan;
+        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+    jsol_b = solve(jprob_b, JuMPCollocation(Ipopt.Optimizer, constructVerner8()))
+    @test ≈(jsol_b.sol[x(t)][end], 0.125, rtol = 1.0e-4)
+
+    # Verify bounds are set as variable bounds, not nonlinear constraints
+    m = jprob_b.wrapped_model
+    @test InfiniteOpt.has_lower_bound(m.V[1])
+    @test InfiniteOpt.has_upper_bound(m.V[1])
+    @test InfiniteOpt.lower_bound(m.V[1]) == -0.5
+    @test InfiniteOpt.upper_bound(m.V[1]) == 0.5
+
     ###################
     ### Bee example ###
     ###################
