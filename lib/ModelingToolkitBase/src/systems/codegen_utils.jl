@@ -350,7 +350,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
     for dervar in dervars_in_expr
         bound_parameters_used_by!(reqd_bound_pars, sys, dervars[dervar]; bgraph)
-        if add_observed && !isempty(obs) && obsidxs_to_use !== nothing
+        if add_observed && !isempty(obs) && obsidxs_to_use === nothing
             union!(obsidxs, observed_equations_used_by(sys, dervars[dervar]; obs))
         end
     end
