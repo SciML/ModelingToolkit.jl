@@ -226,6 +226,32 @@ end
     @test InfiniteOpt.lower_bound(m.V[1]) == -0.5
     @test InfiniteOpt.upper_bound(m.V[1]) == 0.5
 
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan;
+        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
+
+    m = iprob.wrapped_model
+    @test InfiniteOpt.has_lower_bound(m.V[1])
+    @test InfiniteOpt.has_upper_bound(m.V[1])
+    @test InfiniteOpt.lower_bound(m.V[1]) == -0.5
+    @test InfiniteOpt.upper_bound(m.V[1]) == 0.5
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(block, [u0map; parammap], tspan;
+            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
+        @test ≈(csol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
+    end
+
+    if @isdefined(Pyomo)
+        pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan;
+            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
+        @test ≈(psol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
+    end
+
     ###################
     ### Bee example ###
     ###################
