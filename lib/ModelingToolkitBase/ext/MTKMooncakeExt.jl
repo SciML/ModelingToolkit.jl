@@ -5,8 +5,14 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, Ab
 using ModelingToolkitBase: System
 import ModelingToolkitBase as MTK
 import Mooncake
-using Mooncake: @from_rrule, @zero_adjoint, MinimalCtx, NoTangent
+using Mooncake: @from_rrule, @zero_adjoint, MinimalCtx, NoTangent, NoRData, NoFData, increment_and_get_rdata!
 import SymbolicIndexingInterface: remake_buffer
+
+# Mooncake @from_rrule interface for MTKParameters.
+function Mooncake.increment_and_get_rdata!(f::Mooncake.FData{@NamedTuple{tunable::Vector{T}, initials::Vector{P}, discrete::NoFData, constant::NoFData, nonnumeric::NoFData, caches::NoFData}}, r::Mooncake.NoRData, t::@NamedTuple{tunable::Vector{T}, initials::Nothing, discrete::Nothing, constant::Nothing, nonnumeric::Nothing, caches::Nothing}) where {T <: Base.IEEEFloat, P <: Base.IEEEFloat}
+    Mooncake.increment_and_get_rdata!(f.data.tunable, r, t.tunable)
+    return NoRData()
+end
 
 # Fix StackOverflow in tangent_type for recursive/structural types.
 # These types are model structure descriptors, not differentiable quantities.
