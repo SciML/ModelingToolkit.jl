@@ -11,6 +11,7 @@ import SymbolicIndexingInterface: remake_buffer
 # Mooncake @from_rrule interface for MTKParameters.
 function Mooncake.increment_and_get_rdata!(f::Mooncake.FData{@NamedTuple{tunable::Vector{T}, initials::Vector{P}, discrete::NoFData, constant::NoFData, nonnumeric::NoFData, caches::NoFData}}, r::Mooncake.NoRData, t::@NamedTuple{tunable::Vector{T}, initials::Nothing, discrete::Nothing, constant::Nothing, nonnumeric::Nothing, caches::Nothing}) where {T <: Base.IEEEFloat, P <: Base.IEEEFloat}
     Mooncake.increment_and_get_rdata!(f.data.tunable, r, t.tunable)
+    Mooncake.increment_and_get_rdata!(f.data.caches, r, t.caches)
     return NoRData()
 end
 
