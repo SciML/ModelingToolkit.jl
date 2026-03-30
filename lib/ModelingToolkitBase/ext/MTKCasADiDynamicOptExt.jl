@@ -97,11 +97,12 @@ function MTK.CasADiDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...
+        guesses = Dict(),
+        bounds = Dict(), kwargs...
     )
     prob,
         _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
     )
     return prob
 end
@@ -153,6 +154,26 @@ function MTK.add_constraint!(m::CasADiModel, expr)
 end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
+
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+    for (i, (lo, hi)) in state_bounds
+        subject_to!(m.model, m.U.u[i, :] >= lo)
+        subject_to!(m.model, m.U.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in input_bounds
+        subject_to!(m.model, m.V.u[i, :] >= lo)
+        subject_to!(m.model, m.V.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in param_bounds
+        subject_to!(m.model, m.P[i] >= lo)
+        subject_to!(m.model, m.P[i] <= hi)
+    end
+    if !isnothing(tf_bounds)
+        subject_to!(m.model, m.tₛ >= tf_bounds[1])
+        subject_to!(m.model, m.tₛ <= tf_bounds[2])
+    end
+end
 
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     @unpack model, U = m

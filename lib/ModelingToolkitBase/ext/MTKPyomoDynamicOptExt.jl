@@ -101,12 +101,13 @@ _getproperty(s, name::Val{fieldname}) where {fieldname} = getproperty(s, fieldna
 function MTK.PyomoDynamicOptProblem(
         sys::System, op, tspan;
         dt = nothing, steps = nothing, tune_parameters = false,
-        guesses = Dict(), kwargs...
+        guesses = Dict(),
+        bounds = Dict(), kwargs...
     )
     prob,
         pmap = MTK.process_DynamicOptProblem(
         PyomoDynamicOptProblem, PyomoDynamicOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
     )
     conc_model = prob.wrapped_model.model
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
@@ -169,6 +170,32 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     else
         f = eval(Symbolics.build_function(expr, model_sym, dummy_sym))
         setproperty!(model, cons_sym, pyomo.Constraint(rule = Pyomo.pyfunc(f)))
+    end
+end
+
+function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+    t = MTK.get_iv(sys)
+    for (i, (lo, hi)) in state_bounds
+        var = MTK.lowered_var(m, :U, i, t)
+        MTK.add_constraint!(m, var ≳ lo)
+        MTK.add_constraint!(m, var ≲ hi)
+    end
+    for (i, (lo, hi)) in input_bounds
+        var = MTK.lowered_var(m, :V, i, t)
+        MTK.add_constraint!(m, var ≳ lo)
+        MTK.add_constraint!(m, var ≲ hi)
+    end
+    for (i, (lo, hi)) in param_bounds
+        P_sym = Symbolics.value(pysym_getproperty(m.model_sym, :P))
+        p_var = P_sym[i]
+        MTK.add_constraint!(m, p_var ≳ lo)
+        MTK.add_constraint!(m, p_var ≲ hi)
+    end
+    if !isnothing(tf_bounds)
+        tₛ_sym = pysym_getproperty(m.model_sym, :tₛ)
+        MTK.add_constraint!(m, tₛ_sym ≳ tf_bounds[1])
+        MTK.add_constraint!(m, tₛ_sym ≲ tf_bounds[2])
     end
 end
 
