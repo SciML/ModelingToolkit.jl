@@ -1231,8 +1231,8 @@ end
     $TYPEDSIGNATURES
 
 Convert floating point literals (including ones inside arrays or complex numbers) in the equations
-and observed of `sys` to ones of the specified bitwidth. The bitwidth must be one of 16, 32
-or 64.
+and observed of `sys` to ones of the specified type.  This can be any `AbstractFloat` type, for example
+`Float32`, `Float16`, or something like `MultiFloats.Float32x2`.
 """
 function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatType <: AbstractFloat}
     if !isempty(get_systems(sys))
