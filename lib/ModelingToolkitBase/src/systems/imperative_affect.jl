@@ -204,6 +204,66 @@ function check_assignable(sys, sym)
     end
 end
 
+"""
+    FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+
+Callable struct representing a compiled [`ImperativeAffect`](@ref). On each invocation,
+reads current modified and observed values from the integrator, calls the user function,
+and writes back the returned values. Created by [`compile_functional_affect`](@ref).
+
+# Fields
+- `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
+- `ctx`: user-supplied context object passed through to `user_affect`
+- `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
+- `mod_og_val_fun`: OOP function that reads the current values of all modified variables
+- `obs_fun`: OOP function that reads the observed expressions
+- `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
+- `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
+- `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
+"""
+struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+    user_affect::UF
+    ctx::CTX
+    reset_jumps::Bool
+    mod_og_val_fun::MOF
+    obs_fun::OF
+    mod_names::MN
+    obs_sym_tuple::OST
+    upd_funs::UPS
+end
+
+@inline function (fa::FunctionalAffect)(integ)
+    # Read the current values of the modified variables (pre-affect baseline)
+    modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
+    upd_component_array = NamedTuple{fa.mod_names}(modvals)
+    # Read the observed expressions
+    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
+        fa.obs_fun(integ.u, integ.p, integ.t)
+    )
+    # Call the user-supplied affect function
+    upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
+    # Write back any returned values
+    if !isnothing(upd_vals)
+        _generated_writeback(integ, fa.upd_funs, upd_vals)
+    end
+    return fa.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    compile_functional_affect(affect::ImperativeAffect, sys; reset_jumps, kwargs...)
+
+Compile an `ImperativeAffect` into a [`FunctionalAffect`](@ref) callable struct. Generates
+OOP observed and modified-value reader functions via `build_explicit_observed_function`, and
+setter callables via `setu`. All captures are encoded as typed struct fields for type stability.
+
+# Arguments
+- `affect`: the `ImperativeAffect` specification
+- `sys`: the parent system providing compilation context
+- `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after each invocation
+
+# Returns
+A `FunctionalAffect` struct callable as `f(integrator)`.
+"""
 function compile_functional_affect(
         affect::ImperativeAffect, sys; reset_jumps = false, kwargs...
     )
@@ -288,30 +348,10 @@ function compile_functional_affect(
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    return let user_affect = func(affect), ctx = context(affect), reset_jumps = reset_jumps
-        @inline function (integ)
-            # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
-            upd_component_array = NamedTuple{mod_names}(modvals)
-
-            # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(
-                obs_fun(
-                    integ.u, integ.p, integ.t
-                )
-            )
-
-            # let the user do their thing
-            upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
-
-            # write the new values back to the integrator
-            if !isnothing(upd_vals)
-                _generated_writeback(integ, upd_funs, upd_vals)
-            end
-
-            return reset_jumps && reset_aggregated_jumps!(integ)
-        end
-    end
+    return FunctionalAffect(
+        func(affect), context(affect), reset_jumps,
+        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+    )
 end
 
 scalarize_affects(affects::ImperativeAffect) = affects
