@@ -1326,17 +1326,6 @@ function build_explicit_observed_function(
     end
     ts = substitute(ts, namespace_subs)
 
-    obsfilter = if param_only
-        if is_split(sys)
-            let ic = get_index_cache(sys)
-                eq -> !(ContinuousTimeseries() in ic.observed_syms_to_timeseries[eq.lhs])
-            end
-        else
-            Returns(false)
-        end
-    else
-        Returns(true)
-    end
     dvs = if param_only
         ()
     else
@@ -1380,7 +1369,7 @@ function build_explicit_observed_function(
     p_start = length(dvs) + length(inputs) + 1
     p_end = length(dvs) + length(inputs) + length(rps)
     fns = build_function_wrapper(
-        sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
+        sys, ts, args...; p_start, p_end,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
         wrap_delays, extra_assignments, kwargs...
     )

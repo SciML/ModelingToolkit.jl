@@ -252,10 +252,8 @@ generated functions, and `args` are the arguments.
 - `wrap_code`: Forwarded to `build_function`.
 - `add_observed`: Whether to add assignment statements for observed equations in the
   generated code.
-- `filter_observed`: A predicate function to filter out observed equations which should
-  not be added to the generated code.
 - `obsidxs_to_use`: An iterable of `Int` of the specific observed equations to use in this
-  function. This elides automatic observed detection and prevents usage of `filter_observed`.
+  function. This elides automatic observed detection.
 - `create_bindings`: Whether to explicitly destructure arrays of symbolics present in
   `args` in the generated code. If `false`, all usages of the individual symbolics will
   instead call `getindex` on the relevant argument. This is useful if the generated
@@ -281,18 +279,13 @@ Base.@nospecializeinfer function build_function_wrapper(
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
         non_standard_param_layout = false,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
-        add_observed = true, filter_observed = Returns(true), obsidxs_to_use = nothing,
+        add_observed = true, obsidxs_to_use = nothing,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
         optimize = nothing, kwargs...
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
-    if obsidxs_to_use === nothing
-        # filter observed equations
-        obs = filter(filter_observed, observed(sys))
-    else
-        obs = observed(sys)
-    end
+    obs = observed(sys)
     # turn delayed unknowns into calls to the history function
     if wrap_delays
         param_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
