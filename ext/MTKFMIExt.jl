@@ -471,6 +471,18 @@ mutable struct FMI2InstanceWrapper
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU2Component{FMI.FMU2}, Nothing}
+    """
+    Continuous state buffer pre-allocated to avoid simulation allocations.
+    """
+    const states_buffer::Vector{FMI.fmi2Real}
+    """
+    Output buffer pre-allocated to avoid simulation allocations.
+    """
+    const outputs_buffer::Vector{FMI.fmi2Real}
+    """
+    Return buffer caching state and output arrays to eliminate return vcat allocations.
+    """
+    const res_buffer::Vector{FMI.fmi2Real}
 end
 
 """
@@ -479,7 +491,7 @@ end
 Create an `FMI2InstanceWrapper` with no instance.
 """
 function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, nothing)
+    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)))
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
@@ -618,6 +630,18 @@ mutable struct FMI3InstanceWrapper
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
+    """
+    Continuous state buffer pre-allocated to avoid simulation allocations.
+    """
+    const states_buffer::Vector{FMI.fmi3Float64}
+    """
+    Output buffer pre-allocated to avoid simulation allocations.
+    """
+    const outputs_buffer::Vector{FMI.fmi3Float64}
+    """
+    Return buffer caching state and output arrays to eliminate return vcat allocations.
+    """
+    const res_buffer::Vector{FMI.fmi3Float64}
 end
 
 """
@@ -626,7 +650,7 @@ end
 Create an `FMI3InstanceWrapper` with no instance.
 """
 function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, nothing)
+    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)))
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
@@ -757,10 +781,10 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
     )
     instance = get_instance_ME!(wrapper, inputs, params, t)
 
-    # TODO: Find a way to do this without allocating. We can't pass a view to these
-    # functions.
-    states_buffer = zeros(length(states))
-    outputs_buffer = zeros(length(wrapper.output_value_references))
+    states_buffer = wrapper.states_buffer
+    outputs_buffer = wrapper.outputs_buffer
+    #buffer size matches
+    @assert length(states_buffer) == length(states)
     # Defined in FMIBase.jl/src/eval.jl
     # Doesn't seem to be documented, but somehow this is the only way to
     # propagate inputs to the FMU consistently. I have no idea why.
@@ -774,7 +798,9 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
         dx = states_buffer, dx_refs = wrapper.derivative_value_references,
         y = outputs_buffer, y_refs = wrapper.output_value_references
     )
-    return [states_buffer; outputs_buffer]
+    wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
+    wrapper.res_buffer[length(states_buffer)+1:end] .= outputs_buffer
+    return wrapper.res_buffer
 end
 
 """
