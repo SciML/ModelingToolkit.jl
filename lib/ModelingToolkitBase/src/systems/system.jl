@@ -288,6 +288,11 @@ struct System <: IntermediateDeprecationSystem
     maybe_zeros::AtomicSetT
     """
     $INTERNAL_FIELD_WARNING
+    The `IRStructure` used for efficient symbolic manipulation.
+    """
+    irstructure::IRStructure{VartypeT}
+    """
+    $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
     """
     isscheduled::Bool
@@ -310,7 +315,8 @@ struct System <: IntermediateDeprecationSystem
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
             irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
-            isscheduled = false, schedule = nothing; checks::Union{Bool, Int} = true
+            irstructure = IRStructure{VartypeT}(), isscheduled = false, schedule = nothing;
+            checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
             throw(
@@ -372,7 +378,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            state_priorities, irreducibles, maybe_zeros,
+            state_priorities, irreducibles, maybe_zeros, irstructure,
             isscheduled, schedule
         )
     end
@@ -464,6 +470,7 @@ function System(
         irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
+        irstructure = IRStructure{VartypeT}(),
         checks = true, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
@@ -638,7 +645,7 @@ function System(
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
-        maybe_zeros; checks
+        maybe_zeros, irstructure; checks
     )
 end
 

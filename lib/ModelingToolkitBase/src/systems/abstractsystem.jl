@@ -941,6 +941,7 @@ const SYS_PROPS = [
     :state_priorities
     :irreducibles
     :maybe_zeros
+    :irstructure
     :assertions
     :ignored_connections
     :parent
