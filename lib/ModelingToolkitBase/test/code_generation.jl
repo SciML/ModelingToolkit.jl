@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
+using SymbolicUtils: unwrap
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
 
@@ -139,4 +140,14 @@ end
     solve!(integ)
     sol = integ.sol
     @test sol.ps[d2].count == 0
+end
+
+@testset "Derivatives dependent on observed" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System([D(x) ~ y, y ~ 2t + 1], t)
+    @test length(equations(sys)) == 1
+    v = ModelingToolkitBase.default_toterm(unwrap(D(x)))
+    fn = ModelingToolkitBase.build_explicit_observed_function(sys, v)
+    ps = MTKParameters(sys, nothing)
+    @test fn([1.0], ps, 1.5) ≈ 4.0
 end
