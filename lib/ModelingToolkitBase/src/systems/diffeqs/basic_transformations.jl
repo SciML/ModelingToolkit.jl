@@ -1203,18 +1203,22 @@ function add_diffcache(sys::AbstractSystem, len::Int)
     return sys, param
 end
 
-struct LiteralRewriter{BW} end
+"""
+struct LiteralRewriter{FloatType <: AbstractFloat}
 
-(::LiteralRewriter{16})(x::AbstractFloat) = convert(Float16, x)
-(::LiteralRewriter{32})(x::AbstractFloat) = convert(Float32, x)
-(::LiteralRewriter{64})(x::AbstractFloat) = convert(Float64, x)
-function (rw::LiteralRewriter{BW})(x::Complex{F}) where {BW, F <: AbstractFloat}
+INTERNAL: callable struct that can rewrite literal floats to the parameterized `FloatType`.
+Does nothing to integers or other number types.  Does affect Complex numbers.
+"""
+struct LiteralRewriter{FloatType <: AbstractFloat} end
+
+(::LiteralRewriter{FT})(x::AbstractFloat) where FT = convert(FT, x)
+function (rw::LiteralRewriter{FT})(x::Complex{F}) where {FT, F <: AbstractFloat}
     return convert(Complex{typeof(rw(one(F)))}, x)
 end
-function (rw::LiteralRewriter{BW})(x::AbstractArray{F}) where {BW, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
+function (rw::LiteralRewriter{FT})(x::AbstractArray{F}) where {FT, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
     return map(rw, x)
 end
-(::LiteralRewriter)(x) = x
+(::LiteralRewriter{FT})(x) where FT = x
 
 function (rw::LiteralRewriter)(x::SymbolicT)
     return Moshi.Match.@match x begin
@@ -1227,10 +1231,10 @@ end
     $TYPEDSIGNATURES
 
 Convert floating point literals (including ones inside arrays or complex numbers) in the equations
-and observed of `sys` to ones of the specified bitwidth. The bitwidth must be one of 16, 32
-or 64.
+and observed of `sys` to ones of the specified type.  This can be any `AbstractFloat` type, for example
+`Float32`, `Float16`, or something like `MultiFloats.Float32x2`.
 """
-function truncate_constant_floats(sys::System, ::Val{BitWidth}) where {BitWidth}
+function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatType <: AbstractFloat}
     if !isempty(get_systems(sys))
         throw(
             ArgumentError(
@@ -1240,7 +1244,7 @@ function truncate_constant_floats(sys::System, ::Val{BitWidth}) where {BitWidth}
             )
         )
     end
-    rw = SU.Rewriters.Postwalk(LiteralRewriter{BitWidth}())
+    rw = SU.Rewriters.Postwalk(LiteralRewriter{FloatType}())
     eqs = copy(get_eqs(sys))
     for i in eachindex(eqs)
         eqs[i] = rw(eqs[i].lhs) ~ rw(eqs[i].rhs)
