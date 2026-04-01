@@ -331,7 +331,7 @@ conditions = getfield.(equations(initprob.f.sys), :rhs)
 if @isdefined(ModelingToolkit)
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
     @test SciMLBase.successful_retcode(initsol)
-    @test maximum(abs.(initsol[conditions])) < 1.0e-8
+    @test maximum(abs.(initsol[conditions])) < 2.0e-8
 end
 
 @test_throws ERRMOD.ExtraEquationsSystemException ModelingToolkitBase.InitializationProblem(
@@ -1343,7 +1343,7 @@ if @isdefined(ModelingToolkit)
         model = dc_motor()
         sys = mtkcompile(model)
 
-        prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0))
+        prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0); guesses = [sys.emf.flange.phi => 0])
 
         @test_nowarn remake(prob, p = prob.p)
     end

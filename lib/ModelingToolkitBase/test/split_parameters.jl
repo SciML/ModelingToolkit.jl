@@ -164,7 +164,8 @@ if @isdefined(ModelingToolkit)
     inputs = [model.torque.tau.u]
     op = [model.torque.tau.u => 0.0]
     matrices, ssys = ModelingToolkit.linearize(
-        wr(model), inputs, model_outputs; op
+        wr(model), inputs, model_outputs; op,
+        guesses = [model.inertia2.flange_a.phi => 0.0, model.inertia1.flange_b.phi => 0.0]
     )
 
     # Design state-feedback gain using LQR
