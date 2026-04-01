@@ -174,4 +174,14 @@ function FMIComponent end
 @public similarity_transform
 
 include(pkgdir(ModelingToolkitBase, "src", "precompile.jl"))
+
+function __init__()
+    SU.hashcons(StructuralTransformations.NOTHING_EQ.lhs, true)
+    SU.hashcons(StructuralTransformations.NOTHING_EQ.rhs, true)
+    SU.hashcons(unwrap(ODE_GAMMA[1]), true)
+    SU.hashcons(unwrap(ODE_GAMMA[2]), true)
+    SU.hashcons(unwrap(ODE_GAMMA[3]), true)
+    SU.hashcons(unwrap(ODE_C), true)
+end
+
 end # module
