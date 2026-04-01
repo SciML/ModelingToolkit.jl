@@ -140,7 +140,7 @@ function AffectSystem(
         iv = t_nounits
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
-    append!(affect, extra_eqs)
+    affect = [affect; extra_eqs]
 
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
 
