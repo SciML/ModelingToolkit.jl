@@ -926,3 +926,51 @@ struct UnsupportedTrajectoryBackend end
     @parameters b
     @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, p_test)
 end
+
+@testset "Residual scaling of dynamics constraints" begin
+    # Double integrator with nominal_values - should converge to same answer
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)]
+
+    @named block = System(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+    )
+    block = mtkcompile(block; inputs = [u(t)])
+
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u(t) => 0.0]
+
+    # With scaling
+    nominal_values = Dict(x(t) => 10.0, v(t) => 1.0)
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        nominal_values = nominal_values
+    )
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Without scaling - should also work
+    iprob2 = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol2.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Nominal values kwarg passes through JuMP without error
+    jprob = JuMPDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        nominal_values = nominal_values
+    )
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()))
+    @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.01,
+            nominal_values = nominal_values
+        )
+        csol = solve(cprob, CasADiCollocation("ipopt", ExplicitTableaus.Verner8()))
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+    end
+end
