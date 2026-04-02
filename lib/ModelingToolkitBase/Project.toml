@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.26.0"
+version = "1.27.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -122,7 +122,7 @@ FillArrays = "1.13.0"
 FindFirstFunctions = "1"
 ForwardDiff = "0.10.3, 1"
 FunctionWrappers = "1.1"
-FunctionWrappersWrappers = "0.1"
+FunctionWrappersWrappers = "0.1, 1"
 Graphs = "1.5.2"
 ImplicitDiscreteSolve = "0.1.2, 1"
 InfiniteOpt = "0.6"
