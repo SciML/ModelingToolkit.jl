@@ -146,13 +146,13 @@ function MTK.JuMPDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), scales = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
+        _, _ = MTK.process_DynamicOptProblem(
         JuMPDynamicOptProblem, InfiniteOptModel, sys,
-        op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        op, tspan; dt, steps, tune_parameters, guesses, scales, bounds, kwargs...
     )
     return prob
 end
@@ -162,15 +162,15 @@ function MTK.InfiniteOptDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), scales = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        pmap = MTK.process_DynamicOptProblem(
+        pmap, scales = MTK.process_DynamicOptProblem(
         InfiniteOptDynamicOptProblem, InfiniteOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, scales, bounds, kwargs...
     )
-    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
+    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan, scales)
     return prob
 end
 

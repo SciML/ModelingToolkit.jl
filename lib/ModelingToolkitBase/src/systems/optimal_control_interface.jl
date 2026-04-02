@@ -323,7 +323,7 @@ function process_DynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), scales = Dict(),
         bounds = Dict(), kwargs...
     )
     warn_overdetermined(sys, op)
@@ -333,6 +333,7 @@ function process_DynamicOptProblem(
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
+    scales = Dict([default_toterm(value(k)) => v for (k, v) in scales])
     bounds = Dict([default_toterm(value(k)) => v for (k, v) in bounds])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
         [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
@@ -390,7 +391,7 @@ function process_DynamicOptProblem(
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
+    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap, scales
 end
 
 function generate_time_variable! end
@@ -633,15 +634,20 @@ function add_user_constraints!(model, sys, tspan, pmap)
     return
 end
 
-function add_equational_constraints!(model, sys, pmap, tspan)
+function add_equational_constraints!(model, sys, pmap, tspan, scales = Dict())
     rules = Dict{Any, Any}()
     get_observed_substitution_rules!(rules, sys)
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
     get_param_substitution_rules!(rules, pmap)
     get_differential_substitution_rules!(rules, model, sys)
+    dvs = unknowns(sys)
     diff_eqs = fixpoint_sub(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
-    for eq in diff_eqs
-        add_constraint!(model, eq.lhs ~ unwrap_const(eq.rhs) * model.tₛ)
+    for (i, eq) in enumerate(diff_eqs)
+        # User-provided scales override default (1.0).
+        # Scale the entire residual, not each side independently.
+        # (∂x - tₛ*f(x)) / scale == 0 prevents degenerate tₛ → 0 solutions.
+        s = get(scales, dvs[i], getnominal(dvs[i]))
+        add_constraint!(model, (unwrap_const(eq.lhs) - unwrap_const(eq.rhs) * model.tₛ) / s ~ 0)
     end
 
     alg_eqs = fixpoint_sub(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))
