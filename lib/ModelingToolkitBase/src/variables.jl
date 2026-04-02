@@ -465,6 +465,40 @@ function setbounds(x::Num, bounds)
     return setmetadata(x, VariableBounds, (lb, ub))
 end
 
+## NominalValue ================================================================
+struct VariableNominalValue end
+Symbolics.option_to_metadata_type(::Val{:nominal_value}) = VariableNominalValue
+
+"""
+    getnominalvalue(x)
+
+Get the nominal value associated with symbolic variable `x`. Returns `1.0` if no nominal value is set.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal_value = 4785.0]
+```
+"""
+getnominalvalue(x::Union{Num, Symbolics.Arr}) = getnominalvalue(unwrap(x))
+function getnominalvalue(x::SymbolicT)
+    s = Symbolics.getmetadata_maybe_indexed(x, VariableNominalValue, nothing)
+    s === nothing ? 1.0 : s
+end
+
+"""
+    hasnominalvalue(x)
+
+Determine whether symbolic variable `x` has a nominal value associated with it.
+See also [`getnominalvalue`](@ref).
+"""
+function hasnominalvalue(x)
+    Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominalValue, nothing) !== nothing
+end
+
+function setnominalvalue(x::Num, val)
+    return setmetadata(x, VariableNominalValue, val)
+end
+
 ## Disturbance =================================================================
 struct VariableDisturbance end
 Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
@@ -606,6 +640,26 @@ function getbounds(p::AbstractVector)
     lb = first.(bounds)
     ub = last.(bounds)
     return (; lb, ub)
+end
+
+"""
+    getnominalvalue(sys::ModelingToolkitBase.AbstractSystem, vars = parameters(sys))
+
+Returns a dict with pairs `var => nominal_value` mapping variables of `sys` to their nominal values.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal_value = 40.0]
+```
+
+To obtain unknown variable nominal values, call `getnominalvalue(sys, unknowns(sys))`
+"""
+function getnominalvalue(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
+    return Dict(p .=> getnominalvalue.(p))
+end
+
+function getnominalvalue(p::AbstractVector)
+    return getnominalvalue.(p)
 end
 
 ## Description =================================================================

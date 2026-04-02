@@ -257,7 +257,7 @@ export flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
     instream
 export @component, @mtkcompile, @mtkbuild, @mtkcomplete
-export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
+export isinput, isoutput, getbounds, hasbounds, getnominalvalue, hasnominalvalue, setnominalvalue, getguess, hasguess, isdisturbance,
     istunable, getdist, hasdist,
     tunable_parameters, isirreducible, getdescription, hasdescription,
     hasunit, getunit, hasconnect, getconnect,
