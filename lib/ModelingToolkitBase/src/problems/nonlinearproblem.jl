@@ -77,6 +77,10 @@ end
         check_length, check_compatibility, expression, kwargs...
     )
 
+    if spec === SciMLBase.AutoSpecialize && iip && expression != Val{true}
+        f = _maybe_wrap_nonlinear_f(f, u0, p)
+    end
+
     kwargs = process_kwargs(sys; kwargs...)
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
@@ -97,12 +101,32 @@ end
         check_length, expression, kwargs...
     )
 
+    if iip && expression != Val{true}
+        f = _maybe_wrap_nonlinear_f(f, u0, p)
+    end
+
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, p)
 
     return maybe_codegen_scimlproblem(
         expression, NonlinearLeastSquaresProblem{iip}, args; kwargs...
     )
+end
+
+"""
+    _maybe_wrap_nonlinear_f(f::NonlinearFunction, u0, p)
+
+Wrap the function inside a `NonlinearFunction` with `FunctionWrappersWrapper` via
+`NonlinearSolveBase.AutoSpecializeCallable` for the norecompile pathway. This erases
+the concrete function type so that different models sharing the same state/parameter
+structure reuse compiled solver code.
+"""
+function _maybe_wrap_nonlinear_f(f, u0, p)
+    ff = f.f
+    NonlinearSolveBase.is_fw_wrapped(ff) && return f
+    wrapped = NonlinearSolveBase.AutoSpecializeCallable(
+        NonlinearSolveBase.wrapfun_iip(ff, (u0, u0, p)), ff)
+    return Setfield.@set f.f = wrapped
 end
 
 function check_compatible_system(

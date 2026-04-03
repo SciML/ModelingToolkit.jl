@@ -645,6 +645,13 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                 end
             end
             _u0 = u0_constructor(u0_eltype.(_u0))
+            # Wrap with FunctionWrappersWrapper for norecompile (AutoSpecialize)
+            if iip && SciMLBase.isinplace(f)
+                orig = f.f
+                wrapped = NonlinearSolveBase.AutoSpecializeCallable(
+                    NonlinearSolveBase.wrapfun_iip(orig, (_u0, _u0, p)), orig)
+                f = @set f.f = wrapped
+            end
             prob = NonlinearProblem(f, _u0, p)
         end
         push!(subprobs, prob)

@@ -51,6 +51,7 @@ using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, Ti
 import Moshi
 using Moshi.Data: @data
 import SCCNonlinearSolve
+import NonlinearSolveBase
 using Reexport
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 import CommonSolve
