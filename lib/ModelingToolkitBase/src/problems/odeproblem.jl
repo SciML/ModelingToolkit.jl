@@ -40,6 +40,10 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
         end
+    elseif spec === SciMLBase.AutoSpecialize && iip &&
+            u0 !== nothing && p !== nothing && t !== nothing &&
+            expression != Val{true}
+        f = DiffEqBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
     if tgrad
