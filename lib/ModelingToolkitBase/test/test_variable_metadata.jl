@@ -264,48 +264,48 @@ x = ModelingToolkitBase.toparam(x)
 @brownians z
 @test ModelingToolkitBase.getvariabletype(z) == ModelingToolkitBase.BROWNIAN
 
-# NominalValue
-@variables x [nominal_value = 100.0]
-@test getnominalvalue(x) == 100.0
-@test hasnominalvalue(x)
+# Nominal
+@variables x [nominal = 100.0]
+@test getnominal(x) == 100.0
+@test hasnominal(x)
 
 @variables y
-@test !hasnominalvalue(y)
-@test getnominalvalue(y) == 1.0
+@test !hasnominal(y)
+@test getnominal(y) == 1.0
 
-y2 = setnominalvalue(y, 50.0)
-@test getnominalvalue(y2) == 50.0
-@test hasnominalvalue(y2)
+y2 = setnominal(y, 50.0)
+@test getnominal(y2) == 50.0
+@test hasnominal(y2)
 
-@variables z [nominal_value = 0.001]
-@test getnominalvalue(z) == 0.001
+@variables z [nominal = 0.001]
+@test getnominal(z) == 0.001
 
 # Vector of variables
-vals = getnominalvalue([x, y, z])
+vals = getnominal([x, y, z])
 @test vals == [100.0, 1.0, 0.001]
 
 # Vector variables
-@variables yv[1:3] [nominal_value = [100.0, 200.0, 300.0]]
-@test hasnominalvalue(yv)
-@test getnominalvalue(yv) == [100.0, 200.0, 300.0]
+@variables yv[1:3] [nominal = [100.0, 200.0, 300.0]]
+@test hasnominal(yv)
+@test getnominal(yv) == [100.0, 200.0, 300.0]
 for i in 1:3
-    @test hasnominalvalue(yv[i])
+    @test hasnominal(yv[i])
 end
-@test getnominalvalue(yv[1]) == 100.0
-@test getnominalvalue(yv[2]) == 200.0
-@test getnominalvalue(yv[3]) == 300.0
+@test getnominal(yv[1]) == 100.0
+@test getnominal(yv[2]) == 200.0
+@test getnominal(yv[3]) == 300.0
 
 @variables wv[1:3]
-@test !hasnominalvalue(wv)
-@test getnominalvalue(wv[1]) == 1.0
+@test !hasnominal(wv)
+@test getnominal(wv[1]) == 1.0
 
 # System-level accessor
 @independent_variables t5
 Dₜ5 = Differential(t5)
-@variables x5(t5) [nominal_value = 100.0] y5(t5) z5(t5) [nominal_value = 0.001]
+@variables x5(t5) [nominal = 100.0] y5(t5) z5(t5) [nominal = 0.001]
 @parameters α5 = 1.5 β5 = 1.0
 eqs5 = [Dₜ5(x5) ~ α5 * x5, Dₜ5(y5) ~ -β5 * y5, Dₜ5(z5) ~ x5 - z5]
 sys5 = System(eqs5, t5, name = :nominal_test)
-nv = getnominalvalue(sys5, unknowns(sys5))
+nv = getnominal(sys5, unknowns(sys5))
 @test nv isa Dict
 @test length(nv) == length(unknowns(sys5))

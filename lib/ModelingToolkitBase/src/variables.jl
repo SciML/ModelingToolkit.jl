@@ -465,38 +465,38 @@ function setbounds(x::Num, bounds)
     return setmetadata(x, VariableBounds, (lb, ub))
 end
 
-## NominalValue ================================================================
-struct VariableNominalValue end
-Symbolics.option_to_metadata_type(::Val{:nominal_value}) = VariableNominalValue
+## Nominal =====================================================================
+struct VariableNominal end
+Symbolics.option_to_metadata_type(::Val{:nominal}) = VariableNominal
 
 """
-    getnominalvalue(x)
+    getnominal(x)
 
 Get the nominal value associated with symbolic variable `x`. Returns `1.0` if no nominal value is set.
 Create variables with a nominal value like this
 
 ```
-@variables x [nominal_value = 4785.0]
+@variables x [nominal = 4785.0]
 ```
 """
-getnominalvalue(x::Union{Num, Symbolics.Arr}) = getnominalvalue(unwrap(x))
-function getnominalvalue(x::SymbolicT)
-    s = Symbolics.getmetadata_maybe_indexed(x, VariableNominalValue, nothing)
+getnominal(x::Union{Num, Symbolics.Arr}) = getnominal(unwrap(x))
+function getnominal(x::SymbolicT)
+    s = Symbolics.getmetadata_maybe_indexed(x, VariableNominal, nothing)
     s === nothing ? 1.0 : s
 end
 
 """
-    hasnominalvalue(x)
+    hasnominal(x)
 
 Determine whether symbolic variable `x` has a nominal value associated with it.
-See also [`getnominalvalue`](@ref).
+See also [`getnominal`](@ref).
 """
-function hasnominalvalue(x)
-    Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominalValue, nothing) !== nothing
+function hasnominal(x)
+    Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
 end
 
-function setnominalvalue(x::Num, val)
-    return setmetadata(x, VariableNominalValue, val)
+function setnominal(x::Num, val)
+    return setmetadata(x, VariableNominal, val)
 end
 
 ## Disturbance =================================================================
@@ -643,23 +643,23 @@ function getbounds(p::AbstractVector)
 end
 
 """
-    getnominalvalue(sys::ModelingToolkitBase.AbstractSystem, vars = parameters(sys))
+    getnominal(sys::ModelingToolkitBase.AbstractSystem, vars = parameters(sys))
 
-Returns a dict with pairs `var => nominal_value` mapping variables of `sys` to their nominal values.
+Returns a dict with pairs `var => nominal` mapping variables of `sys` to their nominal values.
 Create variables with a nominal value like this
 
 ```
-@variables x [nominal_value = 40.0]
+@variables x [nominal = 40.0]
 ```
 
-To obtain unknown variable nominal values, call `getnominalvalue(sys, unknowns(sys))`
+To obtain unknown variable nominal values, call `getnominal(sys, unknowns(sys))`
 """
-function getnominalvalue(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
-    return Dict(p .=> getnominalvalue.(p))
+function getnominal(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
+    return Dict(p .=> getnominal.(p))
 end
 
-function getnominalvalue(p::AbstractVector)
-    return getnominalvalue.(p)
+function getnominal(p::AbstractVector)
+    return getnominal.(p)
 end
 
 ## Description =================================================================
