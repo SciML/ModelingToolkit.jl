@@ -1784,7 +1784,7 @@ function SymbolicTstops(
     rps = reorder_parameters(sys)
     tstops,
         _ = build_function_wrapper(
-        sys, tstops,
+        sys, Symbolics.SConst(tstops),
         rps...,
         t0,
         t1;
