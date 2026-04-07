@@ -374,7 +374,14 @@ function __init__()
     SU.hashcons(COMMON_TRUE, true)
     SU.hashcons(COMMON_FALSE, true)
     SU.hashcons(COMMON_SENTINEL, true)
-    return SU.hashcons(COMMON_INF, true)
+    SU.hashcons(COMMON_INF, true)
+    SU.hashcons(MTKPARAMETERS_ARG, true)
+    SU.hashcons(COMMON_DEFAULT_VAR, true)
+    SU.hashcons(DDE_HISTORY_FUN, true)
+    SU.hashcons(BVP_SOLUTION, true)
+    SU.hashcons(unwrap(W_GAMMA), true)
+    SU.hashcons(unwrap(ASSERTION_LOG_VARIABLE), true)
+    return nothing
 end
 
 include("precompile.jl")
