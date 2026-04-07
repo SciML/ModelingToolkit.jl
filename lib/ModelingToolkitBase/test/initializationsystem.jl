@@ -10,6 +10,7 @@ using DynamicQuantities
 using DiffEqBase: BrownFullBasicInit
 import DiffEqNoiseProcess
 using Setfield: @set!
+import SymbolicUtils as SU
 
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
 missing_guess_value = if @isdefined(ModelingToolkit)
@@ -1215,7 +1216,7 @@ function (m::Multiplier)(x, y)
     return m.a * x + m.b * y
 end
 
-@register_symbolic Multiplier(x::Real, y::Real)
+@register_symbolic Multiplier(x::Real, y::Real)::SU.FnType{Tuple{Real, Real}, Real, Nothing}
 
 @testset "Nonnumeric bound parameters are retained" begin
     @variables x(t) y(t)
