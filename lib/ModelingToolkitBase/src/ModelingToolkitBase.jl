@@ -382,6 +382,8 @@ function __init__()
     SU.hashcons(BVP_SOLUTION, true)
     SU.hashcons(unwrap(W_GAMMA), true)
     SU.hashcons(unwrap(ASSERTION_LOG_VARIABLE), true)
+    SU.hashcons(DDE_AT_IDX_SYM, true)
+    SU.hashcons(DDE_DELAY_SYM, true)
     return nothing
 end
 
