@@ -698,11 +698,10 @@ function generate_cost(
     res = build_function_wrapper(
         sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays,
         histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...
-    )
+    )[1]
     if expression == Val{true}
         return res
     end
-    f_oop = eval_or_rgf(res; eval_expression, eval_module)
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module
     )
@@ -750,7 +749,7 @@ function generate_bvp_cost(
         histfn = (p, t) -> BVP_SOLUTION(t),
         histfn_symbolic = BVP_SOLUTION,
         cse, checkbounds, kwargs...
-    )
+    )[1]
 
     # (2, 2, is_split) means: 2 args out-of-place, 2 original args, split status
     return maybe_compile_function(
@@ -1061,8 +1060,9 @@ function generate_rate_function(js::System, rate)
     return build_function_wrapper(
         js, rate, unknowns(js), p...,
         get_iv(js),
-        expression = Val{true}
-    )
+        expression = Val{true},
+        iip_config = (true, false),
+    )[1]
 end
 
 function generate_affect_function(js::System, affect; kwargs...)
@@ -1320,10 +1320,6 @@ function build_explicit_observed_function(
             SU.query(pred, x)
         end
     end
-    extra_assignments = Assignment[]
-    for var in pred.present_dervars
-        push!(extra_assignments, var ← dervals[var])
-    end
     ts = substitute(ts, namespace_subs)
 
     dvs = if param_only
@@ -1371,7 +1367,7 @@ function build_explicit_observed_function(
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays, extra_assignments, kwargs...
+        wrap_delays, kwargs...
     )
     if fns isa Tuple
         if expression == true || expression === Val{true}
