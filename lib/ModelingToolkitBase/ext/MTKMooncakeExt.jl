@@ -9,9 +9,24 @@ using Mooncake: @from_rrule, @zero_adjoint, MinimalCtx, NoTangent, NoRData, NoFD
 import SymbolicIndexingInterface: remake_buffer
 
 # Mooncake @from_rrule interface for MTKParameters.
-function Mooncake.increment_and_get_rdata!(f::Mooncake.FData{@NamedTuple{tunable::Vector{T}, initials::Vector{P}, discrete::NoFData, constant::NoFData, nonnumeric::NoFData, caches::NoFData}}, r::Mooncake.NoRData, t::@NamedTuple{tunable::Vector{T}, initials::Nothing, discrete::Nothing, constant::Nothing, nonnumeric::Nothing, caches::Nothing}) where {T <: Base.IEEEFloat, P <: Base.IEEEFloat}
-    Mooncake.increment_and_get_rdata!(f.data.tunable, r, t.tunable)
-    Mooncake.increment_and_get_rdata!(f.data.caches, r, t.caches)
+# MTKParameters fields (tunable, initials, discrete, constant, nonnumeric, caches)
+# can have varying FData types depending on whether the field is mutable (Vector →
+# Vector fdata) or immutable/empty (SVector{0}, Tuple{} → NoFData). Rather than
+# enumerating every combination, accept any NamedTuple FData layout and increment
+# each field that has tangent data.
+function Mooncake.increment_and_get_rdata!(
+        f::Mooncake.FData{<:NamedTuple{(:tunable, :initials, :discrete, :constant, :nonnumeric, :caches)}},
+        r::Mooncake.NoRData,
+        t::NamedTuple{(:tunable, :initials, :discrete, :constant, :nonnumeric, :caches)},
+    )
+    d = f.data
+    for field in (:tunable, :initials, :discrete, :constant, :caches)
+        fd = getfield(d, field)
+        td = getfield(t, field)
+        fd isa NoFData && continue
+        td === nothing && continue
+        Mooncake.increment_and_get_rdata!(fd, NoRData(), td)
+    end
     return NoRData()
 end
 
