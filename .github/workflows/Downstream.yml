@@ -44,7 +44,7 @@ jobs:
           - {user: SciML, repo: MethodOfLines.jl, group: Interface}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: All}
+          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core}
           - {user: SciML, repo: SciMLSensitivity.jl, group: Core8}
     steps:
       - uses: actions/checkout@v6
