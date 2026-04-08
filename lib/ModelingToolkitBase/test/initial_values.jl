@@ -292,7 +292,11 @@ end
         0 ~ x^2 + y^2 - w2^2,
     ]
 
-    @mtkcompile sys = System(eqs, t)
+    if @isdefined(ModelingToolkit)
+        @mtkcompile sys = System(eqs, t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    else
+        @mtkcompile sys = System(eqs, t)
+    end
 
     u0 = [
         D(x) => 2.0,

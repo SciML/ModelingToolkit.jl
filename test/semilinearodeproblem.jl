@@ -143,7 +143,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     ]   # 14: M
 
     prob = ODEProblem(Nelson!, u0, tspan, params)
-    sys = mtkcompile(modelingtoolkitize(prob))
+    sys = mtkcompile(
+        modelingtoolkitize(prob);
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    )
     A, B, C = ModelingToolkit.calculate_semiquadratic_form(sys)
     @test A !== nothing
     @test B !== nothing
