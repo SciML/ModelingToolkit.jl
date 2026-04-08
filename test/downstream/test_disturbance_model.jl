@@ -241,6 +241,27 @@ d = [0, 0, 1]
 @test measurement2(x, u, p, 0.0, d) == [1] # We have now disturbed the output
 @test measurement3(x, u, p, 0.0, d) == [1]  # Test new interface
 
+## Test known_disturbance_inputs with analysis points (issue #4215) ================
+# This exercises the AP override's known_disturbance_inputs keyword using symbols
+f_known, x_sym_known,
+    p_sym_known,
+    io_sys_known = ModelingToolkit.generate_control_function(
+    model_with_disturbance, [:u];
+    known_disturbance_inputs = [:d1, :d2, :dy], split = false
+)
+
+op_known = ModelingToolkit.inputs(io_sys_known) .=> 0
+x0_known = ModelingToolkit.get_u0(io_sys_known, op_known)
+p_known = ModelingToolkit.get_p(io_sys_known, op_known)
+x_known = zeros(length(x_sym_known))
+u_known = zeros(1)
+d_known = zeros(3)
+@test f_known[1](x_known, u_known, p_known, t, d_known) == zeros(length(x_sym_known))
+
+# Non-zero known disturbance
+d_known = [1, 0, 0]
+@test sort(f_known[1](x_known, u_known, p_known, 0.0, d_known)) == [0, 0, 0, 1, 1]
+
 ## Further downstream tests that the functions generated above actually have the properties required to use for state estimation
 #
 # using LowLevelParticleFilters, SeeToDee
