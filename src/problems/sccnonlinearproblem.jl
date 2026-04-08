@@ -27,12 +27,13 @@ function CacheWriter(
         return generated_argument_name(i - length(solsyms))
     end
     array_assignments = array_variable_assignments(solsyms...; argument_name)
-    fn = build_function_wrapper(
+    fn, _ = build_function_wrapper(
         sys, nothing, :out,
         DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
         rps...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false, cse,
-        extra_assignments = [array_assignments; obs_assigns; body]
+        extra_assignments = [array_assignments; obs_assigns; body],
+        iip_config = (true, false)
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
