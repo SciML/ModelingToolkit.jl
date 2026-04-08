@@ -35,7 +35,8 @@ jobs:
           - {user: SciML, repo: Catalyst.jl, group: Spatial}
           - {user: SciML, repo: CellMLToolkit.jl, group: Core}
           - {user: SciML, repo: SBMLToolkit.jl, group: All}
-          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: Core}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core}
@@ -43,10 +44,8 @@ jobs:
           - {user: SciML, repo: MethodOfLines.jl, group: Interface}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: All}
+          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core}
           - {user: SciML, repo: SciMLSensitivity.jl, group: Core8}
-
-          - {user: Neuroblox, repo: Neuroblox.jl, group: All}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
