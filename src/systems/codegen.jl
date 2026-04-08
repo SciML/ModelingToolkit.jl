@@ -335,24 +335,18 @@ function generate_semiquadratic_functions(
 
     f1_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f1_iip_ir, expression = Val{true}, kwargs...
-    )
+        extra_assignments = f1_iip_ir, expression = Val{true}, iip_config = (true, false), kwargs...
+    )[1]
     f2_iip = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...
-    )
+        extra_assignments = f2_iip_ir, expression = Val{true}, iip_config = (true, false), kwargs...
+    )[1]
     f1_oop = build_function_wrapper(
-        sys, f1_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
-    )
-    if f1_oop isa NTuple{2, Expr}
-        f1_oop = f1_oop[1]
-    end
+        sys, f1_expr, dvs, ps..., iv; expression = Val{true}, iip_config = (true, false), kwargs...
+    )[1]
     f2_oop = build_function_wrapper(
-        sys, f2_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
-    )
-    if f2_oop isa NTuple{2, Expr}
-        f2_oop = f2_oop[1]
-    end
+        sys, f2_expr, dvs, ps..., iv; expression = Val{true}, iip_config = (true, false), kwargs...
+    )[1]
 
     f1 = maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)),
@@ -516,13 +510,12 @@ function generate_semiquadratic_jacobian(
     end
     oop_expr = length(terms) == 1 ? only(terms) : term(+, terms...)
 
-    j_iip = build_function_wrapper(
+    j_iip, _ = build_function_wrapper(
         sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = iip_ir, expression = Val{true}, kwargs...
+        extra_assignments = iip_ir, expression = Val{true}, iip_config = (true, false), kwargs...
     )
-    j_oop,
-        _ = build_function_wrapper(
-        sys, oop_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
+    j_oop, _ = build_function_wrapper(
+        sys, oop_expr, dvs, ps..., iv; expression = Val{true}, iip_config = (true, false), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)),
