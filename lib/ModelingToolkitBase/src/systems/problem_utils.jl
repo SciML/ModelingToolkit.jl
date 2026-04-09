@@ -881,7 +881,9 @@ function ReconstructInitializeprob(
     ugetter = u0_constructor ∘
         concrete_getu(
         srcsys, unknowns(dstsys);
-        eval_expression, eval_module, force_time_independent = is_steadystateprob, kwargs...
+        eval_expression, eval_module, force_time_independent = is_steadystateprob,
+        iip_config = (true, false),
+        kwargs...
     )
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
