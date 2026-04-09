@@ -52,9 +52,10 @@ end
     check_complete(sys, DDEProblem)
     check_compatibility && check_compatible_system(DDEProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        DDEFunction{iip, spec}, sys, op;
+        DDEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, cse, checkbounds,
         eval_expression, eval_module, check_compatibility, symbolic_u0 = true,
         expression, u0_constructor, kwargs...
@@ -80,7 +81,7 @@ end
     )
     args = (; f, u0, h, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, DDEProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, DDEProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Union{Type{DDEFunction}, Type{DDEProblem}}, sys::System)

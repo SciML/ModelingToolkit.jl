@@ -75,10 +75,11 @@ end
     check_complete(sys, DAEProblem)
     check_compatibility && check_compatible_system(DAEProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, du0,
         u0,
         p = process_SciMLProblem(
-        DAEFunction{iip, spec}, sys, op;
+        DAEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, implicit_dae = true, expression, kwargs...
     )
@@ -95,5 +96,5 @@ end
     args = (; f, du0, u0, tspan, p)
     kwargs = (; differential_vars, kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, DAEProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, DAEProblem{_iip}, args; kwargs...)
 end

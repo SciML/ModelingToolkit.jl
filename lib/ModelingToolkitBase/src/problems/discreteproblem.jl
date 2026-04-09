@@ -48,12 +48,13 @@ end
     check_complete(sys, DiscreteProblem)
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     dvs = unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,
         p = process_SciMLProblem(
-        DiscreteFunction{iip, spec}, sys, op;
+        DiscreteFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
         kwargs...
     )
@@ -67,7 +68,7 @@ end
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, DiscreteProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, DiscreteProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(
