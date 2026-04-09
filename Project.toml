@@ -1,6 +1,6 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
-version = "11.19.1"
+version = "11.20.0"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
 
 [deps]
@@ -107,7 +107,7 @@ REPL = "1"
 Reexport = "0.2, 1"
 RuntimeGeneratedFunctions = "0.5.12"
 SCCNonlinearSolve = "1.8.1"
-SciMLBase = "2.144.0"
+SciMLBase = "2.144.0, 3"
 SciMLPublic = "1.0.0"
 Serialization = "1"
 Setfield = "0.7, 0.8, 1"
