@@ -659,7 +659,12 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,))
         )
     )
-    return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
+
+    if length(subprobs) <= 5
+        return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
+    else
+        return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+    end
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)
