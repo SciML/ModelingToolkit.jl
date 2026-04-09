@@ -447,6 +447,7 @@ function SCCNonlinearFunction{iip}(
     rps = reorder_parameters(subsys)
     f = generate_rhs(
         subsys; expression = Val{false}, wrap_gfw = Val{true}, cachesyms,
+        eval_expression, eval_module,
         obsidxs_to_use = eachindex(observed(subsys))
     )
 
