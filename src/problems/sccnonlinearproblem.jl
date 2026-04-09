@@ -514,7 +514,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
             return NonlinearProblem{iip}(
-                sys, op; eval_expression, eval_module, u0_constructor, cse, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, cse, missing_guess_value, kwargs...
             )
         end
     end
