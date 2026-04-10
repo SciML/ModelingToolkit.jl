@@ -171,12 +171,11 @@ function AffectSystem(
         p in pre_params && continue
         push!(sys_params, p)
     end
-    discretes = map(tovar, discrete_parameters)
+    discretes = discrete_parameters
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
 
-    rev_map = Dict{SymbolicT, SymbolicT}(zip(discrete_parameters, discretes))
-    subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
+    subs = Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs))
     affect = substitute(affect, subs)
 
     ps = collect(gather_array_params(union(pre_params, sys_params)))
