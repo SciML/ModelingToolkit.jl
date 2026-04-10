@@ -206,6 +206,24 @@ if @isdefined(ModelingToolkit)
         @test matrices.D[] == 0
     end
 
+    @testset "LinearizationOpPoint" begin
+        # sys here is the two-analysis-point system (plant_input + plant_output)
+        # Simulate to obtain a solution, then verify that linearizing at t=0 via
+        # LinearizationOpPoint gives the same result as the default operating point.
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        matrices_ref, _ = linearize(sys, sys.plant_input, sys.plant_output)
+        matrices_op, _ = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0)
+        )
+        @test matrices_op.A ≈ matrices_ref.A
+        @test matrices_op.B ≈ matrices_ref.B
+        @test matrices_op.C ≈ matrices_ref.C
+        @test matrices_op.D ≈ matrices_ref.D
+    end
+
     @testset "Complicated model" begin
         # Parameters
         m1 = 1
