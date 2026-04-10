@@ -1736,11 +1736,27 @@ All other keyword arguments are passed as-is to `constructor`.
 """
 Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
+        u0_eltype = nothing, u0_constructor = identity, p_constructor = identity,
+        symbolic_u0 = false, kwargs...
+    )
+    u0Type = pType = typeof(op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(u0_eltype, floatT)
+    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
+    p_constructor = get_p_constructor(p_constructor, pType, floatT)
+
+    __process_SciMLProblem(constructor, sys, op; floatT, u0Type, u0_eltype, u0_constructor, p_constructor, symbolic_u0, kwargs...)
+end
+
+function __process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict;
+        floatT, u0Type, u0_eltype,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, u0_eltype = nothing, tofloat = true,
+        check_initialization_units = false, tofloat = true,
         u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
@@ -1757,17 +1773,11 @@ Base.@nospecializeinfer function process_SciMLProblem(
 
     check_array_equations_unknowns(eqs, dvs)
 
-    u0Type = pType = typeof(op)
-
-    op = operating_point_preprocess(sys, op)
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
-
     op = build_operating_point(sys, op; fast_path = true)
 
     check_inputmap_keys(sys, op)
 
-    op = getmetadata(sys, ProblemConstructionHook, identity)(op)
+    op = getmetadata(sys, ProblemConstructionHook, identity)(op)::SymmapT
 
     kwargs = NamedTuple(kwargs)
 
@@ -1781,9 +1791,6 @@ Base.@nospecializeinfer function process_SciMLProblem(
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs, bindings(sys))
     end
-
-    u0_constructor = get_u0_constructor(u0_constructor, u0Type, u0_eltype, symbolic_u0)
-    p_constructor = get_p_constructor(p_constructor, pType, floatT)
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
@@ -1868,13 +1875,9 @@ Base.@nospecializeinfer function process_SciMLProblem(
     end
 
     if is_split(sys)
-        # `pType` is usually `Dict` when the user passes key-value pairs.
-        if !(pType <: AbstractArray)
-            pType = Array
-        end
         p = MTKParameters(sys, op; floatT = floatT, p_constructor, fast_path = true)
     else
-        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
+        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = u0Type))
     end
 
     if implicit_dae
@@ -1902,7 +1905,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
     end
 
     f = constructor(
-        sys; u0 = u0, p = p,
+        sys; u0 = u0, p = p, t = t,
         eval_expression = eval_expression,
         eval_module = eval_module,
         kwargs...
