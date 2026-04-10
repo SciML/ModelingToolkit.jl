@@ -55,12 +55,13 @@ end
     check_complete(sys, ImplicitDiscreteProblem)
     check_compatibility && check_compatible_system(ImplicitDiscreteProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     dvs = unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,
         p = process_SciMLProblem(
-        ImplicitDiscreteFunction{iip, spec}, sys, op;
+        ImplicitDiscreteFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility,
         expression, kwargs...
     )
@@ -68,7 +69,7 @@ end
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, tspan, p)
     return maybe_codegen_scimlproblem(
-        expression, ImplicitDiscreteProblem{iip}, args; kwargs...
+        expression, ImplicitDiscreteProblem{_iip}, args; kwargs...
     )
 end
 

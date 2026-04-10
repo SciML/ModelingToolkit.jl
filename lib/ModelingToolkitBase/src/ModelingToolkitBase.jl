@@ -351,6 +351,7 @@ const set_scalar_metadata = setmetadata
 @public renamespace, namespace_equations
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry
 @public convert_bindings_for_time_independent_system, get_w
+@public Both
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

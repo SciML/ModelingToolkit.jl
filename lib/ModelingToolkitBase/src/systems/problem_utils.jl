@@ -1803,11 +1803,31 @@ function SymbolicTstops(
 end
 
 """
+    Both
+
+Sentinel type used as the `iip` type parameter in problem constructors when the caller
+did not explicitly specify in-place vs. out-of-place behavior. The actual value is
+resolved at construction time: `iip = false` when the operating-point `op` is a
+`StaticArray`, and `iip = true` otherwise.
+"""
+struct Both end
+
+"""
+    resolve_iip(iip, op)
+
+Resolve the `iip` type parameter for a problem constructor. When `iip` is `Both`,
+returns `false` if `op` is a `StaticArray` and `true` otherwise. For any other value
+of `iip`, returns `iip` unchanged.
+"""
+resolve_iip(iip, @nospecialize(op)) = iip
+resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
+
+"""
     $(TYPEDSIGNATURES)
 
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
-`specialize = SciMLBase.AutoSpecialize` and `iip = true`.
+`specialize = SciMLBase.AutoSpecialize` and `iip = Both` (resolved at construction time).
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -1889,32 +1909,18 @@ macro fallback_iip_specialize(ex)
     fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
     fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
 
-    # `ODEProblem{true}(call_args...)`
-    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), call_args...)
+    # Problem constructors default to `Both` (iip resolved at construction time).
+    # Function constructors keep `true` as the iip default.
+    is_problem = occursin("Problem", string(fnname_name))
+    default_iip = is_problem ? Both : true
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, default_iip), call_args...)
     # `ODEProblem(sig_args...)` - use sig_args for fallback signature
     fncall_base = Expr(:call, fnname_name, sig_args...)
     fn_base = Expr(:function, fncall_base, callexpr_base)
 
-    # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
-    # where `iip` should default to `false`.
+    # The StaticArray-specific fallback is no longer needed: `Both` defers the
+    # iip decision to the body of the fully-parameterized method.
     fn_sarr = nothing
-    if occursin("Problem", string(fnname_name))
-        # sig_args should at least contain an argument for the `u0map`
-        @assert length(sig_args) > 2
-        u0_arg = sig_args[3]
-        # should not have a type-annotation
-        @assert !Meta.isexpr(u0_arg, :(::))
-        if Meta.isexpr(u0_arg, :kw)
-            argname, default = u0_arg.args
-            u0_arg = Expr(:kw, Expr(:(::), argname, StaticArray), default)
-        else
-            u0_arg = Expr(:(::), u0_arg, StaticArray)
-        end
-
-        callexpr_sarr = Expr(:call, Expr(:curly, fnname_name, false), call_args...)
-        fncall_sarr = Expr(:call, fnname_name, sig_args[1], sig_args[2], u0_arg, sig_args[4:end]...)
-        fn_sarr = Expr(:function, fncall_sarr, callexpr_sarr)
-    end
     return quote
         $fn_base
         $fn_sarr

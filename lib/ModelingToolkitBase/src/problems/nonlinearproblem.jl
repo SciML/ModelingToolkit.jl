@@ -71,9 +71,10 @@ end
     end
     check_compatibility && check_compatible_system(NonlinearProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{iip, spec}, sys, op;
+        NonlinearFunction{_iip, spec}, sys, op;
         check_length, check_compatibility, expression, kwargs...
     )
 
@@ -81,7 +82,7 @@ end
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
 
-    return maybe_codegen_scimlproblem(expression, NonlinearProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, NonlinearProblem{_iip}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
@@ -91,9 +92,10 @@ end
     check_complete(sys, NonlinearLeastSquaresProblem)
     check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{iip}, sys, op;
+        NonlinearFunction{_iip}, sys, op;
         check_length, expression, kwargs...
     )
 
@@ -101,7 +103,7 @@ end
     args = (; f, u0, p)
 
     return maybe_codegen_scimlproblem(
-        expression, NonlinearLeastSquaresProblem{iip}, args; kwargs...
+        expression, NonlinearLeastSquaresProblem{_iip}, args; kwargs...
     )
 end
 

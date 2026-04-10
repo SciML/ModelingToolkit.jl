@@ -125,9 +125,10 @@ end
     @set! sys.guesses = guess
     @set! sys.initial_conditions = defs
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SemilinearODEFunction{iip, spec}, sys, op;
+        SemilinearODEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, expression, check_compatibility,
         semiquadratic_form, sparse, u0_eltype, stiff_linear, stiff_quadratic, stiff_nonlinear, jac, kwargs...
     )
@@ -135,7 +136,7 @@ end
     kwargs = process_kwargs(sys; expression, callback, kwargs...)
 
     args = (; f, u0, tspan, p)
-    maybe_codegen_scimlproblem(expression, SplitODEProblem{iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(expression, SplitODEProblem{_iip}, args; kwargs...)
 end
 
 """

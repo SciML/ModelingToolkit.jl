@@ -9,6 +9,7 @@
     check_compatibility && check_compatible_system(BVProblem, sys)
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
+    _iip = resolve_iip(iip, op)
     dvs = unknowns(sys)
     op = to_varmap(op, dvs)
     # Systems without algebraic equations should use both fixed values + guesses
@@ -17,7 +18,7 @@
 
     fode, u0,
         p = process_SciMLProblem(
-        ODEFunction{iip, spec}, sys, _op; guesses,
+        ODEFunction{_iip, spec}, sys, _op; guesses,
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse,
         checkbounds, time_dependent_init = false, expression, kwargs...
     )
@@ -39,7 +40,7 @@
     f_prototype = n_controls > 0 ? zeros(eltype(u0), length(dvs) - n_controls) : nothing
     bcresid_prototype = zeros(eltype(u0), length(u0_idxs) + length(constraints(sys)))
 
-    bvpfn = BVPFunction{iip}(fode, fbc; cost = fcost, f_prototype, bcresid_prototype)
+    bvpfn = BVPFunction{_iip}(fode, fbc; cost = fcost, f_prototype, bcresid_prototype)
 
     if (length(constraints(sys)) + length(op) > length(dvs))
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
@@ -48,7 +49,7 @@
     kwargs = process_kwargs(sys; expression, tspan, kwargs...)
     args = (; bvpfn, u0, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, BVProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, BVProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Type{BVProblem}, sys::System)
