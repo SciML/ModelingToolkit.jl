@@ -107,7 +107,7 @@ u = collect(1:3)
 p = ModelingToolkitBase.MTKParameters(de, [σ, ρ, β] .=> 4.0:6.0)
 f.f(du, u, p, 0.1)
 @test du == [4, 0, -16]
-@test_throws ArgumentError f.f(u, p, 0.1)
+@test_throws Symbolics.FunctionUnimplementedError f.f(u, p, 0.1)
 
 #check iip
 f = eval(ODEFunction(de; expression = Val{true}))
@@ -505,6 +505,7 @@ bar(x, p) = p * x
 @register_array_symbolic bar(x::AbstractVector, p::AbstractMatrix) begin
     size = size(x)
     eltype = promote_type(eltype(x), eltype(p))
+    ndims = 1
 end
 @parameters p[1:3, 1:3]
 eqs = [D(x) ~ foo(x, ms); D(ms) ~ bar(ms, p)]

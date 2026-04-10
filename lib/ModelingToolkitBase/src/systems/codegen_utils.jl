@@ -161,6 +161,8 @@ The argument of generated functions corresponding to the history function.
 """
 const DDE_HISTORY_FUN = SSym(:___history___; type = SU.FnType{Tuple{Any, <:Real}, Vector{Real}, Nothing}, shape = SU.Unknown(1))
 const BVP_SOLUTION = SSym(:__sol__; type = Symbolics.FnType{Tuple{<:Real}, Vector{Real}, Nothing}, shape = SU.Unknown(1))
+const DDE_AT_IDX_SYM = SSym(:__delayvar_idxₘₜₖ; type = Int, shape = UnitRange{Int}[])
+const DDE_DELAY_SYM = SSym(:__delayxₘₜₖ; type = Real, shape = UnitRange{Int}[])
 
 """
     $(TYPEDSIGNATURES)
@@ -286,72 +288,40 @@ Base.@nospecializeinfer function build_function_wrapper(
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     obs = observed(sys)
+    args = Vector{Any}(collect(args))
+    assignments = Assignment[]
     # turn delayed unknowns into calls to the history function
     if wrap_delays
         param_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
-        obs = map(obs) do eq
-            delay_to_function(sys, eq; param_arg, histfn)
+        delayfn_expr = STerm(
+            Base.Fix1, SArgsT((histfn_symbolic, param_arg));
+            type = SU.FnType{Tuple, Vector{Real}, Any}, shape = SU.Unknown(1)
+        )
+        for (i, var) in enumerate(unknowns(sys))
+            Moshi.Match.@match var begin
+                BSImpl.Term(; f) && if f isa SymbolicT end => begin
+                    rhs = STerm(
+                        ComposedFunction, SArgsT((Base.Fix2(getindex, i), delayfn_expr));
+                        type = SU.FnType{Tuple, Real, Any}, shape = UnitRange{Int}[]
+                    )
+                    push!(assignments, Assignment(f, rhs))
+                end
+                _ => nothing
+            end
         end
-        expr = delay_to_function(sys, expr; param_arg, histfn)
+
         # add extra argument
-        args = (args[1:(p_start - 1)]..., histfn_symbolic, args[p_start:end]...)
+        insert!(args, p_start, histfn_symbolic)
         p_start += 1
         p_end += 1
     end
+    
+    ir_info = get_ir_info(sys)
+    expr = ir_info.obs_subber(expr)
 
-    dervars = Dict{SymbolicT, SymbolicT}()
-    dervars_in_expr = Set{SymbolicT}()
-    if isscheduled(sys)
-        sched::Schedule = get_schedule(sys)
-        for (k, v) in sched.dummy_sub
-            ttk = default_toterm(k)
-            isequal(ttk, v) && continue
-            dervars[default_toterm(k)] = v
-        end
-    elseif is_time_dependent(sys)
-        for eq in equations(sys)
-            isdiffeq(eq) || continue
-            ttk = default_toterm(eq.lhs)
-            isequal(ttk, eq.rhs) && continue
-            dervars[ttk] = eq.rhs
-        end
-    end
-    if is_time_dependent(sys)
-        Symbolics.get_variables!(dervars_in_expr, expr, keys(dervars); recurse = __search_dervars_recurse)
-    end
-    # only get the necessary observed equations, avoiding extra computation
-    if add_observed && !isempty(obs)
-        if obsidxs_to_use !== nothing
-            obsidxs = Set{Int}(obsidxs_to_use)
-        else
-            obsidxs = Set{Int}(observed_equations_used_by(sys, expr; obs))
-        end
-    else
-        obsidxs = Set{Int}()
-    end
-    # similarly for parameter dependency equations
-    reqd_bound_pars = OrderedSet{SymbolicT}()
-    bgraph::ParameterBindingsGraph = if iscomplete(sys)
-        get_parameter_bindings_graph(sys)
-    else
-        ParameterBindingsGraph(sys)
-    end
-
-    bound_parameters_used_by!(reqd_bound_pars, sys, expr; bgraph)
-    for i in obsidxs
-        bound_parameters_used_by!(reqd_bound_pars, sys, obs[i].rhs; bgraph)
-    end
-    for dervar in dervars_in_expr
-        bound_parameters_used_by!(reqd_bound_pars, sys, dervars[dervar]; bgraph)
-        if add_observed && !isempty(obs) && obsidxs_to_use === nothing
-            union!(obsidxs, observed_equations_used_by(sys, dervars[dervar]; obs))
-        end
-    end
-    bound_parameters_used_by!(reqd_bound_pars, sys, extra_assignments; bgraph)
-    sort_bound_parameters!(reqd_bound_pars, sys; bgraph)
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
-        assignments = array_variable_assignments(args...)
+        append!(assignments, array_variable_assignments(args...))
     else
         cached = check_mutable_cache(sys, ParameterArrayAssignments, ParameterArrayAssignments, nothing)
         if cached isa ParameterArrayAssignments
@@ -360,30 +330,19 @@ Base.@nospecializeinfer function build_function_wrapper(
             param_var_to_arridxs = compute_array_variable_buffer_idxs(args[p_start:p_end])
             store_to_mutable_cache!(sys, ParameterArrayAssignments, ParameterArrayAssignments(param_var_to_arridxs))
         end
-        assignments = array_variable_buffer_idxs_to_assignments(param_var_to_arridxs; buffer_offset = p_start - 1)
+        append!(
+            assignments, array_variable_buffer_idxs_to_assignments(
+                param_var_to_arridxs; buffer_offset = p_start - 1
+            )
+        )
         other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs))
         append!(assignments, other_assigns)
     end
-    binds = bindings(sys)
-    for p in reqd_bound_pars
-        push!(assignments, p ← binds[p])
-    end
-    obsidxs = collect(obsidxs)
-    sort!(obsidxs)
-    for eq in obs[obsidxs]
-        push!(assignments, eq.lhs ← eq.rhs)
-        delete!(dervars_in_expr, eq.lhs)
-    end
-
-    for dervar in dervars_in_expr
-        push!(assignments, dervar ← dervars[dervar])
-    end
     append!(assignments, extra_assignments)
 
-    args = ntuple(Val(length(args))) do i
-        arg = args[i]
+    for (i, arg) in enumerate(args)
         # Make sure to use the proper names for arguments
-        if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
+        args[i] = if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
             DestructuredArgs(arg, generated_argument_name(i); create_bindings)
         else
             arg
@@ -394,14 +353,10 @@ Base.@nospecializeinfer function build_function_wrapper(
     if is_split(sys) && wrap_mtkparameters
         if p_start > p_end
             # In case there are no parameter buffers, still insert an argument
-            args = (args[1:(p_start - 1)]..., MTKPARAMETERS_ARG, args[(p_end + 1):end]...)
+            args = [args[1:(p_start - 1)]; MTKPARAMETERS_ARG; args[(p_end + 1):end]]
         else
             # cannot apply `create_bindings` here since it doesn't nest
-            args = (
-                args[1:(p_start - 1)]...,
-                DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG),
-                args[(p_end + 1):end]...,
-            )
+            args = [args[1:(p_start - 1)]; DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG); args[(p_end + 1):end]]
         end
     end
 
@@ -410,27 +365,20 @@ Base.@nospecializeinfer function build_function_wrapper(
         append!(assignments, pref)
     end
 
-    wrap_code = wrap_code .∘ wrap_assignments(isscalar, assignments)
+    wrap_code = wrap_code .∘ wrap_assignments(false, assignments)
 
     # handling of `output_type` and `mkarray`
     similarto = nothing
     if output_type === Tuple
         expr = MakeTuple(Tuple(expr))
-        wrap_code = wrap_code[1]
     elseif mkarray === nothing
         similarto = output_type
     else
         expr = mkarray(expr, output_type)
-        wrap_code = wrap_code[2]
-    end
-
-    # scalar `build_function` only accepts a single function for `wrap_code`.
-    if wrap_code isa Tuple && symbolic_type(expr) == ScalarSymbolic()
-        wrap_code = wrap_code[1]
     end
 
     optimize = resolve_optimize_option(optimize)
-    return build_function(expr, args...; wrap_code, similarto, cse, optimize, kwargs...)
+    return Symbolics.codegen_function(get_irstructure(sys), expr, args; wrap_code, similarto, cse, optimize, kwargs...)
 end
 
 resolve_optimize_option(x) = x

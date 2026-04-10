@@ -27,12 +27,13 @@ function CacheWriter(
         return generated_argument_name(i - length(solsyms))
     end
     array_assignments = array_variable_assignments(solsyms...; argument_name)
-    fn = build_function_wrapper(
+    fn, _ = build_function_wrapper(
         sys, nothing, :out,
         DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
         rps...; p_start = 3, p_end = length(rps) + 2,
         expression = Val{true}, add_observed = false, cse,
-        extra_assignments = [array_assignments; obs_assigns; body]
+        extra_assignments = [array_assignments; obs_assigns; body],
+        iip_config = (true, false)
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
@@ -513,7 +514,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
             return NonlinearProblem{iip}(
-                sys, op; eval_expression, eval_module, u0_constructor, cse, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, cse, missing_guess_value, kwargs...
             )
         end
     end
@@ -658,7 +659,12 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,))
         )
     )
-    return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
+
+    if length(subprobs) <= 5
+        return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
+    else
+        return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+    end
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)

@@ -10,6 +10,7 @@ using SciMLStructures: canonicalize, Tunable, replace, replace!
 using SymbolicIndexingInterface
 using NonlinearSolve
 import DiffEqNoiseProcess
+import SymbolicUtils as SU
 
 @testset "ODESystem with callbacks" begin
     @discretes p1(t) = 1.0
@@ -206,7 +207,7 @@ struct CallableFoo
     p::Any
 end
 
-@register_symbolic CallableFoo(x)
+@register_symbolic CallableFoo(x)::SU.FnType{Tuple{Real}, Real, CallableFoo}
 
 (f::CallableFoo)(x) = f.p + x
 

@@ -55,10 +55,10 @@ function generate_custom_function(
     if expression == Val{true}
         return fnexpr
     end
-    if fnexpr isa Tuple
+    if SU.is_array_shape(SU.shape(unwrap(exprs)))
         return eval_or_rgf.(fnexpr; eval_expression, eval_module)
     else
-        return eval_or_rgf(fnexpr; eval_expression, eval_module)
+        return eval_or_rgf(fnexpr[1]; eval_expression, eval_module)
     end
 end
 
@@ -941,6 +941,7 @@ const SYS_PROPS = [
     :state_priorities
     :irreducibles
     :maybe_zeros
+    :irstructure
     :assertions
     :ignored_connections
     :parent

@@ -171,12 +171,11 @@ function AffectSystem(
         p in pre_params && continue
         push!(sys_params, p)
     end
-    discretes = map(tovar, discrete_parameters)
+    discretes = discrete_parameters
     dvs = collect(dvs)
     _dvs = map(default_toterm, dvs)
 
-    rev_map = Dict{SymbolicT, SymbolicT}(zip(discrete_parameters, discretes))
-    subs = merge(rev_map, Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs)))
+    subs = Dict{SymbolicT, SymbolicT}(zip(dvs, _dvs))
     affect = substitute(affect, subs)
 
     ps = collect(gather_array_params(union(pre_params, sys_params)))
@@ -985,9 +984,6 @@ Base.@nospecializeinfer function compile_condition(
     fs = build_function_wrapper(
         sys, condit, u, p..., t; kwargs..., cse = false
     )
-    if is_discrete(cbs)
-        fs = (fs, nothing)
-    end
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
         Val{false}, fs...; eval_expression, eval_module
     )
@@ -1384,7 +1380,13 @@ Base.@nospecializeinfer function compile_explicit_affect(
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
     _affsys = unhack_system(affsys)
-    obseqs = observed(_affsys)
+    aff_ir_info = get_ir_info(affsys)
+    aff_ir = get_irstructure(affsys)
+    obseqs = Equation[]
+    sizehint!(obseqs, length(observed(_affsys)))
+    for (i, eq) in enumerate(observed(_affsys))
+        push!(obseqs, eq.lhs ~ aff_ir_info.obs_subber(eq.rhs))
+    end
 
     update_eqs = substitute(
         obseqs, Dict([p => unPre(p) for p in parameters(affsys)])
@@ -1416,17 +1418,18 @@ Base.@nospecializeinfer function compile_explicit_affect(
     u_up,
         u_up! = build_function_wrapper(
         sys, (@view rhss[is_u]), dvs, _ps..., t;
-        wrap_code = add_integrator_header(sys, integ, :u), expression = Val{false},
-        outputidxs = u_idxs, wrap_mtkparameters, cse = false, eval_expression,
-        eval_module
+        wrap_code = add_integrator_header(sys, integ, :u),
+        outputidxs = u_idxs, wrap_mtkparameters, iip_config = (false, true)
     )
     p_up,
         p_up! = build_function_wrapper(
         sys, (@view rhss[is_p]), dvs, _ps..., t;
-        wrap_code = add_integrator_header(sys, integ, :p), expression = Val{false},
-        outputidxs = p_idxs, wrap_mtkparameters, cse = false, eval_expression,
-        eval_module
+        wrap_code = add_integrator_header(sys, integ, :p),
+        outputidxs = p_idxs, wrap_mtkparameters, iip_config = (false, true)
     )
+
+    u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)
+    p_up! = eval_or_rgf(p_up!; eval_expression, eval_module)
 
     return ExplicitAffect(dvs_to_update, ps_to_update, reset_jumps, u_up!, p_up!)
 end

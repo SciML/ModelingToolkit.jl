@@ -190,6 +190,7 @@ include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/analysis_points.jl")
+include("systems/ir_info.jl")
 include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
@@ -382,6 +383,8 @@ function __init__()
     SU.hashcons(BVP_SOLUTION, true)
     SU.hashcons(unwrap(W_GAMMA), true)
     SU.hashcons(unwrap(ASSERTION_LOG_VARIABLE), true)
+    SU.hashcons(DDE_AT_IDX_SYM, true)
+    SU.hashcons(DDE_DELAY_SYM, true)
     return nothing
 end
 

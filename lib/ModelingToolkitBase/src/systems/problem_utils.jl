@@ -881,7 +881,9 @@ function ReconstructInitializeprob(
     ugetter = u0_constructor ∘
         concrete_getu(
         srcsys, unknowns(dstsys);
-        eval_expression, eval_module, force_time_independent = is_steadystateprob, kwargs...
+        eval_expression, eval_module, force_time_independent = is_steadystateprob,
+        iip_config = (true, false),
+        kwargs...
     )
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
@@ -1284,8 +1286,11 @@ function maybe_build_initialization_problem(
     end
 
     missingvars = AtomicArraySet()
+    temp_op = copy(op)
     for (k, v) in op
-        v === COMMON_MISSING && push!(missingvars, k)
+        v === COMMON_MISSING || continue
+        push!(missingvars, k)
+        delete!(temp_op, k)
     end
     binds = bindings(sys)
     if time_dependent_init
@@ -1323,15 +1328,14 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
-    # We can't use `getu` here because that goes to `SII.observed`, which goes to
-    # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
-    # `eval_expression == true`, this then runs into world-age issues. Building an
-    # RGF here is fine since it is always discarded. We can't use `eval_module` for
-    # the RGF since the user may not have run RGF's init.
-    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars; kwargs...)
-    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
-    for (p, pval) in zip(missingvars, pvals)
-        op[p] = pval
+    for (i, v) in enumerate(unknowns(initializeprob.f.sys))
+        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+    end
+    add_observed!(initializeprob.f.sys, temp_op)
+    left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
+    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
+    for p in missingvars
+        op[p] = subber(p)
     end
 
     return (;
@@ -1784,7 +1788,7 @@ function SymbolicTstops(
     rps = reorder_parameters(sys)
     tstops,
         _ = build_function_wrapper(
-        sys, tstops,
+        sys, Symbolics.SConst(tstops),
         rps...,
         t0,
         t1;
