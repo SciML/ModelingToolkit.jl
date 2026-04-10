@@ -222,6 +222,35 @@ if @isdefined(ModelingToolkit)
         @test matrices_op.B ≈ matrices_ref.B
         @test matrices_op.C ≈ matrices_ref.C
         @test matrices_op.D ≈ matrices_ref.D
+
+        # Vector of time points: linearization_function is built once and reused.
+        ts = [0.0, 0.5, 1.0]
+        mats_vec, _, extras_vec = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec) == 3
+        @test length(extras_vec) == 3
+        # The system is linear so all operating points yield the same A,B,C,D.
+        for mats_t in mats_vec
+            @test mats_t.A ≈ matrices_ref.A
+            @test mats_t.B ≈ matrices_ref.B
+            @test mats_t.C ≈ matrices_ref.C
+            @test mats_t.D ≈ matrices_ref.D
+        end
+        # Two-arg form: linearize(ssys, lin_fun; op=LinearizationOpPoint(sol, ts))
+        lin_fun, ssys_lin = linearization_function(sys, sys.plant_input, sys.plant_output)
+        mats_vec2, extras_vec2 = linearize(
+            ssys_lin, lin_fun;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec2) == 3
+        for (m1, m2) in zip(mats_vec, mats_vec2)
+            @test m1.A ≈ m2.A
+            @test m1.B ≈ m2.B
+            @test m1.C ≈ m2.C
+            @test m1.D ≈ m2.D
+        end
     end
 
     @testset "Complicated model" begin
