@@ -293,17 +293,20 @@ numerical problem from a `System`.
 - `MissingGuessValue.Constant(val::Number)`: Missing guesses are set to the given value
   `val`.
 - `MissingGuessValue.Random(rng::AbstractRNG)`: Missing guesses are set to `rand(rng)`.
+- `MissingGuessValue.HashedRandom`: Missing guesses are set to a
+  deterministically determined random-like value based on the hash of the variable name
 - `MissingGuessValue.Error()`: Missing guess values cause an error.
 """
 Moshi.Data.@data MissingGuessValue begin
     Constant(Number)
     Random(AbstractRNG)
+    HashedRandom
     Error
 end
 
 # To be overloaded downstream by MTK
 default_missing_guess_value() = default_missing_guess_value(nothing)
-default_missing_guess_value(_) = MissingGuessValue.Error()
+default_missing_guess_value(_) = MissingGuessValue.HashedRandom()
 
 """
     $(TYPEDSIGNATURES)
@@ -367,6 +370,15 @@ function varmap_to_vars(
                         varmap[var] = rand(rng, size(var))
                     else
                         write_possibly_indexed_array!(varmap, var, Symbolics.SConst(rand(rng)), COMMON_NOTHING)
+                    end
+                end
+            end
+            MissingGuessValue.HashedRandom() => begin
+                for var in missing_vars
+                    if Symbolics.isarraysymbolic(var)
+                        varmap[var] = [hash(var,i) for i in eachindex(var)]./0x1p64
+                    else
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var)/0x1p64), COMMON_NOTHING)
                     end
                 end
             end
