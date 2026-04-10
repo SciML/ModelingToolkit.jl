@@ -1,10 +1,14 @@
 """
     $(TYPEDEF)
 
-Wraps an `ODESolution` and a time point `t`. When passed as `op` to [`linearize`](@ref),
-an operating point is constructed from the values of differential state variables and
-parameters of `sol` evaluated at time `t`. Algebraic variables are not set and will be
-determined by the initialization algorithm.
+Wraps an `ODESolution` and a time point (or vector of time points) `t`. When passed as
+`op` to [`linearize`](@ref), an operating point is constructed from the values of
+differential state variables and parameters of `sol` evaluated at `t`. Algebraic
+variables are not set and will be determined by the initialization algorithm.
+
+When `t` is an `AbstractVector`, [`linearize`](@ref) calls [`linearization_function`](@ref)
+once and evaluates the linearization at each time point, returning vectors of matrices and
+extras.
 
 # Fields
 
@@ -16,7 +20,7 @@ struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T}
     """
     sol::S
     """
-    The time point at which to evaluate the solution.
+    The time point (or vector of time points) at which to evaluate the solution.
     """
     t::T
 end
@@ -35,6 +39,29 @@ function _build_op_from_solution(op::LinearizationOpPoint)
         result[p] = getp(op.sol, p)(op.sol)
     end
     return result
+end
+
+function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) where {S <: SciMLBase.AbstractODESolution}
+    sol_sys = MTKBase.indp_to_system(op.sol)
+    eqs = equations(sol_sys)
+    sts = unknowns(sol_sys)
+    # Find differential equation indices and extract parameters once — both are
+    # time-independent, so we only do this work once regardless of how many time
+    # points are requested.
+    diff_idxs = findall(isdiffeq, eqs)
+    param_vals = Dict{SymbolicT, SymbolicT}()
+    for p in parameters(sol_sys)
+        param_vals[p] = getp(op.sol, p)(op.sol)
+    end
+    # Interpolate once per time point to build the per-point operating-point dict.
+    return map(op.t) do ti
+        u = op.sol(ti)
+        result = copy(param_vals)
+        for i in diff_idxs
+            result[sts[i]] = u[i]
+        end
+        result
+    end
 end
 
 """
@@ -823,6 +850,13 @@ function linearize(
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters()
     )
+    if op isa LinearizationOpPoint && op.t isa AbstractVector
+        ops = _build_op_from_solution(op)
+        results = map(zip(ops, op.t)) do (op_i, ti)
+            linearize(sys, lin_fun; t = ti, op = op_i, allow_input_derivatives, p)
+        end
+        return first.(results), last.(results)
+    end
     if op isa LinearizationOpPoint
         t = op.t
         op = _build_op_from_solution(op)
@@ -854,6 +888,21 @@ function linearize(
         zero_dummy_der = false,
         kwargs...
     )
+    if op isa LinearizationOpPoint && op.t isa AbstractVector
+        ops = _build_op_from_solution(op)
+        ts = op.t
+        # Build the linearization function once using the first operating point, then
+        # reuse it for all subsequent time points — this avoids redundant `mtkcompile`
+        # and Jacobian preparation work.
+        lin_fun, ssys = linearization_function(
+            sys, inputs, outputs;
+            zero_dummy_der, op = ops[1], t = ts[1], kwargs...
+        )
+        results = map(zip(ops, ts)) do (op_i, ti)
+            linearize(ssys, lin_fun; op = op_i, t = ti, allow_input_derivatives)
+        end
+        return first.(results), ssys, last.(results)
+    end
     if op isa LinearizationOpPoint
         t = op.t
         op = _build_op_from_solution(op)
