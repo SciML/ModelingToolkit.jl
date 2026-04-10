@@ -156,7 +156,7 @@ eqs = [
 ]
 @named daesys = System(eqs, t)
 newdaesys = mtkcompile(daesys)
-@test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ y + sin(z) - p * t])
+@test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t])
 @test issetequal(
     equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 )
@@ -260,7 +260,7 @@ end
     @test length(equations(sys3)) == 1
     @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
 
-    idx = findfirst(isequal(sys3.capacitor.i), observables(sys3))
+    idx = findfirst(isequal(sys3.capacitor.p.i), observables(sys3))
     rhs = observed(sys3)[idx].rhs
     @test operation(rhs) === getindex
     @test operation(arguments(rhs)[1]) === (\)

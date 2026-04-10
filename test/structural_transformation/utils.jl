@@ -194,7 +194,7 @@ end
         @testset "DDEs" begin
             function oscillator(; name, k = 1.0, τ = 0.01)
                 @parameters k = k τ = τ
-                @variables x(..) = 0.1 y(t) = 0.1 jcn(t) = 0.0 delx(t)
+                @variables x(..) = 0.1 y(t) = 0.1 jcn(t) = 0.0 [state_priority = -1] delx(t)
                 eqs = [
                     D(x(t)) ~ y,
                     D(y) ~ -k * x(t - τ) + jcn,
@@ -217,11 +217,11 @@ end
             x1 = operation(unwrap(osc1.x))
             x2 = operation(unwrap(osc2.x))
             @test mapping[sys.osc1.x] == (D(sys.osc1.x) ~ sys.osc1.y)
-            @test mapping[sys.osc1.y] == (D(sys.osc1.y) ~ sys.osc1.jcn - sys.osc1.k * x1(t - sys.osc1.τ))
+            @test mapping[sys.osc1.y] == (D(sys.osc1.y) ~ sys.osc2.delx - sys.osc1.k * x1(t - sys.osc1.τ))
             @test mapping[sys.osc1.delx] == (sys.osc1.delx ~ x1(t - sys.osc1.τ))
             @test mapping[sys.osc1.jcn] == (sys.osc1.jcn ~ sys.osc2.delx)
             @test mapping[sys.osc2.x] == (D(sys.osc2.x) ~ sys.osc2.y)
-            @test mapping[sys.osc2.y] == (D(sys.osc2.y) ~ sys.osc2.jcn - sys.osc2.k * x2(t - sys.osc2.τ))
+            @test mapping[sys.osc2.y] == (D(sys.osc2.y) ~ sys.osc1.delx - sys.osc2.k * x2(t - sys.osc2.τ))
             @test mapping[sys.osc2.delx] == (sys.osc2.delx ~ x2(t - sys.osc2.τ))
             @test mapping[sys.osc2.jcn] == (sys.osc2.jcn ~ sys.osc1.delx)
             @test length(mapping) == 8

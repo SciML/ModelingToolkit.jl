@@ -122,27 +122,32 @@ connections = [
 
 @named cl = System(connections, t, systems = [f, c, p])
 
-lsys0, ssys = linearize(cl, [f.u], [p.x])
-desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
-lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
+function compare_matrices(reference, value)
+    @assert size(reference.A) == (2, 2) "This testing function is only valid for `2x2` systems"
+    @test isapprox(reference.C, value.C) || isapprox(reverse(reference.C), value.C)
+    colorder = isapprox(reference.C, value.C) ? [1, 2] : [2, 1]
+    @test isapprox(reference.B, value.B) || isapprox(reverse(reference.B), value.B)
+    roworder = isapprox(reference.B, value.B) ? [1, 2] : [2, 1]
+    @test isapprox(reference.D, value.D)
+    @test isapprox(reference.A[roworder, colorder], value.A)
+end
+lsys, ssys = linearize(cl, [f.u], [p.x])
+lsys2, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
 
-@test lsys.A == lsys2.A == [-2 0; 1 -2]
-@test lsys.B == lsys2.B == reshape([1, 0], 2, 1)
-@test lsys.C == lsys2.C == [0 1]
-@test lsys.D[] == lsys2.D[] == 0
+compare_matrices(lsys, lsys2)
+compare_matrices(lsys, (; A = [-2 0; 1 -2], B = reshape([1, 0], 2, 1), C = [0 1], D = [0;;]))
 
 ## Symbolic linearization
 lsyss_ns, ssys_ns = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x], split = false)
 lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @test isequal(lsyss.A, lsyss_ns.A)
 
-lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.initial_conditions(cl))) == lsys.A
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.initial_conditions(cl))) == lsys.B
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.initial_conditions(cl))) == lsys.C
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.initial_conditions(cl))) == lsys.D
+_substituter(M, sys) = value.(ModelingToolkit.fixpoint_sub(M, ModelingToolkit.initial_conditions_and_guesses(sys); fold = Val(true)))
+lsys_m = (;
+    A = _substituter(lsyss.A, cl), B = _substituter(lsyss.B, cl),
+    C = _substituter(lsyss.C, cl), D = _substituter(lsyss.D, cl)
+)
+compare_matrices(lsys, lsys_m)
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -152,14 +157,12 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys0,
+lsys,
     ssys = linearize(
     pid, [reference.u, measurement.u], [ctr_output.u];
     op = Dict(reference.u => 0.0, measurement.u => 0.0)
 )
 @unpack int, der = pid
-desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
@@ -171,31 +174,14 @@ lsyss0,
     pid, [reference.u, measurement.u],
     [ctr_output.u]
 )
-lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
-
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.A, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.A
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.B, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.B
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.C, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.C
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.D, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.D
+lsyss = (;
+    A = _substituter(lsyss0.A, pid), B = _substituter(lsyss0.B, pid),
+    C = _substituter(lsyss0.C, pid), D = _substituter(lsyss0.D, pid)
+)
+compare_matrices(lsys, lsyss)
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
-lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_order))
+lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(unknowns(ssys)))
 
 @test lsys.A == [-10 0; 0 0]
 @test lsys.B == [10 -10; 2 -2]

@@ -141,12 +141,16 @@ if @isdefined(ModelingToolkit)
     model_inputs = [torque.tau.u]
     op = Dict(torque.tau.u => 0.0)
     matrices, ssys = linearize(
-        model, model_inputs, model_outputs; op
+        model, model_inputs, model_outputs; op,
+        guesses = [inertia2.flange_a.phi => 0.0, inertia1.flange_b.phi => 0.0]
     )
     @test length(ModelingToolkit.outputs(ssys)) == 4
 
     let # Just to have a local scope for D
-        matrices, ssys = linearize(model, model_inputs, [y]; op)
+        matrices, ssys = linearize(
+            model, model_inputs, [y]; op,
+            guesses = [inertia2.flange_a.phi => 0.0, inertia1.flange_b.phi => 0.0]
+        )
         A, B, C, D = matrices
         obsf = ModelingToolkit.build_explicit_observed_function(
             ssys,
