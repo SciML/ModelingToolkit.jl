@@ -140,6 +140,17 @@ margin(P)
 nyquistplot(P)
 ```
 
+## Operating Point of Unconnected Inputs After Loop Openings
+When a connection is broken via `loop_openings`, the downstream input variable(s) that were previously driven by the connection become free. The value assigned to these inputs determines the operating point at which the linearization is computed, which is significant for nonlinear systems where the Jacobian depends on the operating point.
+Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No default value is automatically propagated from the output side of the broken connection — the user is expected to provide the value explicitly via the operating point (e.g., `op = [u => value`]).
+For initialization, variables that become free due to loop openings are treated as solvable parameters: the initialization system always considers them as unknowns. If the user provides a value in the operating point, that value is used. If no value is provided, the initialization system will attempt to determine a consistent value, but the system may be underdetermined and a warning will be issued.
+Motivation: This design reflects a series of tradeoffs discovered through iteration:
+
+- Defaulting free inputs to zero (the original behavior) is incorrect for nonlinear systems because it changes the linearization point relative to the equilibrium, potentially yielding meaningless results.
+- Automatically propagating the output value of the broken connection preserves the correct operating point in some cases, makes it impossible to disconnect input sources (e.g., a Step signal). It also silently determines the operating point in a way that is difficult for the user to inspect or override.
+- Making the variable a parameter (rather than a linearization input) prevents it from appearing as an extra input dimension in the linearized system. The user requested a linearization from specific inputs to specific outputs; the broken connection's input is not one of them.
+- Requiring the user to explicitly provide the operating point for broken connections makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can determine this from a simulation or an initialization solution and pass it explicitly.
+
 ## Index
 
 ```@index
