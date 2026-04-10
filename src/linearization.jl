@@ -1,4 +1,43 @@
 """
+    $(TYPEDEF)
+
+Wraps an `ODESolution` and a time point `t`. When passed as `op` to [`linearize`](@ref),
+an operating point is constructed from the values of differential state variables and
+parameters of `sol` evaluated at time `t`. Algebraic variables are not set and will be
+determined by the initialization algorithm.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T}
+    """
+    The solution to extract operating point values from.
+    """
+    sol::S
+    """
+    The time point at which to evaluate the solution.
+    """
+    t::T
+end
+
+function _build_op_from_solution(op::LinearizationOpPoint)
+    sol_sys = MTKBase.indp_to_system(op.sol)
+    eqs = equations(sol_sys)
+    sts = unknowns(sol_sys)
+    u = op.sol(op.t)
+    result = Dict{SymbolicT, SymbolicT}()
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) || continue
+        result[sts[i]] = u[i]
+    end
+    for p in parameters(sol_sys)
+        result[p] = getp(op.sol, p)(op.sol)
+    end
+    return result
+end
+
+"""
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = nothing, kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
@@ -786,6 +825,10 @@ function linearize(
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters()
     )
+    if op isa LinearizationOpPoint
+        t = op.t
+        op = _build_op_from_solution(op)
+    end
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
@@ -813,6 +856,10 @@ function linearize(
         zero_dummy_der = false,
         kwargs...
     )
+    if op isa LinearizationOpPoint
+        t = op.t
+        op = _build_op_from_solution(op)
+    end
     lin_fun,
         ssys = linearization_function(
         sys,
