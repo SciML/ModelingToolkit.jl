@@ -92,6 +92,7 @@ The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring in
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
+  - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -114,6 +115,7 @@ function linearization_function(
         warn_empty_op = true,
         missing_guess_value = MTKBase.default_missing_guess_value(),
         t = 0.0,
+        ignore_system_initial_conditions = false,
         kwargs...
     )
     op = Dict(op)
@@ -123,6 +125,11 @@ function linearization_function(
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    if ignore_system_initial_conditions
+        ics = copy(initial_conditions(ssys))
+        filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
+        @set! ssys.initial_conditions = ics
+    end
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
@@ -922,16 +929,19 @@ function linearize(
         # and Jacobian preparation work.
         lin_fun, ssys = linearization_function(
             sys, inputs, outputs;
-            zero_dummy_der, op = ops[1], t = ts[1], kwargs...
+            zero_dummy_der, op = ops[1], t = ts[1],
+            ignore_system_initial_conditions = true, kwargs...
         )
         results = map(zip(ops, ts)) do (op_i, ti)
             linearize(ssys, lin_fun; op = op_i, t = ti, allow_input_derivatives)
         end
         return first.(results), ssys, last.(results)
     end
+    ignore_system_ics = false
     if op isa LinearizationOpPoint
         t = op.t
         op = _build_op_from_solution(op)
+        ignore_system_ics = true
     end
     lin_fun,
         ssys = linearization_function(
@@ -940,6 +950,7 @@ function linearize(
         outputs;
         zero_dummy_der,
         op, t,
+        ignore_system_initial_conditions = ignore_system_ics,
         kwargs...
     )
     mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
