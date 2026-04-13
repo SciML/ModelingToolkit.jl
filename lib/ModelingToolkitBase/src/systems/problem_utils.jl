@@ -1278,8 +1278,7 @@ struct GetUpdatedU0{GG, GIU}
     get_initial_unknowns::GIU
 end
 
-function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinearProblem, op::AbstractDict)
-    @nospecialize initprob
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict)
     dvs = unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
@@ -1287,7 +1286,7 @@ function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinear
         varval = get(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
-    get_guessvars = getu(initprob, dvs[guessvars])
+    get_guessvars = getu(initsys, dvs[guessvars])
     get_initial_unknowns = getu(sys, Initial.(dvs))
     return GetUpdatedU0(guessvars, get_guessvars, get_initial_unknowns)
 end
@@ -1400,7 +1399,7 @@ constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments 
 to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, t, guesses;
+        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses;
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
@@ -1420,6 +1419,7 @@ function maybe_build_initialization_problem(
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
         missing_guess_value, is_steadystateprob, kwargs...
     )
+    initsys = initializeprob.f.sys::System
     needs_remake = false
     _u0 = state_values(initializeprob)
      if _u0 !== nothing
@@ -1466,7 +1466,7 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initializeprob, op)
+        GetUpdatedU0(sys, initsys, op)
     else
         nothing
     end
@@ -1476,7 +1476,7 @@ function maybe_build_initialization_problem(
         Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
-            sys, initializeprob.f.sys; u0_constructor,
+            sys, initsys; u0_constructor,
             p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
@@ -1504,7 +1504,7 @@ function maybe_build_initialization_problem(
         initializeprobpmap = nothing
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module, kwargs...
+            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
         )
     end
 
@@ -1532,7 +1532,6 @@ function maybe_build_initialization_problem(
             end
         end
         if implicit_dae
-            initsys = initializeprob.f.sys
             for v in unknowns(sys)
                 v = Differential(get_iv(sys))(v)
                 ttv = default_toterm(v)
@@ -1558,10 +1557,10 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
-    for (i, v) in enumerate(unknowns(initializeprob.f.sys))
+    for (i, v) in enumerate(unknowns(initsys))
         write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
     end
-    add_observed!(initializeprob.f.sys, temp_op)
+    add_observed!(initsys, temp_op)
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
