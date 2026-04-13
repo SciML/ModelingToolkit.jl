@@ -34,7 +34,9 @@ function eliminate_perfect_aliases!(state::TearingState)
     eqs_to_rm = Int[]
     vars_to_rm = Int[]
     aliases = find_perfect_aliases!(state, eqs_to_rm, vars_to_rm)
-    old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(state, eqs_to_rm, vars_to_rm)
+    old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(
+        state, eqs_to_rm, vars_to_rm; eqs_sorted_and_uniqued = true
+    )
     return nothing
 end
 
@@ -80,6 +82,7 @@ function find_perfect_aliases!(
             end
             _ => continue
         end
+        push!(eqs_to_rm, ieq)
         push!(alias_groups, snbors[1])
         push!(alias_groups, snbors[2])
         union!(alias_groups, snbors[1], snbors[2])
@@ -105,14 +108,8 @@ function find_perfect_aliases!(
             aliases[v] = target
 
             dnbors = copy(𝑑neighbors(graph, v))
-            alias_eq = 0
             for e in dnbors
                 snbors = 𝑠neighbors(graph, e)
-                if alias_eq == 0 && length(snbors) == 2 && (snbors[1] == target || snbors[2] == target)
-                    push!(eqs_to_rm, e)
-                    alias_eq = e
-                    continue
-                end
                 eqs[e] = substitute(eqs[e], subs)
                 original_eqs[e] = substitute(original_eqs[e], subs)
                 Graphs.rem_edge!(graph, e, v)
@@ -133,11 +130,6 @@ function find_perfect_aliases!(
                 dnbors = copy(𝑑neighbors(graph, dv))
                 for e in dnbors
                     snbors = 𝑠neighbors(graph, e)
-                    if length(snbors) == 2 && (snbors[1] == dtarget || snbors[2] == dtarget)
-                        push!(eqs_to_rm, e)
-                        alias_eq = e
-                        continue
-                    end
                     eqs[e] = substitute(eqs[e], subs)
                     original_eqs[e] = substitute(original_eqs[e], subs)
                     Graphs.rem_edge!(graph, e, dv)
