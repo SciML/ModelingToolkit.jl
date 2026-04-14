@@ -152,3 +152,9 @@ end
     ps = MTKParameters(sys, nothing)
     @test fn([1.0], ps, 1.5) ≈ 4.0
 end
+
+@testset "Non-scalarized array observed without individual elements being unknowns/observables" begin
+    @variables x(t)[1:3] y(t)
+    @mtkcomplete sys = System([D(y) ~ 2y + sum(x)], t, [y], []; observed = [x ~ [y, y + 1, y + 2]])
+    @test ModelingToolkitBase.observed_equations_used_by(sys, [x[1]]) == [1]
+end

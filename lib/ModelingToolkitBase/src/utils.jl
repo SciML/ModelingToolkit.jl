@@ -1243,9 +1243,10 @@ function observed_equations_used_by(
     obsidxs = BitSet()
     for sym in involved_vars
         sym in available_vars && continue
-        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
+        arrsym = split_indexed_var(sym)[1]
         idx = @something(
             get(obsvar_to_idx, sym, nothing),
+            get(obsvar_to_idx, arrsym, nothing),
             Some(nothing)
         )
         idx === nothing && continue
