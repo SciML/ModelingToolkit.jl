@@ -88,7 +88,7 @@ function generate_rhs(
         rhss = [eq.rhs for eq in eqs]
     end
 
-    if !isempty(assertions(sys))
+    if !isempty(assertions(sys)) && !isempty(rhss)
         rhss[end] += unwrap(get_assertions_expr(sys))
     end
 
