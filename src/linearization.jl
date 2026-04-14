@@ -163,7 +163,7 @@ function linearization_function(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+    prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only = true, guesses, missing_guess_value
     )
