@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}
+    name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}/${{ matrix.package.subpkg }}
     runs-on: ${{ matrix.os }}
     env:
       GROUP: ${{ matrix.package.group }}
@@ -26,26 +26,27 @@ jobs:
         julia-version: [1]
         os: [ubuntu-latest]
         package:
-          - {user: SciML, repo: SciMLBase.jl, group: Downstream}
-          - {user: SciML, repo: SciMLBase.jl, group: SymbolicIndexingInterface}
-          - {user: SciML, repo: Catalyst.jl, group: Modeling}
-          - {user: SciML, repo: Catalyst.jl, group: Simulation}
-          - {user: SciML, repo: Catalyst.jl, group: Hybrid}
-          - {user: SciML, repo: Catalyst.jl, group: Misc}
-          - {user: SciML, repo: Catalyst.jl, group: Spatial}
-          - {user: SciML, repo: CellMLToolkit.jl, group: Core}
-          - {user: SciML, repo: SBMLToolkit.jl, group: All}
-          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1}
-          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2}
-          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream}
-          - {user: SciML, repo: StructuralIdentifiability.jl, group: Core}
-          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core}
-          - {user: SciML, repo: ModelOrderReduction.jl, group: All}
-          - {user: SciML, repo: MethodOfLines.jl, group: Interface}
-          - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
-          - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core}
-          - {user: SciML, repo: SciMLSensitivity.jl, group: Core8}
+          - {user: SciML, repo: SciMLBase.jl, group: Downstream, subpkg: ""}
+          - {user: SciML, repo: SciMLBase.jl, group: SymbolicIndexingInterface, subpkg: ""}
+          - {user: SciML, repo: Catalyst.jl, group: Modeling, subpkg: ""}
+          - {user: SciML, repo: Catalyst.jl, group: Simulation, subpkg: ""}
+          - {user: SciML, repo: Catalyst.jl, group: Hybrid, subpkg: ""}
+          - {user: SciML, repo: Catalyst.jl, group: Misc, subpkg: ""}
+          - {user: SciML, repo: Catalyst.jl, group: Spatial, subpkg: ""}
+          - {user: SciML, repo: CellMLToolkit.jl, group: Core, subpkg: ""}
+          - {user: SciML, repo: SBMLToolkit.jl, group: All, subpkg: ""}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1, subpkg: ""}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2, subpkg: ""}
+          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream, subpkg: ""}
+          - {user: SciML, repo: StructuralIdentifiability.jl, group: Core, subpkg: ""}
+          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core, subpkg: ""}
+          - {user: SciML, repo: ModelOrderReduction.jl, group: All, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: Interface, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: DAE, subpkg: ""}
+          - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core, subpkg: ""}
+          - {user: SciML, repo: SciMLSensitivity.jl, group: Core8, subpkg: ""}
+          - {user: JuliaComputing, repo: StateSelection.jl, group: All, subpkg: ModelingToolkitTearing}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
@@ -66,8 +67,16 @@ jobs:
             # force it to use this PR's version of the package
             Pkg.develop(PackageSpec(path="./lib/ModelingToolkitBase"))  # resolver may fail with main deps
             Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
+            subpkg = "${{ matrix.package.subpkg }}"
+            if subpkg != ""
+              Pkg.develop(PackageSpec(path=joinpath("./downstream/lib", subpkg)))
+            end
             Pkg.update()
-            Pkg.test(coverage=true)  # resolver may fail with test time deps
+            if subpkg != ""
+              Pkg.test(subpkg)
+            else
+              Pkg.test(coverage=true)  # resolver may fail with test time deps
+            end
           catch err
             err isa Pkg.Resolve.ResolverError || rethrow()
             # If we can't resolve that means this is incompatible by SemVer and this is fine
