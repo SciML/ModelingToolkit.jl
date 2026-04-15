@@ -239,6 +239,7 @@ function _mtkcompile!(
     state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
     state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
     eliminate_perfect_aliases!(state)
+    remove_constant_variables!(state; kwargs...)
     StateSelection.trivial_tearing!(state)
     sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
     if check_consistency

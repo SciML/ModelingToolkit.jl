@@ -353,3 +353,13 @@ ss = mtkcompile(sys)
     @mtkcompile sys = System([D(x) ~ 2x, y ~ x], t; state_priorities = [y => 10])
     @test isequal(only(unknowns(sys)), y)
 end
+
+@testset "Constant equations are removed" begin
+    @variables x(t) y(t) z(t)
+    @named sys = System([0 ~ 2x + 3t + 4, 0 ~ x * y + 2, 0 ~ D(x) + D(z) + 2z], t)
+    ts = TearingState(sys)
+    ModelingToolkit.remove_constant_variables!(ts)
+    dx = ModelingToolkit.default_toterm(unwrap(D(x)))
+    @test isequal(ts.additional_observed, [x ~ (3t + 4) / -2, dx ~ (-3//2), y ~ 2 / (-x)])
+    @test isequal(equations(ts), [0 ~ D(z) + 2z - 3/2])
+end
