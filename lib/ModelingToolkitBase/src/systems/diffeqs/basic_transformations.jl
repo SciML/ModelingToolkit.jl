@@ -1166,6 +1166,10 @@ end
 
 DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper{T}) where {T} = dcapiw
 
+function DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper) where {T}
+    convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
+end
+
 function (dcapiw::DiffCacheAllocatorAPIWrapper)(reference, sz::NTuple{N, Int}) where {N}
     return reshape(get_tmp(dcapiw.cache, reference), sz)
 end
