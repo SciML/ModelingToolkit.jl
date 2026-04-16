@@ -845,15 +845,19 @@ function get_mtkparameters_reconstructor(
     getter = let getters = getters, diffcache_buffer_idx = diffcache_buffer_idx
         function _getter(valp, initprob)
             oldcache = parameter_values(initprob).caches
+            tunablevals = getters[1](valp)
             initialvals = getters[2](valp)
             nonnumerics = getters[5](valp)
             if !iszero(diffcache_buffer_idx)
                 @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{eltype(initialvals)}.(nonnumerics[diffcache_buffer_idx])
             end
-            return MTKParameters(
-                getters[1](valp), initialvals, getters[3](valp),
-                getters[4](valp), nonnumerics, oldcache isa Tuple{} ? () :
-                    copy.(oldcache)
+            return promote_with_nothing(
+                promote_type_with_nothing(eltype(tunablevals), initialvals),
+                MTKParameters(
+                    tunablevals, initialvals, getters[3](valp),
+                    getters[4](valp), nonnumerics, oldcache isa Tuple{} ? () :
+                        copy.(oldcache)
+                )
             )
         end
     end
