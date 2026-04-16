@@ -353,3 +353,23 @@ ss = mtkcompile(sys)
     @mtkcompile sys = System([D(x) ~ 2x, y ~ x], t; state_priorities = [y => 10])
     @test isequal(only(unknowns(sys)), y)
 end
+
+@testset "Perfect aliases do not eliminate irreducible variables" begin
+    @variables x(t) y(t)
+    @variables e(t) [irreducible = true]
+    @variables c(t) [irreducible = true] d(t) [irreducible = true]
+    # Two independent alias groups:
+    #   * {x, e}     -- one irreducible; the non-irreducible `x` is eliminated as observed
+    #   * {c, d, y}  -- two irreducibles + one non-irreducible. `y` is eliminated, both
+    #                   irreducibles remain unknowns, bound by the surviving alias
+    #                   equation between them.
+    @mtkcompile sys = System([
+            D(x) ~ x,
+            D(c) ~ -c,
+            e ~ x,
+            c ~ d,
+            y ~ c
+        ], t)
+
+    @test Set(unknowns(sys)) == Set([e, c, d])
+end
