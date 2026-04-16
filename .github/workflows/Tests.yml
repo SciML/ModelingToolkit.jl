@@ -55,10 +55,6 @@ jobs:
         with:
           version: "${{ matrix.version }}"
           arch: "${{ runner.arch }}"
-      - uses: julia-actions/cache@v3
-        if: ${{ vars.USE_SELF_HOSTED != 'true' }}
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
       - name: "Test ${{ matrix.pkggroup }}"
         env:
           PKGGROUP: ${{ matrix.pkggroup }}

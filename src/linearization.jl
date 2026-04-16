@@ -37,14 +37,14 @@ function linearization_function(
         initializealg = nothing,
         initialization_abstol = 1.0e-5,
         initialization_reltol = 1.0e-3,
-        op = Dict(),
+        op = Dict{SymbolicT, SymbolicT}(),
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
         warn_initialize_determined = true,
-        guesses = Dict(),
+        guesses = Dict{SymbolicT, SymbolicT}(),
         warn_empty_op = true,
         t = 0.0,
         kwargs...
@@ -55,20 +55,34 @@ function linearization_function(
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
-    inputs = mapreduce(vcat, inputs; init = []) do var
-        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
-    end
-    outputs = mapreduce(vcat, outputs; init = []) do var
-        symbolic_type(var) == ArraySymbolic() ? collect(var) : [var]
-    end
     ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
-        defs = Dict(x => 0.0 for x in dummyder)
-        @set! ssys.defaults = merge(defs, defaults(ssys))
-        op = merge(defs, op)
+        ics = initial_conditions(ssys)
+        for x in dummyder
+            ics[x] = Symbolics.COMMON_ZERO
+        end
     end
+
+    _inputs = SymbolicT[]
+    _outputs = SymbolicT[]
+    for x in inputs
+        if SU.is_array_shape(SU.shape(x))
+            append!(_inputs, vec(collect(x)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(_inputs, x)
+        end
+    end
+    for x in outputs
+        if SU.is_array_shape(SU.shape(x))
+            append!(_outputs, vec(collect(x)::Array{SymbolicT})::Vector{SymbolicT})
+        else
+            push!(_outputs, x)
+        end
+    end
+    inputs = _inputs
+    outputs = _outputs
     sys = ssys
 
     if initializealg === nothing
@@ -591,10 +605,10 @@ function linearize_symbolic(
         B = f_u
         C = h_x
     else
-        gz = lu(g_z; check = false)
+        gz = lu(Num.(g_z); check = false)
         issuccess(gz) ||
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
-        gzgx = -(gz \ g_x)
+        gzgx = -(gz \ Num.(g_x))
         A = [
             f_x f_z
             gzgx * f_x gzgx * f_z
@@ -605,7 +619,7 @@ function linearize_symbolic(
         ] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
-        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
+        Bs = -(gz \ Num.(g_u)) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!iszero, Bs, dims = 1)))

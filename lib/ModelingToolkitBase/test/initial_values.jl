@@ -133,7 +133,8 @@ end
 end
 
 @testset "Cyclic dependency checking and substitution limits" begin
-    @variables x(t) y(t)
+    # `irreducible` to make sure they are unknowns of the initialization system
+    @variables x(t) [irreducible = true] y(t) [irreducible = true]
     @mtkcompile sys = System(
         [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
         guesses = [x => 2y, y => 2x]

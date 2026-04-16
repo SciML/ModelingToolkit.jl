@@ -195,6 +195,7 @@ function generate_initializesystem_timevarying(
         maybe_zeros = maybe_zeros(sys),
         is_initializesystem = true,
         discover_from_metadata = false,
+        irstructure = get_irstructure(sys),
         kwargs...
     )
     diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}

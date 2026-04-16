@@ -84,9 +84,10 @@ end
     check_complete(sys, SDEProblem)
     check_compatibility && check_compatible_system(SDEProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SDEFunction{iip, spec}, sys, op;
+        SDEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, check_compatibility, sparse, expression, kwargs...
     )
@@ -113,7 +114,7 @@ end
     args = (; f, u0, tspan, p)
     kwargs = (; noise, noise_rate_prototype, kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, SDEProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, SDEProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, sys::System)

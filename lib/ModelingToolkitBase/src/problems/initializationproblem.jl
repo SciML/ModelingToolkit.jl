@@ -39,6 +39,7 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
+    _iip = resolve_iip(iip, op)
     if !fast_path
         op = build_operating_point(sys, op)
         fast_path = true
@@ -122,7 +123,7 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         sys, isys; warn_initialize_determined,
         kwargs...
     )
-    TProb{iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
+    TProb{_iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
 end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)

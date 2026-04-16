@@ -881,7 +881,9 @@ function ReconstructInitializeprob(
     ugetter = u0_constructor ∘
         concrete_getu(
         srcsys, unknowns(dstsys);
-        eval_expression, eval_module, force_time_independent = is_steadystateprob, kwargs...
+        eval_expression, eval_module, force_time_independent = is_steadystateprob,
+        iip_config = (true, false),
+        kwargs...
     )
     if is_split(dstsys)
         pgetter = get_mtkparameters_reconstructor(
@@ -1284,8 +1286,11 @@ function maybe_build_initialization_problem(
     end
 
     missingvars = AtomicArraySet()
+    temp_op = copy(op)
     for (k, v) in op
-        v === COMMON_MISSING && push!(missingvars, k)
+        v === COMMON_MISSING || continue
+        push!(missingvars, k)
+        delete!(temp_op, k)
     end
     binds = bindings(sys)
     if time_dependent_init
@@ -1323,15 +1328,14 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
-    # We can't use `getu` here because that goes to `SII.observed`, which goes to
-    # `ObservedFunctionCache` which uses `eval_expression` and `eval_module`. If
-    # `eval_expression == true`, this then runs into world-age issues. Building an
-    # RGF here is fine since it is always discarded. We can't use `eval_module` for
-    # the RGF since the user may not have run RGF's init.
-    _pgetter = build_explicit_observed_function(initializeprob.f.sys, missingvars; kwargs...)
-    pvals = _pgetter(state_values(initializeprob), parameter_values(initializeprob))
-    for (p, pval) in zip(missingvars, pvals)
-        op[p] = pval
+    for (i, v) in enumerate(unknowns(initializeprob.f.sys))
+        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+    end
+    add_observed!(initializeprob.f.sys, temp_op)
+    left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
+    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
+    for p in missingvars
+        op[p] = subber(p)
     end
 
     return (;
@@ -1784,7 +1788,7 @@ function SymbolicTstops(
     rps = reorder_parameters(sys)
     tstops,
         _ = build_function_wrapper(
-        sys, tstops,
+        sys, Symbolics.SConst(tstops),
         rps...,
         t0,
         t1;
@@ -1803,11 +1807,31 @@ function SymbolicTstops(
 end
 
 """
+    Both
+
+Sentinel type used as the `iip` type parameter in problem constructors when the caller
+did not explicitly specify in-place vs. out-of-place behavior. The actual value is
+resolved at construction time: `iip = false` when the operating-point `op` is a
+`StaticArray`, and `iip = true` otherwise.
+"""
+struct Both end
+
+"""
+    resolve_iip(iip, op)
+
+Resolve the `iip` type parameter for a problem constructor. When `iip` is `Both`,
+returns `false` if `op` is a `StaticArray` and `true` otherwise. For any other value
+of `iip`, returns `iip` unchanged.
+"""
+resolve_iip(iip, @nospecialize(op)) = iip
+resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
+
+"""
     $(TYPEDSIGNATURES)
 
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
-`specialize = SciMLBase.AutoSpecialize` and `iip = true`.
+`specialize = SciMLBase.AutoSpecialize` and `iip = Both` (resolved at construction time).
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -1889,32 +1913,18 @@ macro fallback_iip_specialize(ex)
     fnwhere_iip = Expr(:where, fncall_iip, where_args[1])
     fn_iip = Expr(:function, fnwhere_iip, callexpr_iip)
 
-    # `ODEProblem{true}(call_args...)`
-    callexpr_base = Expr(:call, Expr(:curly, fnname_name, true), call_args...)
+    # Problem constructors default to `Both` (iip resolved at construction time).
+    # Function constructors keep `true` as the iip default.
+    is_problem = occursin("Problem", string(fnname_name))
+    default_iip = is_problem ? Both : true
+    callexpr_base = Expr(:call, Expr(:curly, fnname_name, default_iip), call_args...)
     # `ODEProblem(sig_args...)` - use sig_args for fallback signature
     fncall_base = Expr(:call, fnname_name, sig_args...)
     fn_base = Expr(:function, fncall_base, callexpr_base)
 
-    # Handle case when this is a problem constructor and `u0map` is a `StaticArray`,
-    # where `iip` should default to `false`.
+    # The StaticArray-specific fallback is no longer needed: `Both` defers the
+    # iip decision to the body of the fully-parameterized method.
     fn_sarr = nothing
-    if occursin("Problem", string(fnname_name))
-        # sig_args should at least contain an argument for the `u0map`
-        @assert length(sig_args) > 2
-        u0_arg = sig_args[3]
-        # should not have a type-annotation
-        @assert !Meta.isexpr(u0_arg, :(::))
-        if Meta.isexpr(u0_arg, :kw)
-            argname, default = u0_arg.args
-            u0_arg = Expr(:kw, Expr(:(::), argname, StaticArray), default)
-        else
-            u0_arg = Expr(:(::), u0_arg, StaticArray)
-        end
-
-        callexpr_sarr = Expr(:call, Expr(:curly, fnname_name, false), call_args...)
-        fncall_sarr = Expr(:call, fnname_name, sig_args[1], sig_args[2], u0_arg, sig_args[4:end]...)
-        fn_sarr = Expr(:function, fncall_sarr, callexpr_sarr)
-    end
     return quote
         $fn_base
         $fn_sarr

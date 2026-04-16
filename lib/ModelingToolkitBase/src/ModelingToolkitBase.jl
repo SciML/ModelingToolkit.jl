@@ -190,6 +190,7 @@ include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/analysis_points.jl")
+include("systems/ir_info.jl")
 include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
@@ -257,7 +258,7 @@ export flatten
 export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
     instream
 export @component, @mtkcompile, @mtkbuild, @mtkcomplete
-export isinput, isoutput, getbounds, hasbounds, getguess, hasguess, isdisturbance,
+export isinput, isoutput, getbounds, hasbounds, getnominal, hasnominal, setnominal, getguess, hasguess, isdisturbance,
     istunable, getdist, hasdist,
     tunable_parameters, isirreducible, getdescription, hasdescription,
     hasunit, getunit, hasconnect, getconnect,
@@ -351,6 +352,7 @@ const set_scalar_metadata = setmetadata
 @public renamespace, namespace_equations
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry
 @public convert_bindings_for_time_independent_system, get_w
+@public Both
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
@@ -381,6 +383,8 @@ function __init__()
     SU.hashcons(BVP_SOLUTION, true)
     SU.hashcons(unwrap(W_GAMMA), true)
     SU.hashcons(unwrap(ASSERTION_LOG_VARIABLE), true)
+    SU.hashcons(DDE_AT_IDX_SYM, true)
+    SU.hashcons(DDE_DELAY_SYM, true)
     return nothing
 end
 

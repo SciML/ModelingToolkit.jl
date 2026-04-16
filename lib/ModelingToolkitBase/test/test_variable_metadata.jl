@@ -263,3 +263,49 @@ x = ModelingToolkitBase.toparam(x)
 
 @brownians z
 @test ModelingToolkitBase.getvariabletype(z) == ModelingToolkitBase.BROWNIAN
+
+# Nominal
+@variables x [nominal = 100.0]
+@test getnominal(x) == 100.0
+@test hasnominal(x)
+
+@variables y
+@test !hasnominal(y)
+@test getnominal(y) == 1.0
+
+y2 = setnominal(y, 50.0)
+@test getnominal(y2) == 50.0
+@test hasnominal(y2)
+
+@variables z [nominal = 0.001]
+@test getnominal(z) == 0.001
+
+# Vector of variables
+vals = getnominal([x, y, z])
+@test vals == [100.0, 1.0, 0.001]
+
+# Vector variables
+@variables yv[1:3] [nominal = [100.0, 200.0, 300.0]]
+@test hasnominal(yv)
+@test getnominal(yv) == [100.0, 200.0, 300.0]
+for i in 1:3
+    @test hasnominal(yv[i])
+end
+@test getnominal(yv[1]) == 100.0
+@test getnominal(yv[2]) == 200.0
+@test getnominal(yv[3]) == 300.0
+
+@variables wv[1:3]
+@test !hasnominal(wv)
+@test getnominal(wv[1]) == 1.0
+
+# System-level accessor
+@independent_variables t5
+Dₜ5 = Differential(t5)
+@variables x5(t5) [nominal = 100.0] y5(t5) z5(t5) [nominal = 0.001]
+@parameters α5 = 1.5 β5 = 1.0
+eqs5 = [Dₜ5(x5) ~ α5 * x5, Dₜ5(y5) ~ -β5 * y5, Dₜ5(z5) ~ x5 - z5]
+sys5 = System(eqs5, t5, name = :nominal_test)
+nv = getnominal(sys5, unknowns(sys5))
+@test nv isa Dict
+@test length(nv) == length(unknowns(sys5))

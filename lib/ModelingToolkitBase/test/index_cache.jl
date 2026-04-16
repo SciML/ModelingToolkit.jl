@@ -165,3 +165,24 @@ end
     idata = prob.f.initialization_data
     @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(prob, idata.initializeprob)
 end
+
+@testset "gradients with special `DiffCache` params" begin
+    @variables x(t)
+    @parameters p1=2.0 p2=3.0
+    @named sys = System([D(x) ~ -p1*x + p2*t], t)
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 4)
+    sys = complete(sys)
+
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    setter = setp_oop(prob, [p1, p2])
+
+    function costfn(theta)
+        p = setter(prob, theta)
+        newprob = SciMLBase.remake(prob; p)
+        sol = solve(newprob, Rodas5P(); saveat=0.1)
+        sum(abs2, sol[x])
+    end
+
+    @test costfn([2.0, 3.0]) ≠ zeros(2)
+    @test_nowarn @inferred ForwardDiff.gradient(costfn, [2.0, 3.0])
+end

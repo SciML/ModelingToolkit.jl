@@ -107,9 +107,10 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        ODEFunction{iip, spec}, sys, op;
+        ODEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
         eval_module, expression, check_compatibility, kwargs...
     )
@@ -120,7 +121,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)
-    maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
 end
 
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
@@ -130,9 +131,10 @@ end
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        ODEFunction{iip}, sys, op;
+        ODEFunction{_iip}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
         is_steadystateprob = true, kwargs...
     )
@@ -140,7 +142,7 @@ end
     kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
 
-    maybe_codegen_scimlproblem(expression, SteadyStateProblem{iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(expression, SteadyStateProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(

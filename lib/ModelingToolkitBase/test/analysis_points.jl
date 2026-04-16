@@ -1,6 +1,7 @@
 using ModelingToolkitBase, ModelingToolkitStandardLibrary.Blocks, ControlSystemsBase
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
+using SymbolicIndexingInterface
 using OrdinaryDiffEq, LinearAlgebra
 using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
@@ -618,6 +619,16 @@ if @isdefined(ModelingToolkit)
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
     matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
 
+    function compare_matrices(reference, value)
+        @assert size(reference.A) == (2, 2) "This testing function is only valid for `2x2` systems"
+        @test isequal(reference.C, value.C) || isequal(reverse(reference.C), value.C)
+        colorder = isequal(reference.C, value.C) ? [1, 2] : [2, 1]
+        @test isequal(reference.B, value.B) || isequal(reverse(reference.B), value.B)
+        roworder = isequal(reference.B, value.B) ? [1, 2] : [2, 1]
+        @test isequal(reference.D, value.D)
+        @test isequal(reference.A[roworder, colorder], value.A)
+    end
+
     @testset "Analysis point overriding part of connection - normal connect" begin
         @named F1 = FirstOrder(k = 1, T = 1)
         @named F2 = FirstOrder(k = 1, T = 1)
@@ -643,7 +654,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Analysis point overriding part of connection - variable connect" begin
@@ -671,7 +682,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Analysis point overriding part of connection - mixed connect" begin
@@ -699,7 +710,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Ignored analysis points only affect relevant connection sets" begin

@@ -465,6 +465,40 @@ function setbounds(x::Num, bounds)
     return setmetadata(x, VariableBounds, (lb, ub))
 end
 
+## Nominal =====================================================================
+struct VariableNominal end
+Symbolics.option_to_metadata_type(::Val{:nominal}) = VariableNominal
+
+"""
+    getnominal(x)
+
+Get the nominal value associated with symbolic variable `x`. Returns `1.0` if no nominal value is set.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal = 4785.0]
+```
+"""
+getnominal(x::Union{Num, Symbolics.Arr}) = getnominal(unwrap(x))
+function getnominal(x::SymbolicT)
+    s = Symbolics.getmetadata_maybe_indexed(x, VariableNominal, nothing)
+    s === nothing ? 1.0 : s
+end
+
+"""
+    hasnominal(x)
+
+Determine whether symbolic variable `x` has a nominal value associated with it.
+See also [`getnominal`](@ref).
+"""
+function hasnominal(x)
+    Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
+end
+
+function setnominal(x::Num, val)
+    return setmetadata(x, VariableNominal, val)
+end
+
 ## Disturbance =================================================================
 struct VariableDisturbance end
 Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
@@ -606,6 +640,26 @@ function getbounds(p::AbstractVector)
     lb = first.(bounds)
     ub = last.(bounds)
     return (; lb, ub)
+end
+
+"""
+    getnominal(sys::ModelingToolkitBase.AbstractSystem, vars = parameters(sys))
+
+Returns a dict with pairs `var => nominal` mapping variables of `sys` to their nominal values.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal = 40.0]
+```
+
+To obtain unknown variable nominal values, call `getnominal(sys, unknowns(sys))`
+"""
+function getnominal(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
+    return Dict(p .=> getnominal.(p))
+end
+
+function getnominal(p::AbstractVector)
+    return getnominal.(p)
 end
 
 ## Description =================================================================

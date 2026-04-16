@@ -173,6 +173,33 @@ getbounds
 ModelingToolkit.VariableBounds
 ```
 
+## Nominal Value
+
+A nominal value represents the characteristic magnitude of a variable. This is useful
+for scaling constraints in optimal control problems, preventing ill-conditioning when
+variables have vastly different magnitudes. The default nominal value is `1.0`.
+
+```@repl metadata
+@variables x [nominal = 1000.0];
+hasnominal(x)
+getnominal(x)
+```
+
+Nominal values can also be specified for array variables:
+
+```@repl metadata
+@variables x[1:3] [nominal = [100.0, 200.0, 300.0]];
+getnominal(x)
+getnominal(x[1])
+```
+
+```@docs
+hasnominal
+getnominal
+setnominal
+ModelingToolkit.VariableNominal
+```
+
 ## Guess
 
 Specify an initial guess for variables of a `System`. This is used when building the
