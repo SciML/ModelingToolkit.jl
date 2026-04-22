@@ -608,6 +608,15 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                             )
                         end
                     end
+                    MissingGuessValue.HashedRandom() => begin
+                        newval = [hash(var,i) for i in eachindex(symbolic_idxs)]./0x1p64
+                        _u0[symbolic_idxs] .= newval
+                        for (idx, j) in enumerate(symbolic_idxs)
+                            write_possibly_indexed_array!(
+                                op, dvs[vscc[j]], Symbolics.SConst(newval[idx]), COMMON_NOTHING
+                            )
+                        end
+                    end
                     MissingGuessValue.Error() => throw(MissingGuessError(dvs[vscc], _u0))
                 end
             end
