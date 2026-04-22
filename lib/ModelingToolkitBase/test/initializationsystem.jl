@@ -625,7 +625,8 @@ if @isdefined(ModelingToolkit)
         @named sys = System([x^2 + y^2 ~ 25, D(x) ~ 1], t)
         ssys = mtkcompile(sys)
         @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-            ssys, [x => 3], (0, 1)
+            ssys, [x => 3], (0, 1),
+            missing_values = MissingGuessValue.Error()
         ) # y should have a guess
     end
 end
