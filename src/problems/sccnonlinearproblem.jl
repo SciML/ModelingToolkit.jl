@@ -609,7 +609,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                         end
                     end
                     MissingGuessValue.HashedRandom() => begin
-                        newval = [hash(var,i) for i in eachindex(symbolic_idxs)]./0x1p64
+                        newval = [hash(var,hash(i)) for i in SU.stable_eachindex(symbolic_idxs)]./0x1p64
                         _u0[symbolic_idxs] .= newval
                         for (idx, j) in enumerate(symbolic_idxs)
                             write_possibly_indexed_array!(
