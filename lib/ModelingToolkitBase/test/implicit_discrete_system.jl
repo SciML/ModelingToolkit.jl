@@ -30,7 +30,8 @@ rng = StableRNG(22525)
     @mtkcompile sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
     if @isdefined(ModelingToolkit)
         @test_throws ModelingToolkitBase.MissingGuessError prob = ImplicitDiscreteProblem(
-            sys, [], tspan
+            sys, [], tspan,
+            missing_guess_values = MissingGuessValue.Error()
         )
     end
 end

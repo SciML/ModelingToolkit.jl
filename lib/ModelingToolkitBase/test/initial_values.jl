@@ -204,7 +204,7 @@ end
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
         pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1],
-        missing_guess_value==MissingGuessValue.Error()
+        missing_guess_value = MissingGuessValue.Error()
     )
     ODEProblem(
         pend, [x => 1, D(y) => 0, g => 1], (0, 1);
