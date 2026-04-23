@@ -376,7 +376,7 @@ function varmap_to_vars(
             MissingGuessValue.HashedRandom() => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = [hash(var,i) for i in eachindex(var)]./0x1p64
+                        varmap[var] = [hash(var,hash(i)) for i in SU.stable_eachindex(var)]./0x1p64
                     else
                         write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var)/0x1p64), COMMON_NOTHING)
                     end
