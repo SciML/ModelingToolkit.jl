@@ -910,7 +910,7 @@ end
 
     @testset "No initialization for variables" begin
         @variables x = 1.0
-        @parameters p = 10.0 
+        @parameters p = 10.0
 
         eqs = [
             0 ~ x^2 + 2p * x + 3p
@@ -2038,4 +2038,34 @@ if @isdefined(ModelingToolkit)
         end
         @test_nowarn ForwardDiff.gradient(costfn, [1.2])
     end
+end
+
+@testset "Issue #4457" begin
+    @parameters m=1.5 d=9.0
+    @variables s(t) v(t)
+
+    eqs = [
+        D(s) ~ v
+        m * D(v) ~ 1 - d * v
+    ]
+
+    sys = mtkcompile(System(eqs, t;
+        name = :model,
+        initialization_eqs = [s ~ 0, v ~ 0],
+    ))
+
+    prob = ODEProblem(sys, [], (0.0, 200.0))
+    sol = solve(prob, Tsit5(); saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol)
+
+    setter = setp_oop(prob, [sys.m, sys.d])
+
+    function loss(x)
+        p = setter(prob, x)
+        newprob = remake(prob; p)
+        newsol = solve(newprob, Tsit5(); saveat = 0.1)
+        sum(abs2, newsol[sys.s])
+    end
+
+    ForwardDiff.gradient(loss, [3.0, 20.0])
 end

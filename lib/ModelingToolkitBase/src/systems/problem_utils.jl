@@ -1164,6 +1164,41 @@ safe_float(x) = x
 safe_float(x::AbstractArray) = isempty(x) ? x : float(x)
 
 """
+    PromoteToTunableEltype(observed)
+
+Wraps an `initializeprob` observed function so its output array is promoted to an
+eltype compatible with the current tunable parameters. Addresses the case where
+the observed function is generated from fully constant RHS (e.g. `initialization_eqs
+= [s ~ 0]`): the resulting `create_array(Array, nothing, …, 0, 0)` would otherwise
+produce `Vector{Int64}`, which — when downstream `remake` reinstalls it as `u0` —
+silently defeats ForwardDiff/Tracker/Measurements promotion of `u0`.
+
+Replaces the previous `safe_float` layer by subsuming it: `promote_type(Int, Float64)
+== Float64`, so plain problems still get `Vector{Float64}`; `promote_type(Int,
+ForwardDiff.Dual)` yields the Dual type.
+"""
+struct PromoteToTunableEltype{F}
+    observed::F
+end
+
+function (p::PromoteToTunableEltype)(nlsol)
+    raw = p.observed(nlsol)
+    raw isa AbstractArray || return raw
+    isempty(raw) && return raw
+    T = promote_type(eltype(raw), _tunable_eltype(parameter_values(nlsol)), Float64)
+    T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
+end
+
+_tunable_eltype(p::MTKParameters) = isempty(p.tunable) ? Bool : eltype(p.tunable)
+function _tunable_eltype(p)
+    if SciMLStructures.isscimlstructure(p)
+        tun = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]
+        return isempty(tun) ? Bool : eltype(tun)
+    end
+    return Bool
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
@@ -1262,8 +1297,8 @@ function maybe_build_initialization_problem(
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         else
-            initializeprobmap = u0_constructor ∘ safe_float ∘
-                getu(initializeprob, solved_unknowns)
+            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(
+                getu(initializeprob, solved_unknowns))
         end
     else
         initializeprobmap = nothing
