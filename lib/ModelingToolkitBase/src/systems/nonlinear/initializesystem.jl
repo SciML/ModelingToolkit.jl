@@ -683,7 +683,26 @@ function promote_u0_p(u0, p, t0)
     return u0, p
 end
 
-function SciMLBase.late_binding_update_u0_p(
+# SciMLBase v3.1.0 added a trailing `ctx::LateBindingUpdateU0PContext`
+# argument (with default) that the v3 public path forwards as an 8th
+# positional. We accept the new arg only when the type exists so that the
+# `SciMLBase = "2, 3"` compat range continues to work on the v2 line.
+@static if isdefined(SciMLBase, :LateBindingUpdateU0PContext)
+    function SciMLBase.late_binding_update_u0_p(
+            prob, sys::AbstractSystem, u0, p, t0, newu0, newp,
+            ctx::SciMLBase.LateBindingUpdateU0PContext = SciMLBase.LateBindingUpdateU0PContext()
+        )
+        return _late_binding_update_u0_p_impl(prob, sys, u0, p, t0, newu0, newp)
+    end
+else
+    function SciMLBase.late_binding_update_u0_p(
+            prob, sys::AbstractSystem, u0, p, t0, newu0, newp
+        )
+        return _late_binding_update_u0_p_impl(prob, sys, u0, p, t0, newu0, newp)
+    end
+end
+
+function _late_binding_update_u0_p_impl(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp
     )
     supports_initialization(sys) || return newu0, newp
