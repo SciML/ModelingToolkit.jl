@@ -171,7 +171,7 @@ end
         @test !MTK.isinput(adder.c) && !MTK.isoutput(adder.c)
 
         sys, prob = build_simple_adder(adder)
-        sol = solve(prob, Rodas5P(autodiff = false), abstol = 1.0e-8, reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()), abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
 
         @test truesol(
@@ -196,7 +196,7 @@ end
         @test !MTK.isinput(adder.c) && !MTK.isoutput(adder.c)
 
         sys, prob = build_simple_adder(adder)
-        sol = solve(prob, Rodas5P(autodiff = false), abstol = 1.0e-8, reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()), abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
 
         @test truesol(
@@ -233,7 +233,7 @@ end
         @test !MTK.isinput(sspace.x) && !MTK.isoutput(sspace.x)
 
         sys, prob = build_sspace_model(sspace)
-        sol = solve(prob, Rodas5P(autodiff = false); abstol = 1.0e-8, reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
 
         @test truesol(
@@ -257,7 +257,7 @@ end
         @test !MTK.isinput(sspace.x) && !MTK.isoutput(sspace.x)
 
         sys, prob = build_sspace_model(sspace)
-        sol = solve(prob, Rodas5P(autodiff = false); abstol = 1.0e-8, reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
 
         @test truesol(
@@ -295,7 +295,7 @@ end
         @named adder1 = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @named adder2 = MTK.FMIComponent(Val(2); fmu, type = :ME)
         sys, prob = build_looped_adders(adder1, adder2)
-        sol = solve(prob, Rodas5P(autodiff = false); reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
         @test truesol(
             sol.t;
@@ -353,7 +353,7 @@ end
         @named sspace1 = MTK.FMIComponent(Val(3); fmu, type = :ME)
         @named sspace2 = MTK.FMIComponent(Val(3); fmu, type = :ME)
         sys, prob = build_looped_sspace(sspace1, sspace2)
-        sol = solve(prob, Rodas5P(autodiff = false); reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
         @test truesol(
             sol.t;
@@ -372,7 +372,7 @@ end
             Val(3); fmu, type = :CS, communication_step_size = 1.0e-5
         )
         sys, prob = build_looped_sspace(sspace1, sspace2)
-        sol = solve(prob, Rodas5P(autodiff = false); reltol = 1.0e-8)
+        sol = solve(prob, Rodas5P(autodiff = AutoFiniteDiff()); reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
         @test truesol(
             sol.t;

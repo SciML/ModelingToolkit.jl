@@ -598,8 +598,8 @@ end
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
 
-    function prob_func(prob, i, repeat)
-        remake(prob, seed = seeds[i])
+    function prob_func(prob, ctx)
+        remake(prob, seed = seeds[ctx.i])
     end
     numtraj = Int(1.0e3)
     seed = 100
@@ -608,7 +608,7 @@ end
 
     ensemble_prob = EnsembleProblem(
         prob;
-        output_func = (sol, i) -> (g(sol.u[end]), false),
+        output_func = (sol, ctx) -> (g(sol.u[end]), false),
         prob_func = prob_func
     )
 
@@ -624,7 +624,7 @@ end
 
     ensemble_probmod = EnsembleProblem(
         probmod;
-        output_func = (sol, i) -> (
+        output_func = (sol, ctx) -> (
             g(sol[x][end]) *
                 sol[demod.weight][end],
             false,
