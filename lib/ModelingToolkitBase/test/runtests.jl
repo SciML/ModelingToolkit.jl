@@ -10,6 +10,12 @@ function activate_extensions_env()
     return Pkg.instantiate()
 end
 
+function activate_qa_env()
+    Pkg.activate("qa")
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
+    return Pkg.instantiate()
+end
+
 function activate_downstream_env()
     Pkg.activate("downstream")
     Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
@@ -113,5 +119,11 @@ end
         @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
         # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("extensions/dynamic_optimization.jl")
+    end
+
+    if GROUP == "All" || GROUP == "QA"
+        activate_qa_env()
+        @safetestset "JET Tests" include("qa/jet.jl")
+        @safetestset "Aqua Tests" include("qa/aqua.jl")
     end
 end

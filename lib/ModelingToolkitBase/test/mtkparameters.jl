@@ -7,7 +7,6 @@ using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
 using DiffEqBase
 using ForwardDiff
-using JET
 using Test
 
 @discretes c(t)
@@ -187,8 +186,6 @@ ps = [p => 1.0] # Value for `d` is missing
 @test_throws "Could not evaluate" ODEProblem(sys, [u0; ps], tspan)
 @test_nowarn ODEProblem(sys, [u0; ps; [d => 1.0]], tspan)
 
-# JET tests
-
 # scalar parameters only
 function level1()
     @parameters p1 = 0.5 [tunable = true] p2 = 1 [tunable = true] p3 = 3 [tunable = false] p4 = 3 [tunable = true] y0
@@ -257,35 +254,16 @@ end
     @testset "Type stability of $portion" for portion in [
             Tunable(), Discrete(), Constants(),
         ]
-        @test_call canonicalize(portion, ps)
         @inferred canonicalize(portion, ps)
-
-        # broken because the size of a vector of vectors can't be determined at compile time
-        @test_opt target_modules = (ModelingToolkitBase,) canonicalize(
-            portion, ps
-        )
 
         buffer, repack, alias = canonicalize(portion, ps)
 
-        # broken because dependent update functions break inference
-        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer))
-        )
         @inferred SciMLStructures.replace(
             portion, ps, ones(length(buffer))
         )
         @inferred MTKParameters SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer))
-        )
 
-        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer))
-        )
         @inferred SciMLStructures.replace!(portion, ps, ones(length(buffer)))
-        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer))
-        )
     end
 end
 
