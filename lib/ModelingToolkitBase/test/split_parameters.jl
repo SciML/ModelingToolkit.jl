@@ -162,7 +162,13 @@ if @isdefined(ModelingToolkit)
     @named d = Step(start_time = 1.0, duration = 10.0, offset = 0.0, height = 1.0) # Disturbance
     model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi] # This is the state realization we want to control
     inputs = [model.torque.tau.u]
-    op = [model.torque.tau.u => 0.0]
+    op = [
+        model.inertia1.w => 1.0
+        model.inertia2.w => 1.0
+        model.inertia1.phi => 1.0
+        model.inertia2.phi => 1.0
+        model.torque.tau.u => 0.0
+    ]
     matrices, ssys = ModelingToolkit.linearize(
         wr(model), inputs, model_outputs; op,
         guesses = [model.inertia2.flange_a.phi => 0.0, model.inertia1.flange_b.phi => 0.0]
@@ -197,7 +203,7 @@ if @isdefined(ModelingToolkit)
         connect(add.output, :u, model.torque.tau)
     ]
     @named closed_loop = System(connections, t, systems = [model, state_feedback, add, d])
-    S = get_sensitivity(closed_loop, :u)
+    S = get_sensitivity(closed_loop, :u; op = x_costs)
 end
 
 @testset "Indexing MTKParameters with ParameterIndex" begin
