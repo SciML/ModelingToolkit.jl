@@ -31,7 +31,8 @@ function LinearFunction{iip}(
     A, b = calculate_A_b(sys; sparse)
     A = Moshi.Match.@match structural_hint begin
         StructuralHint.NoHint() => A
-        StructuralHint.Diagonal() => Diagonal{SymbolicT, Vector{SymbolicT}}(A)
+        # `Diagonal{T, Vector{T}}(::AbstractMatrix)` does not exist on 1.10
+        StructuralHint.Diagonal() => Diagonal{SymbolicT, Vector{SymbolicT}}(diag(A))
         StructuralHint.Banded(; lower_band_size, upper_band_size) => begin
             BandedMatrix{SymbolicT, Matrix{SymbolicT}}(A, (lower_band_size, upper_band_size))
         end
