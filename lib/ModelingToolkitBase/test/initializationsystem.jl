@@ -1,7 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
-# FIXME: Disabled due to failing precompilation
-# using StochasticDelayDiffEq
 using ForwardDiff, StaticArrays
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
