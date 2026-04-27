@@ -35,6 +35,8 @@ macro mtktestset(name, file)
     end
 end
 
+Pkg.why("JET")
+
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin

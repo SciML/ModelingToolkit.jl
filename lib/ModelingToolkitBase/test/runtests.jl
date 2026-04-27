@@ -22,6 +22,8 @@ function activate_downstream_env()
     return Pkg.instantiate()
 end
 
+Pkg.why("JET")
+
 @time begin
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
