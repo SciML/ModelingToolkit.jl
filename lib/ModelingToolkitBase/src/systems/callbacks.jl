@@ -1639,7 +1639,9 @@ function continuous_events(sys::AbstractSystem)
     systems = get_systems(sys)
     cbs = copy(cbs)
     for s in systems
-        append!(cbs, map(Base.Fix2(namespace_callback, s), continuous_events(s)))
+        for _cb in continuous_events(s)
+            push!(cbs, @invokelatest namespace_callback(_cb, s))
+        end
     end
     return cbs
 end
