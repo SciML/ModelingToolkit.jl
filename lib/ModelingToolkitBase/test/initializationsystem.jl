@@ -2067,5 +2067,5 @@ end
         sum(abs2, newsol[sys.s])
     end
 
-    ForwardDiff.gradient(loss, [3.0, 20.0])
+    @test_nowarn ForwardDiff.gradient(loss, [3.0, 20.0])
 end
