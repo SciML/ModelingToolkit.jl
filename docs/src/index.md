@@ -125,7 +125,7 @@ Below is an incomplete list of extension libraries one may want to be aware of:
     
       + Automated construction of ODEs and DAEs from data
       + Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
-  - [MomentClosure.jl](https://augustinas1.github.io/MomentClosure.jl/dev/): Automatic
+  - [MomentClosure.jl](https://sciml.github.io/MomentClosure.jl/dev/): Automatic
     transformation of ReactionSystems into deterministic systems
     
       + Generates Systems for the moment closures
