@@ -194,8 +194,7 @@ function mtkcompile!(
             HybridSystemNotSupportedException(
                 """
                 Hybrid continuous-discrete systems are currently not supported with \
-                the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-                see https://help.juliahub.com/juliasimcompiler/stable/
+                the standard MTK compiler.
                 """
             )
         )
