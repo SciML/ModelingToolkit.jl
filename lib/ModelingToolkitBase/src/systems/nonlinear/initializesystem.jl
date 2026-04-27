@@ -670,6 +670,11 @@ function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
     p = SciMLStructures.replace(SciMLStructures.Tunable(), p, tunables)
     initials = promote_with_nothing(T, p.initials)
     p = SciMLStructures.replace(SciMLStructures.Initials(), p, initials)
+    for i in eachindex(p.caches)
+        if eltype(p.caches[i]) <: AbstractFloat
+            @set! p.caches[i] = promote_with_nothing(T, p.caches[i])
+        end
+    end
     return p
 end
 

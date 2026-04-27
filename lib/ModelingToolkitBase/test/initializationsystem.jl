@@ -2013,3 +2013,30 @@ end
         @test !(prob.f.initialization_data.initializeprob isa SCCNonlinearProblem)
     end
 end
+
+if @isdefined(ModelingToolkit)
+    # `SCCNonlinearProblem` uses the cache buffers
+    @testset "Cache buffers are correctly promoted during initialization" begin
+        @parameters g
+        @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
+        @mtkcomplete pend = index_reduced_pend()
+        g_true = 9.81
+        prob = ODEProblem(
+            pend, [x => 1, D(y) => 0, g => g_true], (0.0, 0.5);
+            guesses = [λ => 0, y => 1, x => 1], missing_guess_value
+        )
+        @test !isempty(prob.f.initialization_data.initializeprob.p.caches)
+        saveat = range(prob.tspan..., length = 30)
+        sol = solve(prob, Rodas5P(); saveat)
+        @test SciMLBase.successful_retcode(sol)
+        setter = setp_oop(prob, [g])
+
+        function costfn(theta)
+            p = setter(prob, theta)
+            newprob = SciMLBase.remake(prob; p)
+            sol = solve(newprob, Rodas5P(); saveat = 0.1)
+            sum(abs2, sol[x])
+        end
+        @test_nowarn ForwardDiff.gradient(costfn, [1.2])
+    end
+end
