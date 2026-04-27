@@ -1024,6 +1024,12 @@ end
 function Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field}
     return getfield(obj, field)
 end
+"""
+    ConstructionBase.setproperties(sys::AbstractSystem, patch::NamedTuple)
+
+Return a new system with the properties in `patch` updated. Performs additional
+validation and cache invalidation as required.
+"""
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn

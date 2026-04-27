@@ -61,5 +61,6 @@ pages = [
         "internals.md",
         "internals/structural_transformation.md",
         "internals/bipartite_graph.md",
+        "internals/systems.md",
     ],
 ]
