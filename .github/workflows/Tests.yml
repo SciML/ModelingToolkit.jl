@@ -46,7 +46,11 @@ jobs:
           - ModelingToolkitBase/Extended
           - ModelingToolkitBase/RegressionI
           - ModelingToolkitBase/Extensions
+          - ModelingToolkitBase/QA
           - SciCompDSL/All
+        exclude:
+          - version: "pre"
+            pkggroup: ModelingToolkitBase/QA
     runs-on: ${{ vars.USE_SELF_HOSTED == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v6
