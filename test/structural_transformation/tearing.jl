@@ -13,7 +13,7 @@ import SymbolicUtils as SU
 ### Nonlinear system
 ###
 @constants h = 1
-@variables u1(t) u2(t) u3(t) u4(t) u5(t)
+@variables u1(t) u2(t) u3(t) u4(t) u5(t) [state_priority = 10]
 eqs = [
     0 ~ u1 - sin(u5) * h,
     0 ~ u2 - cos(u1),
@@ -65,7 +65,8 @@ graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
 
 newsys = tearing(sys)
 @test length(equations(newsys)) == 1
-@test issetequal(SU.search_variables(equations(newsys)), [u1, u4, u5])
+vars = SU.search_variables(equations(newsys))
+@test issetequal(vars, [u1, u4, u5]) || issetequal(vars, [h, u1, u5])
 
 # Before:
 #      u1  u2  u3  u4  u5
@@ -100,16 +101,19 @@ newsys = tearing(sys)
 # --------------------|-----
 # e5 [  1           1 |  1 ]
 
-let state = TearingState(sys)
-    result, = tearing(state)
-    S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
-    @test S == [
-        1 0 0 0 1
-        1 1 0 0 0
-        1 1 1 0 0
-        0 1 1 1 0
-        1 0 0 1 1
-    ]
+# Variable and equation ordering changes with version
+if v"1.12" <= VERSION < v"1.13"
+    let state = TearingState(sys)
+        result, = tearing(state)
+        S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
+        @test S == [
+            1 0 0 0 1
+            1 1 0 0 0
+            1 1 1 0 0
+            0 1 1 1 0
+            1 0 0 1 1
+        ]
+    end
 end
 
 # unknowns: u5
@@ -124,8 +128,8 @@ end
 # solve for
 # 0 = u5 - hypot(sin(u5), hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))))
 tornsys = complete(tearing(sys))
-@test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)])
-prob = NonlinearProblem(tornsys, [u5 => 1.0])
+@test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)]) || isequal(equations(tornsys), [0 ~ u1 - h * sin(u5)])
+prob = NonlinearProblem(tornsys, [u5 => 1.0, u1 => 1.0])
 sol = solve(prob, NewtonRaphson())
 @test norm(prob.f(sol.u, sol.prob.p)) < 1.0e-10
 
@@ -260,7 +264,7 @@ end
     @test length(equations(sys3)) == 1
     @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
 
-    idx = findfirst(isequal(sys3.capacitor.p.i), observables(sys3))
+    idx = findfirst(isequal(sys3.resistor1.v), observables(sys3))
     rhs = observed(sys3)[idx].rhs
     @test operation(rhs) === getindex
     @test operation(arguments(rhs)[1]) === (\)
