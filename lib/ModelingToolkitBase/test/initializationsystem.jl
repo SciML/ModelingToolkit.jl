@@ -2046,7 +2046,7 @@ end
 
     eqs = [
         D(s) ~ v
-        m * D(v) ~ 1 - d * v
+        D(v) ~ (1 - d * v) / m
     ]
 
     sys = mtkcompile(System(eqs, t;
