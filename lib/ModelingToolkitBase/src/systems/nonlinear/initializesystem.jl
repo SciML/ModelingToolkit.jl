@@ -542,7 +542,22 @@ function _has_delays(sys::AbstractSystem, ex, banned)
     return any(x -> _has_delays(sys, x, banned), args)
 end
 
-function SciMLBase.remake_initialization_data(
+@static if isdefined(SciMLBase, :RemakeInitializationDataContext)
+    function SciMLBase.remake_initialization_data(
+            sys::AbstractSystem, odefn, u0, t0, p, newu0, newp,
+            ::SciMLBase.RemakeInitializationDataContext
+        )
+        _remake_initialization_data_impl(sys, odefn, u0, t0, p, newu0, newp)
+    end
+else
+    function SciMLBase.remake_initialization_data(
+            sys::AbstractSystem, odefn, u0, t0, p, newu0, newp
+        )
+        _remake_initialization_data_impl(sys, odefn, u0, t0, p, newu0, newp)
+    end
+end
+
+function _remake_initialization_data_impl(
         sys::AbstractSystem, odefn, u0, t0, p, newu0, newp
     )
     if u0 === missing && p === missing
@@ -688,7 +703,22 @@ function promote_u0_p(u0, p, t0)
     return u0, p
 end
 
-function SciMLBase.late_binding_update_u0_p(
+@static if isdefined(SciMLBase, :LateBindingUpdateU0PContext)
+    function SciMLBase.late_binding_update_u0_p(
+            prob, sys::AbstractSystem, u0, p, t0, newu0, newp,
+            ctx::SciMLBase.LateBindingUpdateU0PContext
+        )
+        return _late_binding_update_u0_p_impl(prob, sys, u0, p, t0, newu0, newp)
+    end
+else
+    function SciMLBase.late_binding_update_u0_p(
+            prob, sys::AbstractSystem, u0, p, t0, newu0, newp
+        )
+        return _late_binding_update_u0_p_impl(prob, sys, u0, p, t0, newu0, newp)
+    end
+end
+
+function _late_binding_update_u0_p_impl(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp
     )
     supports_initialization(sys) || return newu0, newp
