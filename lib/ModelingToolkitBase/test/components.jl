@@ -510,3 +510,34 @@ end
     @test (ss.P1.input.u ~ ss.R.output.u[1]) in equations(sys)
     @test (ss.P2.input.u ~ ss.R.output.u[2]) in equations(sys)
 end
+
+if !@isdefined(ModelingToolkit)
+    @connector function Input(; name)
+        @variables u(t) [input = true]
+        return System(Equation[], t, [u], []; name)
+    end
+    @connector function Output(; name)
+        @variables u(t) [output = true]
+        return System(Equation[], t, [u], []; name)
+    end
+
+    @component function Bad(; name)
+        @named begin
+            in = Input()
+            out = Input()
+        end
+        return System([connect(in.u, out.u)], t, [], []; name, systems = [in, out])
+    end
+    @component function MWE(; name)
+        @named begin
+            bad = Bad()
+            src = Output()
+            dst = Input()
+        end
+        return System([connect(src.u, bad.in.u), connect(bad.out.u, dst.u)], t; name, systems = [bad, src, dst])
+    end
+    @testset "Bad causal connection set throws appropriate error" begin
+        @named sys = MWE()
+        @test_throws ModelingToolkitBase.CausalConnectionSetNoSourceError expand_connections(sys)
+    end
+end

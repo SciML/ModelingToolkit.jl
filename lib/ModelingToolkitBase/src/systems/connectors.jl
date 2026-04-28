@@ -853,6 +853,26 @@ function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, 
     return
 end
 
+struct CausalConnectionSetNoSourceError <: Exception
+    cset::Vector{ConnectionVertex}
+end
+
+function Base.showerror(io::IO, err::CausalConnectionSetNoSourceError)
+    println(
+        io, """
+        Found a causal connection set with no source. For a causal connection set to be valid \
+        it must have one outer input or one inner output. Typically, this happens when a \
+        component incorrectly has two input ports or two output ports instead of one input \
+        and one output port.
+
+        Problematic connection set:
+        """
+    )
+    for cvar in err.cset
+        println(io, "  ", cvar, " ", cvar.type === InputVar ? "(Input)" : "(Output)")
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -895,6 +915,13 @@ function generate_connection_equations_and_stream_connections(
                     end
                     inner_output = cvert
                 end
+            end
+            if inner_output !== nothing
+                root_vert = inner_output
+            elseif outer_input !== nothing
+                root_vert = outer_input
+            else
+                throw(CausalConnectionSetNoSourceError(cset))
             end
             root_vert = something(inner_output, outer_input)
             root_var = variable_from_vertex(sys, root_vert)::SymbolicT
