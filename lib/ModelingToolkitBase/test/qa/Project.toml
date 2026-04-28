@@ -1,0 +1,10 @@
+[deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SciMLStructures = "53ae85a6-f571-4167-b2af-e1d143709226"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+ModelingToolkitBase = {path = "../.."}
