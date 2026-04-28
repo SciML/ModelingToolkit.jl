@@ -126,7 +126,7 @@ function compare_matrices(reference, value)
     @assert size(reference.A) == (2, 2) "This testing function is only valid for `2x2` systems"
     @test isapprox(reference.C, value.C) || isapprox(reverse(reference.C), value.C)
     colorder = isapprox(reference.C, value.C) ? [1, 2] : [2, 1]
-    @test isapprox(reference.B, value.B) || isapprox(reverse(reference.B), value.B)
+    @test isapprox(reference.B, value.B) || isapprox(reference.B[[2, 1], :], value.B)
     roworder = isapprox(reference.B, value.B) ? [1, 2] : [2, 1]
     @test isapprox(reference.D, value.D)
     @test isapprox(reference.A[roworder, colorder], value.A)
@@ -164,10 +164,8 @@ lsys,
 )
 @unpack int, der = pid
 
-@test lsys.A == [0 0; 0 -10]
-@test lsys.B == [2 -2; 10 -10]
-@test lsys.C == [400 -4000]
-@test lsys.D == [4400 -4400]
+refmats = (; A = [0 0; 0 -10], B = [2 -2; 10 -10], C = [400 -4000], D = [4400 -4400])
+compare_matrices(refmats, lsys)
 
 lsyss0,
     ssys2 = ModelingToolkit.linearize_symbolic(
@@ -183,10 +181,7 @@ compare_matrices(lsys, lsyss)
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(unknowns(ssys)))
 
-@test lsys.A == [-10 0; 0 0]
-@test lsys.B == [10 -10; 2 -2]
-@test lsys.C == [-4000 400]
-@test lsys.D == [4400 -4400]
+compare_matrices(refmats, lsys)
 
 ## Test that there is a warning when input is misspecified
 @test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(

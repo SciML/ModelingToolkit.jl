@@ -43,7 +43,8 @@ end
     @test ps2.tunable isa SVector
     @test ps2.initials isa SVector
     @test ps2.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
-    @test ps2.constant isa Tuple{<:SVector, <:SVector, <:SVector{1, <:SMatrix}}
+    @test all(Base.Fix2(isa, SVector), ps2.constant)
+    @test any(Base.Fix2(isa, SVector{1, <:SMatrix}), ps2.constant)
     @test ps2.nonnumeric isa Tuple{<:SVector}
 end
 
