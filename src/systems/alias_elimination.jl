@@ -72,7 +72,7 @@ function find_perfect_aliases!(
         state::TearingState, eqs_to_rm::Vector{Int}, vars_to_rm::Vector{Int}
     )
     (; sys, fullvars, structure) = state
-    (; graph, solvable_graph, var_to_diff) = structure
+    (; graph, solvable_graph, var_to_diff, state_priorities) = structure
 
     @assert solvable_graph === nothing
     diff_to_var = invview(var_to_diff)
@@ -122,7 +122,7 @@ function find_perfect_aliases!(
 
     group_target = Dict{Int, Int}()
     for (root, group_vars) in alias_sets
-        group_target[root] = pick_alias_target(state.sys, fullvars, group_vars, state.structure.state_priorities)
+        group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles)
     end
 
     # Queue an alias equation for removal only if both endpoints collapse onto the
@@ -132,8 +132,8 @@ function find_perfect_aliases!(
     # rewrites the kept equation into `I ~ T` form automatically.
     for (ieq, v1, v2) in candidate_eqs
         target = group_target[DataStructures.find_root!(alias_groups, v1)]
-        c1 = contains_possibly_indexed_element(irreducibles, fullvars[v1]) ? v1 : target
-        c2 = contains_possibly_indexed_element(irreducibles, fullvars[v2]) ? v2 : target
+        c1 = contains_possibly_indexed_element(irreducibles, fullvars[v1]) || state_priorities[v1] > 0 ? v1 : target
+        c2 = contains_possibly_indexed_element(irreducibles, fullvars[v2]) || state_priorities[v2] > 0 ? v2 : target
         c1 == c2 && push!(eqs_to_rm, ieq)
     end
 
@@ -144,10 +144,11 @@ function find_perfect_aliases!(
             v == target && continue
             # Irreducibles other than the target stay as unknowns; only non-irreducibles
             # are eliminated in favor of the target.
-            if contains_possibly_indexed_element(irreducibles, fullvars[v])
+            if contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
                 state.always_present[v] = true
                 continue
             end
+            
             push!(vars_to_rm, v)
             subs[fullvars[v]] = fullvars[target]
             push!(state.additional_observed, fullvars[v] ~ fullvars[target])
