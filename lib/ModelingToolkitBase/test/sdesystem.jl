@@ -598,8 +598,14 @@ end
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
 
-    function prob_func(prob, ctx)
-        remake(prob, seed = seeds[ctx.i])
+    @static if pkgversion(SciMLBase) < v"3"
+        function prob_func(prob, i, repeat)
+            remake(prob, seed = seeds[i])
+        end
+    else
+        function prob_func(prob, ctx)
+            remake(prob, seed = seeds[ctx.i])
+        end
     end
     numtraj = Int(1.0e3)
     seed = 100
