@@ -691,7 +691,7 @@ end
 @static if isdefined(SciMLBase, :LateBindingUpdateU0PContext)
     function SciMLBase.late_binding_update_u0_p(
             prob, sys::AbstractSystem, u0, p, t0, newu0, newp,
-            ctx::SciMLBase.LateBindingUpdateU0PContext = SciMLBase.LateBindingUpdateU0PContext()
+            ctx::SciMLBase.LateBindingUpdateU0PContext
         )
         return _late_binding_update_u0_p_impl(prob, sys, u0, p, t0, newu0, newp)
     end
