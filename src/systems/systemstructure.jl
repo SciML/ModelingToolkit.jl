@@ -64,54 +64,23 @@ end
 Turn input variables into parameters of the system.
 """
 function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{SymbolicT}, outputsyms::OrderedSet{SymbolicT})
-    @unpack structure, fullvars, sys = state
-    @unpack var_to_diff, graph, solvable_graph = structure
-    @assert solvable_graph === nothing
+    (; sys, fullvars) = state
 
-    var_reidx = zeros(Int, length(fullvars))
-    nvar = 0
-    new_fullvars = SymbolicT[]
-    for (i, v) in enumerate(fullvars)
-        if v in inputsyms
-            if var_to_diff[i] !== nothing
-                error("Input $(fullvars[i]) is differentiated!")
-            end
-            var_reidx[i] = -1
-        else
-            nvar += 1
-            var_reidx[i] = nvar
-            push!(new_fullvars, v)
-        end
-    end
-    ninputs = length(inputsyms)
-    @set! sys.inputs = inputsyms
-    @set! sys.outputs = outputsyms
-    if ninputs == 0
+    if isempty(inputsyms)
+        @set! sys.inputs = inputsyms
+        @set! sys.outputs = outputsyms
         state.sys = sys
         return state
     end
 
-    nvars = ndsts(graph) - ninputs
-    new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
-
-    for ie in 1:nsrcs(graph)
-        for iv in 𝑠neighbors(graph, ie)
-            iv = var_reidx[iv]
-            iv > 0 || continue
-            add_edge!(new_graph, ie, iv)
-        end
+    vars_to_rm = Int[]
+    for (i, v) in enumerate(fullvars)
+        v in inputsyms && push!(vars_to_rm, i)
     end
-
-    new_var_to_diff = StateSelection.DiffGraph(nvars, true)
-    for (i, v) in enumerate(var_to_diff)
-        new_i = var_reidx[i]
-        (new_i < 1 || v === nothing) && continue
-        new_v = var_reidx[v]
-        @assert new_v > 0
-        new_var_to_diff[new_i] = new_v
-    end
-    @set! structure.var_to_diff = complete(new_var_to_diff)
-    @set! structure.graph = complete(new_graph)
+    StateSelection.rm_eqs_vars!(
+        state, Int[], vars_to_rm; eqs_sorted_and_uniqued = true,
+        vars_sorted_and_uniqued = true
+    )
 
     binds = copy(parent(bindings(sys)))
     for var in inputsyms
@@ -122,9 +91,7 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     append!(ps, inputsyms)
     @set! sys.ps = ps
     @set! sys.bindings = ROSymmapT(binds)
-    @set! state.sys = sys
-    @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
-    @set! state.structure = structure
+    state.sys = sys
     return state
 end
 
