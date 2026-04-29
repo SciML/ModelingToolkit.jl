@@ -64,6 +64,15 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
     end
 end
 
+function _linearization_wrap_odeproblem_f(@nospecialize(prob::ODEProblem), ::Type{T}) where {T}
+    f = SciMLBase.Void{Any}(prob.f.f)
+    u0 = T.(prob.u0)
+    t = T(prob.tspan[1])
+    f = SciMLBase.wrapfun_iip(f, (u0, u0, prob.p, t))
+    odef = remake(prob.f; f = f)
+    return remake(prob; f = odef)
+end
+
 """
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = nothing, kwargs...)
 
@@ -170,6 +179,7 @@ function linearization_function(
 
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
+    h = SciMLBase.Void{Any}(h)
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
@@ -180,24 +190,21 @@ function linearization_function(
     t0 = current_time(prob)
     inputvals = [prob.ps[i] for i in inputs]
 
-    hp_fun = let fun = h, setter = setp_oop(sys, inputs)
-        function hpf(du, input, u, p, t)
-            p = setter(p, input)
-            fun(du, u, p, t)
-            return du
-        end
-    end
     if u0 === nothing
         T = typeof(t0)
     else
         T = promote_type(eltype(u0), typeof(t0))
     end
+    prob = _linearization_wrap_odeproblem_f(prob, T)
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
         u0
     else
         T.(u0)
     end
+    h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0)))
+    hp_fun = HPFun(h, setp_oop(sys, inputs))
+
     cu0T = DI.Constant(u0T)
     cp = DI.Constant(p)
 
@@ -209,11 +216,7 @@ function linearization_function(
             cu0T, cp, DI.Constant(t0)
         )
     else
-        uf_fun = let fun = prob.f
-            function uff(du, u, p, t)
-                return SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
-            end
-        end
+        uf_fun = UFFun(prob.f)
 
         uf_jac = PreparedJacobian{true}(
             uf_fun, similar(prob.u0, T), autodiff, u0T, cp, ct0
@@ -223,12 +226,8 @@ function linearization_function(
             h, similar(prob.u0, T, size(outputs)), autodiff,
             u0T, cp, ct0
         )
-        pf_fun = let fun = prob.f, setter = setp_oop(sys, inputs)
-            function pff(du, input, u, p, t)
-                p = setter(p, input)
-                return SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
-            end
-        end
+
+        pf_fun = PFFun(prob.f, setp_oop(sys, inputs))
         pf_jac = PreparedJacobian{true}(
             pf_fun, similar(prob.u0, T), autodiff, inputvals,
             cu0T, cp, ct0
@@ -239,12 +238,43 @@ function linearization_function(
         )
     end
 
+    input_getter = getsym(prob, inputs)
+
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
+        diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs
     )
     return lin_fun, sys
+end
+
+struct HPFun{F, S}
+    fn::F
+    setter::S
+end
+
+function (hpf::HPFun)(du, input, u, p, t)
+    p = hpf.setter(p, input)
+    hpf.fn(du, u, p, t)
+    return du
+end
+
+struct UFFun{F}
+    fn::F
+end
+
+function (uff::UFFun)(du, u, p, t)
+    return SciMLBase.UJacobianWrapper(uff.fn, t, p)(du, u)
+end
+
+struct PFFun{F, S}
+    fn::F
+    setter::S
+end
+
+function (pff::PFFun)(du, input, u, p, t)
+    p = pff.setter(p, input)
+    return SciMLBase.ParamJacobianWrapper(pff.fn, t, u)(du, p)
 end
 
 """
@@ -319,22 +349,26 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
-        DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
+        I, P <: ODEProblem,
         H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK,
     }
     """
     The indexes of differential equations in the linearized system.
     """
-    diff_idxs::DI
+    diff_idxs::Vector{Int}
     """
     The indexes of algebraic equations in the linearized system.
     """
-    alge_idxs::AI
+    alge_idxs::Vector{Int}
     """
-    The indexes of parameters in the linearized system which represent
+    Getter function for parameters in the linearized system which represent
     input variables.
     """
-    inputs::I
+    inputs_getter::I
+    """
+    Number of input variables.
+    """
+    num_inputs::Int
     """
     The number of unknowns in the linearized system.
     """
@@ -409,7 +443,7 @@ function (linfun::LinearizationFunction)(u, p, t)
     end
 
     fun = linfun.prob.f
-    input_vals = [linfun.prob.ps[i] for i in linfun.inputs]
+    input_vals = linfun.inputs_getter(linfun.prob)
     if u !== nothing # Handle systems without unknowns
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
@@ -420,6 +454,9 @@ function (linfun::LinearizationFunction)(u, p, t)
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...
         )
+        u = u::typeof(linfun.prob.u0)
+        p = p::typeof(linfun.prob.p)
+        success = success::Bool
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
@@ -433,7 +470,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.inputs))
+        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
     end
     h_u = linfun.hp_jac(
         input_vals,
@@ -889,6 +926,18 @@ function linearize(
     return solve(prob; allow_input_derivatives)
 end
 
+function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
+    T = eltype(lin_fun.prob.u0)
+    results = @NamedTuple{A::Matrix{T}, B::Matrix{T}, C::Matrix{T}, D::Matrix{T}}[]
+    xpts = @NamedTuple{x::typeof(lin_fun.prob.u0), p::typeof(lin_fun.prob.p), t::typeof(lin_fun.prob.tspan[1])}[]
+    for (op, t) in zip(ops, ts)
+        res, xpt = linearize(ssys, lin_fun; op, t, allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
+        push!(results, res)
+        push!(xpts, xpt)
+    end
+    return results, xpts
+end
+
 function linearize(
         sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
@@ -906,10 +955,8 @@ function linearize(
             zero_dummy_der, op = ops[1], t = ts[1],
             ignore_system_initial_conditions = true, kwargs...
         )
-        results = map(zip(ops, ts)) do (op_i, ti)
-            linearize(ssys, lin_fun; op = op_i, t = ti, allow_input_derivatives)
-        end
-        return first.(results), ssys, last.(results)
+        ress, ops = __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
+        return ress, ssys, ops
     end
     ignore_system_ics = false
     if op isa LinearizationOpPoint
