@@ -980,7 +980,7 @@ if @isdefined(ModelingToolkit)
         # constant after that point anyway. Just make sure it hits the last event and
         # had the correct `u`.
         @test sol.t[end] >= 120.0
-        @test sol[end] == [0.0, 0.0, 0.0]
+        @test sol[[sys.binary_valve_1.S, sys.binary_valve_2.Δp]][end] == [0.0, 0.0]
     end
 end
 
