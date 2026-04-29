@@ -158,18 +158,33 @@ function invalid_variables(sys, expr)
 end
 
 function unassignable_variables(sys, expr)
-    assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(
-            vcat(
-                unknowns(sys), parameters(sys; initial_parameters = true)
-            )
-        );
-        init = []
-    )
-    written = reduce(vcat, Symbolics.scalarize.(collect(SU.search_variables(expr))); init = [])
-    return filter(
-        x -> !any(isequal(x), assignable_syms), written
-    )
+    assignable_syms = Set{SymbolicT}()
+    union!(assignable_syms, unknowns(sys))
+    for p in parameters(sys; initial_parameters = true)
+        if Symbolics.isarraysymbolic(p)
+            for idx in SU.stable_eachindex(p)
+                push!(assignable_syms, p[idx])
+            end
+        else
+            push!(assignable_syms, p)
+        end
+    end
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr)
+    unassignable = SymbolicT[]
+    for var in vars
+        if Symbolics.isarraysymbolic(var)
+            for idx in SU.stable_eachindex(var)
+                sym = var[idx]
+                sym in assignable_syms && continue
+                push!(unassignable, sym)
+            end
+        else
+            var in assignable_syms && continue
+            push!(unassignable, var)
+        end
+    end
+    return unassignable
 end
 
 @generated function _generated_writeback(
