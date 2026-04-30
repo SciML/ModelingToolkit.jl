@@ -12,7 +12,9 @@ import NonlinearSolve
 using Setfield: @set
 
 using ControlSystemsMTK
+using ControlSystemsBase
 using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
+using OrdinaryDiffEq
 connect = ModelingToolkit.connect
 
 function rm_bindings(sys)
@@ -70,11 +72,11 @@ lsyss,
     allow_input_derivatives = true, allow_symbolic = true,
 )
 
+integ = init(lin_fun.prob, Rodas5P())
+
 lsyss2 = (;
-    A = lin_fun.prob[lsyss.A], B = lin_fun.prob[lsyss.B],
-    C = lin_fun.prob[lsyss.C], D = lin_fun.prob[lsyss.D],
+    A = integ[lsyss.A], B = integ[lsyss.B],
+    C = integ[lsyss.C], D = integ[lsyss.D],
 )
-@test lsyss2.A ≈ lsys.A
-@test lsyss2.B ≈ lsys.B
-@test lsyss2.C ≈ lsys.C
-@test lsyss2.D ≈ lsys.D
+
+@test tf(ss(lsyss2...)) ≈ tf(ss(lsys...)) atol = 1e-8
