@@ -157,7 +157,11 @@ function mtkcompile!(
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
             discrete_compile = additional_passes[discrete_pass_idx]
             deleteat!(additional_passes, discrete_pass_idx)
-            return discrete_compile(tss, clocked_inputs, ci)
+            sys = System(
+                Equation[], get_iv(state.sys)::SymbolicT, SymbolicT[], get_ps(state.sys);
+                name = nameof(state.sys)
+            )
+            return discrete_compile(sys, tss, clocked_inputs, ci, id_to_clock)
         end
         throw(
             HybridSystemNotSupportedException(
