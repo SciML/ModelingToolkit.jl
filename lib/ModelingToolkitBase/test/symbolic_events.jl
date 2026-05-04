@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+using OrdinaryDiffEqRosenbrock
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
     SymbolicDiscreteCallback,

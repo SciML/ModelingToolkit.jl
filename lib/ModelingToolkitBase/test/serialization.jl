@@ -1,4 +1,4 @@
-using ModelingToolkitBase, SciMLBase, Serialization, OrdinaryDiffEq
+using ModelingToolkitBase, SciMLBase, Serialization, OrdinaryDiffEqSDIRK
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 missing_guess_value = MissingGuessValue.Constant(1.0)

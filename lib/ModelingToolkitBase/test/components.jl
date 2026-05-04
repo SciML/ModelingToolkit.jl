@@ -1,5 +1,6 @@
 using Test
 using ModelingToolkitBase, OrdinaryDiffEq
+using OrdinaryDiffEqRosenbrock, OrdinaryDiffEqBDF
 using ModelingToolkitBase: get_component_type, complete
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, value
 using ModelingToolkitStandardLibrary.Electrical

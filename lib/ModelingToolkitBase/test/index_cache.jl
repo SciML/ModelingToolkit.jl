@@ -1,6 +1,8 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLStructures
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback
 using OrdinaryDiffEq
+using OrdinaryDiffEqRosenbrock
+using SciMLBase
 import SymbolicUtils as SU
 using PreallocationTools: DiffCache
 using ForwardDiff

@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+using OrdinaryDiffEqBDF, OrdinaryDiffEqRosenbrock
 import SymbolicUtils as SU
 using ModelingToolkit: t_nounits as t, D_nounits as D
 

@@ -2,6 +2,7 @@ using Test
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using OrdinaryDiffEq
+using SciMLBase
 
 @connector function TwoPhaseFluidPort(; name, P = 0.0, m_flow = 0.0, h_outflow = 0.0)
     pars = @parameters begin

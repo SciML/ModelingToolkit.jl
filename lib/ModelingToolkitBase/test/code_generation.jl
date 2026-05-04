@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
+using SciMLBase
 using SymbolicUtils: unwrap
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test

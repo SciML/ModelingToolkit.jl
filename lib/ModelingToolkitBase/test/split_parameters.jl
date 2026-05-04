@@ -1,6 +1,7 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
+using OrdinaryDiffEqSDIRK
 using DataInterpolations
 using BlockArrays: BlockedArray
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, value

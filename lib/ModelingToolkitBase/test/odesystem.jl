@@ -3,6 +3,7 @@ using ModelingToolkitBase: get_metadata, MTKParameters, SymbolicDiscreteCallback
     SymbolicContinuousCallback
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, Sundials
+using OrdinaryDiffEqRosenbrock, OrdinaryDiffEqBDF
 using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
@@ -605,9 +606,9 @@ sys = complete(sys)
     # don't build initializeprob because it will use preface in other functions and
     # affect `c`
     prob = ODEProblem(sys, [], (0.0, 1.0); build_initializeprob = false)
-    sol = solve(prob, Euler(); dt = 0.1)
+    sol = solve(prob, Tsit5(); dt = 0.1)
 
-    @test c[1] == length(sol)
+    @test c[1] == sol.stats.nf
 end
 
 let

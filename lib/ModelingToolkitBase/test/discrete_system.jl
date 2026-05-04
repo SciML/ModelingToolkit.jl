@@ -68,7 +68,7 @@ prob_map = DiscreteProblem(
 @test prob_map.f.sys === syss
 
 # Solution
-using OrdinaryDiffEq
+using OrdinaryDiffEqFunctionMap
 sol_map = solve(prob_map, FunctionMap());
 @test sol_map[S] isa Vector
 @test sol_map[S(k - 1)] isa Vector

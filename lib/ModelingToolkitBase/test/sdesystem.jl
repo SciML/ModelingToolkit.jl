@@ -604,7 +604,7 @@ end
         end
     else
         function prob_func(prob, ctx)
-            remake(prob, seed = seeds[ctx.i])
+            remake(prob, seed = seeds[ctx.sim_id])
         end
     end
     numtraj = Int(1.0e3)

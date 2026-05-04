@@ -1,4 +1,5 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
+using SciMLBase
 using OrderedCollections
 using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
