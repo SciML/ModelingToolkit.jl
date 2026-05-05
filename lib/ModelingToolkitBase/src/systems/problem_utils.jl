@@ -1416,7 +1416,8 @@ function maybe_build_initialization_problem(
 
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
+        sys, t, op; verbose = NonlinearVerbosity(linear_verbosity = None()),
+        guesses, time_dependent_init, initialization_eqs, fast_path = true,
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
         missing_guess_value, is_steadystateprob, kwargs...
     )
