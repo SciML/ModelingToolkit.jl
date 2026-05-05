@@ -10,6 +10,8 @@ using DiffEqBase: BrownFullBasicInit
 import DiffEqNoiseProcess
 using Setfield: @set!
 import SymbolicUtils as SU
+using NonlinearSolveBase: NonlinearVerbosity
+using SciMLLogging: None
 
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
 missing_guess_value = if @isdefined(ModelingToolkit)
@@ -2038,6 +2040,25 @@ if @isdefined(ModelingToolkit)
         end
         @test_nowarn ForwardDiff.gradient(costfn, [1.2])
     end
+end
+
+@testset "Default `verbose` kwarg silences linear solve chatter on initializeprob" begin
+    @variables a(t) b(t)
+    @parameters k
+    eqs = [D(a) ~ k * a + b,
+        0 ~ a + b - 1]
+    @mtkbuild verbsys = ODESystem(eqs, t)
+
+    prob = ODEProblem(verbsys, [a => 0.5, k => 1.0], (0.0, 1.0))
+
+    @test haskey(prob.f.initializeprob.kwargs, :verbose)
+    v = prob.f.initializeprob.kwargs[:verbose]
+    @test v isa NonlinearVerbosity
+    @test v.linear_verbosity isa None
+
+    custom = NonlinearVerbosity()
+    prob2 = ODEProblem(verbsys, [a => 0.5, k => 1.0], (0.0, 1.0); verbose = custom)
+    @test prob2.f.initializeprob.kwargs[:verbose] === custom
 end
 
 @testset "Output arrays from constant RHS under ForwardDiff" begin
