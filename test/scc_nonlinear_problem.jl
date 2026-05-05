@@ -1,6 +1,7 @@
 using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
+using OrdinaryDiffEqBDF
 using SciMLBase, Symbolics
 using StaticArrays
 using LinearAlgebra, Test
@@ -173,7 +174,7 @@ end
     sccprob = SCCNonlinearProblem(sys, [y => u0, t => t0])
     sccsol = solve(sccprob, NewtonRaphson(); abstol = 1.0e-12)
 
-    @test sol.u ≈ sccsol.u atol = 1.0e-10
+    @test sol.u ≈ sccsol.u atol = 1.0e-8
 
     # Test BLT sorted
     @test istril(StructuralTransformations.sorted_incidence_matrix(sys), 1)

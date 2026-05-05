@@ -1,4 +1,5 @@
 using OrdinaryDiffEq, ModelingToolkitBase, DataStructures, Test
+using OrdinaryDiffEqRosenbrock
 using Optimization, RecursiveArrayTools, OptimizationOptimJL
 using SymbolicIndexingInterface
 using ModelingToolkitBase: t_nounits as t, D_nounits as D

@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
+using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
 using ForwardDiff, StaticArrays
 using SymbolicIndexingInterface, SciMLStructures

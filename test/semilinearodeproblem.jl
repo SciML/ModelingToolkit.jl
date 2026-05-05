@@ -1,5 +1,7 @@
 using ModelingToolkit
 using OrdinaryDiffEq
+using OrdinaryDiffEqSDIRK
+using SciMLBase
 using LinearAlgebra
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D

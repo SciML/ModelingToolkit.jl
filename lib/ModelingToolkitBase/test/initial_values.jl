@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, get_u0
+using SciMLBase
 using OrdinaryDiffEq
 using DataInterpolations
 using StaticArrays

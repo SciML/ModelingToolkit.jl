@@ -882,43 +882,63 @@ function (ia::ImplicitAffect)(integ)
     return ia.reset_jumps && reset_aggregated_jumps!(integ)
 end
 
-"""
-    VectorAffect{E2A, AFFS}
+@static if pkgversion(SciMLBase) < v"3"
+    """
+        VectorAffect{E2A, AFFS}
 
-Callable struct for the positive-edge arm of a `VectorContinuousCallback`. Routes an
-integrator call to the appropriate per-equation affect based on the equation index `idx`.
-Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
+    Callable struct for a `VectorContinuousCallback`. Routes an
+    integrator call to the appropriate per-equation affect based on the equation index `idx`.
+    Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
+    Skips `nothing` affects.
 
-# Fields
-- `eq2affect`: maps condition equation index → affect index
-- `affects`: vector of compiled affect callables, one per callback in the group
-"""
-struct VectorAffect{E2A, AFFS}
-    eq2affect::E2A
-    affects::AFFS
-end
+    # Fields
+    - `eq2affect`: maps condition equation index → affect index
+    - `affects`: vector of compiled affect callables (entries may be `nothing`)
+    """
+    struct VectorAffect{E2A, AFFS}
+        eq2affect::E2A
+        affects::AFFS
+    end
 
-(va::VectorAffect)(integ, idx) = va.affects[va.eq2affect[idx]](integ)
+    function (va::VectorAffect)(integ, idx)
+        f = va.affects[va.eq2affect[idx]]
+        f === nothing && return
+        return f(integ)
+    end
 
-"""
-    VectorAffectNeg{E2A, AFFS}
+else
+    """
+        $TYPEDEF
 
-Callable struct for the negative-edge arm of a `VectorContinuousCallback`. Like
-[`VectorAffect`](@ref) but skips `nothing` entries (callbacks with no negative-edge affect).
+    Callable struct for a `VectorContinuousCallback`. Routes an
+    integrator call to the appropriate per-equation affect based on the equation index `idx`.
+    Created inside [`generate_callback`](@ref) for vectors of `SymbolicContinuousCallback`s.
+    Skips `nothing` affects.
 
-# Fields
-- `eq2affect`: maps condition equation index → affect index
-- `affect_negs`: vector of compiled negative-edge affect callables (entries may be `nothing`)
-"""
-struct VectorAffectNeg{E2A, AFFS}
-    eq2affect::E2A
-    affect_negs::AFFS
-end
+    # Fields
+    - `eq2affect`: maps condition equation index → affect index
+    - `affects`: vector of compiled positive-edge affect callables (entries may be `nothing`)
+    - `affect_negs`: vector of compiled negative-edge affect callables (entries may be `nothing`)
+    """
+    struct VectorAffect{E2A, AFFS, NAFFS}
+        eq2affect::E2A
+        affects::AFFS
+        affect_negs::NAFFS
+    end
 
-function (va::VectorAffectNeg)(integ, idx)
-    f = va.affect_negs[va.eq2affect[idx]]
-    f === nothing && return
-    return f(integ)
+    function (va::VectorAffect)(integ, evts)
+        for (i, evt) in enumerate(evts)
+            if evt == 1
+                f = va.affects[va.eq2affect[i]]
+                f === nothing && continue
+                f(integ)
+            elseif evt == -1
+                f = va.affect_negs[va.eq2affect[i]]
+                f === nothing && continue
+                f(integ)
+            end
+        end
+    end
 end
 
 """
@@ -1073,7 +1093,7 @@ one equation) from a homogeneous group of `SymbolicContinuousCallback`s that sha
 rootfinding class. Delegates to the single-callback overload when `sum(num_eqs) == 1`.
 
 Affect routing (from condition equation index to per-callback affect) is encoded in
-[`VectorAffect`](@ref) and [`VectorAffectNeg`](@ref) callable structs.
+the [`VectorAffect`](@ref) callable structs.
 Initialize/finalize are wrapped in [`VectorOptionalAffect`](@ref) via
 [`wrap_vector_optional_affect`](@ref).
 """
@@ -1101,17 +1121,30 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     eq2affect = reduce(vcat, [fill(i, num_eqs[i]) for i in eachindex(compiled.affects)])
     eqs = reduce(vcat, eqs)
 
-    affect     = VectorAffect(eq2affect, compiled.affects)
-    affect_neg = VectorAffectNeg(eq2affect, compiled.affect_negs)
-    initialize = wrap_vector_optional_affect(compiled.inits, SciMLBase.INITIALIZE_DEFAULT)
-    finalize   = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
+    @static if pkgversion(SciMLBase) < v"3"
+        affect     = VectorAffect(eq2affect, compiled.affects)
+        affect_neg = VectorAffect(eq2affect, compiled.affect_negs)
+        initialize = wrap_vector_optional_affect(compiled.inits, SciMLBase.INITIALIZE_DEFAULT)
+        finalize   = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
 
-    return VectorContinuousCallback(
-        trigger, affect, affect_neg, length(eqs); initialize, finalize,
-        rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
-        saved_clock_partitions = compiled.saved_clock_partitions,
-        initialize_save_discretes = cbs[1].initialize_save_discretes
-    )
+        return VectorContinuousCallback(
+            trigger, affect, affect_neg, length(eqs); initialize, finalize,
+            rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
+            saved_clock_partitions = compiled.saved_clock_partitions,
+            initialize_save_discretes = cbs[1].initialize_save_discretes
+        )
+    else
+        affect     = VectorAffect(eq2affect, compiled.affects, compiled.affect_negs)
+        initialize = wrap_vector_optional_affect(compiled.inits, SciMLBase.INITIALIZE_DEFAULT)
+        finalize   = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
+
+        return VectorContinuousCallback(
+            trigger, affect, length(eqs); initialize, finalize,
+            rootfind = cbs[1].rootfind, initializealg = cbs[1].reinitializealg,
+            saved_clock_partitions = compiled.saved_clock_partitions,
+            initialize_save_discretes = cbs[1].initialize_save_discretes
+        )
+    end
 end
 
 """

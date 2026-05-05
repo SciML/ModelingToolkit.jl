@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, SpecialFunctions, LinearAlgebra
+using OrdinaryDiffEqFIRK
 using Test
 
 # Testing for α < 1

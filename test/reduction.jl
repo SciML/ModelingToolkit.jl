@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
+using OrdinaryDiffEqRosenbrock
 using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
 @variables x(t) y(t) z(t) k(t)

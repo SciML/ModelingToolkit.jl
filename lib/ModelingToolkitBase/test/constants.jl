@@ -3,7 +3,7 @@ using Test
 MT = ModelingToolkitBase
 
 @constants a = 1
-@test isconstant(a)
+@test MT.isconstant(a)
 @test !istunable(a)
 
 @independent_variables t

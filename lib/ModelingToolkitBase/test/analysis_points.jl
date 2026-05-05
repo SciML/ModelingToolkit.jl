@@ -3,6 +3,8 @@ using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, LinearAlgebra
+using OrdinaryDiffEqRosenbrock
+using SciMLBase
 using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkitBase as MTK
