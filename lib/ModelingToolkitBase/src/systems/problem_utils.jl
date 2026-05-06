@@ -1260,7 +1260,7 @@ function maybe_build_initialization_problem(
         all_init_syms = Set(all_symbols(initializeprob))
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         if isempty(solved_unknowns)
-            initializeprobmap = Returns(nothing)
+            initializeprobmap = nothing
         else
             initializeprobmap = u0_constructor ∘ safe_float ∘
                 getu(initializeprob, solved_unknowns)
