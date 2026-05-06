@@ -58,9 +58,14 @@ end
     return var_to_arridxs
 end
 
-function array_variable_buffer_idxs_to_assignments(var_to_arridxs::Dict{SymbolicT, Vector{Tuple{Int, Int}}}; argument_name = generated_argument_name, buffer_offset = 0)
+function array_variable_buffer_idxs_to_assignments(
+        var_to_arridxs::Dict{SymbolicT, Vector{Tuple{Int, Int}}};
+        argument_name = generated_argument_name, buffer_offset = 0,
+        filter_vars = nothing,
+    )
     assignments = Assignment[]
     for (arrvar, idxs) in var_to_arridxs
+        filter_vars === nothing || arrvar in filter_vars || continue
         # all elements of the array need to be present in `args` to form the
         # reconstructing assignment
         any(iszero ∘ first, idxs) && continue
@@ -126,9 +131,12 @@ reconstruct array variables if they are present scalarized in `args`.
   an argument to the generated function and returns the name of the argument in the
   generated function.
 """
-function array_variable_assignments(args...; ignore_vars = Set{SymbolicT}(), argument_name = generated_argument_name, buffer_offset = 0)
+function array_variable_assignments(
+        args...; ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
+        argument_name = generated_argument_name, buffer_offset = 0
+    )
     var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars)
-    return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset)
+    return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
 end
 
 """
@@ -231,6 +239,10 @@ function should_invalidate_mutable_cache_entry(::Type{ParameterArrayAssignments}
     return haskey(patch, :ps)
 end
 
+function find_arrvars_is_atomic(ex::SymbolicT)
+    SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -319,9 +331,14 @@ Base.@nospecializeinfer function build_function_wrapper(
     ir_info = get_ir_info(sys)
     expr = ir_info.obs_subber(expr)
 
+    ir = get_irstructure(sys)
+    required_arrvars = Set{SymbolicT}()
+    search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
+    SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
+
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...))
+        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars))
     else
         cached = check_mutable_cache(sys, ParameterArrayAssignments, ParameterArrayAssignments, nothing)
         if cached isa ParameterArrayAssignments
@@ -332,10 +349,10 @@ Base.@nospecializeinfer function build_function_wrapper(
         end
         append!(
             assignments, array_variable_buffer_idxs_to_assignments(
-                param_var_to_arridxs; buffer_offset = p_start - 1
+                param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs))
+        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars)
         append!(assignments, other_assigns)
     end
     append!(assignments, extra_assignments)
