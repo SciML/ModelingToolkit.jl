@@ -1164,7 +1164,7 @@ safe_float(x) = x
 safe_float(x::AbstractArray) = isempty(x) ? x : float(x)
 
 """
-    PromoteToTunableEltype(observed)
+    PromoteToTunableEltype(observed, floatT)
 
 Wraps an `initializeprob` observed function so its output array is promoted to an
 eltype compatible with the current tunable parameters. Addresses the case where
@@ -1173,19 +1173,24 @@ the observed function is generated from fully constant RHS (e.g. `initialization
 produce `Vector{Int64}`, which — when downstream `remake` reinstalls it as `u0` —
 silently defeats ForwardDiff/Tracker/Measurements promotion of `u0`.
 
-Replaces the previous `safe_float` layer by subsuming it: `promote_type(Int, Float64)
-== Float64`, so plain problems still get `Vector{Float64}`; `promote_type(Int,
-ForwardDiff.Dual)` yields the Dual type.
+`floatT` is the static floor (the same `floatT` the rest of the construction pipeline
+commits to, derived from the user's varmap). It guarantees integer RHS gets lifted
+to a float without overriding the user's chosen precision (e.g. `Float32`). The
+dynamic tunable eltype is read fresh from `parameter_values(nlsol)` on every call,
+so a later `remake` with `ForwardDiff.Dual` parameters still wins via `promote_type`.
 """
-struct PromoteToTunableEltype{F}
+struct PromoteToTunableEltype{F, floatT}
     observed::F
 end
 
-function (p::PromoteToTunableEltype)(nlsol)
+PromoteToTunableEltype(observed, ::Type{T}) where {T} =
+    PromoteToTunableEltype{typeof(observed), T}(observed)
+
+function (p::PromoteToTunableEltype{F, floatT})(nlsol) where {F, floatT}
     raw = p.observed(nlsol)
     raw isa AbstractArray || return raw
     isempty(raw) && return raw
-    T = promote_type(eltype(raw), _tunable_eltype(parameter_values(nlsol)), Float64)
+    T = promote_type(eltype(raw), _tunable_eltype(parameter_values(nlsol)), floatT)
     T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
 end
 
@@ -1298,7 +1303,7 @@ function maybe_build_initialization_problem(
             initializeprobmap = nothing
         else
             initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(
-                getu(initializeprob, solved_unknowns))
+                getu(initializeprob, solved_unknowns), floatT)
         end
     else
         initializeprobmap = nothing
