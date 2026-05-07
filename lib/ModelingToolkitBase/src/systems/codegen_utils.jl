@@ -256,6 +256,11 @@ generated functions, and `args` are the arguments.
   `MTKParameters` object are present. These are collapsed into a single argument and
   destructured inside the function. `p_start` must also be provided for non-split systems
   since it is used by `wrap_delays`.
+- `compress_args`: A list of argument ranges that end before `p_start`.
+  Each range will be compressed into a single argument to the function. For example,
+  If there are 5 elements in `args` and `compress_args = [2:3]`, then the generated function
+  will take 4 arguments, where the second should be an indexable collection of the second
+  and third elements in `args`.
 - `wrap_delays`: Whether to transform delayed unknowns of `sys` present in `expr` into
   calls to a history function. The history function is added to the list of arguments
   right before parameters, at the index `p_start`.
@@ -290,7 +295,7 @@ All other keyword arguments are forwarded to `build_function`.
 """
 Base.@nospecializeinfer function build_function_wrapper(
         sys::AbstractSystem, @nospecialize(expr), @nospecialize(args...); p_start = 2,
-        p_end = is_time_dependent(sys) ? length(args) - 1 : length(args),
+        p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), compress_args = UnitRange{Int}[],
         non_standard_param_layout = false,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, obsidxs_to_use = nothing,
@@ -380,6 +385,14 @@ Base.@nospecializeinfer function build_function_wrapper(
             # cannot apply `create_bindings` here since it doesn't nest
             args = [args[1:(p_start - 1)]; DestructuredArgs(collect(args[p_start:p_end]), MTKPARAMETERS_ARG); args[(p_end + 1):end]]
         end
+    end
+
+    sort!(compress_args; by = first)
+    reverse!(compress_args)
+    for (i, range) in enumerate(compress_args)
+        compressed = DestructuredArgs(args[range], Symbol(:__compressed, i))
+        deleteat!(args, range)
+        insert!(args, first(range), compressed)
     end
 
     # add preface assignments
