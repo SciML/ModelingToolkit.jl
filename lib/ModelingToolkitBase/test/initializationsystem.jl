@@ -910,7 +910,7 @@ end
 
     @testset "No initialization for variables" begin
         @variables x = 1.0
-        @parameters p = 10.0 
+        @parameters p = 10.0
 
         eqs = [
             0 ~ x^2 + 2p * x + 3p
@@ -2038,4 +2038,67 @@ if @isdefined(ModelingToolkit)
         end
         @test_nowarn ForwardDiff.gradient(costfn, [1.2])
     end
+end
+
+@testset "Output arrays from constant RHS under ForwardDiff" begin
+    # Issue #4457
+    @parameters m=1.5 d=9.0
+    @variables s(t) v(t)
+
+    eqs = [
+        D(s) ~ v
+        D(v) ~ (1 - d * v) / m
+    ]
+
+    sys = mtkcompile(System(eqs, t;
+        name = :model,
+        initialization_eqs = [s ~ 0, v ~ 0],
+    ))
+
+    prob = ODEProblem(sys, [], (0.0, 200.0))
+    sol = solve(prob, Tsit5(); saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol)
+
+    setter = setp_oop(prob, [sys.m, sys.d])
+
+    function loss1(x)
+        p = setter(prob, x)
+        newprob = remake(prob; p)
+        newsol = solve(newprob, Tsit5(); saveat = 0.1)
+        sum(abs2, newsol[sys.s])
+    end
+
+    @test_nowarn ForwardDiff.gradient(loss1, [3.0, 20.0])
+
+    # Issue 3924
+    function create_sys()
+        @parameters p1 = 0.5 [tunable = true] (p23[1:2] = [1, 3.0]) [tunable = true] p4 = 3 * p1 [tunable = false] y0 = 1.2 [tunable = true]
+        @variables x(t) = 2p1 y(t) = y0 z(t) = x + y
+
+        eqs = [D(x) ~ p1 * x - p23[1] * x * y
+            D(y) ~ -p23[2] * y + p4 * x * y
+            z ~ x + y]
+
+        mtkcompile(System(eqs, t, name=:sys))
+    end
+
+    sys = create_sys()
+
+    sub_sys = subset_tunables(sys, [sys.p23])
+
+    prob = ODEProblem(sub_sys, [], (0, 1.))
+
+    setter = setsym_oop(prob, Symbolics.scalarize(sys.p23));
+
+    function loss2(x, ps)
+        setter, prob = ps
+        u0, p = setter(prob, x)
+        new_prob = remake(prob; u0, p)
+        sol = solve(new_prob, Tsit5())
+        sum(sol)
+    end
+
+    @test_nowarn loss2([1., 2], (setter, prob))
+
+    @test_nowarn ForwardDiff.gradient(Base.Fix2(loss2, (setter, prob)), [1, 2.])
 end
