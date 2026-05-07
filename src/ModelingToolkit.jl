@@ -182,6 +182,7 @@ function __init__()
     SU.hashcons(unwrap(ODE_GAMMA[2]), true)
     SU.hashcons(unwrap(ODE_GAMMA[3]), true)
     SU.hashcons(unwrap(ODE_C), true)
+    SU.hashcons(SCC_EXPLICITFUN_CACHE_OUT, true)
 end
  
 end # module
