@@ -340,11 +340,6 @@ Base.@nospecializeinfer function build_function_wrapper(
     required_arrvars = Set{SymbolicT}()
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
-    # TODO: This is only required because `CacheWriter` has its body in `extra_assignments`. Rewrite
-    # that to use `ArrayMaker` and remove this.
-    for assign in extra_assignments
-        SU.search_variables!(search_buffer, assign; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
-    end
 
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
