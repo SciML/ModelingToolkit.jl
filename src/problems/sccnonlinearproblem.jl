@@ -8,31 +8,45 @@ end
 
 const SCCCacheVarsExprsElT = Dict{TypeT, Vector{SymbolicT}}
 
+const SCC_EXPLICITFUN_CACHE_OUT = unwrap(only(@parameters __outₘₜₖ::Vector{Vector{Any}}))
+
 function CacheWriter(
         sys::AbstractSystem, buffer_types::Vector{TypeT},
-        exprs::SCCCacheVarsExprsElT, solsyms, obseqs::Vector{Equation};
+        exprs::SCCCacheVarsExprsElT, solsyms;
         eval_expression = false, eval_module = @__MODULE__, cse = true, sparse = false
     )
     ps = parameters(sys; initial_parameters = true)
     rps = reorder_parameters(sys, ps)
-    obs_assigns = [eq.lhs ← eq.rhs for eq in obseqs]
-    body = map(eachindex(buffer_types), buffer_types) do i, T
-        Symbol(:tmp, i) ← SetArray(true, :(out[$i]), get(exprs, T, []))
-    end
-
-    function argument_name(i::Int)
-        if i <= length(solsyms)
-            return :($(generated_argument_name(1))[$i])
+    cache_writes = SymbolicT[]
+    for (i, T) in enumerate(buffer_types)
+        regions = SU.RegionsT()
+        values = Symbolics.SArgsT()
+        output = SCC_EXPLICITFUN_CACHE_OUT[i]
+        cacheexprs = get(exprs, T, SymbolicT[])
+        isempty(cacheexprs) && continue
+        N = length(cacheexprs)
+        allocator = Symbolics.STerm(
+            Returns, Symbolics.SArgsT((output,));
+            type = SU.FnType{Tuple, Vector{T}, Any}, shape = SU.ShapeVecT((1:N,))
+        )
+        for (j, expr) in enumerate(cacheexprs)
+            push!(regions, SU.ShapeVecT((j:j,)))
+            push!(values, Symbolics.SConst([expr]))
         end
-        return generated_argument_name(i - length(solsyms))
+        maker = SU.ArrayMaker{VartypeT}(regions, values; shape = SU.ShapeVecT((1:N,)))
+        writer = Code.with_allocator(allocator, maker)
+        push!(cache_writes, writer)
     end
-    array_assignments = array_variable_assignments(solsyms...; argument_name)
+    body = Symbolics.STerm(
+        tuple, cache_writes;
+        type = Vector{Any}, shape = SU.ShapeVecT((1:length(cache_writes),))
+    )
+
     fn, _ = build_function_wrapper(
-        sys, nothing, :out,
-        DestructuredArgs(DestructuredArgs.(solsyms), generated_argument_name(1)),
-        rps...; p_start = 3, p_end = length(rps) + 2,
-        expression = Val{true}, add_observed = false, cse,
-        extra_assignments = [array_assignments; obs_assigns; body],
+        sys, body, SCC_EXPLICITFUN_CACHE_OUT, solsyms..., rps...;
+        p_start = length(solsyms) + 2, p_end = length(rps) + length(solsyms) + 1,
+        compress_args = [2:(length(solsyms) + 1)],
+        expression = Val{true}, cse,
         iip_config = (true, false)
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
@@ -553,7 +567,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             push!(
                 explicitfuns,
                 CacheWriter(
-                    sys, decomposition.cachetypes, cacheexprs, solsyms, obs[_prevobsidxs];
+                    sys, decomposition.cachetypes, cacheexprs, solsyms;
                     eval_expression, eval_module, cse
                 )
             )
