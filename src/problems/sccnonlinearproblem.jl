@@ -65,45 +65,30 @@ equations are subset, delete accordingly. Requires that `sys` is complete and fl
 - `available_vars`: A list of variables that the subset system should assume are precomputed
   or already available. Will be mutated with the unknowns and observables of the subset. This
   is useful for SCC decomposition.
-- `prevobsidxs`: Indices of observed equations that the subset system should assume are
-  precomputed or already available. Will be appended with the indices of observed equations
-  required by this subset.
 """
 function subset_system(
         sys::System, vscc::Vector{Int}, escc::Vector{Int};
-        available_vars = Set{SymbolicT}(), prevobsidxs = Int[]
+        available_vars = Set{SymbolicT}()
     )
     check_complete(sys, "subset_system")
     @assert isempty(get_systems(sys)) "`subset_system` requires a flattened system"
 
     dvs = unknowns(sys)
     ps = parameters(sys)
-    eqs = equations(sys)
-    obs = observed(sys)
+    eqs = full_equations(sys)
 
     # subset unknowns and equations
     _dvs = dvs[vscc]
     _eqs = eqs[escc]
-    # get observed equations required by this SCC
     union!(available_vars, _dvs)
-    obsidxs = observed_equations_used_by(sys, _eqs; available_vars)
-    # the ones used by previous SCCs can be precomputed into the cache
-    setdiff!(obsidxs, prevobsidxs)
-    _obs = obs[obsidxs]
-    _observables = SymbolicT[]
-    for eq in _obs
-        push!(_observables, eq.lhs)
-    end
-    union!(available_vars, _observables)
-    append!(prevobsidxs, obsidxs)
 
     subsys = ConstructionBase.setproperties(
-        sys; unknowns = _dvs, eqs = _eqs, observed = _obs,
+        sys; unknowns = _dvs, eqs = _eqs, observed = Equation[],
         parameter_bindings_graph = get_parameter_bindings_graph(sys), complete = true
     )
     if get_index_cache(sys) !== nothing
         @set! subsys.index_cache = subset_unknowns_observed(
-            get_index_cache(sys), sys, _dvs, getproperty.(_obs, (:lhs,))
+            get_index_cache(sys), sys, _dvs, SymbolicT[],
         )
     end
     cached_param_arr_assigns = check_mutable_cache(
@@ -120,29 +105,26 @@ end
 
 const BlockIdxsT = typeof(BlockVector{Int}(undef_blocks, Int[]))
 
-mutable struct SCCDecomposition
-    const subsystems::Vector{System}
-    const var_sccs::Vector{Vector{Int}}
-    const eq_sccs::Vector{Vector{Int}}
-    const islinear::BitVector
-    const hints::Vector{StructuralHint.Type}
+struct SCCDecomposition
+    subsystems::Vector{System}
+    var_sccs::Vector{Vector{Int}}
+    eq_sccs::Vector{Vector{Int}}
+    islinear::BitVector
+    hints::Vector{StructuralHint.Type}
     # Cache buffer types and corresponding sizes. Stored as a pair of arrays instead of a
     # dict to maintain a consistent order of buffers across SCCs
-    const cachetypes::Vector{TypeT}
-    const cachesizes::Vector{Int}
+    cachetypes::Vector{TypeT}
+    cachesizes::Vector{Int}
     # explicitfun! related information for each SCC
     # We need to compute buffer sizes before doing any codegen
-    const scc_cachevars::Vector{SCCCacheVarsExprsElT}
-    const scc_cacheexprs::Vector{SCCCacheVarsExprsElT}
-    obsidxs::BlockIdxsT
-    const obsidxs_for_cacheexprs::Vector{Vector{Int}}
+    scc_cachevars::Vector{SCCCacheVarsExprsElT}
+    scc_cacheexprs::Vector{SCCCacheVarsExprsElT}
 end
 
 function SCCDecomposition()
     return SCCDecomposition(
         System[], Vector{Int}[], Vector{Int}[], BitVector(), StructuralHint.Type[],
-        TypeT[], Int[], SCCCacheVarsExprsElT[], SCCCacheVarsExprsElT[],
-        BlockVector{Int}(undef_blocks, Int[]), Vector{Int}[]
+        TypeT[], Int[], SCCCacheVarsExprsElT[], SCCCacheVarsExprsElT[]
     )
 end
 
@@ -164,9 +146,8 @@ function SCCDecomposition(
                 final_decomposition, active_decomposition, first(nbors), active, nbors
             )
         end
-        blockpush!(active_decomposition.obsidxs, Int[])
         subsys = subset_system(
-            sys, vscc, escc; available_vars, prevobsidxs = active_decomposition.obsidxs
+            sys, vscc, escc; available_vars
         )
         push!(active_decomposition.subsystems, subsys)
         push!(active_decomposition.var_sccs, vscc)
@@ -189,7 +170,6 @@ function SCCDecomposition(
 end
 
 function copy_scc!(dst::SCCDecomposition, src::SCCDecomposition, tgt::Int)
-    blockpush!(dst.obsidxs, copy(view(src.obsidxs, Block(tgt))))
     push!(dst.subsystems, src.subsystems[tgt])
     push!(dst.var_sccs, src.var_sccs[tgt])
     push!(dst.eq_sccs, src.eq_sccs[tgt])
@@ -304,33 +284,27 @@ end
 
 function build_caches!(sys::System, decomposition::SCCDecomposition)
     banned_vars = Set{SymbolicT}()
-    state = Dict()
-    prev_obseqs = Equation[]
+    state = Dict{SymbolicT, SymbolicT}()
+    ir = get_irstructure(sys)
     for i in eachindex(decomposition.subsystems)
         empty!(banned_vars)
         empty!(state)
         
         subsys = decomposition.subsystems[i]
         union!(banned_vars, unknowns(subsys))
-        union!(banned_vars, observables(subsys))
         for u in unknowns(subsys)
             push!(banned_vars, split_indexed_var(u)[1])
         end
-        for u in observables(subsys)
-            push!(banned_vars, split_indexed_var(u)[1])
-        end
 
-        _obs = get_observed(subsys)
-        for i in eachindex(_obs)
-            _obs[i] = _obs[i].lhs ~ subexpressions_not_involving_vars!(
-                _obs[i].rhs, banned_vars, state
-            )
-        end
         _eqs = get_eqs(subsys)
+        exprs_to_search = SymbolicT[]
         for i in eachindex(_eqs)
-            _eqs[i] = _eqs[i].lhs ~ subexpressions_not_involving_vars!(
-                _eqs[i].rhs, banned_vars, state
-            )
+            push!(exprs_to_search, _eqs[i].rhs)
+        end
+        subexpressions_not_involving_vars!(ir, exprs_to_search, banned_vars, state)
+        subber = SU.IRSubstituter{false}(ir, state; filterer = !SU.default_is_atomic)
+        for i in eachindex(_eqs)
+            _eqs[i] = _eqs[i].lhs ~ subber(_eqs[i].rhs)
         end
 
         if decomposition.islinear[i]
@@ -351,19 +325,6 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
         cacheexprs = SCCCacheVarsExprsElT()
         push!(decomposition.scc_cachevars, cachevars)
         push!(decomposition.scc_cacheexprs, cacheexprs)
-        # observed of previous SCCs are in the cache
-        # NOTE: When we get proper CSE, we can substitute these
-        # and then use `subexpressions_not_involving_vars!`
-        for eq in prev_obseqs
-            T = symtype(eq.lhs)
-            buf = get!(() -> SymbolicT[], cachevars, T)
-            push!(buf, eq.lhs)
-
-            buf = get!(() -> SymbolicT[], cacheexprs, T)
-            push!(buf, eq.lhs)
-        end
-
-        append!(prev_obseqs, observed(subsys))
 
         for (k, v) in state
             k = unwrap(k)
@@ -375,8 +336,6 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
             push!(buf, k)
         end
         all_cacheexprs = reduce(vcat, values(cacheexprs); init = SymbolicT[])
-        obsidxs_for_scc_cacheexprs = observed_equations_used_by(sys, all_cacheexprs)
-        push!(decomposition.obsidxs_for_cacheexprs, obsidxs_for_scc_cacheexprs)
         # update the sizes of cache buffers
         for (T, buf) in cachevars
             idx = findfirst(isequal(T), decomposition.cachetypes)
@@ -400,7 +359,6 @@ function _collapse_into!(decomposition::SCCDecomposition, i::Int, js)
     parent = decomposition.subsystems[i]
     new_eqs = copy(equations(parent))
     new_dvs = copy(unknowns(parent))
-    new_obs = copy(observed(parent))
     cached_ab::Union{CachedLinearAb, Nothing} = if decomposition.islinear[i]
         calculate_A_b(parent)
         check_mutable_cache(parent, CachedLinearAb, CachedLinearAb, nothing)::CachedLinearAb
@@ -411,7 +369,6 @@ function _collapse_into!(decomposition::SCCDecomposition, i::Int, js)
         cur = decomposition.subsystems[j]
         append!(new_eqs, equations(cur))
         append!(new_dvs, unknowns(cur))
-        append!(new_obs, observed(cur))
         decomposition.islinear[i] &= decomposition.islinear[j]
         if cached_ab isa CachedLinearAb && decomposition.islinear[j]
             A = cached_ab.A
@@ -426,20 +383,12 @@ function _collapse_into!(decomposition::SCCDecomposition, i::Int, js)
         append!(decomposition.var_sccs[i], decomposition.var_sccs[j])
         append!(decomposition.eq_sccs[i], decomposition.eq_sccs[j])
     end
-    unique!(new_obs)
     new_parent = decomposition.subsystems[i] = ConstructionBase.setproperties(
-        parent; eqs = new_eqs, unknowns = new_dvs, observed = new_obs
+        parent; eqs = new_eqs, unknowns = new_dvs,
     )
     if cached_ab isa CachedLinearAb
         store_to_mutable_cache!(new_parent, CachedLinearAb, cached_ab)
     end
-
-    parent_obsidxs = view(decomposition.obsidxs, Block(i))
-    for j in js
-        append!(parent_obsidxs, view(decomposition.obsidxs, Block(j)))
-    end
-    sort!(parent_obsidxs)
-    unique!(parent_obsidxs)
 
     return nothing
 end
@@ -463,7 +412,6 @@ function SCCNonlinearFunction{iip}(
     f = generate_rhs(
         subsys; expression = Val{false}, wrap_gfw = Val{true}, cachesyms,
         eval_expression, eval_module,
-        obsidxs_to_use = eachindex(observed(subsys))
     )
 
     return NonlinearFunction{iip}(f; sys = subsys)
@@ -536,7 +484,6 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     dvs = unknowns(sys)
     ps = parameters(sys)
     eqs = equations(sys)
-    obs = observed(sys)
 
     _, u0, p = process_SciMLProblem(
         EmptySciMLFunction{iip}, sys, op; eval_expression, eval_module, symbolic_u0 = true,
@@ -559,7 +506,6 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         cachevars = decomposition.scc_cachevars[i]
         cacheexprs = decomposition.scc_cacheexprs[i]
         subsys = decomposition.subsystems[i]
-        _prevobsidxs = decomposition.obsidxs_for_cacheexprs[i]
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
         else
@@ -670,7 +616,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     new_eqs = eqs[reduce(vcat, decomposition.eq_sccs)]
     sys = ConstructionBase.setproperties(
         sys; unknowns = new_dvs, eqs = new_eqs, index_cache = subset_unknowns_observed(
-            get_index_cache(sys), sys, new_dvs, getproperty.(obs, (:lhs,))
+            get_index_cache(sys), sys, new_dvs, SymbolicT[]
         )
     )
 
