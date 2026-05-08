@@ -5,6 +5,8 @@ using DiffEqBase
 using UnPack
 using NaNMath
 using Setfield
+using OrderedCollections: OrderedSet
+using Symbolics: SymbolicT, unwrap
 import SymbolicUtils as SU
 const MTK = ModelingToolkitBase
 

@@ -4,7 +4,8 @@ using CasADi
 using DiffEqBase
 using UnPack
 using NaNMath
-using Symbolics: SymbolicT
+using OrderedCollections: OrderedSet
+using Symbolics: SymbolicT, unwrap
 const MTK = ModelingToolkitBase
 
 function __init__()
