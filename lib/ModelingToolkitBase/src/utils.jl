@@ -1263,79 +1263,94 @@ function observed_equations_used_by(
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Given an expression `expr`, return a dictionary mapping subexpressions of `expr` that do
-not involve variables in `vars` to anonymous symbolic variables. Also return the modified
-`expr` with the substitutions indicated by the dictionary. If `expr` is a function
-of only `vars`, then all of the returned subexpressions can be precomputed.
-
-Note that this will only process subexpressions floating point value. Additionally,
-array variables must be passed in both scalarized and non-scalarized forms in `vars`.
+Given a list of expressions `exprs`, find all top-level subexpressions in `exprs`
+that do not involve variables in `banned_vars`. "Top-level" implies that for all
+such subexpressions, any parent of theirs in `exprs` will involve something in
+`banned_vars`. `state` will be populated as a map from the identified subexpressions
+to anonymous symbols they can be replaced by.
 """
-function subexpressions_not_involving_vars(expr, vars)
-    expr = unwrap(expr)
-    vars = map(unwrap, vars)
-    state = Dict()
-    newexpr = subexpressions_not_involving_vars!(expr, vars, state)
-    return state, newexpr
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Mutating version of `subexpressions_not_involving_vars` which writes to `state`. Only
-returns the modified `expr`.
-"""
-function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
-    expr = unwrap(expr)
-    if symbolic_type(expr) == NotSymbolic()
-        if is_array_of_symbolics(expr)
-            return map(expr) do el
-                subexpressions_not_involving_vars!(el, vars, state)
-            end
+function subexpressions_not_involving_vars!(
+        ir::SU.IRStructure{VartypeT}, exprs::AbstractArray{SymbolicT},
+        banned_vars::Set{SymbolicT}, state::Dict{SymbolicT, SymbolicT}
+    )
+    # Populate the IR first to ensure that the `RecursiveDFS` has a correctly sized
+    # `visited` buffer.
+    for x in exprs
+        populate_ir!(ir, x)
+    end
+    for x in banned_vars
+        populate_ir!(ir, x)
+    end
+    # Get the nodes that are reachable from `exprs`. We need to find the topologically
+    # earliest subset of these nodes that do not contain `banned_vars`.
+    reachable_nodes = Set{Int}()
+    # We only want to descent into non-atomic nodes. Otherwise e.g. the index `1` in `x[1]`
+    # will end up being a subexpression not involving `banned_vars`.
+    filtered_nbors = let ir = ir
+        function __filtered_nbors(graph, i)
+            # Use `Iterators.filter` instead of just checking `ir[i]` and returning `()` for
+            # type-stability. The early-exit infers as a `Union`.
+            is_atomic = SU.default_is_atomic(ir[i])
+            # We also don't want to descend into constants - those are not worth caching.
+            Iterators.filter(j -> !is_atomic && !SU.isconst(ir[j]), Graphs.outneighbors(graph, i))
         end
-        return expr
     end
-    any(isequal(expr), vars) && return expr
-    iscall(expr) || return expr
-    symbolic_has_known_size(expr) || return expr
-    haskey(state, expr) && return state[expr]
-    op = operation(expr)
-    args = arguments(expr)
-    # if this is a `getindex` and the getindex-ed value is a `Sym`
-    # or it is not a called parameter
-    # OR
-    # none of `vars` are involved in `expr`
-    if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
-            (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
-        sym = gensym(:subexpr)
-        var = similar_variable(expr, sym)
-        state[expr] = var
-        return var
+    rdfs = SU.RecursiveDFS(
+        ir.dependency_graph; neighbors_fn = filtered_nbors,
+        on_exit = Base.Fix1(push!, reachable_nodes)
+    )
+    for x in exprs
+        for idx in ir.weak_definitions[x]
+            rdfs(idx)
+        end
+    end
+    # We want to retain the reachability information for later
+    unbanned_subexprs = copy(reachable_nodes)
+    # Walk through the usages of `banned_vars` that are in `unbanned_subexprs`, and remove
+    # from the candidates any expression we encounter. The remaining vertices are
+    # ones that do not use `banned_vars`.
+    unbanned_nbors_fn = let unbanned_subexprs = unbanned_subexprs
+        function __unbanned_nbors_fn(graph, i)
+            return Iterators.filter(in(unbanned_subexprs), Graphs.inneighbors(graph, i))
+        end
+    end
+    rdfs = SU.RecursiveDFS(
+        ir.dependency_graph;
+        neighbors_fn = unbanned_nbors_fn,
+        on_exit = Base.Fix1(delete!, unbanned_subexprs)
+    )
+    for var in banned_vars
+        for idx in ir.weak_definitions[var]
+            rdfs(idx)
+        end
     end
 
-    if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
-        indep_args = SymbolicT[]
-        dep_args = SymbolicT[]
-        for arg in args
-            _vs = SU.search_variables(arg)
-            intersect!(_vs, vars)
-            if !isempty(_vs)
-                push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
-            else
-                push!(indep_args, arg)
-            end
+    # Now, the nodes we actually care about and will populate `state` with are ones
+    # present in `unbanned_subexprs` and are used by a node in
+    # `setdiff(reachable_nodes, unbanned_subexprs)`. All of `setdiff!`, the subsequent
+    # `filter!`, and then populating `state` will iterate over `unbanned_subexprs`. We
+    # might as well combine this into one loop.
+    for node in unbanned_subexprs
+        nbors = Graphs.inneighbors(ir.dependency_graph, node)
+        is_valid_node = false
+        for nbor in nbors
+            nbor in reachable_nodes || continue
+            nbor in unbanned_subexprs && continue
+            is_valid_node = true
+            break
         end
-        indep_term = reduce(op, indep_args; init = Int(op == (*)))
-        indep_term = subexpressions_not_involving_vars!(indep_term, vars, state)
-        dep_term = reduce(op, dep_args; init = Int(op == (*)))
-        return op(indep_term, dep_term)
+        is_valid_node || continue
+
+        expr = ir[node]
+        haskey(state, expr) && continue
+        anon_sym = Symbolics.SSym(
+            Symbol(:__cached_, length(state));
+            type = SU.symtype(expr), shape = SU.shape(expr)
+        )
+        state[expr] = anon_sym
     end
-    newargs = map(args) do arg
-        subexpressions_not_involving_vars!(arg, vars, state)
-    end
-    return maketerm(typeof(expr), op, newargs, metadata(expr))
 end
 
 """
