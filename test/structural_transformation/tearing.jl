@@ -9,6 +9,8 @@ using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import StateSelection
 import SymbolicUtils as SU
+using ForwardDiff
+
 ###
 ### Nonlinear system
 ###
@@ -290,4 +292,27 @@ end
     @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
     @test Initial(sys.resistor1.v) in Set(ModelingToolkit.get_ps(sys))
     @test Initial(sys.resistor2.v) in Set(ModelingToolkit.get_ps(sys))
+end
+
+@testset "AD through inline linear SCCs works" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
+    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
+    prob = ODEProblem(sys, [], (0.0, 10.0))
+    @assert prob.p.nonnumeric[1] isa
+        Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+    @assert SciMLBase.has_initializeprob(prob.f)
+
+    setter = setsym_oop(prob, [sys.R, sys.C])
+
+    function loss(x)
+        new_u0, new_p = setter(prob, x)
+        new_prob = remake(prob; u0 = new_u0, p = new_p)
+        sol = solve(new_prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        return sol[sys.capacitor.v][end]
+    end
+
+    # Primal works: returns ~0.993
+    @test_nowarn loss([1.0, 1.0])
+
+    @test_nowarn ForwardDiff.gradient(loss, [1.0, 1.0])
 end

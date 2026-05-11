@@ -849,7 +849,7 @@ function get_mtkparameters_reconstructor(
             initialvals = getters[2](valp)
             nonnumerics = getters[5](valp)
             if !iszero(diffcache_buffer_idx)
-                @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{eltype(initialvals)}.(nonnumerics[diffcache_buffer_idx])
+                @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(nonnumerics[diffcache_buffer_idx])
             end
             return promote_with_nothing(
                 promote_type_with_nothing(eltype(tunablevals), initialvals),
