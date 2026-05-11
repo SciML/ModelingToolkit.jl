@@ -45,18 +45,26 @@ end
 
 Pick the target variable for an alias group. Irreducible variables must remain as
 unknowns, so one of them is chosen as the target when the group contains any. Otherwise
-the variable with the highest `state_priority` wins.
+the variable with the highest `state_priority` wins. When priorities are tied, prefer
+the variable appearing in the most equations: visualization-only variables appear in a
+single alias equation, while physics variables appear in many dynamics equations.
 """
 function pick_alias_target(
-        fullvars::Vector{SymbolicT}, group_vars::Vector{Int}, state_priorities, irreducibles::AtomicSetT
+        fullvars::Vector{SymbolicT}, group_vars::Vector{Int}, state_priorities, irreducibles::AtomicSetT,
+        graph = nothing
     )
     irr_idx = findfirst(
         Base.Fix1(contains_possibly_indexed_element, irreducibles) ∘ Base.Fix1(getindex, fullvars),
         group_vars
     )
     irr_idx === nothing || return group_vars[irr_idx]
-    _, target_idx = findmax(Base.Fix1(getindex, state_priorities), group_vars)
-    return group_vars[target_idx]
+    max_priority = maximum(Base.Fix1(getindex, state_priorities), group_vars)
+    candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
+    if graph !== nothing && length(candidates) > 1
+        _, target_idx = findmax(v -> length(𝑑neighbors(graph, v)), candidates)
+        return candidates[target_idx]
+    end
+    return candidates[1]
 end
 
 """
@@ -122,7 +130,7 @@ function find_perfect_aliases!(
 
     group_target = Dict{Int, Int}()
     for (root, group_vars) in alias_sets
-        group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles)
+        group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
     end
 
     # Queue an alias equation for removal only if both endpoints collapse onto the
