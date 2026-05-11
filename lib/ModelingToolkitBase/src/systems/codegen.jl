@@ -268,19 +268,16 @@ function generate_jacobian(
     )
 end
 
+function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})
+    @assert findnz(arr)[1:2] == (I, J)
+end
+
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
     return identity,
         function add_header(expr)
-            return Func(
-                expr.args, [], expr.body,
-                [
-                    :(
-                        @assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
-                        $(findnz(W)[1:2])
-                    )
-                ]
-            )
+            body = Let([Assignment(:_, term(assert_jac_length, expr.args[1], findnz(W)[1:2]...))], expr.body, true)
+            return Func(expr.args, [], body)
     end
 end
 
