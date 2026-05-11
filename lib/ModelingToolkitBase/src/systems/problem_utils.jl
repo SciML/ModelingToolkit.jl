@@ -1548,8 +1548,8 @@ $PROBLEM_INTERNAL_KWARGS
 
 All other keyword arguments are passed as-is to `constructor`.
 """
-function process_SciMLProblem(
-        constructor, sys::AbstractSystem, op;
+Base.@nospecializeinfer function process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
