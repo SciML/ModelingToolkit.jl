@@ -8,8 +8,13 @@ Given a function expression `expr`, return a callable version of it.
   RuntimeGeneratedFunctions.jl.
 - `eval_module`: The module to `eval` the expression `expr` in. If `!eval_expression`,
   this is the cache and context module for the `RuntimeGeneratedFunction`.
+- `optlevel`: LLVM optimization level (0-3) for the generated function, or -1 (default) to
+  inherit from the module. Injected as `:meta :optlevel` into the function body.
 """
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
+function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__, optlevel::Int = -1)
+    if optlevel != -1
+        expr = _inject_optlevel_meta(expr, optlevel)
+    end
     if eval_expression
         return eval_module.eval(expr)
     else
@@ -18,6 +23,20 @@ function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODUL
 end
 
 eval_or_rgf(::Nothing; kws...) = nothing
+
+function _inject_optlevel_meta(expr::Expr, optlevel::Int)
+    if expr.head === :function || expr.head === :->
+        body = expr.args[2]
+        meta = Expr(:meta, Expr(:optlevel, optlevel))
+        if body isa Expr && body.head === :block
+            new_body = Expr(:block, meta, body.args...)
+        else
+            new_body = Expr(:block, meta, body)
+        end
+        return Expr(expr.head, expr.args[1], new_body)
+    end
+    return expr
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -458,8 +477,8 @@ function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) w
     return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
 
-function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; kws...) where {P}
-    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; kws...), eval_or_rgf(fiip; kws...))
+function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; optlevel::Int = -1, kws...) where {P}
+    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; optlevel, kws...), eval_or_rgf(fiip; optlevel, kws...))
 end
 
 function (gfw::GeneratedFunctionWrapper)(args...)
@@ -512,39 +531,46 @@ Optionally compile a method and optionally wrap it in a `GeneratedFunctionWrappe
 basis of `expression` `wrap_gfw`, both of type `Union{Type{Val{true}}, Type{Val{false}}}`.
 `gfw_args` is the first type parameter of `GeneratedFunctionWrapper`. `f` is a tuple of
 function expressions of the form `(oop, iip)` or a single out-of-place function expression.
-Keyword arguments are forwarded to `eval_or_rgf`.
+
+# Keyword Arguments
+
+- `optlevel`: LLVM optimization level (0-3) for the generated function, or -1 (default) to
+  inherit from the module. Injected as `:meta :optlevel` into the function body expression
+  so it ends up in the `generated_callfunc` CodeInfo.
+
+All other keyword arguments are forwarded to `eval_or_rgf`.
 """
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; optlevel::Int = -1, kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f...; kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f...; optlevel, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; optlevel::Int = -1, kwargs...
     )
-    return eval_or_rgf.(f; kwargs...)
+    return eval_or_rgf.(f; optlevel, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; optlevel::Int = -1, kwargs...
     )
     return f
 end
 
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; optlevel::Int = -1, kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; optlevel, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr; optlevel::Int = -1, kwargs...
     )
-    return eval_or_rgf(f; kwargs...)
+    return eval_or_rgf(f; optlevel, kwargs...)
 end

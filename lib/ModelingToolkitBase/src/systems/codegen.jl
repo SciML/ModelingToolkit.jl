@@ -37,7 +37,7 @@ function generate_rhs(
         sys::System; implicit_dae = false,
         scalar = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        cachesyms = nothing,
+        cachesyms = nothing, optlevel::Int = -1,
         kwargs...
     )
     dvs = unknowns(sys)
@@ -120,7 +120,7 @@ function generate_rhs(
     end
     return maybe_compile_function(
         expression, wrap_gfw, (p_start, nargs, is_split(sys)),
-        res; eval_expression, eval_module
+        res; optlevel, eval_expression, eval_module
     )
 end
 
