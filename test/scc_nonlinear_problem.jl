@@ -5,6 +5,9 @@ using OrdinaryDiffEqBDF
 using SciMLBase, Symbolics
 using StaticArrays
 using LinearAlgebra, Test
+using SymbolicUtils
+import ModelingToolkitBase
+using Symbolics: SymbolicT, VartypeT, unwrap
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
 @testset "Trivial case" begin
@@ -387,4 +390,15 @@ end
     prob = SCCNonlinearProblem(sys, [z => 1])
     sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "`subexpressions_not_involving_vars!`" begin
+    @variables x[1:3]
+    @parameters (f::Function)(..)
+    ir = IRStructure{VartypeT}()
+    expr = f([x[1], 2x[2], x[2]^2 + x[3]]) + f(x) + f(x[2] + 1)
+    state = Dict{SymbolicT, SymbolicT}()
+    banned_vars = Set{SymbolicT}([x[3], x])
+    ModelingToolkitBase.subexpressions_not_involving_vars!(ir, [unwrap(expr)], banned_vars, state)
+    @test issetequal(keys(state), [x[1], 2x[2], x[2]^2, f(x[2] + 1)])
 end

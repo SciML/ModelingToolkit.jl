@@ -1293,8 +1293,19 @@ function subexpressions_not_involving_vars!(
             # Use `Iterators.filter` instead of just checking `ir[i]` and returning `()` for
             # type-stability. The early-exit infers as a `Union`.
             is_atomic = SU.default_is_atomic(ir[i])
+            # If the operation is symbolic, it is the first `outneighbor`. Symbolic operations
+            # are already parameters, we don't want to cache it.
+            drop = Moshi.Match.@match ir[i] begin
+                BSImpl.Term(; f) && if f isa SymbolicT end => begin
+                1
+                end
+                _ => 0
+            end
             # We also don't want to descend into constants - those are not worth caching.
-            Iterators.filter(j -> !is_atomic && !SU.isconst(ir[j]), Graphs.outneighbors(graph, i))
+            return Iterators.filter(
+                j -> !is_atomic && !SU.isconst(ir[j]),
+                Iterators.drop(Graphs.outneighbors(graph, i), drop)
+            )
         end
     end
     rdfs = SU.RecursiveDFS(
@@ -1311,9 +1322,16 @@ function subexpressions_not_involving_vars!(
     # Walk through the usages of `banned_vars` that are in `unbanned_subexprs`, and remove
     # from the candidates any expression we encounter. The remaining vertices are
     # ones that do not use `banned_vars`.
-    unbanned_nbors_fn = let unbanned_subexprs = unbanned_subexprs
+    unbanned_nbors_fn = let unbanned_subexprs = unbanned_subexprs, ir = ir
         function __unbanned_nbors_fn(graph, i)
-            return Iterators.filter(in(unbanned_subexprs), Graphs.inneighbors(graph, i))
+            # If an `inneighbor` is atomic, it means `ir[i]` is an array variable and
+            # the neighbor is a scalarized element. We want to cache specific parts of
+            # symbolic arrays that are unbanned, and only ban usages of the full symbolic
+            # array.
+            return Iterators.filter(
+                j -> j in unbanned_subexprs && !SU.default_is_atomic(ir[j]),
+                Graphs.inneighbors(graph, i)
+            )
         end
     end
     rdfs = SU.RecursiveDFS(
