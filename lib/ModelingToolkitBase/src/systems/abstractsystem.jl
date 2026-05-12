@@ -1998,6 +1998,20 @@ equations during `mtkcompile`. These equations matches generated numerical code.
 See also [`equations`](@ref) and [`ModelingToolkitBase.get_eqs`](@ref).
 """
 function full_equations(sys::AbstractSystem; simplify = false)
+    subsys = get_systems(sys)
+    # Fast path using `IRInfo`
+    if isempty(subsys)
+        new_eqs = Equation[]
+        eqs = equations(sys)
+        sizehint!(new_eqs, length(eqs))
+        info = get_ir_info(sys)
+        ir = get_irstructure(sys)
+        @assert length(info.eqs_idxs) == length(eqs)
+        for (eq, rhs_idx) in zip(eqs, info.eqs_idxs)
+            push!(new_eqs, eq.lhs ~ ir[rhs_idx])
+        end
+        return new_eqs
+    end
     empty_substitutions(sys) && return equations(sys)
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
