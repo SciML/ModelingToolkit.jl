@@ -24,6 +24,37 @@ Utility metadata key for adding miscellaneous/one-off metadata to systems.
 abstract type MiscSystemData end
 
 """
+    $TYPEDEF
+
+Metadata key used to mark a system as incompatible with symbolic automatic differentiation.
+When set on a system via `setmetadata(sys, SymbolicADDisallowed, reason)`, any attempt to
+perform symbolic AD on the equations of that system (e.g. via `calculate_jacobian`,
+`calculate_tgrad`, `linearize_symbolic`, or during structural simplification) will throw
+an error. The value associated with this key should be a descriptive `String` explaining
+why symbolic AD is unsupported, or `true` if no explanation is available.
+
+See also: [`check_symbolic_ad_allowed`](@ref).
+"""
+abstract type SymbolicADDisallowed end
+
+"""
+    check_symbolic_ad_allowed(sys::AbstractSystem)
+
+Check whether `sys` supports symbolic automatic differentiation. Throws an `ArgumentError`
+if the system has been marked with [`SymbolicADDisallowed`](@ref).
+"""
+function check_symbolic_ad_allowed(sys::AbstractSystem)
+    if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
+        reason = SymbolicUtils.getmetadata(sys, SymbolicADDisallowed, nothing)
+        msg = "System $(nameof(sys)) does not support symbolic automatic differentiation."
+        if reason isa AbstractString && !isempty(reason)
+            msg *= " $reason"
+        end
+        throw(ArgumentError(msg))
+    end
+end
+
+"""
     $(TYPEDEF)
 
 A symbolic representation of a numerical system to be solved. This is a recursive
