@@ -28,6 +28,7 @@
     )
 
     if jac
+        check_symbolic_ad_allowed(sys)
         Cjac = (C === nothing || !stiff_nonlinear) ? nothing : Symbolics.jacobian(C, dvs)
         _jac = generate_semiquadratic_jacobian(
             sys, A, B, C, Cjac; sparse, expression,

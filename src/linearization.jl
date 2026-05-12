@@ -562,6 +562,7 @@ function linearize_symbolic(
         kwargs...
     )
     sys = mtkcompile(sys; inputs, outputs, simplify, split, kwargs...)
+    check_symbolic_ad_allowed(sys)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)
     t = get_iv(sys)

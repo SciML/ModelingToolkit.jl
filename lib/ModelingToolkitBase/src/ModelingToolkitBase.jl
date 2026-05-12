@@ -353,6 +353,7 @@ const set_scalar_metadata = setmetadata
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
+@public SymbolicADDisallowed, check_symbolic_ad_allowed
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

@@ -170,6 +170,7 @@ Calculate the gradient of the equations of `sys` with respect to the independent
 `simplify` is forwarded to `Symbolics.expand_derivatives`.
 """
 function calculate_tgrad(sys::System; simplify = false)
+    check_symbolic_ad_allowed(sys)
     # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
     # t + u(t)`.
@@ -198,6 +199,7 @@ function calculate_jacobian(
         sys::System;
         sparse = false, simplify = false, dvs = unknowns(sys)
     )
+    check_symbolic_ad_allowed(sys)
     eqs = full_equations(sys)
     rhs = SymbolicT[]
     sizehint!(rhs, length(eqs))
