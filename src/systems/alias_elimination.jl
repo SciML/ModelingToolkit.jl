@@ -197,6 +197,29 @@ function find_perfect_aliases!(
         end
     end
 
+    # After substitution, alias equations that connected a sticky non-target
+    # variable to a zero-priority variable become structurally identical to the
+    # direct alias between the sticky variable and the target (since the
+    # zero-priority variable was redirected to the target in the graph). Remove
+    # all but the first copy of each (v_a, v_b) variable pair.
+    let seen = Set{Tuple{Int,Int}}()
+        eqs_rm_set = Set(eqs_to_rm)
+        removed_additional_eqs = false
+        for (ieq, _, _) in candidate_eqs
+            ieq in eqs_rm_set && continue
+            snbors = 𝑠neighbors(graph, ieq)
+            length(snbors) == 2 || continue
+            pair = minmax(snbors[1], snbors[2])
+            if pair in seen
+                removed_additional_eqs = true
+                push!(eqs_to_rm, ieq)
+            else
+                push!(seen, pair)
+            end
+        end
+        removed_additional_eqs && sort!(eqs_to_rm)
+    end
+
     @set! sys.eqs = eqs
     state.sys = sys
 
