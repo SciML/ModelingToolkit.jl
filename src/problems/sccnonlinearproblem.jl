@@ -296,7 +296,10 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
             push!(banned_vars, split_indexed_var(u)[1])
         end
 
-        _eqs = get_eqs(subsys)
+        # While we own the system and so mutation _should_ be safe, `IRInfo` exists.
+        # It stores the indices corresponding to equations in the `IRStructure`, which
+        # would be incorrect if we mutate.
+        _eqs = copy(get_eqs(subsys))
         exprs_to_search = SymbolicT[]
         for i in eachindex(_eqs)
             push!(exprs_to_search, _eqs[i].rhs)
@@ -306,6 +309,7 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
         for i in eachindex(_eqs)
             _eqs[i] = _eqs[i].lhs ~ subber(_eqs[i].rhs)
         end
+        subsys = decomposition.subsystems[i] = ConstructionBase.setproperties(subsys; eqs = _eqs)
 
         if decomposition.islinear[i]
             store_to_mutable_cache!(subsys, CachedLinearAb, nothing)
