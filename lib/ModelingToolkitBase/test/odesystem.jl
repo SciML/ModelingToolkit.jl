@@ -777,7 +777,7 @@ if @isdefined(ModelingToolkit)
     ## double integrator
 
     function double_int(; name)
-        @variables u(t) x(t) v(t)
+        @variables u(t) x(t) [state_priority = 1] v(t) [state_priority = 1]
 
         eqs = [D(x) ~ v, D(v) ~ u]
         return System(eqs, t; name)

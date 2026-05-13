@@ -154,7 +154,7 @@ newsys = tearing(nlsys)
 ###
 using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @parameters p
-@variables x(t) y(t) z(t)
+@variables x(t) [state_priority = 1] y(t) z(t)
 eqs = [
     D(x) ~ z * h
     0 ~ x - y
