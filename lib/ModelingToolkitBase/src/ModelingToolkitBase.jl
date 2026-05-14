@@ -236,6 +236,7 @@ const t_nounits = let
 end
 const D_nounits = Differential(t_nounits)
 
+export CompilerOptions
 export ODEFunction, convert_system_indepvar,
     System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
 export SDEFunction

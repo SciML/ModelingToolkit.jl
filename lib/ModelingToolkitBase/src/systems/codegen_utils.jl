@@ -1,3 +1,52 @@
+const _COMPILE_OPTIONS = Dict{Symbol, Int}(
+    :off => 0,
+    :on => 1,
+    :all => 2,
+    :min => 3,
+)
+
+"""
+    CompilerOptions(; optlevel = -1, compile = :default, infer = :default)
+
+Options controlling the Julia compiler for generated functions.
+
+Note that this feature is considered experimental.
+
+# Fields
+- `optlevel::Int`: LLVM optimization level (0-3), or -1 (default) to inherit from the module.
+- `compile::Int`: Compilation mode as an integer (0=off, 1=on, 2=all, 3=min), or -1 (default)
+  to inherit. Can also be specified as a symbol: `:off`, `:on`, `:all`, `:min`, or `:default`.
+- `infer::Int`: Type inference (0=off, 1=on), or -1 (default) to inherit. Can also be specified
+  as a Bool or `:default`.
+"""
+struct CompilerOptions
+    optlevel::Int
+    compile::Int
+    infer::Int
+end
+
+function CompilerOptions(; optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
+                           infer::Union{Int, Bool, Symbol} = :default)
+    _compile = if compile isa Symbol
+        compile === :default ? -1 : get(_COMPILE_OPTIONS, compile) do
+            throw(ArgumentError("Invalid compile option: $compile. Valid options: :default, :off, :on, :all, :min"))
+        end
+    else
+        compile
+    end
+    _infer = if infer isa Symbol
+        infer === :default ? -1 :
+            throw(ArgumentError("Invalid infer option: $infer. Valid options: :default, true, false"))
+    elseif infer isa Bool
+        Int(infer)
+    else
+        infer
+    end
+    return CompilerOptions(optlevel, _compile, _infer)
+end
+
+_has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
+
 """
     $(TYPEDSIGNATURES)
 
@@ -8,12 +57,13 @@ Given a function expression `expr`, return a callable version of it.
   RuntimeGeneratedFunctions.jl.
 - `eval_module`: The module to `eval` the expression `expr` in. If `!eval_expression`,
   this is the cache and context module for the `RuntimeGeneratedFunction`.
-- `optlevel`: LLVM optimization level (0-3) for the generated function, or -1 (default) to
-  inherit from the module. Injected as `:meta :optlevel` into the function body.
+- `compiler_options`: A [`CompilerOptions`](@ref) controlling LLVM optimization level,
+  compilation mode, and type inference for the generated function.
 """
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__, optlevel::Int = -1)
-    if optlevel != -1
-        expr = _inject_optlevel_meta(expr, optlevel)
+function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__,
+                     compiler_options::CompilerOptions = CompilerOptions())
+    if _has_options(compiler_options)
+        expr = _inject_compiler_options_meta(expr, compiler_options)
     end
     if eval_expression
         return eval_module.eval(expr)
@@ -24,14 +74,17 @@ end
 
 eval_or_rgf(::Nothing; kws...) = nothing
 
-function _inject_optlevel_meta(expr::Expr, optlevel::Int)
+function _inject_compiler_options_meta(expr::Expr, co::CompilerOptions)
     if expr.head === :function || expr.head === :->
         body = expr.args[2]
-        meta = Expr(:meta, Expr(:optlevel, optlevel))
+        metas = Expr[]
+        co.optlevel != -1 && push!(metas, Expr(:meta, Expr(:optlevel, co.optlevel)))
+        co.compile != -1 && push!(metas, Expr(:meta, Expr(:compile, co.compile)))
+        co.infer != -1 && push!(metas, Expr(:meta, Expr(:infer, co.infer)))
         if body isa Expr && body.head === :block
-            new_body = Expr(:block, meta, body.args...)
+            new_body = Expr(:block, metas..., body.args...)
         else
-            new_body = Expr(:block, meta, body)
+            new_body = Expr(:block, metas..., body)
         end
         return Expr(expr.head, expr.args[1], new_body)
     end
@@ -477,8 +530,10 @@ function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) w
     return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
 
-function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; optlevel::Int = -1, kws...) where {P}
-    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; optlevel, kws...), eval_or_rgf(fiip; optlevel, kws...))
+function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip;
+        compiler_options::CompilerOptions = CompilerOptions(), kws...) where {P}
+    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; compiler_options, kws...),
+                                       eval_or_rgf(fiip; compiler_options, kws...))
 end
 
 function (gfw::GeneratedFunctionWrapper)(args...)
@@ -534,43 +589,47 @@ function expressions of the form `(oop, iip)` or a single out-of-place function 
 
 # Keyword Arguments
 
-- `optlevel`: LLVM optimization level (0-3) for the generated function, or -1 (default) to
-  inherit from the module. Injected as `:meta :optlevel` into the function body expression
-  so it ends up in the `generated_callfunc` CodeInfo.
+- `compiler_options`: A [`CompilerOptions`](@ref) controlling LLVM optimization level,
+  compilation mode, and type inference for the generated function.
 
 All other keyword arguments are forwarded to `eval_or_rgf`.
 """
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; optlevel::Int = -1, kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f...; optlevel, kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f...; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; optlevel::Int = -1, kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return eval_or_rgf.(f; optlevel, kwargs...)
+    return eval_or_rgf.(f; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; optlevel::Int = -1, kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     return f
 end
 
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; optlevel::Int = -1, kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr;
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; optlevel, kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; optlevel::Int = -1, kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr;
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return eval_or_rgf(f; optlevel, kwargs...)
+    return eval_or_rgf(f; compiler_options, kwargs...)
 end

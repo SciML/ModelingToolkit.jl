@@ -37,7 +37,7 @@ function generate_rhs(
         sys::System; implicit_dae = false,
         scalar = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        cachesyms = nothing, optlevel::Int = -1,
+        cachesyms = nothing, compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     )
     dvs = unknowns(sys)
@@ -120,7 +120,7 @@ function generate_rhs(
     end
     return maybe_compile_function(
         expression, wrap_gfw, (p_start, nargs, is_split(sys)),
-        res; optlevel, eval_expression, eval_module
+        res; compiler_options, eval_expression, eval_module
     )
 end
 
@@ -245,7 +245,7 @@ function generate_jacobian(
         sys::System;
         simplify = false, sparse = false, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        checkbounds = false, optlevel::Int = -1, kwargs...
+        checkbounds = false, compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
@@ -268,7 +268,7 @@ function generate_jacobian(
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res;
-        optlevel, eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -300,7 +300,8 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_tgrad(
         sys::System;
         simplify = false, eval_expression = false, eval_module = @__MODULE__,
-        expression = Val{true}, wrap_gfw = Val{false}, optlevel::Int = -1, kwargs...
+        expression = Val{true}, wrap_gfw = Val{false},
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -319,7 +320,7 @@ function generate_tgrad(
 
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res;
-        optlevel, eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -420,7 +421,8 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_dae_jacobian(
         sys::System; simplify = false, sparse = false,
         expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
+        eval_module = @__MODULE__,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -439,7 +441,8 @@ function generate_dae_jacobian(
         u_arg = 2, p_start = 3, p_end = 2 + length(p), kwargs...
     )
     return maybe_compile_function(
-        expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module
+        expression, wrap_gfw, (3, 5, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -1501,7 +1504,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_update_A(
         sys::System, A::AbstractMatrix; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), optlevel::Int = -1, kwargs...
+        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = reorder_parameters(sys)
 
@@ -1511,7 +1514,7 @@ function generate_update_A(
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        optlevel, eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -1538,7 +1541,7 @@ end
 function generate_update_A(
         sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}}; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), optlevel::Int = -1, kwargs...
+        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = reorder_parameters(sys)
 
@@ -1549,7 +1552,7 @@ function generate_update_A(
     return DiagonalAMatrixWrapper(
         maybe_compile_function(
             expression, wrap_gfw, (1, 1, is_split(sys)), res;
-            optlevel, eval_expression, eval_module
+            compiler_options, eval_expression, eval_module
         )
     )
 end
@@ -1579,7 +1582,7 @@ end
 function generate_update_A(
         sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}}; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), optlevel::Int = -1, kwargs...
+        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = reorder_parameters(sys)
 
@@ -1595,7 +1598,7 @@ function generate_update_A(
     return BandedAMatrixWrapper(
         maybe_compile_function(
             expression, wrap_gfw, (1, 1, is_split(sys)), res;
-            optlevel, eval_expression, eval_module
+            compiler_options, eval_expression, eval_module
         ), size(A, 1), BandedMatrices.bandwidths(A)
     )
 end
@@ -1615,7 +1618,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 function generate_update_b(
         sys::System, b::AbstractVector; expression = Val{true},
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), optlevel::Int = -1, kwargs...
+        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = reorder_parameters(sys)
 
@@ -1625,6 +1628,6 @@ function generate_update_b(
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        optlevel, eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
     )
 end
