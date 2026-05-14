@@ -169,7 +169,7 @@ StaticArrays = "1.9.14"
 StochasticDiffEq = "6.82.0, 7"
 SymbolicIndexingInterface = "0.3.39"
 SymbolicUtils = "4.27"
-Symbolics = "7.18.1"
+Symbolics = "7.24"
 UnPack = "0.1, 1.0"
 julia = "1.9"
 

@@ -342,7 +342,7 @@ function varmap_to_vars(
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
-    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit)
+    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit, allow_symbolic)
     if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
         for var in vars
@@ -496,13 +496,13 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100)
+function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
     for k in vars
         arr, _ = split_indexed_var(unwrap(k))
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true))
+        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
     end
     return
 end
