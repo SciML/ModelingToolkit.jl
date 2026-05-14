@@ -1381,8 +1381,9 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? fns : fns[1]
     end
 
-    oop = eval_or_rgf(fns[1]; eval_expression, eval_module)
-    iip = eval_or_rgf(fns[2]; eval_expression, eval_module)
+    compiler_options = get(kwargs, :compiler_options, CompilerOptions())
+    oop = eval_or_rgf(fns[1]; eval_expression, eval_module, compiler_options)
+    iip = eval_or_rgf(fns[2]; eval_expression, eval_module, compiler_options)
     f = GeneratedFunctionWrapper{
         (
             p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),

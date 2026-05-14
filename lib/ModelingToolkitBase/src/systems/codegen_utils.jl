@@ -47,6 +47,8 @@ end
 
 _has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
 
+const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
+
 """
     $(TYPEDSIGNATURES)
 
@@ -63,7 +65,12 @@ Given a function expression `expr`, return a callable version of it.
 function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__,
                      compiler_options::CompilerOptions = CompilerOptions())
     if _has_options(compiler_options)
-        expr = _inject_compiler_options_meta(expr, compiler_options)
+        if _COMPILER_OPTIONS_SUPPORTED
+            expr = _inject_compiler_options_meta(expr, compiler_options)
+        else
+            @warn "Non-default CompilerOptions were provided but this Julia build does not \
+                   support per-method compiler options. The options will be ignored." maxlog=1
+        end
     end
     if eval_expression
         return eval_module.eval(expr)
