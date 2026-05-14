@@ -145,6 +145,7 @@ function find_perfect_aliases!(
         c1 == c2 && push!(eqs_to_rm, ieq)
     end
 
+    eqs_to_substitute = Int[]
     for (root, group_vars) in alias_sets
         target = group_target[root]
         state.always_present[target] = true
@@ -165,8 +166,7 @@ function find_perfect_aliases!(
             dnbors = copy(𝑑neighbors(graph, v))
             for e in dnbors
                 snbors = 𝑠neighbors(graph, e)
-                eqs[e] = substitute(eqs[e], subs)
-                original_eqs[e] = substitute(original_eqs[e], subs)
+                push!(eqs_to_substitute, e)
                 Graphs.rem_edge!(graph, e, v)
                 Graphs.add_edge!(graph, e, target)
             end
@@ -185,8 +185,7 @@ function find_perfect_aliases!(
                 dnbors = copy(𝑑neighbors(graph, dv))
                 for e in dnbors
                     snbors = 𝑠neighbors(graph, e)
-                    eqs[e] = substitute(eqs[e], subs)
-                    original_eqs[e] = substitute(original_eqs[e], subs)
+                    push!(eqs_to_substitute, e)
                     Graphs.rem_edge!(graph, e, dv)
                     Graphs.add_edge!(graph, e, dtarget)
                 end
@@ -195,6 +194,23 @@ function find_perfect_aliases!(
                 dtarget = var_to_diff[dtarget]
             end
         end
+    end
+
+    # We need to handle unscalarized array variables
+    for k in keys(subs)
+        k, isarr = split_indexed_var(k)
+        isarr || continue
+        haskey(subs, k) && continue
+        subs[k] = Symbolics.SConst(collect(k))
+    end
+
+    ir = get_irstructure(sys)
+    subber = SU.IRSubstituter{false}(ir, subs)
+    for e in eqs_to_substitute
+        # Double substitute to handle unscalarized array variables. First one
+        # substitutes `x` to `[x[1], x[2]]`. The second substitutes `x[1]` and `x[2]`.
+        eqs[e] = subber(subber(eqs[e]))
+        original_eqs[e] = subber(subber(original_eqs[e]))
     end
 
     # After substitution, alias equations that connected a sticky non-target

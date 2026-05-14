@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
+using Symbolics
 using OrdinaryDiffEqRosenbrock
 using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
 
@@ -373,4 +374,13 @@ end
         ], t)
 
     @test Set(unknowns(sys)) == Set([e, c, d])
+end
+
+@testset "`eliminate_perfect_aliases!` correctly handles unscalarized arrays" begin
+    @variables x(t)[1:2] y(t)[1:2]
+    @mtkcompile sys = System([D(x) ~ x, y[1] ~ y[2], dot(x, y) ~ 1], t)
+    @test any(equations(sys)) do eq
+        isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[2], y[2]]))) ||
+        isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
+    end
 end
