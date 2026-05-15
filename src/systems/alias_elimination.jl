@@ -82,7 +82,6 @@ function find_perfect_aliases!(
     (; sys, fullvars, structure) = state
     (; graph, solvable_graph, var_to_diff, state_priorities) = structure
 
-    @assert solvable_graph === nothing
     diff_to_var = invview(var_to_diff)
     aliases = Dict{Int, Int}()
     subs = Dict{SymbolicT, SymbolicT}()
