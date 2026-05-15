@@ -256,6 +256,10 @@ generated functions, and `args` are the arguments.
   `MTKParameters` object are present. These are collapsed into a single argument and
   destructured inside the function. `p_start` must also be provided for non-split systems
   since it is used by `wrap_delays`.
+- `u_arg`: The index in `args` of the argument corresponding to `unknowns(sys)` (the `u`
+  vector). If `-1` (the default), the u vector is not treated specially. Otherwise, the
+  argument must be a `Vector` and is wrapped in a `DestructuredArgs` with the common
+  identifier `MTKUNKNOWNS_ARG`, giving it the predictable name `___mtkunknowns___`.
 - `compress_args`: A list of argument ranges that end before `p_start`.
   Each range will be compressed into a single argument to the function. For example,
   If there are 5 elements in `args` and `compress_args = [2:3]`, then the generated function
@@ -296,7 +300,7 @@ All other keyword arguments are forwarded to `build_function`.
 Base.@nospecializeinfer function build_function_wrapper(
         sys::AbstractSystem, @nospecialize(expr), @nospecialize(args...); p_start = 2,
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), compress_args = UnitRange{Int}[],
-        non_standard_param_layout = false,
+        non_standard_param_layout = false, u_arg::Integer = -1,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, obsidxs_to_use = nothing,
         create_bindings = false, output_type = nothing, mkarray = nothing,
@@ -307,6 +311,18 @@ Base.@nospecializeinfer function build_function_wrapper(
     obs = observed(sys)
     args = Vector{Any}(collect(args))
     assignments = Assignment[]
+
+    if u_arg != -1
+        args[u_arg] isa AbstractVector ||
+            throw(ArgumentError("argument at u_arg = $u_arg must be a Vector, got $(typeof(args[u_arg]))"))
+    end
+
+    u_argument_name = if u_arg == -1
+        generated_argument_name
+    else
+        push!(assignments, Assignment(generated_argument_name(u_arg), :___mtkunknowns___))
+        i -> i == u_arg ? :___mtkunknowns___ : generated_argument_name(i)
+    end
     # turn delayed unknowns into calls to the history function
     if wrap_delays
         param_arg = is_split(sys) ? MTKPARAMETERS_ARG : generated_argument_name(p_start)
@@ -343,7 +359,7 @@ Base.@nospecializeinfer function build_function_wrapper(
 
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars))
+        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
     else
         cached = check_mutable_cache(sys, ParameterArrayAssignments, ParameterArrayAssignments, nothing)
         if cached isa ParameterArrayAssignments
@@ -357,14 +373,16 @@ Base.@nospecializeinfer function build_function_wrapper(
                 param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars)
+        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name)
         append!(assignments, other_assigns)
     end
     append!(assignments, extra_assignments)
 
     for (i, arg) in enumerate(args)
         # Make sure to use the proper names for arguments
-        args[i] = if symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
+        args[i] = if u_arg != -1 && i == u_arg
+            DestructuredArgs(arg, MTKUNKNOWNS_ARG; create_bindings)
+        elseif symbolic_type(arg) == NotSymbolic() && arg isa AbstractArray
             DestructuredArgs(arg, generated_argument_name(i); create_bindings)
         else
             arg
