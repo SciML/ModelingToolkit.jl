@@ -384,3 +384,68 @@ end
         isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
     end
 end
+
+@testset "Perfect aliases detect negated form `x ~ -y`" begin
+    # Helper: numerically evaluate the RHS of an observed equation at a chosen
+    # value of the surviving unknown, to verify the implied relationship without
+    # depending on the exact symbolic representation produced by `-`.
+    eval_rhs(rhs, var, val) = Symbolics.value(Symbolics.substitute(rhs, Dict(var => val)))
+
+    @testset "basic negated alias `y ~ -x`" begin
+        @variables x(t) y(t)
+        @mtkcompile sys = System([D(x) ~ -x, y ~ -x], t; state_priorities = [x => 10])
+        @test isequal(only(unknowns(sys)), x)
+        obs_eq = only(filter(eq -> isequal(eq.lhs, y), observed(sys)))
+        @test eval_rhs(obs_eq.rhs, x, 3.0) == -3.0
+    end
+
+    @testset "mixed chain `x ~ y, y ~ -z`" begin
+        @variables x(t) y(t) z(t)
+        @mtkcompile sys = System(
+            [D(x) ~ -x, x ~ y, y ~ -z], t; state_priorities = [x => 10])
+        @test isequal(only(unknowns(sys)), x)
+        obs = observed(sys)
+        y_eq = only(filter(eq -> isequal(eq.lhs, y), obs))
+        z_eq = only(filter(eq -> isequal(eq.lhs, z), obs))
+        # y ~ x  (sign +1),  z ~ -x  (sign -1)
+        @test eval_rhs(y_eq.rhs, x, 3.0) == 3.0
+        @test eval_rhs(z_eq.rhs, x, 3.0) == -3.0
+    end
+
+    @testset "double-negation transitivity `x ~ -y, y ~ -z` ⇒ `x ~ z`" begin
+        @variables x(t) y(t) z(t)
+        @mtkcompile sys = System(
+            [D(x) ~ -x, x ~ -y, y ~ -z], t; state_priorities = [x => 10])
+        @test isequal(only(unknowns(sys)), x)
+        obs = observed(sys)
+        y_eq = only(filter(eq -> isequal(eq.lhs, y), obs))
+        z_eq = only(filter(eq -> isequal(eq.lhs, z), obs))
+        # y ~ -x  (sign -1),  z ~ x  (sign +1: two negations cancel)
+        @test eval_rhs(y_eq.rhs, x, 3.0) == -3.0
+        @test eval_rhs(z_eq.rhs, x, 3.0) == 3.0
+    end
+
+    @testset "negated alias with irreducible target" begin
+        @variables x(t) [irreducible = true]
+        @variables y(t)
+        @mtkcompile sys = System([D(x) ~ -x, y ~ -x], t)
+        # x is irreducible so it must survive; y is eliminated as `y ~ -x`.
+        @test any(isequal(x), unknowns(sys))
+        @test !any(isequal(y), unknowns(sys))
+        obs_eq = only(filter(eq -> isequal(eq.lhs, y), observed(sys)))
+        @test eval_rhs(obs_eq.rhs, x, 2.5) == -2.5
+    end
+
+    @testset "conflicting signs force both to zero" begin
+        @variables x(t) y(t) z(t)
+        # `x ~ y` and `x ~ -y` together imply `x = y = 0`. `z` carries the dynamics
+        # so the compiled system has a well-defined surviving state.
+        @mtkcompile sys = System([D(z) ~ z, x ~ y, x ~ -y], t)
+        @test isequal(only(unknowns(sys)), z)
+        obs = observed(sys)
+        x_eq = only(filter(eq -> isequal(eq.lhs, x), obs))
+        y_eq = only(filter(eq -> isequal(eq.lhs, y), obs))
+        @test iszero(Symbolics.value(x_eq.rhs))
+        @test iszero(Symbolics.value(y_eq.rhs))
+    end
+end

@@ -92,10 +92,12 @@ function find_perfect_aliases!(
 
     # Not `IntDisjointSet` because we don't want singleton sets for every single variable
     alias_groups = DisjointSet{Int}()
-    # Candidate alias equations `(ieq, v1_idx, v2_idx)`. Removal is decided below once
-    # each group's target is known: equations with a non-target irreducible endpoint
-    # must stay so the remaining irreducibles are still constrained to the target.
-    candidate_eqs = Tuple{Int, Int, Int}[]
+    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. `edge_sign == +1`
+    # encodes `v1 ~ v2` (coefficients sum to zero); `edge_sign == -1` encodes
+    # `v1 ~ -v2` (coefficients are equal). Removal is decided below once each group's
+    # target is known: equations with a non-target irreducible endpoint must stay so
+    # the remaining irreducibles are still constrained to the target.
+    candidate_eqs = Tuple{Int, Int, Int, Int8}[]
 
     for ieq in 1:nsrcs(graph)
         snbors = 𝑠neighbors(graph, ieq)
@@ -106,15 +108,23 @@ function find_perfect_aliases!(
         eq = eqs[ieq]
         v1 = fullvars[snbors[1]]
         v2 = fullvars[snbors[2]]
+        local edge_sign::Int8
         Moshi.Match.@match eq.rhs begin
             BSImpl.AddMul(; variant, coeff, dict) && if variant == SU.AddMulVariant.ADD end => begin
                 SU._iszero(coeff) || continue
                 length(dict) == 2 || continue
-                haskey(dict, v1) && haskey(dict, v2) && SU._iszero(dict[v1] + dict[v2]) || continue
+                haskey(dict, v1) && haskey(dict, v2) || continue
+                if SU._iszero(dict[v1] + dict[v2])
+                    edge_sign = Int8(1)   # v1 ~ v2
+                elseif SU._iszero(dict[v1] - dict[v2])
+                    edge_sign = Int8(-1)  # v1 ~ -v2
+                else
+                    continue
+                end
             end
             _ => continue
         end
-        push!(candidate_eqs, (ieq, snbors[1], snbors[2]))
+        push!(candidate_eqs, (ieq, snbors[1], snbors[2], edge_sign))
         push!(alias_groups, snbors[1])
         push!(alias_groups, snbors[2])
         union!(alias_groups, snbors[1], snbors[2])
@@ -133,65 +143,152 @@ function find_perfect_aliases!(
         group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
     end
 
-    # Queue an alias equation for removal only if both endpoints collapse onto the
-    # target after non-irreducibles are substituted -- i.e. the equation becomes
-    # `T ~ T`. Any equation with a non-target irreducible endpoint is kept; when the
-    # other endpoint is a non-irreducible, the existing substitution machinery below
-    # rewrites the kept equation into `I ~ T` form automatically.
-    for (ieq, v1, v2) in candidate_eqs
-        target = group_target[DataStructures.find_root!(alias_groups, v1)]
-        c1 = contains_possibly_indexed_element(irreducibles, fullvars[v1]) || state_priorities[v1] > 0 ? v1 : target
-        c2 = contains_possibly_indexed_element(irreducibles, fullvars[v2]) || state_priorities[v2] > 0 ? v2 : target
-        c1 == c2 && push!(eqs_to_rm, ieq)
+    # Build per-group adjacency from the (signed) candidate edges and run a BFS from
+    # each group's target to assign `var_sign[v] = ±1`, indicating whether `v` is
+    # aliased to `+target` or `-target`. Sign propagation correctly handles
+    # transitive chains, including double negation: `x ~ -y` and `y ~ -z` yield
+    # `var_sign[z] = +1` (i.e. `z ~ x`). If a variable is reached via two paths
+    # implying opposite signs (e.g. both `x ~ y` and `x ~ -y` are present), the
+    # group is inconsistent: every variable in it is implied to be zero. We record
+    # such groups in `conflict_groups` and substitute their non-irreducibles with
+    # the symbolic literal `0`; irreducibles stay and the surviving alias equations
+    # encode the resulting `irr ~ 0` constraint.
+    group_adj = Dict{Int, Vector{Tuple{Int, Int8}}}()
+    for (_, v1, v2, s) in candidate_eqs
+        push!(get!(() -> Tuple{Int, Int8}[], group_adj, v1), (v2, s))
+        push!(get!(() -> Tuple{Int, Int8}[], group_adj, v2), (v1, s))
     end
+    var_sign = Dict{Int, Int8}()
+    conflict_groups = Set{Int}()
+    bfs_queue = Int[]
+    for (root, _) in alias_sets
+        target = group_target[root]
+        var_sign[target] = Int8(1)
+        empty!(bfs_queue)
+        push!(bfs_queue, target)
+        while !isempty(bfs_queue)
+            u = popfirst!(bfs_queue)
+            us = var_sign[u]
+            nbrs = get(group_adj, u, nothing)
+            nbrs === nothing && continue
+            for (n, s) in nbrs
+                implied = Int8(s * us)
+                if haskey(var_sign, n)
+                    if var_sign[n] != implied
+                        push!(conflict_groups, root)
+                    end
+                else
+                    var_sign[n] = implied
+                    push!(bfs_queue, n)
+                end
+            end
+        end
+    end
+
+    # Queue an alias equation for removal only if both endpoints collapse out after
+    # substitution -- i.e. the equation becomes `0 ~ 0` (or `T ~ T`, which is the
+    # same once written). Any equation with a non-target irreducible endpoint is
+    # kept; when the other endpoint is a non-irreducible the existing substitution
+    # machinery below rewrites the kept equation automatically (into `I ~ T` for
+    # consistent groups, or `I ~ 0` for conflict groups).
+    is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
+    for (ieq, v1, v2, _) in candidate_eqs
+        root = DataStructures.find_root!(alias_groups, v1)
+        if root in conflict_groups
+            # Both endpoints non-sticky -> both become 0 -> equation is `0 ~ 0`.
+            !is_sticky(v1) && !is_sticky(v2) && push!(eqs_to_rm, ieq)
+        else
+            target = group_target[root]
+            c1 = is_sticky(v1) ? v1 : target
+            c2 = is_sticky(v2) ? v2 : target
+            c1 == c2 && push!(eqs_to_rm, ieq)
+        end
+    end
+
+    # Symbolic literal zero used as the substitution target for variables in conflict
+    # (sign-inconsistent) groups.
+    zero_sym = Symbolics.COMMON_ZERO
+    signed_sym = (s::Int8, x::SymbolicT) -> s == 1 ? x : (-1) * x
 
     eqs_to_substitute = Int[]
     for (root, group_vars) in alias_sets
         target = group_target[root]
-        state.always_present[target] = true
+        is_conflict = root in conflict_groups
+        # Only meaningful for non-conflict groups: the chosen target survives as an
+        # unknown. For conflict groups every non-sticky variable (target included) is
+        # replaced by `0`, so we don't pin the target with `always_present`.
+        is_conflict || (state.always_present[target] = true)
         for v in group_vars
-            v == target && continue
+            !is_conflict && v == target && continue
             # Irreducibles other than the target stay as unknowns; only non-irreducibles
-            # are eliminated in favor of the target.
-            if contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
+            # are eliminated. In conflict groups they are replaced with `0`; in
+            # consistent groups they are replaced with `±target` according to the sign
+            # propagated by the BFS above.
+            if is_sticky(v)
                 state.always_present[v] = true
                 continue
             end
 
-            push!(vars_to_rm, v)
-            subs[fullvars[v]] = fullvars[target]
-            push!(state.additional_observed, fullvars[v] ~ fullvars[target])
-            aliases[v] = target
+            if is_conflict
+                push!(vars_to_rm, v)
+                subs[fullvars[v]] = zero_sym
+                push!(state.additional_observed, fullvars[v] ~ zero_sym)
 
-            dnbors = copy(𝑑neighbors(graph, v))
-            for e in dnbors
-                snbors = 𝑠neighbors(graph, e)
-                push!(eqs_to_substitute, e)
-                Graphs.rem_edge!(graph, e, v)
-                Graphs.add_edge!(graph, e, target)
-            end
-
-            dv = var_to_diff[v]
-            dtarget = var_to_diff[target]
-            while dv isa Int
-                if dtarget === nothing
-                    dtarget = StateSelection.var_derivative!(state, target)
-                end
-                push!(vars_to_rm, dv)
-
-                subs[fullvars[dv]] = fullvars[dtarget]
-                aliases[dv] = dtarget
-
-                dnbors = copy(𝑑neighbors(graph, dv))
+                dnbors = copy(𝑑neighbors(graph, v))
                 for e in dnbors
-                    snbors = 𝑠neighbors(graph, e)
                     push!(eqs_to_substitute, e)
-                    Graphs.rem_edge!(graph, e, dv)
-                    Graphs.add_edge!(graph, e, dtarget)
+                    Graphs.rem_edge!(graph, e, v)
                 end
 
-                dv = var_to_diff[dv]
-                dtarget = var_to_diff[dtarget]
+                dv = var_to_diff[v]
+                while dv isa Int
+                    push!(vars_to_rm, dv)
+                    subs[fullvars[dv]] = zero_sym
+
+                    dnbors = copy(𝑑neighbors(graph, dv))
+                    for e in dnbors
+                        push!(eqs_to_substitute, e)
+                        Graphs.rem_edge!(graph, e, dv)
+                    end
+
+                    dv = var_to_diff[dv]
+                end
+            else
+                s = var_sign[v]
+                push!(vars_to_rm, v)
+                rhs_sym = signed_sym(s, fullvars[target])
+                subs[fullvars[v]] = rhs_sym
+                push!(state.additional_observed, fullvars[v] ~ rhs_sym)
+                aliases[v] = target
+
+                dnbors = copy(𝑑neighbors(graph, v))
+                for e in dnbors
+                    push!(eqs_to_substitute, e)
+                    Graphs.rem_edge!(graph, e, v)
+                    Graphs.add_edge!(graph, e, target)
+                end
+
+                dv = var_to_diff[v]
+                dtarget = var_to_diff[target]
+                while dv isa Int
+                    if dtarget === nothing
+                        dtarget = StateSelection.var_derivative!(state, target)
+                    end
+                    push!(vars_to_rm, dv)
+
+                    subs[fullvars[dv]] = signed_sym(s, fullvars[dtarget])
+                    aliases[dv] = dtarget
+
+                    dnbors = copy(𝑑neighbors(graph, dv))
+                    for e in dnbors
+                        push!(eqs_to_substitute, e)
+                        Graphs.rem_edge!(graph, e, dv)
+                        Graphs.add_edge!(graph, e, dtarget)
+                    end
+
+                    dv = var_to_diff[dv]
+                    dtarget = var_to_diff[dtarget]
+                end
             end
         end
     end
@@ -221,7 +318,7 @@ function find_perfect_aliases!(
     let seen = Set{Tuple{Int,Int}}()
         eqs_rm_set = Set(eqs_to_rm)
         removed_additional_eqs = false
-        for (ieq, _, _) in candidate_eqs
+        for (ieq, _, _, _) in candidate_eqs
             ieq in eqs_rm_set && continue
             snbors = 𝑠neighbors(graph, ieq)
             length(snbors) == 2 || continue
