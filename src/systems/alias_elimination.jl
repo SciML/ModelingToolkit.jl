@@ -44,18 +44,18 @@ end
     $TYPEDSIGNATURES
 
 Weighted union-find augmented with sign tracking. Merges the components of `v1`
-and `v2` under the relation `v1 ≡ edge_sign · v2` (`edge_sign ∈ ±1`), maintaining
-the invariant that `parent[v]` is always the current root and `parity[v]` is the
-sign of `v` relative to that root -- so finds are O(1).
+and `v2` under the relation `v1 ~ edge_sign · v2` (`edge_sign ∈ ±1`)
+maintains the invariant that `parent[v]` is always the current root and `parity[v]`
+is the sign of `v` relative to that root so finds are O(1).
 
-Merges are smaller-into-larger using `members` (root → member list), giving
-O((V+E) log V) amortized work across all unions. If an edge creates a contradiction
-within an already-merged component the root is recorded in `conflict_roots`; the
-flag is migrated when a conflict component is absorbed by a larger one.
+Merges are smaller-into-larger using `members` (root → member list)
+giving O((V+E) log V) across all unions.
+A contradiction (e.g. `x ~ y, x ~ -y`) zeros out every member's `parity` in the
+affected component; downstream code treats `parity[v] == 0` as "v is forced to 0".
 """
 function union_with_sign!(
         parent::Dict{Int, Int}, parity::Dict{Int, Int8},
-        members::Dict{Int, Vector{Int}}, conflict_roots::Set{Int},
+        members::Dict{Int, Vector{Int}},
         v1::Int, v2::Int, edge_sign::Int8
     )
     for v in (v1, v2)
@@ -68,7 +68,11 @@ function union_with_sign!(
     r1 = parent[v1]; s1 = parity[v1]
     r2 = parent[v2]; s2 = parity[v2]
     if r1 == r2
-        s1 == Int8(edge_sign * s2) || push!(conflict_roots, r1)
+        if s1 != Int8(edge_sign * s2)
+            for m in members[r1]
+                parity[m] = Int8(0)
+            end
+        end
         return
     end
     if length(members[r1]) < length(members[r2])
@@ -76,18 +80,21 @@ function union_with_sign!(
         s1, s2 = s2, s1
     end
     # Edge `v1 = edge_sign · v2` ⇒ sign of r2 relative to r1 = s1 · edge_sign · s2.
+    # If either side is already zero (conflict-tainted), `r2_to_r1` is 0 and we
+    # propagate the zero through both components.
     r2_to_r1 = Int8(s1 * edge_sign * s2)
     r2_members = members[r2]
     for m in r2_members
         parent[m] = r1
         parity[m] = Int8(parity[m] * r2_to_r1)
     end
+    if r2_to_r1 == 0
+        for m in members[r1]
+            parity[m] = Int8(0)
+        end
+    end
     append!(members[r1], r2_members)
     delete!(members, r2)
-    if r2 in conflict_roots
-        delete!(conflict_roots, r2)
-        push!(conflict_roots, r1)
-    end
     return
 end
 
@@ -142,19 +149,17 @@ function find_perfect_aliases!(
     irreducibles = get_irreducibles(sys)
 
     # Weighted union-find tracking each variable's sign relative to its
-    # component's current root. `parent[v]` is always the root (no path
-    # walking needed), `parity[v] ∈ ±1` is the sign of `v` relative to that
-    # root, `members` maps root → member list (used for smaller-to-larger
-    # merges in `union_with_sign!`), and `conflict_roots` collects roots
-    # whose edges are sign-inconsistent.
+    # component's current root. `parent[v]` is always the root.
+    # `parity[v] ∈ ±1` is the sign of `v` relative to that root, or `0` if the
+    # component contains a sign contradiction (forcing every member to 0).
+    # `members` maps root → member list (used for smaller-to-larger merges).
     parent = Dict{Int, Int}()
     parity = Dict{Int, Int8}()
     members = Dict{Int, Vector{Int}}()
-    conflict_roots = Set{Int}()
-    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. `edge_sign == +1`
-    # encodes `v1 ~ v2` (coefficients sum to zero); `edge_sign == -1` encodes
-    # `v1 ~ -v2` (coefficients are equal). Removal is decided below once each group's
-    # target is known: equations with a non-target irreducible endpoint must stay so
+    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. 
+    # `edge_sign == +1` encodes `v1 ~ edge_sign*v2`.
+    # Removal is decided below once each group's target is known:
+    # equations with a non-target irreducible endpoint must stay so
     # the remaining irreducibles are still constrained to the target.
     candidate_eqs = Tuple{Int, Int, Int, Int8}[]
 
@@ -184,53 +189,36 @@ function find_perfect_aliases!(
             _ => continue
         end
         push!(candidate_eqs, (ieq, snbors[1], snbors[2], edge_sign))
-        union_with_sign!(parent, parity, members, conflict_roots,
-            snbors[1], snbors[2], edge_sign)
-    end
-
-    # After the scan above, every variable in any alias group has `parent[v] ==
-    # root` and `parity[v] = ±1` (its sign relative to the root). Pick a target
-    # per group and rebase `parity` so that `var_sign[v] = +1` means `v ~ target`
-    # and `-1` means `v ~ -target`. Sign-inconsistent groups were collected in
-    # `conflict_roots`; their non-irreducibles get substituted with the symbolic
-    # literal `0` below, and one alias equation per irreducible is rewritten to
-    # `irr ~ 0`.
-    group_target = Dict{Int, Int}()
-    sizehint!(group_target, length(members))
-    for (root, group_vars) in members
-        group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
-    end
-    var_sign = Dict{Int, Int8}()
-    sizehint!(var_sign, length(parent))
-    for (root, group_vars) in members
-        target_p = parity[group_target[root]]
-        for v in group_vars
-            var_sign[v] = Int8(parity[v] * target_p)
-        end
+        union_with_sign!(parent, parity, members, snbors[1], snbors[2], edge_sign)
     end
     sizehint!(aliases, length(parent) - length(members))
+
+    # After the scan above, every variable in any alias group has
+    # `parent[v] == root` and `parity[v] ∈ {-1, 0, +1}`
+    # (sign relative to root, or 0 if the component is conflict-tainted). 
+    # The main rewriting loop below picks a target per non-conflict group 
+    # and uses `s = parity[v] * parity[target]` (±1) as `v`'s sign relative to the target.
+    # For Conflict groups: every non-irreducible gets substituted with the
+    # symbolic `0`, and one alias eq per irreducible is rewritten to `irr ~ 0`.
+    group_target = Dict{Int, Int}()
+    sizehint!(group_target, length(members))
 
     is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
     is_irreducible_v = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v])
 
-    # Symbolic literal zero used as the substitution target for variables in conflict
-    # (sign-inconsistent) groups.
+    # Symbolic zero used as substitution target for variables in conflict groups.
     zero_sym = Symbolics.COMMON_ZERO
     signed_sym = (s::Int8, x::SymbolicT) -> s == 1 ? x : (-1) * x
 
-    # Conflict-group alias equations: in conflict groups every variable is
-    # forced to `0`. Each irreducible must stay as an unknown, so claim one
-    # alias equation per irreducible and rewrite it eagerly to `v ~ 0` (and
-    # strip the bipartite edge to the other endpoint). A conflict group has
-    # at least as many alias equations as vertices (it contains a cycle), so
-    # there is always one equation per irreducible. Remaining alias equations
-    # become `0 ~ 0` after the substitution pass and are queued for removal.
-    # Doing the rewrite here -- before the main loop walks
-    # `𝑑neighbors(graph, v)` for non-irreducibles -- keeps the pinned eq out
-    # of `eqs_to_substitute`, so it survives untouched.
+    # Conflict-group alias equations: every variable is forced to `0`.
+    # Each irreducible must stay in unknowns, so claim one alias eq per irreducible
+    # and rewrite it eagerly to `v ~ 0` (stripping the bipartite edge to the other endpoint).
+    # A conflict group contains a cycle so has at least as many alias equations as vertices
+    # so there is always one eq per irreducible.
+    # Remaining alias equations become `0 ~ 0` after the substitution and are queued for removal.
     let claimed = Set{Int}()
         for (ieq, v1, v2, _) in candidate_eqs
-            parent[v1] in conflict_roots || continue
+            parity[v1] == 0 || continue
             v_pin = if is_irreducible_v(v1) && !(v1 in claimed)
                 v1
             elseif is_irreducible_v(v2) && !(v2 in claimed)
@@ -252,49 +240,22 @@ function find_perfect_aliases!(
         end
     end
 
-    # Consistent-group alias equations: queue for removal only if both
-    # endpoints collapse out after substitution (the equation becomes `0 ~ 0`).
-    # An equation with a non-target irreducible endpoint must stay so the
-    # remaining irreducible is still pinned to the target after substitution.
-    for (ieq, v1, v2, _) in candidate_eqs
-        root = parent[v1]
-        root in conflict_roots && continue
-        target = group_target[root]
-        c1 = is_sticky(v1) ? v1 : target
-        c2 = is_sticky(v2) ? v2 : target
-        c1 == c2 && push!(eqs_to_rm, ieq)
-    end
-
     eqs_to_substitute = Int[]
     for (root, group_vars) in members
-        target = group_target[root]
-        is_conflict = root in conflict_roots
-        # Only meaningful for non-conflict groups: the chosen target survives as an
-        # unknown. For conflict groups every non-irreducible variable (target
-        # included) is replaced by `0`, so we don't pin the target with
-        # `always_present` here -- irreducibles get marked individually below.
-        is_conflict || (state.always_present[target] = true)
-        for v in group_vars
-            !is_conflict && v == target && continue
-            # In consistent groups, sticky vars (irreducible OR priority>0) other
-            # than the target stay as unknowns. In conflict groups, ONLY truly
-            # irreducible vars survive as unknowns; priority>0 non-irreducibles
-            # are eliminated along with everything else. Irreducibles in conflict
-            # groups already had one alias equation rewritten to `v ~ 0` above,
-            # so we just mark them present here -- adding them to `subs` would
-            # clobber that pin.
-            if is_conflict ? is_irreducible_v(v) : is_sticky(v)
-                state.always_present[v] = true
-                continue
-            end
-
-            if is_conflict
+        if parity[root] == 0 # is conflict group
+            for v in group_vars
+                # In conflict groups, ONLY irreducible vars survive as unknowns
+                # Irreducibles already had equation rewritten to `v ~ 0` above
+                # so just mark them present here
+                if is_irreducible_v(v)
+                    state.always_present[v] = true
+                    continue
+                end
                 push!(vars_to_rm, v)
                 subs[fullvars[v]] = zero_sym
                 push!(state.additional_observed, fullvars[v] ~ zero_sym)
 
-                dnbors = copy(𝑑neighbors(graph, v))
-                for e in dnbors
+                for e in copy(𝑑neighbors(graph, v))
                     push!(eqs_to_substitute, e)
                     Graphs.rem_edge!(graph, e, v)
                 end
@@ -304,52 +265,77 @@ function find_perfect_aliases!(
                     push!(vars_to_rm, dv)
                     subs[fullvars[dv]] = zero_sym
 
-                    dnbors = copy(𝑑neighbors(graph, dv))
-                    for e in dnbors
+                    for e in copy(𝑑neighbors(graph, dv))
                         push!(eqs_to_substitute, e)
                         Graphs.rem_edge!(graph, e, dv)
                     end
 
                     dv = var_to_diff[dv]
-                end
-            else
-                s = var_sign[v]
-                push!(vars_to_rm, v)
-                rhs_sym = signed_sym(s, fullvars[target])
-                subs[fullvars[v]] = rhs_sym
-                push!(state.additional_observed, fullvars[v] ~ rhs_sym)
-                aliases[v] = target
-
-                dnbors = copy(𝑑neighbors(graph, v))
-                for e in dnbors
-                    push!(eqs_to_substitute, e)
-                    Graphs.rem_edge!(graph, e, v)
-                    Graphs.add_edge!(graph, e, target)
-                end
-
-                dv = var_to_diff[v]
-                dtarget = var_to_diff[target]
-                while dv isa Int
-                    if dtarget === nothing
-                        dtarget = StateSelection.var_derivative!(state, target)
-                    end
-                    push!(vars_to_rm, dv)
-
-                    subs[fullvars[dv]] = signed_sym(s, fullvars[dtarget])
-                    aliases[dv] = dtarget
-
-                    dnbors = copy(𝑑neighbors(graph, dv))
-                    for e in dnbors
-                        push!(eqs_to_substitute, e)
-                        Graphs.rem_edge!(graph, e, dv)
-                        Graphs.add_edge!(graph, e, dtarget)
-                    end
-
-                    dv = var_to_diff[dv]
-                    dtarget = var_to_diff[dtarget]
                 end
             end
+            continue
         end
+        # For consistent groups pick a target (survives as unknown) and rebase
+        # parities relative to it via `target_p`.
+        target = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
+        group_target[root] = target
+        target_p = parity[target]
+        state.always_present[target] = true
+        for v in group_vars
+            v == target && continue
+            # In consistent groups sticky vars (irreducible OR priority>0) other
+            # than the target stay as unknowns.
+            if is_sticky(v)
+                state.always_present[v] = true
+                continue
+            end
+
+            s = Int8(parity[v] * target_p)
+            push!(vars_to_rm, v)
+            rhs_sym = signed_sym(s, fullvars[target])
+            subs[fullvars[v]] = rhs_sym
+            push!(state.additional_observed, fullvars[v] ~ rhs_sym)
+            aliases[v] = target
+
+            for e in copy(𝑑neighbors(graph, v))
+                push!(eqs_to_substitute, e)
+                Graphs.rem_edge!(graph, e, v)
+                Graphs.add_edge!(graph, e, target)
+            end
+
+            dv = var_to_diff[v]
+            dtarget = var_to_diff[target]
+            while dv isa Int
+                if dtarget === nothing
+                    dtarget = StateSelection.var_derivative!(state, target)
+                end
+                push!(vars_to_rm, dv)
+
+                subs[fullvars[dv]] = signed_sym(s, fullvars[dtarget])
+                aliases[dv] = dtarget
+
+                for e in copy(𝑑neighbors(graph, dv))
+                    push!(eqs_to_substitute, e)
+                    Graphs.rem_edge!(graph, e, dv)
+                    Graphs.add_edge!(graph, e, dtarget)
+                end
+
+                dv = var_to_diff[dv]
+                dtarget = var_to_diff[dtarget]
+            end
+        end
+    end
+
+    # Consistent-group alias equations: queue for removal iff both endpoints
+    # collapse (equation becomes `0 ~ 0`). An equation with a non-target
+    # irreducible endpoint must stay so the remaining irreducible is still
+    # pinned to the target after substitution.
+    for (ieq, v1, v2, _) in candidate_eqs
+        parity[v1] == 0 && continue
+        target = group_target[parent[v1]]
+        c1 = is_sticky(v1) ? v1 : target
+        c2 = is_sticky(v2) ? v2 : target
+        c1 == c2 && push!(eqs_to_rm, ieq)
     end
 
     # We need to handle unscalarized array variables
