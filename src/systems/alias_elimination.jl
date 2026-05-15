@@ -43,6 +43,57 @@ end
 """
     $TYPEDSIGNATURES
 
+Weighted union-find augmented with sign tracking. Merges the components of `v1`
+and `v2` under the relation `v1 ≡ edge_sign · v2` (`edge_sign ∈ ±1`), maintaining
+the invariant that `parent[v]` is always the current root and `parity[v]` is the
+sign of `v` relative to that root -- so finds are O(1).
+
+Merges are smaller-into-larger using `members` (root → member list), giving
+O((V+E) log V) amortized work across all unions. If an edge creates a contradiction
+within an already-merged component the root is recorded in `conflict_roots`; the
+flag is migrated when a conflict component is absorbed by a larger one.
+"""
+function union_with_sign!(
+        parent::Dict{Int, Int}, parity::Dict{Int, Int8},
+        members::Dict{Int, Vector{Int}}, conflict_roots::Set{Int},
+        v1::Int, v2::Int, edge_sign::Int8
+    )
+    for v in (v1, v2)
+        if !haskey(parent, v)
+            parent[v] = v
+            parity[v] = Int8(1)
+            members[v] = [v]
+        end
+    end
+    r1 = parent[v1]; s1 = parity[v1]
+    r2 = parent[v2]; s2 = parity[v2]
+    if r1 == r2
+        s1 == Int8(edge_sign * s2) || push!(conflict_roots, r1)
+        return
+    end
+    if length(members[r1]) < length(members[r2])
+        r1, r2 = r2, r1
+        s1, s2 = s2, s1
+    end
+    # Edge `v1 = edge_sign · v2` ⇒ sign of r2 relative to r1 = s1 · edge_sign · s2.
+    r2_to_r1 = Int8(s1 * edge_sign * s2)
+    r1_members = members[r1]
+    for m in members[r2]
+        parent[m] = r1
+        parity[m] = Int8(parity[m] * r2_to_r1)
+        push!(r1_members, m)
+    end
+    delete!(members, r2)
+    if r2 in conflict_roots
+        delete!(conflict_roots, r2)
+        push!(conflict_roots, r1)
+    end
+    return
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Pick the target variable for an alias group. Irreducible variables must remain as
 unknowns, so one of them is chosen as the target when the group contains any. Otherwise
 the variable with the highest `state_priority` wins. When priorities are tied, prefer
@@ -90,8 +141,16 @@ function find_perfect_aliases!(
     original_eqs = state.original_eqs
     irreducibles = get_irreducibles(sys)
 
-    # Not `IntDisjointSet` because we don't want singleton sets for every single variable
-    alias_groups = DisjointSet{Int}()
+    # Weighted union-find tracking each variable's sign relative to its
+    # component's current root. `parent[v]` is always the root (no path
+    # walking needed), `parity[v] ∈ ±1` is the sign of `v` relative to that
+    # root, `members` maps root → member list (used for smaller-to-larger
+    # merges in `union_with_sign!`), and `conflict_roots` collects roots
+    # whose edges are sign-inconsistent.
+    parent = Dict{Int, Int}()
+    parity = Dict{Int, Int8}()
+    members = Dict{Int, Vector{Int}}()
+    conflict_roots = Set{Int}()
     # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. `edge_sign == +1`
     # encodes `v1 ~ v2` (coefficients sum to zero); `edge_sign == -1` encodes
     # `v1 ~ -v2` (coefficients are equal). Removal is decided below once each group's
@@ -125,65 +184,31 @@ function find_perfect_aliases!(
             _ => continue
         end
         push!(candidate_eqs, (ieq, snbors[1], snbors[2], edge_sign))
-        push!(alias_groups, snbors[1])
-        push!(alias_groups, snbors[2])
-        union!(alias_groups, snbors[1], snbors[2])
+        union_with_sign!(parent, parity, members, conflict_roots,
+            snbors[1], snbors[2], edge_sign)
     end
 
-    alias_sets = Dict{Int, Vector{Int}}()
-    sizehint!(alias_sets, DataStructures.num_groups(alias_groups))
-    sizehint!(aliases, length(alias_groups) - DataStructures.num_groups(alias_groups))
-    for var in alias_groups
-        set = get!(() -> Int[], alias_sets, DataStructures.find_root!(alias_groups, var))
-        push!(set, var)
-    end
-
+    # After the scan above, every variable in any alias group has `parent[v] ==
+    # root` and `parity[v] = ±1` (its sign relative to the root). Pick a target
+    # per group and rebase `parity` so that `var_sign[v] = +1` means `v ~ target`
+    # and `-1` means `v ~ -target`. Sign-inconsistent groups were collected in
+    # `conflict_roots`; their non-irreducibles get substituted with the symbolic
+    # literal `0` below, and one alias equation per irreducible is rewritten to
+    # `irr ~ 0`.
     group_target = Dict{Int, Int}()
-    for (root, group_vars) in alias_sets
+    sizehint!(group_target, length(members))
+    for (root, group_vars) in members
         group_target[root] = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
     end
-
-    # Build per-group adjacency from the (signed) candidate edges and run a BFS from
-    # each group's target to assign `var_sign[v] = ±1`, indicating whether `v` is
-    # aliased to `+target` or `-target`. Sign propagation correctly handles
-    # transitive chains, including double negation: `x ~ -y` and `y ~ -z` yield
-    # `var_sign[z] = +1` (i.e. `z ~ x`). If a variable is reached via two paths
-    # implying opposite signs (e.g. both `x ~ y` and `x ~ -y` are present), the
-    # group is inconsistent: every variable in it is implied to be zero. We record
-    # such groups in `conflict_groups`; below we substitute their non-irreducibles
-    # with the symbolic literal `0` and rewrite one alias equation per irreducible
-    # to `irr ~ 0`.
-    group_adj = Dict{Int, Vector{Tuple{Int, Int8}}}()
-    for (_, v1, v2, s) in candidate_eqs
-        push!(get!(() -> Tuple{Int, Int8}[], group_adj, v1), (v2, s))
-        push!(get!(() -> Tuple{Int, Int8}[], group_adj, v2), (v1, s))
-    end
     var_sign = Dict{Int, Int8}()
-    conflict_groups = Set{Int}()
-    bfs_queue = Int[]
-    for (root, _) in alias_sets
-        target = group_target[root]
-        var_sign[target] = Int8(1)
-        empty!(bfs_queue)
-        push!(bfs_queue, target)
-        while !isempty(bfs_queue)
-            u = popfirst!(bfs_queue)
-            us = var_sign[u]
-            nbrs = get(group_adj, u, nothing)
-            nbrs === nothing && continue
-            for (n, s) in nbrs
-                implied = Int8(s * us)
-                if haskey(var_sign, n)
-                    if var_sign[n] != implied
-                        push!(conflict_groups, root)
-                    end
-                else
-                    var_sign[n] = implied
-                    push!(bfs_queue, n)
-                end
-            end
+    sizehint!(var_sign, length(parent))
+    for (root, group_vars) in members
+        target_p = parity[group_target[root]]
+        for v in group_vars
+            var_sign[v] = Int8(parity[v] * target_p)
         end
     end
+    sizehint!(aliases, length(parent) - length(members))
 
     is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
     is_irreducible_v = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v])
@@ -205,8 +230,7 @@ function find_perfect_aliases!(
     # of `eqs_to_substitute`, so it survives untouched.
     let claimed = Set{Int}()
         for (ieq, v1, v2, _) in candidate_eqs
-            root = DataStructures.find_root!(alias_groups, v1)
-            root in conflict_groups || continue
+            parent[v1] in conflict_roots || continue
             v_pin = if is_irreducible_v(v1) && !(v1 in claimed)
                 v1
             elseif is_irreducible_v(v2) && !(v2 in claimed)
@@ -233,8 +257,8 @@ function find_perfect_aliases!(
     # An equation with a non-target irreducible endpoint must stay so the
     # remaining irreducible is still pinned to the target after substitution.
     for (ieq, v1, v2, _) in candidate_eqs
-        root = DataStructures.find_root!(alias_groups, v1)
-        root in conflict_groups && continue
+        root = parent[v1]
+        root in conflict_roots && continue
         target = group_target[root]
         c1 = is_sticky(v1) ? v1 : target
         c2 = is_sticky(v2) ? v2 : target
@@ -242,9 +266,9 @@ function find_perfect_aliases!(
     end
 
     eqs_to_substitute = Int[]
-    for (root, group_vars) in alias_sets
+    for (root, group_vars) in members
         target = group_target[root]
-        is_conflict = root in conflict_groups
+        is_conflict = root in conflict_roots
         # Only meaningful for non-conflict groups: the chosen target survives as an
         # unknown. For conflict groups every non-irreducible variable (target
         # included) is replaced by `0`, so we don't pin the target with
