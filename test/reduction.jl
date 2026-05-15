@@ -468,6 +468,30 @@ end
         @test isequal(only(eqs).lhs, D(z))
     end
 
+    @testset "conflict with 3 irreducibles, one only on a single eq" begin
+        @variables a(t) [irreducible = true]
+        @variables b(t) [irreducible = true]
+        @variables c(t) [irreducible = true]
+        @variables w(t)
+        # All three are irreducible, all in one conflict group via `a ~ b`,
+        # `a ~ c`, `a ~ -c`. Each irreducible needs its own `irr ~ 0` equation.
+        # `b` only appears on `e1 = a ~ b`. A previous greedy claiming
+        # algorithm (prefer v1, fall back to v2) would have stranded `b`:
+        # e1 → claim a, e2=(a,c) → claim c, e3=(a,c) → both claimed, drop. So
+        # b would survive as an unconstrained unknown. With the matching-free
+        # rewrite we now do (any irr ↔ any group eq), all three irreducibles
+        # get their own pinned equation.
+        @named sys = System([D(w) ~ w, a ~ b, a ~ c, a ~ -c], t)
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        eqs = equations(state.sys)
+        for v in (a, b, c)
+            @test any(
+                eq -> isequal(eq.lhs, unwrap(v)) && iszero(Symbolics.value(eq.rhs)), eqs)
+        end
+        @test any(eq -> isequal(eq.lhs, D(w)), eqs)
+    end
+
     @testset "conflicting signs with irreducible: alias eq rewritten to `v ~ 0`" begin
         @variables x(t) [irreducible = true]
         @variables y(t) z(t)

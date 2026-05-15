@@ -49,7 +49,7 @@ maintains the invariant that `parent[v]` is always the current root and `parity[
 is the sign of `v` relative to that root so finds are O(1).
 
 Merges are smaller-into-larger using `members` (root → member list)
-giving O((V+E) log V) across all unions.
+giving O(E log V) across all unions.
 A contradiction (e.g. `x ~ y, x ~ -y`) zeros out every member's `parity` in the
 affected component; downstream code treats `parity[v] == 0` as "v is forced to 0".
 """
@@ -195,8 +195,8 @@ function find_perfect_aliases!(
 
     # After the scan above, every variable in any alias group has
     # `parent[v] == root` and `parity[v] ∈ {-1, 0, +1}`
-    # (sign relative to root, or 0 if the component is conflict-tainted). 
-    # The main rewriting loop below picks a target per non-conflict group 
+    # (sign relative to root, or 0 if the component is conflict-tainted).
+    # The main rewriting loop below picks a target per non-conflict group
     # and uses `s = parity[v] * parity[target]` (±1) as `v`'s sign relative to the target.
     # For Conflict groups: every non-irreducible gets substituted with the
     # symbolic `0`, and one alias eq per irreducible is rewritten to `irr ~ 0`.
@@ -210,43 +210,16 @@ function find_perfect_aliases!(
     zero_sym = Symbolics.COMMON_ZERO
     signed_sym = (s::Int8, x::SymbolicT) -> s == 1 ? x : (-1) * x
 
-    # Conflict-group alias equations: every variable is forced to `0`.
-    # Each irreducible must stay in unknowns, so claim one alias eq per irreducible
-    # and rewrite it eagerly to `v ~ 0` (stripping the bipartite edge to the other endpoint).
-    # A conflict group contains a cycle so has at least as many alias equations as vertices
-    # so there is always one eq per irreducible.
-    # Remaining alias equations become `0 ~ 0` after the substitution and are queued for removal.
-    let claimed = Set{Int}()
-        for (ieq, v1, v2, _) in candidate_eqs
-            parity[v1] == 0 || continue
-            v_pin = if is_irreducible_v(v1) && !(v1 in claimed)
-                v1
-            elseif is_irreducible_v(v2) && !(v2 in claimed)
-                v2
-            else
-                nothing
-            end
-            if v_pin === nothing
-                push!(eqs_to_rm, ieq)
-            else
-                push!(claimed, v_pin)
-                for u in copy(𝑠neighbors(graph, ieq))
-                    u == v_pin && continue
-                    Graphs.rem_edge!(graph, ieq, u)
-                end
-                eqs[ieq] = fullvars[v_pin] ~ zero_sym
-                original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
-            end
-        end
-    end
-
     eqs_to_substitute = Int[]
+    irrs_by_root = Dict{Int, Vector{Int}}()
     for (root, group_vars) in members
         if parity[root] == 0 # is conflict group
+            # collect the irreducibles that need an equation forcing them to `0`.
+            irrs_by_root[root] = filter(is_irreducible_v, group_vars)
             for v in group_vars
-                # In conflict groups, ONLY irreducible vars survive as unknowns
-                # Irreducibles already had equation rewritten to `v ~ 0` above
-                # so just mark them present here
+                # In conflict groups, ONLY irreducible vars survive as unknowns.
+                # The per-equation cleanup below rewrites one alias eq per
+                # irreducible to `v ~ 0`; here we just mark them present.
                 if is_irreducible_v(v)
                     state.always_present[v] = true
                     continue
@@ -255,20 +228,16 @@ function find_perfect_aliases!(
                 subs[fullvars[v]] = zero_sym
                 push!(state.additional_observed, fullvars[v] ~ zero_sym)
 
-                for e in copy(𝑑neighbors(graph, v))
-                    push!(eqs_to_substitute, e)
-                    Graphs.rem_edge!(graph, e, v)
-                end
+                append!(eqs_to_substitute, 𝑑neighbors(graph, v))
+                BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), v, ())
 
                 dv = var_to_diff[v]
                 while dv isa Int
                     push!(vars_to_rm, dv)
                     subs[fullvars[dv]] = zero_sym
 
-                    for e in copy(𝑑neighbors(graph, dv))
-                        push!(eqs_to_substitute, e)
-                        Graphs.rem_edge!(graph, e, dv)
-                    end
+                    append!(eqs_to_substitute, 𝑑neighbors(graph, dv))
+                    BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), dv, ())
 
                     dv = var_to_diff[dv]
                 end
@@ -280,12 +249,10 @@ function find_perfect_aliases!(
         target = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
         group_target[root] = target
         target_p = parity[target]
-        state.always_present[target] = true
         for v in group_vars
-            v == target && continue
             # In consistent groups sticky vars (irreducible OR priority>0) other
             # than the target stay as unknowns.
-            if is_sticky(v)
+            if is_sticky(v) || v == target
                 state.always_present[v] = true
                 continue
             end
@@ -326,16 +293,35 @@ function find_perfect_aliases!(
         end
     end
 
-    # Consistent-group alias equations: queue for removal iff both endpoints
-    # collapse (equation becomes `0 ~ 0`). An equation with a non-target
-    # irreducible endpoint must stay so the remaining irreducible is still
-    # pinned to the target after substitution.
+    # Per-equation cleanup. Two cases:
+    #
+    # Conflict groups: every variable is forced to `0`.
+    # Take the first `length(irrs)` eq in the group to force the irrs to 0
+    # (overwriting the eq and replacing its graph row with the edge to `irr`). 
+    # Remaining conflict eqs become `0 ~ 0` and are queued for removal.
+    # Pinned eqs end up in `eqs_to_substitute` from the var-elim pass above
+    # but `subber` leaves `irr ~ 0` untouched (irreducibles aren't in `subs`).
+    #
+    # Consistent groups: queue for removal iff both endpoints collapse. An eq
+    # with a non-target irreducible endpoint must stay so the remaining
+    # irreducible is still pinned to the target after substitution.
     for (ieq, v1, v2, _) in candidate_eqs
-        parity[v1] == 0 && continue
-        target = group_target[parent[v1]]
-        c1 = is_sticky(v1) ? v1 : target
-        c2 = is_sticky(v2) ? v2 : target
-        c1 == c2 && push!(eqs_to_rm, ieq)
+        if parity[v1] == 0 # if conflict group
+            irrs = irrs_by_root[parent[v1]]
+            if isempty(irrs)
+                push!(eqs_to_rm, ieq)
+            else
+                v_pin = pop!(irrs) # irriducable var to pin to 0
+                BipartiteGraphs.set_neighbors!(graph, ieq, [v_pin])
+                eqs[ieq] = fullvars[v_pin] ~ zero_sym
+                original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
+            end
+        else
+            target = group_target[parent[v1]]
+            c1 = is_sticky(v1) ? v1 : target
+            c2 = is_sticky(v2) ? v2 : target
+            c1 == c2 && push!(eqs_to_rm, ieq)
+        end
     end
 
     # We need to handle unscalarized array variables
