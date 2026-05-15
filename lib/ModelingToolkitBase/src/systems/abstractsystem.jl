@@ -40,6 +40,7 @@ function generate_custom_function(
             dvs,
             p...,
             get_iv(sys);
+            u_arg = 1,
             kwargs...,
             expression = Val{true}
         )
@@ -48,6 +49,7 @@ function generate_custom_function(
             sys, exprs,
             dvs,
             p...;
+            u_arg = 1,
             kwargs...,
             expression = Val{true}
         )
