@@ -150,9 +150,9 @@ function find_perfect_aliases!(
     # `var_sign[z] = +1` (i.e. `z ~ x`). If a variable is reached via two paths
     # implying opposite signs (e.g. both `x ~ y` and `x ~ -y` are present), the
     # group is inconsistent: every variable in it is implied to be zero. We record
-    # such groups in `conflict_groups` and substitute their non-irreducibles with
-    # the symbolic literal `0`; irreducibles stay and the surviving alias equations
-    # encode the resulting `irr ~ 0` constraint.
+    # such groups in `conflict_groups`; below we substitute their non-irreducibles
+    # with the symbolic literal `0` and rewrite one alias equation per irreducible
+    # to `irr ~ 0`.
     group_adj = Dict{Int, Vector{Tuple{Int, Int8}}}()
     for (_, v1, v2, s) in candidate_eqs
         push!(get!(() -> Tuple{Int, Int8}[], group_adj, v1), (v2, s))
@@ -185,46 +185,81 @@ function find_perfect_aliases!(
         end
     end
 
-    # Queue an alias equation for removal only if both endpoints collapse out after
-    # substitution -- i.e. the equation becomes `0 ~ 0` (or `T ~ T`, which is the
-    # same once written). Any equation with a non-target irreducible endpoint is
-    # kept; when the other endpoint is a non-irreducible the existing substitution
-    # machinery below rewrites the kept equation automatically (into `I ~ T` for
-    # consistent groups, or `I ~ 0` for conflict groups).
     is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
-    for (ieq, v1, v2, _) in candidate_eqs
-        root = DataStructures.find_root!(alias_groups, v1)
-        if root in conflict_groups
-            # Both endpoints non-sticky -> both become 0 -> equation is `0 ~ 0`.
-            !is_sticky(v1) && !is_sticky(v2) && push!(eqs_to_rm, ieq)
-        else
-            target = group_target[root]
-            c1 = is_sticky(v1) ? v1 : target
-            c2 = is_sticky(v2) ? v2 : target
-            c1 == c2 && push!(eqs_to_rm, ieq)
-        end
-    end
+    is_irreducible_v = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v])
 
     # Symbolic literal zero used as the substitution target for variables in conflict
     # (sign-inconsistent) groups.
     zero_sym = Symbolics.COMMON_ZERO
     signed_sym = (s::Int8, x::SymbolicT) -> s == 1 ? x : (-1) * x
 
+    # Conflict-group alias equations: in conflict groups every variable is
+    # forced to `0`. Each irreducible must stay as an unknown, so claim one
+    # alias equation per irreducible and rewrite it eagerly to `v ~ 0` (and
+    # strip the bipartite edge to the other endpoint). A conflict group has
+    # at least as many alias equations as vertices (it contains a cycle), so
+    # there is always one equation per irreducible. Remaining alias equations
+    # become `0 ~ 0` after the substitution pass and are queued for removal.
+    # Doing the rewrite here -- before the main loop walks
+    # `𝑑neighbors(graph, v)` for non-irreducibles -- keeps the pinned eq out
+    # of `eqs_to_substitute`, so it survives untouched.
+    let claimed = Set{Int}()
+        for (ieq, v1, v2, _) in candidate_eqs
+            root = DataStructures.find_root!(alias_groups, v1)
+            root in conflict_groups || continue
+            v_pin = if is_irreducible_v(v1) && !(v1 in claimed)
+                v1
+            elseif is_irreducible_v(v2) && !(v2 in claimed)
+                v2
+            else
+                nothing
+            end
+            if v_pin === nothing
+                push!(eqs_to_rm, ieq)
+            else
+                push!(claimed, v_pin)
+                for u in copy(𝑠neighbors(graph, ieq))
+                    u == v_pin && continue
+                    Graphs.rem_edge!(graph, ieq, u)
+                end
+                eqs[ieq] = fullvars[v_pin] ~ zero_sym
+                original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
+            end
+        end
+    end
+
+    # Consistent-group alias equations: queue for removal only if both
+    # endpoints collapse out after substitution (the equation becomes `0 ~ 0`).
+    # An equation with a non-target irreducible endpoint must stay so the
+    # remaining irreducible is still pinned to the target after substitution.
+    for (ieq, v1, v2, _) in candidate_eqs
+        root = DataStructures.find_root!(alias_groups, v1)
+        root in conflict_groups && continue
+        target = group_target[root]
+        c1 = is_sticky(v1) ? v1 : target
+        c2 = is_sticky(v2) ? v2 : target
+        c1 == c2 && push!(eqs_to_rm, ieq)
+    end
+
     eqs_to_substitute = Int[]
     for (root, group_vars) in alias_sets
         target = group_target[root]
         is_conflict = root in conflict_groups
         # Only meaningful for non-conflict groups: the chosen target survives as an
-        # unknown. For conflict groups every non-sticky variable (target included) is
-        # replaced by `0`, so we don't pin the target with `always_present`.
+        # unknown. For conflict groups every non-irreducible variable (target
+        # included) is replaced by `0`, so we don't pin the target with
+        # `always_present` here -- irreducibles get marked individually below.
         is_conflict || (state.always_present[target] = true)
         for v in group_vars
             !is_conflict && v == target && continue
-            # Irreducibles other than the target stay as unknowns; only non-irreducibles
-            # are eliminated. In conflict groups they are replaced with `0`; in
-            # consistent groups they are replaced with `±target` according to the sign
-            # propagated by the BFS above.
-            if is_sticky(v)
+            # In consistent groups, sticky vars (irreducible OR priority>0) other
+            # than the target stay as unknowns. In conflict groups, ONLY truly
+            # irreducible vars survive as unknowns; priority>0 non-irreducibles
+            # are eliminated along with everything else. Irreducibles in conflict
+            # groups already had one alias equation rewritten to `v ~ 0` above,
+            # so we just mark them present here -- adding them to `subs` would
+            # clobber that pin.
+            if is_conflict ? is_irreducible_v(v) : is_sticky(v)
                 state.always_present[v] = true
                 continue
             end
