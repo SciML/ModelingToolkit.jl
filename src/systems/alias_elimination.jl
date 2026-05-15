@@ -77,12 +77,12 @@ function union_with_sign!(
     end
     # Edge `v1 = edge_sign · v2` ⇒ sign of r2 relative to r1 = s1 · edge_sign · s2.
     r2_to_r1 = Int8(s1 * edge_sign * s2)
-    r1_members = members[r1]
-    for m in members[r2]
+    r2_members = members[r2]
+    for m in r2_members
         parent[m] = r1
         parity[m] = Int8(parity[m] * r2_to_r1)
-        push!(r1_members, m)
     end
+    append!(members[r1], r2_members)
     delete!(members, r2)
     if r2 in conflict_roots
         delete!(conflict_roots, r2)
