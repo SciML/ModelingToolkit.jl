@@ -157,7 +157,7 @@ function find_perfect_aliases!(
     parity = Dict{Int, Int8}()
     members = Dict{Int, Vector{Int}}()
     # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. 
-    # `edge_sign == +1` encodes `v1 ~ edge_sign*v2`.
+    # `edge_sign == ±1` encodes `v1 ~ edge_sign*v2`.
     # Removal is decided below once each group's target is known:
     # equations with a non-target irreducible endpoint must stay so
     # the remaining irreducibles are still constrained to the target.
