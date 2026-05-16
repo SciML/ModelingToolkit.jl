@@ -311,7 +311,7 @@ function find_perfect_aliases!(
             if isempty(irrs)
                 push!(eqs_to_rm, ieq)
             else
-                v_pin = pop!(irrs) # irriducable var to pin to 0
+                v_pin = pop!(irrs) # irreducible var to pin to 0
                 BipartiteGraphs.set_neighbors!(graph, ieq, [v_pin])
                 eqs[ieq] = fullvars[v_pin] ~ zero_sym
                 original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
