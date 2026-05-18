@@ -49,6 +49,64 @@ _has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.
 
 const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 
+# Fallback modules with module-level compiler options for Julia versions
+# that don't support per-method compiler options (Base.Experimental.set_compile!).
+# We pre-create modules for the most common combinations:
+#   - optimize=0
+#   - optimize=1
+#   - optimize=0, infer=false
+# On Julia versions with per-method support, these modules are still defined
+# but without any special compiler options (they are never used in that case).
+module _EvalModuleOpt0
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=0
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+module _EvalModuleOpt1
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=1
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+module _EvalModuleOpt0NoInfer
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=0 infer=false
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+
+"""
+    _resolve_fallback_eval_module(co::CompilerOptions)
+
+Return a pre-made module with the appropriate module-level compiler options for the
+given `CompilerOptions`. This is used as a fallback on Julia versions that do not support
+per-method compiler options. Only a limited set of option combinations is supported;
+unsupported combinations will throw an error.
+"""
+function _resolve_fallback_eval_module(co::CompilerOptions)
+    if co.compile != -1
+        throw(ArgumentError(
+            "Non-default `compile` compiler option is not supported on Julia $VERSION. " *
+            "Per-method compiler options require Julia with `Base.Experimental.set_compile!` support."))
+    end
+    if co.optlevel == 0 && co.infer == -1
+        return _EvalModuleOpt0
+    elseif co.optlevel == 1 && co.infer == -1
+        return _EvalModuleOpt1
+    elseif co.optlevel == 0 && co.infer == 0
+        return _EvalModuleOpt0NoInfer
+    else
+        throw(ArgumentError(
+            "The compiler option combination (optlevel=$(co.optlevel), infer=$(co.infer)) " *
+            "is not supported on Julia $VERSION without per-method compiler options. " *
+            "Supported fallback combinations: (optlevel=0), (optlevel=1), (optlevel=0, infer=false)."))
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -68,8 +126,12 @@ function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODUL
         if _COMPILER_OPTIONS_SUPPORTED
             expr = _inject_compiler_options_meta(expr, compiler_options)
         else
-            @warn "Non-default CompilerOptions were provided but this Julia build does not \
-                   support per-method compiler options. The options will be ignored." maxlog=1
+            if eval_module !== @__MODULE__
+                throw(ArgumentError(
+                    "Cannot use both a non-default `eval_module` and non-default `compiler_options` " *
+                    "on Julia $VERSION. Per-method compiler options require `Base.Experimental.set_compile!` support."))
+            end
+            eval_module = _resolve_fallback_eval_module(compiler_options)
         end
     end
     if eval_expression
