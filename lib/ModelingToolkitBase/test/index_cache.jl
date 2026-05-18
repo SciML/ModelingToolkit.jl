@@ -8,6 +8,8 @@ using PreallocationTools: DiffCache
 using ForwardDiff
 using Symbolics: unwrap
 using Setfield: @set!
+import DifferentiationInterface as DI
+using ADTypes
 using Test
 
 # Ensure indexes of array symbolics are cached appropriately
@@ -168,6 +170,14 @@ end
     @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(prob, idata.initializeprob)
 end
 
+function costfn(theta, ps)
+    setter, prob, getter = ps
+    p = setter(prob, theta)
+    newprob = SciMLBase.remake(prob; p)
+    sol = solve(newprob, Rodas5P(); saveat=0.1)
+    sum(abs2, getter(sol))
+end
+
 @testset "gradients with special `DiffCache` params" begin
     @variables x(t)
     @parameters p1=2.0 p2=3.0
@@ -175,16 +185,12 @@ end
     sys, _ = ModelingToolkitBase.add_diffcache(sys, 4)
     sys = complete(sys)
 
-    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [x => 1.0], (0.0, 1.0))
     setter = setp_oop(prob, [p1, p2])
+    getter = getsym(prob, x)
 
-    function costfn(theta)
-        p = setter(prob, theta)
-        newprob = SciMLBase.remake(prob; p)
-        sol = solve(newprob, Rodas5P(); saveat=0.1)
-        sum(abs2, sol[x])
-    end
-
-    @test costfn([2.0, 3.0]) ≠ zeros(2)
-    @test_nowarn @inferred ForwardDiff.gradient(costfn, [2.0, 3.0])
+    ps = (setter, prob, getter)
+    @test costfn([2.0, 3.0], ps) ≠ zeros(2)
+    prep = DI.prepare_gradient(Base.Fix2(costfn, ps), AutoForwardDiff(), [2.0, 3.0])
+    @test_nowarn @inferred DI.gradient(Base.Fix2(costfn, ps), prep, AutoForwardDiff(), [2.0, 3.0])
 end
