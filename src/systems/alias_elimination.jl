@@ -339,6 +339,15 @@ function find_perfect_aliases!(
         # substitutes `x` to `[x[1], x[2]]`. The second substitutes `x[1]` and `x[2]`.
         eqs[e] = subber(subber(eqs[e]))
         original_eqs[e] = subber(subber(original_eqs[e]))
+        # Substitution can drop vars beyond the one substituted: zero
+        # substitution annihilates multiplicative cofactors (`v*w` with `v→0`
+        # also removes `w`); alias substitution can cancel the target
+        # (`v - target` with `v→target` leaves neither). Substitution never
+        # introduces new vars, so the new incidence is a subset of the old —
+        # prune the row to entries actually present in the simplified RHS.
+        new_vars = Symbolics.get_variables(eqs[e], fullvars)
+        new_row = filter(v_idx -> fullvars[v_idx] in new_vars, 𝑠neighbors(graph, e))
+        BipartiteGraphs.set_neighbors!(graph, e, new_row)
     end
 
     # After substitution, alias equations that connected a sticky non-target

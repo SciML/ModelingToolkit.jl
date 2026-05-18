@@ -512,3 +512,49 @@ end
         @test any(eq -> isequal(eq.lhs, D(z)), eqs)
     end
 end
+
+@testset "Substitution rebuilds equation incidence" begin
+    # Calls `find_perfect_aliases!` directly so we can inspect the bipartite
+    # graph *before* `rm_eqs_vars!` renumbers it.
+    sneighbors = ModelingToolkit.BipartiteGraphs.𝑠neighbors
+
+    @testset "zero substitution drops multiplicatively annihilated var" begin
+        @variables x(t) y(t) a(t) b(t)
+        # `x ~ y` and `x ~ -y` is a sign conflict ⇒ x = y = 0. The non-alias
+        # eq `D(a) ~ x*b + a` simplifies to `D(a) ~ a` after `x → 0`, so `b`
+        # is annihilated and its edge to that eq must be dropped even though
+        # `b` itself wasn't substituted.
+        @named sys = System(
+            [D(a) ~ x * b + a, D(b) ~ b, x ~ y, x ~ -y], t)
+        state = TearingState(sys)
+
+        eqs_before = collect(ModelingToolkit.equations(state))
+        da_ieq = findfirst(eq -> isequal(eq.lhs, D(a)), eqs_before)
+        b_idx = findfirst(isequal(unwrap(b)), state.fullvars)
+        # Precondition: b is incident on the D(a) eq before the pass runs.
+        @test b_idx in sneighbors(state.structure.graph, da_ieq)
+
+        ModelingToolkit.find_perfect_aliases!(state, Int[], Int[])
+
+        @test !(b_idx in sneighbors(state.structure.graph, da_ieq))
+    end
+
+    @testset "alias substitution drops cancelled target var" begin
+        @variables x(t) y(t) w(t)
+        # `x ~ y` is a consistent alias. `x` gets eliminated in favor of `y`.
+        # The non-alias eq `D(w) ~ x - y + w` becomes `D(w) ~ w`, so `y` is no
+        # longer in the equation even though it was the alias *target*.
+        @named sys = System([D(w) ~ x - y + w, x ~ y], t;
+            state_priorities = [y => 10])
+        state = TearingState(sys)
+
+        eqs_before = collect(ModelingToolkit.equations(state))
+        dw_ieq = findfirst(eq -> isequal(eq.lhs, D(w)), eqs_before)
+        y_idx = findfirst(isequal(unwrap(y)), state.fullvars)
+        @test y_idx in sneighbors(state.structure.graph, dw_ieq)
+
+        ModelingToolkit.find_perfect_aliases!(state, Int[], Int[])
+
+        @test !(y_idx in sneighbors(state.structure.graph, dw_ieq))
+    end
+end
