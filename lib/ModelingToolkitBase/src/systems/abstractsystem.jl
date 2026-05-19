@@ -556,7 +556,7 @@ end
 
 supports_initialization(sys::AbstractSystem) = true
 
-function add_initialization_parameters(sys::AbstractSystem; split = true)
+function add_initialization_parameters(sys::AbstractSystem; split = true, _unhack_sys = nothing)
     @assert !has_systems(sys) || isempty(get_systems(sys))
     supports_initialization(sys) || return sys
     is_initializesystem(sys) && return sys
@@ -564,8 +564,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true)
     all_initialvars = Set{SymbolicT}()
     # time-independent systems don't initialize unknowns
     # but may initialize parameters using guesses for unknowns
-    eqs = equations(sys)
-    _sys = unhack_system(sys)
+    _sys = _unhack_sys === nothing ? unhack_system(sys) : _unhack_sys
     obs = observed(_sys)
     eqs = equations(_sys)
     for x in unknowns(_sys)
@@ -691,10 +690,10 @@ function complete(
         end
         sys = newsys
         check_no_parameter_equations(sys)
-        if add_initial_parameters
-            sys = add_initialization_parameters(sys; split)::T
-        end
         _unhack_sys = unhack_system(sys)
+        if add_initial_parameters
+            sys = add_initialization_parameters(sys; split, _unhack_sys)::T
+        end
         cb_alg_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
         if has_continuous_events(sys) && is_time_dependent(sys)
             cevts = SymbolicContinuousCallback[]
