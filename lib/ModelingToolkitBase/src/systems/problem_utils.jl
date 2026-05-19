@@ -672,7 +672,7 @@ Note that the getter ONLY works for problem-like objects, since it generates an 
 function. It does NOT work for solutions.
 """
 Base.@nospecializeinfer function concrete_getu(
-        indp, syms;
+        indp, syms; wrap_as_any = false,
         eval_expression, eval_module, force_time_independent = false, kwargs...
     )
     @nospecialize
@@ -680,6 +680,9 @@ Base.@nospecializeinfer function concrete_getu(
         indp, syms; wrap_delays = false, eval_expression, eval_module,
         force_time_independent, kwargs...
     )
+    if wrap_as_any
+        return ObservedWrapper{is_time_dependent(indp) && !force_time_independent, Any}(obsfn)
+    end
     return ObservedWrapper{is_time_dependent(indp) && !force_time_independent}(obsfn)
 end
 
