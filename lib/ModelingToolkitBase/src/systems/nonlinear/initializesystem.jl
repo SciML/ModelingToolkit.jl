@@ -438,7 +438,7 @@ function timevaring_initsys_process_op!(
         is a variable/parameter of the system, or change the set of initial conditions \
         provided to the problem constructor.
         2. An initial condition was provided for a bound parameter. Bound parameters cannot \
-        be given intial conditions. Their values are determined solely by the binding \
+        be given initial conditions. Their values are determined solely by the binding \
         relation.
 
         In case neither of these is the case, please open an issue in ModelingToolkit.jl \

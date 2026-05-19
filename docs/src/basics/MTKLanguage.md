@@ -254,7 +254,7 @@ end
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
   - If this block is not defined in the model, no discrete events will be added.
   - The block can also handle `if`-statements (evaluated at compilation) and unpacked lists defined by [comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions)
-  - Dicrete events have the form `*condition* => *affect*` where *condition* is a boolean expression
+  - Discrete events have the form `*condition* => *affect*` where *condition* is a boolean expression
   - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example

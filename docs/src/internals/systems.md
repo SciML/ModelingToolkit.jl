@@ -88,7 +88,7 @@ This constructor is responsible for:
 - Populating `var_to_name`.
 - Validating bindings.
 - Parsing bindings/initial conditions/guesses from variable metadata.
-- Converting symbolic event shorthand into `SymbolicContinousCallback`/`SymbolicDiscreteCallback`.
+- Converting symbolic event shorthand into `SymbolicContinuousCallback`/`SymbolicDiscreteCallback`.
 
 !!! note "Parsing metadata"
   It is often useful to disable parsing bindings/initial conditions/guesses from variable metadata during
@@ -200,7 +200,7 @@ The order and number of unknowns should correspond to that of equations. For exa
 D(x) ~ rhs
 ```
 
-Then `x` should be the `i`th unknown. Algebraic variables often have a weaker correspondance.
+Then `x` should be the `i`th unknown. Algebraic variables often have a weaker correspondence.
 
 ## `AtomicArrayDict`
 

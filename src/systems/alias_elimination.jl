@@ -253,7 +253,7 @@ function alias_elimination!(state::TearingState; fully_determined = true,
     (; fullvars, sys) = state
     (; graph, var_to_diff, solvable_graph) = state.structure
     # Previously, underconstrained variables were zeroed out. This leads to significant
-    # unintuitive behavior, especially for intialization systems. The underconstrained variables
+    # unintuitive behavior, especially for initialization systems. The underconstrained variables
     # should constitute an underdetermined error, and hence the behavior is removed. This pass
     # continues to remove redundant equations, since it is essential for adding analysis points
     # to existing connections.

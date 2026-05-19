@@ -99,7 +99,7 @@ allowed values on the RHS along with its behavior during initialization. For thi
 nomenclature "FP parameter" or "FP variable" is used to refer to parameters/variables which
 take continuous values, determined by their `SymbolicUtils.symtype` being `Real`, or a
 subtype of `AbstractFloat`, or an array thereof. The term "variable" in this table is used
-to refer to both continously-varying quantities such as the unknowns of a DAE (created
+to refer to both continuously-varying quantities such as the unknowns of a DAE (created
 via `@variables`) as well as discretely-varying quantities updated in events (created by
 `@discretes`). Note that all FP variables are solved for by initialization. Any quantity
 that initialization solves for is referred to as an "initialization unknown".
