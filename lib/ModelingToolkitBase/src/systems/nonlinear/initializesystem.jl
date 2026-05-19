@@ -812,14 +812,9 @@ function DiffEqBase.get_updated_symbolic_problem(
     end
 
     u0 = DiffEqBase.promote_u0(u0, buffer, t0)
+    u0 = ArrayInterface.restructure(u0, meta.get_updated_u0(prob, initdata.initializeprob))
 
-    if ArrayInterface.ismutable(u0)
-        T = typeof(u0)
-    else
-        T = StaticArrays.similar_type(u0)
-    end
-
-    return remake(prob; u0 = T(meta.get_updated_u0(prob, initdata.initializeprob)), p)
+    return remake(prob; u0, p)
 end
 
 """
