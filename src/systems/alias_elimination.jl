@@ -333,7 +333,7 @@ function find_perfect_aliases!(
     end
 
     ir = get_irstructure(sys)
-    subber = SU.IRSubstituter{false}(ir, subs)
+    subber = SU.IRSubstituter{true}(ir, subs)
     for e in eqs_to_substitute
         # Double substitute to handle unscalarized array variables. First one
         # substitutes `x` to `[x[1], x[2]]`. The second substitutes `x[1]` and `x[2]`.
