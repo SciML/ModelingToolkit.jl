@@ -6,7 +6,7 @@ This is, for example, useful for finding the steady state of an ODE.
 This steady state is reached when the nonlinear system of differential equations equals zero.
 
 !!! note
-    
+
     The high level `@mtkmodel` macro used in the
     [getting started tutorial](@ref getting_started)
     is not yet compatible with `NonlinearSystem`.

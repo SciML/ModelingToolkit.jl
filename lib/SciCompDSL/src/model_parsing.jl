@@ -1344,9 +1344,9 @@ end
 function check_event_syntax(line)
     if line.args[1] == :(=>)
         return true
-    elseif (line.head == :(...)) || 
-           (line.head == :generator) || 
-           (line.head == :comprehension)|| 
+    elseif (line.head == :(...)) ||
+           (line.head == :generator) ||
+           (line.head == :comprehension)||
            (line.head == :if)
         return check_event_syntax(line.args[1])
     else

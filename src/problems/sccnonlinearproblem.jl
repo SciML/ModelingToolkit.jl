@@ -289,7 +289,7 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
     for i in eachindex(decomposition.subsystems)
         empty!(banned_vars)
         empty!(state)
-        
+
         subsys = decomposition.subsystems[i]
         union!(banned_vars, unknowns(subsys))
         for u in unknowns(subsys)

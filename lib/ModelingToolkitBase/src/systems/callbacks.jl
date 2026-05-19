@@ -315,7 +315,7 @@ end
 const Affect = Union{AffectSystem, ImperativeAffect}
 
 """
-    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing; 
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect = nothing, iv = nothing;
                                affect_neg = affect, initialize = nothing, finalize = nothing,
                                rootfind = SciMLBase.LeftRootFind, initialize_save_discretes = true)
 
@@ -360,7 +360,7 @@ and combined with the remaining `Equation`s.
     + `ctx` is a user-defined context object passed to `f!` when invoked. This value is aliased for each problem.
 * A [`ImperativeAffect`](@ref); refer to its documentation for details.
 
-`reinitializealg` is used to set how the system will be reinitialized after the callback. 
+`reinitializealg` is used to set how the system will be reinitialized after the callback.
 - Symbolic affects have reinitialization built in. In this case the algorithm will default to SciMLBase.NoInit(), and should **not** be provided.
 - Functional and imperative affects will default to SciMLBase.CheckInit(), which will error if the system is not properly reinitialized after the callback. If your system is a DAE, pass in an algorithm like SciMLBase.BrownBasicFullInit() to properly re-initialize.
 
@@ -533,7 +533,7 @@ end
 
 A callback that triggers at the first timestep that the conditions are satisfied.
 
-The condition can be one of: 
+The condition can be one of:
 - Δt::Real              - periodic events with period Δt
 - ts::Vector{Real}      - events trigger at these preset times given by `ts`
 - eqs::Vector{SymbolicT} - events trigger when the condition evaluates to true
@@ -542,7 +542,7 @@ The condition can be one of:
   interest of correctness. The callback will trigger and save at `tspan[1]` if the clock
   would tick at `tspan[1]`.
 
-Arguments: 
+Arguments:
 - iv: The independent variable of the system. This must be specified if the independent variable appears in one of the equations explicitly, as in x ~ t + 1.
 """
 struct SymbolicDiscreteCallback <: AbstractCallback

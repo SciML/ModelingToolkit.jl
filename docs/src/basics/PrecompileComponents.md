@@ -159,7 +159,7 @@ is the most reliable tool. Use `@descend` on the component constructor and look 
 (runtime-dispatch) calls. In Cthulhu, press `T` to switch to Typed IR, `o` to enable
 optimizations, and `w` to highlight unstable code — this view is harder to read but gives the
 most accurate picture of what the compiler actually infers. The Julia flags `--trace-compile`
-and `--trace-compile-timing` are also useful for identifying methods that were not 
+and `--trace-compile-timing` are also useful for identifying methods that were not
 precompiled or were invalidated at load time.
 
 !!! note "Julia 1.12 and precompilation"

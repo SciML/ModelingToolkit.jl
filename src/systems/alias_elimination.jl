@@ -157,7 +157,7 @@ function find_perfect_aliases!(
                 state.always_present[v] = true
                 continue
             end
-            
+
             push!(vars_to_rm, v)
             subs[fullvars[v]] = fullvars[target]
             push!(state.additional_observed, fullvars[v] ~ fullvars[target])

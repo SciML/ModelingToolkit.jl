@@ -34,7 +34,7 @@ rc = 0.25 # Reference concentration
         c = RealOutput()
         T = RealOutput()
     end
-    
+
     xc = @something(xc, c0)
     xT = @something(xT, T0)
     vars = @variables begin

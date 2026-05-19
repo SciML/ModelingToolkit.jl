@@ -173,13 +173,13 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 One or more partial systems can be extended in a higher system with `@extend` statements. This can be done in two ways:
 
   - `@extend PartialSystem(var1 = value1)`
-    
+
       + This is the recommended way of extending a base system.
       + The default values for the arguments of the base system can be declared in the `@extend` statement.
       + Note that all keyword arguments of the base system are added as the keyword arguments of the main system.
 
   - `@extend var_to_unpack1, var_to_unpack2 = partial_sys = PartialSystem(var1 = value1)`
-    
+
       + In this method: explicitly list the variables that should be unpacked, provide a name for the partial system and declare the base system.
       + Note that only the arguments listed out in the declaration of the base system (here: `var1`) are added as the keyword arguments of the higher system.
 
@@ -381,7 +381,7 @@ end
 ```
 
 !!! note
-    
+
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## [More on `Model.structure`](@id model_structure)

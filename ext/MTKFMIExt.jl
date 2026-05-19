@@ -417,7 +417,7 @@ function parseFMIVariableName(name::AbstractString)
             name = @view name[5:(end - 1)]
             der = 1
         else
-            
+
             der = parse(Int, @view name[(idx + 1):(end - 1)])
             name = @view name[5:(idx - 1)]
         end

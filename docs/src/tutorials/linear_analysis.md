@@ -21,7 +21,7 @@ connect(comp1.output, :analysis_point_name, comp2.input, comp3.input, comp4.inpu
 ```
 
 !!! warning "Causality"
-    
+
     Analysis points are *causal*, i.e., they imply a directionality for the flow of information. The order of the connections in the connect statement is thus important, i.e., `connect(out, :name, in)` is different from `connect(in, :name, out)`.
 
 The directionality of an analysis point can be thought of as an arrow in a block diagram, where the name of the analysis point applies to the arrow itself.
