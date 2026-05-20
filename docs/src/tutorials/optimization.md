@@ -4,7 +4,7 @@ ModelingToolkit.jl is not only useful for generating initial value problems (`OD
 The package can also build optimization systems.
 
 !!! note
-    
+
     The high level `@mtkmodel` macro used in the
     [getting started tutorial](@ref getting_started)
     is not yet compatible with `OptimizationSystem`.

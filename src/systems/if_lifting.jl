@@ -547,7 +547,7 @@ const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(
 If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.
 
 Lifting proceeds through the following process:
-* rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS 
+* rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS
 * replace comparisons with generated parameters; for each comparison eqn [op] 0, generate an event (dependent on op) that sets the parameter
 
 !!! warn

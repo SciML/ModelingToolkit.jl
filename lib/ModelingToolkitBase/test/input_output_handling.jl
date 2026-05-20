@@ -517,8 +517,8 @@ if @isdefined(ModelingToolkit)
 
         f, x, p, simplified_system = ModelingToolkit.generate_control_function(model, [u;])
 
-        x0 = ModelingToolkitBase.get_u0(simplified_system, []) 
-        p = ModelingToolkitBase.get_p(simplified_system, []) 
+        x0 = ModelingToolkitBase.get_u0(simplified_system, [])
+        p = ModelingToolkitBase.get_p(simplified_system, [])
 
         @test f[1](x0, zeros(2), p, 0) != f[1](x0, ones(2), p, 0)
     end

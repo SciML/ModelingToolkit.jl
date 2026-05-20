@@ -480,7 +480,7 @@ end
 
 using ModelingToolkitBase: D_nounits
 @testset "Event handling in MTKModel" begin
-    
+
     cond = true
     @mtkmodel A begin
         @variables begin
@@ -532,9 +532,9 @@ using ModelingToolkitBase: D_nounits
 
     @mtkcompile model = M()
 
-    u0 = [model.x => 10, 
-          model.y => 0, 
-          model.z => 0, 
+    u0 = [model.x => 10,
+          model.y => 0,
+          model.z => 0,
           model.c => 0,
           model.d => 0]
 

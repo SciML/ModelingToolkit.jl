@@ -366,7 +366,7 @@ end
 distribute_shift(eq::Equation) = distribute_shift(eq.lhs) ~ distribute_shift(eq.rhs)
 distribute_shift(var::Union{Num, Arr}) = distribute_shift(unwrap(var))
 """
-Distribute a shift applied to a whole expression or equation. 
+Distribute a shift applied to a whole expression or equation.
 Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
 Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
 """
@@ -857,7 +857,7 @@ getmisc(x::SymbolicT) = Symbolics.getmetadata(x, VariableMisc, nothing)
     hasmisc(x)
 
 Determine whether a symbolic variable `x` has misc
-metadata associated with it. 
+metadata associated with it.
 
 See also [`getmisc(x)`](@ref).
 """
@@ -897,15 +897,15 @@ An operator that evaluates time-dependent variables at a specific absolute time 
 - `t::Union{SymbolicT, Number}`: The absolute time at which to evaluate the variable.
 
 # Description
-`EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
-useful in optimization problems where you need to specify constraints or costs at particular moments 
+`EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly
+useful in optimization problems where you need to specify constraints or costs at particular moments
 in time, or delay differential equations for setting a delay time.
 
-The operator works by replacing the time argument of time-dependent variables with the specified 
+The operator works by replacing the time argument of time-dependent variables with the specified
 time `t`. For variables that don't depend on time, `EvalAt` returns them unchanged.
 
 # Behavior
-- For time-dependent variables like `x(t)`, `EvalAt(τ)(x)` returns `x(τ)` 
+- For time-dependent variables like `x(t)`, `EvalAt(τ)(x)` returns `x(τ)`
 - For time-independent parameters, `EvalAt` returns them unchanged
 - For derivatives, `EvalAt` evaluates the derivative at the specified time
 - For arrays of variables, `EvalAt` is applied element-wise

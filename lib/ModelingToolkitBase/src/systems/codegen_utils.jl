@@ -332,7 +332,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         p_start += 1
         p_end += 1
     end
-    
+
     ir_info = get_ir_info(sys)
     expr = ir_info.obs_subber(expr)
 

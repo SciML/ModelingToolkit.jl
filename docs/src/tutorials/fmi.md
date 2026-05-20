@@ -7,7 +7,7 @@ Events, non-floating-point variables and array variables are not supported. Addi
 time derivatives of FMU states/outputs is not supported.
 
 !!! danger "Experimental"
-    
+
     This functionality is currently experimental and subject to change without a breaking release of
     ModelingToolkit.jl.
 
@@ -43,7 +43,7 @@ Note how hierarchical names in the FMU (e.g. `mass.m` or `spring.f`) are turned 
 names, with `__` being the namespace separator (`mass__m` and `spring__f`).
 
 !!! note
-    
+
     Eventually we plan to reconstruct a hierarchical system structure mirroring the one indicated
     by the variables in the FMU. This would allow accessing the above mentioned variables as
     `model.mass.m` and `model.spring.f` instead of `model.mass__m` and `model.spring__f` respectively.
@@ -61,7 +61,7 @@ same reference, and hence refer to the same quantity. Correspondingly, there is 
 `mass__vˍt(t) ~ mass__a(t)` in the system.
 
 !!! note
-    
+
     Any variables and/or parameters that are not part of the FMU should be ignored, as ModelingToolkit
     creates them to manage the FMU. Unexpected usage of these variables/parameters can lead to errors.
 

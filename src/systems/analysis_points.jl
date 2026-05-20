@@ -18,7 +18,7 @@ const DOC_LOOP_OPENINGS = """
 const DOC_SYS_MODIFIER = """
 - `system_modifier`: A function taking the transformed system and applying any
   additional transformations, returning the modified system. The modified system
-  is passed to `linearization_function`. 
+  is passed to `linearization_function`.
 """
 
 """

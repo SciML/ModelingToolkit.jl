@@ -3,7 +3,7 @@
 
 `ImperativeAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
-the signature 
+the signature
 
 ```
     f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
@@ -15,7 +15,7 @@ so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` cu
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
 
 The argument NamedTuples (for instance `(;x=y)`) will be populated with the declared values on function entry; if we require `(;x=y)` in `observed` and `y=2`, for example,
-then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function `f`. 
+then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function `f`.
 
 The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 

@@ -173,13 +173,13 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 One or more partial systems can be extended in a higher system with `@extend` statements. This can be done in two ways:
 
   - `@extend PartialSystem(var1 = value1)`
-    
+
       + This is the recommended way of extending a base system.
       + The default values for the arguments of the base system can be declared in the `@extend` statement.
       + Note that all keyword arguments of the base system are added as the keyword arguments of the main system.
 
   - `@extend var_to_unpack1, var_to_unpack2 = partial_sys = PartialSystem(var1 = value1)`
-    
+
       + In this method: explicitly list the variables that should be unpacked, provide a name for the partial system and declare the base system.
       + Note that only the arguments listed out in the declaration of the base system (here: `var1`) are added as the keyword arguments of the higher system.
 
@@ -254,7 +254,7 @@ end
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
   - If this block is not defined in the model, no discrete events will be added.
   - The block can also handle `if`-statements (evaluated at compilation) and unpacked lists defined by [comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions)
-  - Dicrete events have the form `*condition* => *affect*` where *condition* is a boolean expression
+  - Discrete events have the form `*condition* => *affect*` where *condition* is a boolean expression
   - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
@@ -381,7 +381,7 @@ end
 ```
 
 !!! note
-    
+
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## [More on `Model.structure`](@id model_structure)

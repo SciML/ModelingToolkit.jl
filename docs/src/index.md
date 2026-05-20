@@ -37,7 +37,7 @@ If you use ModelingToolkit in your work, please cite the following:
 ## Feature Summary
 
 !!! danger "ModelingToolkit version 11"
-    
+
     ModelingToolkit version 11 just released. Please refer to the [changelog](https://github.com/SciML/ModelingToolkit.jl/blob/master/NEWS.md)
     for a summary of the changes. Some documentation pages may be broken while downstream
     packages update to the new version.
@@ -90,7 +90,7 @@ a standard library of prebuilt components for the ModelingToolkit ecosystem.
 ## Model Import Formats
 
   - [CellMLToolkit.jl](https://docs.sciml.ai/CellMLToolkit/stable/): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
-    
+
       + Repository of more than a thousand pre-made models
       + Focus on biomedical models in areas such as: Calcium Dynamics,
         Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms,
@@ -100,10 +100,10 @@ a standard library of prebuilt components for the ModelingToolkit ecosystem.
         Protein Modules, Signal Transduction, and Synthetic Biology.
 
   - [SBMLToolkit.jl](https://docs.sciml.ai/SBMLToolkit/stable/): Import [SBML](http://sbml.org/) models into ModelingToolkit
-    
+
       + Uses the robust libsbml library for parsing and transforming the SBML
   - [ReactionNetworkImporters.jl](https://docs.sciml.ai/ReactionNetworkImporters/stable/): Import various models into ModelingToolkit
-    
+
       + Supports the BioNetGen `.net` file
       + Supports importing networks specified by stoichiometric matrices
 
@@ -115,37 +115,37 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 
   - [Catalyst.jl](https://docs.sciml.ai/Catalyst/stable/): Symbolic representations
     of chemical reactions
-    
+
       + Symbolically build and represent large systems of chemical reactions
       + Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
       + Simulate the models using the SciML ecosystem with O(1) Gillespie methods
 
   - [DataDrivenDiffEq.jl](https://docs.sciml.ai/DataDrivenDiffEq/stable/): Automatic
     identification of equations from data
-    
+
       + Automated construction of ODEs and DAEs from data
       + Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
   - [MomentClosure.jl](https://sciml.github.io/MomentClosure.jl/dev/): Automatic
     transformation of ReactionSystems into deterministic systems
-    
+
       + Generates Systems for the moment closures
       + Allows for geometrically-distributed random reaction rates
   - [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
     Simulating and analyzing large chemical reaction mechanisms
-    
+
       + Ideal gas and dilute liquid phases.
       + Constant T and P and constant V adiabatic ideal gas reactors.
       + Constant T and V dilute liquid reactors.
       + Diffusion limited rates. Sensitivity analysis for all reactors.
       + Flux diagrams with molecular images (if molecular information is provided).
   - [NumCME.jl](https://github.com/voduchuy/NumCME.jl): High-performance simulation of chemical master equations (CME)
-    
+
       + Transient solution of the CME
       + Dynamic state spaces
       + Accepts reaction systems defined using Catalyst.jl DSL.
   - [FiniteStateProjection.jl](https://github.com/SciML/FiniteStateProjection.jl): High-performance simulation of
     chemical master equations (CME) via finite state projections
-    
+
       + Accepts reaction systems defined using Catalyst.jl DSL.
 
 ## Compatible Numerical Solvers
@@ -158,21 +158,21 @@ the solver libraries which are the numerical targets of the ModelingToolkit
 system:
 
   - [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/)
-    
+
       + Multi-package interface of high performance numerical solvers for `System`,
         `SDESystem`, and `JumpSystem`
 
   - [NonlinearSolve.jl](https://docs.sciml.ai/NonlinearSolve/stable/)
-    
+
       + High performance numerical solving of `NonlinearSystem`
   - [Optimization.jl](https://docs.sciml.ai/Optimization/stable/)
-    
+
       + Multi-package interface for numerical solving `OptimizationSystem`
   - [NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/)
-    
+
       + Physics-Informed Neural Network (PINN) training on `PDESystem`
   - [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/)
-    
+
       + Automated finite difference method (FDM) discretization of `PDESystem`
 
 ## Contributing
@@ -183,7 +183,7 @@ system:
 
   - See the [SciML Style Guide](https://github.com/SciML/SciMLStyle) for common coding practices and other style decisions.
   - There are a few community forums:
-    
+
       + The #diffeq-bridged and #sciml-bridged channels in the
         [Julia Slack](https://julialang.org/slack/)
       + The #diffeq-bridged and #sciml-bridged channels in the

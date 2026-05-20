@@ -126,7 +126,7 @@ namespaced version of `var`. Note that this can also be used to access subsystem
 or analysis points.
 
 !!! note
-    
+
     By default, top-level systems not marked as `complete` will apply their namespace. Systems
     marked as `complete` will not do this namespacing. This namespacing behavior can be toggled
     independently of whether the system is completed using [`toggle_namespacing`](@ref) and the

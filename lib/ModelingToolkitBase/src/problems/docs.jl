@@ -172,7 +172,7 @@ as in `x(0.5) ~ 1`). More general constraints that  should hold over the entire 
 such as `x(t)^2 + y(t)^2`, should be  specified as one of the equations used to build the
 `System`.
 
-If a `System` without `constraints` is specified, it will be treated as an initial value problem. 
+If a `System` without `constraints` is specified, it will be treated as an initial value problem.
 
 ```julia
     @parameters g t_c = 0.5
@@ -191,7 +191,7 @@ If a `System` without `constraints` is specified, it will be treated as an initi
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 ```
 
-If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting 
+If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 `BVProblem` must be solved using BVDAE solvers, such as Ascher.
 """
 

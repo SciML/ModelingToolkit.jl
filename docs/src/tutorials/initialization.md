@@ -99,7 +99,7 @@ allowed values on the RHS along with its behavior during initialization. For thi
 nomenclature "FP parameter" or "FP variable" is used to refer to parameters/variables which
 take continuous values, determined by their `SymbolicUtils.symtype` being `Real`, or a
 subtype of `AbstractFloat`, or an array thereof. The term "variable" in this table is used
-to refer to both continously-varying quantities such as the unknowns of a DAE (created
+to refer to both continuously-varying quantities such as the unknowns of a DAE (created
 via `@variables`) as well as discretely-varying quantities updated in events (created by
 `@discretes`). Note that all FP variables are solved for by initialization. Any quantity
 that initialization solves for is referred to as an "initialization unknown".
@@ -298,7 +298,7 @@ long enough you will see that `λ = 0` is required for this equation, but since 
 `λ = 1` we end up with a set of equations that are impossible to satisfy.
 
 !!! note
-    
+
     If you would prefer to have an error instead of a warning in the context of non-fully
     determined systems, pass the keyword argument `fully_determined = true` into the
     problem constructor. Additionally, any warning about not being fully determined can
@@ -562,7 +562,7 @@ sol = solve(iprob)
 ```
 
 !!! note
-    
+
     For more information on solving NonlinearProblems and NonlinearLeastSquaresProblems,
     check out the [NonlinearSolve.jl tutorials!](https://docs.sciml.ai/NonlinearSolve/stable/tutorials/getting_started/).
 

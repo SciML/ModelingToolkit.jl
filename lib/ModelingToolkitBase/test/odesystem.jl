@@ -1670,7 +1670,7 @@ end
     using ModelingToolkitBase
     using ModelingToolkitBase: t_nounits as t, D_nounits as D
     @variables x(t)[1:3]=[0,0,1]
-    @variables u1(t)=0 u2(t)=0 
+    @variables u1(t)=0 u2(t)=0
     y₁, y₂, y₃ = x
     k₁, k₂, k₃ = 1,1,1
     eqs = [

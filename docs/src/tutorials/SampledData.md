@@ -3,11 +3,11 @@
 A sampled-data system contains both continuous-time and discrete-time components, such as a continuous-time plant model and a discrete-time control system. ModelingToolkit supports the modeling and simulation of sampled-data systems by means of *clocks*.
 
 !!! danger "Experimental"
-    
+
     The sampled-data interface is currently experimental and at any time subject to breaking changes **not** respecting semantic versioning.
 
 !!! note "Negative shifts"
-    
+
     The initial release of the sampled-data interface **only supports negative shifts**.
 
 A clock can be seen as an *event source*, i.e., when the clock ticks, an event is generated. In response to the event the discrete-time logic is executed, for example, a control signal is computed. For basic modeling of sampled-data systems, the user does not have to interact with clocks explicitly, instead, the modeling is performed using the operators
@@ -26,7 +26,7 @@ The [`ShiftIndex`](@ref) operator is used to refer to past and future values of 
 
 ```math
 \begin{align}
-    x(k+1) &= 0.5x(k) + u(k) \\ 
+    x(k+1) &= 0.5x(k) + u(k) \\
     y(k) &= x(k)
 \end{align}
 ```

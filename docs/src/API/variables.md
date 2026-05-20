@@ -251,7 +251,7 @@ ModelingToolkit.isconstant
 ```
 
 !!! note
-    
+
     [`@constants`](@ref) is a convenient way to create `@parameters` with `tunable = false`
     metadata
 
@@ -422,7 +422,7 @@ system happen at discrete intervals on a clock. While ModelingToolkit cannot yet
 such systems, it has the capability to represent them.
 
 !!! warn
-    
+
     These operators are considered experimental API.
 
 ```@docs

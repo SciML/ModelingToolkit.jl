@@ -191,7 +191,7 @@ end
 Generate `f1` and `f2` for [`SemilinearODEFunction`](@ref) (internally represented as a
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
 [`calculate_semiquadratic_form`](@ref). This expects that the system has the necessary
-extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+extra parameters added by [`add_semiquadratic_parameters`](@ref).
 
 ## Keyword Arguments
 
@@ -367,7 +367,7 @@ Generate the jacobian of `f1` for [`SemilinearODEFunction`](@ref) (internally re
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
 [`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by [`add_semiquadratic_parameters`](@ref).
 
 ## Keyword Arguments
 
@@ -530,7 +530,7 @@ Return the sparsity pattern of the  jacobian of `f1` for [`SemilinearODEFunction
 (internally represented as a `SplitFunction`). `A`, `B`, `C` are the matrices returned from
 [`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by [`add_semiquadratic_parameters`](@ref).
 
 ## Keyword Arguments
 

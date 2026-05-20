@@ -7,7 +7,7 @@ In particular, we show how to represent a
 as a `SDESystem`.
 
 !!! note
-    
+
     The high level `@mtkmodel` macro used in the
     [getting started tutorial](@ref getting_started)
     is not yet compatible with `SDESystem`.

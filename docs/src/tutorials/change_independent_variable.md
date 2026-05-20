@@ -57,7 +57,7 @@ M2s # display this # hide
 The derivatives are now with respect to the new independent variable $x$, which can be accessed with `M2.x`.
 
 !!! info
-    
+
     At this point `x`, `M1.x`, `M1s.x`, `M2.x`, `M2s.x` are *three* different variables.
     Meanwhile `y`, `M1.y`, `M1s.y`, `M2.y` and `M2s.y` are *four* different variables.
     It can be instructive to inspect these yourself to see their subtle differences.
@@ -73,9 +73,9 @@ plot(sol; idxs = M2.y) # must index by M2.y = y(x); not M1.y = y(t)!
 ```
 
 !!! tip "Usage tips"
-    
+
     Look up the documentation of [`change_independent_variable`](@ref) for tips on how to use it.
-    
+
     For example, if you also need $t(x)$, you can tell it to add a differential equation for the old independent variable in terms of the new one using the [inverse function rule](https://en.wikipedia.org/wiki/Inverse_function_rule) (here $\mathrm{d}t/\mathrm{d}x = 1 / (\mathrm{d}x/\mathrm{d}t)$). If you know an analytical expression between the independent variables (here $t = x/v$), you can also pass it directly to the function to avoid the extra differential equation.
 
 ## 2. Alleviating stiffness by changing to logarithmic time

@@ -455,7 +455,7 @@ if !@isdefined(ModelingToolkit)
         @parameters p d
         eqs = [D(X) ~ p - d * X]
         @mtkcompile sys = System(eqs, t)
-        sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a misstake
+        sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a mistake
         @test_throws ["duplicate entries", "X(t)"] ODEProblem(sys, sim_cond, (0.0, 10.0))
     end
 end

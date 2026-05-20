@@ -242,7 +242,7 @@ has the ability to represent them. Compilation strategies can be implemented ind
 on top of [`mtkcompile`](@ref) using the `additional_passes` functionality.
 
 !!! warn
-    
+
     These operators are considered experimental API.
 
 ```@docs; canonical = false
@@ -266,7 +266,7 @@ While ModelingToolkit has the capability to represent state machines, it lacks t
 to compile and simulate them.
 
 !!! warn
-    
+
     This functionality is considered experimental API
 
 ```@docs
