@@ -626,12 +626,17 @@ end
 """
 Returns true if the parameter `p` is of the form `Initial(x)`.
 """
+function isinitial(p::SymbolicT)
+    p, _ = split_indexed_var(p)
+    Moshi.Match.@match p begin
+        BSImpl.Term(; f) => f isa Initial
+        _ => false
+    end
+end
 function isinitial(p)
-    p = unwrap(p)
-    return iscall(p) && (
-        operation(p) isa Initial ||
-            operation(p) === getindex && isinitial(arguments(p)[1])
-    )
+    up = unwrap(p)
+    up === p && return false
+    return isinitial(up)
 end
 
 """
