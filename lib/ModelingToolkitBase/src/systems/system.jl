@@ -1627,3 +1627,29 @@ function should_invalidate_mutable_cache_entry(
     )
     return true
 end
+
+abstract type LinearExpansionCache end
+
+const LinearExpansionCacheT = Dict{Tuple{SymbolicT, Bool}, Symbolics.LinearExpander}
+
+function should_invalidate_mutable_cache_entry(
+        ::Type{LinearExpansionCache}, @nospecialize(patch::NamedTuple)
+    )
+    return false
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get a cached `Symbolics.LinearExpander` for variable `var` and strictness `strict`. This
+allows reusing significant cached information between `LinearExpander` calls. This cache
+is never invalidated.
+"""
+function get_linear_expander_for!(sys::System, var::SymbolicT, strict::Bool)
+    cache = check_mutable_cache(sys, LinearExpansionCache, LinearExpansionCacheT, nothing)
+    if cache === nothing
+        cache = LinearExpansionCacheT()
+        store_to_mutable_cache!(sys, LinearExpansionCache, cache)
+    end
+    return get!(() -> Symbolics.LinearExpander(var; strict), cache, (var, strict))
+end

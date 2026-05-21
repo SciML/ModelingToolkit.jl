@@ -998,7 +998,12 @@ Invalidate cached jacobians, etc.
 """
 function invalidate_cache!(sys::AbstractSystem)
     has_metadata(sys) || return sys
-    empty!(getmetadata(sys, MutableCacheKey, nothing))
+    cache = getmetadata(sys, MutableCacheKey, nothing)
+    if cache isa MutableCacheT
+        # Avoid clearing the linear expansion cache. It doesn't depend on anything in the
+        # system, just useful to have around.
+        filter!(Base.Fix2(===, LinearExpansionCache) ∘ first, cache)
+    end
     return sys
 end
 

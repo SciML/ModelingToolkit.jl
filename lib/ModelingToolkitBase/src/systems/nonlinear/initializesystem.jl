@@ -199,7 +199,12 @@ function generate_initializesystem_timevarying(
         kwargs...
     )
     diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
-    isys = SU.setmetadata(isys, DiffCacheParams, diffcache_params)
+    isys = SU.setmetadata(isys, DiffCacheParams, copy(diffcache_params))
+    # Reuse `LinearExpander` cache for the initialization system
+    linear_expansion_cache = check_mutable_cache(sys, LinearExpansionCache, LinearExpansionCacheT, nothing)
+    if linear_expansion_cache !== nothing
+        store_to_mutable_cache!(isys, LinearExpansionCache, linear_expansion_cache)
+    end
     return isys
 end
 
