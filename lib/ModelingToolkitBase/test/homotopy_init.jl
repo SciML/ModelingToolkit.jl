@@ -98,4 +98,62 @@ using Symbolics
         @test abs(sol.u[1]^2 - 9.0) < 1e-6   # actual equation y^2 = p satisfied
         @test abs(sol.u[1] - 1.0) > 0.5      # not the simplified root (y = 1)
     end
+
+    @testset "Buildings PressureDrop fixture (PR1: init doesn't break)" begin
+        # Modelica Buildings Fluid/FixedResistances/PressureDrop.mo from_dp=true branch:
+        #   m_flow = homotopy(
+        #     actual     = basicFlowFunction_dp(dp, k, m_flow_turbulent),
+        #     simplified = m_flow_nominal_pos * dp / dp_nominal_pos)
+        # PR1 scope = "init runs and converges to the *actual* equation, not
+        # the simplified one". Numerical OMC parity is deferred to PR2.
+        # Uses the ODESystem-with-algebraic-constraint pattern (same as the
+        # Integration testset) so the hook in InitializationProblem fires
+        # symbolically; NonlinearSystem direct construction does not migrate
+        # parent algebraic eqs into init system.
+        using ModelingToolkitBase: System, mtkcompile
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        using ModelingToolkitBase: has_homotopy_in_equations, equations
+        using OrdinaryDiffEqRosenbrock: Rodas5P
+        using OrdinaryDiffEqNonlinearSolve  # needed for DAE init nlsolve
+        using SciMLBase
+
+        @variables x(t) m_flow(t)
+        @parameters dp k m_flow_nominal dp_nominal
+
+        # Turbulent sqrt-law actual, linear-nominal simplified.
+        basic_flow(dp_val, k_val) = sign(dp_val) * sqrt(abs(dp_val)) * k_val
+
+        # `dp` is a parameter (boundary fixed externally); `m_flow` is
+        # algebraic, pinned by the homotopy constraint. `x` is a dummy
+        # differential state so the system is a well-posed DAE (mirrors
+        # the Integration testset's structure: 1 ODE + 1 algebraic eq).
+        eqs = [
+            D(x) ~ -x,
+            0 ~ m_flow - homotopy(
+                basic_flow(dp, k),
+                m_flow_nominal * dp / dp_nominal,
+            ),
+        ]
+        @named sys = System(eqs, t; guesses = [m_flow => 2.0])
+        sys = mtkcompile(sys)
+
+        prob = ODEProblem(sys,
+            Dict(x => 1.0, dp => 5.0, k => 1.0,
+                 m_flow_nominal => 1.0, dp_nominal => 5.0),
+            (0.0, 1.0))
+        sol = solve(prob, Rodas5P(); abstol = 1e-10, reltol = 1e-10)
+
+        # Hook fired: no residual homotopy in init equations
+        @test !has_homotopy_in_equations(equations(prob.f.initialization_data.initializeprob.f.sys))
+        # Solver succeeded
+        @test SciMLBase.successful_retcode(sol)
+        # m_flow at t=0 should solve the *actual* equation:
+        #   m_flow = sign(dp) * sqrt(abs(dp)) * k  at  dp=5, k=1
+        #   m_flow = sqrt(5) ≈ 2.236
+        # If the rewrite had failed and simplified were active:
+        #   m_flow = m_flow_nominal * dp / dp_nominal = 1.0 * 5/5 = 1.0
+        # The sqrt(5) result distinguishes the two outcomes.
+        m_flow_at_t0 = sol[m_flow][1]
+        @test abs(m_flow_at_t0 - sqrt(5.0)) < 1e-6  # actual root
+    end
 end
