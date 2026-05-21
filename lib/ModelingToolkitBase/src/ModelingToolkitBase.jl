@@ -194,6 +194,7 @@ include("systems/ir_info.jl")
 include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
+include("systems/homotopy.jl")
 include("systems/problem_utils.jl")
 
 include("problems/compatibility.jl")
@@ -270,6 +271,7 @@ export liouville_transform, change_independent_variable,
 export respecialize
 export PDESystem
 export Differential, expand_derivatives, @derivatives
+export homotopy
 export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
