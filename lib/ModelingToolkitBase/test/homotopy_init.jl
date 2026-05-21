@@ -28,4 +28,27 @@ using Symbolics
         @test !has_homotopy(rewrite_trivial(outer))
         @test !has_homotopy(rewrite_trivial(triple))
     end
+
+    @testset "Q3 Base.ifelse branches" begin
+        @variables x
+        @parameters p
+        cond = p > 0
+        branch_expr = Base.ifelse(
+            cond,
+            homotopy(x^2 - p, x - sqrt(abs(p))),
+            homotopy(-(x^2) - p, x + sqrt(abs(p))),
+        )
+        rewritten = rewrite_trivial(branch_expr)
+
+        # Outer ifelse structure preserved
+        @test occursin("ifelse", repr(rewritten))
+        # Both branches' homotopy nodes are gone
+        @test !has_homotopy(rewritten)
+
+        # Folding the cond to true/false picks the right actual
+        true_folded  = Symbolics.simplify(Symbolics.substitute(rewritten, Dict(cond => true)))
+        false_folded = Symbolics.simplify(Symbolics.substitute(rewritten, Dict(cond => false)))
+        @test isequal(Symbolics.unwrap(true_folded),  Symbolics.unwrap(x^2 - p))
+        @test isequal(Symbolics.unwrap(false_folded), Symbolics.unwrap(-(x^2) - p))
+    end
 end
