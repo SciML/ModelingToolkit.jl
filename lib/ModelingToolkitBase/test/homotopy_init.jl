@@ -51,4 +51,18 @@ using Symbolics
         @test isequal(Symbolics.unwrap(true_folded),  Symbolics.unwrap(x^2 - p))
         @test isequal(Symbolics.unwrap(false_folded), Symbolics.unwrap(-(x^2) - p))
     end
+
+    @testset "Q4 broadcast" begin
+        @variables x[1:3] p[1:3]
+        actuals     = [x[i]^2 - p[i] for i in 1:3]
+        simplifieds = [x[i]   - p[i] for i in 1:3]
+        vec_expr  = homotopy.(actuals, simplifieds)
+        rewritten = rewrite_trivial.(vec_expr)
+        @test length(rewritten) == 3
+        for i in 1:3
+            @test isequal(Symbolics.unwrap(rewritten[i]),
+                          Symbolics.unwrap(actuals[i]))
+            @test !has_homotopy(rewritten[i])
+        end
+    end
 end
