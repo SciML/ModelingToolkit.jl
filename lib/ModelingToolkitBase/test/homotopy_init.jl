@@ -66,27 +66,36 @@ using Symbolics
         end
     end
 
-    @testset "Integration: homotopy in NonlinearSystem init" begin
+    @testset "Integration: homotopy in ODESystem init" begin
         using ModelingToolkitBase: System, mtkcompile
         using ModelingToolkitBase: InitializationProblem
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        using ModelingToolkitBase: has_homotopy_in_equations, equations
         using NonlinearSolve: NewtonRaphson, solve
         using SciMLBase
 
-        @variables x
+        @variables x(t) y(t)
         @parameters p
-        # Equation: homotopy(actual = x^2 - p, simplified = x - 1) = 0
-        # L0 trivial must solve actual: x^2 = p ⇒ x = ±√p.
-        # If rewrite is broken and simplified got selected: x = 1.
-        # At p = 9: actual root x = 3 (or -3); simplified root x = 1.
-        # The x^2 ≈ p assertion distinguishes the two outcomes.
-        eqs = [0 ~ homotopy(x^2 - p, x - 1)]
-        @named sys = System(eqs, [x], [p])
+        # `y` is algebraic, constrained by homotopy(actual = y^2 - p, simplified = y - 1).
+        # L0 trivial rewrite must replace the constraint with `y^2 - p = 0`, so init solves
+        # to y = ±√p. At p = 9 with guess y = 2.5, init converges to y ≈ 3. If the rewrite
+        # never fired, the init system would carry the opaque `homotopy(...)` symbolic call
+        # — which is the structural assertion below.
+        eqs = [D(x) ~ -x,
+               0  ~ homotopy(y^2 - p, y - 1)]
+        @named sys = System(eqs, t; guesses = [y => 2.5])
         sys = mtkcompile(sys)
 
-        prob = InitializationProblem{false}(sys, nothing, Dict(p => 9.0, x => 2.5))
+        prob = InitializationProblem{false}(sys, 0.0, Dict(x => 1.0, p => 9.0))
+
+        # Structural: after the init pipeline applies rewrite_trivial, no equation in
+        # the wrapped initialization system should still contain a `homotopy(...)` node.
+        @test !has_homotopy_in_equations(equations(prob.f.sys))
+
+        # Numerical: init must converge to the actual root.
         sol = solve(prob, NewtonRaphson(); abstol = 1e-10, reltol = 1e-10)
         @test SciMLBase.successful_retcode(sol)
-        @test abs(sol.u[1]^2 - 9.0) < 1e-6   # actual equation solved (NOT simplified, which would give x=1)
-        @test abs(sol.u[1] - 1.0) > 0.5      # not the simplified root
+        @test abs(sol.u[1]^2 - 9.0) < 1e-6   # actual equation y^2 = p satisfied
+        @test abs(sol.u[1] - 1.0) > 0.5      # not the simplified root (y = 1)
     end
 end
