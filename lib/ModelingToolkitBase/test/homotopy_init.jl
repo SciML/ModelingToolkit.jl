@@ -1,6 +1,6 @@
 using Test
 using ModelingToolkitBase
-using ModelingToolkitBase: rewrite_trivial
+using ModelingToolkitBase: rewrite_trivial, has_homotopy
 using Symbolics
 
 @testset "homotopy operator — L0 trivial rewrite" begin
@@ -10,6 +10,6 @@ using Symbolics
         expr = homotopy(x^2 - p, x - sqrt(p))
         rewritten = rewrite_trivial(expr)
         @test isequal(Symbolics.unwrap(rewritten), Symbolics.unwrap(x^2 - p))
-        @test !occursin("homotopy", repr(rewritten))
+        @test !has_homotopy(rewritten)
     end
 end
