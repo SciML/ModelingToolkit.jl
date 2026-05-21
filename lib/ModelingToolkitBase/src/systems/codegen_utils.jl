@@ -441,13 +441,9 @@ arguments, the second is the expected number of arguments in the out-of-place va
 of the function, and the third is a boolean indicating whether the generated functions
 are for a split system. For scalar functions, the inplace variant can be `nothing`.
 """
-struct GeneratedFunctionWrapper{P, O, I} <: Function
-    f_oop::O
-    f_iip::I
-end
-
-function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
-    return GeneratedFunctionWrapper{P, O, I}(foop, fiip)
+struct GeneratedFunctionWrapper{P} <: Function
+    f_oop::Function
+    f_iip::Union{Function, Nothing}
 end
 
 function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
