@@ -1503,7 +1503,7 @@ function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
 end
 
 function supports_initialization(sys::System)
-    return isempty(get_systems(sys)) && isempty(jumps(sys)) &&
+    return isempty(get_systems(sys)) && isempty(get_jumps(sys)) &&
         isempty(get_costs(sys)) && isempty(get_constraints(sys))
 end
 
