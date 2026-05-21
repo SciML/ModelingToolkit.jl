@@ -82,6 +82,17 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
         @set! isys.bindings = ROSymmapT(binds)
     end
+    # L0 trivial homotopy rewrite (Modelica spec 3.7.4 trivial form).
+    # Only runs when `homotopy(...)` is actually present, so non-homotopy
+    # systems pay zero overhead. PR2 (L1 parameter sweep) will replace this
+    # branch with λ-lowering when an explicit HomotopySweep algorithm is in use.
+    # Applied before `mtkcompile` so that downstream structural transforms
+    # operate on the actual equations, not on opaque `homotopy(...)` calls.
+    if has_homotopy_in_equations(equations(isys))
+        new_eqs = rewrite_trivial_in_equations(equations(isys))
+        @set! isys.eqs = new_eqs
+    end
+
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
     end
