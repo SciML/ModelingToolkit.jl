@@ -55,3 +55,30 @@ function _has_homotopy(x)
     end
     return any(_has_homotopy, arguments(x))
 end
+
+"""
+    has_homotopy_in_equations(eqs)
+
+Return `true` iff any equation in `eqs` (lhs or rhs) contains a `homotopy(...)`
+node. `eqs` is an iterable of `Equation`.
+"""
+function has_homotopy_in_equations(eqs)
+    for eq in eqs
+        if has_homotopy(eq.lhs) || has_homotopy(eq.rhs)
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    rewrite_trivial_in_equations(eqs)
+
+Return a new vector of `Equation`s with every `homotopy(a, s)` replaced by `a`
+on both lhs and rhs. Original `eqs` not mutated; the system caller is
+responsible for swapping the equation vector into the system.
+"""
+function rewrite_trivial_in_equations(eqs)
+    return [Equation(rewrite_trivial(eq.lhs), rewrite_trivial(eq.rhs))
+            for eq in eqs]
+end

@@ -65,4 +65,28 @@ using Symbolics
             @test !has_homotopy(rewritten[i])
         end
     end
+
+    @testset "Integration: homotopy in NonlinearSystem init" begin
+        using ModelingToolkitBase: System, mtkcompile
+        using ModelingToolkitBase: InitializationProblem
+        using NonlinearSolve: NewtonRaphson, solve
+        using SciMLBase
+
+        @variables x
+        @parameters p
+        # Equation: homotopy(actual = x^2 - p, simplified = x - 1) = 0
+        # L0 trivial must solve actual: x^2 = p ⇒ x = ±√p.
+        # If rewrite is broken and simplified got selected: x = 1.
+        # At p = 9: actual root x = 3 (or -3); simplified root x = 1.
+        # The x^2 ≈ p assertion distinguishes the two outcomes.
+        eqs = [0 ~ homotopy(x^2 - p, x - 1)]
+        @named sys = System(eqs, [x], [p])
+        sys = mtkcompile(sys)
+
+        prob = InitializationProblem{false}(sys, nothing, Dict(p => 9.0, x => 2.5))
+        sol = solve(prob, NewtonRaphson(); abstol = 1e-10, reltol = 1e-10)
+        @test SciMLBase.successful_retcode(sol)
+        @test abs(sol.u[1]^2 - 9.0) < 1e-6   # actual equation solved (NOT simplified, which would give x=1)
+        @test abs(sol.u[1] - 1.0) > 0.5      # not the simplified root
+    end
 end
