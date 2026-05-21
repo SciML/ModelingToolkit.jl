@@ -108,8 +108,9 @@ function generate_rhs(
         p_start += 1
     end
 
+    u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments,
+        sys, rhss, args...; p_start, extra_assignments, u_arg,
         expression = Val{true}, expression_module = eval_module, kwargs...
     )
     nargs = length(args) - length(p) + 1
@@ -147,7 +148,7 @@ function generate_diffusion_function(
         eqs = vec(eqs)
     end
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); kwargs...)
+    res = build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); u_arg = 1, kwargs...)
     if expression == Val{true}
         return res
     end
@@ -262,7 +263,7 @@ function generate_jacobian(
         nargs = 3
     end
     res = build_function_wrapper(
-        sys, jac, args...; wrap_code, expression = Val{true},
+        sys, jac, args...; wrap_code, u_arg = 1, expression = Val{true},
         expression_module = eval_module, checkbounds, kwargs...
     )
     return maybe_compile_function(
@@ -309,6 +310,7 @@ function generate_tgrad(
         dvs,
         p...,
         get_iv(sys);
+        u_arg = 1,
         expression = Val{true},
         expression_module = eval_module,
         kwargs...
@@ -392,7 +394,7 @@ function generate_W(
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
         sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        p_end = 1 + length(p), checkbounds, kwargs...
+        u_arg = 1, p_end = 1 + length(p), checkbounds, kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module
@@ -432,7 +434,7 @@ function generate_dae_jacobian(
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
         sys, jac, derivatives, dvs, p..., W_GAMMA, t;
-        p_start = 3, p_end = 2 + length(p), kwargs...
+        u_arg = 2, p_start = 3, p_end = 2 + length(p), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module
@@ -694,8 +696,9 @@ function generate_cost(
         args = (dvs, ps...)
         nargs = 2
     end
+    u_arg = is_time_dependent(sys) ? -1 : 1
     res = build_function_wrapper(
-        sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays,
+        sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays, u_arg,
         histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...
     )[1]
     if expression == Val{true}
@@ -788,7 +791,7 @@ function generate_cost_gradient(
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
-    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -847,7 +850,7 @@ function generate_cost_hessian(
     if sparse
         sparsity = similar(exprs, Float64)
     end
-    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -879,7 +882,7 @@ function generate_cons(
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    res = build_function_wrapper(sys, cons, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, cons, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -936,7 +939,7 @@ function generate_constraint_jacobian(
         sparsity = calculate_constraint_jacobian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, jac, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -995,7 +998,7 @@ function generate_constraint_hessian(
         sparsity = calculate_constraint_hessian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, hess, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1048,7 +1051,7 @@ function generate_control_jacobian(
     ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
+    res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); u_arg = 1, kwargs...)
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1059,6 +1062,7 @@ function generate_rate_function(js::System, rate)
     return build_function_wrapper(
         js, rate, unknowns(js), p...,
         get_iv(js),
+        u_arg = 1,
         expression = Val{true},
         iip_config = (true, false),
     )[1]

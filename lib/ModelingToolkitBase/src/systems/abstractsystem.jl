@@ -40,6 +40,7 @@ function generate_custom_function(
             dvs,
             p...,
             get_iv(sys);
+            u_arg = 1,
             kwargs...,
             expression = Val{true}
         )
@@ -48,6 +49,7 @@ function generate_custom_function(
             sys, exprs,
             dvs,
             p...;
+            u_arg = 1,
             kwargs...,
             expression = Val{true}
         )
@@ -74,6 +76,7 @@ function wrap_assignments(isscalar, assignments; let_block = false)
 end
 
 const MTKPARAMETERS_ARG = SSym(:___mtkparameters___; type = Vector{Vector{Any}}, shape = SymbolicUtils.Unknown(1))
+const MTKUNKNOWNS_ARG = SSym(:___mtkunknowns___; type = Vector{Real}, shape = SymbolicUtils.Unknown(1))
 
 """
     $(TYPEDSIGNATURES)

@@ -313,7 +313,7 @@ function generate_control_function(
         args = (ddvs, args...)
     end
     f = build_function_wrapper(
-        sys, rhss, args...; p_start = 3 + implicit_dae,
+        sys, rhss, args...; u_arg = 1 + Int(implicit_dae), p_start = 3 + implicit_dae,
         p_end = length(p) + 2 + implicit_dae, kwargs...
     )
     f = eval_or_rgf.(f; eval_expression, eval_module)

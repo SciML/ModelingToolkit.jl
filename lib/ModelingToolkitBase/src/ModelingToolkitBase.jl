@@ -386,6 +386,7 @@ function __init__()
     SU.hashcons(unwrap(ASSERTION_LOG_VARIABLE), true)
     SU.hashcons(DDE_AT_IDX_SYM, true)
     SU.hashcons(DDE_DELAY_SYM, true)
+    SU.hashcons(MTKUNKNOWNS_ARG, true)
     return nothing
 end
 
