@@ -63,6 +63,7 @@ end
     if GROUP == "All" || GROUP == "Initialization"
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
+        @safetestset "Homotopy Operator L0 Trivial" include("homotopy_init.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
     end
 
