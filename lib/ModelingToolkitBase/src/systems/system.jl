@@ -1503,7 +1503,15 @@ function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
 end
 
 function supports_initialization(sys::System)
-    return isempty(get_systems(sys)) && isempty(jumps(sys)) &&
+    # Use `get_jumps` rather than the flattened `jumps`. The two are
+    # equivalent here because the `isempty(get_systems(sys))` short-circuit
+    # before this term guarantees the subsystem-flattening branch in
+    # `jumps(sys)` (which does `copy` + `append!`) is unreachable. The
+    # mutation in that unreachable branch nevertheless prevents Enzyme from
+    # proving `sys` is read-only, blocking `Enzyme.gradient` through any
+    # closure that ends up at `_late_binding_update_u0_p_impl` — including
+    # `remake(prob; p = repack(tunables))` on MTK-generated problems.
+    return isempty(get_systems(sys)) && isempty(get_jumps(sys)) &&
         isempty(get_costs(sys)) && isempty(get_constraints(sys))
 end
 
