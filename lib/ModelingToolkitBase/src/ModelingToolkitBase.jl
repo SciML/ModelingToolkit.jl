@@ -391,5 +391,5 @@ function __init__()
     return nothing
 end
 
-include("precompile.jl")
+# include("precompile.jl")
 end # module
