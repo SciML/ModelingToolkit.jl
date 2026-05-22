@@ -117,15 +117,17 @@ function SciMLBase.LinearProblem{iip}(
 end
 
 function get_A_b_from_LinearFunction(
-        sys::System, f::LinearFunction, op; kws...
+        sys::System, @nospecialize(f::LinearFunction), op; kws...
     )
     return get_A_b_from_LinearFunction(sys, f, Symbolics.FixpointSubstituter{true}(op); kws...)
 end
 
 function get_A_b_from_LinearFunction(
-        sys::System, f::LinearFunction, subber::Symbolics.FixpointSubstituter{true}; eval_expression = false,
-        eval_module = @__MODULE__, expression = Val{false}, u0_constructor = identity,
-        u0_eltype = float
+        sys::System, @nospecialize(f::LinearFunction), subber::Symbolics.FixpointSubstituter{true};
+        eval_expression = false, eval_module = @__MODULE__,
+        @nospecialize(expression = Val{false}),
+        @nospecialize(u0_constructor = identity),
+        @nospecialize(u0_eltype = float)
     )
     @unpack A, b, interface = f
     if A isa Matrix{SymbolicT}

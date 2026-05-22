@@ -1219,8 +1219,8 @@ The signatures will be of the form `g(...)` with arguments:
 For example, a function `g(op, unknowns, p..., inputs, t, known_disturbances)` will be the in-place function generated if `return_inplace` is true, `ts` is a vector,
 an array of inputs `inputs` is given, `known_disturbance_inputs` is provided, and `param_only` is false for a time-dependent system.
 """
-function build_explicit_observed_function(
-        sys, ts;
+Base.@nospecializeinfer function build_explicit_observed_function(
+        sys, @nospecialize(ts);
         inputs = nothing,
         disturbance_inputs = nothing,
         known_disturbance_inputs = nothing,

@@ -28,7 +28,11 @@ function generated_argument_name(i::Int)
     return Symbol(:__mtk_arg_, i)
 end
 
-@inline function compute_array_variable_buffer_idxs(args; ignore_vars = Set{SymbolicT}())
+function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}())
+    _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
+end
+
+function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
     # map array symbolic to an identically sized array where each element is (buffer_idx, idx_in_buffer)
     var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
     for (i, arg) in enumerate(args)
@@ -132,7 +136,7 @@ reconstruct array variables if they are present scalarized in `args`.
   generated function.
 """
 function array_variable_assignments(
-        args...; ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
+        @nospecialize(args...); ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
         argument_name = generated_argument_name, buffer_offset = 0
     )
     var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars)
