@@ -384,3 +384,177 @@ end
         isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
     end
 end
+
+@testset "Perfect aliases detect negated form `x ~ -y`" begin
+    # Run only `eliminate_perfect_aliases!` on a fresh `TearingState`, so we
+    # observe the output of *this* pass rather than the cumulative effect of
+    # the rest of `mtkcompile`. The pass mutates `state` in place:
+    #   - `state.additional_observed` collects `v ~ rhs` for each eliminated v
+    #   - surviving equations of the system are returned by `equations(state.sys)`
+    #   - irreducibles forced to zero by sign conflicts have one alias equation
+    #     rewritten in place to `irr ~ 0`.
+
+    # Numerically evaluate the RHS of an observed equation at a chosen value
+    # of the surviving unknown, without depending on whether the symbolic
+    # representation of `-x` is `-x` or `-1*x` etc.
+    eval_rhs(rhs, var, val) = Symbolics.value(Symbolics.substitute(rhs, Dict(var => val)))
+
+    # Find the entry of `state.additional_observed` whose lhs matches `v`.
+    obs_for(state, v) = only(filter(eq -> isequal(eq.lhs, v), state.additional_observed))
+
+    @testset "basic negated alias `y ~ -x`" begin
+        @variables x(t) y(t)
+        @named sys = System([D(x) ~ -x, y ~ -x], t; state_priorities = [x => 10])
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        # y ~ -x recorded as observed
+        @test eval_rhs(obs_for(state, y).rhs, x, 3.0) == -3.0
+        # The alias equation is gone; the dynamics `D(x) ~ -x` is the only one left.
+        eqs = equations(state.sys)
+        @test length(eqs) == 1
+        @test isequal(only(eqs).lhs, D(x))
+        # `y` is no longer in `fullvars` after `rm_eqs_vars!`.
+        @test !any(isequal(unwrap(y)), state.fullvars)
+    end
+
+    @testset "mixed chain `x ~ y, y ~ -z`" begin
+        @variables x(t) y(t) z(t)
+        @named sys = System(
+            [D(x) ~ -x, x ~ y, y ~ -z], t; state_priorities = [x => 10])
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        # y ~ x (sign +1) and z ~ -x (sign -1: y has +1, z has -1 via `y ~ -z`)
+        @test eval_rhs(obs_for(state, y).rhs, x, 3.0) == 3.0
+        @test eval_rhs(obs_for(state, z).rhs, x, 3.0) == -3.0
+    end
+
+    @testset "double-negation transitivity `x ~ -y, y ~ -z` ⇒ `x ~ z`" begin
+        @variables x(t) y(t) z(t)
+        @named sys = System(
+            [D(x) ~ -x, x ~ -y, y ~ -z], t; state_priorities = [x => 10])
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        # y ~ -x (sign -1), z ~ x (sign +1: two negations cancel)
+        @test eval_rhs(obs_for(state, y).rhs, x, 3.0) == -3.0
+        @test eval_rhs(obs_for(state, z).rhs, x, 3.0) == 3.0
+    end
+
+    @testset "negated alias with irreducible target" begin
+        @variables x(t) [irreducible = true]
+        @variables y(t)
+        @named sys = System([D(x) ~ -x, y ~ -x], t)
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        # x is irreducible, so y is the eliminated one: y ~ -x is observed.
+        @test eval_rhs(obs_for(state, y).rhs, x, 2.5) == -2.5
+        # x must be marked `always_present` by the pass (so downstream keeps it).
+        x_idx = findfirst(isequal(unwrap(x)), state.fullvars)
+        @test x_idx !== nothing && state.always_present[x_idx]
+    end
+
+    @testset "conflicting signs force both to zero (no irreducibles)" begin
+        @variables x(t) y(t) z(t)
+        # `x ~ y` and `x ~ -y` together imply `x = y = 0`. Neither is irreducible,
+        # so both are substituted to `0` (no alias-equation pin needed) and both
+        # alias equations become `0 ~ 0` and are removed.
+        @named sys = System([D(z) ~ z, x ~ y, x ~ -y], t)
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        @test iszero(Symbolics.value(obs_for(state, x).rhs))
+        @test iszero(Symbolics.value(obs_for(state, y).rhs))
+        # Both original alias equations are removed; only `D(z) ~ z` survives.
+        eqs = equations(state.sys)
+        @test length(eqs) == 1
+        @test isequal(only(eqs).lhs, D(z))
+    end
+
+    @testset "conflict with 3 irreducibles, one only on a single eq" begin
+        @variables a(t) [irreducible = true]
+        @variables b(t) [irreducible = true]
+        @variables c(t) [irreducible = true]
+        @variables w(t)
+        # All three are irreducible, all in one conflict group via `a ~ b`,
+        # `a ~ c`, `a ~ -c`. Each irreducible needs its own `irr ~ 0` equation.
+        # `b` only appears on `e1 = a ~ b`. A previous greedy claiming
+        # algorithm (prefer v1, fall back to v2) would have stranded `b`:
+        # e1 → claim a, e2=(a,c) → claim c, e3=(a,c) → both claimed, drop. So
+        # b would survive as an unconstrained unknown. With the matching-free
+        # rewrite we now do (any irr ↔ any group eq), all three irreducibles
+        # get their own pinned equation.
+        @named sys = System([D(w) ~ w, a ~ b, a ~ c, a ~ -c], t)
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        eqs = equations(state.sys)
+        for v in (a, b, c)
+            @test any(
+                eq -> isequal(eq.lhs, unwrap(v)) && iszero(Symbolics.value(eq.rhs)), eqs)
+        end
+        @test any(eq -> isequal(eq.lhs, D(w)), eqs)
+    end
+
+    @testset "conflicting signs with irreducible: alias eq rewritten to `v ~ 0`" begin
+        @variables x(t) [irreducible = true]
+        @variables y(t) z(t)
+        # `x ~ y` and `x ~ -y` with `x` irreducible: `x` cannot be removed, so one
+        # alias equation is rewritten to `x ~ 0` and the other is removed.
+        @named sys = System([D(z) ~ z, x ~ y, x ~ -y], t)
+        state = TearingState(sys)
+        ModelingToolkit.eliminate_perfect_aliases!(state)
+        # y is non-irreducible: substituted to 0 in observed.
+        @test iszero(Symbolics.value(obs_for(state, y).rhs))
+        # x is NOT in additional_observed (it survives as an unknown).
+        @test !any(eq -> isequal(eq.lhs, unwrap(x)), state.additional_observed)
+        # The system carries `x ~ 0` as a real equation now, alongside the
+        # untouched `D(z) ~ z`.
+        eqs = equations(state.sys)
+        @test length(eqs) == 2
+        @test any(eq -> isequal(eq.lhs, unwrap(x)) && iszero(Symbolics.value(eq.rhs)), eqs)
+        @test any(eq -> isequal(eq.lhs, D(z)), eqs)
+    end
+end
+
+@testset "Substitution rebuilds equation incidence" begin
+    # Calls `find_perfect_aliases!` directly so we can inspect the bipartite
+    # graph *before* `rm_eqs_vars!` renumbers it.
+    sneighbors = ModelingToolkit.BipartiteGraphs.𝑠neighbors
+
+    @testset "zero substitution drops multiplicatively annihilated var" begin
+        @variables x(t) y(t) a(t) b(t)
+        # `x ~ y` and `x ~ -y` is a sign conflict ⇒ x = y = 0. The non-alias
+        # eq `D(a) ~ x*b + a` simplifies to `D(a) ~ a` after `x → 0`, so `b`
+        # is annihilated and its edge to that eq must be dropped even though
+        # `b` itself wasn't substituted.
+        @named sys = System(
+            [D(a) ~ x * b + a, D(b) ~ b, x ~ y, x ~ -y], t)
+        state = TearingState(sys)
+
+        eqs_before = collect(ModelingToolkit.equations(state))
+        da_ieq = findfirst(eq -> isequal(eq.lhs, D(a)), eqs_before)
+        b_idx = findfirst(isequal(unwrap(b)), state.fullvars)
+        # Precondition: b is incident on the D(a) eq before the pass runs.
+        @test b_idx in sneighbors(state.structure.graph, da_ieq)
+
+        ModelingToolkit.find_perfect_aliases!(state, Int[], Int[])
+
+        @test !(b_idx in sneighbors(state.structure.graph, da_ieq))
+    end
+
+    @testset "alias substitution drops cancelled target var" begin
+        @variables x(t) y(t) w(t)
+        # `x ~ y` is a consistent alias. `x` gets eliminated in favor of `y`.
+        # The non-alias eq `D(w) ~ x - y + w` becomes `D(w) ~ w`, so `y` is no
+        # longer in the equation even though it was the alias *target*.
+        @named sys = System([D(w) ~ x - y + w, x ~ y], t;
+            state_priorities = [y => 10])
+        state = TearingState(sys)
+
+        eqs_before = collect(ModelingToolkit.equations(state))
+        dw_ieq = findfirst(eq -> isequal(eq.lhs, D(w)), eqs_before)
+        y_idx = findfirst(isequal(unwrap(y)), state.fullvars)
+        @test y_idx in sneighbors(state.structure.graph, dw_ieq)
+
+        ModelingToolkit.find_perfect_aliases!(state, Int[], Int[])
+
+        @test !(y_idx in sneighbors(state.structure.graph, dw_ieq))
+    end
+end

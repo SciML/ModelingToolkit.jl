@@ -33,12 +33,6 @@ using SymbolicIndexingInterface
 using LinearAlgebra, SparseArrays
 using InteractiveUtils
 using DataStructures
-@static if pkgversion(DataStructures) >= v"0.19"
-    import DataStructures: IntDisjointSet
-else
-    import DataStructures: IntDisjointSets
-    const IntDisjointSet = IntDisjointSets
-end
 using Base.Threads
 using Setfield, ConstructionBase
 import Libdl
