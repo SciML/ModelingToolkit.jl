@@ -2,7 +2,7 @@ struct CacheWriter{F}
     fn::F
 end
 
-function (cw::CacheWriter)(p, sols)
+function (cw::CacheWriter)(p::MTKParameters, sols)
     return cw.fn(p.caches, sols, p)
 end
 
