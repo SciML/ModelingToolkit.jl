@@ -363,6 +363,13 @@ function EnzymeCore.EnzymeRules.inactive_noinl(
     )
     return true
 end
+# Declare the type itself inactive so Enzyme's runtime-activity dispatch
+# (e.g. `MixedDuplicated`-wrapping) never tries to track a `System` as a
+# differentiable value. Without this, `Enzyme.gradient(set_runtime_activity(Reverse),
+# Const(loss), p)` over a closure capturing an MTK-generated problem
+# (which transitively carries the symbolic `System`) trips a
+# `MethodError MixedDuplicated(::System, ::System)` in `create_activity_wrapper`.
+EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)
