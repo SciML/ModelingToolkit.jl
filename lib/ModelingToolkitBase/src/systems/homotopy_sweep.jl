@@ -1,5 +1,5 @@
 using CommonSolve: CommonSolve
-using SciMLBase: SciMLBase, NonlinearProblem, ReturnCode, remake,
+using SciMLBase: SciMLBase, NonlinearProblem, remake,
                  successful_retcode, state_values, parameter_values
 using Setfield: @set
 
@@ -35,11 +35,6 @@ end
 # passing `inner = ...` explicitly; the default is only invoked when the test
 # env (or a downstream user env) has already loaded NonlinearSolve.
 function _default_inner()
-    nls = Base.get_extension(@__MODULE__, :NonlinearSolve)
-    if nls !== nothing
-        return nls.NewtonRaphson()
-    end
-    # Try via Base.require if NonlinearSolve is available in the current env.
     try
         mod = Base.require(Base.PkgId(Base.UUID("8913a72c-1f9b-4ce2-8d82-65094dcecaec"),
                                        "NonlinearSolve"))
@@ -55,6 +50,10 @@ end
 function CommonSolve.solve(prob::NonlinearProblem, alg::HomotopySweep; kwargs...)
     u_curr = copy(state_values(prob))
     last_sol = nothing
+    # `set_λ!` is expected to be a `SymbolicIndexingInterface.setp` handle in
+    # production (mutates `prob.p` in place via `setindex!`, returns nothing).
+    # Tests pass an OOP `(p, v) -> new_p` closure; both paths are supported
+    # by the `ret === nothing ? p_in : ret` normalization below.
     for λ in alg.schedule
         p_in = copy(parameter_values(prob))
         ret = alg.set_λ!(p_in, λ)

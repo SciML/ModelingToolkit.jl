@@ -63,6 +63,9 @@ using NonlinearSolve: NewtonRaphson
     @testset "S5 TrivialThenSweep succeeds via trivial path when guess is good" begin
         # u0 = 1.9 is close to actual root u=2 → Newton converges from trivial.
         # Sweep should NOT be invoked. We detect by `sol.original.path === :trivial`.
+        # NOTE: p[1] = 1.0 is intentional — TrivialHomotopy does NOT touch λ,
+        # so the canonical fixture must already be in actual-form. Don't "fix"
+        # this to 0.0; that would silently flip the trivial path to simplified.
         prob = NonlinearProblem(f_canonical!, [1.9], [1.0])  # p[1]=1.0 → already trivial
         alg = TrivialThenSweep(;
             trivial = TrivialHomotopy(),
