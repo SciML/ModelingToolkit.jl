@@ -82,3 +82,53 @@ function rewrite_trivial_in_equations(eqs)
     return [Equation(rewrite_trivial(eq.lhs), rewrite_trivial(eq.rhs))
             for eq in eqs]
 end
+
+"""
+    rewrite_with_lambda(expr, λ = nothing)
+
+Recursively replace every `homotopy(a, s)` node in `expr` with `(1 - λ)*s + λ*a`,
+where `λ` is a single shared parameter for the whole expression (allocated lazily
+if not supplied, default name `__homotopy_λ`, default value `1.0`).
+Returns `(new_expr, λ)`.
+
+At λ=1 the lowered expression reduces numerically to `actual` (trivial form);
+at λ=0 it reduces to `simplified`. `HomotopySweep` walks λ from 0 → 1.
+
+Hand-written TermInterface walk; no `@rule` (per AayushSabharwal #1385 feedback).
+"""
+function rewrite_with_lambda(expr, λ = nothing)
+    if λ === nothing
+        λ = only(@parameters __homotopy_λ = 1.0)
+    end
+    x = unwrap(expr)
+    return _rewrite_with_lambda(x, λ), λ
+end
+
+function _rewrite_with_lambda(x, λ)
+    if !iscall(x)
+        return x
+    end
+    op = operation(x)
+    args = arguments(x)
+    new_args = map(arg -> _rewrite_with_lambda(arg, λ), args)
+    if op === homotopy
+        a, s = new_args[1], new_args[2]
+        return (1 - λ) * s + λ * a
+    end
+    return maketerm(typeof(x), op, new_args, metadata(x))
+end
+
+"""
+    rewrite_with_lambda_in_equations(eqs, λ = nothing)
+
+Return `(new_eqs, λ)`. All `homotopy(a, s)` nodes across all equations are
+replaced using a single shared `λ` parameter. Original `eqs` not mutated.
+"""
+function rewrite_with_lambda_in_equations(eqs, λ = nothing)
+    if λ === nothing
+        λ = only(@parameters __homotopy_λ = 1.0)
+    end
+    new_eqs = [Equation(_rewrite_with_lambda(unwrap(eq.lhs), λ),
+                        _rewrite_with_lambda(unwrap(eq.rhs), λ)) for eq in eqs]
+    return new_eqs, λ
+end
