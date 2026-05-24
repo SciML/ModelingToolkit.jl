@@ -1,0 +1,129 @@
+using CommonSolve: CommonSolve
+using SciMLBase: SciMLBase, NonlinearProblem, ReturnCode, remake,
+                 successful_retcode, state_values, parameter_values
+using Setfield: @set
+
+"""
+    HomotopySweep(; inner = NewtonRaphson(), schedule = 0.0:0.1:1.0,
+                  set_λ!, maxiters_per_step = nothing)
+
+Parameter-sweep continuation algorithm for `NonlinearProblem` lowered by
+`rewrite_with_lambda`. Each step `λ_k ∈ schedule` is solved by `inner` with
+`u0` warm-started from the previous step's solution. λ is written into the
+problem's parameter vector via `set_λ!`, normally a `SymbolicIndexingInterface.setp`
+handle (or a `(p, v) -> new_p` closure in tests).
+
+Failure policy: if any step's inner solve returns an unsuccessful retcode,
+`HomotopySweep` returns that step's solution unchanged. No auto-fallback.
+Auto-fallback to trivial is the job of `TrivialThenSweep`, not this struct.
+"""
+struct HomotopySweep{Inner, Sched, Setter} <: SciMLBase.AbstractNonlinearAlgorithm
+    inner::Inner
+    schedule::Sched
+    set_λ!::Setter
+    maxiters_per_step::Union{Int, Nothing}
+end
+
+function HomotopySweep(; inner = nothing, schedule = 0.0:0.1:1.0,
+                        set_λ!, maxiters_per_step = nothing)
+    return HomotopySweep(inner === nothing ? _default_inner() : inner,
+                         schedule, set_λ!, maxiters_per_step)
+end
+
+# Lazy-load NewtonRaphson from NonlinearSolve, which is a test-extras dependency
+# of ModelingToolkitBase (not a runtime [deps]). Callers can avoid this path by
+# passing `inner = ...` explicitly; the default is only invoked when the test
+# env (or a downstream user env) has already loaded NonlinearSolve.
+function _default_inner()
+    nls = Base.get_extension(@__MODULE__, :NonlinearSolve)
+    if nls !== nothing
+        return nls.NewtonRaphson()
+    end
+    # Try via Base.require if NonlinearSolve is available in the current env.
+    try
+        mod = Base.require(Base.PkgId(Base.UUID("8913a72c-1f9b-4ce2-8d82-65094dcecaec"),
+                                       "NonlinearSolve"))
+        return mod.NewtonRaphson()
+    catch err
+        throw(ArgumentError(
+            "HomotopySweep/TrivialHomotopy default `inner` requires NonlinearSolve " *
+            "to be loaded. Either `using NonlinearSolve` first, or pass `inner = ...` " *
+            "explicitly. (Underlying error: $err)"))
+    end
+end
+
+function CommonSolve.solve(prob::NonlinearProblem, alg::HomotopySweep; kwargs...)
+    u_curr = copy(state_values(prob))
+    last_sol = nothing
+    for λ in alg.schedule
+        p_in = copy(parameter_values(prob))
+        ret = alg.set_λ!(p_in, λ)
+        new_p = ret === nothing ? p_in : ret
+        step_prob = remake(prob; u0 = u_curr, p = new_p)
+        inner_kwargs = alg.maxiters_per_step === nothing ?
+                       kwargs : (; kwargs..., maxiters = alg.maxiters_per_step)
+        step_sol = CommonSolve.solve(step_prob, alg.inner; inner_kwargs...)
+        last_sol = step_sol
+        if !successful_retcode(step_sol)
+            return step_sol
+        end
+        u_curr = copy(step_sol.u)
+    end
+    return last_sol
+end
+
+"""
+    TrivialHomotopy(; inner = NewtonRaphson())
+
+Trivial-form init: leaves `__homotopy_λ` at its default 1.0 (so the lowered
+system is `actual`) and solves once with `inner`. Equivalent to OMC's
+`-noHomotopyOnFirstTry`. Use when the guess is reliably close to the actual
+root and sweep cost is unwarranted.
+"""
+struct TrivialHomotopy{Inner} <: SciMLBase.AbstractNonlinearAlgorithm
+    inner::Inner
+end
+
+TrivialHomotopy(; inner = nothing) =
+    TrivialHomotopy(inner === nothing ? _default_inner() : inner)
+
+function CommonSolve.solve(prob::NonlinearProblem, alg::TrivialHomotopy; kwargs...)
+    return CommonSolve.solve(prob, alg.inner; kwargs...)
+end
+
+"""
+    TrivialThenSweep(; trivial = TrivialHomotopy(), sweep = HomotopySweep(...))
+
+Composite algorithm matching OpenModelica's default user experience: attempt
+the trivial (single-Newton) solve first, and on unsuccessful retcode fall
+back to a full parameter sweep. The returned `sol.original` records which
+path succeeded under `:path` (`:trivial` or `:sweep_fallback`).
+
+This is MTK's default `initializealg.nlsolve` when a system contains
+`homotopy(...)` nodes. Users override by passing `OverrideInit(nlsolve = ...)`
+explicitly.
+"""
+struct TrivialThenSweep{T, S} <: SciMLBase.AbstractNonlinearAlgorithm
+    trivial::T
+    sweep::S
+end
+
+TrivialThenSweep(; trivial = TrivialHomotopy(), sweep) =
+    TrivialThenSweep(trivial, sweep)
+
+function CommonSolve.solve(prob::NonlinearProblem, alg::TrivialThenSweep; kwargs...)
+    trivial_sol = CommonSolve.solve(prob, alg.trivial; kwargs...)
+    if successful_retcode(trivial_sol)
+        return _annotate_path(trivial_sol, :trivial)
+    end
+    sweep_sol = CommonSolve.solve(prob, alg.sweep; kwargs...)
+    return _annotate_path(sweep_sol, :sweep_fallback)
+end
+
+# Attach a path marker to sol via the `original` field. The inner solver's
+# previous `original` (if any) is preserved under `:inner` so callers that need
+# the underlying object can still reach it.
+function _annotate_path(sol, path::Symbol)
+    inner_original = hasproperty(sol, :original) ? getproperty(sol, :original) : nothing
+    return @set sol.original = (; path = path, inner = inner_original)
+end
