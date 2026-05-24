@@ -466,6 +466,18 @@ function (gfw::GeneratedFunctionWrapper)(args...)
     return _generated_call(gfw, args...)
 end
 
+# Arity is encoded in the type parameter; avoid `methods(f)` (and the
+# `Tuple.parameters → Core.SimpleVector` runtime-getproperty chain it triggers
+# under Enzyme reverse-mode `remake`) by returning the known oop/iip widths
+# directly. Mirrors the existing `SciMLBase.numargs(::RuntimeGeneratedFunction)`
+# special-case for a downstream-defined function type, so callers in SciMLBase
+# (e.g. `SciMLBase.isinplace` during `remake`) dispatch here rather than the
+# generic `methods`-based fallback.
+function SciMLBase.numargs(::GeneratedFunctionWrapper{P}) where {P}
+    n_oop = P[2]
+    return (n_oop, n_oop + 1)
+end
+
 @generated function _generated_call(gfw::GeneratedFunctionWrapper{P}, args...) where {P}
     paramidx, nargs, issplit = P
     iip = false
