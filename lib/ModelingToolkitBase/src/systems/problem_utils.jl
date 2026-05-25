@@ -1249,6 +1249,37 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     The value of the `missing_guess_value` keyword indicating how to handle missing guesses.
     """
     missing_guess_value::MissingGuessValue.Type
+    """
+    Writer closure `(p, λ) -> p_new` that sets `__homotopy_λ` in a parameter
+    container. Built from `SymbolicIndexingInterface.setp` when the init
+    system carries a `__homotopy_λ` parameter (i.e. the homotopy lowering
+    in `complete()` fired); `nothing` otherwise. Consumed by `HomotopySweep`
+    during parameter-sweep continuation.
+    """
+    homotopy_set_λ!::Any
+    """
+    The default `OverrideInit(nlsolve = TrivialThenSweep(...))` instance MTK
+    can inject when the user does not supply `initializealg` and the system
+    contains homotopy nodes; `nothing` otherwise. Mirrors OpenModelica's
+    default user experience (try trivial first, fall back to sweep).
+    """
+    homotopy_default_initializealg::Any
+end
+
+# Backward-compatible 9-positional outer constructor: callers that predate
+# the homotopy fields keep working; the new fields default to `nothing`.
+function InitializationMetadata(
+        op::SymmapT, guesses::SymmapT,
+        additional_initialization_eqs::Vector{Equation},
+        use_scc::Bool, time_dependent_init::Bool,
+        oop_reconstruct_u0_p::R, get_updated_u0::GUU,
+        set_initial_unknowns!::SIU, missing_guess_value::MissingGuessValue.Type,
+    ) where {R <: ReconstructInitializeprob, GUU, SIU}
+    return InitializationMetadata{R, GUU, SIU}(
+        op, guesses, additional_initialization_eqs, use_scc, time_dependent_init,
+        oop_reconstruct_u0_p, get_updated_u0, set_initial_unknowns!, missing_guess_value,
+        nothing, nothing,
+    )
 end
 
 """
@@ -1481,6 +1512,32 @@ function maybe_build_initialization_problem(
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
+
+    # If the init system carries `__homotopy_λ` (injected by the homotopy
+    # lowering pass in `complete()` via `add_homotopy_parameter`), populate
+    # the homotopy-related metadata so downstream solvers (HomotopySweep)
+    # can mutate λ during continuation and Task 5's default-injection hook
+    # can find the OMC-aligned `TrivialThenSweep` default. When the system
+    # has no homotopy nodes, both fields stay `nothing`.
+    initsys_for_homotopy = initializeprob.f.sys
+    homotopy_λ_idx = findfirst(parameters(initsys_for_homotopy)) do p
+        sym = SymbolicUtils.unwrap(p)
+        SymbolicUtils.issym(sym) && nameof(sym) === :__homotopy_λ
+    end
+    if homotopy_λ_idx !== nothing
+        raw_setter = SymbolicIndexingInterface.setp(initsys_for_homotopy, :__homotopy_λ)
+        # Normalize both mutating (returns Nothing) and OOP setp contracts.
+        set_λ! = (p, v) -> begin
+            p2 = copy(p)
+            ret = raw_setter(p2, v)
+            ret === nothing ? p2 : ret
+        end
+        default_sweep = HomotopySweep(; schedule = 0.0:0.1:1.0, set_λ! = set_λ!)
+        default_alg = SciMLBase.OverrideInit(;
+            nlsolve = TrivialThenSweep(; sweep = default_sweep))
+        @set! meta.homotopy_set_λ! = set_λ!
+        @set! meta.homotopy_default_initializealg = default_alg
+    end
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))

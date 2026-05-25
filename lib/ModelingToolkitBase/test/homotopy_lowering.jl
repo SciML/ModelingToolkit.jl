@@ -57,4 +57,50 @@ using Symbolics
         @test isequal(new_eqs[2].rhs, eqs[2].rhs)
         @test λ !== nothing
     end
+
+    @testset "L1-Q5 OverrideInitData metadata exposes setp handle + default alg" begin
+        using ModelingToolkitBase: System, mtkcompile, HomotopySweep, TrivialThenSweep
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        using OrdinaryDiffEqRosenbrock: Rodas5P
+        using OrdinaryDiffEqNonlinearSolve
+        using SymbolicIndexingInterface
+        using SciMLBase
+
+        @variables x(t) y(t)
+        @parameters p
+        eqs = [D(x) ~ -x,
+               0 ~ homotopy(y^2 - p, y - 1)]
+        @named sys = System(eqs, t; guesses = [y => 2.5])
+        sys = mtkcompile(sys)
+        prob = ODEProblem(sys, Dict(x => 1.0, p => 9.0), (0.0, 1.0))
+
+        meta = prob.f.initialization_data.metadata
+        @test meta.homotopy_set_λ! !== nothing
+        @test meta.homotopy_default_initializealg !== nothing
+
+        # setp handle round-trip — write λ = 0.3, read it back
+        initprob = prob.f.initialization_data.initializeprob
+        set_λ! = meta.homotopy_set_λ!
+        new_p = set_λ!(parameter_values(initprob), 0.3)
+        getter = SymbolicIndexingInterface.getp(initprob, :__homotopy_λ)
+        @test isapprox(getter(new_p), 0.3; atol = 1e-12)
+
+        # Default initializealg shape
+        default_alg = meta.homotopy_default_initializealg
+        @test default_alg isa SciMLBase.OverrideInit
+        @test default_alg.nlsolve isa TrivialThenSweep
+        @test default_alg.nlsolve.sweep isa HomotopySweep
+
+        # Non-homotopy system: metadata fields stay `nothing`.
+        @variables a(t)
+        @parameters q
+        @named sys2 = System([D(a) ~ -q * a], t; guesses = [a => 1.0])
+        sys2 = mtkcompile(sys2)
+        prob2 = ODEProblem(sys2, Dict(a => 1.0, q => 2.0), (0.0, 1.0))
+        if prob2.f.initialization_data !== nothing
+            meta2 = prob2.f.initialization_data.metadata
+            @test meta2.homotopy_set_λ! === nothing
+            @test meta2.homotopy_default_initializealg === nothing
+        end
+    end
 end
