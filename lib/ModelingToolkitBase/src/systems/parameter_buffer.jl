@@ -364,7 +364,19 @@ function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameter
     arr = p.tunable
     repack = let p = p
         function (new_val)
-            return SciMLStructures.replace(SciMLStructures.Tunable(), p, new_val)
+            # Allocate fresh `caches` buffers to avoid aliasing the template's
+            # cache vectors. Sharing those buffers breaks Enzyme reverse-mode AD
+            # (no separate shadow is allocated for the aliased cache, producing
+            # silent-zero or wrong-but-nonzero cotangents through cache writes
+            # during initialization). See SciML/ModelingToolkit.jl PR notes.
+            return MTKParameters(
+                new_val,
+                p.initials,
+                p.discrete,
+                p.constant,
+                p.nonnumeric,
+                ntuple(i -> copy(p.caches[i]), length(p.caches)),
+            )
         end
     end
     return arr, repack, true
