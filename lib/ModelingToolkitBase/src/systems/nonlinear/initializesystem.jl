@@ -726,11 +726,23 @@ end
 function _late_binding_update_u0_p_impl(
         prob, sys::AbstractSystem, u0, p, t0, newu0, newp
     )
-    supports_initialization(sys) || return newu0, newp
+    # We originally called `supports_initialization` but this does not
+    # infer, since we can return different types depending on the branch.
+    # Since the presence of jumps, costs or constraints rules out initialization,
+    # we check against `JumpProblem`, `OptimizationProblem` and `BVProblem`.
+    # supports_initialization(sys) || return newu0, newp
+    prob isa JumpProblem && return newu0, newp
+    prob isa OptimizationProblem && return newu0, newp
+    prob isa BVProblem && return newu0, newp
     prob isa IntervalNonlinearProblem && return newu0, newp
     prob isa LinearProblem && return newu0, newp
 
     initdata = prob.f.initialization_data
+    # Also catches the JumpProblem case
+    if initdata === nothing && prob isa Union{ODEProblem, SDEProblem, DiscreteProblem}
+        return newu0, newp
+    end
+
     meta = initdata === nothing ? nothing : initdata.metadata
 
     newu0, newp = promote_u0_p(newu0, newp, t0)

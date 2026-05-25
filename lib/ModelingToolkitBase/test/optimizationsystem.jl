@@ -1,6 +1,7 @@
 using ModelingToolkitBase, SparseArrays, Test, Optimization, OptimizationOptimJL,
-    OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll, SymbolicIndexingInterface,
+    OptimizationMOI, Ipopt, AmplNLWriter, SymbolicIndexingInterface,
     LinearAlgebra
+using Ipopt: Ipopt_jll
 using Symbolics: value
 
 @testset "basic" begin

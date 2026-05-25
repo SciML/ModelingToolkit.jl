@@ -8,17 +8,15 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 const SUITE = BenchmarkGroup()
 
-@mtkmodel DCMotor begin
-    @structural_parameters begin
-        R = 0.5
-        L = 4.5e-3
-        k = 0.5
-        J = 0.02
-        f = 0.01
-        V_step = 10
-        tau_L_step = -3
-    end
-    @components begin
+@component function DCMotor(; name)
+    R = 0.5
+    L = 4.5e-3
+    k = 0.5
+    J = 0.02
+    f = 0.01
+    V_step = 10
+    tau_L_step = -3
+    systems = @named begin
         ground = Ground()
         source = Voltage()
         voltage_step = Blocks.Step(height = V_step, start_time = 0)
@@ -31,7 +29,7 @@ const SUITE = BenchmarkGroup()
         inertia = Inertia(J = J)
         friction = Damper(d = f)
     end
-    @equations begin
+    eqs = [
         connect(fixed.flange, emf.support, friction.flange_b)
         connect(emf.flange, friction.flange_a, inertia.flange_a)
         connect(inertia.flange_b, load.flange)
@@ -41,7 +39,8 @@ const SUITE = BenchmarkGroup()
         connect(R1.n, L1.p)
         connect(L1.n, emf.p)
         connect(emf.n, source.n, ground.g)
-    end
+    ]
+    return System(eqs, t, [], []; name, systems)
 end
 
 @named model = DCMotor()
@@ -69,7 +68,7 @@ N = 25
 
 defval = collect(x) * collect(x)'
 @mtkcompile model = System(
-    [D(x) ~ x], t, [x], [A]; defaults = [A => defval], guesses = [A => fill(NaN, N, N)]
+    [D(x) ~ x], t, [x], [A]; initial_conditions = [A => defval], guesses = [A => fill(NaN, N, N)]
 )
 
 u0 = [x => rand(N)]

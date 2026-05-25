@@ -40,7 +40,7 @@ jobs:
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream, subpkg: ""}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core, subpkg: ""}
-          - {user: SciML, repo: ModelOrderReduction.jl, group: All, subpkg: ""}
+          - {user: SciML, repo: ModelOrderReduction.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: Interface, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE, subpkg: ""}
