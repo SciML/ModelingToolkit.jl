@@ -82,15 +82,28 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
         @set! isys.bindings = ROSymmapT(binds)
     end
-    # L0 trivial homotopy rewrite (Modelica spec 3.7.4 trivial form).
-    # Only runs when `homotopy(...)` is actually present, so non-homotopy
-    # systems pay zero overhead. PR2 (L1 parameter sweep) will replace this
-    # branch with λ-lowering when an explicit HomotopySweep algorithm is in use.
-    # Applied before `mtkcompile` so that downstream structural transforms
-    # operate on the actual equations, not on opaque `homotopy(...)` calls.
+    # Modelica homotopy operator (spec 3.7.4). Lower every `homotopy(a, s)`
+    # node to `(1 - λ)*s + λ*a` and inject `__homotopy_λ` with default 1.0.
+    # At λ=1 the lowered system is numerically `actual` (trivial form);
+    # `HomotopySweep` walks λ from 0 → 1 to obtain `actual`'s root from a
+    # `simplified` starting point. Applied before `mtkcompile` so structural
+    # transforms see real equations, not opaque `homotopy(...)` calls.
     if has_homotopy_in_equations(equations(isys))
-        new_eqs = rewrite_trivial_in_equations(equations(isys))
+        new_eqs, homotopy_λ = rewrite_with_lambda_in_equations(equations(isys))
         @set! isys.eqs = new_eqs
+        homotopy_λ_sym = unwrap(homotopy_λ)
+        current_ps = get_ps(isys)
+        if !any(p -> isequal(p, homotopy_λ_sym), current_ps)
+            @set! isys.ps = vcat(current_ps, homotopy_λ_sym)
+        end
+        # `@parameters __homotopy_λ = 1.0` carries the default in `Num` metadata,
+        # but pushing the symbol straight into `isys.ps` here bypasses the System
+        # constructor that normally copies metadata defaults into `bindings`. So
+        # we add the binding explicitly to avoid `MTKParameters` complaining
+        # about a missing value at problem-construction time.
+        binds = copy(parent(bindings(isys)))
+        binds[homotopy_λ_sym] = Symbolics.SConst(1.0)
+        @set! isys.bindings = ROSymmapT(binds)
     end
 
     if simplify_system
