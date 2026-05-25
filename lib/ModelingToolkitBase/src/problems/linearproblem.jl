@@ -1,5 +1,5 @@
-struct LinearFunction{iip, I} <: SciMLBase.AbstractSciMLFunction{iip}
-    interface::I
+struct LinearFunction{iip} <: SciMLBase.AbstractSciMLFunction{iip}
+    interface::Any
     A::Union{
         Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int},
         Diagonal{SymbolicT, Vector{SymbolicT}},
@@ -66,7 +66,7 @@ function LinearFunction{iip}(
         )
     end
 
-    return LinearFunction{iip, typeof(symbolic_interface)}(symbolic_interface, A, b)
+    return LinearFunction{iip}(symbolic_interface, A, b)
 end
 
 function SciMLBase.LinearProblem(sys::System, op; kwargs...)
