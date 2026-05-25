@@ -82,28 +82,38 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
         @set! isys.bindings = ROSymmapT(binds)
     end
-    # Modelica homotopy operator (spec 3.7.4). Lower every `homotopy(a, s)`
-    # node to `(1 - λ)*s + λ*a` and inject `__homotopy_λ` with default 1.0.
-    # At λ=1 the lowered system is numerically `actual` (trivial form);
-    # `HomotopySweep` walks λ from 0 → 1 to obtain `actual`'s root from a
-    # `simplified` starting point. Applied before `mtkcompile` so structural
-    # transforms see real equations, not opaque `homotopy(...)` calls.
-    if has_homotopy_in_equations(equations(isys))
+    # Modelica `homotopy(actual, simplified)` (spec 3.7.4) lowering happens
+    # in the parent system inside `complete()` via `add_homotopy_parameter`
+    # (`systems/homotopy.jl`). The init system here inherits the lowered
+    # equations + `__homotopy_λ` parameter from the parent.
+    #
+    # `MTKParameters` requires every parameter to have a value in `op`
+    # (sys.bindings is intentionally NOT used — that would let `mtkcompile`
+    # substitute λ away and break the sweep path). So we plant the runtime
+    # default `λ = 1.0` into `op` here, which is op-level metadata and not
+    # consulted by `mtkcompile`'s substitution. `HomotopySweep` overrides
+    # this at solve time via the SII setp handle.
+    homotopy_λ_idx = findfirst(get_ps(isys)) do p
+        sym = unwrap(p)
+        SymbolicUtils.issym(sym) && nameof(sym) === :__homotopy_λ
+    end
+    if homotopy_λ_idx !== nothing
+        homotopy_λ_sym = unwrap(get_ps(isys)[homotopy_λ_idx])
+        if !haskey(op, homotopy_λ_sym)
+            op[homotopy_λ_sym] = 1.0
+        end
+    elseif has_homotopy_in_equations(equations(isys))
+        # Defensive fallback: caller skipped `complete()` (rare), do the
+        # lowering inline so `mtkcompile` doesn't see opaque homotopy nodes.
         new_eqs, homotopy_λ = rewrite_with_lambda_in_equations(equations(isys))
         @set! isys.eqs = new_eqs
         homotopy_λ_sym = unwrap(homotopy_λ)
-        current_ps = get_ps(isys)
-        if !any(p -> isequal(p, homotopy_λ_sym), current_ps)
-            @set! isys.ps = vcat(current_ps, homotopy_λ_sym)
+        if !any(p -> isequal(p, homotopy_λ_sym), get_ps(isys))
+            @set! isys.ps = vcat(get_ps(isys), homotopy_λ_sym)
         end
-        # `@parameters __homotopy_λ = 1.0` carries the default in `Num` metadata,
-        # but pushing the symbol straight into `isys.ps` here bypasses the System
-        # constructor that normally copies metadata defaults into `bindings`. So
-        # we add the binding explicitly to avoid `MTKParameters` complaining
-        # about a missing value at problem-construction time.
-        binds = copy(parent(bindings(isys)))
-        binds[homotopy_λ_sym] = Symbolics.SConst(1.0)
-        @set! isys.bindings = ROSymmapT(binds)
+        if !haskey(op, homotopy_λ_sym)
+            op[homotopy_λ_sym] = 1.0
+        end
     end
 
     if simplify_system

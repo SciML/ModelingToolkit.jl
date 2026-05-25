@@ -698,6 +698,14 @@ function complete(
         _unhack_sys = unhack_system(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split, _unhack_sys)::T
+            # Modelica `homotopy(actual, simplified)` operator (spec 3.7.4):
+            # if the system carries any homotopy nodes, lower them now to
+            # `(1-λ)*s + λ*a` and inject `__homotopy_λ` into the parent so
+            # `MTKParametersReconstructor` can resolve λ in init-system
+            # observed expressions. Lives at the same lifecycle point as
+            # `add_initialization_parameters` so the index_cache rebuild at
+            # line 723+ picks up λ uniformly.
+            sys = add_homotopy_parameter(sys)::T
         end
         cb_alg_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
         if has_continuous_events(sys) && is_time_dependent(sys)
