@@ -67,6 +67,7 @@ end
         @safetestset "Homotopy lowering" begin include("homotopy_lowering.jl") end
         @safetestset "Homotopy nlsolve algorithms" begin include("homotopy_sweep.jl") end
         @safetestset "Homotopy integration" begin include("homotopy_integration.jl") end
+        @safetestset "Homotopy OMC parity" begin include("homotopy_omc_parity.jl") end
         @safetestset "Initial Values Test" include("initial_values.jl")
     end
 
