@@ -103,4 +103,42 @@ using Symbolics
             @test meta2.homotopy_default_initializealg === nothing
         end
     end
+
+    @testset "L1-Q6 default initializealg injected into prob.kwargs for homotopy systems" begin
+        using ModelingToolkitBase: System, mtkcompile, TrivialThenSweep, TrivialHomotopy
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        using OrdinaryDiffEqRosenbrock
+        using OrdinaryDiffEqNonlinearSolve
+        using SciMLBase
+
+        @variables x(t) y(t)
+        @parameters p
+        eqs = [D(x) ~ -x,
+               0 ~ homotopy(y^2 - p, y - 1)]
+        @named sys = System(eqs, t; guesses = [y => 2.5])
+        sys = mtkcompile(sys)
+
+        # Auto-injection path: user passes no `initializealg`
+        prob_default = ODEProblem(sys, Dict(x => 1.0, p => 9.0), (0.0, 1.0))
+        @test haskey(prob_default.kwargs, :initializealg)
+        injected = prob_default.kwargs[:initializealg]
+        @test injected isa SciMLBase.OverrideInit
+        @test injected.nlsolve isa TrivialThenSweep
+
+        # Explicit override path: user passes their own initializealg
+        explicit_alg = SciMLBase.OverrideInit(; nlsolve = TrivialHomotopy())
+        prob_explicit = ODEProblem(sys, Dict(x => 1.0, p => 9.0), (0.0, 1.0);
+                                    initializealg = explicit_alg)
+        @test haskey(prob_explicit.kwargs, :initializealg)
+        # User's explicit alg must win over MTK's default
+        @test prob_explicit.kwargs[:initializealg] === explicit_alg
+
+        # Non-homotopy system: no `initializealg` injection
+        @variables a(t)
+        @parameters q
+        @named sys2 = System([D(a) ~ -q * a], t; guesses = [a => 1.0])
+        sys2 = mtkcompile(sys2)
+        prob_nohomotopy = ODEProblem(sys2, Dict(a => 1.0, q => 2.0), (0.0, 1.0))
+        @test !haskey(prob_nohomotopy.kwargs, :initializealg)
+    end
 end

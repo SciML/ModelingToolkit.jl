@@ -2010,7 +2010,8 @@ end
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
-        _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
+        _skip_events = false, _skip_tstops = false, tspan = nothing,
+        initialization_data = nothing, kwargs...
     )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
@@ -2030,6 +2031,23 @@ function process_kwargs(
             if tstops !== nothing
                 kwargs1 = merge(kwargs1, (; tstops))
             end
+        end
+    end
+
+    # Default `initializealg` injection for homotopy systems (Modelica spec
+    # 3.7.4). When `add_homotopy_parameter` lowered a homotopy node during
+    # `complete()`, the init metadata carries an OMC-aligned
+    # `OverrideInit(nlsolve = TrivialThenSweep(...))` instance. Inject it as
+    # the default `initializealg` ONLY if the user did not pass one
+    # explicitly — `solve(prob, alg; initializealg = X)` always wins because
+    # `prob.kwargs.initializealg` is overridden by an explicit solve-time
+    # kwarg per SciMLBase conventions.
+    if !haskey(kwargs, :initializealg) &&
+            initialization_data isa SciMLBase.OverrideInitData &&
+            initialization_data.metadata isa InitializationMetadata
+        default_alg = initialization_data.metadata.homotopy_default_initializealg
+        if default_alg !== nothing
+            kwargs1 = merge(kwargs1, (; initializealg = default_alg))
         end
     end
 
