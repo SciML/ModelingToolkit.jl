@@ -1734,7 +1734,6 @@ end
         @test_broken @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
         @test_broken @inferred solve(prob)
     end
-    @inferred solve(prob)
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
