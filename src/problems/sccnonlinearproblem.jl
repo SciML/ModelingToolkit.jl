@@ -583,6 +583,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             A, b = get_A_b_from_LinearFunction(
                 sys, f, subber; eval_expression, eval_module, u0_constructor, u0_eltype
             )
+            symbolic_interface = MTKBase.wrap_symbolic_linear_interface(symbolic_interface, iip, A, b, p)
             for (j, val) in zip(vscc, _u0)
                 write_possibly_indexed_array!(op, dvs[j], Symbolics.SConst(val), COMMON_NOTHING)
             end

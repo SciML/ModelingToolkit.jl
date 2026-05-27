@@ -46,6 +46,7 @@ using DocStringExtensions
 using Base: RefValue
 using Combinatorics
 import FunctionWrappersWrappers
+import FunctionWrappersWrappers: FunctionWrappersWrapper
 import FunctionWrappers: FunctionWrapper
 using SciMLStructures
 using Compat

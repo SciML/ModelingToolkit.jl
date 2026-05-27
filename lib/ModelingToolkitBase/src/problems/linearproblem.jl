@@ -1,5 +1,5 @@
-struct LinearFunction{iip, I} <: SciMLBase.AbstractSciMLFunction{iip}
-    interface::I
+struct LinearFunction{iip} <: SciMLBase.AbstractSciMLFunction{iip}
+    interface::Any
     A::Union{
         Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int},
         Diagonal{SymbolicT, Vector{SymbolicT}},
@@ -66,7 +66,7 @@ function LinearFunction{iip}(
         )
     end
 
-    return LinearFunction{iip, typeof(symbolic_interface)}(symbolic_interface, A, b)
+    return LinearFunction{iip}(symbolic_interface, A, b)
 end
 
 function SciMLBase.LinearProblem(sys::System, op; kwargs...)
@@ -109,11 +109,39 @@ function SciMLBase.LinearProblem{iip}(
     A, b = get_A_b_from_LinearFunction(
         sys, f, op; eval_expression, eval_module, expression, u0_constructor
     )
+    if expression === Val{false}
+        symbolic_interface = wrap_symbolic_linear_interface(symbolic_interface, iip, A, b, p)
+    end
 
     kwargs = (; u0, process_kwargs(sys; kwargs...)..., f = symbolic_interface)
     args = (; A, b, p)
 
     return maybe_codegen_scimlproblem(expression, LinearProblem{iip}, args; kwargs...)
+end
+
+function __make_fww(@nospecialize(f), retT, argsT)
+    fwt = (
+        FunctionWrapper{retT, argsT}(f),
+    )
+    cs = FunctionWrappersWrappers.SingleCacheStorage()
+    return FunctionWrappersWrapper{typeof(fwt), FunctionWrappersWrappers.AllowNonIsBits, typeof(cs)}(fwt, cs)
+end
+
+Base.@nospecializeinfer function wrap_symbolic_linear_interface(
+        symbolic_interface::SciMLBase.SymbolicLinearInterface, iip::Bool, A, b, p
+    )
+    # We'll never infer the type of these, so no point specializing on them
+    @nospecialize symbolic_interface, A, b, p
+    if iip
+        update_A! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_A!), Nothing, typeof((A, p)))
+        update_b! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_b!), Nothing, typeof((b, p)))
+    else
+        update_A! = __make_fww(symbolic_interface.update_A!, typeof(A), typeof((p,)))
+        update_b! = __make_fww(symbolic_interface.update_b!, typeof(b), typeof((p,)))
+    end
+    return SciMLBase.SymbolicLinearInterface(
+        update_A!, update_b!, symbolic_interface.sys, symbolic_interface.observed, nothing
+    )
 end
 
 function get_A_b_from_LinearFunction(

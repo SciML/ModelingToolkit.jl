@@ -295,7 +295,7 @@ end
 end
 
 @testset "AD through inline linear SCCs works" begin
-    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
     @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
     prob = ODEProblem(sys, [], (0.0, 10.0))
     @assert prob.p.nonnumeric[1] isa
