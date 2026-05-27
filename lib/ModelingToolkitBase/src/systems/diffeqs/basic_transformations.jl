@@ -1141,16 +1141,19 @@ end
 
 const DIFFCACHE_PREFIX = Vector{UInt8}("__diffcacheₘₜₖ#")
 
-function get_diffcache_parameter_name(cnt::Int)
+function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, cnt::Int)
     buffer = Vector{UInt8}()
-    sizehint!(buffer, length(DIFFCACHE_PREFIX) + ndigits(cnt))
+    sizehint!(buffer, length(prefix) + ndigits(cnt))
     append!(buffer, DIFFCACHE_PREFIX)
     while cnt > 0
         push!(buffer, '0' + (cnt % 10))
         cnt = div(cnt, 10)
     end
-    reverse!(@view(buffer[(length(DIFFCACHE_PREFIX) + 1):end]))
+    reverse!(@view(buffer[(length(prefix) + 1):end]))
     return Symbol(buffer)
+end
+function get_diffcache_parameter_name(cnt::Int)
+    return get_numbered_symbol_with_prefix(DIFFCACHE_PREFIX, cnt)
 end
 
 abstract type DiffCacheParams end
@@ -1201,6 +1204,43 @@ function add_diffcache(sys::AbstractSystem, len::Int)
     diffcaches[param] = len
     sys = SU.setmetadata(sys, DiffCacheParams, diffcaches)
 
+    ps = copy(get_ps(sys))
+    push!(ps, param)
+    @set! sys.ps = ps
+    return sys, param
+end
+
+abstract type MiscParameterCnt end
+const MISC_PARAM_PREFIX = Vector{UInt8}("__miscₘₜₖ")
+
+"""
+    $TYPEDSIGNATURES
+
+Add a new unique miscellaneous parameter to the system. The parameter is equivalent to
+
+```julia
+@constants \$name::type
+```
+
+for scalars, or if `szs` is provided
+
+```julia
+@constants \$name[szs...]::type
+```
+
+Returns the updated `sys` and the added parameter.
+"""
+function add_misc_parameter(sys::AbstractSystem, type::SU.TypeT, szs::UnitRange{Int}...)
+    misc_param_count = SU.getmetadata(sys, MiscParameterCnt, 0)::Int
+    misc_param_count += 1
+    name = get_numbered_symbol_with_prefix(MISC_PARAM_PREFIX, misc_param_count)
+    param = if isempty(szs)
+        only(@constants $name::type)
+    else
+        only(@constants $name[szs...]::type)
+    end
+
+    sys = SU.setmetadata(sys, MiscParameterCnt, misc_param_count)
     ps = copy(get_ps(sys))
     push!(ps, param)
     @set! sys.ps = ps
