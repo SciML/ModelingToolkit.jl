@@ -803,6 +803,8 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     template = []
     elem_types = Set{DataType}()
     iv = get_iv(srcsys)
+    irinfo = get_ir_info(srcsys)
+
     for sym in syms
         if iv isa SymbolicT && isequal(iv, sym)
             push!(template, IV_TEMPLATE)
@@ -811,7 +813,13 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
         symidx = parameter_index(srcsys, sym)
         if symidx === nothing
+            symidx = parameter_index(srcsys, irinfo.obs_subber(sym))
+        end
+        if symidx === nothing
             symidx = variable_index(srcsys, sym)
+            if symidx === nothing
+                symidx = variable_index(srcsys, irinfo.obs_subber(sym))
+            end
             if symidx === nothing
                 if isempty(template)
                     push!(elem_types, Vector{SymbolicT})
