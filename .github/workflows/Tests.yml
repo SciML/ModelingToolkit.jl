@@ -37,6 +37,7 @@ jobs:
           - ModelingToolkit/Initialization
           - ModelingToolkit/SymbolicIndexingInterface
           - ModelingToolkit/Extensions
+          - ModelingToolkit/Optimization
           - ModelingToolkit/Downstream
           - ModelingToolkit/FMI
           - ModelingToolkitBase/InterfaceI
@@ -46,6 +47,7 @@ jobs:
           - ModelingToolkitBase/Extended
           - ModelingToolkitBase/RegressionI
           - ModelingToolkitBase/Extensions
+          - ModelingToolkitBase/Optimization
           - ModelingToolkitBase/QA
           - SciCompDSL/All
         exclude:
