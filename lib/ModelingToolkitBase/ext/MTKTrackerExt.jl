@@ -11,4 +11,8 @@ function MTKBase.promote_with_nothing(::Type{Tracker.TrackedReal{T}}, x::Tracker
     return x 
 end
 
+function MTKBase.__iip_u0_ad_wrapper(u0::Tracker.TrackedVector)
+    convert(Vector{eltype(u0)}, u0)
+end
+
 end
