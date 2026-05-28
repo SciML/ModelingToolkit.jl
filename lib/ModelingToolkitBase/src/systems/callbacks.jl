@@ -218,7 +218,7 @@ end
 
 safe_vec(@nospecialize(x)) = x isa SymbolicT ? [x] : vec(x::Array{SymbolicT})
 
-system(a::AffectSystem) = a.system
+system(a::AffectSystem) = a.system::System
 discretes(a::AffectSystem) = a.discretes
 unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
@@ -655,7 +655,10 @@ function namespace_affects(affect::AffectSystem, s)
     # called `affectsys` for further namespacing
     affsys = rename(affsys, nameof(s))
     affsys = toggle_namespacing(affsys, true)
-    affsys = System(Equation[], get_iv(affsys); systems = [affsys], name = :affectsys)
+    affsys = System(
+        Equation[], get_iv(affsys)::SymbolicT, SymbolicT[], SymbolicT[];
+        systems = System[affsys], name = :affectsys
+    )
     affsys = complete(affsys)
     @set! affsys.tearing_state = old_ts
     return AffectSystem(
@@ -1636,7 +1639,9 @@ function continuous_events(sys::AbstractSystem)
     systems = get_systems(sys)
     cbs = copy(cbs)
     for s in systems
-        append!(cbs, map(Base.Fix2(namespace_callback, s), continuous_events(s)))
+        for _cb in continuous_events(s)
+            push!(cbs, @invokelatest namespace_callback(_cb, s))
+        end
     end
     return cbs
 end

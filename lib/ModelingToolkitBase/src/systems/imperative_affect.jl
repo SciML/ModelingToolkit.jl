@@ -120,12 +120,12 @@ function Base.:(==)(a1::ImperativeAffect, a2::ImperativeAffect)
 end
 
 function Base.hash(a::ImperativeAffect, s::UInt)
-    s = hash(a.f, s)
-    s = hash(a.obs, s)
-    s = hash(a.obs_syms, s)
-    s = hash(a.modified, s)
-    s = hash(a.mod_syms, s)
-    return hash(a.ctx, s)
+    s = hash(a.f, s)::UInt
+    s = hash(a.obs, s)::UInt
+    s = hash(a.obs_syms, s)::UInt
+    s = hash(a.modified, s)::UInt
+    s = hash(a.mod_syms, s)::UInt
+    return hash(a.ctx, s)::UInt
 end
 
 namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)

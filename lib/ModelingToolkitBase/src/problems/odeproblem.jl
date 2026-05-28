@@ -108,12 +108,19 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
     _iip = resolve_iip(iip, op)
-    f, u0,
-        p = process_SciMLProblem(
-        ODEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, expression, check_compatibility, kwargs...
-    )
+    if _iip === true
+        f, u0, p = process_SciMLProblem(
+            ODEFunction{true, spec}, sys, op;
+            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+            eval_module, expression, check_compatibility, kwargs...
+        )
+    else
+        f, u0, p = process_SciMLProblem(
+            ODEFunction{false, spec}, sys, op;
+            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+            eval_module, expression, check_compatibility, kwargs...
+        )
+    end
 
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...

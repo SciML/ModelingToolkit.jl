@@ -1278,8 +1278,7 @@ struct GetUpdatedU0{GG, GIU}
     get_initial_unknowns::GIU
 end
 
-function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinearProblem, op::AbstractDict)
-    @nospecialize initprob
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict)
     dvs = unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
@@ -1287,7 +1286,7 @@ function GetUpdatedU0(sys::AbstractSystem, initprob::SciMLBase.AbstractNonlinear
         varval = get(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
-    get_guessvars = getu(initprob, dvs[guessvars])
+    get_guessvars = getu(initsys, dvs[guessvars])
     get_initial_unknowns = getu(sys, Initial.(dvs))
     return GetUpdatedU0(guessvars, get_guessvars, get_initial_unknowns)
 end
@@ -1400,7 +1399,7 @@ constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments 
 to `InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip, op::AbstractDict, t, guesses;
+        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses;
         time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
         p_constructor = identity, floatT = Float64, initialization_eqs = [],
         use_scc = true, eval_expression = false, eval_module = @__MODULE__,
@@ -1420,6 +1419,7 @@ function maybe_build_initialization_problem(
         use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
         missing_guess_value, is_steadystateprob, kwargs...
     )
+    initsys = initializeprob.f.sys::System
     needs_remake = false
     _u0 = state_values(initializeprob)
      if _u0 !== nothing
@@ -1466,7 +1466,7 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initializeprob, op)
+        GetUpdatedU0(sys, initsys, op)
     else
         nothing
     end
@@ -1476,7 +1476,7 @@ function maybe_build_initialization_problem(
         Vector{Equation}(initialization_eqs),
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
-            sys, initializeprob.f.sys; u0_constructor,
+            sys, initsys; u0_constructor,
             p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
@@ -1504,7 +1504,7 @@ function maybe_build_initialization_problem(
         initializeprobpmap = nothing
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initializeprob.f.sys; p_constructor, eval_expression, eval_module, kwargs...
+            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
         )
     end
 
@@ -1532,7 +1532,6 @@ function maybe_build_initialization_problem(
             end
         end
         if implicit_dae
-            initsys = initializeprob.f.sys
             for v in unknowns(sys)
                 v = Differential(get_iv(sys))(v)
                 ttv = default_toterm(v)
@@ -1558,10 +1557,10 @@ function maybe_build_initialization_problem(
     end
     missingvars = collect(missingvars)
 
-    for (i, v) in enumerate(unknowns(initializeprob.f.sys))
+    for (i, v) in enumerate(unknowns(initsys))
         write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
     end
-    add_observed!(initializeprob.f.sys, temp_op)
+    add_observed!(initsys, temp_op)
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
@@ -1736,11 +1735,27 @@ All other keyword arguments are passed as-is to `constructor`.
 """
 Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
+        u0_eltype = nothing, u0_constructor = identity, p_constructor = identity,
+        symbolic_u0 = false, kwargs...
+    )
+    u0Type = pType = typeof(op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(u0_eltype, floatT)
+    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
+    p_constructor = get_p_constructor(p_constructor, pType, floatT)
+
+    __process_SciMLProblem(constructor, sys, op; floatT, u0Type, u0_eltype, u0_constructor, p_constructor, symbolic_u0, kwargs...)
+end
+
+function __process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict;
+        floatT, u0Type, u0_eltype,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
-        check_initialization_units = false, u0_eltype = nothing, tofloat = true,
+        check_initialization_units = false, tofloat = true,
         u0_constructor = identity, p_constructor = identity,
         check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
@@ -1757,17 +1772,11 @@ Base.@nospecializeinfer function process_SciMLProblem(
 
     check_array_equations_unknowns(eqs, dvs)
 
-    u0Type = pType = typeof(op)
-
-    op = operating_point_preprocess(sys, op)
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
-
     op = build_operating_point(sys, op; fast_path = true)
 
     check_inputmap_keys(sys, op)
 
-    op = getmetadata(sys, ProblemConstructionHook, identity)(op)
+    op = getmetadata(sys, ProblemConstructionHook, identity)(op)::SymmapT
 
     kwargs = NamedTuple(kwargs)
 
@@ -1781,9 +1790,6 @@ Base.@nospecializeinfer function process_SciMLProblem(
     if !is_time_dependent(sys) || is_initializesystem(sys)
         add_observed_equations!(op, obs, bindings(sys))
     end
-
-    u0_constructor = get_u0_constructor(u0_constructor, u0Type, u0_eltype, symbolic_u0)
-    p_constructor = get_p_constructor(p_constructor, pType, floatT)
 
     if build_initializeprob
         kws = maybe_build_initialization_problem(
@@ -1868,13 +1874,9 @@ Base.@nospecializeinfer function process_SciMLProblem(
     end
 
     if is_split(sys)
-        # `pType` is usually `Dict` when the user passes key-value pairs.
-        if !(pType <: AbstractArray)
-            pType = Array
-        end
         p = MTKParameters(sys, op; floatT = floatT, p_constructor, fast_path = true)
     else
-        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = pType))
+        p = p_constructor(varmap_to_vars(op, ps; tofloat, container_type = u0Type))
     end
 
     if implicit_dae
@@ -1902,7 +1904,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
     end
 
     f = constructor(
-        sys; u0 = u0, p = p,
+        sys; u0 = u0, p = p, t = t,
         eval_expression = eval_expression,
         eval_module = eval_module,
         kwargs...
