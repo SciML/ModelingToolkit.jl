@@ -100,7 +100,7 @@ function mtkcompile(
     for pass in additional_passes
         newsys = pass(newsys)
     end
-    @set! newsys.parent = complete(sys; split = false, flatten = false)
+    @set! newsys.parent = toggle_namespacing(sys, false)
     newsys = complete(newsys; split)
     return newsys
 end
