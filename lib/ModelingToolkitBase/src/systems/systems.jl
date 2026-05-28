@@ -244,7 +244,7 @@ function __mtkcompile(
         obseqs = copy(original_obs)
         get_trivial_observed_equations!(Equation[], eqs, obseqs, all_dvs, nothing)
         add_array_observed!(obseqs)
-        obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
+        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
         map!(eq -> Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs), eqs, eqs)
         observables = Set{SymbolicT}()
         for eq in obseqs
@@ -342,7 +342,7 @@ function __mtkcompile(
             end
         end
 
-        _obseqs = topsort_equations(obseqs, collect(all_dvs); check = false)
+        _obseqs = topsort_equations(sys, obseqs, collect(all_dvs); check = false)
         _algeqs = setdiff!(obseqs, _obseqs)
         for i in eachindex(_algeqs)
             _algeqs[i] = Symbolics.COMMON_ZERO ~ _algeqs[i].rhs - _algeqs[i].lhs
@@ -371,7 +371,7 @@ function __mtkcompile(
     end
     get_trivial_observed_equations!(diffeqs, alg_eqs, obseqs, all_dvs, iv)
     add_array_observed!(obseqs)
-    obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
+    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
     for i in eachindex(alg_eqs)
         eq = alg_eqs[i]
         alg_eqs[i] = 0 ~ subst(eq.rhs - eq.lhs)
@@ -903,13 +903,14 @@ graph for the equations. Also construct a `Vector{Int}` mapping indices of `eqs`
 index in `unknowns` of the observed variable on the LHS of each equation. Return the
 constructed incidence graph and index mapping.
 """
-function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
+function observed2graph(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
     graph = BipartiteGraph(length(eqs), length(unknowns))
     v2j = Dict{SymbolicT, Int}(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
-    vars = Set{SymbolicT}()
+    ir = get_irstructure(sys)
+    vars = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
@@ -946,15 +947,17 @@ julia> eqs = [
            y ~ 2z + k
        ];
 
-julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
+julia> @named sys = System(Equation[], t, [x, y, z, k], [])
+
+julia> ModelingToolkit.topsort_equations(sys, eqs, [x, y, z, k])
 3-element Vector{Equation}:
  Equation(z(t), 2)
  Equation(y(t), k(t) + 2z(t))
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
-    graph, assigns = observed2graph(eqs, unknowns)
+function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
+    graph, assigns = observed2graph(sys, eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 

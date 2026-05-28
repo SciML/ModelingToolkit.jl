@@ -9,8 +9,9 @@ eqs = [
     z ~ 2
     y ~ 2z + k
 ]
+@named sys = System(Equation[], t, [x, y, z, k], [])
 
-sorted_eq = topsort_equations(eqs, unwrap.([x, y, z, k]))
+sorted_eq = topsort_equations(sys, eqs, unwrap.([x, y, z, k]))
 
 ref_eq = [
     z ~ 2
@@ -20,6 +21,7 @@ ref_eq = [
 @test ref_eq == sorted_eq
 
 @test_throws ArgumentError topsort_equations(
+    sys,
     [
         x ~ y + z
         z ~ 2
