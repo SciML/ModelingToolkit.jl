@@ -88,6 +88,7 @@ end
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Poissonians Test" include("poissonians.jl")
             @safetestset "Extend SDE/Jump Test" include("extend_sde_jump.jl")
+            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Analysis Points Test" include("analysis_points.jl")
             @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
@@ -126,7 +127,6 @@ end
     if GROUP == "All" || GROUP == "Optimization"
         activate_optimization_env()
         @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
-        @safetestset "Optimal Control + Constraints Tests" include("optimization/bvproblem.jl")
         @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end
