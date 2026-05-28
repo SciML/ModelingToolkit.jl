@@ -10,6 +10,12 @@ function activate_extensions_env()
     return Pkg.instantiate()
 end
 
+function activate_optimization_env()
+    Pkg.activate("optimization")
+    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
+    return Pkg.instantiate()
+end
+
 function activate_qa_env()
     Pkg.activate("qa")
     Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
@@ -72,7 +78,6 @@ end
             @safetestset "IndexCache Test" include("index_cache.jl")
             @safetestset "Variable Utils Test" include("variable_utils.jl")
             @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
-            @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
             @safetestset "Discrete System" include("discrete_system.jl")
             @safetestset "Implicit Discrete System" include("implicit_discrete_system.jl")
             @safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
@@ -116,9 +121,14 @@ end
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "LabelledArrays Test" include("extensions/labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
-        @safetestset "InfiniteOpt Extension Test" include("extensions/test_infiniteopt.jl")
         # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
-        @safetestset "Dynamic Optimization Collocation Solvers" include("extensions/dynamic_optimization.jl")
+    end
+
+    if GROUP == "All" || GROUP == "Optimization"
+        activate_optimization_env()
+        @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
+        @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
+        @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end
 
     if GROUP == "All" || GROUP == "QA"

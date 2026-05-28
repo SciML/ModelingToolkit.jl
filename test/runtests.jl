@@ -19,6 +19,12 @@ function activate_extensions_env()
     return Pkg.instantiate()
 end
 
+function activate_optimization_env()
+    Pkg.activate(joinpath(MTKBasePath, "test", "optimization"))
+    Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
+    return Pkg.instantiate()
+end
+
 function activate_downstream_env()
     Pkg.activate("downstream")
     Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
@@ -82,7 +88,6 @@ end
             @safetestset "Linearization Tests" include("linearize.jl")
             @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
             @safetestset "SemilinearODEProblem tests" include("semilinearodeproblem.jl")
-            @mtktestset("OptimizationSystem Test", "optimizationsystem.jl")
         end
     end
 
@@ -107,8 +112,14 @@ end
         activate_extensions_env()
         @mtktestset("HomotopyContinuation Extension Test", "extensions/homotopy_continuation.jl")
         @mtktestset("BifurcationKit Extension Test", "extensions/bifurcationkit.jl")
-        @mtktestset("InfiniteOpt Extension Test", "extensions/test_infiniteopt.jl")
         # @mtktestset("Auto Differentiation Test", "extensions/ad.jl")
-        @mtktestset("Dynamic Optimization Collocation Solvers", "extensions/dynamic_optimization.jl")
+    end
+
+    if GROUP == "All" || GROUP == "Optimization"
+        activate_optimization_env()
+        @mtktestset("OptimizationSystem Test", "optimization/optimizationsystem.jl")
+        @mtktestset("InfiniteOpt Extension Test", "optimization/test_infiniteopt.jl")
+        @mtktestset("Dynamic Optimization Collocation Solvers",
+            "optimization/dynamic_optimization.jl")
     end
 end
