@@ -1943,6 +1943,17 @@ function equations(sys::AbstractSystem, visitor::AbstractRecursivePropertyVisito
     return eqs
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if `sys` or any of its subcomponents have equations. This avoids having to
+do `isempty(equations(sys))` which can be expensive to materialize.
+"""
+function has_some_equations(sys::AbstractSystem)
+    isempty(get_eqs(sys)) || return true
+    return any(has_some_equations, get_systems(sys))
+end
+
 function equations_source(sys::AbstractSystem)
     source = Vector{Symbol}[]
     for _ in eachindex(get_eqs(sys))
