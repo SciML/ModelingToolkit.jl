@@ -516,10 +516,10 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             solsyms = view.((dvs,), view(decomposition.var_sccs, 1:(i - 1)))
             push!(
                 explicitfuns,
-                CacheWriter(
+                SciMLBase.Void{Any}(CacheWriter(
                     sys, decomposition.cachetypes, cacheexprs, solsyms;
                     eval_expression, eval_module, cse
-                )
+                ))
             )
         end
         cachebufsyms = Vector{SymbolicT}[]
