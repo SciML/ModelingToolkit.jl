@@ -156,7 +156,7 @@ function find_perfect_aliases!(
     parent = Dict{Int, Int}()
     parity = Dict{Int, Int8}()
     members = Dict{Int, Vector{Int}}()
-    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. 
+    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`.
     # `edge_sign == ±1` encodes `v1 ~ edge_sign*v2`.
     # Removal is decided below once each group's target is known:
     # equations with a non-target irreducible endpoint must stay so
@@ -297,7 +297,7 @@ function find_perfect_aliases!(
     #
     # Conflict groups: every variable is forced to `0`.
     # Take the first `length(irrs)` eq in the group to force the irrs to 0
-    # (overwriting the eq and replacing its graph row with the edge to `irr`). 
+    # (overwriting the eq and replacing its graph row with the edge to `irr`).
     # Remaining conflict eqs become `0 ~ 0` and are queued for removal.
     # Pinned eqs end up in `eqs_to_substitute` from the var-elim pass above
     # but `subber` leaves `irr ~ 0` untouched (irreducibles aren't in `subs`).
@@ -357,7 +357,7 @@ function find_perfect_aliases!(
     # direct alias between the sticky variable and the target (since the
     # zero-priority variable was redirected to the target in the graph). Remove
     # all but the first copy of each (v_a, v_b) variable pair.
-    let seen = Set{Tuple{Int,Int}}()
+    let seen = Set{Tuple{Int, Int}}()
         eqs_rm_set = Set(eqs_to_rm)
         removed_additional_eqs = false
         for (ieq, _, _, _) in candidate_eqs
@@ -381,8 +381,10 @@ function find_perfect_aliases!(
     return aliases
 end
 
-function alias_elimination!(state::TearingState; fully_determined = true,
-                            print_underconstrained_variables = false, kwargs...)
+function alias_elimination!(
+        state::TearingState; fully_determined = true,
+        print_underconstrained_variables = false, kwargs...
+    )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
     vars_to_rm = Int[]

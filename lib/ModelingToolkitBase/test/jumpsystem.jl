@@ -1341,11 +1341,15 @@ end
         crj = ConstantRateJump(k, [X ~ Pre(X) - 1])
         ev1 = (t == t1) => [X ~ Pre(X) + 1000]
         ev2 = (t == t1 + t2) => [X ~ Pre(X) + 2000]
-        @mtkcompile jsys = System(Equation[], t, [X], [k, t1, t2]; jumps = [crj],
-            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]])
+        @mtkcompile jsys = System(
+            Equation[], t, [X], [k, t1, t2]; jumps = [crj],
+            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]]
+        )
 
-        jprob = JumpProblem(jsys, [X => 100, k => 0.1, t1 => 3.0, t2 => 4.0],
-            (0.0, 10.0); aggregator = Direct(), rng)
+        jprob = JumpProblem(
+            jsys, [X => 100, k => 0.1, t1 => 3.0, t2 => 4.0],
+            (0.0, 10.0); aggregator = Direct(), rng
+        )
 
         @test jprob.prob isa DiscreteProblem
         @test haskey(jprob.kwargs, :tstops)
@@ -1371,11 +1375,15 @@ end
         maj = SymbolicMassActionJump(k, [X => 1], [X => -1])
         ev1 = (t == t1) => [X ~ Pre(X) + 500]
         ev2 = (t == t2) => [X ~ Pre(X) + 500]
-        @mtkcompile jsys = System(Equation[], t, [X], [k, t1, t2]; jumps = [maj],
-            discrete_events = [ev1, ev2], tstops = [[t1], [t2]])
+        @mtkcompile jsys = System(
+            Equation[], t, [X], [k, t1, t2]; jumps = [maj],
+            discrete_events = [ev1, ev2], tstops = [[t1], [t2]]
+        )
 
-        jprob = JumpProblem(jsys, [X => 100, k => 0.1, t1 => 2.0, t2 => 6.0],
-            (0.0, 10.0); aggregator = Direct(), rng)
+        jprob = JumpProblem(
+            jsys, [X => 100, k => 0.1, t1 => 2.0, t2 => 6.0],
+            (0.0, 10.0); aggregator = Direct(), rng
+        )
 
         @test jprob.prob isa DiscreteProblem
         @test haskey(jprob.kwargs, :tstops)
@@ -1401,11 +1409,15 @@ end
         vrj = VariableRateJump(k * (1 + sin(t)), [X ~ Pre(X) + 1])
         ev1 = (t == t1) => [X ~ Pre(X) + 1000]
         ev2 = (t == t1 + t2) => [X ~ Pre(X) + 2000]
-        @mtkcompile jsys = System(Equation[], t, [X], [k, t1, t2]; jumps = [vrj],
-            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]])
+        @mtkcompile jsys = System(
+            Equation[], t, [X], [k, t1, t2]; jumps = [vrj],
+            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]]
+        )
 
-        jprob = JumpProblem(jsys, [X => 0, k => 1.0, t1 => 2.0, t2 => 3.0],
-            (0.0, 8.0); rng)
+        jprob = JumpProblem(
+            jsys, [X => 0, k => 1.0, t1 => 2.0, t2 => 3.0],
+            (0.0, 8.0); rng
+        )
 
         @test jprob.prob isa ODEProblem
         @test haskey(jprob.kwargs, :tstops)
@@ -1433,12 +1445,16 @@ end
         crj = ConstantRateJump(b, [X ~ Pre(X) - 1])
         ev1 = (t == t1) => [X ~ Pre(X) + 100.0]
         ev2 = (t == t1 * t2) => [X ~ Pre(X) + 200.0]
-        @mtkcompile jsys = System([eq], t, [X], [a, b, t1, t2]; jumps = [crj],
-            discrete_events = [ev1, ev2], tstops = [[t1], [t1 * t2]])
+        @mtkcompile jsys = System(
+            [eq], t, [X], [a, b, t1, t2]; jumps = [crj],
+            discrete_events = [ev1, ev2], tstops = [[t1], [t1 * t2]]
+        )
 
-        jprob = JumpProblem(jsys,
+        jprob = JumpProblem(
+            jsys,
             [X => 10.0, a => 1.0, b => 0.01, t1 => 2.0, t2 => 3.0],
-            (0.0, 10.0); rng)
+            (0.0, 10.0); rng
+        )
 
         @test jprob.prob isa ODEProblem
         # tstops are created at JumpProblem level; inner problem has _skip_tstops
@@ -1465,12 +1481,16 @@ end
         crj = ConstantRateJump(k, [X ~ Pre(X) - 1])
         ev1 = (t == t1) => [X ~ Pre(X) + 100.0]
         ev2 = (t == t1 + t2) => [X ~ Pre(X) + 200.0]
-        @mtkcompile jsys = System(eqs, t, [X], [k, σ_noise, t1, t2], [B]; jumps = [crj],
-            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]])
+        @mtkcompile jsys = System(
+            eqs, t, [X], [k, σ_noise, t1, t2], [B]; jumps = [crj],
+            discrete_events = [ev1, ev2], tstops = [[t1], [t1 + t2]]
+        )
 
-        jprob = JumpProblem(jsys,
+        jprob = JumpProblem(
+            jsys,
             [X => 10.0, k => 0.5, σ_noise => 0.01, t1 => 1.0, t2 => 2.0],
-            (0.0, 5.0); rng)
+            (0.0, 5.0); rng
+        )
 
         @test jprob.prob isa SDEProblem
         # tstops are created at JumpProblem level; inner problem has _skip_tstops
@@ -1497,11 +1517,15 @@ end
         ev2 = (t == 2 * t1) => [X ~ Pre(X) + 200]
         ev3 = (t == 3 * t1) => [X ~ Pre(X) + 300]
         # Scalar tstop t1 → periodic range (tspan[1]+t1):t1:tspan[2]
-        @mtkcompile jsys = System(Equation[], t, [X], [k, t1]; jumps = [crj],
-            discrete_events = [ev1, ev2, ev3], tstops = [t1])
+        @mtkcompile jsys = System(
+            Equation[], t, [X], [k, t1]; jumps = [crj],
+            discrete_events = [ev1, ev2, ev3], tstops = [t1]
+        )
 
-        jprob = JumpProblem(jsys, [X => 1000, k => 0.1, t1 => 3.0],
-            (0.0, 10.0); aggregator = Direct(), rng)
+        jprob = JumpProblem(
+            jsys, [X => 1000, k => 0.1, t1 => 3.0],
+            (0.0, 10.0); aggregator = Direct(), rng
+        )
 
         tstop_vals = jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))
         @test Set(tstop_vals) == Set(3.0:3.0:10.0)
@@ -1525,11 +1549,15 @@ end
         ev1 = (t == t1) => [X ~ Pre(X) + 500]
         ev2 = (t == t2) => [X ~ Pre(X) + 700]
         # t1 as scalar (periodic range), [t2] as array (exact time)
-        @mtkcompile jsys = System(Equation[], t, [X], [k, t1, t2]; jumps = [crj],
-            discrete_events = [ev1, ev2], tstops = [t1, [t2]])
+        @mtkcompile jsys = System(
+            Equation[], t, [X], [k, t1, t2]; jumps = [crj],
+            discrete_events = [ev1, ev2], tstops = [t1, [t2]]
+        )
 
-        jprob = JumpProblem(jsys, [X => 1000, k => 0.1, t1 => 2.0, t2 => 5.0],
-            (0.0, 10.0); aggregator = Direct(), rng)
+        jprob = JumpProblem(
+            jsys, [X => 1000, k => 0.1, t1 => 2.0, t2 => 5.0],
+            (0.0, 10.0); aggregator = Direct(), rng
+        )
 
         tstop_vals = jprob.kwargs[:tstops](jprob.prob.p, (0.0, 10.0))
         # t1=2.0 periodic → 2:2:10, t2=5.0 exact → [5.0]
@@ -1553,10 +1581,14 @@ end
         crj = ConstantRateJump(k, [X ~ Pre(X) - 1])
         @mtkcompile jsys = System(Equation[], t, [X], [k]; jumps = [crj])
 
-        err = @test_throws ArgumentError JumpProblem(jsys, [X => 100, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), rng, tstops = [1.0, 2.0])
-        @test contains(err.value.msg,
-            "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported")
+        err = @test_throws ArgumentError JumpProblem(
+            jsys, [X => 100, k => 1.0], (0.0, 10.0);
+            aggregator = Direct(), rng, tstops = [1.0, 2.0]
+        )
+        @test contains(
+            err.value.msg,
+            "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported"
+        )
     end
 
     # Test that systems with no tstops don't break anything
@@ -1566,8 +1598,10 @@ end
         crj = ConstantRateJump(k, [X ~ Pre(X) - 1])
         @mtkcompile jsys = System(Equation[], t, [X], [k]; jumps = [crj])
 
-        jprob = JumpProblem(jsys, [X => 100, k => 1.0], (0.0, 10.0);
-            aggregator = Direct(), rng)
+        jprob = JumpProblem(
+            jsys, [X => 100, k => 1.0], (0.0, 10.0);
+            aggregator = Direct(), rng
+        )
         @test !haskey(jprob.kwargs, :tstops)
 
         sol = solve(jprob, SSAStepper())
@@ -1605,8 +1639,10 @@ end
     @test jprob3.massaction_jump.scaled_rates[1] ≈ 6.0 / factorial(3)
 
     # callback with reset_aggregated_jumps!
-    jprob_cb = JumpProblem(js, [u0; ps], (0.0, 200.0);
-        save_positions = (false, false))
+    jprob_cb = JumpProblem(
+        js, [u0; ps], (0.0, 200.0);
+        save_positions = (false, false)
+    )
     condit(u, t, integrator) = t == 100.0
     function affect!(integrator)
         integrator.ps[:k] = 24.0
@@ -1639,5 +1675,6 @@ end
     @variables X(t) Y(t)
 
     @test_throws ArgumentError SymbolicMassActionJump(
-        k, [X => 3], [X => -3, Y => 1]; scale_rates = true)
+        k, [X => 3], [X => -3, Y => 1]; scale_rates = true
+    )
 end

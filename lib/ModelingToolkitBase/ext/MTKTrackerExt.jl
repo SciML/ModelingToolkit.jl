@@ -8,7 +8,7 @@ function MTKBase.promote_type_with_nothing(::Type{Tracker.TrackedReal{T}}, x::Tr
 end
 
 function MTKBase.promote_with_nothing(::Type{Tracker.TrackedReal{T}}, x::Tracker.TrackedArray{T}) where {T}
-    return x 
+    return x
 end
 
 end

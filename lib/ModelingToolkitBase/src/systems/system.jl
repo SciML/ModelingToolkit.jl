@@ -52,6 +52,7 @@ function check_symbolic_ad_allowed(sys::AbstractSystem)
         end
         throw(ArgumentError(msg))
     end
+    return nothing
 end
 
 """
@@ -661,11 +662,14 @@ function System(
     # JumpProcesses must not re-apply factorial scaling on parameter updates.
     for j in jumps
         if j isa MassActionJump && j.rescale_rates_on_update
-            throw(ArgumentError(
-                "MassActionJump with rescale_rates_on_update = true is not supported " *
-                "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
-                "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
-                "or pass scale_rates = false when constructing the MassActionJump."))
+            throw(
+                ArgumentError(
+                    "MassActionJump with rescale_rates_on_update = true is not supported " *
+                        "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
+                        "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
+                        "or pass scale_rates = false when constructing the MassActionJump."
+                )
+            )
         end
     end
     return System(
@@ -1313,15 +1317,20 @@ Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
 
 Returns a `MassActionJump` — this is a convenience constructor, not a new type.
 """
-function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
-        kwargs...)
+function SymbolicMassActionJump(
+        rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...
+    )
     if scale_rates
-        throw(ArgumentError(
-            "SymbolicMassActionJump requires pre-scaled rate expressions " *
-            "(scale_rates = false). scale_rates = true is not supported in " *
-            "ModelingToolkitBase."))
+        throw(
+            ArgumentError(
+                "SymbolicMassActionJump requires pre-scaled rate expressions " *
+                    "(scale_rates = false). scale_rates = true is not supported in " *
+                    "ModelingToolkitBase."
+            )
+        )
     end
-    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+    return MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
 end
 
 """

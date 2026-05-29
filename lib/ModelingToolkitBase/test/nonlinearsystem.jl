@@ -314,7 +314,7 @@ end
         0 ~ x * y - β * z
     ]
     obs = [
-        y ~ x * (ρ - z)
+        y ~ x * (ρ - z),
     ]
     guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
@@ -340,7 +340,7 @@ end
     # system that contains a chain of observed variables when simplified
     @variables x y z
     eqs = [
-        0 ~ y - z
+        0 ~ y - z,
     ]
     obs = [
         y ~ x
@@ -349,7 +349,7 @@ end
     @named ns = System(eqs, [x], []; observed = obs) # solve for y with observed chain z -> y -> x
     ns = complete(ns)
     mtkjac = expand.(calculate_jacobian(ns))
-    jac1 = unwrap.([3//2 + x;;])
+    jac1 = unwrap.([3 // 2 + x;;])
     @test isequal(mtkjac, jac1)
     mtkhess = calculate_hessian(ns)
     hess1 = [Num[1;;]]

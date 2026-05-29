@@ -11,9 +11,9 @@ using ModelingToolkitBase: t_nounits as t, D_nounits as D
         @variables X1(t) X2(t) X3(t)
         @parameters Γ[1:1] k1 k2 k3 k4
         nleqs = [
-           0 ~ -k1*X1 + k2*X2 - k3*X2*X1 + (1//2)*k4*(X3^2),
-           0 ~ k1*X1 - k2*X2 - k3*X2*X1 + (1//2)*k4*(X3^2),
-       ]
+            0 ~ -k1 * X1 + k2 * X2 - k3 * X2 * X1 + (1 // 2) * k4 * (X3^2),
+            0 ~ k1 * X1 - k2 * X2 - k3 * X2 * X1 + (1 // 2) * k4 * (X3^2),
+        ]
         @mtkcompile sys = System(nleqs; observed = [X3 ~ Γ[1] - X1 - X2])
         @test issetequal(equations(sys), nleqs)
         @test isequal(only(observed(sys)), X3 ~ Γ[1] - X1 - X2)

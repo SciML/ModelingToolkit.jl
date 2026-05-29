@@ -29,7 +29,7 @@ function generated_argument_name(i::Int)
 end
 
 function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}())
-    _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
+    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
 end
 
 function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
@@ -244,7 +244,7 @@ function should_invalidate_mutable_cache_entry(::Type{ParameterArrayAssignments}
 end
 
 function find_arrvars_is_atomic(ex::SymbolicT)
-    SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
+    return SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
 end
 
 """

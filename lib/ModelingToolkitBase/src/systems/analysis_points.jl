@@ -558,7 +558,7 @@ function apply_transformation(tf::Break, sys::AbstractSystem)
                 if tf.outputs_to_params
                     namespace = namespace_hierarchy(getname(out_var))
                     insert!(namespace, 1, nameof(breaksys))
-                    breaksys, _ = modify_nested_subsystem(breaksys, @view(namespace[1:end-1])) do apsys
+                    breaksys, _ = modify_nested_subsystem(breaksys, @view(namespace[1:(end - 1)])) do apsys
                         new_dvs = copy(get_unknowns(apsys))
                         var_in_apsys = getvar(apsys, namespace[end]; namespace = false)
                         deleteat!(new_dvs, findfirst(isequal(var_in_apsys), new_dvs)::Int)
