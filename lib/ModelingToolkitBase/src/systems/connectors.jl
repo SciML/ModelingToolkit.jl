@@ -1062,11 +1062,15 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     sys, (csets, domain_csets) = generate_connection_set(sys)
     # generate equations, and stream equations
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
-    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol)
-
     if with_source_info
         source_visitor = SourceInformationVisitor()
         eqs = equations(sys, source_visitor)
+    else
+        eqs = equations(sys)
+    end
+    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
+
+    if with_source_info
         N = length(eqs) + length(ceqs) + length(stream_eqs)
         sources = source_visitor.sources
         # Names are in reverse order
@@ -1087,7 +1091,7 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
         end
         source_info = EquationSourceInformation(sources, is_connection_equation)
     else
-        eqs = [equations(sys); ceqs; stream_eqs]
+        eqs = [eqs; ceqs; stream_eqs]
     end
     if !isempty(instream_subs)
         # substitute `instream(..)` expressions with their new values
@@ -1148,9 +1152,8 @@ variable approaches zero.
 """
 function expand_instream(
         csets::Vector{Vector{ConnectionVertex}}, sys::AbstractSystem;
-        tol = 1.0e-8
+        tol = 1.0e-8, eqs = equations(sys)
     )
-    eqs = equations(sys)
     # collect all `instream` terms in the equations
     instream_exprs = Set{SymbolicT}()
     for eq in eqs

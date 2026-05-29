@@ -803,6 +803,8 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     template = []
     elem_types = Set{DataType}()
     iv = get_iv(srcsys)
+    irinfo = get_ir_info(srcsys)
+
     for sym in syms
         if iv isa SymbolicT && isequal(iv, sym)
             push!(template, IV_TEMPLATE)
@@ -811,7 +813,13 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
         symidx = parameter_index(srcsys, sym)
         if symidx === nothing
+            symidx = parameter_index(srcsys, irinfo.obs_subber(sym))
+        end
+        if symidx === nothing
             symidx = variable_index(srcsys, sym)
+            if symidx === nothing
+                symidx = variable_index(srcsys, irinfo.obs_subber(sym))
+            end
             if symidx === nothing
                 if isempty(template)
                     push!(elem_types, Vector{SymbolicT})
@@ -1389,6 +1397,16 @@ function _tunable_eltype(p)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Utility function present in `initializeprobmap` for iip problems. If the problem is `iip`,
+then `u0` cannot be a struct-of-arrays (e.g. `Tracker.TrackedVector`). It needs to be
+turned into an array-of-structs (`Vector{Tracker.TrackedReal{..}}`). Methods are added to
+this function in extensions.
+"""
+__iip_u0_ad_wrapper(x) = x
+
+"""
     $(TYPEDSIGNATURES)
 
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
@@ -1488,8 +1506,10 @@ function maybe_build_initialization_problem(
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         else
-            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(
-                getu(initializeprob, solved_unknowns), floatT)
+            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(CopyParamsByTemplate(initializeprob.f.sys, solved_unknowns; eval_expression, eval_module, kwargs...), floatT)
+            if iip
+                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
+            end
         end
     else
         initializeprobmap = nothing

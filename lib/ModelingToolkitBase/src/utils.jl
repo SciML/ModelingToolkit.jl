@@ -1166,13 +1166,8 @@ end
 
 Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
 """
-function observed_dependency_graph(eqs::Vector{Equation})
-    for eq in eqs
-        if symbolic_type(eq.lhs) == NotSymbolic()
-            error(lazy"All equations must be observed equations of the form `var ~ expr`. Got $eq")
-        end
-    end
-    graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
+function observed_dependency_graph(sys::AbstractSystem, eqs::Vector{Equation})
+    graph, assigns = observed2graph(sys, eqs, getproperty.(eqs, (:lhs,)))
     matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
     return DiCMOBiGraph{false}(graph, matching)
 end
@@ -1230,14 +1225,14 @@ function observed_equations_used_by(
         obs_graph_cache = check_mutable_cache(sys, ObservedGraphCacheKey, ObservedGraphCache, nothing)
         if obs_graph_cache === nothing
             obsvar_to_idx = Dict{Any, Int}([eq.lhs => i for (i, eq) in enumerate(obs)])
-            graph = observed_dependency_graph(obs)
+            graph = observed_dependency_graph(sys, obs)
             obs_graph_cache = ObservedGraphCache(graph, obsvar_to_idx)
             store_to_mutable_cache!(sys, ObservedGraphCacheKey, obs_graph_cache)
         end
         @unpack obsvar_to_idx, graph = obs_graph_cache
     else
         obsvar_to_idx = Dict([eq.lhs => i for (i, eq) in enumerate(obs)])
-        graph = observed_dependency_graph(obs)
+        graph = observed_dependency_graph(sys, obs)
     end
 
     obsidxs = BitSet()

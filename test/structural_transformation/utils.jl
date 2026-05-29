@@ -46,7 +46,8 @@ end
 @testset "observed2graph handles unknowns inside callable parameters" begin
     @variables x(t) y(t)
     @parameters p(::Real)
-    g, _ = ModelingToolkit.observed2graph([y ~ p(x), x ~ 0], unwrap.([y, x]))
+    @named sys = System(Equation[], t, [x, y], [p])
+    g, _ = ModelingToolkit.observed2graph(sys, [y ~ p(x), x ~ 0], unwrap.([y, x]))
     @test ModelingToolkit.𝑠neighbors(g, 1) == [2]
     @test ModelingToolkit.𝑑neighbors(g, 2) == [1]
 end

@@ -366,7 +366,8 @@ function get_observed_and_dependent_to_timeseries(
         return observed_syms_to_timeseries, dependent_pars_to_timeseries
     end
 
-    varsbuf = Set{SymbolicT}()
+    ir = get_irstructure(sys)
+    varsbuf = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     for eq in observed(sys)
         sym = eq.lhs
         empty!(varsbuf)
