@@ -351,6 +351,7 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
             decomposition.cachesizes[idx] = max(decomposition.cachesizes[idx], length(buf))
         end
     end
+    return
 end
 
 """

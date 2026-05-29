@@ -628,7 +628,7 @@ if @isdefined(ModelingToolkit)
         @test isequal(reference.B, value.B) || isequal(reverse(reference.B), value.B)
         roworder = isequal(reference.B, value.B) ? [1, 2] : [2, 1]
         @test isequal(reference.D, value.D)
-        @test isequal(reference.A[roworder, colorder], value.A)
+        return @test isequal(reference.A[roworder, colorder], value.A)
     end
 
     @testset "Analysis point overriding part of connection - normal connect" begin

@@ -631,7 +631,7 @@ Returns true if the parameter `p` is of the form `Initial(x)`.
 """
 function isinitial(p::SymbolicT)
     p, _ = split_indexed_var(p)
-    Moshi.Match.@match p begin
+    return Moshi.Match.@match p begin
         BSImpl.Term(; f) => f isa Initial
         _ => false
     end
@@ -2961,7 +2961,7 @@ sys = mtkcompile(sys)
 ```
 """
 macro mtkcompile(exprs...)
-    _named_and_call(mtkcompile, exprs)
+    return _named_and_call(mtkcompile, exprs)
 end
 
 """
@@ -2981,7 +2981,7 @@ sys = complete(sys)
 ```
 """
 macro mtkcomplete(exprs...)
-    _named_and_call(complete, exprs)
+    return _named_and_call(complete, exprs)
 end
 
 """

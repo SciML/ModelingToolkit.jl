@@ -119,7 +119,9 @@ end
         activate_optimization_env()
         @mtktestset("OptimizationSystem Test", "optimization/optimizationsystem.jl")
         @mtktestset("InfiniteOpt Extension Test", "optimization/test_infiniteopt.jl")
-        @mtktestset("Dynamic Optimization Collocation Solvers",
-            "optimization/dynamic_optimization.jl")
+        @mtktestset(
+            "Dynamic Optimization Collocation Solvers",
+            "optimization/dynamic_optimization.jl"
+        )
     end
 end

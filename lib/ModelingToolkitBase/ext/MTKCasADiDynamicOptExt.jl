@@ -174,6 +174,7 @@ function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params,
         subject_to!(m.model, m.tₛ >= tf_bounds[1])
         subject_to!(m.model, m.tₛ <= tf_bounds[2])
     end
+    return nothing
 end
 
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)

@@ -7,9 +7,12 @@
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
     if haskey(kwargs, :tstops)
-        throw(ArgumentError(
-            "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported. " *
-            "Define tstops on the `System` via the `tstops` keyword instead."))
+        throw(
+            ArgumentError(
+                "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported. " *
+                    "Define tstops on the `System` via the `tstops` keyword instead."
+            )
+        )
     end
 
     has_vrjs = any(x -> x isa VariableRateJump, jumps(sys))

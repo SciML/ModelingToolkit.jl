@@ -123,8 +123,10 @@ end
     eq_outer = [Dt(q(t, s2)) ~ Ds2(q(t, s2))]
     bcs_outer = [q(0, s2) ~ cos(s2), q(t, 0) ~ 1, q(t, 1) ~ 1]
     domains_outer = [t ∈ (0.0, 1.0), s2 ∈ (0.0, 1.0)]
-    @named outer = PDESystem(eq_outer, bcs_outer, domains_outer, [t, s2], [q], [γ];
-        systems = [inner])
+    @named outer = PDESystem(
+        eq_outer, bcs_outer, domains_outer, [t, s2], [q], [γ];
+        systems = [inner]
+    )
 
     # Subsystem should be listed in propertynames
     @test :inner ∈ propertynames(outer)

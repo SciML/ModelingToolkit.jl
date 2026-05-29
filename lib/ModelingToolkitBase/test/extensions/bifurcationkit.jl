@@ -212,7 +212,7 @@ end
     @variables X1(t) X2(t)
     @parameters k1 k2 Γ[1:1]
     eqs = [
-        0 ~ -k1*X1 + k2*(-X1 + Γ[1])
+        0 ~ -k1 * X1 + k2 * (-X1 + Γ[1])
         0 ~ X2 + X1 - Γ[1]
     ]
     @mtkcompile nsys2 = System(eqs)

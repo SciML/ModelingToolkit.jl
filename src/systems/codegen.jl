@@ -568,4 +568,3 @@ function get_semiquadratic_W_sparsity(
         SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end
-

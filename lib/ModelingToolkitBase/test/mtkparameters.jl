@@ -467,7 +467,7 @@ if @isdefined(ModelingToolkit)
             getter, setter, prob = ps
             u0, p = setter(prob, x)
             new_prob = remake(prob; u0, p)
-            sol = solve(new_prob, Rodas5P(); saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
+            sol = solve(new_prob, Rodas5P(); saveat = 0.1, abstol = 1.0e-8, reltol = 1.0e-8)
             @test SciMLBase.successful_retcode(sol)
             sum(getter(sol))
         end

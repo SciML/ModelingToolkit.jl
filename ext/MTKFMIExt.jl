@@ -799,7 +799,7 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
         y = outputs_buffer, y_refs = wrapper.output_value_references
     )
     wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
-    wrapper.res_buffer[length(states_buffer)+1:end] .= outputs_buffer
+    wrapper.res_buffer[(length(states_buffer) + 1):end] .= outputs_buffer
     return wrapper.res_buffer
 end
 

@@ -199,6 +199,7 @@ function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunabl
         MTK.add_constraint!(m, tₛ_sym ≳ tf_bounds[1])
         MTK.add_constraint!(m, tₛ_sym ≲ tf_bounds[2])
     end
+    return nothing
 end
 
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)

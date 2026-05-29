@@ -1856,7 +1856,7 @@ if !@isdefined(ModelingToolkit)
         @variables x(t) y(t)
         @discretes d(t)
 
-        aff = AssignmentAffect([y => y + 1, d => d+y+1])
+        aff = AssignmentAffect([y => y + 1, d => d + y + 1])
         @test aff isa ModelingToolkitBase.SymbolicAffect
         @test issetequal(aff.affect, [y ~ Pre(y) + 1, d ~ Pre(d) + Pre(y) + 1])
         @test issetequal(aff.discrete_parameters, [d])
@@ -1883,7 +1883,7 @@ if @isdefined(ModelingToolkit)
                 arr[2] ~ 2s
             ]
             continuous_events = [
-                [s ~ 0.5] => Symbolics.Equation[]
+                [s ~ 0.5] => Symbolics.Equation[],
             ]
             System(eqs, t, [s; collect(arr)], []; name, continuous_events)
         end
