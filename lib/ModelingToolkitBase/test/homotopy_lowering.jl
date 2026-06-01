@@ -141,4 +141,40 @@ using Symbolics
         prob_nohomotopy = ODEProblem(sys2, Dict(a => 1.0, q => 2.0), (0.0, 1.0))
         @test !haskey(prob_nohomotopy.kwargs, :initializealg)
     end
+
+    @testset "L1-Q7 observed equations are homotopy-free after lowering" begin
+        # Regression guard: `add_homotopy_parameter` lowers homotopy nodes in
+        # observed equations too (PressureDrop-style: an eliminated variable's
+        # definition lives in observed). Downstream observed codegen must never
+        # see an opaque `homotopy(...)` node — assert observed is homotopy-free
+        # after lowering a System whose homotopy-defined variable is eliminated.
+        using ModelingToolkitBase: System, mtkcompile, observed, has_homotopy
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        using OrdinaryDiffEqRosenbrock
+        using OrdinaryDiffEqNonlinearSolve
+
+        # `w ~ homotopy(...)` defines w explicitly from a state, so mtkcompile
+        # eliminates w into observed — the codepath where an eliminated
+        # variable's definition (PressureDrop's m_flow) lands in observed.
+        @variables x(t) w(t)
+        @parameters p
+        eqs = [D(x) ~ -x,
+               w ~ homotopy(x^2 - p, x - 1)]
+        @named sys = System(eqs, t; guesses = [w => 2.5])
+        sys = mtkcompile(sys)
+
+        obs = observed(sys)
+        @test obs !== nothing && !isempty(obs)
+        for eq in obs
+            @test !has_homotopy(eq.lhs)
+            @test !has_homotopy(eq.rhs)
+        end
+
+        # The lowered ODEProblem's observed must likewise be homotopy-free.
+        prob = ODEProblem(sys, Dict(x => 1.0, p => 9.0), (0.0, 1.0))
+        for eq in observed(prob.f.sys)
+            @test !has_homotopy(eq.lhs)
+            @test !has_homotopy(eq.rhs)
+        end
+    end
 end

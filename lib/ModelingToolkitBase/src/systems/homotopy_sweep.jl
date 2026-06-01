@@ -77,7 +77,15 @@ function CommonSolve.solve(prob::NonlinearProblem, alg::HomotopySweep; kwargs...
         step_sol = CommonSolve.solve(step_prob, alg.inner; inner_kwargs...)
         last_sol = step_sol
         if !successful_retcode(step_sol)
-            return step_sol
+            # SWEEP-2: reset λ to actual form (1.0) before surfacing the failed
+            # solution. The sweep stalled at this step's intermediate λ; leaving
+            # λ there would expose a half-homotopied system to any consumer that
+            # reads the returned solution's parameter vector. The unknowns are
+            # left untouched (they carry the diagnostic failed iterate).
+            p_reset = copy(parameter_values(step_prob))
+            ret = alg.set_λ!(p_reset, one(λ))
+            new_p_reset = ret === nothing ? p_reset : ret
+            return @set step_sol.prob = remake(step_prob; p = new_p_reset)
         end
         u_curr = copy(step_sol.u)
     end

@@ -43,6 +43,28 @@ using NonlinearSolve: NewtonRaphson
         @test !SciMLBase.successful_retcode(sol)
     end
 
+    @testset "S2b failed step resets λ to actual form (1.0) before returning" begin
+        # SWEEP-2: when a sweep step fails mid-schedule, the returned solution's
+        # parameter vector must hold λ = 1.0 (actual form), not the intermediate
+        # λ where continuation stalled. Otherwise a downstream consumer reading
+        # the failed solution's parameters sees a half-homotopied system.
+        # Fixture: f = (1-λ)*u + λ*(u^2+1). A real root exists only for small λ;
+        # around λ ≈ 0.5 the quadratic loses its real root and Newton diverges,
+        # so the failing step's λ is strictly between 0 and 1.
+        f_bad! = (du, u, p) -> begin
+            λ = p[1]
+            du[1] = (1 - λ) * u[1] + λ * (u[1]^2 + 1)
+        end
+        prob = NonlinearProblem(f_bad!, [0.5], [0.0])
+        alg = HomotopySweep(; inner = NewtonRaphson(),
+                              schedule = 0.0:0.1:1.0,
+                              set_λ! = set_λ_explicit,
+                              maxiters_per_step = 20)
+        sol = solve(prob, alg)
+        @test !SciMLBase.successful_retcode(sol)
+        @test sol.prob.p[1] == 1.0
+    end
+
     @testset "S3 HomotopySweep default constructor" begin
         alg = HomotopySweep(; set_λ! = ((p, v) -> p))
         @test alg.schedule == 0.0:0.1:1.0
