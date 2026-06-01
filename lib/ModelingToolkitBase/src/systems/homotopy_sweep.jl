@@ -2,6 +2,7 @@ using CommonSolve: CommonSolve
 using SciMLBase: SciMLBase, NonlinearProblem, remake,
                  successful_retcode, state_values, parameter_values
 using Setfield: @set
+using SimpleNonlinearSolve: SimpleNewtonRaphson
 
 # An inner residual/continuation solve must never re-trigger DAE initialization.
 # When the parent is built with an explicit `initializealg`, that `OverrideInit`
@@ -51,11 +52,15 @@ function _default_inner()
         mod = Base.require(Base.PkgId(Base.UUID("8913a72c-1f9b-4ce2-8d82-65094dcecaec"),
                                        "NonlinearSolve"))
         return mod.NewtonRaphson()
-    catch err
-        throw(ArgumentError(
-            "HomotopySweep/TrivialHomotopy default `inner` requires NonlinearSolve " *
-            "to be loaded. Either `using NonlinearSolve` first, or pass `inner = ...` " *
-            "explicitly. (Underlying error: $err)"))
+    catch
+        # NonlinearSolve is a test-only dependency of ModelingToolkitBase, not a
+        # runtime [deps]. When it isn't available, fall back to SimpleNonlinearSolve
+        # (a runtime [deps]) so a system carrying `homotopy(...)` can be built and
+        # solved out of the box — without this, merely constructing a homotopy
+        # `ODEProblem` would throw at problem-construction time. Load NonlinearSolve
+        # (`using NonlinearSolve`) to restore its richer `NewtonRaphson` as the
+        # default, or pass `inner = ...` explicitly.
+        return SimpleNewtonRaphson()
     end
 end
 
