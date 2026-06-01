@@ -373,7 +373,8 @@ end
     @named sys = System(eqs, t; initial_conditions = [p => 1.0])
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingGuessError linearize(
-        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true
+        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true,
+        missing_guess_values = MissingGuessValue.Error()
     )
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
