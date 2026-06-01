@@ -948,7 +948,7 @@ const SYS_PROPS = [
     :state_priorities
     :irreducibles
     :maybe_zeros
-    :irstructure
+    :irstructure_tlv
     :assertions
     :ignored_connections
     :parent
@@ -998,8 +998,9 @@ Invalidate cached jacobians, etc.
 """
 function invalidate_cache!(sys::AbstractSystem)
     has_metadata(sys) || return sys
-    cache = getmetadata(sys, MutableCacheKey, nothing)
-    if cache isa MutableCacheT
+    cache_tlv = getmetadata(sys, MutableCacheKey, nothing)
+    if cache_tlv isa MutableCacheTLVT
+        cache = cache_tlv[]::MutableCacheT
         # Avoid clearing the linear expansion cache. It doesn't depend on anything in the
         # system, just useful to have around.
         filter!(Base.Fix2(===, LinearExpansionCache) ∘ first, cache)
@@ -1023,12 +1024,14 @@ function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing)
     for (k, v) in meta
         if k === MutableCacheKey
             hascache = true
-            v = maybe_invalidate_cache(v::MutableCacheT, patch)::MutableCacheT
+            new_cache = maybe_invalidate_cache((v::MutableCacheTLVT)[]::MutableCacheT, patch)::MutableCacheT
+            v = __new_mutable_cache_tlv()
+            v[] = new_cache
         end
         newmeta = Base.ImmutableDict(newmeta, k => v)
     end
     if !hascache
-        newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => MutableCacheT())
+        newmeta = Base.ImmutableDict(newmeta, MutableCacheKey => __new_mutable_cache_tlv())
     end
     return newmeta
 end
