@@ -51,6 +51,17 @@ using NonlinearSolve: NewtonRaphson
         @test alg.inner isa typeof(NewtonRaphson())
     end
 
+    @testset "S3b default inner supplied by NonlinearSolve extension" begin
+        # MERGE-3: the default inner solver is provided by the
+        # `MTKNonlinearSolveExt` package extension (populated when NonlinearSolve
+        # is loaded), not by an eager construction-time `Base.require`. With
+        # NonlinearSolve loaded the factory Ref is set and resolves to
+        # `NonlinearSolve.NewtonRaphson`; without it, `_default_inner` falls back
+        # to `SimpleNonlinearSolve.SimpleNewtonRaphson` (a hard dependency).
+        @test ModelingToolkitBase._DEFAULT_INNER_FACTORY[] !== nothing
+        @test ModelingToolkitBase._default_inner() isa typeof(NewtonRaphson())
+    end
+
     @testset "S4 TrivialHomotopy dispatches to inner once" begin
         f! = (du, u, p) -> du[1] = u[1]^2 - 4
         prob = NonlinearProblem(f!, [1.5], Float64[])

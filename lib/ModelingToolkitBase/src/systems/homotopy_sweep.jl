@@ -43,25 +43,20 @@ function HomotopySweep(; inner = nothing, schedule = 0.0:0.1:1.0,
                          schedule, set_λ!, maxiters_per_step)
 end
 
-# Lazy-load NewtonRaphson from NonlinearSolve, which is a test-extras dependency
-# of ModelingToolkitBase (not a runtime [deps]). Callers can avoid this path by
-# passing `inner = ...` explicitly; the default is only invoked when the test
-# env (or a downstream user env) has already loaded NonlinearSolve.
+# Default inner solver for the homotopy continuation algorithms. NonlinearSolve
+# is NOT a runtime `[deps]` of ModelingToolkitBase, so its richer `NewtonRaphson`
+# cannot be referenced directly here. The `MTKNonlinearSolveExt` package
+# extension (a `[weakdeps]` extension) populates this Ref with a thunk returning
+# `NonlinearSolve.NewtonRaphson()` whenever NonlinearSolve is loaded. Until then
+# `_default_inner` falls back to `SimpleNonlinearSolve.SimpleNewtonRaphson` (a
+# runtime `[deps]`) so a system carrying `homotopy(...)` can be built and solved
+# out of the box. Load NonlinearSolve (`using NonlinearSolve`) to restore its
+# `NewtonRaphson` as the default, or pass `inner = ...` explicitly.
+const _DEFAULT_INNER_FACTORY = Ref{Union{Nothing, Function}}(nothing)
+
 function _default_inner()
-    try
-        mod = Base.require(Base.PkgId(Base.UUID("8913a72c-1f9b-4ce2-8d82-65094dcecaec"),
-                                       "NonlinearSolve"))
-        return mod.NewtonRaphson()
-    catch
-        # NonlinearSolve is a test-only dependency of ModelingToolkitBase, not a
-        # runtime [deps]. When it isn't available, fall back to SimpleNonlinearSolve
-        # (a runtime [deps]) so a system carrying `homotopy(...)` can be built and
-        # solved out of the box — without this, merely constructing a homotopy
-        # `ODEProblem` would throw at problem-construction time. Load NonlinearSolve
-        # (`using NonlinearSolve`) to restore its richer `NewtonRaphson` as the
-        # default, or pass `inner = ...` explicitly.
-        return SimpleNewtonRaphson()
-    end
+    factory = _DEFAULT_INNER_FACTORY[]
+    return factory === nothing ? SimpleNewtonRaphson() : factory()
 end
 
 function CommonSolve.solve(prob::NonlinearProblem, alg::HomotopySweep; kwargs...)
