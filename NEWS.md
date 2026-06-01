@@ -1,5 +1,18 @@
 # ModelingToolkit v11 Release Notes
 
+## Modelica `homotopy(actual, simplified)` operator
+
+ModelingToolkit now supports Modelica's `homotopy(actual, simplified)` operator
+(Modelica specification §3.7.4) as an initialization aid. Annotate a hard-to-solve
+relation with an easy `simplified` form, and initialization can start from the
+`simplified` problem and continuously deform it into the `actual` one. Each node is
+lowered to `(1 - λ)*simplified + λ*actual` with a shared `__homotopy_λ` parameter;
+for systems containing `homotopy` nodes the default initialization becomes
+`OverrideInit(nlsolve = TrivialThenSweep(...))`, which tries the trivial solve at
+`λ = 1` first and falls back to a `λ`-sweep continuation (mirroring OpenModelica).
+`HomotopySweep`, `TrivialHomotopy` and `TrivialThenSweep` are exported for explicit
+use via `initializealg`. See the "Homotopy continuation for initialization" API page.
+
 ## Symbolics@7 and SymbolicUtils@4 compatibility
 
 SymbolicUtils version 4 involved a major overhaul of the core symbolic infrastructure, which

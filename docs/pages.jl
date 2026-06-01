@@ -40,6 +40,7 @@ pages = [
         "API/variables.md",
         "API/model_building.md",
         "API/problems.md",
+        "API/homotopy.md",
         "API/dynamic_opt.md",
         "API/codegen.md",
         "API/PDESystem.md",
