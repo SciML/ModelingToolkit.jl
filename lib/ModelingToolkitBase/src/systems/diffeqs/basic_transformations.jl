@@ -1144,7 +1144,7 @@ const DIFFCACHE_PREFIX = Vector{UInt8}("__diffcacheₘₜₖ#")
 function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, cnt::Int)
     buffer = Vector{UInt8}()
     sizehint!(buffer, length(prefix) + ndigits(cnt))
-    append!(buffer, DIFFCACHE_PREFIX)
+    append!(buffer, prefix)
     while cnt > 0
         push!(buffer, '0' + (cnt % 10))
         cnt = div(cnt, 10)
