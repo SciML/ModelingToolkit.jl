@@ -78,7 +78,15 @@ end
         check_length, check_compatibility, expression, kwargs...
     )
 
-    kwargs = process_kwargs(sys; kwargs...)
+    # Thread `initialization_data` so the homotopy default `initializealg`
+    # (OMC-aligned `OverrideInit(nlsolve = TrivialThenSweep)`) is auto-injected
+    # for homotopy systems lowered to a `NonlinearProblem` (PIPE-1).
+    kwargs = process_kwargs(
+        sys;
+        initialization_data = (hasproperty(f, :initialization_data) ? f.initialization_data :
+                               nothing),
+        kwargs...
+    )
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
 

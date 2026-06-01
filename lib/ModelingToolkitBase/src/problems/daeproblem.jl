@@ -86,7 +86,10 @@ end
 
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module,
-        op, tspan, kwargs...
+        op, tspan,
+        initialization_data = (hasproperty(f, :initialization_data) ? f.initialization_data :
+                               nothing),
+        kwargs...
     )
 
     diffvars = collect_differential_variables(sys)

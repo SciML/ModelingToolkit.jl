@@ -95,6 +95,36 @@ end
         @test abs(sol[y][1]) > 0.5          # definitively NOT the simplified root y = 0
     end
 
+    @testset "I7 default injection reaches NonlinearProblem and SteadyStateProblem" begin
+        # PIPE-1: the OMC-aligned default `OverrideInit(nlsolve = TrivialThenSweep)`
+        # was only threaded into `process_kwargs` by `odeproblem.jl`. A homotopy
+        # System lowered to a `NonlinearProblem` / `SteadyStateProblem` must get the
+        # same default in `prob.kwargs[:initializealg]` so continuation engages
+        # without explicit user opt-in.
+
+        # NonlinearProblem: time-independent algebraic homotopy system.
+        @variables y
+        @parameters p
+        @named nlsys = System([0 ~ homotopy(y^2 - p, y - 1)]; guesses = [y => 2.5])
+        nlsys = mtkcompile(nlsys)
+        nlprob = NonlinearProblem(nlsys, Dict(y => 2.5, p => 9.0))
+        @test haskey(nlprob.kwargs, :initializealg)
+        @test nlprob.kwargs[:initializealg] isa SciMLBase.OverrideInit
+        @test nlprob.kwargs[:initializealg].nlsolve isa TrivialThenSweep
+
+        # SteadyStateProblem: time-dependent ODE homotopy system.
+        @variables x(t) yy(t)
+        @parameters q
+        eqs = [D(x) ~ -x,
+               0 ~ homotopy(yy^2 - q, yy - 1)]
+        @named ssys = System(eqs, t; guesses = [yy => 2.5])
+        ssys = mtkcompile(ssys)
+        ssprob = SteadyStateProblem(ssys, Dict(x => 1.0, q => 9.0))
+        @test haskey(ssprob.kwargs, :initializealg)
+        @test ssprob.kwargs[:initializealg] isa SciMLBase.OverrideInit
+        @test ssprob.kwargs[:initializealg].nlsolve isa TrivialThenSweep
+    end
+
     @testset "I6 explicit TrivialHomotopy on an unsolvable init fails cleanly" begin
         # Regression: an init the single-Newton trivial path cannot solve must
         # surface as an unsuccessful retcode, NOT a cryptic internal error. The

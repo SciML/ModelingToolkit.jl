@@ -108,7 +108,10 @@ end
 
     kwargs = process_kwargs(
         sys; expression, callback, eval_expression, eval_module,
-        op, _skip_events, tspan, kwargs...
+        op, _skip_events, tspan,
+        initialization_data = (hasproperty(f, :initialization_data) ? f.initialization_data :
+                               nothing),
+        kwargs...
     )
 
     args = (; f, u0, tspan, p)

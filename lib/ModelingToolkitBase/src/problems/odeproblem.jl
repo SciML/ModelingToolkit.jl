@@ -141,7 +141,12 @@ end
         is_steadystateprob = true, kwargs...
     )
 
-    kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
+    kwargs = process_kwargs(
+        sys; expression, tspan = (0, Inf),
+        initialization_data = (hasproperty(f, :initialization_data) ? f.initialization_data :
+                               nothing),
+        kwargs...
+    )
     args = (; f, u0, p)
 
     maybe_codegen_scimlproblem(expression, SteadyStateProblem{_iip}, args; kwargs...)
