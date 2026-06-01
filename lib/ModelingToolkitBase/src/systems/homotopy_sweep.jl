@@ -3,6 +3,18 @@ using SciMLBase: SciMLBase, NonlinearProblem, remake,
                  successful_retcode, state_values, parameter_values
 using Setfield: @set
 
+# An inner residual/continuation solve must never re-trigger DAE initialization.
+# When the parent is built with an explicit `initializealg`, that `OverrideInit`
+# is baked into the init problem's own `prob.kwargs` and `solve_up` merges it back
+# even if we drop it from the forwarded call kwargs. NonlinearSolveBase then runs
+# its `OverrideInit` init path on the inner problem — whose `f.initialization_data`
+# is `nothing` — and throws a `FieldError` (that path is unguarded, unlike its
+# default init path). Force `initializealg = NoInit()` on the inner solve so the
+# call kwarg overrides any baked-in `OverrideInit` and no inner re-init runs.
+_inner_solve_kwargs(kwargs) = (;
+    Base.structdiff((; kwargs...), NamedTuple{(:initializealg,)})...,
+    initializealg = SciMLBase.NoInit())
+
 """
     HomotopySweep(; inner = NewtonRaphson(), schedule = 0.0:0.1:1.0,
                   set_λ!, maxiters_per_step = nothing)
@@ -59,8 +71,9 @@ function CommonSolve.solve(prob::NonlinearProblem, alg::HomotopySweep; kwargs...
         ret = alg.set_λ!(p_in, λ)
         new_p = ret === nothing ? p_in : ret
         step_prob = remake(prob; u0 = u_curr, p = new_p)
+        base_kwargs = _inner_solve_kwargs(kwargs)
         inner_kwargs = alg.maxiters_per_step === nothing ?
-                       kwargs : (; kwargs..., maxiters = alg.maxiters_per_step)
+                       base_kwargs : (; base_kwargs..., maxiters = alg.maxiters_per_step)
         step_sol = CommonSolve.solve(step_prob, alg.inner; inner_kwargs...)
         last_sol = step_sol
         if !successful_retcode(step_sol)
@@ -87,7 +100,7 @@ TrivialHomotopy(; inner = nothing) =
     TrivialHomotopy(inner === nothing ? _default_inner() : inner)
 
 function CommonSolve.solve(prob::NonlinearProblem, alg::TrivialHomotopy; kwargs...)
-    return CommonSolve.solve(prob, alg.inner; kwargs...)
+    return CommonSolve.solve(prob, alg.inner; _inner_solve_kwargs(kwargs)...)
 end
 
 """

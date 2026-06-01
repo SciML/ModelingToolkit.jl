@@ -94,4 +94,24 @@ end
         @test abs(sol[y][1] - 3.0) < 1e-6   # actual root via the sweep
         @test abs(sol[y][1]) > 0.5          # definitively NOT the simplified root y = 0
     end
+
+    @testset "I6 explicit TrivialHomotopy on an unsolvable init fails cleanly" begin
+        # Regression: an init the single-Newton trivial path cannot solve must
+        # surface as an unsuccessful retcode, NOT a cryptic internal error. The
+        # DAE-init driver forwards its `initializealg` (an OverrideInit) into the
+        # nlsolve `solve`; if that leaks into the inner solver it re-runs the
+        # OverrideInit on a problem with no initialization_data and throws. Same
+        # out-of-basin fixture as I5, but pinning the trivial path (no sweep
+        # fallback) so init genuinely cannot converge.
+        @variables x(t) y(t)
+        eqs = [D(x) ~ -x,
+               0 ~ homotopy(atan(y - 3.0), y)]
+        @named sys = System(eqs, t; guesses = [y => 12.0])
+        sys = mtkcompile(sys)
+
+        prob = ODEProblem(sys, Dict(x => 1.0), (0.0, 1.0);
+                          initializealg = SciMLBase.OverrideInit(nlsolve = TrivialHomotopy()))
+        sol = solve(prob, Rodas5P())                  # must NOT throw an internal error
+        @test !SciMLBase.successful_retcode(sol)      # clean init failure instead
+    end
 end
