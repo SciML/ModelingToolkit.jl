@@ -495,9 +495,33 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     ir_info = get_ir_info(sys)
-    expr = ir_info.obs_subber(expr)
-
     ir = get_irstructure(sys)
+    expr = ir_info.obs_subber(expr)
+    stmts = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
+    SU.search_variables!(stmts, expr; is_atomic = Returns(true))
+    for subexpr in stmts
+        SU.populate_ir!(ir, subexpr)
+    end
+
+    # Subset the `IRStructure` so that optimization passes run on the minimal set of
+    # expressions
+    ir = SU.subset_ir(ir, stmts)
+    # We don't use `replace_node!` here to insert the observed, and instead prefer to
+    # substitute as done above. The issue arises due to array variables passed scalarized
+    # to the function. Consider a case where `p1` and `p2` are array parameters, `p1 => p2`
+    # is a binding, and `p2` is passed scalarized to the function. Codegen for `Func` adds
+    # `p2[1] => Symbol("...")` to `rewrites`, expecting that `SU.Code.codegen_ir!` checks
+    # this and doesn't actually try to codegen the `getindex`. However, if an expression
+    # has `p1[1]`, then `replace_node!(ir, p1, p2)` won't update this expression. As a result,
+    # when codegen hits `p1[1]`, it won't use the replacement and codegen the `getindex`, which
+    # generates `p2[1]`. `p2` unscalarized is not defined because `array_variable_assignments`
+    # doesn't find it in the expression. Thus, where codegen should generate something like
+    # `var"##cse#1234" = __mtk_arg_2[13]`, it will generate
+    # ```julia
+    # var"##cse#1234" = var"p2"
+    # var"##cse#1235" = var"##cse#1234"[1]
+    # ```
+    
     required_arrvars = Set{SymbolicT}()
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
@@ -571,7 +595,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     optimize = resolve_optimize_option(optimize)
-    return Symbolics.codegen_function(get_irstructure(sys), expr, args; wrap_code, similarto, cse, optimize, kwargs...)
+    return Symbolics.codegen_function(ir, expr, args; wrap_code, similarto, cse, optimize, kwargs...)
 end
 
 resolve_optimize_option(x) = x
