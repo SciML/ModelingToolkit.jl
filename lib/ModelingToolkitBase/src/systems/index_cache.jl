@@ -195,12 +195,15 @@ function IndexCache(sys::AbstractSystem)
         haskey(constant_buffers, ctype) && p in constant_buffers[ctype] && continue
         haskey(nonnumeric_buffers, ctype) && p in nonnumeric_buffers[ctype] && continue
         insert_by_type!(
-            if ctype <: Real || ctype <: AbstractArray{<:Real}
+            if ctype <: Number || ctype <: AbstractArray{<:Number}
                 if istunable(p, true) && symbolic_has_known_size(p) &&
                         (
-                        ctype == Real || ctype <: AbstractFloat ||
-                            ctype <: AbstractArray{Real} ||
-                            ctype <: AbstractArray{<:AbstractFloat}
+                        ctype == Real || ctype == Number || ctype == Complex ||
+                            ctype <: AbstractFloat || ctype <: Complex ||
+                            ctype <: AbstractArray{Real} || ctype <: AbstractArray{Number} ||
+                            ctype <: AbstractArray{Complex} ||
+                            ctype <: AbstractArray{<:AbstractFloat} ||
+                            ctype <: AbstractArray{<:Complex}
                     )
                     if iscall(p) && operation(p) === Initial()
                         initial_pars
