@@ -3,9 +3,19 @@
 """
     homotopy(actual, simplified)
 
-Modelica homotopy operator (spec 3.7.4). At runtime and at L0 trivial rewrite
-time, equivalent to `actual`. Future PRs may use `simplified` as a starting
-point for parameter-sweep continuation during initialization.
+Modelica homotopy operator (spec 3.7.4), an initialization aid. At runtime,
+outside initialization, it evaluates to `actual`.
+
+During `complete`/`mtkcompile` every `homotopy(actual, simplified)` node is
+lowered to `(1 - λ)*simplified + λ*actual` with a single shared `__homotopy_λ`
+parameter (default `1.0`, so `λ=1` reduces to `actual`). A system containing
+`homotopy(...)` nodes is then initialized either by solving `actual` directly
+(the spec's *trivial form*) or, when that fails, by continuation that sweeps `λ`
+from 0 (the easy-to-solve `simplified` equation) to 1 (`actual`) — the spec's
+*transformation form*. The default initialization algorithm is
+`OverrideInit(nlsolve = TrivialThenSweep(...))`: trivial first, sweep on failure.
+
+See [`TrivialThenSweep`](@ref), [`HomotopySweep`](@ref) and [`TrivialHomotopy`](@ref).
 """
 homotopy(actual::Real, simplified::Real) = actual
 
