@@ -51,7 +51,7 @@ function CacheWriter(
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
-    return CacheWriter(fn)
+    return CacheWriter{Any}(fn)
 end
 
 """
