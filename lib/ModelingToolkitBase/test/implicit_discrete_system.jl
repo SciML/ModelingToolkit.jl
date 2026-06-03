@@ -31,7 +31,7 @@ rng = StableRNG(22525)
     if @isdefined(ModelingToolkit)
         @test_throws ModelingToolkitBase.MissingGuessError prob = ImplicitDiscreteProblem(
             sys, [], tspan,
-            missing_guess_values = MissingGuessValue.Error()
+            missing_guess_value = MissingGuessValue.Error()
         )
     end
 end
