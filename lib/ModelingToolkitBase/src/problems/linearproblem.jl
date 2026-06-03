@@ -119,10 +119,16 @@ function SciMLBase.LinearProblem{iip}(
     return maybe_codegen_scimlproblem(expression, LinearProblem{iip}, args; kwargs...)
 end
 
-function __make_fww(@nospecialize(f), retT, argsT)
+function __make_fww(@nospecialize(f), retT::DataType, argsT::DataType)
     fwt = (
         FunctionWrapper{retT, argsT}(f),
     )
+    cs = FunctionWrappersWrappers.SingleCacheStorage()
+    return FunctionWrappersWrapper{typeof(fwt), FunctionWrappersWrappers.AllowNonIsBits, typeof(cs)}(fwt, cs)
+end
+
+function __make_fww(@nospecialize(f), retT::NTuple{N, DataType}, argsT::NTuple{N, DataType}) where {N}
+    fwt = ntuple(i -> FunctionWrapper{retT[i], argsT[i]}(f), Val(N))
     cs = FunctionWrappersWrappers.SingleCacheStorage()
     return FunctionWrappersWrapper{typeof(fwt), FunctionWrappersWrappers.AllowNonIsBits, typeof(cs)}(fwt, cs)
 end
@@ -133,7 +139,9 @@ Base.@nospecializeinfer function wrap_symbolic_linear_interface(
     # We'll never infer the type of these, so no point specializing on them
     @nospecialize symbolic_interface, A, b, p
     if iip
-        update_A! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_A!), Nothing, typeof((A, p)))
+        elT = eltype(A)
+        pT = typeof(p)
+        update_A! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_A!), (Nothing, Nothing, Nothing), (Tuple{Matrix{elT}, pT}, Tuple{Diagonal{elT, Vector{elT}}, pT}, Tuple{BandedMatrix{elT, Matrix{elT}, Base.OneTo{Int}}, pT}))
         update_b! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_b!), Nothing, typeof((b, p)))
     else
         update_A! = __make_fww(symbolic_interface.update_A!, typeof(A), typeof((p,)))
