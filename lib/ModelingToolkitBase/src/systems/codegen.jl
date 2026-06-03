@@ -1502,6 +1502,19 @@ function generate_update_A(
     )
     ps = reorder_parameters(sys)
 
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = size(A, 1)
+    push!(regions, SU.ShapeVecT((1:N, 1:size(A, 2))))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(A, 1), j in axes(A, 2)
+        v = A[i, j]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i, j:j)))
+        push!(values, Symbolics.SConst([v;;]))
+    end
+    A = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
+
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
         similarto = typeof(A), add_observed = false, kwargs...
@@ -1612,6 +1625,19 @@ function generate_update_b(
         wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
     )
     ps = reorder_parameters(sys)
+
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = length(b)
+    push!(regions, SU.ShapeVecT((1:N,)))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(b, 1)
+        v = b[i]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i,)))
+        push!(values, Symbolics.SConst([v]))
+    end
+    b = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
