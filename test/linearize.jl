@@ -374,7 +374,7 @@ end
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingGuessError linearize(
         sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true,
-        missing_guess_values = MissingGuessValue.Error()
+        missing_guess_value = MissingGuessValue.Error()
     )
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
