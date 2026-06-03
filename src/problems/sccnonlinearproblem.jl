@@ -543,7 +543,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
-    explicitfuns = []
+    explicitfuns = Union{Returns{Nothing}, CacheWriter{Any}, typeof(__explicitfun_copy_states)}[]
     nlfuns = []
     decomposition = SCCDecomposition(sys, var_sccs, eq_sccs; combine_sccs)
 
@@ -566,11 +566,9 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             solsyms = view.((dvs,), view(decomposition.var_sccs, 1:(i - 1)))
             push!(
                 explicitfuns,
-                SciMLBase.Void{Any}(
-                    CacheWriter(
-                        sys, decomposition.cachetypes, cacheexprs, solsyms;
-                        eval_expression, eval_module, cse
-                    )
+                CacheWriter(
+                    sys, decomposition.cachetypes, cacheexprs, solsyms;
+                    eval_expression, eval_module, cse
                 )
             )
         end
@@ -689,7 +687,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     if length(subprobs) <= 5
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
     else
-        return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+        return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
     end
 end
 
