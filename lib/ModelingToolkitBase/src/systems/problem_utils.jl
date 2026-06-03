@@ -907,7 +907,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
 
     for i in eachindex(template)
         if template[i] isa Vector{SymbolicT}
-            template[i] = concrete_getu(srcsys, template[i]; wrap_as_any = true, kws...)
+            template[i] = concrete_getu(srcsys, Symbolics.SConst(template[i]); wrap_as_any = true, kws...)
             delete!(elem_types, Vector{SymbolicT})
             push!(elem_types, typeof(template[i]))
         end
