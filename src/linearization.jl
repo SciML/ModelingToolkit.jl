@@ -46,6 +46,7 @@ function linearization_function(
         warn_initialize_determined = true,
         guesses = Dict{SymbolicT, SymbolicT}(),
         warn_empty_op = true,
+        missing_guess_value = MTKBase.default_missing_guess_value(),
         t = 0.0,
         kwargs...
     )
@@ -91,7 +92,7 @@ function linearization_function(
 
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses
+        algebraic_only = true, guesses, missing_guess_value
     )
     u0 = state_values(prob)
 

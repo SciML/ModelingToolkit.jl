@@ -203,7 +203,8 @@ end
     pend = complete(pend)
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1]
+        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1],
+        missing_guess_value = MissingGuessValue.Error()
     )
     ODEProblem(
         pend, [x => 1, D(y) => 0, g => 1], (0, 1);
@@ -215,7 +216,8 @@ end
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
     @test_throws ["Cyclic guesses detected"] ODEProblem(
-        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc=false
+        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc=false,
+        missing_guess_value=MissingGuessValue.Error()
     )
 end
 
