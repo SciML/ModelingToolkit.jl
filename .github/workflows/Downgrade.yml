@@ -14,24 +14,13 @@ on:
       - 'benchmark/**'
 jobs:
   test:
+    name: "Downgrade"
+    # Preserved from the previous bespoke workflow: this job is intentionally disabled.
     if: false
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        downgrade_mode: ['alldeps']
-        julia-version: ['1.10']
-        group: ['InterfaceI']
-    steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: ${{ matrix.julia-version }}
-      - uses: julia-actions/julia-downgrade-compat@v2
-        with:
-          skip: Pkg,TOML
-      - uses: julia-actions/julia-buildpkg@1
-      - uses: julia-actions/julia-runtest@1
-        with:
-          ALLOW_RERESOLVE: false
-        env:
-          GROUP: ${{ matrix.group }}
+    uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
+    with:
+      julia-version: "1.10"
+      group: "InterfaceI"
+      skip: "Pkg,TOML"
+      allow-reresolve: false
+    secrets: "inherit"
