@@ -1,5 +1,6 @@
 using ModelingToolkit, FMI, FMIZoo, OrdinaryDiffEq, NonlinearSolve, SciMLBase
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using DiffEqBase: BrownFullBasicInit
 import ModelingToolkit as MTK
 
 const FMU_DIR = joinpath(@__DIR__, "fmus")
