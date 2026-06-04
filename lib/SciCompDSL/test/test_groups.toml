@@ -1,6 +1,0 @@
-# Test groups and Julia version matrix for the SciCompDSL sublibrary.
-# Consumed by SciML/.github sublibrary-tests.yml (compute_affected_sublibraries.jl).
-# Mirrors the single "All" group matrix that previously lived in .github/workflows/Tests.yml.
-
-[All]
-versions = ["lts", "1", "pre"]
