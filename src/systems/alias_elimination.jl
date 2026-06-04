@@ -348,7 +348,10 @@ function find_perfect_aliases!(
         # prune the row to entries actually present in the simplified RHS.
         empty!(new_vars)
         SU.search_variables!(new_vars, eqs[e])
-        new_row = filter(v_idx -> fullvars[v_idx] in new_vars, 𝑠neighbors(graph, e))
+        new_row = filter(
+            v_idx -> fullvars[v_idx] in new_vars || split_indexed_var(fullvars[v_idx])[1] in new_vars,
+            𝑠neighbors(graph, e)
+        )
         BipartiteGraphs.set_neighbors!(graph, e, new_row)
     end
 

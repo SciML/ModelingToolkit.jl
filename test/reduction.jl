@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
+using BipartiteGraphs
 using Symbolics
 using OrdinaryDiffEqRosenbrock
 using ModelingToolkit: topsort_equations, t_nounits as t, D_nounits as D, unwrap
@@ -559,4 +560,17 @@ end
 
         @test !(y_idx in sneighbors(state.structure.graph, dw_ieq))
     end
+end
+
+@testset "`eliminate_perfect_aliases!` correctly handles unscalarized array variabls" begin
+    @variables x(t)[1:2] y(t) z(t) [state_priority = -10] w(t)
+    @named sys = System([0 ~ dot(x, Symbolics.SConst([y, z])), z ~ w], t)
+    ts = TearingState(sys)
+    ModelingToolkit.eliminate_perfect_aliases!(ts)
+    # `z ~ w` is eliminated, `w` is substituted into the remaining equation
+    @test length(equations(ts)) == 1
+    @test length(ts.fullvars) == 4
+    # Prior to the fix, this only had `y` and `w` since unscalarized array incidence
+    # was not handled correctly in the pass.
+    @test issetequal(𝑠neighbors(ts.structure.graph, 1), 1:4)
 end
