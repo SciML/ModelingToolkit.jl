@@ -1,6 +1,8 @@
 # Test groups and Julia version matrix for the SciCompDSL sublibrary.
 # Consumed by SciML/.github sublibrary-tests.yml (compute_affected_sublibraries.jl).
 # Mirrors the single "All" group matrix that previously lived in .github/workflows/Tests.yml.
+# runtests.jl runs every testset unconditionally, so the single always-on group is [Core]
+# (emits GROUP="SciCompDSL"); no GROUP gating is needed in runtests.jl.
 
-[All]
+[Core]
 versions = ["lts", "1", "pre"]

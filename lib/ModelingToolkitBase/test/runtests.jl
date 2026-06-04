@@ -2,7 +2,16 @@ using SafeTestsets, Pkg, Test
 # https://github.com/JuliaLang/julia/issues/54664
 import REPL
 
-const GROUP = get(ENV, "GROUP", "All")
+# The centralized SciML sublibrary CI (SublibraryCI.yml -> sublibrary-tests.yml@v1)
+# emits GROUP="ModelingToolkitBase" for the [Core] section and
+# GROUP="ModelingToolkitBase_<Section>" for every other section in test_groups.toml.
+# Strip that "<pkg>_" prefix so the bare section names below ("InterfaceI", "QA", …)
+# drive the dispatch. A bare "<pkg>" maps to "Core"; anything else (e.g. "All" for
+# local runs) is passed through unchanged.
+const _G = get(ENV, "GROUP", "All")
+const _SUB = "ModelingToolkitBase"
+const GROUP = _G == _SUB ? "Core" :
+              (startswith(_G, _SUB * "_") ? _G[(length(_SUB) + 2):end] : _G)
 
 function activate_extensions_env()
     Pkg.activate("extensions")
