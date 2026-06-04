@@ -101,6 +101,8 @@ import Random: AbstractRNG
 import DomainSets
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
+using NonlinearSolveBase: NonlinearVerbosity
+using SciMLLogging: None
 
 export @derivatives
 
