@@ -2836,7 +2836,7 @@ macro namespace(expr)
     return esc(_config(expr, true))
 end
 
-const _HAS_PER_METHOD_COMPILER_OPTIONS = false # isdefined(Base.Experimental, :set_compile!)
+const _HAS_PER_METHOD_COMPILER_OPTIONS = isdefined(Base.Experimental, :set_compile!)
 
 function component_post_processing(__source__, expr, isconnector)
     @assert expr isa Expr && (
