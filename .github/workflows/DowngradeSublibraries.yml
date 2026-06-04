@@ -1,0 +1,23 @@
+name: Downgrade Sublibraries
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+jobs:
+  downgrade-sublibraries:
+    uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
+    secrets: "inherit"
+    with:
+      julia-version: "lts"
+      skip: "Pkg,TOML,Statistics,LinearAlgebra,SparseArrays,InteractiveUtils,Random,Test,ModelingToolkit,ModelingToolkitBase,SciCompDSL"
+      allow-reresolve: true
