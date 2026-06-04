@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.42.1"
+version = "1.42.2"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -117,7 +117,7 @@ DiffRules = "0.1, 1.0"
 DifferentiationInterface = "0.6.47, 0.7"
 Distributed = "1"
 DocStringExtensions = "0.8, 0.9"
-DomainSets = "0.6, 0.7"
+DomainSets = "0.6, 0.7, 0.8"
 DynamicQuantities = "^0.11.2, 0.12, 0.13, 1"
 EnumX = "1.0.4"
 EnzymeCore = "0.8"
