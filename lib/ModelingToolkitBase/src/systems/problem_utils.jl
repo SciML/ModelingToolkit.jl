@@ -1795,7 +1795,10 @@ function __process_SciMLProblem(
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
         algebraic_only = false, missing_guess_value = default_missing_guess_value(),
         allow_incomplete = false, is_initializeprob = false, is_steadystateprob = false,
-        return_operating_point = false, kwargs...
+        return_operating_point = false,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        init_compiler_options::CompilerOptions = CompilerOptions(),
+        kwargs...
     )
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
@@ -1833,6 +1836,7 @@ function __process_SciMLProblem(
             circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
             algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
             time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
+            compiler_options = init_compiler_options,
             kwargs...
         )
 
@@ -1939,6 +1943,7 @@ function __process_SciMLProblem(
         sys; u0 = u0, p = p, t = t,
         eval_expression = eval_expression,
         eval_module = eval_module,
+        compiler_options,
         kwargs...
     )
     if return_operating_point

@@ -1,3 +1,112 @@
+const _COMPILE_OPTIONS = Dict{Symbol, Int}(
+    :off => 0,
+    :on => 1,
+    :all => 2,
+    :min => 3,
+)
+
+"""
+    CompilerOptions(; optlevel = -1, compile = :default, infer = :default)
+
+Options controlling the Julia compiler for generated functions.
+
+Note that this feature is considered experimental.
+
+# Fields
+- `optlevel::Int`: LLVM optimization level (0-3), or -1 (default) to inherit from the module.
+- `compile::Int`: Compilation mode as an integer (0=off, 1=on, 2=all, 3=min), or -1 (default)
+  to inherit. Can also be specified as a symbol: `:off`, `:on`, `:all`, `:min`, or `:default`.
+- `infer::Int`: Type inference (0=off, 1=on), or -1 (default) to inherit. Can also be specified
+  as a Bool or `:default`.
+"""
+struct CompilerOptions
+    optlevel::Int
+    compile::Int
+    infer::Int
+end
+
+function CompilerOptions(; optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
+                           infer::Union{Int, Bool, Symbol} = :default)
+    _compile = if compile isa Symbol
+        compile === :default ? -1 : get(_COMPILE_OPTIONS, compile) do
+            throw(ArgumentError("Invalid compile option: $compile. Valid options: :default, :off, :on, :all, :min"))
+        end
+    else
+        compile
+    end
+    _infer = if infer isa Symbol
+        infer === :default ? -1 :
+            throw(ArgumentError("Invalid infer option: $infer. Valid options: :default, true, false"))
+    elseif infer isa Bool
+        Int(infer)
+    else
+        infer
+    end
+    return CompilerOptions(optlevel, _compile, _infer)
+end
+
+_has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
+
+const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
+
+# Fallback modules with module-level compiler options for Julia versions
+# that don't support per-method compiler options (Base.Experimental.set_compile!).
+# We pre-create modules for the most common combinations:
+#   - optimize=0
+#   - optimize=1
+#   - optimize=0, infer=false
+# On Julia versions with per-method support, these modules are still defined
+# but without any special compiler options (they are never used in that case).
+module _EvalModuleOpt0
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=0
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+module _EvalModuleOpt1
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=1
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+module _EvalModuleOpt0NoInfer
+    @static if !isdefined(Base.Experimental, :set_compile!)
+        Base.Experimental.@compiler_options optimize=0 infer=false
+        using RuntimeGeneratedFunctions
+        RuntimeGeneratedFunctions.init(@__MODULE__)
+    end
+end
+
+"""
+    _resolve_fallback_eval_module(co::CompilerOptions)
+
+Return a pre-made module with the appropriate module-level compiler options for the
+given `CompilerOptions`. This is used as a fallback on Julia versions that do not support
+per-method compiler options. Only a limited set of option combinations is supported;
+unsupported combinations will throw an error.
+"""
+function _resolve_fallback_eval_module(co::CompilerOptions)
+    if co.compile != -1
+        throw(ArgumentError(
+            "Non-default `compile` compiler option is not supported on Julia $VERSION. " *
+            "Per-method compiler options require Julia with `Base.Experimental.set_compile!` support."))
+    end
+    if co.optlevel == 0 && co.infer == -1
+        return _EvalModuleOpt0
+    elseif co.optlevel == 1 && co.infer == -1
+        return _EvalModuleOpt1
+    elseif co.optlevel == 0 && co.infer == 0
+        return _EvalModuleOpt0NoInfer
+    else
+        throw(ArgumentError(
+            "The compiler option combination (optlevel=$(co.optlevel), infer=$(co.infer)) " *
+            "is not supported on Julia $VERSION without per-method compiler options. " *
+            "Supported fallback combinations: (optlevel=0), (optlevel=1), (optlevel=0, infer=false)."))
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -8,8 +117,23 @@ Given a function expression `expr`, return a callable version of it.
   RuntimeGeneratedFunctions.jl.
 - `eval_module`: The module to `eval` the expression `expr` in. If `!eval_expression`,
   this is the cache and context module for the `RuntimeGeneratedFunction`.
+- `compiler_options`: A [`CompilerOptions`](@ref) controlling LLVM optimization level,
+  compilation mode, and type inference for the generated function.
 """
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__)
+function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__,
+                     compiler_options::CompilerOptions = CompilerOptions())
+    if _has_options(compiler_options)
+        if _COMPILER_OPTIONS_SUPPORTED
+            expr = _inject_compiler_options_meta(expr, compiler_options)
+        else
+            if eval_module !== @__MODULE__
+                throw(ArgumentError(
+                    "Cannot use both a non-default `eval_module` and non-default `compiler_options` " *
+                    "on Julia $VERSION. Per-method compiler options require `Base.Experimental.set_compile!` support."))
+            end
+            eval_module = _resolve_fallback_eval_module(compiler_options)
+        end
+    end
     if eval_expression
         return eval_module.eval(expr)
     else
@@ -18,6 +142,23 @@ function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODUL
 end
 
 eval_or_rgf(::Nothing; kws...) = nothing
+
+function _inject_compiler_options_meta(expr::Expr, co::CompilerOptions)
+    if expr.head === :function || expr.head === :->
+        body = expr.args[2]
+        metas = Expr[]
+        co.optlevel != -1 && push!(metas, Expr(:meta, Expr(:optlevel, co.optlevel)))
+        co.compile != -1 && push!(metas, Expr(:meta, Expr(:compile, co.compile)))
+        co.infer != -1 && push!(metas, Expr(:meta, Expr(:infer, co.infer)))
+        if body isa Expr && body.head === :block
+            new_body = Expr(:block, metas..., body.args...)
+        else
+            new_body = Expr(:block, metas..., body)
+        end
+        return Expr(expr.head, expr.args[1], new_body)
+    end
+    return expr
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -458,8 +599,10 @@ function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) w
     return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
 
-function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip; kws...) where {P}
-    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; kws...), eval_or_rgf(fiip; kws...))
+function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip;
+        compiler_options::CompilerOptions = CompilerOptions(), kws...) where {P}
+    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; compiler_options, kws...),
+                                       eval_or_rgf(fiip; compiler_options, kws...))
 end
 
 function (gfw::GeneratedFunctionWrapper)(args...)
@@ -512,39 +655,50 @@ Optionally compile a method and optionally wrap it in a `GeneratedFunctionWrappe
 basis of `expression` `wrap_gfw`, both of type `Union{Type{Val{true}}, Type{Val{false}}}`.
 `gfw_args` is the first type parameter of `GeneratedFunctionWrapper`. `f` is a tuple of
 function expressions of the form `(oop, iip)` or a single out-of-place function expression.
-Keyword arguments are forwarded to `eval_or_rgf`.
+
+# Keyword Arguments
+
+- `compiler_options`: A [`CompilerOptions`](@ref) controlling LLVM optimization level,
+  compilation mode, and type inference for the generated function.
+
+All other keyword arguments are forwarded to `eval_or_rgf`.
 """
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f...; kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f...; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::NTuple{2, Expr};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return eval_or_rgf.(f; kwargs...)
+    return eval_or_rgf.(f; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{true}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}}; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Union{Expr, NTuple{2, Expr}};
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     return f
 end
 
 function maybe_compile_function(
         expression, wrap_gfw::Type{Val{true}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr;
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; kwargs...)
+    return GeneratedFunctionWrapper{gfw_args}(expression, f, nothing; compiler_options, kwargs...)
 end
 
 function maybe_compile_function(
         expression::Type{Val{false}}, wrap_gfw::Type{Val{false}},
-        gfw_args::Tuple{Int, Int, Bool}, f::Expr; kwargs...
+        gfw_args::Tuple{Int, Int, Bool}, f::Expr;
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    return eval_or_rgf(f; kwargs...)
+    return eval_or_rgf(f; compiler_options, kwargs...)
 end
