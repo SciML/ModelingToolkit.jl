@@ -21,5 +21,7 @@ concurrency:
 
 jobs:
   sublibrary-ci:
-    uses: "SciML/.github/.github/workflows/sublibrary-tests.yml@v1"
+    uses: "SciML/.github/.github/workflows/sublibrary-project-tests.yml@v1"
+    with:
+      check-bounds: auto
     secrets: "inherit"
