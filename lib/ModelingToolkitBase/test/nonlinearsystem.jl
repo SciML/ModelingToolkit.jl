@@ -515,3 +515,42 @@ end
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.problem_type == "A"
 end
+
+@testset "Bounds extraction for Nonlinear Problems" begin
+    @variables x [bounds=(0.0, 1.0)]
+    @variables y [bounds=(-1.0, 5.0)]
+    @variables z
+
+    eqs = [
+        0 ~ x^2 - 0.5,
+        0 ~ y - x,
+        0 ~ z - y
+    ]
+
+    @named sys = System(eqs, [x, y, z], [])
+    sys = complete(sys)
+
+    u0 = [x => 0.5, y => 0.5, z => 0.5]
+
+    prob_nl = NonlinearProblem(sys, u0)
+    prob_ls = NonlinearLeastSquaresProblem(sys, u0)
+
+    for p in (prob_nl, prob_ls)
+        @test p.lb !== nothing
+        @test p.ub !== nothing
+
+        @test eltype(p.lb) === Float64
+        @test eltype(p.ub) === Float64
+
+        unks = unknowns(sys)
+        expected_lb = map(unks) do v
+            isequal(v, x) ? 0.0 : (isequal(v, y) ? -1.0 : typemin(Float64))
+        end
+        expected_ub = map(unks) do v
+            isequal(v, x) ? 1.0 : (isequal(v, y) ? 5.0 : typemax(Float64))
+        end
+
+        @test p.lb == expected_lb
+        @test p.ub == expected_ub
+    end
+end

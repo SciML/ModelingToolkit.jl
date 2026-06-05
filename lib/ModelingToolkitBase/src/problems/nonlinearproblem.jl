@@ -61,6 +61,33 @@
     return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
+function _get_nonlinear_bounds_arrays(unknowns_list, u0)
+    if !any(hasbounds, unknowns_list)
+        return nothing, nothing
+    end
+
+    T = u0 === nothing ? Float64 : eltype(u0)
+    if !(T <: Number)
+        T = Float64
+    end
+
+    N = length(unknowns_list)
+    lb = Vector{T}(undef, N)
+    ub = Vector{T}(undef, N)
+
+    for (i, v) in enumerate(unknowns_list)
+        b = getbounds(v)
+        if b !== nothing && length(b) >= 2
+            lb[i] = b[1] !== nothing ? T(b[1]) : typemin(T)
+            ub[i] = b[2] !== nothing ? T(b[2]) : typemax(T)
+        else
+            lb[i] = typemin(T)
+            ub[i] = typemax(T)
+        end
+    end
+    return lb, ub
+end
+
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
         sys::System, op; expression = Val{false},
         check_length = true, check_compatibility = true, kwargs...
@@ -80,9 +107,24 @@ end
 
     kwargs = process_kwargs(sys; kwargs...)
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
-    args = (; f, u0, p, ptype)
 
-    return maybe_codegen_scimlproblem(expression, NonlinearProblem{_iip}, args; kwargs...)
+    if !haskey(kwargs, :lb) && !haskey(kwargs, :ub)
+        lb, ub = _get_nonlinear_bounds_arrays(unknowns(sys), u0)
+        if lb !== nothing && ub !== nothing
+            kwargs = merge(kwargs, (lb = lb, ub = ub))
+        end
+    end
+
+    if expression == Val{false}
+        prob = SciMLBase.NonlinearProblem(f, u0, p; kwargs...)
+        if !(ptype isa StandardNonlinearProblem)
+            prob = SciMLBase.remake(prob; problem_type = ptype)
+        end
+        return prob
+    else
+        args = ptype isa StandardNonlinearProblem ? (; f, u0, p) : (; f, u0, p, ptype)
+        return maybe_codegen_scimlproblem(expression, NonlinearProblem{_iip}, args; kwargs...)
+    end
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
@@ -100,11 +142,22 @@ end
     )
 
     kwargs = process_kwargs(sys; kwargs...)
-    args = (; f, u0, p)
 
-    return maybe_codegen_scimlproblem(
-        expression, NonlinearLeastSquaresProblem{_iip}, args; kwargs...
-    )
+    if !haskey(kwargs, :lb) && !haskey(kwargs, :ub)
+        lb, ub = _get_nonlinear_bounds_arrays(unknowns(sys), u0)
+        if lb !== nothing && ub !== nothing
+            kwargs = merge(kwargs, (lb = lb, ub = ub))
+        end
+    end
+
+    if expression == Val{false}
+        return SciMLBase.NonlinearLeastSquaresProblem(f, u0, p; kwargs...)
+    else
+        args = (; f, u0, p)
+        return maybe_codegen_scimlproblem(
+            expression, NonlinearLeastSquaresProblem{_iip}, args; kwargs...
+        )
+    end
 end
 
 function check_compatible_system(
