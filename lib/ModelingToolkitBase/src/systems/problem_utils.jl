@@ -1298,7 +1298,7 @@ struct GetUpdatedU0{GG, GIU}
     get_initial_unknowns::GIU
 end
 
-function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict)
+function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict; kwargs...)
     dvs = unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
@@ -1306,15 +1306,17 @@ function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::Abstract
         varval = get(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
-    get_guessvars = getu(initsys, dvs[guessvars])
+    get_guessvars = iszero(count(guessvars)) ? nothing : CopyParamsByTemplate(initsys, dvs[guessvars]; kwargs...)
     get_initial_unknowns = getu(sys, Initial.(dvs))
     return GetUpdatedU0(guessvars, get_guessvars, get_initial_unknowns)
 end
 
 function (guu::GetUpdatedU0)(prob, initprob)
     buffer = guu.get_initial_unknowns(prob)
-    algebuf = view(buffer, guu.guessvars)
-    copyto!(algebuf, guu.get_guessvars(initprob))
+    if guu.get_guessvars !== nothing
+        algebuf = view(buffer, guu.guessvars)
+        copyto!(algebuf, guu.get_guessvars(initprob))
+    end
     return buffer
 end
 
@@ -1496,7 +1498,7 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initsys, op)
+        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
     else
         nothing
     end
