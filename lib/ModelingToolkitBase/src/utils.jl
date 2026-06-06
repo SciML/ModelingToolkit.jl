@@ -1221,7 +1221,6 @@ function observed_equations_used_by(
         available_vars = Set(available_vars)
     end
     if iscomplete(sys) && obs == observed(sys)
-        cache = getmetadata(sys, MutableCacheKey, nothing)
         obs_graph_cache = check_mutable_cache(sys, ObservedGraphCacheKey, ObservedGraphCache, nothing)
         if obs_graph_cache === nothing
             obsvar_to_idx = Dict{Any, Int}([eq.lhs => i for (i, eq) in enumerate(obs)])

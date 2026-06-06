@@ -117,6 +117,7 @@ end
         @safetestset "Test Big System Usage" include("bigsystem.jl")
         println("C compilation test requires gcc available in the path!")
         @safetestset "C Compilation Test" include("ccompile.jl")
+        @safetestset "Multithreading test" include("multithreading.jl")
         @testset "Distributed Test" include("distributed.jl")
         @testset "Serialization" include("serialization.jl")
     end

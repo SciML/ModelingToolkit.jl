@@ -101,6 +101,7 @@ import Random: AbstractRNG
 import DomainSets
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
+using TaskLocalValues: TaskLocalValue
 
 export @derivatives
 

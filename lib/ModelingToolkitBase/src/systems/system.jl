@@ -54,6 +54,14 @@ function check_symbolic_ad_allowed(sys::AbstractSystem)
     end
 end
 
+__new_irstructure() = IRStructure{VartypeT}()
+__new_irstructure_tlv() = TaskLocalValue{IRStructure{VartypeT}}(__new_irstructure)
+const IRStructureTLVT = typeof(__new_irstructure_tlv())
+
+__new_mutable_cache() = MutableCacheT()
+__new_mutable_cache_tlv() = TaskLocalValue{MutableCacheT}(__new_mutable_cache)
+const MutableCacheTLVT = typeof(__new_mutable_cache_tlv())
+
 """
     $(TYPEDEF)
 
@@ -319,9 +327,9 @@ struct System <: IntermediateDeprecationSystem
     maybe_zeros::AtomicSetT
     """
     $INTERNAL_FIELD_WARNING
-    The `IRStructure` used for efficient symbolic manipulation.
+    The `IRStructure` used for efficient symbolic manipulation, stored in a `TaskLocalValue`.
     """
-    irstructure::IRStructure{VartypeT}
+    irstructure_tlv::TaskLocalValue{IRStructure{VartypeT}}
     """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
@@ -346,7 +354,7 @@ struct System <: IntermediateDeprecationSystem
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
             irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
-            irstructure = IRStructure{VartypeT}(), isscheduled = false, schedule = nothing;
+            irstructure_tlv = __new_irstructure_tlv(), isscheduled = false, schedule = nothing;
             checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
@@ -409,7 +417,7 @@ struct System <: IntermediateDeprecationSystem
             tstops, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            state_priorities, irreducibles, maybe_zeros, irstructure,
+            state_priorities, irreducibles, maybe_zeros, irstructure_tlv,
             isscheduled, schedule
         )
     end
@@ -501,7 +509,7 @@ function System(
         irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
-        irstructure = IRStructure{VartypeT}(),
+        irstructure = IRStructure{VartypeT}(), irstructure_tlv = nothing,
         checks = true, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
@@ -668,6 +676,14 @@ function System(
                 "or pass scale_rates = false when constructing the MassActionJump."))
         end
     end
+
+    if irstructure_tlv === nothing
+        irstructure_tlv = __new_irstructure_tlv()
+        if !iszero(length(irstructure))
+            irstructure_tlv[] = irstructure
+        end
+    end
+
     return System(
         __get_new_tag(), eqs, noise_eqs, jumps, constraints,
         costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,
@@ -676,7 +692,7 @@ function System(
         tstops, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
-        maybe_zeros, irstructure; checks
+        maybe_zeros, irstructure_tlv; checks
     )
 end
 
@@ -1597,8 +1613,9 @@ return `default`. `V` is the expected type of the cache entry, if it exists.
 function check_mutable_cache(
         sys::System, @nospecialize(K::DataType), ::Type{V}, default::D
     )::Union{V, D} where {V, D}
-    cache = getmetadata(sys, MutableCacheKey, nothing)
-    cache isa MutableCacheT || return default
+    cache_tlv = getmetadata(sys, MutableCacheKey, nothing)
+    cache_tlv isa MutableCacheTLVT || return default
+    cache = cache_tlv[]::MutableCacheT
     return get(cache, K, default)::Union{V, D}
 end
 
@@ -1608,8 +1625,9 @@ end
 Store into the mutable cache of `sys` the key-value pair `K => value`.
 """
 function store_to_mutable_cache!(sys::System, @nospecialize(K::DataType), value)
-    cache = getmetadata(sys, MutableCacheKey, nothing)
-    cache isa MutableCacheT || return nothing
+    cache_tlv = getmetadata(sys, MutableCacheKey, nothing)
+    cache_tlv isa MutableCacheTLVT || return nothing
+    cache = cache_tlv[]::MutableCacheT
     cache[K] = value
     return nothing
 end
@@ -1652,4 +1670,13 @@ function get_linear_expander_for!(sys::System, var::SymbolicT, strict::Bool)
         store_to_mutable_cache!(sys, LinearExpansionCache, cache)
     end
     return get!(() -> Symbolics.LinearExpander(var; strict), cache, (var, strict))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get the `IRStructure` associated with the system.
+"""
+function get_irstructure(sys::System)
+    get_irstructure_tlv(sys)[]::IRStructure{SymReal}
 end
