@@ -61,8 +61,35 @@
     return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Construct the `lb` and `ub` vectors of bounds for the unknowns of `sys` from their `bounds`
+metadata, aligned with the order of `unknowns(sys)`. `op` is the operating point used to
+resolve any symbolic bounds. Returns `(nothing, nothing)` if no unknown has a finite bound,
+so problems without bounds are left untouched (and don't trigger the bounds-handling path in
+the solver). See also [`getbounds`](@ref).
+"""
+function generate_nonlinear_bounds(sys::AbstractSystem, op)
+    dvs = unknowns(sys)
+    isempty(dvs) && return nothing, nothing
+    lb = first.(getbounds.(dvs))
+    ub = last.(getbounds.(dvs))
+    op = build_operating_point(sys, op)
+    lbmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> lb), COMMON_NOTHING)
+    left_merge!(lbmap, op)
+    lb = varmap_to_vars(lbmap, dvs; tofloat = false)
+    ubmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> ub), COMMON_NOTHING)
+    left_merge!(ubmap, op)
+    ub = varmap_to_vars(ubmap, dvs; tofloat = false)
+    if all(==(-Inf), lb) && all(==(Inf), ub)
+        return nothing, nothing
+    end
+    return lb, ub
+end
+
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
-        sys::System, op; expression = Val{false},
+        sys::System, op; expression = Val{false}, lb = nothing, ub = nothing,
         check_length = true, check_compatibility = true, kwargs...
     ) where {iip, spec}
     check_complete(sys, NonlinearProblem)
@@ -78,15 +105,21 @@ end
         check_length, check_compatibility, expression, kwargs...
     )
 
+    if lb === nothing && ub === nothing
+        lb, ub = generate_nonlinear_bounds(sys, op)
+    end
+
     kwargs = process_kwargs(sys; kwargs...)
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
 
-    return maybe_codegen_scimlproblem(expression, NonlinearProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(
+        expression, NonlinearProblem{_iip}, args; lb, ub, kwargs...
+    )
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
-        sys::System, op; check_length = false,
+        sys::System, op; check_length = false, lb = nothing, ub = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, NonlinearLeastSquaresProblem)
@@ -99,11 +132,15 @@ end
         check_length, expression, kwargs...
     )
 
+    if lb === nothing && ub === nothing
+        lb, ub = generate_nonlinear_bounds(sys, op)
+    end
+
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, p)
 
     return maybe_codegen_scimlproblem(
-        expression, NonlinearLeastSquaresProblem{_iip}, args; kwargs...
+        expression, NonlinearLeastSquaresProblem{_iip}, args; lb, ub, kwargs...
     )
 end
 
