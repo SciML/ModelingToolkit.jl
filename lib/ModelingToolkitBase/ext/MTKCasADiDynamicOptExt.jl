@@ -170,7 +170,7 @@ function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params,
         subject_to!(m.model, m.P[i] >= lo)
         subject_to!(m.model, m.P[i] <= hi)
     end
-    if !isnothing(tf_bounds)
+    return if !isnothing(tf_bounds)
         subject_to!(m.model, m.tₛ >= tf_bounds[1])
         subject_to!(m.model, m.tₛ <= tf_bounds[2])
     end

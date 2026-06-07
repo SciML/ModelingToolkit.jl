@@ -273,7 +273,7 @@ function generate_jacobian(
 end
 
 function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})
-    @assert findnz(arr)[1:2] == (I, J)
+    return @assert findnz(arr)[1:2] == (I, J)
 end
 
 function assert_jac_length_header(sys)
@@ -1103,8 +1103,10 @@ end
 function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
-    return MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true,
-        scale_rates = false, rescale_rates_on_update = false)
+    return MassActionJump(
+        rs, ns; param_mapper = pmapper, nocopy = true,
+        scale_rates = false, rescale_rates_on_update = false
+    )
 end
 
 function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
@@ -1389,8 +1391,8 @@ Base.@nospecializeinfer function build_explicit_observed_function(
             p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
         ),
     }(
-            oop, iip
-        )
+        oop, iip
+    )
     return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? (f, f) : f
 end
 

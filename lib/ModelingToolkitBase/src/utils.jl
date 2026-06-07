@@ -1292,7 +1292,7 @@ function subexpressions_not_involving_vars!(
             # are already parameters, we don't want to cache it.
             drop = Moshi.Match.@match ir[i] begin
                 BSImpl.Term(; f) && if f isa SymbolicT end => begin
-                1
+                    1
                 end
                 _ => 0
             end
@@ -1364,6 +1364,7 @@ function subexpressions_not_involving_vars!(
         )
         state[expr] = anon_sym
     end
+    return
 end
 
 """
@@ -1642,7 +1643,7 @@ function move_variable_bindings_to_ics!(
             return true
         end
     end
-    filter!(filterer, binds)
+    return filter!(filterer, binds)
 end
 
 """

@@ -216,8 +216,8 @@ end
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
     @test_throws ["Cyclic guesses detected"] ODEProblem(
-        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc=false,
-        missing_guess_value=MissingGuessValue.Error()
+        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc = false,
+        missing_guess_value = MissingGuessValue.Error()
     )
 end
 
@@ -368,7 +368,7 @@ end
     @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
-    initdata = prob.f.initialization_data;
+    initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
     if @isdefined(ModelingToolkit)
         @test initdata.initializeprob isa SCCNonlinearProblem

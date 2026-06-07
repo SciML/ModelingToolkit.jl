@@ -194,7 +194,7 @@ function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunabl
         MTK.add_constraint!(m, p_var ≳ lo)
         MTK.add_constraint!(m, p_var ≲ hi)
     end
-    if !isnothing(tf_bounds)
+    return if !isnothing(tf_bounds)
         tₛ_sym = pysym_getproperty(m.model_sym, :tₛ)
         MTK.add_constraint!(m, tₛ_sym ≳ tf_bounds[1])
         MTK.add_constraint!(m, tₛ_sym ≲ tf_bounds[2])

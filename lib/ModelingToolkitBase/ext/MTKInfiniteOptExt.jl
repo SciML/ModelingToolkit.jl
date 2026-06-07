@@ -129,7 +129,7 @@ function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_pa
         set_lower_bound(m.P[i], lo)
         set_upper_bound(m.P[i], hi)
     end
-    if !isnothing(tf_bounds)
+    return if !isnothing(tf_bounds)
         set_lower_bound(m.tₛ, tf_bounds[1])
         set_upper_bound(m.tₛ, tf_bounds[2])
     end
