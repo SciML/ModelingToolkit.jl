@@ -22,5 +22,4 @@ jobs:
       julia-version: "1.10"
       group: "InterfaceI"
       skip: "Pkg,TOML"
-      allow-reresolve: false
     secrets: "inherit"
