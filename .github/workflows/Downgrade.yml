@@ -15,8 +15,6 @@ on:
 jobs:
   test:
     name: "Downgrade"
-    # Preserved from the previous bespoke workflow: this job is intentionally disabled.
-    if: false
     uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
     with:
       julia-version: "1.10"
