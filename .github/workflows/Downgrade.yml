@@ -17,7 +17,6 @@ jobs:
     name: "Downgrade"
     uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
     with:
-      julia-version: "1.10"
+      julia-version: "lts"
       group: "InterfaceI"
-      skip: "Pkg,TOML"
     secrets: "inherit"
