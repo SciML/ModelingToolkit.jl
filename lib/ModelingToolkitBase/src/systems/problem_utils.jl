@@ -907,7 +907,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
 
     for i in eachindex(template)
         if template[i] isa Vector{SymbolicT}
-            template[i] = concrete_getu(srcsys, template[i]; wrap_as_any = true, kws...)
+            template[i] = concrete_getu(srcsys, Symbolics.SConst(template[i]); wrap_as_any = true, kws...)
             delete!(elem_types, Vector{SymbolicT})
             push!(elem_types, typeof(template[i]))
         end
@@ -1075,6 +1075,34 @@ function call(f, args...)
     return f(args...)
 end
 
+struct IIPUGetterWrapper{TD, F}
+    fn::F
+    n::Int
+end
+
+function IIPUGetterWrapper(sys::AbstractSystem, vars::Vector{SymbolicT}; force_time_independent = false, kwargs...)
+    fn = concrete_getu(sys, Symbolics.SConst(vars); force_time_independent, wrap_as_any = true, kwargs...).f
+    return IIPUGetterWrapper{force_time_independent ? false : is_time_dependent(sys), Any}(fn, length(vars))
+end
+
+function (fn::IIPUGetterWrapper{TD})(valp) where {TD}
+    u0 = state_values(valp)
+    p = parameter_values(valp)
+    T = Union{}
+    T = promote_type_with_nothing(T, u0)
+    T = promote_type_with_nothing(T, p)
+    if T === Union{}
+        T = Float64
+    end
+    buffer = Vector{T}(undef, fn.n)
+    if TD
+        fn.fn(buffer, u0, p, current_time(valp))
+    else
+        fn.fn(buffer, u0, p)
+    end
+    return buffer
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1089,10 +1117,10 @@ function ReconstructInitializeprob(
     )
     @assert is_initializesystem(dstsys)
     ugetter = u0_constructor ∘
-        concrete_getu(
+        IIPUGetterWrapper(
         srcsys, unknowns(dstsys);
         eval_expression, eval_module, force_time_independent = is_steadystateprob,
-        iip_config = (true, false),
+        iip_config = (false, true),
         kwargs...
     )
     if is_split(dstsys)

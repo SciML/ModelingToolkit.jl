@@ -51,7 +51,25 @@ function CacheWriter(
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
-    return CacheWriter(fn)
+    return CacheWriter{Any}(fn)
+end
+
+# This phrasing allows us to precompile the calls
+@noinline function __explicitfun_copy_states_helper(buffer, sols)
+    offset = 0
+    for sol in sols
+        u = sol.u
+        copyto!(buffer, CartesianIndices(((offset + 1):(offset + length(u)),)), u, CartesianIndices((1:length(u),)))
+        offset += length(u)
+    end
+    return nothing
+end
+
+function __explicitfun_copy_states(@nospecialize(p), sols)
+    buffer_idx = findfirst(Base.Fix2(==, eltype(sols[1].u)) ∘ eltype, p.caches)::Int
+    buffer = p.caches[buffer_idx]::Vector{eltype(sols[1].u)}
+    __explicitfun_copy_states_helper(buffer, sols)
+    return nothing
 end
 
 """
@@ -286,12 +304,41 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
     banned_vars = Set{SymbolicT}()
     state = Dict{SymbolicT, SymbolicT}()
     ir = get_irstructure(sys)
+    previous_scc_unknowns = SymbolicT[]
     for i in eachindex(decomposition.subsystems)
+        subsys = decomposition.subsystems[i]
+        if decomposition.islinear[i]
+            store_to_mutable_cache!(subsys, CachedLinearAb, nothing)
+            # For linear systems, there is no point in a complicated explicitfun. Just copy
+            # all previous states to the cache buffer.
+
+            cachevars = SCCCacheVarsExprsElT()
+            cacheexprs = SCCCacheVarsExprsElT()
+            push!(decomposition.scc_cachevars, cachevars)
+            push!(decomposition.scc_cacheexprs, cacheexprs)
+
+            if isempty(previous_scc_unknowns)
+                append!(previous_scc_unknowns, unknowns(subsys))
+                continue
+            end
+            T = Real
+            buffer = cachevars[T] = cacheexprs[T] = SymbolicT[]
+            append!(buffer, previous_scc_unknowns)
+            idx = findfirst(isequal(T), decomposition.cachetypes)
+            if idx === nothing
+                push!(decomposition.cachetypes, T)
+                push!(decomposition.cachesizes, 0)
+                idx = lastindex(decomposition.cachetypes)
+            end
+            decomposition.cachesizes[idx] = max(decomposition.cachesizes[idx], length(buffer))
+            append!(previous_scc_unknowns, unknowns(subsys))
+            continue
+        end
         empty!(banned_vars)
         empty!(state)
 
-        subsys = decomposition.subsystems[i]
         union!(banned_vars, unknowns(subsys))
+        append!(previous_scc_unknowns, unknowns(subsys))
         for u in unknowns(subsys)
             push!(banned_vars, split_indexed_var(u)[1])
         end
@@ -495,7 +542,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     )
     op = calculate_op_from_u0_p(sys, u0, p)
 
-    explicitfuns = []
+    explicitfuns = Union{Returns{Nothing}, CacheWriter{Any}, typeof(__explicitfun_copy_states)}[]
     nlfuns = []
     decomposition = SCCDecomposition(sys, var_sccs, eq_sccs; combine_sccs)
 
@@ -512,14 +559,16 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         subsys = decomposition.subsystems[i]
         if isempty(cachevars)
             push!(explicitfuns, Returns(nothing))
+        elseif decomposition.islinear[i]
+            push!(explicitfuns, __explicitfun_copy_states)
         else
             solsyms = view.((dvs,), view(decomposition.var_sccs, 1:(i - 1)))
             push!(
                 explicitfuns,
-                SciMLBase.Void{Any}(CacheWriter(
+                CacheWriter(
                     sys, decomposition.cachetypes, cacheexprs, solsyms;
                     eval_expression, eval_module, cse
-                ))
+                )
             )
         end
         cachebufsyms = Vector{SymbolicT}[]
@@ -637,7 +686,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     if length(subprobs) <= 5
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
     else
-        return SCCNonlinearProblem(subprobs, explicitfuns, p, true; sys)
+        return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
     end
 end
 
