@@ -1,6 +1,7 @@
 function MTKBase.generate_ODENLStepData(
         sys::System, u0, p, mm = calculate_massmatrix(sys),
-        nlstep_compile::Bool = true, nlstep_scc::Bool = false
+        nlstep_compile::Bool = true, nlstep_scc::Bool = false;
+        jac::Bool = false
     )
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
     state = ProblemState(; u = u0, p)
@@ -15,10 +16,13 @@ function MTKBase.generate_ODENLStepData(
         haskey(op, v) && continue
         op[v] = getsym(sys, v)(state)
     end
+    # Forward the outer ODEFunction's `jac` flag so the inner teared nonlinear
+    # problem also carries an analytic Jacobian. This lets NonlinearSolve.jl
+    # skip the per-iteration AD/FD Jacobian computation on the inner Newton.
     nlprob = if nlstep_scc
-        SCCNonlinearProblem(nlsys, op; build_initializeprob = false)
+        SCCNonlinearProblem(nlsys, op; build_initializeprob = false, jac)
     else
-        NonlinearProblem(nlsys, op; build_initializeprob = false)
+        NonlinearProblem(nlsys, op; build_initializeprob = false, jac)
     end
 
     subsetidxs = [findfirst(isequal(y), unknowns(sys)) for y in unknowns(nlsys)]
