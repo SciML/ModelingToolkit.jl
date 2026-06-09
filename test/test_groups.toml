@@ -1,0 +1,31 @@
+# Test groups and Julia version matrix for the ModelingToolkit root package.
+# Consumed by SciML/.github grouped-tests.yml (compute_affected_sublibraries.jl
+# --root-matrix). These mirror the per-group matrix that previously lived inline
+# in .github/workflows/Tests.yml.
+
+[InterfaceI]
+versions = ["lts", "1", "pre"]
+
+[InterfaceII]
+versions = ["lts", "1", "pre"]
+
+[Initialization]
+versions = ["lts", "1", "pre"]
+
+[SymbolicIndexingInterface]
+versions = ["lts", "1", "pre"]
+
+[Extensions]
+versions = ["lts", "1", "pre"]
+
+[Optimization]
+versions = ["lts", "1", "pre"]
+
+[Downstream]
+versions = ["lts", "1", "pre"]
+
+[FMI]
+versions = ["lts", "1", "pre"]
+
+[QA]
+versions = ["lts", "1"]

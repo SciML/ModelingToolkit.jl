@@ -23,27 +23,7 @@ concurrency:
 
 jobs:
   tests:
-    name: "Tests"
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - "1"
-          - "lts"
-          - "pre"
-        group:
-          - InterfaceI
-          - InterfaceII
-          - Initialization
-          - SymbolicIndexingInterface
-          - Extensions
-          - Optimization
-          - Downstream
-          - FMI
-    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    uses: "SciML/.github/.github/workflows/grouped-tests.yml@v1"
     with:
-      julia-version: "${{ matrix.version }}"
-      group: "${{ matrix.group }}"
-      self-hosted: ${{ vars.USE_SELF_HOSTED == 'true' }}
       coverage-directories: "src,ext,lib/ModelingToolkitBase/src,lib/ModelingToolkitBase/ext"
     secrets: "inherit"

@@ -31,6 +31,12 @@ function activate_downstream_env()
     return Pkg.instantiate()
 end
 
+function activate_qa_env()
+    Pkg.activate("qa")
+    Pkg.develop([MTKBasePkgSpec, PackageSpec(path = dirname(@__DIR__))])
+    return Pkg.instantiate()
+end
+
 macro mtktestset(name, file)
     return quote
         @safetestset $name begin
@@ -121,5 +127,10 @@ end
         @mtktestset("InfiniteOpt Extension Test", "optimization/test_infiniteopt.jl")
         @mtktestset("Dynamic Optimization Collocation Solvers",
             "optimization/dynamic_optimization.jl")
+    end
+
+    if GROUP == "All" || GROUP == "QA"
+        activate_qa_env()
+        @safetestset "Quality Assurance" include("qa/qa.jl")
     end
 end
