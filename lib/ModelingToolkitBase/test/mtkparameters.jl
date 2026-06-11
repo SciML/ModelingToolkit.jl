@@ -467,7 +467,7 @@ if @isdefined(ModelingToolkit)
             getter, setter, prob = ps
             u0, p = setter(prob, x)
             new_prob = remake(prob; u0, p)
-            sol = solve(new_prob, Rodas5P(); saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
+            sol = solve(new_prob, Rodas5P(); saveat = 0.1, abstol = 1.0e-8, reltol = 1.0e-8)
             @test SciMLBase.successful_retcode(sol)
             sum(getter(sol))
         end
@@ -509,18 +509,22 @@ end
     @variables r(t)[1:2] z(t)
     @parameters p q
     @named sys = System(
-        [D(r[1]) ~ -r[1] * p, D(r[2]) ~ -r[2] * q, z ~ r[1] + r[2]], t)
+        [D(r[1]) ~ -r[1] * p, D(r[2]) ~ -r[2] * q, z ~ r[1] + r[2]], t
+    )
     sys = complete(sys)
     # A parameter value expression referencing the unspecified element `r[2]`
     # used to throw `TypeError` from `promote_symtype` during substitution.
     @test_throws ["Could not evaluate", "p"] MTKParameters(
-        sys, Dict(r[1] => 1.0, q => 1.0, p => z * r[2]))
+        sys, Dict(r[1] => 1.0, q => 1.0, p => z * r[2])
+    )
     # All-const variant of the same fold used to throw a `MethodError`.
     @test_throws ["Could not evaluate", "p"] MTKParameters(
-        sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[2]))
+        sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[2])
+    )
     # `Initial` values that cannot be evaluated are treated as unfixed.
     ps = MTKParameters(
-        sys, Dict(r[1] => 1.0, p => 2.0, q => 1.0, Initial(z) => z * r[2]))
+        sys, Dict(r[1] => 1.0, p => 2.0, q => 1.0, Initial(z) => z * r[2])
+    )
     @test ps isa MTKParameters
     # Values referencing only specified elements still evaluate.
     ps = MTKParameters(sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[1]))

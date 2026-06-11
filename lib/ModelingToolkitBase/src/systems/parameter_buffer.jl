@@ -178,10 +178,12 @@ function MTKParameters(
             # (elements of) the value as unfixed, mirroring the `COMMON_NOTHING`
             # handling below.
             if SU.is_array_shape(SU.shape(val))
-                val = BSImpl.Const{VartypeT}(map(SU.stable_eachindex(val)) do i
-                    el = val[i]
-                    SU.isconst(el) ? unwrap_const(el) : false
-                end)
+                val = BSImpl.Const{VartypeT}(
+                    map(SU.stable_eachindex(val)) do i
+                        el = val[i]
+                        SU.isconst(el) ? unwrap_const(el) : false
+                    end
+                )
             else
                 val = BSImpl.Const{VartypeT}(false)
             end
