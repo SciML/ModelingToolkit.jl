@@ -500,3 +500,29 @@ end
     @test DiffEqBase.anyeltypedual(fps) <: ForwardDiff.Dual
     @test DiffEqBase.anyeltypedual(typeof(fps)) <: ForwardDiff.Dual
 end
+
+# Partially specifying an array variable leaves `nothing` holes for the remaining
+# elements in the operating point. Substituting these holes into expressions used
+# to throw a `TypeError` from `promote_symtype` (or a `MethodError` when folding
+# with constants).
+@testset "Issue#4607: nothing-holes in partially-specified array values" begin
+    @variables r(t)[1:2] z(t)
+    @parameters p q
+    @named sys = System(
+        [D(r[1]) ~ -r[1] * p, D(r[2]) ~ -r[2] * q, z ~ r[1] + r[2]], t)
+    sys = complete(sys)
+    # A parameter value expression referencing the unspecified element `r[2]`
+    # used to throw `TypeError` from `promote_symtype` during substitution.
+    @test_throws ["Could not evaluate", "p"] MTKParameters(
+        sys, Dict(r[1] => 1.0, q => 1.0, p => z * r[2]))
+    # All-const variant of the same fold used to throw a `MethodError`.
+    @test_throws ["Could not evaluate", "p"] MTKParameters(
+        sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[2]))
+    # `Initial` values that cannot be evaluated are treated as unfixed.
+    ps = MTKParameters(
+        sys, Dict(r[1] => 1.0, p => 2.0, q => 1.0, Initial(z) => z * r[2]))
+    @test ps isa MTKParameters
+    # Values referencing only specified elements still evaluate.
+    ps = MTKParameters(sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[1]))
+    @test ps isa MTKParameters
+end

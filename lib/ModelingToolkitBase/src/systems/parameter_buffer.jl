@@ -104,7 +104,10 @@ function MTKParameters(
         op[get_iv(sys)] = t0
     end
 
-    evaluate_varmap!(op, all_ps; limit = substitution_limit)
+    # Substitute through `AADSubWrapper` so that `COMMON_NOTHING` holes in partially
+    # specified array values are never substituted into expressions (issue #4607).
+    wrapped_op = AADSubWrapper(op)
+    evaluate_varmap!(wrapped_op, all_ps; limit = substitution_limit)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length
@@ -167,20 +170,20 @@ function MTKParameters(
 
     for sym in all_ps
         haskey(diffcache_params, sym) && continue
-        val = fixpoint_sub(sym, op; maxiters = max(div(substitution_limit, 2), 2), fold = Val(true))
+        val = fixpoint_sub(sym, wrapped_op; maxiters = max(div(substitution_limit, 2), 2), fold = Val(true))
         ctype = symtype(sym)
-        if !SU.isconst(val)
-            Moshi.Match.@match sym begin
-                BSImpl.Term(; f, args) && if f isa Initial end => begin
-                    if isequal(val, args[1])
-                        if Symbolics.isarraysymbolic(sym)
-                            val = BSImpl.Const{VartypeT}(fill(false, size(val)))
-                        else
-                            val = BSImpl.Const{VartypeT}(false)
-                        end
-                    end
-                end
-                _ => nothing
+        if !SU.isconst(val) && isinitial(sym)
+            # The value of an `Initial` parameter that cannot be fully evaluated
+            # refers to variables not fixed by the operating point. Treat such
+            # (elements of) the value as unfixed, mirroring the `COMMON_NOTHING`
+            # handling below.
+            if SU.is_array_shape(SU.shape(val))
+                val = BSImpl.Const{VartypeT}(map(SU.stable_eachindex(val)) do i
+                    el = val[i]
+                    SU.isconst(el) ? unwrap_const(el) : false
+                end)
+            else
+                val = BSImpl.Const{VartypeT}(false)
             end
         end
         if !SU.isconst(val)
