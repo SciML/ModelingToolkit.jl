@@ -118,6 +118,31 @@ end
     )
 end
 
+"""
+    get_nonlinear_problem_type(sys::System)
+
+The concrete `AbstractNonlinearProblem` type that `AbstractNonlinearProblem(sys, op)`
+builds for `sys`: [`SciMLBase.HomotopyProblem`](@ref) when `sys` contains Modelica
+`homotopy(actual, simplified)` nodes, otherwise [`SciMLBase.NonlinearProblem`](@ref).
+"""
+function get_nonlinear_problem_type(sys::System)
+    return has_any_homotopy(sys) ? SciMLBase.HomotopyProblem : SciMLBase.NonlinearProblem
+end
+
+"""
+    SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
+
+Build a nonlinear problem from `sys`, automatically selecting the concrete type via
+`get_nonlinear_problem_type`: a [`SciMLBase.HomotopyProblem`](@ref) when `sys`
+contains Modelica `homotopy(actual, simplified)` nodes (so the equations are solved by
+continuation from the `simplified` form), otherwise a plain
+[`SciMLBase.NonlinearProblem`](@ref). Keyword arguments are forwarded to the selected
+constructor; `λspan` only applies to the `HomotopyProblem` branch.
+"""
+function SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
+    return get_nonlinear_problem_type(sys)(sys, op; kwargs...)
+end
+
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
         sys::System, op; check_length = false, lb = nothing, ub = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...
