@@ -559,13 +559,17 @@ end
 """
 Check if difference/derivative operation occurs in the R.H.S. of an equation
 """
-function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
+function _check_operator_variables(eq, op::T, expr = eq.rhs, visited = Base.IdSet{Any}()) where {T}
     iscall(expr) || return nothing
+    # Expressions are DAGs with (potentially heavy) sharing of subexpressions.
+    # Without memoization this traversal is exponential in the depth of the DAG.
+    expr in visited && return nothing
+    push!(visited, expr)
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
     return foreach(
-        expr -> _check_operator_variables(eq, op, expr),
+        expr -> _check_operator_variables(eq, op, expr, visited),
         SymbolicUtils.arguments(expr)
     )
 end
@@ -575,8 +579,10 @@ Check if all the LHS are unique
 function check_operator_variables(eqs, ::Type{op}) where {op}
     ops = Set{SymbolicT}()
     tmp = Set{SymbolicT}()
+    visited = Base.IdSet{Any}()
     for eq in eqs
-        _check_operator_variables(eq, op)
+        empty!(visited)
+        _check_operator_variables(eq, op, eq.rhs, visited)
         SU.search_variables!(tmp, eq.lhs; is_atomic = OperatorIsAtomic{Differential}())
         if length(tmp) == 1
             x = only(tmp)
