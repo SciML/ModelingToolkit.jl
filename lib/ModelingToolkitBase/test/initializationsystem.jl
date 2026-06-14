@@ -1727,7 +1727,17 @@ end
     # AutoSpecialize uses Union types for compilation sharing, so @inferred
     # is only expected to pass with FullSpecialize.
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(complete(sys), [], (0.0, 1))
-    if v"1.12-" <= VERSION < v"1.13-"
+    if v"1.13-" <= VERSION
+        if @isdefined(ModelingToolkit)
+            @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
+            @inferred solve(prob)
+        else
+            # Changes in how the initialization system simplifies cause changes in generated
+            # code and thus in inference behavior.
+            @test_broken @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
+            @test_broken @inferred solve(prob)
+        end
+    elseif v"1.12-" <= VERSION
         @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
         @inferred solve(prob)
     else

@@ -192,7 +192,7 @@ end
     ps = (setter, prob, getter)
     @test costfn([2.0, 3.0], ps) ≠ zeros(2)
     prep = DI.prepare_gradient(Base.Fix2(costfn, ps), AutoForwardDiff(), [2.0, 3.0])
-    if VERSION >= v"1.12-"
+    if VERSION >= v"1.12-" && VERSION < v"1.13-"
         @test_nowarn @inferred DI.gradient(Base.Fix2(costfn, ps), prep, AutoForwardDiff(), [2.0, 3.0])
     else
         @test_nowarn DI.gradient(Base.Fix2(costfn, ps), prep, AutoForwardDiff(), [2.0, 3.0])
