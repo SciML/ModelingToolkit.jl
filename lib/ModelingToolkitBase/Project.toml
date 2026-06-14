@@ -156,6 +156,7 @@ OrdinaryDiffEqFunctionMap = "1, 2"
 OrdinaryDiffEqNonlinearSolve = "1.5.0, 2"
 OrdinaryDiffEqRosenbrock = "1, 2"
 OrdinaryDiffEqSDIRK = "1, 2"
+OrdinaryDiffEqTsit5 = "1, 2"
 Pkg = "1"
 PreallocationTools = "0.4.27, 1"
 PrecompileTools = "1.2.1"
@@ -219,6 +220,7 @@ OrdinaryDiffEqFunctionMap = "d3585ca7-f5d3-4ba6-8057-292ed1abd90f"
 OrdinaryDiffEqNonlinearSolve = "127b3ac7-2247-4354-8eb6-78cf4e7c58e8"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 OrdinaryDiffEqSDIRK = "2d112036-d095-4a1e-ab9a-08536f3ecdbf"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -232,4 +234,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationIpopt", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "Pkg", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap"]
+test = ["BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationIpopt", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "Pkg", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqTsit5"]
