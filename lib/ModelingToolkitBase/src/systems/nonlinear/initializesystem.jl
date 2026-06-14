@@ -531,7 +531,7 @@ function _has_delays(sys::AbstractSystem, ex, banned)
     if !is_dde(sys) && isempty(banned)
         return false
     end
-    return _has_delays!(Base.IdSet{Any}(), sys, ex, banned)
+    return _has_delays!(Base.IdSet{SymbolicT}(), sys, ex, banned)
 end
 
 function _has_delays!(seen::Base.IdSet{Any}, sys::AbstractSystem, ex, banned)
