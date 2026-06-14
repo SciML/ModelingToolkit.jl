@@ -559,13 +559,15 @@ end
 """
 Check if difference/derivative operation occurs in the R.H.S. of an equation
 """
-function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
+function _check_operator_variables(eq, op::T, expr = eq.rhs, visited = Base.IdSet{BasicSymbolic}()) where {T}
     iscall(expr) || return nothing
+    expr in visited && return nothing
+    push!(visited, expr)
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
     return foreach(
-        expr -> _check_operator_variables(eq, op, expr),
+        arg -> _check_operator_variables(eq, op, arg, visited),
         SymbolicUtils.arguments(expr)
     )
 end
@@ -575,8 +577,9 @@ Check if all the LHS are unique
 function check_operator_variables(eqs, ::Type{op}) where {op}
     ops = Set{SymbolicT}()
     tmp = Set{SymbolicT}()
+    visited = Base.IdSet{BasicSymbolic}()
     for eq in eqs
-        _check_operator_variables(eq, op)
+        _check_operator_variables(eq, op, eq.rhs, visited)
         SU.search_variables!(tmp, eq.lhs; is_atomic = OperatorIsAtomic{Differential}())
         if length(tmp) == 1
             x = only(tmp)
@@ -597,6 +600,7 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
             push!(ops, v)
         end
         empty!(tmp)
+        empty!(visited)
     end
     return
 end
@@ -1292,7 +1296,7 @@ function subexpressions_not_involving_vars!(
             # are already parameters, we don't want to cache it.
             drop = Moshi.Match.@match ir[i] begin
                 BSImpl.Term(; f) && if f isa SymbolicT end => begin
-                1
+                    1
                 end
                 _ => 0
             end
@@ -1364,6 +1368,7 @@ function subexpressions_not_involving_vars!(
         )
         state[expr] = anon_sym
     end
+    return
 end
 
 """
@@ -1642,7 +1647,7 @@ function move_variable_bindings_to_ics!(
             return true
         end
     end
-    filter!(filterer, binds)
+    return filter!(filterer, binds)
 end
 
 """

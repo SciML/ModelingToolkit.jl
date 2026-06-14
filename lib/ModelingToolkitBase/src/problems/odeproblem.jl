@@ -1,11 +1,15 @@
 """
-    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false)
 
 Generate the NLStep data for implicit ODE solvers. This is a stub that throws an error
 if called without ModelingToolkit loaded. The actual implementation is provided by
 ModelingToolkit when it is loaded.
+
+When `jac = true`, the analytic Jacobian of the teared inner nonlinear system is
+generated symbolically and attached to `nlprob.f.jac`, so NonlinearSolve does not
+have to recompute it via AD/FD on every Newton iteration.
 """
-function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false)
     error(
         """
         `nlstep=true` requires ModelingToolkit.jl to be loaded.
@@ -65,7 +69,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     _M = concrete_massmatrix(M; sparse, u0)
 
     if nlstep
-        ode_nlstep = generate_ODENLStepData(sys, u0, p, M, nlstep_compile, nlstep_scc)
+        ode_nlstep = generate_ODENLStepData(sys, u0, p, M, nlstep_compile, nlstep_scc; jac)
     else
         ode_nlstep = nothing
     end

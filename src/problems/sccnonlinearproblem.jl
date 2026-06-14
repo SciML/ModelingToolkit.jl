@@ -351,6 +351,7 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
             decomposition.cachesizes[idx] = max(decomposition.cachesizes[idx], length(buf))
         end
     end
+    return
 end
 
 """
@@ -516,10 +517,12 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             solsyms = view.((dvs,), view(decomposition.var_sccs, 1:(i - 1)))
             push!(
                 explicitfuns,
-                SciMLBase.Void{Any}(CacheWriter(
-                    sys, decomposition.cachetypes, cacheexprs, solsyms;
-                    eval_expression, eval_module, cse
-                ))
+                SciMLBase.Void{Any}(
+                    CacheWriter(
+                        sys, decomposition.cachetypes, cacheexprs, solsyms;
+                        eval_expression, eval_module, cse
+                    )
+                )
             )
         end
         cachebufsyms = Vector{SymbolicT}[]
@@ -609,7 +612,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                         end
                     end
                     MissingGuessValue.HashedRandom() => begin
-                        newval = [hash(dvs[vscc[j]]) for j in symbolic_idxs]./0x1p64
+                        newval = [hash(dvs[vscc[j]]) for j in symbolic_idxs] ./ 0x1p64
                         _u0[symbolic_idxs] .= newval
                         for (idx, j) in enumerate(symbolic_idxs)
                             write_possibly_indexed_array!(

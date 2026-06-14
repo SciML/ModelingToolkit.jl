@@ -108,13 +108,26 @@ if v"1.12" <= VERSION < v"1.13"
     let state = TearingState(sys)
         result, = tearing(state)
         S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
-        @test S == [
+        # Tearing `u5` or tearing `u1` (the two arrangements diagrammed above) are both
+        # valid maximal matchings; which one the heuristic picks depends on the
+        # lexicographic equation sort in `TearingState`, whose strings depend on the
+        # symbolic backend's term ordering (e.g. it flipped with a SymbolicUtils hashing
+        # change, see #4619). Accept either, like the `vars` test above does.
+        S_tear_u5 = [
             1 0 0 0 1
             1 1 0 0 0
             1 1 1 0 0
             0 1 1 1 0
             1 0 0 1 1
         ]
+        S_tear_u1 = [
+            1 0 0 1 1
+            0 1 0 0 1
+            0 1 1 0 1
+            0 1 1 1 0
+            1 0 0 0 1
+        ]
+        @test S == S_tear_u5 || S == S_tear_u1
     end
 end
 

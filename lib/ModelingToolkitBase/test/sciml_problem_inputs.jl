@@ -39,7 +39,7 @@ begin
     ]
 
     # Create systems (without mtkcompile, since that might modify systems to affect intended tests).
-    osys = complete(System(diff_eqs, t; name = :osys))
+    osys = complete(System(diff_eqs, t, [X, Y, Z], [kp, kd, k1, k2, Z0]; name = :osys))
     ssys = complete(
         SDESystem(
             diff_eqs, noise_eqs, t, [X, Y, Z], [kp, kd, k1, k2]; name = :ssys
