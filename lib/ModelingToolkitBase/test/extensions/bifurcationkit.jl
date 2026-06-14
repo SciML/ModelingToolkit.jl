@@ -215,7 +215,7 @@ end
         0 ~ -k1*X1 + k2*(-X1 + Γ[1])
         0 ~ X2 + X1 - Γ[1]
     ]
-    @mtkcompile nsys2 = System(eqs)
+    @mtkcompile nsys2 = System(eqs; maybe_zeros = [k1, k2])
 
     @test_nowarn BifurcationKit.BifurcationProblem(
         nsys2, [X1 => 5.0, X2 => 8.0], [k1 => 8.0, k2 => 1.0, Γ => [13.0]], k1; plot_var = X1
