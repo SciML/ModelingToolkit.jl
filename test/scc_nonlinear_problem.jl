@@ -402,3 +402,17 @@ end
     ModelingToolkitBase.subexpressions_not_involving_vars!(ir, [unwrap(expr)], banned_vars, state)
     @test issetequal(keys(state), [x[1], 2x[2], x[2]^2, f(x[2] + 1)])
 end
+
+@testset "HashedRandom missing guesses in init `SCCNonlinearProblem` (#4603)" begin
+    # Initialization decomposes into multiple SCCs and no guesses are provided,
+    # so the default `HashedRandom` missing-guess strategy is used for the SCC
+    # init problem. This previously errored with
+    # `MethodError: no method matching stable_eachindex(::Vector{Int64})`.
+    @variables a(t) b(t) c(t) d(t)
+    @mtkcompile sys = System(
+        [D(a) ~ b, 0 ~ b^3 + b + a - 2, 0 ~ c^3 + c - b, 0 ~ d - c * b], t)
+    prob = ODEProblem(sys, [a => 0.5], (0.0, 1.0))
+    @test prob.f.initialization_data.initializeprob isa SCCNonlinearProblem
+    sol = solve(prob, Rodas5P())
+    @test SciMLBase.successful_retcode(sol)
+end
