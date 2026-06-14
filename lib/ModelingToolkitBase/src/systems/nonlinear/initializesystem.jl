@@ -534,7 +534,7 @@ function _has_delays(sys::AbstractSystem, ex, banned)
     return _has_delays!(Base.IdSet{SymbolicT}(), sys, ex, banned)
 end
 
-function _has_delays!(seen::Base.IdSet{Any}, sys::AbstractSystem, ex, banned)
+function _has_delays!(seen::Base.IdSet{SymbolicT}, sys::AbstractSystem, ex, banned)
     ex = unwrap(ex)
     ex in banned && return true
     if symbolic_type(ex) == NotSymbolic()
