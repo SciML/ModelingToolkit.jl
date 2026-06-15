@@ -1,5 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEqTsit5, SciMLBase
-using ModelingToolkit: t_nounits as t, D_nounits as D, SymbolicT
+using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicT
 using SciMLBase: EnsembleProblem, EnsembleThreads
 
 const TRAJECTORIES = 100
