@@ -112,3 +112,15 @@ end
     @parameters p::Int q::String
     @test_throws "only valid for solvable" System(Equation[], t, [], [q]; bindings = [q => missing], name = :a)
 end
+
+@testset "Symbol keys in initial_conditions, guesses, and bindings" begin
+    @variables x(t)
+    @parameters p d
+    eqs = [D(x) ~ p - d * x]
+
+    sys = System(eqs, t; initial_conditions = [:x => 1.0, :p => 2.0],
+        guesses = [:x => 0.5], bindings = [:d => 2p], name = :a)
+    @test isequal(initial_conditions(sys), Dict(x => SConst(1.0), p => SConst(2.0)))
+    @test isequal(guesses(sys), Dict(x => SConst(0.5)))
+    @test isequal(bindings(sys), Dict(d => 2p))
+end
