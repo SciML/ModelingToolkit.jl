@@ -152,7 +152,7 @@ end
 export SemilinearODEFunction, SemilinearODEProblem
 export alias_elimination
 export linearize, linearization_function,
-    LinearizationProblem, linearization_ap_transform
+    LinearizationProblem, LinearizationOpPoint, linearization_ap_transform
 export solve
 export map_variables_to_equations, substitute_component
 

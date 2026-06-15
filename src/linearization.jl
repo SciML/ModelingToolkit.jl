@@ -1,4 +1,79 @@
 """
+    $(TYPEDEF)
+
+Wraps an `ODESolution` and a time point (or vector of time points) `t`. When passed as
+`op` to [`linearize`](@ref), an operating point is constructed from the values of
+differential state variables and parameters of `sol` evaluated at `t`. Algebraic
+variables are not set and will be determined by the initialization algorithm.
+
+When `t` is an `AbstractVector`, [`linearize`](@ref) calls [`linearization_function`](@ref)
+once and evaluates the linearization at each time point, returning vectors of matrices and
+extras.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T}
+    """
+    The solution to extract operating point values from.
+    """
+    sol::S
+    """
+    The time point (or vector of time points) at which to evaluate the solution.
+    """
+    t::T
+end
+
+function _build_op_from_solution(op::LinearizationOpPoint)
+    sol_sys = MTKBase.indp_to_system(op.sol)
+    eqs = equations(sol_sys)
+    sts = unknowns(sol_sys)
+    u = op.sol(op.t)
+    result = Dict{SymbolicT, SymbolicT}()
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) || continue
+        result[sts[i]] = u[i]
+    end
+    for p in parameters(sol_sys)
+        result[p] = getp(op.sol, p)(op.sol)
+    end
+    return result
+end
+
+function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) where {S <: SciMLBase.AbstractODESolution}
+    sol_sys = MTKBase.indp_to_system(op.sol)
+    eqs = equations(sol_sys)
+    sts = unknowns(sol_sys)
+    # Find differential equation indices and extract parameters once — both are
+    # time-independent, so we only do this work once regardless of how many time
+    # points are requested.
+    diff_idxs = findall(isdiffeq, eqs)
+    param_vals = Dict{SymbolicT, SymbolicT}()
+    for p in parameters(sol_sys)
+        param_vals[p] = getp(op.sol, p)(op.sol)
+    end
+    # Interpolate once per time point to build the per-point operating-point dict.
+    return map(op.t) do ti
+        u = op.sol(ti)
+        result = copy(param_vals)
+        for i in diff_idxs
+            result[sts[i]] = u[i]
+        end
+        result
+    end
+end
+
+function _linearization_wrap_odeproblem_f(@nospecialize(prob::ODEProblem), ::Type{T}) where {T}
+    f = SciMLBase.Void{Any}(prob.f.f)
+    u0 = T.(prob.u0)
+    t = T(prob.tspan[1])
+    f = SciMLBase.wrapfun_iip(f, (u0, u0, prob.p, t))
+    odef = remake(prob.f; f = f)
+    return remake(prob; f = odef)
+end
+
+"""
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, initialization_solver_alg = nothing, kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
@@ -26,6 +101,7 @@ The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring in
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
+  - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -48,6 +124,7 @@ function linearization_function(
         warn_empty_op = true,
         missing_guess_value = MTKBase.default_missing_guess_value(),
         t = 0.0,
+        ignore_system_initial_conditions = false,
         kwargs...
     )
     op = Dict(op)
@@ -57,6 +134,11 @@ function linearization_function(
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    if ignore_system_initial_conditions
+        ics = copy(initial_conditions(ssys))
+        filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
+        @set! ssys.initial_conditions = ics
+    end
     diff_idxs, alge_idxs = eq_idxs(ssys)
     if zero_dummy_der
         dummyder = setdiff(unknowns(ssys), unknowns(sys))
@@ -90,7 +172,7 @@ function linearization_function(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+    prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only = true, guesses, missing_guess_value
     )
@@ -98,6 +180,7 @@ function linearization_function(
 
     ps = parameters(sys)
     h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
+    h = SciMLBase.Void{Any}(h)
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
@@ -108,24 +191,21 @@ function linearization_function(
     t0 = current_time(prob)
     inputvals = [prob.ps[i] for i in inputs]
 
-    hp_fun = let fun = h, setter = setp_oop(sys, inputs)
-        function hpf(du, input, u, p, t)
-            p = setter(p, input)
-            fun(du, u, p, t)
-            return du
-        end
-    end
     if u0 === nothing
         T = typeof(t0)
     else
         T = promote_type(eltype(u0), typeof(t0))
     end
+    prob = _linearization_wrap_odeproblem_f(prob, T)
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
         u0
     else
         T.(u0)
     end
+    h = SciMLBase.wrapfun_iip(h, (u0T, u0T, p, T(t0)))
+    hp_fun = HPFun(h, setp_oop(sys, inputs))
+
     cu0T = DI.Constant(u0T)
     cp = DI.Constant(p)
 
@@ -137,11 +217,7 @@ function linearization_function(
             cu0T, cp, DI.Constant(t0)
         )
     else
-        uf_fun = let fun = prob.f
-            function uff(du, u, p, t)
-                return SciMLBase.UJacobianWrapper(fun, t, p)(du, u)
-            end
-        end
+        uf_fun = UFFun(prob.f)
 
         uf_jac = PreparedJacobian{true}(
             uf_fun, similar(prob.u0, T), autodiff, u0T, cp, ct0
@@ -151,12 +227,8 @@ function linearization_function(
             h, similar(prob.u0, T, size(outputs)), autodiff,
             u0T, cp, ct0
         )
-        pf_fun = let fun = prob.f, setter = setp_oop(sys, inputs)
-            function pff(du, input, u, p, t)
-                p = setter(p, input)
-                return SciMLBase.ParamJacobianWrapper(fun, t, u)(du, p)
-            end
-        end
+
+        pf_fun = PFFun(prob.f, setp_oop(sys, inputs))
         pf_jac = PreparedJacobian{true}(
             pf_fun, similar(prob.u0, T), autodiff, inputvals,
             cu0T, cp, ct0
@@ -167,12 +239,43 @@ function linearization_function(
         )
     end
 
+    input_getter = getsym(prob, inputs)
+
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
+        diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs
     )
     return lin_fun, sys
+end
+
+struct HPFun{F, S}
+    fn::F
+    setter::S
+end
+
+function (hpf::HPFun)(du, input, u, p, t)
+    p = hpf.setter(p, input)
+    hpf.fn(du, u, p, t)
+    return du
+end
+
+struct UFFun{F}
+    fn::F
+end
+
+function (uff::UFFun)(du, u, p, t)
+    return SciMLBase.UJacobianWrapper(uff.fn, t, p)(du, u)
+end
+
+struct PFFun{F, S}
+    fn::F
+    setter::S
+end
+
+function (pff::PFFun)(du, input, u, p, t)
+    p = pff.setter(p, input)
+    return SciMLBase.ParamJacobianWrapper(pff.fn, t, u)(du, p)
 end
 
 """
@@ -247,22 +350,26 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 struct LinearizationFunction{
-        DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
+        I, P <: ODEProblem,
         H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK,
     }
     """
     The indexes of differential equations in the linearized system.
     """
-    diff_idxs::DI
+    diff_idxs::Vector{Int}
     """
     The indexes of algebraic equations in the linearized system.
     """
-    alge_idxs::AI
+    alge_idxs::Vector{Int}
     """
-    The indexes of parameters in the linearized system which represent
+    Getter function for parameters in the linearized system which represent
     input variables.
     """
-    inputs::I
+    inputs_getter::I
+    """
+    Number of input variables.
+    """
+    num_inputs::Int
     """
     The number of unknowns in the linearized system.
     """
@@ -337,7 +444,7 @@ function (linfun::LinearizationFunction)(u, p, t)
     end
 
     fun = linfun.prob.f
-    input_vals = [linfun.prob.ps[i] for i in linfun.inputs]
+    input_vals = linfun.inputs_getter(linfun.prob)
     if u !== nothing # Handle systems without unknowns
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
@@ -348,6 +455,9 @@ function (linfun::LinearizationFunction)(u, p, t)
             linfun.prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...
         )
+        u = u::typeof(linfun.prob.u0)
+        p = p::typeof(linfun.prob.p)
+        success = success::Bool
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
         end
@@ -361,7 +471,7 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.inputs))
+        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
     end
     h_u = linfun.hp_jac(
         input_vals,
@@ -786,6 +896,17 @@ function linearize(
         op = Dict(), allow_input_derivatives = false,
         p = DiffEqBase.NullParameters()
     )
+    if op isa LinearizationOpPoint && op.t isa AbstractVector
+        ops = _build_op_from_solution(op)
+        results = map(zip(ops, op.t)) do (op_i, ti)
+            linearize(sys, lin_fun; t = ti, op = op_i, allow_input_derivatives, p)
+        end
+        return first.(results), last.(results)
+    end
+    if op isa LinearizationOpPoint
+        t = op.t
+        op = _build_op_from_solution(op)
+    end
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
@@ -807,12 +928,44 @@ function linearize(
     return solve(prob; allow_input_derivatives)
 end
 
+function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
+    T = eltype(lin_fun.prob.u0)
+    results = @NamedTuple{A::Matrix{T}, B::Matrix{T}, C::Matrix{T}, D::Matrix{T}}[]
+    xpts = @NamedTuple{x::typeof(lin_fun.prob.u0), p::typeof(lin_fun.prob.p), t::typeof(lin_fun.prob.tspan[1])}[]
+    for (op, t) in zip(ops, ts)
+        res, xpt = linearize(ssys, lin_fun; op, t, allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
+        push!(results, res)
+        push!(xpts, xpt)
+    end
+    return results, xpts
+end
+
 function linearize(
         sys, inputs, outputs; op = Dict(), t = 0.0,
         allow_input_derivatives = false,
         zero_dummy_der = false,
         kwargs...
     )
+    if op isa LinearizationOpPoint && op.t isa AbstractVector
+        ops = _build_op_from_solution(op)
+        ts = op.t
+        # Build the linearization function once using the first operating point, then
+        # reuse it for all subsequent time points — this avoids redundant `mtkcompile`
+        # and Jacobian preparation work.
+        lin_fun, ssys = linearization_function(
+            sys, inputs, outputs;
+            zero_dummy_der, op = ops[1], t = ts[1],
+            ignore_system_initial_conditions = true, kwargs...
+        )
+        ress, ops = __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
+        return ress, ssys, ops
+    end
+    ignore_system_ics = false
+    if op isa LinearizationOpPoint
+        t = op.t
+        op = _build_op_from_solution(op)
+        ignore_system_ics = true
+    end
     lin_fun,
         ssys = linearization_function(
         sys,
@@ -820,6 +973,7 @@ function linearize(
         outputs;
         zero_dummy_der,
         op, t,
+        ignore_system_initial_conditions = ignore_system_ics,
         kwargs...
     )
     mats, extras = linearize(ssys, lin_fun; op, t, allow_input_derivatives)
