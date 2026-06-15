@@ -463,10 +463,10 @@ end
 @testset "`truncate_constant_floats`" begin
     @variables x(t) y(t)
     eqs = [
-        D(x) ~ sum(Symbolics.SConst([1.23456, 2.34567])) ^ y
+        D(x) ~ sum(Symbolics.SConst([1.23456, 2.34567]))^y,
     ]
     obs = [
-        y ~ norm(Symbolics.SConst(2.3564 + 12.34345im))
+        y ~ norm(Symbolics.SConst(2.3564 + 12.34345im)),
     ]
     @named sys = System(eqs, t; observed = obs)
 

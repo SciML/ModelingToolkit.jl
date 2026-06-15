@@ -103,7 +103,7 @@ prob = ODEProblem(sys, [x0 => 1.0], (0.0, 1.0))
 
     @component function Parent(; name)
         @named child = Child()
-        System(Equation[], t; systems=[child], guesses=[child.x => 0.9], name)
+        System(Equation[], t; systems = [child], guesses = [child.x => 0.9], name)
     end
 
     @named parent = Parent()

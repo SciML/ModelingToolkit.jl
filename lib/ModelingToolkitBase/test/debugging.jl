@@ -60,7 +60,7 @@ end
 end
 
 @testset "Empty system doesn't error when generating assertions" begin
-        @variables x(t) y(t)
+    @variables x(t) y(t)
     eqs = [
         0 ~ x - y
         0 ~ 2y - x

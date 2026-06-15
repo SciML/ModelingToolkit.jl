@@ -871,6 +871,7 @@ function Base.showerror(io::IO, err::CausalConnectionSetNoSourceError)
     for cvar in err.cset
         println(io, "  ", cvar, " ", cvar.type === InputVar ? "(Input)" : "(Output)")
     end
+    return
 end
 
 """

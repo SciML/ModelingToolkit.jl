@@ -11,7 +11,7 @@ import REPL
 const _G = get(ENV, "GROUP", "All")
 const _SUB = "ModelingToolkitBase"
 const GROUP = _G == _SUB ? "Core" :
-              (startswith(_G, _SUB * "_") ? _G[(length(_SUB) + 2):end] : _G)
+    (startswith(_G, _SUB * "_") ? _G[(length(_SUB) + 2):end] : _G)
 
 function activate_extensions_env()
     Pkg.activate("extensions")
