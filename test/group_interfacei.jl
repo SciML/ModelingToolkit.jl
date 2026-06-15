@@ -1,0 +1,22 @@
+include("shared/mtktestset.jl")
+
+@testset "InterfaceI" begin
+    @mtktestset("Input Output Test", "input_output_handling.jl")
+    @safetestset "Clock Test" include("clock.jl")
+    @mtktestset("Variable binding semantics", "binding_semantics.jl")
+    @mtktestset("ODESystem Test", "odesystem.jl")
+    @mtktestset("Dynamic Quantities Test", "dq_units.jl")
+    @safetestset "Reduction Test" include("reduction.jl")
+    @mtktestset("Split Parameters Test", "split_parameters.jl")
+    @mtktestset("Components Test", "components.jl")
+    @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
+    @mtktestset("Basic transformations", "basic_transformations.jl")
+    @mtktestset("Change of variables", "changeofvariables.jl")
+    @safetestset "State Selection Test" include("state_selection.jl")
+    @mtktestset("Symbolic Event Test", "symbolic_events.jl")
+    @mtktestset("Stream Connect Test", "stream_connectors.jl")
+    @mtktestset("Jacobian Sparsity", "jacobiansparsity.jl")
+    @mtktestset("Modelingtoolkitize Test", "modelingtoolkitize.jl")
+    @mtktestset("Constants Test", "constants.jl")
+    @mtktestset("System Accessor Functions Test", "accessor_functions.jl")
+end
