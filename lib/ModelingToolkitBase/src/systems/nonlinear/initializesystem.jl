@@ -526,25 +526,37 @@ Check if the expression `ex` contains a delayed unknown of `sys` or a term in
 `banned`.
 """
 function _has_delays(sys::AbstractSystem, ex, banned)
+    # Delayed unknowns can only occur in DDEs, and `banned` only accumulates
+    # entries once a delay has been found.
+    if !is_dde(sys) && isempty(banned)
+        return false
+    end
+    return _has_delays!(Base.IdSet{SymbolicT}(), sys, ex, banned)
+end
+
+function _has_delays!(seen::Base.IdSet{SymbolicT}, sys::AbstractSystem, ex, banned)
     ex = unwrap(ex)
     ex in banned && return true
     if symbolic_type(ex) == NotSymbolic()
         if is_array_of_symbolics(ex)
-            return any(x -> _has_delays(sys, x, banned), ex)
+            return any(x -> _has_delays!(seen, sys, x, banned), ex)
         end
         return false
     end
     iscall(ex) || return false
+    ex in seen && return false
     op = operation(ex)
     args = arguments(ex)
-    if iscalledparameter(ex)
-        return any(x -> _has_delays(sys, x, banned), args)
-    end
-    if issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
+    result = if iscalledparameter(ex)
+        any(x -> _has_delays!(seen, sys, x, banned), args)
+    elseif issym(op) && length(args) == 1 && is_variable(sys, op(get_iv(sys))) &&
             iscall(args[1]) && get_iv(sys) in SU.search_variables(args[1])
-        return true
+        true
+    else
+        any(x -> _has_delays!(seen, sys, x, banned), args)
     end
-    return any(x -> _has_delays(sys, x, banned), args)
+    result || push!(seen, ex)
+    return result
 end
 
 @static if isdefined(SciMLBase, :RemakeInitializationDataContext)
