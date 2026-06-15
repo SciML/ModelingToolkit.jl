@@ -53,7 +53,7 @@ using Compat
 using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
     PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-    NoInit
+    NoInit, AbstractNonlinearProblem
 import Moshi
 using Moshi.Data: @data
 using Reexport
@@ -191,6 +191,9 @@ include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
 include("systems/problem_utils.jl")
+# Operator + lowering layer; must load before the problem constructors that
+# consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
+include("systems/homotopy_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -199,6 +202,7 @@ include("problems/daeproblem.jl")
 include("problems/sdeproblem.jl")
 include("problems/sddeproblem.jl")
 include("problems/nonlinearproblem.jl")
+include("problems/homotopyproblem.jl")
 include("problems/intervalnonlinearproblem.jl")
 include("problems/implicitdiscreteproblem.jl")
 include("problems/discreteproblem.jl")
@@ -246,6 +250,10 @@ export ImplicitDiscreteProblem, ImplicitDiscreteFunction
 export ODEProblem, SDEProblem
 export NonlinearFunction
 export NonlinearProblem
+# `AbstractNonlinearProblem(sys, op)` is the automatic constructor that selects a
+# `HomotopyProblem` when `sys` contains `homotopy(...)` nodes (see
+# `problems/homotopyproblem.jl`); re-exported so it is reachable unqualified.
+export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
 export OptimizationProblem, constraints
@@ -299,6 +307,8 @@ export generate_initializesystem, Initial, isinitial, InitializationProblem
 
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
+
+export homotopy
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes

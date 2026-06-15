@@ -30,6 +30,10 @@ $GENERATE_X_KWARGS
   `is_discrete_system(sys)`.
 - `scalar`: Whether to generate a single-out-of-place function that returns a scalar for
   the only equation in the system.
+- `extra_args`: Extra trailing symbolic arguments appended after all standard arguments and
+  kept out of the `MTKParameters` collapse, so they stay live scalar arguments of the
+  generated function (e.g. the homotopy continuation `λ`, threaded as the "t slot"). Empty
+  by default, which leaves the standard codegen path byte-identical.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
@@ -37,7 +41,8 @@ function generate_rhs(
         sys::System; implicit_dae = false,
         scalar = false, expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        cachesyms = nothing, compiler_options::CompilerOptions = CompilerOptions(),
+        cachesyms = nothing, extra_args::Tuple = (),
+        compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     )
     dvs = unknowns(sys)
@@ -107,10 +112,18 @@ function generate_rhs(
         args = (ddvs, args...)
         p_start += 1
     end
+    # Extra trailing symbolic arguments (e.g. the homotopy continuation `λ`),
+    # appended after all standard arguments and kept out of the `MTKParameters`
+    # collapse via `p_end`. Empty by default, so every standard caller is
+    # byte-identical: `p_end` is only forwarded when `extra_args` is non-empty,
+    # and `nargs` already counts the extra arguments through `length(args)`.
+    args = (args..., extra_args...)
+    p_end_kw = isempty(extra_args) ? (;) :
+        (; p_end = (t === nothing ? length(args) : length(args) - 1) - length(extra_args))
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments, u_arg,
+        sys, rhss, args...; p_start, extra_assignments, u_arg, p_end_kw...,
         expression = Val{true}, expression_module = eval_module, kwargs...
     )
     nargs = length(args) - length(p) + 1
