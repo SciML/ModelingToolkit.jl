@@ -1344,7 +1344,7 @@ if @isdefined(ModelingToolkit)
         model = dc_motor()
         sys = mtkcompile(model)
 
-        prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0); guesses = [sys.emf.flange.phi => 0])
+        prob = ODEProblem(sys, [sys.L1.i => 0.0, sys.emf.flange.phi => 0.0], (0, 6.0))
 
         @test_nowarn remake(prob, p = prob.p)
     end
