@@ -570,7 +570,7 @@ end
     end
 end
 
-@testset "`eliminate_perfect_aliases!` correctly handles unscalarized array variabls" begin
+@testset "`eliminate_perfect_aliases!` correctly handles unscalarized array variables" begin
     @variables x(t)[1:2] y(t) z(t) [state_priority = -10] w(t)
     @named sys = System([0 ~ dot(x, Symbolics.SConst([y, z])), z ~ w], t)
     ts = TearingState(sys)

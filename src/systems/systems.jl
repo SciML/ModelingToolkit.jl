@@ -8,7 +8,7 @@ unknowns of the system may be eliminated as observables, eliminating the need fo
 numerical solver to solve for these variables.
 
 Does not rely on metadata to identify variables/parameters/brownians. Instead, queries
-the system for which symbolic quantites belong to which category. Any variables not
+the system for which symbolic quantities belong to which category. Any variables not
 present in the equations of the system will be removed in this process.
 
 # Keyword Arguments
