@@ -772,6 +772,12 @@ function __apply_copy_template(valp, template)
         return p.constant[template.idx[1]][template.idx[2]]
     elseif template isa ParameterIndex{Nonnumeric, Tuple{Int, UnitRange{Int}}}
         return p.nonnumeric[template.idx[1]][template.idx[2]]
+    elseif template isa StaticBufferIndex{SciMLStructures.Discrete}
+        return _static_buffer(p.discrete, template)[template.range]
+    elseif template isa StaticBufferIndex{SciMLStructures.Constants}
+        return _static_buffer(p.constant, template)[template.range]
+    elseif template isa StaticBufferIndex{Nonnumeric}
+        return _static_buffer(p.nonnumeric, template)[template.range]
     elseif template isa UnitRange{Int}
         return u[template]
     elseif template isa ObservedWrapper
@@ -806,6 +812,27 @@ end
 
 struct IndepVarTemplate end
 const IV_TEMPLATE = IndepVarTemplate()
+
+"""
+    $TYPEDEF
+
+Template entry for `CopyParamsByTemplate` indexing into one of the inner buffers of a
+multi-buffer `MTKParameters` portion (discrete/constants/nonnumeric). Unlike
+`ParameterIndex{P, Tuple{Int, UnitRange{Int}}}`, the buffer index `I` is lifted into the
+type domain so that indexing the heterogeneously-typed tuple of buffers constant-folds and
+infers concretely. With a runtime buffer index the result is a small `Union` of the buffer
+types, which Enzyme's type analysis rejects (`IllegalTypeAnalysisException`) when it flows
+into `reshape` inside the `CopyParamsByTemplate` compile unit.
+"""
+struct StaticBufferIndex{P, I}
+    range::UnitRange{Int}
+end
+
+function StaticBufferIndex{P}(idx::Tuple{Int, UnitRange{Int}}) where {P}
+    return StaticBufferIndex{P, idx[1]}(idx[2])
+end
+
+@inline _static_buffer(bufs::Tuple, ::StaticBufferIndex{P, I}) where {P, I} = bufs[I]
 
 Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, elem_types::Set{DataType})
     if length(template) <= 4
@@ -923,6 +950,18 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         if template[i] isa Vector{SymbolicT}
             template[i] = concrete_getu(srcsys, template[i]; wrap_as_any = true, kws...)
             delete!(elem_types, Vector{SymbolicT})
+            push!(elem_types, typeof(template[i]))
+        end
+    end
+
+    # Lift buffer indices of multi-buffer portions (discrete/constants/nonnumeric) into
+    # the type domain. This is done as a final pass so the contiguous-range merging above
+    # can keep operating on plain `ParameterIndex`es.
+    for i in eachindex(template)
+        entry = template[i]
+        if entry isa ParameterIndex && entry.idx isa Tuple{Int, UnitRange{Int}}
+            delete!(elem_types, typeof(entry))
+            template[i] = StaticBufferIndex{typeof(entry.portion)}(entry.idx)
             push!(elem_types, typeof(template[i]))
         end
     end
