@@ -510,7 +510,7 @@ function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t, t
     if !isempty(inputs)
         @statuscheck FMI.fmi2SetReal(
             wrapper.instance, wrapper.input_value_references,
-            Csize_t(length(wrapper.param_value_references)), inputs
+            Csize_t(length(inputs)), inputs
         )
     end
     if !isempty(params)
