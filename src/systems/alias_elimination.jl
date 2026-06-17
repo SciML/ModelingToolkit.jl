@@ -103,9 +103,11 @@ end
 
 Pick the target variable for an alias group. Irreducible variables must remain as
 unknowns, so one of them is chosen as the target when the group contains any. Otherwise
-the variable with the highest `state_priority` wins. When priorities are tied, prefer
-the variable appearing in the most equations: visualization-only variables appear in a
-single alias equation, while physics variables appear in many dynamics equations.
+the variable with the highest `state_priority` wins; all other group members are
+eliminated in favour of the target. When positive priorities are tied, emit a warning and prefer the
+variable appearing in the most equations (visualization-only variables appear in a single alias
+equation, while physics variables appear in many dynamics equations); if that is also
+tied, one of the tied variables is chosen arbitrarily.
 """
 function pick_alias_target(
         fullvars::Vector{SymbolicT}, group_vars::Vector{Int}, state_priorities, irreducibles::AtomicSetT,
@@ -118,9 +120,14 @@ function pick_alias_target(
     irr_idx === nothing || return group_vars[irr_idx]
     max_priority = maximum(Base.Fix1(getindex, state_priorities), group_vars)
     candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
-    if graph !== nothing && length(candidates) > 1
-        _, target_idx = findmax(v -> length(𝑑neighbors(graph, v)), candidates)
-        return candidates[target_idx]
+    if length(candidates) > 1 && max_priority > 0
+        tied_names = getindex.(Ref(fullvars), candidates)
+        @warn "Multiple variables in an alias group share the highest state_priority \
+($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
+        if graph !== nothing
+            max_degree = maximum(v -> length(𝑑neighbors(graph, v)), candidates)
+            candidates = filter(v -> length(𝑑neighbors(graph, v)) == max_degree, candidates)
+        end
     end
     return candidates[1]
 end
@@ -203,7 +210,6 @@ function find_perfect_aliases!(
     group_target = Dict{Int, Int}()
     sizehint!(group_target, length(members))
 
-    is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
     is_irreducible_v = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v])
 
     # Symbolic zero used as substitution target for variables in conflict groups.
@@ -250,9 +256,10 @@ function find_perfect_aliases!(
         group_target[root] = target
         target_p = parity[target]
         for v in group_vars
-            # In consistent groups sticky vars (irreducible OR priority>0) other
-            # than the target stay as unknowns.
-            if is_sticky(v) || v == target
+            # In consistent groups, irreducible vars other than the target stay as unknowns.
+            # All other non-target vars (including those with positive state_priority) are
+            # eliminated in favour of the highest-priority target.
+            if is_irreducible_v(v) || v == target
                 state.always_present[v] = true
                 continue
             end
@@ -318,8 +325,8 @@ function find_perfect_aliases!(
             end
         else
             target = group_target[parent[v1]]
-            c1 = is_sticky(v1) ? v1 : target
-            c2 = is_sticky(v2) ? v2 : target
+            c1 = is_irreducible_v(v1) ? v1 : target
+            c2 = is_irreducible_v(v2) ? v2 : target
             c1 == c2 && push!(eqs_to_rm, ieq)
         end
     end
