@@ -359,6 +359,34 @@ ss = mtkcompile(sys)
     @test isequal(only(unknowns(sys)), y)
 end
 
+@testset "positive-priority variable is eliminated when target has higher priority" begin
+    # Both x and y have positive state_priority, but y's is higher.
+    # Old behaviour: both sticky → neither eliminated.
+    # New behaviour: x (lower priority) is eliminated as observed in favour of y.
+    @variables x(t) y(t)
+    @named sys = System([D(y) ~ -y, x ~ y], t; state_priorities = [x => 1, y => 2])
+    state = TearingState(sys)
+    ModelingToolkit.eliminate_perfect_aliases!(state)
+    @test any(eq -> isequal(eq.lhs, unwrap(x)), state.additional_observed)
+    @test any(isequal(unwrap(y)), state.fullvars)
+    @test !any(isequal(unwrap(x)), state.fullvars)
+end
+
+@testset "warning is emitted when state_priority is tied across alias group" begin
+    # x appears in two equations (D(x) ~ -x and x ~ y), y in one (x ~ y),
+    # so the equation-count heuristic picks x as target — but the priority tie
+    # (both at 5) must still emit a warning regardless of how the tie is broken.
+    @variables x(t) y(t)
+    @named sys = System([D(x) ~ -x, x ~ y], t; state_priorities = [x => 5, y => 5])
+    state = TearingState(sys)
+    @test_logs (:warn, r"state_priority") match_mode=:any ModelingToolkit.eliminate_perfect_aliases!(state)
+    # Exactly one of the two variables is eliminated as observed.
+    n_elim = count(
+        eq -> isequal(eq.lhs, unwrap(x)) || isequal(eq.lhs, unwrap(y)),
+        state.additional_observed)
+    @test n_elim == 1
+end
+
 @testset "Perfect aliases do not eliminate irreducible variables" begin
     @variables x(t) y(t)
     @variables e(t) [irreducible = true]
