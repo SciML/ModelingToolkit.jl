@@ -264,9 +264,9 @@ function MTK.FMIComponent(
         append!(observed, der_observed)
     elseif type == :CS
         _functor = if Ver == 2
-            FMI2CSFunctor(state_value_references, output_value_references)
+            FMI2CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi2Real}(NaN))
         else
-            FMI3CSFunctor(state_value_references, output_value_references)
+            FMI3CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi3Float64}(NaN))
         end
         @parameters (functor::(typeof(_functor)))(..)[1:(length(__mtk_internal_u) + length(__mtk_internal_o))] = _functor
         # for co-simulation, we need to ensure the output buffer is solved for
@@ -505,7 +505,7 @@ a new instance. `inputs` should be in the order of `wrapper.input_value_referenc
 `params` should be in the order of `wrapper.param_value_references`. `t` is the current
 time. Returns the created instance, which is also stored in `wrapper.instance`.
 """
-function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t)
+function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t, t_end = nothing)
     wrapper.instance = FMI.fmi2Instantiate!(wrapper.fmu)::FMI.FMU2Component
     if !isempty(inputs)
         @statuscheck FMI.fmi2SetReal(
@@ -519,8 +519,10 @@ function get_instance_common!(wrapper::FMI2InstanceWrapper, inputs, params, t)
             Csize_t(length(wrapper.param_value_references)), params
         )
     end
+    stop_time_defined = t_end === nothing ? FMI.fmi2False : FMI.fmi2True
+    stop_time = something(t_end, t)
     @statuscheck FMI.fmi2SetupExperiment(
-        wrapper.instance, FMI.fmi2True, wrapper.tolerance, t, FMI.fmi2False, t
+        wrapper.instance, FMI.fmi2True, wrapper.tolerance, t, stop_time_defined, stop_time
     )
     @statuscheck FMI.fmi2EnterInitializationMode(wrapper.instance)
     return wrapper.instance
@@ -555,9 +557,9 @@ present and create a new one otherwise. Return the instance.
 
 See `get_instance_common!` for a description of the arguments.
 """
-function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
+function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, t, t_end)
     if wrapper.instance === nothing
-        get_instance_common!(wrapper, inputs, params, t)
+        get_instance_common!(wrapper, inputs, params, t, t_end)
         if !isempty(states)
             @statuscheck FMI.fmi2SetReal(
                 wrapper.instance, wrapper.state_value_references,
@@ -664,15 +666,17 @@ freshly instantiated FMU which needs to be initialized. `inputs` should be in th
 of `wrapper.input_value_references`. `params` should be in the order of
 `wrapper.param_value_references`. `t` is the current time. Returns `wrapper.instance`.
 """
-function get_instance_common!(wrapper::FMI3InstanceWrapper, inputs, params, t)
+function get_instance_common!(wrapper::FMI3InstanceWrapper, inputs, params, t, t_end = nothing)
     if !isempty(params)
         @statuscheck FMI.fmi3SetFloat64(
             wrapper.instance, wrapper.param_value_references,
             params
         )
     end
+    stop_time_defined = t_end === nothing ? FMI.fmi3False : FMI.fmi3True
+    stop_time = something(t_end, t)
     @statuscheck FMI.fmi3EnterInitializationMode(
-        wrapper.instance, FMI.fmi3False, zero(FMI.fmi3Float64), t, FMI.fmi3False, t
+        wrapper.instance, FMI.fmi3False, zero(FMI.fmi3Float64), t, stop_time_defined, stop_time
     )
     if !isempty(inputs)
         @statuscheck FMI.fmi3SetFloat64(
@@ -713,12 +717,12 @@ present and create a new one otherwise. Return the instance.
 
 See `get_instance_common!` for a description of the arguments.
 """
-function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
+function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, t, t_end)
     if wrapper.instance === nothing
         wrapper.instance = FMI.fmi3InstantiateCoSimulation!(
             wrapper.fmu; eventModeUsed = false
         )::FMI.FMU3Instance
-        get_instance_common!(wrapper, inputs, params, t)
+        get_instance_common!(wrapper, inputs, params, t, t_end)
         if !isempty(states)
             @statuscheck FMI.fmi3SetFloat64(
                 wrapper.instance, wrapper.state_value_references, states
@@ -836,6 +840,10 @@ struct FMI2CSFunctor
     The value references of output variables in the FMU.
     """
     output_value_references::Vector{FMI.fmi2ValueReference}
+    """
+    `tspan[2]`, set during callback initialization
+    """
+    t_end::Base.RefValue{FMI.fmi2Real}
 end
 
 function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, params, t)
@@ -845,7 +853,7 @@ function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
-    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t, fn.t_end[])
     if isempty(fn.output_value_references)
         return eltype(states)[]
     else
@@ -879,11 +887,12 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
+    ctx.t_end[] = integrator.sol.prob.tspan[2]
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
 
-    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
     if isdefined(m, :states)
         @statuscheck FMI.fmi2GetReal!(instance, ctx.state_value_references, m.states)
     end
@@ -910,7 +919,7 @@ function fmiCSStep!(m, o, ctx::FMI2CSFunctor, integrator)
     t = o.t
     dt = o.dt
 
-    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
     if !isempty(inputs)
         FMI.fmi2SetReal(
             instance, wrapper.input_value_references, Csize_t(length(inputs)), inputs
@@ -947,13 +956,17 @@ struct FMI3CSFunctor
     The value references of output variables in the FMU.
     """
     output_value_references::Vector{FMI.fmi3ValueReference}
+    """
+    `tspan[2]`, set during callback initialization
+    """
+    t_end::Base.RefValue{FMI.fmi3Float64}
 end
 
 function (fn::FMI3CSFunctor)(wrapper::FMI3InstanceWrapper, states, inputs, params, t)
     states = states isa SubArray ? copy(states) : states
     inputs = inputs isa SubArray ? copy(inputs) : inputs
     params = params isa SubArray ? copy(params) : params
-    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t, fn.t_end[])
 
     if isempty(fn.output_value_references)
         return eltype(states)[]
@@ -980,10 +993,11 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
+    ctx.t_end[] = integrator.sol.prob.tspan[2]
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
-    instance = get_instance_CS!(wrapper, states, inputs, params, t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, t, ctx.t_end[])
     if isdefined(m, :states)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
@@ -1005,7 +1019,7 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     t = o.t
     dt = o.dt
 
-    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t)
+    instance = get_instance_CS!(wrapper, states, inputs, params, integrator.t, ctx.t_end[])
     if !isempty(inputs)
         FMI.fmi3SetFloat64(instance, wrapper.input_value_references, inputs)
     end
