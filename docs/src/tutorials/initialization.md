@@ -476,7 +476,7 @@ The equations of the initialization system are:
   is `missing`).
 - All additional initialization equations (`initialization_equations(sys)`). This also includes
   additional equations passed to the `initialization_eqs` keyword of the problem constructor.
-- All initial conditions, formed by combinding `initial_conditions(sys)` with those passed
+- All initial conditions, formed by combining `initial_conditions(sys)` with those passed
   to the problem. Initial conditions passed to the problem override those in the system in
   case of conflict.
 

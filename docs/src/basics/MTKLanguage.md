@@ -570,7 +570,7 @@ end
 
 ## Build structurally simplified models:
 
-`@mtkcompile` builds an instance of a component and returns a structurally simplied system.
+`@mtkcompile` builds an instance of a component and returns a structurally simplified system.
 
 ```julia
 @mtkcompile sys = CustomModel()

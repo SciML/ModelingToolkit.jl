@@ -18,7 +18,7 @@ end
 function __import_dynamic_quantities(_...)
     error(
         """
-        Please import DynamicQuantites.jl to use this `t` and `D`.
+        Please import DynamicQuantities.jl to use this `t` and `D`.
         """
     )
 end
