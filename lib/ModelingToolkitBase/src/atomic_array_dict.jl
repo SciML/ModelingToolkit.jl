@@ -243,10 +243,16 @@ const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
-    arr, isarr = split_indexed_var(k)
     res = get_possibly_indexed(dd.dict, k, dd.default)
     if res === dd.default
+        arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k
+        return def()
+    end
+    if SU.is_array_shape(SU.shape(k)) && any(
+            Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
+            SU.stable_eachindex(res)
+        )
         return def()
     end
     return res

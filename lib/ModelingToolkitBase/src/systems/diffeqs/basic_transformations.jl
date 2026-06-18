@@ -1300,3 +1300,31 @@ function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatTy
 
     return ConstructionBase.setproperties(sys; eqs = eqs, observed = obs)
 end
+
+"""
+    $TYPEDSIGNATURES
+
+Use various heuristics to discover parameters that may be zero in `sys`. Useful when
+simplifying the system to avoid accidentally dividing by zero.
+"""
+function discover_maybe_zeros(sys::System)
+    defs = copy(parent(bindings(sys)))
+    left_merge!(defs, initial_conditions(sys))
+    filter!(Base.Fix2(!==, COMMON_MISSING) ∘ last, defs)
+    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(defs))
+    mbzs = copy(maybe_zeros(sys))
+    for k in [parameters(sys); unknowns(sys)]
+        is_variable_numeric(k) || continue
+        sh = SU.shape(k)
+        sh isa SU.ShapeVecT || continue
+        if !SU.is_array_shape(sh)
+            SU._iszero(subber(k)) && push_as_atomic_array!(mbzs, k)
+            continue
+        end
+        if any(SU._iszero ∘ subber ∘ Base.Fix1(getindex, k), SU.stable_eachindex(k))
+            push_as_atomic_array!(mbzs, k)
+        end
+    end
+
+    return @set! sys.maybe_zeros = mbzs
+end
