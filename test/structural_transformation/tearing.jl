@@ -309,23 +309,25 @@ end
 
 @testset "AD through inline linear SCCs works" begin
     reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
-    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
-    prob = ODEProblem(sys, [], (0.0, 10.0))
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    prob = ODEProblem(sys, [x => [1.0, 2.3, 5.7], p => rand(3, 3)], (0.0, 10.0))
     @assert prob.p.nonnumeric[1] isa
         Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
     @assert SciMLBase.has_initializeprob(prob.f)
 
-    setter = setsym_oop(prob, [sys.R, sys.C])
+    setter = setsym_oop(prob, [p[1, 1]])
 
     function loss(x)
         new_u0, new_p = setter(prob, x)
-        new_prob = remake(prob; u0 = new_u0, p = new_p)
+        new_prob = remake(prob; p = new_p)
         sol = solve(new_prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
-        return sol[sys.capacitor.v][end]
+        return sol[sys.y[1]][end]
     end
 
     # Primal works: returns ~0.993
-    @test_nowarn loss([1.0, 1.0])
+    @test_nowarn loss([1.0])
 
-    @test_nowarn ForwardDiff.gradient(loss, [1.0, 1.0])
+    @test_nowarn ForwardDiff.gradient(loss, [1.0])
 end
