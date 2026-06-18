@@ -110,6 +110,22 @@ f.f(du, u, p, 0.1)
 @test du == [4, 0, -16]
 @test_throws Symbolics.FunctionUnimplementedError f.f(u, p, 0.1)
 
+# check that iip_config with expression = Val{true} produces serializable functions
+# (regression test for https://github.com/SciML/ModelingToolkit.jl/issues/4464)
+f_iip_expr = ODEFunction(de; iip_config = (false, true), expression = Val{true})
+f_iip_from_expr = eval(f_iip_expr)
+# verify the OOP stub is the stable module-level function (not a Main closure)
+@test f_iip_from_expr.f.f_oop === ModelingToolkitBase._oop_unimplemented
+# verify round-trip serialization works (simulates distributed usage)
+@testset "Issue#4464" begin
+    using Serialization
+    buf = IOBuffer()
+    serialize(buf, f_iip_from_expr)
+    seekstart(buf)
+    f2 = deserialize(buf)
+    @test f2.f.f_oop === ModelingToolkitBase._oop_unimplemented
+end
+
 #check iip
 f = eval(ODEFunction(de; expression = Val{true}))
 f2 = ODEFunction(de)
