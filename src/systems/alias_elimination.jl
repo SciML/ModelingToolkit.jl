@@ -147,7 +147,6 @@ function find_perfect_aliases!(
     (; sys, fullvars, structure) = state
     (; graph, solvable_graph, var_to_diff, state_priorities) = structure
 
-    @assert solvable_graph === nothing
     diff_to_var = invview(var_to_diff)
     aliases = Dict{Int, Int}()
     subs = Dict{SymbolicT, SymbolicT}()
@@ -236,6 +235,7 @@ function find_perfect_aliases!(
 
                 append!(eqs_to_substitute, 𝑑neighbors(graph, v))
                 BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), v, ())
+                solvable_graph === nothing || BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(solvable_graph), v, ())
 
                 dv = var_to_diff[v]
                 while dv isa Int
@@ -244,6 +244,7 @@ function find_perfect_aliases!(
 
                     append!(eqs_to_substitute, 𝑑neighbors(graph, dv))
                     BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), dv, ())
+                    solvable_graph === nothing || BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(solvable_graph), dv, ())
 
                     dv = var_to_diff[dv]
                 end
@@ -275,6 +276,10 @@ function find_perfect_aliases!(
                 push!(eqs_to_substitute, e)
                 Graphs.rem_edge!(graph, e, v)
                 Graphs.add_edge!(graph, e, target)
+                if solvable_graph !== nothing && Graphs.has_edge(solvable_graph, BipartiteEdge(e, v))
+                    Graphs.rem_edge!(solvable_graph, e, v)
+                    Graphs.add_edge!(solvable_graph, e, target)
+                end
             end
 
             dv = var_to_diff[v]
@@ -292,6 +297,10 @@ function find_perfect_aliases!(
                     push!(eqs_to_substitute, e)
                     Graphs.rem_edge!(graph, e, dv)
                     Graphs.add_edge!(graph, e, dtarget)
+                    if solvable_graph !== nothing && Graphs.has_edge(solvable_graph, BipartiteEdge(e, dv))
+                        Graphs.rem_edge!(solvable_graph, e, dv)
+                        Graphs.add_edge!(solvable_graph, e, dtarget)
+                    end
                 end
 
                 dv = var_to_diff[dv]
@@ -320,6 +329,9 @@ function find_perfect_aliases!(
             else
                 v_pin = pop!(irrs) # irreducible var to pin to 0
                 BipartiteGraphs.set_neighbors!(graph, ieq, [v_pin])
+                if solvable_graph !== nothing
+                    BipartiteGraphs.set_neighbors!(solvable_graph, ieq, [v_pin])
+                end
                 eqs[ieq] = fullvars[v_pin] ~ zero_sym
                 original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
             end
@@ -360,6 +372,10 @@ function find_perfect_aliases!(
             𝑠neighbors(graph, e)
         )
         BipartiteGraphs.set_neighbors!(graph, e, new_row)
+        if solvable_graph !== nothing
+            filter!(v -> Graphs.has_edge(solvable_graph, BipartiteEdge(e, v)), new_row)
+            BipartiteGraphs.set_neighbors!(solvable_graph, e, new_row)
+        end
     end
 
     # After substitution, alias equations that connected a sticky non-target
