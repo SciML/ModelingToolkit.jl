@@ -567,6 +567,19 @@ function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, 
             )
         end
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
+    else
+        if !isempty(states)
+            @statuscheck FMI.fmi2SetReal(
+                wrapper.instance, wrapper.state_value_references,
+                Csize_t(length(wrapper.state_value_references)), states
+            )
+        end
+        if !isempty(inputs)
+            @statuscheck FMI.fmi2SetReal(
+                wrapper.instance, wrapper.input_value_references,
+                Csize_t(length(inputs)), inputs
+            )
+        end
     end
     return wrapper.instance
 end
@@ -729,6 +742,17 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
             )
         end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
+    else
+        if !isempty(inputs)
+            @statuscheck FMI.fmi3SetFloat64(
+                wrapper.instance, wrapper.input_value_references, inputs
+            )
+        end
+        if !isempty(states)
+            @statuscheck FMI.fmi3SetFloat64(
+                wrapper.instance, wrapper.state_value_references, states
+            )
+        end
     end
     return wrapper.instance
 end
@@ -850,9 +874,6 @@ function (fn::FMI2CSFunctor)(wrapper::FMI2InstanceWrapper, states, inputs, param
     states = states isa SubArray ? copy(states) : states
     inputs = inputs isa SubArray ? copy(inputs) : inputs
     params = params isa SubArray ? copy(params) : params
-    if wrapper.instance !== nothing
-        reset_instance!(wrapper)
-    end
     instance = get_instance_CS!(wrapper, states, inputs, params, t, fn.t_end[])
     if isempty(fn.output_value_references)
         return eltype(states)[]
