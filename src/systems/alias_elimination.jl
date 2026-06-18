@@ -37,7 +37,7 @@ function eliminate_perfect_aliases!(state::TearingState)
     old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(
         state, eqs_to_rm, vars_to_rm; eqs_sorted_and_uniqued = true
     )
-    return nothing
+    return old_to_new_eq, old_to_new_var, aliases
 end
 
 """
