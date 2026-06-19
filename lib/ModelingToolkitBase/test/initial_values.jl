@@ -140,6 +140,10 @@ end
         [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
         guesses = [x => 2y, y => 2x]
     )
+    @info unknowns(sys) equations(sys)
+    pr = ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
+    isys = pr.f.initialization_data.initializeprob.f.sys
+    @info unknowns(isys) equations(isys) observed(isys) full_equations(isys)
     @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
     @test_throws ModelingToolkitBase.MissingVariablesError ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
