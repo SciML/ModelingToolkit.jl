@@ -93,13 +93,16 @@ with the name `namespace__variable`.
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
   For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`.
+- `stop_time`: The `stopTime` for the FMU, as defined in the FMI spec. By default, this will
+  be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(
         ::Val{Ver}; fmu = nothing, tolerance = 1.0e-6,
-        communication_step_size = nothing, reinitializealg = nothing, type, name
+        communication_step_size = nothing, reinitializealg = nothing,
+        stop_time = nothing, type, name
     ) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
@@ -264,9 +267,9 @@ function MTK.FMIComponent(
         append!(observed, der_observed)
     elseif type == :CS
         _functor = if Ver == 2
-            FMI2CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi2Real}(NaN))
+            FMI2CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi2Real}(something(stop_time, NaN)))
         else
-            FMI3CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi3Float64}(NaN))
+            FMI3CSFunctor(state_value_references, output_value_references, Base.Ref{FMI.fmi3Float64}(something(stop_time, NaN)))
         end
         @parameters (functor::(typeof(_functor)))(..)[1:(length(__mtk_internal_u) + length(__mtk_internal_o))] = _functor
         # for co-simulation, we need to ensure the output buffer is solved for
@@ -908,7 +911,9 @@ function fmiCSInitialize!(m, o, ctx::FMI2CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
-    ctx.t_end[] = integrator.sol.prob.tspan[2]
+    if isnan(ctx.t_end[])
+        ctx.t_end[] = integrator.sol.prob.tspan[2]
+    end
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
@@ -1014,7 +1019,9 @@ function fmiCSInitialize!(m, o, ctx::FMI3CSFunctor, integrator)
     params = o.params
     t = o.t
     wrapper = o.wrapper
-    ctx.t_end[] = integrator.sol.prob.tspan[2]
+    if isnan(ctx.t_end[])
+        ctx.t_end[] = integrator.sol.prob.tspan[2]
+    end
     if wrapper.instance !== nothing
         reset_instance!(wrapper)
     end
