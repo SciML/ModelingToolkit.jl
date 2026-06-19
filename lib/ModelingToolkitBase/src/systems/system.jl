@@ -44,7 +44,7 @@ Check whether `sys` supports symbolic automatic differentiation. Throws an `Argu
 if the system has been marked with [`SymbolicADDisallowed`](@ref).
 """
 function check_symbolic_ad_allowed(sys::AbstractSystem)
-    if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
+    return if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
         reason = SymbolicUtils.getmetadata(sys, SymbolicADDisallowed, nothing)
         msg = "System $(nameof(sys)) does not support symbolic automatic differentiation."
         if reason isa AbstractString && !isempty(reason)
@@ -669,11 +669,14 @@ function System(
     # JumpProcesses must not re-apply factorial scaling on parameter updates.
     for j in jumps
         if j isa MassActionJump && j.rescale_rates_on_update
-            throw(ArgumentError(
-                "MassActionJump with rescale_rates_on_update = true is not supported " *
-                "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
-                "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
-                "or pass scale_rates = false when constructing the MassActionJump."))
+            throw(
+                ArgumentError(
+                    "MassActionJump with rescale_rates_on_update = true is not supported " *
+                        "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
+                        "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
+                        "or pass scale_rates = false when constructing the MassActionJump."
+                )
+            )
         end
     end
 
@@ -1329,15 +1332,20 @@ Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
 
 Returns a `MassActionJump` — this is a convenience constructor, not a new type.
 """
-function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
-        kwargs...)
+function SymbolicMassActionJump(
+        rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...
+    )
     if scale_rates
-        throw(ArgumentError(
-            "SymbolicMassActionJump requires pre-scaled rate expressions " *
-            "(scale_rates = false). scale_rates = true is not supported in " *
-            "ModelingToolkitBase."))
+        throw(
+            ArgumentError(
+                "SymbolicMassActionJump requires pre-scaled rate expressions " *
+                    "(scale_rates = false). scale_rates = true is not supported in " *
+                    "ModelingToolkitBase."
+            )
+        )
     end
-    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+    return MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
 end
 
 """
@@ -1678,5 +1686,5 @@ end
 Get the `IRStructure` associated with the system.
 """
 function get_irstructure(sys::System)
-    get_irstructure_tlv(sys)[]::IRStructure{SymReal}
+    return get_irstructure_tlv(sys)[]::IRStructure{SymReal}
 end

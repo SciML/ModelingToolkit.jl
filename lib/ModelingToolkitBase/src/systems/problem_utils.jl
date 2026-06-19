@@ -376,9 +376,9 @@ function varmap_to_vars(
             MissingGuessValue.HashedRandom() => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = [hash(var,hash(i)) for i in SU.stable_eachindex(var)]./0x1p64
+                        varmap[var] = [hash(var, hash(i)) for i in SU.stable_eachindex(var)] ./ 0x1p64
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var)/0x1p64), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var) / 0x1p64), COMMON_NOTHING)
                     end
                 end
             end
@@ -793,7 +793,7 @@ function __apply_copy_template(valp, template)
 end
 
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
-    if IsRoot
+    return if IsRoot
         reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
     else
         buffers = map(Base.Fix1(__apply_copy_template, src), cp.template)
@@ -1412,7 +1412,7 @@ function (p::PromoteToTunableEltype{F, floatT})(nlsol) where {F, floatT}
     raw isa AbstractArray || return raw
     isempty(raw) && return raw
     T = promote_type(eltype(raw), _tunable_eltype(parameter_values(nlsol)), floatT)
-    T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
+    return T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
 end
 
 _tunable_eltype(p::MTKParameters) = isempty(p.tunable) ? Bool : eltype(p.tunable)
@@ -1468,7 +1468,7 @@ function maybe_build_initialization_problem(
     initsys = initializeprob.f.sys::System
     needs_remake = false
     _u0 = state_values(initializeprob)
-     if _u0 !== nothing
+    if _u0 !== nothing
         if ArrayInterface.ismutable(_u0)
             __u0 = floatT.(_u0)
         else

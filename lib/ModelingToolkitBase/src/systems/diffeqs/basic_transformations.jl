@@ -1170,7 +1170,7 @@ end
 DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper{T}) where {T} = dcapiw
 
 function DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper) where {T}
-    convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
+    return convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
 end
 
 function (dcapiw::DiffCacheAllocatorAPIWrapper)(reference, sz::NTuple{N, Int}) where {N}
@@ -1255,14 +1255,14 @@ Does nothing to integers or other number types.  Does affect Complex numbers.
 """
 struct LiteralRewriter{FloatType <: AbstractFloat} end
 
-(::LiteralRewriter{FT})(x::AbstractFloat) where FT = convert(FT, x)
+(::LiteralRewriter{FT})(x::AbstractFloat) where {FT} = convert(FT, x)
 function (rw::LiteralRewriter{FT})(x::Complex{F}) where {FT, F <: AbstractFloat}
     return convert(Complex{typeof(rw(one(F)))}, x)
 end
 function (rw::LiteralRewriter{FT})(x::AbstractArray{F}) where {FT, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
     return map(rw, x)
 end
-(::LiteralRewriter{FT})(x) where FT = x
+(::LiteralRewriter{FT})(x) where {FT} = x
 
 function (rw::LiteralRewriter)(x::SymbolicT)
     return Moshi.Match.@match x begin

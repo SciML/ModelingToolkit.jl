@@ -215,7 +215,8 @@ end
     # With u ∈ (-0.5, 0.5) instead of (-1, 1), optimal x(1) = 0.125
     jprob_b = JuMPDynamicOptProblem(
         block, [u0map; parammap], tspan;
-        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5))
+    )
     jsol_b = solve(jprob_b, JuMPCollocation(Ipopt.Optimizer, constructVerner8()))
     @test ≈(jsol_b.sol[x(t)][end], 0.125, rtol = 1.0e-4)
 
@@ -228,7 +229,8 @@ end
 
     iprob = InfiniteOptDynamicOptProblem(
         block, [u0map; parammap], tspan;
-        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5))
+    )
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test ≈(isol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
 
@@ -239,15 +241,19 @@ end
     @test InfiniteOpt.upper_bound(m.V[1]) == 0.5
 
     if ENABLE_CASADI
-        cprob = CasADiDynamicOptProblem(block, [u0map; parammap], tspan;
-            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan;
+            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5))
+        )
         csol = solve(cprob, CasADiCollocation("ipopt", constructTsitouras5()))
         @test ≈(csol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
     end
 
     if @isdefined(Pyomo)
-        pprob = PyomoDynamicOptProblem(block, [u0map; parammap], tspan;
-            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5)))
+        pprob = PyomoDynamicOptProblem(
+            block, [u0map; parammap], tspan;
+            dt = 0.01, bounds = Dict(u(t) => (-0.5, 0.5))
+        )
         psol = solve(pprob, PyomoCollocation("ipopt", BackwardEuler()))
         @test ≈(psol.sol[x(t)][end], 0.125, rtol = 1.0e-4)
     end
@@ -409,7 +415,8 @@ end
     @named gain = System([y ~ v], t)
 
     @named composed = System(
-        [connect(gain.y, plant.u)], t; systems = [plant, gain])
+        [connect(gain.y, plant.u)], t; systems = [plant, gain]
+    )
     sys = mtkcompile(composed; inputs = [gain.v])
 
     # After mtkcompile with connect, the input is bound but should still be a control
@@ -419,7 +426,7 @@ end
     jprob = JuMPDynamicOptProblem(sys, [plant.x => 1.0, gain.v => 0.0], (0.0, 2.0); dt = 0.1)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()))
     # Minimizing x(2)² with D(x) = u, x(0) = 1 → x(2) = 0 is achievable and optimal
-    @test jsol.sol[plant.x][end] ≈ 0.0 atol=1e-5
+    @test jsol.sol[plant.x][end] ≈ 0.0 atol = 1.0e-5
 end
 
 @testset "Free final time problems" begin
@@ -750,7 +757,7 @@ end
     # but observed equations may reference it.
     eqs = [
         D(x) ~ -k * x + u,
-        obs_val ~ q * x  # observed equation references bound parameter q
+        obs_val ~ q * x,  # observed equation references bound parameter q
     ]
     cost = [-EvalAt(1.0)(obs_val)]
 
@@ -813,7 +820,7 @@ end
 
     eqs = [
         D(x) ~ -k * x + u,
-        obs_val ~ q * x
+        obs_val ~ q * x,
     ]
 
     # Fixed-time constraint using observed variable with bound parameter
