@@ -780,6 +780,12 @@ function __apply_copy_template(valp, template)
         return template(valp)
     elseif template isa IndepVarTemplate
         return current_time(valp)
+    elseif template isa ParameterIndex{SciMLStructures.Constants, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.constant[i][j][rest...]
+    elseif template isa ParameterIndex{SciMLStructures.Nonnumeric, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.nonnumeric[i][j][rest...]
     else
         # MethodError because this is a manual dispatch chain
         throw(MethodError(__apply_copy_template, (valp, template)))
@@ -875,6 +881,9 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         elseif _bufidx isa NTuple{2, Int}
             subidx = _bufidx[1]
             _bufidx[2]:_bufidx[2]
+        elseif _bufidx isa Tuple{Vararg{Int}} # indexing into a non-tunable array parameter
+            push!(template, symidx)
+            continue
         else
             # Will error due to the typeassert on `bufidx`
             nothing
@@ -890,7 +899,12 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             continue
         end
         prev = template[end]
-        if prev isa ParameterIndex && prev.portion === symidx.portion && (subidx === nothing && last(prev.idx) + 1 == first(bufidx) || subidx == prev.idx[1] && last(prev.idx[2]) + 1 == first(bufidx))
+        if prev isa ParameterIndex && prev.portion === symidx.portion && (
+                subidx === nothing && prev.idx isa UnitRange{Int} &&
+                    last(prev.idx) + 1 == first(bufidx) ||
+                    prev.idx isa Tuple{Int, UnitRange{Int}} && subidx == prev.idx[1] &&
+                    last(prev.idx[2]) + 1 == first(bufidx)
+            )
             if subidx === nothing
                 template[end] = ParameterIndex(prev.portion, first(prev.idx):last(bufidx))
             else

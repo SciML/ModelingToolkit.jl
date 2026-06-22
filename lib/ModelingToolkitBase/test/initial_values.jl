@@ -460,4 +460,11 @@ if !@isdefined(ModelingToolkit)
         sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a mistake
         @test_throws ["duplicate entries", "X(t)"] ODEProblem(sys, sim_cond, (0.0, 10.0))
     end
+    @testset "Issue#4641" begin
+        @parameters x0[1:2] = [1.0, 2.0]
+        @variables xc(t)[1:2] = x0
+        sys  = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+        sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
+        @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
+    end
 end
