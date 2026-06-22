@@ -1118,12 +1118,16 @@ end
     eqs = [D(X) ~ k + σ_noise * B]
     ev1 = (tt == t1) => [X ~ Pre(X) + 50.0]
     ev2 = (tt == t1 * t2) => [X ~ Pre(X) + 100.0]
-    @mtkcompile sys = System(eqs, tt, [X], [k, σ_noise, t1, t2], [B];
-        discrete_events = [ev1, ev2], tstops = [[t1], [t1 * t2]])
+    @mtkcompile sys = System(
+        eqs, tt, [X], [k, σ_noise, t1, t2], [B];
+        discrete_events = [ev1, ev2], tstops = [[t1], [t1 * t2]]
+    )
 
-    sprob = SDEProblem(sys,
+    sprob = SDEProblem(
+        sys,
         [X => 0.0, k => 1.0, σ_noise => 0.01, t1 => 2.0, t2 => 3.0],
-        (0.0, 10.0))
+        (0.0, 10.0)
+    )
 
     @test haskey(sprob.kwargs, :tstops)
     @test sprob.kwargs[:tstops] isa ModelingToolkitBase.SymbolicTstops
@@ -1148,12 +1152,16 @@ end
     # Single event with symbolic periodic condition: fires at every multiple of t1
     ev = (mod(tt, t1) == 0) => [X ~ Pre(X) + 50.0]
     # Scalar tstop t1 → periodic range (tspan[1]+t1):t1:tspan[2]
-    @mtkcompile sys = System(eqs, tt, [X], [k, σ_noise, t1], [B];
-        discrete_events = [ev], tstops = [t1])
+    @mtkcompile sys = System(
+        eqs, tt, [X], [k, σ_noise, t1], [B];
+        discrete_events = [ev], tstops = [t1]
+    )
 
-    sprob = SDEProblem(sys,
+    sprob = SDEProblem(
+        sys,
         [X => 0.0, k => 1.0, σ_noise => 0.01, t1 => 3.0],
-        (0.0, 10.0))
+        (0.0, 10.0)
+    )
 
     @test haskey(sprob.kwargs, :tstops)
     @test sprob.kwargs[:tstops] isa ModelingToolkitBase.SymbolicTstops

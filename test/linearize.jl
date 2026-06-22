@@ -129,7 +129,7 @@ function compare_matrices(reference, value)
     @test isapprox(reference.B, value.B) || isapprox(reference.B[[2, 1], :], value.B)
     roworder = isapprox(reference.B, value.B) ? [1, 2] : [2, 1]
     @test isapprox(reference.D, value.D)
-    @test isapprox(reference.A[roworder, colorder], value.A)
+    return @test isapprox(reference.A[roworder, colorder], value.A)
 end
 lsys, ssys = linearize(cl, [f.u], [p.x])
 lsys2, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
@@ -145,7 +145,7 @@ lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 _substituter(M, sys) = value.(ModelingToolkit.fixpoint_sub(M, ModelingToolkit.initial_conditions_and_guesses(sys); fold = Val(true)))
 lsys_m = (;
     A = _substituter(lsyss.A, cl), B = _substituter(lsyss.B, cl),
-    C = _substituter(lsyss.C, cl), D = _substituter(lsyss.D, cl)
+    C = _substituter(lsyss.C, cl), D = _substituter(lsyss.D, cl),
 )
 compare_matrices(lsys, lsys_m)
 ##
@@ -174,7 +174,7 @@ lsyss0,
 )
 lsyss = (;
     A = _substituter(lsyss0.A, pid), B = _substituter(lsyss0.B, pid),
-    C = _substituter(lsyss0.C, pid), D = _substituter(lsyss0.D, pid)
+    C = _substituter(lsyss0.C, pid), D = _substituter(lsyss0.D, pid),
 )
 compare_matrices(lsys, lsyss)
 

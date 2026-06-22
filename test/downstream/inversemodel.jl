@@ -198,7 +198,7 @@ nsys = get_named_comp_sensitivity(model, :y; op)
     #
     # Printing `lin_fun` in a tuple (so it doesn't hit the pretty-printing method)
     # will likely segfault Julia. Somehow.
-    lin_fun, ssys = get_sensitivity_function(model, output; op = op1);
+    lin_fun, ssys = get_sensitivity_function(model, output; op = op1)
     matrices1, extras1 = linearize(ssys, lin_fun, op = op1)
     matrices2, extras2 = linearize(ssys, lin_fun, op = op2)
     @test extras1.x != extras2.x

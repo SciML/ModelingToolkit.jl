@@ -174,14 +174,14 @@ function costfn(theta, ps)
     setter, prob, getter = ps
     p = setter(prob, theta)
     newprob = SciMLBase.remake(prob; p)
-    sol = solve(newprob, Rodas5P(); saveat=0.1)
-    sum(abs2, getter(sol))
+    sol = solve(newprob, Rodas5P(); saveat = 0.1)
+    return sum(abs2, getter(sol))
 end
 
 @testset "gradients with special `DiffCache` params" begin
     @variables x(t)
-    @parameters p1=2.0 p2=3.0
-    @named sys = System([D(x) ~ -p1*x + p2*t], t)
+    @parameters p1 = 2.0 p2 = 3.0
+    @named sys = System([D(x) ~ -p1 * x + p2 * t], t)
     sys, _ = ModelingToolkitBase.add_diffcache(sys, 4)
     sys = complete(sys)
 

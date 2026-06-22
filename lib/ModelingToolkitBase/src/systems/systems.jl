@@ -1008,5 +1008,5 @@ end
 # Deprecation path
 function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
     @named misc = System(eqs, unknowns, [])
-    topsort_equations(misc, eqs, unknowns; check)
+    return topsort_equations(misc, eqs, unknowns; check)
 end

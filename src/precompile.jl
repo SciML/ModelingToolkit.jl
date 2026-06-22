@@ -38,4 +38,3 @@ PrecompileTools.@compile_workload begin
     sccprob = SCCNonlinearProblem(model, nothing)
     solve(sccprob, SimpleNonlinearSolve.SimpleNewtonRaphson())
 end
-

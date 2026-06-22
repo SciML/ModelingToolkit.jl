@@ -216,8 +216,8 @@ end
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
     @test_throws ["Cyclic guesses detected"] ODEProblem(
-        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc=false,
-        missing_guess_value=MissingGuessValue.Error()
+        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc = false,
+        missing_guess_value = MissingGuessValue.Error()
     )
 end
 
@@ -368,7 +368,7 @@ end
     @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
-    initdata = prob.f.initialization_data;
+    initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
     if @isdefined(ModelingToolkit)
         @test initdata.initializeprob isa SCCNonlinearProblem
@@ -463,7 +463,7 @@ if !@isdefined(ModelingToolkit)
     @testset "Issue#4641" begin
         @parameters x0[1:2] = [1.0, 2.0]
         @variables xc(t)[1:2] = x0
-        sys  = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+        sys = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
         sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
         @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
     end

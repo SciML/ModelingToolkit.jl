@@ -25,11 +25,13 @@ struct CompilerOptions
     infer::Int
 end
 
-function CompilerOptions(; optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
-                           infer::Union{Int, Bool, Symbol} = :default)
+function CompilerOptions(;
+        optlevel::Int = -1, compile::Union{Int, Symbol} = :default,
+        infer::Union{Int, Bool, Symbol} = :default
+    )
     _compile = if compile isa Symbol
         compile === :default ? -1 : get(_COMPILE_OPTIONS, compile) do
-            throw(ArgumentError("Invalid compile option: $compile. Valid options: :default, :off, :on, :all, :min"))
+                throw(ArgumentError("Invalid compile option: $compile. Valid options: :default, :off, :on, :all, :min"))
         end
     else
         compile
@@ -59,21 +61,21 @@ const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 # but without any special compiler options (they are never used in that case).
 module _EvalModuleOpt0
     @static if !isdefined(Base.Experimental, :set_compile!)
-        Base.Experimental.@compiler_options optimize=0
+        Base.Experimental.@compiler_options optimize = 0
         using RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
 end
 module _EvalModuleOpt1
     @static if !isdefined(Base.Experimental, :set_compile!)
-        Base.Experimental.@compiler_options optimize=1
+        Base.Experimental.@compiler_options optimize = 1
         using RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
 end
 module _EvalModuleOpt0NoInfer
     @static if !isdefined(Base.Experimental, :set_compile!)
-        Base.Experimental.@compiler_options optimize=0 infer=false
+        Base.Experimental.@compiler_options optimize = 0 infer = false
         using RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
@@ -89,9 +91,12 @@ unsupported combinations will throw an error.
 """
 function _resolve_fallback_eval_module(co::CompilerOptions)
     if co.compile != -1
-        throw(ArgumentError(
-            "Non-default `compile` compiler option is not supported on Julia $VERSION. " *
-            "Per-method compiler options require Julia with `Base.Experimental.set_compile!` support."))
+        throw(
+            ArgumentError(
+                "Non-default `compile` compiler option is not supported on Julia $VERSION. " *
+                    "Per-method compiler options require Julia with `Base.Experimental.set_compile!` support."
+            )
+        )
     end
     if co.optlevel == 0 && co.infer == -1
         return _EvalModuleOpt0
@@ -100,10 +105,13 @@ function _resolve_fallback_eval_module(co::CompilerOptions)
     elseif co.optlevel == 0 && co.infer == 0
         return _EvalModuleOpt0NoInfer
     else
-        throw(ArgumentError(
-            "The compiler option combination (optlevel=$(co.optlevel), infer=$(co.infer)) " *
-            "is not supported on Julia $VERSION without per-method compiler options. " *
-            "Supported fallback combinations: (optlevel=0), (optlevel=1), (optlevel=0, infer=false)."))
+        throw(
+            ArgumentError(
+                "The compiler option combination (optlevel=$(co.optlevel), infer=$(co.infer)) " *
+                    "is not supported on Julia $VERSION without per-method compiler options. " *
+                    "Supported fallback combinations: (optlevel=0), (optlevel=1), (optlevel=0, infer=false)."
+            )
+        )
     end
 end
 
@@ -120,16 +128,21 @@ Given a function expression `expr`, return a callable version of it.
 - `compiler_options`: A [`CompilerOptions`](@ref) controlling LLVM optimization level,
   compilation mode, and type inference for the generated function.
 """
-function eval_or_rgf(expr::Expr; eval_expression = false, eval_module = @__MODULE__,
-                     compiler_options::CompilerOptions = CompilerOptions())
+function eval_or_rgf(
+        expr::Expr; eval_expression = false, eval_module = @__MODULE__,
+        compiler_options::CompilerOptions = CompilerOptions()
+    )
     if _has_options(compiler_options)
         if _COMPILER_OPTIONS_SUPPORTED
             expr = _inject_compiler_options_meta(expr, compiler_options)
         else
             if eval_module !== @__MODULE__
-                throw(ArgumentError(
-                    "Cannot use both a non-default `eval_module` and non-default `compiler_options` " *
-                    "on Julia $VERSION. Per-method compiler options require `Base.Experimental.set_compile!` support."))
+                throw(
+                    ArgumentError(
+                        "Cannot use both a non-default `eval_module` and non-default `compiler_options` " *
+                            "on Julia $VERSION. Per-method compiler options require `Base.Experimental.set_compile!` support."
+                    )
+                )
             end
             eval_module = _resolve_fallback_eval_module(compiler_options)
         end
@@ -170,7 +183,7 @@ function generated_argument_name(i::Int)
 end
 
 function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}())
-    _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
+    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
 end
 
 function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
@@ -385,7 +398,7 @@ function should_invalidate_mutable_cache_entry(::Type{ParameterArrayAssignments}
 end
 
 function find_arrvars_is_atomic(ex::SymbolicT)
-    SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
+    return SU.default_is_atomic(ex) && Symbolics.isarraysymbolic(ex)
 end
 
 """
@@ -521,7 +534,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # var"##cse#1234" = var"p2"
     # var"##cse#1235" = var"##cse#1234"[1]
     # ```
-    
+
     required_arrvars = Set{SymbolicT}()
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
@@ -623,10 +636,14 @@ function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) w
     return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
 
-function GeneratedFunctionWrapper{P}(::Type{Val{false}}, foop, fiip;
-        compiler_options::CompilerOptions = CompilerOptions(), kws...) where {P}
-    return GeneratedFunctionWrapper{P}(eval_or_rgf(foop; compiler_options, kws...),
-                                       eval_or_rgf(fiip; compiler_options, kws...))
+function GeneratedFunctionWrapper{P}(
+        ::Type{Val{false}}, foop, fiip;
+        compiler_options::CompilerOptions = CompilerOptions(), kws...
+    ) where {P}
+    return GeneratedFunctionWrapper{P}(
+        eval_or_rgf(foop; compiler_options, kws...),
+        eval_or_rgf(fiip; compiler_options, kws...)
+    )
 end
 
 function (gfw::GeneratedFunctionWrapper)(args...)
