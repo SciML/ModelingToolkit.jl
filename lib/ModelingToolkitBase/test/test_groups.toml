@@ -10,6 +10,10 @@ versions = ["lts", "1", "pre"]
 
 [Initialization]
 versions = ["lts", "1", "pre"]
+# Memory-heavy (OOM-killed on the 4vcpu/8GB self-hosted runners, esp. on `pre`).
+# Route to a GitHub-hosted runner (~16GB). `ubuntu-24.04` forces GitHub-hosted
+# since the self-hosted pool only carries the `ubuntu-latest` label.
+runner = "ubuntu-24.04"
 
 [SymbolicIndexingInterface]
 versions = ["lts", "1", "pre"]
