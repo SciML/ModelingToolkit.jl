@@ -1688,3 +1688,103 @@ Get the `IRStructure` associated with the system.
 function get_irstructure(sys::System)
     return get_irstructure_tlv(sys)[]::IRStructure{SymReal}
 end
+
+# Reversible transformation API
+
+abstract type ReversibleTransformations end
+
+"""
+    $TYPEDSIGNATURES
+
+Add `tf` to the list of reversible transformations applied to `sys`. Returns a modified
+copy of `sys`. Reversible transformations must define [`reverse_transformation`](@ref).
+They can also define several functions to determine when they are reversed. Transformations
+are reversed in the reverse order of application.
+"""
+function with_reversible_transformation(sys::System, @nospecialize(tf))
+    prev_tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    push!(new_tfs, tf)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Filter the reversible transformations applied to `sys`. Return a new system with the
+updated list of transformations.
+"""
+function filter_reversible_transformations(fn::F, sys::System) where {F}
+    prev_tfs = getmetadata(sys, ReversibleTransformations, [])::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    filter!(fn, new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    function reverse_transformation(sys::System, tf)
+
+Reverse a reversible transformation ([`with_reversible_transformation`](@ref)) applied to `sys`.
+"""
+function reverse_transformation end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when performing operations that require reversing such transformations. Defaults to
+`true` for all transformations.
+"""
+reverse_transformation_by_default(@nospecialize(tf)) = true
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when building the initialization system.
+"""
+function reverse_transformation_during_initialization(@nospecialize(tf))
+    return reverse_transformation_by_default(tf)
+end
+
+function __reverse_transformations_helper(fn::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
+    new_tfs = []
+    for tf in Iterators.reverse(tfs)
+        if !fn(tf)::Bool
+            push!(new_tfs, tf)
+            continue
+        end
+        sys = reverse_transformation(sys, tf)::System
+    end
+    reverse!(new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)::System
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_by_default`](@ref) is `true`.
+"""
+function reverse_all_default_reversible_transformations(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_by_default, sys)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_during_initialization`](@ref) is `true`.
+"""
+function reverse_transformations_for_initialization(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_during_initialization, sys)
+end
