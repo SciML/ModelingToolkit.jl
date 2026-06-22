@@ -2,6 +2,11 @@
 $(DocStringExtensions.README)
 """
 module ModelingToolkitBase
+
+if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_methods"))
+    @eval Base.Experimental.@compiler_options max_methods=1
+end
+
 using PrecompileTools, Reexport
 @recompile_invalidations begin
     using StaticArrays
@@ -394,5 +399,5 @@ function __init__()
     return nothing
 end
 
-# include("precompile.jl")
+include("precompile.jl")
 end # module

@@ -2,6 +2,7 @@
 $(DocStringExtensions.README)
 """
 module ModelingToolkit
+
 using PrecompileTools, Reexport
 @recompile_invalidations begin
     using StaticArrays
@@ -68,6 +69,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
     jacobian, hessian, derivative, sparsejacobian, sparsehessian,
     scalarize, hasderiv
 import ModelingToolkitBase as MTKBase
+import SimpleNonlinearSolve
 
 import DiffEqBase: @add_kwonly
 @reexport using Symbolics
@@ -167,7 +169,7 @@ function FMIComponent end
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
 
-include(pkgdir(ModelingToolkitBase, "src", "precompile.jl"))
+include("precompile.jl")
 
 function __init__()
     SU.hashcons(StructuralTransformations.NOTHING_EQ.lhs, true)
