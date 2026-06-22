@@ -817,6 +817,16 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     iv = get_iv(srcsys)
     irinfo = get_ir_info(srcsys)
 
+    push_symbolic! = function (sym)
+        if !isempty(template) && template[end] isa Vector{SymbolicT}
+            push!(template[end], sym)
+        else
+            push!(elem_types, Vector{SymbolicT})
+            push!(template, SymbolicT[sym])
+        end
+        return
+    end
+
     for sym in syms
         if iv isa SymbolicT && isequal(iv, sym)
             push!(template, IV_TEMPLATE)
@@ -833,18 +843,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
                 symidx = variable_index(srcsys, irinfo.obs_subber(sym))
             end
             if symidx === nothing
-                if isempty(template)
-                    push!(elem_types, Vector{SymbolicT})
-                    push!(template, SymbolicT[sym])
-                    continue
-                end
-                prev = template[end]
-                if prev isa Vector{SymbolicT}
-                    push!(prev, sym)
-                else
-                    push!(elem_types, Vector{SymbolicT})
-                    push!(template, SymbolicT[sym])
-                end
+                push_symbolic!(sym)
                 continue
             end
             if isempty(template)
@@ -862,6 +861,10 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             continue
         elseif symidx isa Int
             symidx = ParameterIndex(SciMLStructures.Tunable(), symidx)
+        end
+        if !(symidx.idx isa Union{Int, AbstractVector{Int}, NTuple{2, Int}})
+            push_symbolic!(sym)
+            continue
         end
         portion = symidx.portion
         _bufidx = symidx.idx

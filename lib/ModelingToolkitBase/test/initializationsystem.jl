@@ -2115,3 +2115,12 @@ end
 
     @test_nowarn ForwardDiff.gradient(Base.Fix2(loss2, (setter, prob)), [1, 2.])
 end
+
+@testset "Array variable bound to constant array parameter (issue #4641)" begin
+    @parameters x0[1:2] = [1.0, 2.0]
+    @variables xc(t)[1:2] = x0
+    sys = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+    sys2 = subset_tunables(mtkcompile(sys), [])
+    prob = ODEProblem(sys2, [], (0.0, 1.0))
+    @test prob[xc] == [1.0, 2.0]
+end
