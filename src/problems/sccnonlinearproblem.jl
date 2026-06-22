@@ -422,8 +422,8 @@ function SCCNonlinearFunction{iip}(
     return NonlinearFunction{iip}(f; sys = subsys)
 end
 
-function SciMLBase.SCCNonlinearProblem(sys::System, args...; kwargs...)
-    return SCCNonlinearProblem{true}(sys, args...; kwargs...)
+function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
+    return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
 
 function SciMLBase.SCCNonlinearProblem{iip}(

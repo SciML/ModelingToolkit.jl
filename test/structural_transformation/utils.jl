@@ -179,7 +179,8 @@ end
             @test mapping[D(y)] == (D(yt) ~ -g + y * λ)
             @test mapping[D(x)] == (0 ~ -2xt * x - 2yt * y)
             @test mapping[D(D(x))] == (xtt ~ x * λ)
-            @test length(mapping) == 5
+            @test mapping[λ] == (0 ~ -2yt^2 - 2x * xtt - 2xt^2 - 2(-g + y * λ) * y)
+            @test length(mapping) == 6
 
             @testset "`rename_dummy_derivatives = false`" begin
                 mapping = map_variables_to_equations(sys; rename_dummy_derivatives = false)
@@ -189,7 +190,8 @@ end
                 @test mapping[yt] == (D(yt) ~ -g + y * λ)
                 @test mapping[xt] == (0 ~ -2xt * x - 2yt * y)
                 @test mapping[xtt] == (xtt ~ x * λ)
-                @test length(mapping) == 5
+                @test mapping[λ] == (0 ~ -2yt^2 - 2x * xtt - 2xt^2 - 2(-g + y * λ) * y)
+                @test length(mapping) == 6
             end
         end
         @testset "DDEs" begin

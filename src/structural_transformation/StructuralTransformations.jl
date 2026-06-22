@@ -52,7 +52,7 @@ using DocStringExtensions
 
 import ModelingToolkitBase as MTKBase
 import StateSelection
-import StateSelection: CLIL, SelectedState
+import StateSelection: CLIL, SelectedState, find_solvables!
 import ModelingToolkitTearing as MTKTearing
 using ModelingToolkitTearing: TearingState, SystemStructure, ReassembleAlgorithm,
     DefaultReassembleAlgorithm
