@@ -82,9 +82,16 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
         @set! isys.bindings = ROSymmapT(binds)
     end
+    pareqs, resteqs = find_all_parameter_equations(isys)
+    @set! isys.eqs = resteqs
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
     end
+    for i in eachindex(pareqs)
+        eq = pareqs[i]
+        pareqs[i] = Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs)
+    end
+    @set! isys.eqs = [equations(isys); pareqs]
 
     ts = get_tearing_state(isys)
     unassigned_vars = singular_check(ts)
