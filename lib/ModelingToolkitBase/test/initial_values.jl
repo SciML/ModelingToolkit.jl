@@ -463,7 +463,7 @@ if !@isdefined(ModelingToolkit)
     @testset "Issue#4641" begin
         @parameters x0[1:2] = [1.0, 2.0]
         @variables xc(t)[1:2] = x0
-        sys  = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+        sys = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
         sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
         @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
     end

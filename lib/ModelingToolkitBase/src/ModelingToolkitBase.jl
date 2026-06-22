@@ -4,7 +4,7 @@ $(DocStringExtensions.README)
 module ModelingToolkitBase
 
 if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_methods"))
-    @eval Base.Experimental.@compiler_options max_methods=1
+    @eval Base.Experimental.@compiler_options max_methods = 1
 end
 
 using PrecompileTools, Reexport
