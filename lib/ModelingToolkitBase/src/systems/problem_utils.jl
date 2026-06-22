@@ -959,7 +959,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     # can keep operating on plain `ParameterIndex`es.
     for i in eachindex(template)
         entry = template[i]
-        if entry isa ParameterIndex && entry.idx isa Tuple{Int, UnitRange{Int}}
+        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric}
             delete!(elem_types, typeof(entry))
             template[i] = StaticBufferIndex{typeof(entry.portion)}(entry.idx)
             push!(elem_types, typeof(template[i]))
