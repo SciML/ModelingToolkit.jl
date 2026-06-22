@@ -1873,7 +1873,7 @@ function __process_SciMLProblem(
 
     add_initials!(sys, op)
 
-    _sys = unhack_system(sys)
+    _sys = reverse_all_default_reversible_transformations(sys)
     obs = observed(_sys)
 
     guesses = operating_point_preprocess(sys, guesses; name = "guesses")
@@ -2367,7 +2367,7 @@ function get_u0(sys::AbstractSystem, varmap; kwargs...)
     op = build_operating_point(sys, varmap)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
-    obs = observed(unhack_system(sys))
+    obs = observed(reverse_all_default_reversible_transformations(sys))
     add_observed_equations!(op, obs)
 
     return varmap_to_vars(op, unknowns(sys); kwargs...)
@@ -2385,7 +2385,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
     add_initials!(sys, op)
-    obs = observed(unhack_system(sys))
+    obs = observed(reverse_all_default_reversible_transformations(sys))
     add_observed_equations!(op, obs)
 
     return if split

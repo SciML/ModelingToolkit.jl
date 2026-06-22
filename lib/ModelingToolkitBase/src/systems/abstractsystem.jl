@@ -567,7 +567,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true, _unhac
     all_initialvars = Set{SymbolicT}()
     # time-independent systems don't initialize unknowns
     # but may initialize parameters using guesses for unknowns
-    _sys = _unhack_sys === nothing ? unhack_system(sys) : _unhack_sys
+    _sys = _unhack_sys === nothing ? reverse_all_default_reversible_transformations(sys) : _unhack_sys
     obs = observed(_sys)
     eqs = equations(_sys)
     for x in unknowns(_sys)
@@ -698,7 +698,7 @@ function complete(
         end
         sys = newsys
         check_no_parameter_equations(sys)
-        _unhack_sys = unhack_system(sys)
+        _unhack_sys = reverse_all_default_reversible_transformations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split, _unhack_sys)::T
         end

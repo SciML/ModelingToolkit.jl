@@ -55,7 +55,7 @@ function generate_initializesystem_timevarying(
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...
     )
-    _sys = unhack_system(sys)
+    _sys = reverse_transformations_for_initialization(sys)
     trueobs = observed(_sys)
     eqs = equations(_sys)
     # remove any observed equations that directly or indirectly contain
@@ -226,7 +226,7 @@ function generate_initializesystem_timeindependent(
         name = nameof(sys), kwargs...
     )
     eqs = equations(sys)
-    _sys = unhack_system(sys)
+    _sys = reverse_transformations_for_initialization(sys)
     trueobs = observed(_sys)
     eqs = equations(_sys)
     # remove any observed equations that directly or indirectly contain

@@ -193,7 +193,7 @@ function AffectSystem(
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
-    _obs = observed(unhack_system(affectsys))
+    _obs = observed(reverse_all_default_reversible_transformations(affectsys))
     _dvs = vcat(unknowns(affectsys), map(eq -> eq.lhs, _obs))
     _dvs = __safe_scalarize_vars(_dvs)
     _discs = __safe_scalarize_vars(discretes)
@@ -1415,7 +1415,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
-    _affsys = unhack_system(affsys)
+    _affsys = reverse_all_default_reversible_transformations(affsys)
     aff_ir_info = get_ir_info(affsys)
     aff_ir = get_irstructure(affsys)
     obseqs = Equation[]
