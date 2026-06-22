@@ -221,3 +221,31 @@ end
         nsys2, [X1 => 5.0, X2 => 8.0], [k1 => 8.0, k2 => 1.0, Γ => [13.0]], k1; plot_var = X1
     )
 end
+
+@testset "Symbol inputs (issue #4250)" begin
+    @variables x(t) y(t)
+    @parameters mu alpha
+    eqs = [
+        0 ~ mu * x - x^3 + alpha * y,
+        0 ~ -y,
+    ]
+    @named nsys = System(eqs, [x, y], [mu, alpha])
+    nsys = complete(nsys)
+
+    p_span = (-4.0, 6.0)
+    opts_br = ContinuationPar(max_steps = 500, p_min = p_span[1], p_max = p_span[2])
+
+    bprob_sym = BifurcationProblem(
+        nsys, [x => 1.0, y => 1.0], [mu => -1.0, alpha => 1.0], mu; plot_var = x
+    )
+    bprob_symbol = BifurcationProblem(
+        nsys, [:x => 1.0, :y => 1.0], [:mu => -1.0, :alpha => 1.0], :mu; plot_var = :x
+    )
+
+    dia_sym = bifurcationdiagram(bprob_sym, PALC(), 2, (args...) -> opts_br; bothside = true)
+    dia_symbol = bifurcationdiagram(bprob_symbol, PALC(), 2, (args...) -> opts_br; bothside = true)
+
+    @test getfield.(dia_symbol.γ.branch, :x) ≈ getfield.(dia_sym.γ.branch, :x)
+    @test getfield.(dia_symbol.γ.branch, :param) ≈ getfield.(dia_sym.γ.branch, :param)
+    @test dia_symbol.γ.specialpoint[1].param ≈ dia_sym.γ.specialpoint[1].param
+end

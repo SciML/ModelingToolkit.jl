@@ -135,6 +135,8 @@ function BifurcationKit.BifurcationProblem(
     # Converts the input state guess.
     u0_bif = ModelingToolkitBase.to_varmap(u0_bif, unknowns(nsys))
     ps = ModelingToolkitBase.to_varmap(ps, ModelingToolkitBase.get_ps(nsys))
+    bif_par = ModelingToolkitBase.symbol_to_symbolic(nsys, bif_par)
+    plot_var = ModelingToolkitBase.symbol_to_symbolic(nsys, plot_var)
     op = merge(u0_bif, ps)
     f, u0_bif_vals, p_vals = ModelingToolkitBase.process_SciMLProblem(
         ModelingToolkitBase.EmptySciMLFunction{true}, nsys, op; build_initializeprob = true
