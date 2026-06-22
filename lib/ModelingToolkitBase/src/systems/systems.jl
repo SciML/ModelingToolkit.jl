@@ -88,6 +88,11 @@ function mtkcompile(
         split = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+
+    # For backward compatibility with old ModelingToolkit which does not
+    # integrate with the reversible transformation API.
+    sys = with_reversible_transformation(sys, UnhackSystemTransformation)
+
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
     inputs = canonicalize_io(unwrap_vars(inputs), "input")
     outputs = canonicalize_io(unwrap_vars(outputs), "output")

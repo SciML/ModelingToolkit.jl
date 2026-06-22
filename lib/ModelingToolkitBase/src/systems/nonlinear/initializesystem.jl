@@ -886,17 +886,55 @@ function unhack_observed(obseqs, eqs)
 end
 
 """
+    $TYPEDEF
+
+Default reversible transformation applied to all systems in `mtkcompile` for backward
+compatibility.
+"""
+abstract type UnhackSystemTransformation <: ReversibleTransformations end
+
+function reverse_transformation(sys::AbstractSystem, ::Type{UnhackSystemTransformation})
+    return unhack_system(sys)
+end
+
+# NOTE:
+# 1. Only this MTKBase is loaded. `__mtkcompile` here will remove `UnhackSystemTransformation`
+# from the transformations to avoid it becoming an infinite loop. `unhack_system` also
+# checks to make sure it doesn't rerun itself.
+#
+# 2. This MTKBase + old MTKTearing + old MTK: MTKTearing will anyway do its own array
+# observed equations and remove them in `unhack_system`. The `UnhackSystemTransformation`
+# added in `__mtkcompile` will run `unhack_system` in `reverse_all_default_reversible_transformations`.
+#
+# 3. This MTKBase + new MTKTearing + old MTK: MTKTearing doesn't implement `unhack_system`
+# anymore and removes `UnhackSystemTransformation`. MTKTearing's own reversible transformations
+# will run as intended. Calls to `unhack_system` from MTK will not early-exit.
+#
+# 4. This MTKBase + new MTKTearing + new MTK: `unhack_system` is never called and
+# `UnhackSystemTransformation` is not present post-`mtkcompile`.
+
+function remove_unhack_system_transformation(sys::AbstractSystem)
+    return filter_reversible_transformations(
+        tf -> tf !== UnhackSystemTransformation, sys
+    )::System
+end
+
+"""
     unhack_system(sys::AbstractSystem)
 
 Given a system, remove any codegen oddities applied to it. This is typically used as a
 precursor to generating the initialization system. It is the successor of the now
 deprecated `unhack_observed`.
+
+DEPRECATED: See `with_reversible_transformation` and the reversible transformation API.
 """
 function unhack_system(sys)
-    obs, eqs = unhack_observed(observed(sys), equations(sys))
-    @set! sys.observed = obs
-    @set! sys.eqs = eqs
-    return sys
+    # See note above
+    tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
+    for tf in tfs
+        tf === UnhackSystemTransformation && return sys
+    end
+    return reverse_all_default_reversible_transformations(sys)
 end
 
 function UnknownsInTimeIndependentInitializationError(eq, non_params)
