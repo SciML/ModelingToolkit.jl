@@ -1022,6 +1022,11 @@ function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing)
     newmeta = MetadataT()
     hascache = false
     for (k, v) in meta
+        # `Base.ImmutableDict` is like a stack. New key-value pairs (even with the same key)
+        # are inserted at the top of the stack. `getindex` returns the first matching key.
+        # We ignore repetitions of a key we've already encountered to avoid overwriting
+        # newer entries with lingering older ones.
+        haskey(newmeta, k) && continue
         if k === MutableCacheKey
             hascache = true
             new_cache = maybe_invalidate_cache((v::MutableCacheTLVT)[]::MutableCacheT, patch)::MutableCacheT
