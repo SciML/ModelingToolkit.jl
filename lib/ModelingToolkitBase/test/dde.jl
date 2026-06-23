@@ -1,4 +1,5 @@
 using ModelingToolkitBase, DelayDiffEq, OrdinaryDiffEq, StaticArrays, Test
+import DiffEqNoiseProcess
 using SymbolicIndexingInterface: is_markovian
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Setfield: @set!
