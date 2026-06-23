@@ -708,7 +708,7 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
         end
     end
 
-    _ss = unhack_system(sys)
+    _ss = MTKBase.reverse_all_default_reversible_transformations(sys)
     for eq in observed(_ss)
         write_possibly_indexed_array!(op, eq.lhs, eq.rhs, COMMON_NOTHING)
     end
