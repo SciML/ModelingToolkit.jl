@@ -1603,7 +1603,7 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkitBase.update_initializeprob!
     end
 
-    missingvars = AtomicArraySet()
+    missingvars = Set{SymbolicT}()
     temp_op = copy(op)
     for (k, v) in op
         v === COMMON_MISSING || continue
@@ -1616,7 +1616,7 @@ function maybe_build_initialization_problem(
             has_possibly_indexed_key(parent(binds), v) && continue
             val = get_possibly_indexed(op, v, COMMON_NOTHING)
             if !SU.isconst(val) || val === COMMON_NOTHING
-                push_as_atomic_array!(missingvars, v)
+                push!(missingvars, v)
             end
         end
         if implicit_dae
@@ -1627,14 +1627,14 @@ function maybe_build_initialization_problem(
                         get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
                         # FIXME: Derivatives of algebraic variables aren't present
                         (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
-                    push_as_atomic_array!(missingvars, ttv)
+                    push!(missingvars, ttv)
                 end
             end
         end
     end
     for v in get_all_discretes_fast(sys)
         has_possibly_indexed_key(parent(binds), v) && continue
-        has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
+        has_possibly_indexed_key(op, v) || push!(missingvars, v)
     end
     for (k, v) in binds
         v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
@@ -1652,7 +1652,7 @@ function maybe_build_initialization_problem(
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
-        op[p] = subber(p)
+        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
     end
 
     return (;
