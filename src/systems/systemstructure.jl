@@ -216,6 +216,7 @@ function _mtkcompile!(
     old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
+    state.mm = mm
     if check_consistency
         fully_determined = StateSelection.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing
