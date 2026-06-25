@@ -97,6 +97,7 @@ function generate_initializesystem_timevarying(
     # All bound parameters are solvable. The corresponding equation comes from the binding
     for v in bound_parameters(sys)
         push!(init_ps, v)
+        newbinds[v] = binds[v]
     end
     op::SymmapT = if fast_path
         op

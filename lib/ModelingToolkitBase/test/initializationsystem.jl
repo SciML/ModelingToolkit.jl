@@ -2125,3 +2125,14 @@ end
 
     @test_nowarn ForwardDiff.gradient(Base.Fix2(loss2, (setter, prob)), [1, 2.0])
 end
+
+@testset "Parameters with values determined by a bound parameter" begin
+    # To ensure that the initialization system handles this dependency correctly
+    @parameters p1 p2 p3
+    @variables x(t)
+    @mtkcompile sys = System(
+        [D(x) ~ p1 * x + p2 * t + p3], t;
+        bindings = [p2 => p1], initial_conditions = [p3 => p2]
+    )
+    @test_nowarn prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.0))
+end
