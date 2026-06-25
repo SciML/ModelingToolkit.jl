@@ -136,6 +136,9 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         op = copy(op)
         op[get_iv(sys)] = t
     end
+    # Observed of `sys` aren't present in `isys` anymore, so this enables guess-propagation
+    # to work properly.
+    add_observed!(sys, ModelingToolkitBase.initial_conditions(isys))
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
     TProb = get_initialization_problem_type(
         sys, isys; warn_initialize_determined,
