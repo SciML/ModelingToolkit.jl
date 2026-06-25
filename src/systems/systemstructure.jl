@@ -217,6 +217,10 @@ function _mtkcompile!(
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
     state.mm = mm
+    @assert mm.nparentrows == nsrcs(state.structure.graph) && mm.ncols == ndsts(state.structure.graph) lazy"""
+    Invalid `mm`. Got `nparentrows, ncols` = ($(mm.nparentrows), $(mm.ncols)).
+    Expected ($(nsrcs(state.structure.graph)), $(ndsts(state.structure.graph))).
+    """
     if check_consistency
         fully_determined = StateSelection.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing
