@@ -16,12 +16,12 @@ new residual equations after tearing. End users are encouraged to call [`mtkcomp
 instead, which calls this function internally.
 """
 function tearing(
-        sys::AbstractSystem, state = TearingState(sys); mm = nothing,
+        sys::AbstractSystem, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true, kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
-    return invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined, kwargs...))
+    return invalidate_cache!(reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...))
 end
 
 function safe_isinteger(@nospecialize(x::Number))
@@ -57,7 +57,7 @@ the system is balanced.
 function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        mm = nothing, fully_determined = true, kwargs...
+        fully_determined = true, kwargs...
     )
     jac = let state = state
         (eqs, vars) -> begin
@@ -81,5 +81,5 @@ function dummy_derivative(
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
         state, jac; state_priority, kwargs...
     )
-    return reassemble_alg(state, tearing_result, mm; fully_determined, kwargs...)
+    return reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...)
 end

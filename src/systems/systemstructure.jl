@@ -222,13 +222,7 @@ function _mtkcompile!(
             state, orig_inputs; nothrow = fully_determined === nothing
         )
     end
-    # This phrasing avoids making the `kwcall` dynamic dispatch due to the type of a
-    # keyword (`mm`) being non-concrete
-    if mm isa CLIL.SparseMatrixCLIL{BigInt, Int}
-        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
-    else
-        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
-    end
+    sys = _mtkcompile_worker!(state, sys; fully_determined, dummy_derivative, kwargs...)
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = MTKBase.topsort_equations(sys, observed(sys), fullunknowns)
 
@@ -236,25 +230,26 @@ function _mtkcompile!(
 end
 
 function _mtkcompile_worker!(
-        state::TearingState, sys::System, mm::CLIL.SparseMatrixCLIL{T, Int};
+        state::TearingState, sys::System;
         fully_determined::Bool, dummy_derivative::Bool,
         kwargs...
-    ) where {T}
+    )
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, kwargs...
+            sys, state; kwargs...
         )
     elseif fully_determined
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm::CLIL.SparseMatrixCLIL{T, Int} = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, fully_determined, kwargs...
+            sys, state; fully_determined, kwargs...
         )
     else
         sys = ModelingToolkit.tearing(
-            sys, state; mm, fully_determined, kwargs...
+            sys, state; fully_determined, kwargs...
         )
     end
     return sys
