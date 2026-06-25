@@ -50,6 +50,10 @@ OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
 OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 
+[sources]
+ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
+SciCompDSL = {path = "lib/SciCompDSL"}
+
 [extensions]
 MTKFMIExt = "FMIImport"
 MTKOrdinaryDiffEqBDFExt = "OrdinaryDiffEqBDF"
