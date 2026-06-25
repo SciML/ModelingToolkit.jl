@@ -144,6 +144,6 @@ end
     if GROUP == "All" || GROUP == "QA"
         activate_qa_env()
         @safetestset "JET Tests" include("qa/jet.jl")
-        @safetestset "Aqua Tests" include("qa/aqua.jl")
+        @safetestset "Quality Assurance" include("qa/qa.jl")
     end
 end
