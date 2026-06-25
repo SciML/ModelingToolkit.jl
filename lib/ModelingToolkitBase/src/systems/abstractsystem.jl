@@ -567,7 +567,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true, _unhac
     all_initialvars = Set{SymbolicT}()
     # time-independent systems don't initialize unknowns
     # but may initialize parameters using guesses for unknowns
-    _sys = _unhack_sys === nothing ? unhack_system(sys) : _unhack_sys
+    _sys = _unhack_sys === nothing ? reverse_all_default_reversible_transformations(sys) : _unhack_sys
     obs = observed(_sys)
     eqs = equations(_sys)
     for x in unknowns(_sys)
@@ -698,7 +698,7 @@ function complete(
         end
         sys = newsys
         check_no_parameter_equations(sys)
-        _unhack_sys = unhack_system(sys)
+        _unhack_sys = reverse_all_default_reversible_transformations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split, _unhack_sys)::T
         end
@@ -1022,6 +1022,11 @@ function refreshed_metadata(meta::Base.ImmutableDict, patch = nothing)
     newmeta = MetadataT()
     hascache = false
     for (k, v) in meta
+        # `Base.ImmutableDict` is like a stack. New key-value pairs (even with the same key)
+        # are inserted at the top of the stack. `getindex` returns the first matching key.
+        # We ignore repetitions of a key we've already encountered to avoid overwriting
+        # newer entries with lingering older ones.
+        haskey(newmeta, k) && continue
         if k === MutableCacheKey
             hascache = true
             new_cache = maybe_invalidate_cache((v::MutableCacheTLVT)[]::MutableCacheT, patch)::MutableCacheT
