@@ -110,9 +110,10 @@ equation, while physics variables appear in many dynamics equations); if that is
 tied, one of the tied variables is chosen arbitrarily.
 """
 function pick_alias_target(
-        fullvars::Vector{SymbolicT}, group_vars::Vector{Int}, state_priorities, irreducibles::AtomicSetT,
-        graph = nothing
+        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT
     )
+    (; fullvars, structure) = state
+    (; graph, canonical_ranks, state_priorities) = structure
     irr_idx = findfirst(
         Base.Fix1(contains_possibly_indexed_element, irreducibles) ∘ Base.Fix1(getindex, fullvars),
         group_vars
@@ -121,13 +122,14 @@ function pick_alias_target(
     max_priority = maximum(Base.Fix1(getindex, state_priorities), group_vars)
     candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
     if length(candidates) > 1 && max_priority > 0
-        tied_names = getindex.(Ref(fullvars), candidates)
-        @warn "Multiple variables in an alias group share the highest state_priority \
-($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
-        if graph !== nothing
-            max_degree = maximum(v -> length(𝑑neighbors(graph, v)), candidates)
-            candidates = filter(v -> length(𝑑neighbors(graph, v)) == max_degree, candidates)
+        if max_priority >= 100
+            tied_names = getindex.(Ref(fullvars), candidates)
+            @warn "Multiple variables in an alias group share the highest state_priority \
+            ($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
         end
+        max_degree = maximum(v -> length(𝑑neighbors(graph, v)), candidates)
+        filter!(v -> length(𝑑neighbors(graph, v)) == max_degree, candidates)
+        sort!(candidates; by = Base.Fix1(getindex, canonical_ranks))
     end
     return candidates[1]
 end
@@ -253,7 +255,7 @@ function find_perfect_aliases!(
         end
         # For consistent groups pick a target (survives as unknown) and rebase
         # parities relative to it via `target_p`.
-        target = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
+        target = pick_alias_target(state, group_vars, irreducibles)
         group_target[root] = target
         target_p = parity[target]
         for v in group_vars

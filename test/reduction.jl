@@ -377,7 +377,7 @@ end
     # so the equation-count heuristic picks x as target — but the priority tie
     # (both at 5) must still emit a warning regardless of how the tie is broken.
     @variables x(t) y(t)
-    @named sys = System([D(x) ~ -x, x ~ y], t; state_priorities = [x => 5, y => 5])
+    @named sys = System([D(x) ~ -x, x ~ y], t; state_priorities = [x => 105, y => 105])
     state = TearingState(sys)
     @test_logs (:warn, r"state_priority") match_mode = :any ModelingToolkit.eliminate_perfect_aliases!(state)
     # Exactly one of the two variables is eliminated as observed.
