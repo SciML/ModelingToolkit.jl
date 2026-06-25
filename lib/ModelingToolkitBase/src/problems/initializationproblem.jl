@@ -107,6 +107,10 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
     end
 
     uninit = as_atomic_array_set(unknowns(sys))
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING || continue
+        push!(uninit, k)
+    end
     setdiff!(uninit, as_atomic_array_set(unknowns(isys)))
     setdiff!(uninit, as_atomic_array_set(observables(isys)))
 
