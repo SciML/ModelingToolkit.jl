@@ -279,10 +279,11 @@ end
     @test length(equations(sys3)) == 1
     @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
 
-    idx = findfirst(isequal(sys3.resistor1.v), observables(sys3))
-    rhs = observed(sys3)[idx].rhs
-    @test operation(rhs) === getindex
-    @test operation(arguments(rhs)[1]) === (\)
+    idx = findfirst(observed(sys3)) do eq
+        arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
+        isarr && iscall(arr) && operation(arr) === (\)
+    end
+    @test idx !== nothing
 
     prob1 = ODEProblem(sys1, [], (0.0, 10.0); guesses = [sys1.resistor1.v => 1.0])
     prob2 = ODEProblem(sys2, [], (0.0, 10.0))
