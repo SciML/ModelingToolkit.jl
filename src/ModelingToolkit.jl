@@ -152,6 +152,7 @@ end
 @reexport using .StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
+export report_initialization_nullspace
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, linearization_ap_transform
