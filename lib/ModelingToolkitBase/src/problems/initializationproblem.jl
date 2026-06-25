@@ -122,6 +122,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         new_ps = copy(get_ps(isys))
         append!(new_ps, uninit)
         @set! isys.ps = new_ps
+        gs = ModelingToolkitBase.initial_conditions(isys)
+        sys_gs = ModelingToolkitBase.guesses(sys)
+        for k in uninit
+            haskey(gs, k) && continue
+            haskey(sys_gs, k) || continue
+            gs[k] = sys_gs[k]
+        end
         isys = complete(isys)
     end
 
