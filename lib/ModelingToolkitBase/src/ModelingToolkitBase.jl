@@ -345,12 +345,12 @@ const set_scalar_metadata = setmetadata
 @public unbound_outputs, is_bound
 @public AbstractSystem, CheckAll, CheckNone, CheckComponents, CheckUnits
 @public t, D, t_nounits, D_nounits
-@public SymbolicContinuousCallback, SymbolicDiscreteCallback
+@public SymbolicContinuousCallback, SymbolicDiscreteCallback, ImperativeAffect
 @public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
 @public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
 @public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
-@public getdefault, setdefault, iscomplete, isparameter, modified_unknowns!
+@public getdefault, setdefault, setguess, iscomplete, isparameter, modified_unknowns!
 @public renamespace, namespace_equations
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry
 @public convert_bindings_for_time_independent_system, get_w
