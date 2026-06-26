@@ -107,7 +107,8 @@ function MTKParameters(
     # Substitute through `AADSubWrapper` so that `COMMON_NOTHING` holes in partially
     # specified array values are never substituted into expressions (issue #4607).
     wrapped_op = AADSubWrapper(op)
-    evaluate_varmap!(wrapped_op, all_ps; limit = substitution_limit)
+    ir = get_irstructure(sys)
+    evaluate_varmap!(ir, wrapped_op, all_ps; limit = substitution_limit)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length

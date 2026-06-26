@@ -332,7 +332,7 @@ Keyword arguments:
   itself to get a numeric value for each variable in `vars`.
 """
 function varmap_to_vars(
-        varmap::AbstractDict, vars::Vector;
+        varmap::AbstractDict, vars::Vector; ir = nothing,
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
         is_initializeprob = false, substitution_limit = 100, missing_values = MissingGuessValue.Error()
@@ -345,7 +345,21 @@ function varmap_to_vars(
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
-    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit, allow_symbolic)
+    if ir !== nothing
+        evaluate_varmap!(
+            ir, AtomicArrayDictSubstitutionWrapper(varmap), vars;
+            limit = substitution_limit,
+            allow_symbolic = allow_symbolic ||
+                !Moshi.Data.isa_variant(missing_values, MissingGuessValue.Error)
+        )
+    else
+        evaluate_varmap!(
+            AtomicArrayDictSubstitutionWrapper(varmap), vars;
+            limit = substitution_limit,
+            allow_symbolic = allow_symbolic ||
+                !Moshi.Data.isa_variant(missing_values, MissingGuessValue.Error)
+        )
+    end
     if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
         for var in vars
@@ -515,6 +529,20 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
         varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+    end
+    return
+end
+
+function evaluate_varmap!(
+        ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        limit = 100, allow_symbolic = false
+    )
+    subber = Symbolics.FixpointSubstituter(SU.IRSubstituter{true}(ir, varmap); maxiters = limit, warn_maxiters = !allow_symbolic)
+    for k in vars
+        v = get(varmap, k, COMMON_NOTHING)
+        v === COMMON_NOTHING && continue
+        SU.isconst(v) && continue
+        varmap[k] = subber(v)
     end
     return
 end
@@ -1932,15 +1960,16 @@ function __process_SciMLProblem(
         end
     end
 
+    ir = get_irstructure(sys)
     if is_initializeprob
         u0 = varmap_to_vars(
-            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
             missing_values = missing_guess_value
         )
     else
         u0 = varmap_to_vars(
-            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
         )
     end
