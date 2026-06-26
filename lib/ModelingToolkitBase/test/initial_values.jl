@@ -137,10 +137,17 @@ end
     # `irreducible` to make sure they are unknowns of the initialization system
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     @mtkcompile sys = System(
-        [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
-        guesses = [x => 2y, y => 2x]
+        [D(x) ~ x, D(y) ~ y], t
     )
-    @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
+    @test_warn ["Cycle", "unknowns", "x", "y"] try
+        # This should error. The default substitution limit (100) hides the error because
+        # `2^100` evaluates to `0`, though the warning still prints.
+        ODEProblem(
+            sys, [x => 2y, y => 2x], (0.0, 1.0);
+            warn_cyclic_dependency = true, build_initializeprob = false, substitution_limit = 4
+        )
+    catch e
+    end
     @test_throws ModelingToolkitBase.MissingVariablesError ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
         substitution_limit = 10

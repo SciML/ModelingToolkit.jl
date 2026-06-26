@@ -67,8 +67,8 @@ end
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 
     isys = ModelingToolkit.generate_initializesystem(sys)
-    @test length(unknowns(isys)) == 4
-    @test length(equations(isys)) == 5
+    @test length(unknowns(isys)) == 2
+    @test length(equations(isys)) == 1
     @test !any(equations(isys)) do eq
         iscall(eq.rhs) && operation(eq.rhs) in [MTKTearing.change_origin]
     end

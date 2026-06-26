@@ -545,7 +545,7 @@ struct ScalarizedArrayObserved <: ReversibleTransformations
     arrvars::Set{SymbolicT}
 end
 
-reverse_transformation_during_initialization(::ScalarizedArrayObserved) = true
+reverse_transformation_during_initialization(::ScalarizedArrayObserved) = false
 
 function add_array_observed!(obseqs::Vector{Equation}, unknowns::Vector{SymbolicT})
     # map of array observed variable (unscalarized) to number of its

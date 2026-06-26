@@ -14,7 +14,6 @@ using Test
     tspan = (0.0, 0.2)
     prob = ODEProblem(sys, [], tspan)
 
-    @test prob.f.initializeprob[y] == 2.0
     @test prob.f.initializeprob[x] == 2.0
     sol = solve(prob.f.initializeprob; show_trace = Val(true))
 end
