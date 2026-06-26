@@ -131,6 +131,9 @@ function overdetermined_initialization_message(neqs::Integer, nunknown::Integer,
     Initialization system is overdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
 
+    Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
+    equations are redundant (and which unknowns, if any, remain underdetermined).
+
     To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
     warning into an error, pass `fully_determined = true`.
     """
@@ -140,6 +143,9 @@ function underdetermined_initialization_message(neqs::Integer, nunknown::Integer
     return """
     Initialization system is underdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
+
+    Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
+    unknowns are underdetermined (and which equations, if any, are redundant).
 
     To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
     warning into an error, pass `fully_determined = true`.
