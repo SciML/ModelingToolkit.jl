@@ -519,6 +519,20 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
     return
 end
 
+function evaluate_varmap!(
+        ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        limit = 100, allow_symbolic = false
+    )
+    subber = Symbolics.FixpointSubstituter(SU.IRSubstituter{true}(ir, varmap); maxiters = limit, warn_maxiters = !allow_symbolic)
+    for k in vars
+        v = get(varmap, k, COMMON_NOTHING)
+        v === COMMON_NOTHING && continue
+        SU.isconst(v) && continue
+        varmap[k] = subber(v)
+    end
+    return
+end
+
 """
     $(TYPEDSIGNATURES)
 
