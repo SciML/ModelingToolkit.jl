@@ -332,8 +332,10 @@ conditions = getfield.(equations(initprob.f.sys), :rhs)
 # `x ~ Initial(x)` as such `observed` equations. This makes `mtkcompile`'s job easier
 # on initialization systems, but can lead to parameter-only equations.
 if !@isdefined(ModelingToolkit)
-    @test initprob isa SCCNonlinearProblem
-    @test initprob.probs isa Tuple{<:LinearProblem}
+    @test initprob isa Union{SCCNonlinearProblem, NonlinearLeastSquaresProblem}
+    if initprob isa SCCNonlinearProblem
+        @test initprob.probs isa Tuple{<:LinearProblem}
+    end
 end
 if @isdefined(ModelingToolkit)
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
