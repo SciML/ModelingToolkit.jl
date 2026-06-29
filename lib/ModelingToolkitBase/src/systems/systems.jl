@@ -984,6 +984,12 @@ function observed2graph(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Ve
 end
 
 """
+Toggle to control whether `topsort_equations` prints the equations in the
+cycle, if present.
+"""
+TOPSORT_EQS_PRINT_CYCLE::Bool = false
+
+"""
     $(TYPEDSIGNATURES)
 
 Use Kahn's algorithm to topologically sort observed equations.
@@ -1054,7 +1060,37 @@ function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns:
         end
     end
 
-    (check && idx != neqs) && throw(ArgumentError("The equations have at least one cycle."))
+    if check && idx != neqs
+        # Build a directed eq→eq subgraph over unsorted equations, find smallest SCC.
+        if TOPSORT_EQS_PRINT_CYCLE
+            unsorted = findall(>(0), degrees)
+            unsorted_set = Set(unsorted)
+            n_unsorted = length(unsorted)
+            old_to_new = Dict(old => new for (new, old) in enumerate(unsorted))
+
+            g = SimpleDiGraph(n_unsorted)
+            for src_old in unsorted
+                for dst_old in 𝑑neighbors(graph, assigns[src_old])
+                    dst_old in unsorted_set || continue
+                    add_edge!(g, old_to_new[src_old], old_to_new[dst_old])
+                end
+            end
+
+            sccs = strongly_connected_components(g)
+            nontrivial = filter(scc -> length(scc) >= 2, sccs)
+            smallest_new = isempty(nontrivial) ? collect(1:n_unsorted) :
+                nontrivial[argmin(length.(nontrivial))]
+
+            println("=== topsort_equations: CYCLE DETECTED ===")
+            println("Smallest cycle ($(length(smallest_new)) equations):")
+            for new_idx in smallest_new
+                old_idx = unsorted[new_idx]
+                println("  LHS = $(unknowns[assigns[old_idx]])")
+                println("  EQ  = $(eqs[old_idx])")
+            end
+        end
+        throw(ArgumentError("The equations have at least one cycle."))
+    end
 
     return ordered_eqs
 end

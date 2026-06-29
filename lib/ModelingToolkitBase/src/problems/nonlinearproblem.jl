@@ -90,8 +90,8 @@ function generate_nonlinear_bounds(sys::AbstractSystem, op)
     left_merge!(lbmap, op)
     lb = varmap_to_vars(lbmap, dvs; tofloat = false)
     ubmap = SymmapT()
-    for (var, b) in zip(dvs, lb)
-        b === -Inf && continue
+    for (var, b) in zip(dvs, ub)
+        b === Inf && continue
         write_possibly_indexed_array!(ubmap, var, Symbolics.SConst(b), COMMON_NOTHING)
     end
     left_merge!(ubmap, op)
