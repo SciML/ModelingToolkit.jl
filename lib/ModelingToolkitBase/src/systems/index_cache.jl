@@ -644,14 +644,20 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
             if i isa Int
                 param_buf[i] = p
             else
-                param_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    param_buf[buf_i] = p[p_i]
+                end
             end
         elseif haskey(ic.initials_idx, p)
             i = ic.initials_idx[p]
             if i isa Int
                 initials_buf[i] = p
             else
-                initials_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    initials_buf[buf_i] = p[p_i]
+                end
             end
         elseif haskey(ic.constant_idx, p)
             i, j = ic.constant_idx[p]

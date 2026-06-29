@@ -1176,7 +1176,7 @@ end
 
 Get the metadata associated with key `k` in system `sys` or `default` if it does not exist.
 """
-function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
+function SymbolicUtils.getmetadata(sys::AbstractSystem, @nospecialize(k::DataType), default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
@@ -1188,7 +1188,7 @@ Set the metadata associated with key `k` in system `sys` to value `v`. This is a
 out-of-place operation, and will return a shallow copy of `sys` with the appropriate
 metadata values.
 """
-function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
+function SymbolicUtils.setmetadata(sys::AbstractSystem, @nospecialize(k::DataType), @nospecialize(v))
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
     return @set sys.metadata = meta
