@@ -251,6 +251,19 @@ if @isdefined(ModelingToolkit)
             @test m1.C ≈ m2.C
             @test m1.D ≈ m2.D
         end
+        # The vector-of-time-points path (which builds the problem and setters once and
+        # updates the operating point in place) must agree with calling the scalar
+        # LinearizationOpPoint form at each time point individually.
+        for (i, ti) in enumerate(ts)
+            mats_i, _ = linearize(
+                sys, sys.plant_input, sys.plant_output;
+                op = ModelingToolkit.LinearizationOpPoint(sol, ti)
+            )
+            @test mats_vec[i].A ≈ mats_i.A
+            @test mats_vec[i].B ≈ mats_i.B
+            @test mats_vec[i].C ≈ mats_i.C
+            @test mats_vec[i].D ≈ mats_i.D
+        end
     end
 
     @testset "Complicated model" begin

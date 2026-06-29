@@ -936,9 +936,7 @@ function linearize(
     evaluate_varmap!(op, keys(op))
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
-        if symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v)
-            v = getu(prob, v)(prob)
-        end
+        v = _resolve_op_value(prob, v)
         if is_parameter(prob, Initial(k))
             setu(prob, Initial(k))(prob, v)
         else
@@ -952,12 +950,51 @@ function linearize(
     return solve(prob; allow_input_derivatives)
 end
 
+# Resolve an operating-point value to something that can be passed to a setter.
+# A numeric value stored in a `Dict{SymbolicT, SymbolicT}` is wrapped as a symbolic
+# constant; unwrap it to a plain number/array. Routing a constant through `getu` would
+# build a fresh `RuntimeGeneratedFunction` (with the value baked into the generated code)
+# on every call, which dominates runtime when linearizing along a trajectory. Only
+# genuinely symbolic values (expressions referencing the problem state) need `getu`.
+function _resolve_op_value(prob, v)
+    if SU.isconst(v)
+        return SU.unwrap_const(v)
+    elseif symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v)
+        return getu(prob, v)(prob)
+    else
+        return v
+    end
+end
+
 function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
     T = eltype(lin_fun.prob.u0)
     results = @NamedTuple{A::Matrix{T}, B::Matrix{T}, C::Matrix{T}, D::Matrix{T}}[]
     xpts = @NamedTuple{x::typeof(lin_fun.prob.u0), p::typeof(lin_fun.prob.p), t::typeof(lin_fun.prob.tspan[1])}[]
+    isempty(ops) && return results, xpts
+
+    # Build the linearization problem once and reuse it across all time points, mutating
+    # only the operating point and `.t`. This avoids reconstructing the problem and
+    # rebuilding the symbolic setters on every iteration. The set of operating-point keys
+    # is identical across time points (only the values change), so resolve the first op to
+    # obtain the keys and build the setters once.
+    prob = LinearizationProblem(lin_fun, ts[1])
+    op1 = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(ops[1]), COMMON_NOTHING)
+    evaluate_varmap!(op1, keys(op1))
+    op_keys = collect(keys(op1))
+    setters = map(op_keys) do k
+        is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
+    end
+
     for (op, t) in zip(ops, ts)
-        res, xpt = linearize(ssys, lin_fun; op, t, allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
+        op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+        evaluate_varmap!(op, keys(op))
+        for (setter, k) in zip(setters, op_keys)
+            v = get(op, k, COMMON_NOTHING)
+            isequal(v, COMMON_NOTHING) && continue
+            setter(prob, _resolve_op_value(prob, v))
+        end
+        prob.t = t
+        res, xpt = solve(prob; allow_input_derivatives)::Tuple{eltype(results), eltype(xpts)}
         push!(results, res)
         push!(xpts, xpt)
     end
