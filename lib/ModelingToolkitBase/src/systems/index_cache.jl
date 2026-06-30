@@ -588,9 +588,36 @@ end
 
 const ReorderedParametersT = Vector{Union{Vector{SymbolicT}, Vector{Vector{SymbolicT}}}}
 
-function reorder_parameters(
-        sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...
-    )
+struct ReorderedDefaultParameters
+    value::ReorderedParametersT
+end
+
+function should_invalidate_mutable_cache_entry(::Type{ReorderedDefaultParameters}, patch::NamedTuple)
+    return haskey(patch, :ps) || haskey(patch, :index_cache)
+end
+
+function _copy_reordered(v::ReorderedParametersT)
+    return ReorderedParametersT(map(v) do inner
+        inner isa Vector{SymbolicT} ? copy(inner) : map(copy, inner)
+    end)
+end
+
+function reorder_parameters(sys::AbstractSystem; kwargs...)
+    if isempty(kwargs) && sys isa System && has_index_cache(sys) && get_index_cache(sys) !== nothing
+        cached = check_mutable_cache(sys, ReorderedDefaultParameters, ReorderedDefaultParameters, nothing)
+        if cached isa ReorderedDefaultParameters
+            return _copy_reordered(cached.value)
+        end
+        val = reorder_parameters(
+            get_index_cache(sys)::IndexCache, parameters(sys; initial_parameters = true)
+        )
+        store_to_mutable_cache!(sys, ReorderedDefaultParameters, ReorderedDefaultParameters(val))
+        return _copy_reordered(val)
+    end
+    return reorder_parameters(sys, parameters(sys; initial_parameters = true); kwargs...)
+end
+
+function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         return reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
     elseif ps isa Tuple

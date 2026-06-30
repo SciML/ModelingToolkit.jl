@@ -1613,6 +1613,27 @@ function __no_initial_params_pred(x::SymbolicT)
     end
 end
 
+struct CachedSystemParameters
+    value::Vector{SymbolicT}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{CachedSystemParameters}, patch::NamedTuple)
+    return haskey(patch, :ps) || haskey(patch, :systems)
+end
+
+function _unfiltered_parameters(sys::AbstractSystem)
+    ps = get_ps(sys)
+    ps === SciMLBase.NullParameters() && return SymbolicT[]
+    if eltype(ps) <: Pair
+        ps = Vector{SymbolicT}(unwrap.(first.(ps)))
+    end
+    result = OrderedSet{SymbolicT}(ps)
+    for subsys in get_systems(sys)
+        union!(result, namespace_parameters(subsys))
+    end
+    return collect(result)
+end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -1621,19 +1642,18 @@ Get the parameters of the system `sys` and its subsystems.
 See also [`@parameters`](@ref) and [`ModelingToolkitBase.get_ps`](@ref).
 """
 function parameters(sys::AbstractSystem; initial_parameters = false)
-    ps = get_ps(sys)
-    if ps === SciMLBase.NullParameters()
-        return SymbolicT[]
+    if sys isa System && iscomplete(sys)
+        cached = check_mutable_cache(sys, CachedSystemParameters, CachedSystemParameters, nothing)
+        if cached isa CachedSystemParameters
+            result = copy(cached.value)
+        else
+            base = _unfiltered_parameters(sys)
+            store_to_mutable_cache!(sys, CachedSystemParameters, CachedSystemParameters(base))
+            result = copy(base)
+        end
+    else
+        result = _unfiltered_parameters(sys)
     end
-    if eltype(ps) <: Pair
-        ps = Vector{SymbolicT}(unwrap.(first.(ps)))
-    end
-    systems = get_systems(sys)
-    result = OrderedSet{SymbolicT}(ps)
-    for subsys in systems
-        union!(result, namespace_parameters(subsys))
-    end
-    result = collect(result)
     if !initial_parameters && !is_initializesystem(sys)
         filter!(__no_initial_params_pred, result)
     end
