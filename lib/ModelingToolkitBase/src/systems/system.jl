@@ -1715,6 +1715,16 @@ end
 """
     $TYPEDSIGNATURES
 
+Check if any of the reversible transformations applied to `sys` satisfy the predicate `f`.
+"""
+function any_reversible_transformation(f::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    return any(f, tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Filter the reversible transformations applied to `sys`. Return a new system with the
 updated list of transformations.
 """

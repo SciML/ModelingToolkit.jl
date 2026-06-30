@@ -2145,3 +2145,17 @@ end
     )
     @test_nowarn prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.0))
 end
+
+@testset "`full_equations` initialization correctly handles non-mtkcompile systems" begin
+    @parameters T = missing
+    @variables X(t)[1:2]
+    @mtkcomplete sys = System([D(X[1]) ~ X[1] + X[2]], t, [X[1]], [T]; observed = [X[2] ~ T - X[1]])
+
+    # Prior to the fix which runs `ScalarizedArrayObserved` if it isn't already run, the init system
+    # would contain the equation `X ~ [1.0, 2.0]` despite `X[2]` being eliminated as an observed. This
+    # is underdetermined, and would result in essentially random values for `X[2]` and `T`.
+    prob = ODEProblem(sys, [X => [1.0, 2.0]], (0.0, 1.0))
+    integ = init(prob, Tsit5())
+    @test integ[X] ≈ [1.0, 2.0]
+    @test integ.ps[T] ≈ 3.0
+end
