@@ -1302,20 +1302,15 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
     union!(allsyms, independent_variables(sys))
     dervars = Set{SymbolicT}()
-    dervals = Dict{SymbolicT, SymbolicT}()
     if isscheduled(sys)
         sched::Schedule = get_schedule(sys)
-        for (k, v) in sched.dummy_sub
-            ttk = default_toterm(k)
-            push!(dervars, ttk)
-            dervals[ttk] = v
+        for (k, _) in sched.dummy_sub
+            push!(dervars, default_toterm(k))
         end
     else
         for eq in equations(sys)
             isdiffeq(eq) || continue
-            ttk = default_toterm(eq.lhs)
-            push!(dervars, ttk)
-            dervals[ttk] = eq.rhs
+            push!(dervars, default_toterm(eq.lhs))
         end
     end
     pred = CheckInvalidAndTrackNamespaced(
