@@ -40,6 +40,11 @@ function LinearizationOpPoint(sol::SciMLBase.AbstractODESolution, t; op = Dict{S
     return LinearizationOpPoint(sol, t, op)
 end
 
+# TODO: The `LinearizationOpPoint` infrastructure might have some performance on the table.
+# In particular, it might benefit form using initialization's `ReconstructInitializeprob`
+# to transfer values from the solution to the `LinearizationProblem` without having to
+# materialize and manipulate a dictionary alongisde a corresponding list of setter functions.
+
 function _build_op_from_solution(op::LinearizationOpPoint)
     sol_sys = MTKBase.indp_to_system(op.sol)
     eqs = equations(sol_sys)
