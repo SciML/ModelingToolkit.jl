@@ -264,6 +264,45 @@ if @isdefined(ModelingToolkit)
         end
     end
 
+    @testset "loop_openings require an operating point" begin
+        # Opening a loop turns the opened signal into a parameter whose operating-point
+        # value is not implied by the solution. It must be provided explicitly, otherwise
+        # `linearize` errors instead of silently using a stale/default value.
+        # Linearize plant_input -> P.output.u while opening the `plant_output` analysis
+        # point (so the opened AP is neither the input nor the output).
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        ts = [0.0, 0.5, 1.0]
+
+        lf_lo, _ = linearization_function(
+            sys, sys.plant_input, P.output.u; loop_openings = [sys.plant_output]
+        )
+        lops = lf_lo.loop_opening_params
+        @test !isempty(lops)
+
+        # Not providing the loop-opening parameter errors (both vector and scalar paths).
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts),
+            loop_openings = [sys.plant_output]
+        )
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0),
+            loop_openings = [sys.plant_output]
+        )
+
+        # Providing it via the `op` keyword of `LinearizationOpPoint` works.
+        op_lo = Dict(p => 0.0 for p in lops)
+        mats_lo, _, _ = linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts; op = op_lo),
+            loop_openings = [sys.plant_output]
+        )
+        @test length(mats_lo) == length(ts)
+    end
+
     @testset "Complicated model" begin
         # Parameters
         m1 = 1

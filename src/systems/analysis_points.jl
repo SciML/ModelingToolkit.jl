@@ -1,13 +1,18 @@
 """
     $(TYPEDSIGNATURES)
 
-Given a list of analysis points, break the connection for each and set the output to zero.
+Given a list of analysis points, break the connection for each. The output of each broken
+analysis point is turned into a parameter of the system. Returns the modified system and a
+vector of the variables that were turned into parameters (the "loop-opening parameters"),
+whose operating-point values must be supplied by the user when linearizing.
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
+    loop_opening_params = SymbolicT[]
     for ap in canonicalize_ap(sys, aps)
         sys, (d_vs,) = apply_transformation(Break(ap, true), sys)
+        append!(loop_opening_params, d_vs)
     end
-    return sys
+    return sys, loop_opening_params
 end
 
 const DOC_LOOP_OPENINGS = """
@@ -41,7 +46,7 @@ function get_linear_analysis_function(
     )
     dus = SymbolicT[]
     us = SymbolicT[]
-    sys = handle_loop_openings(sys, loop_openings)
+    sys, loop_opening_params = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
@@ -58,7 +63,7 @@ function get_linear_analysis_function(
             append!(us, u)
         end
     end
-    return linearization_function(system_modifier(sys), dus, us; kwargs...)
+    return linearization_function(system_modifier(sys), dus, us; loop_opening_params, kwargs...)
 end
 """
     $(TYPEDSIGNATURES)
@@ -135,6 +140,8 @@ Returns
 - `sys`: The transformed system.
 - `input_vars`: A vector of input variables corresponding to the input analysis points.
 - `output_vars`: A vector of output variables corresponding to the output analysis points.
+- `loop_opening_params`: A vector of the variables that were turned into parameters by the
+  `loop_openings` (their operating-point values must be supplied when linearizing).
 """
 function linearization_ap_transform(
         sys,
@@ -166,8 +173,8 @@ function linearization_ap_transform(
         end
         push!(output_vars, output_var)
     end
-    sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-    return sys, input_vars, output_vars
+    sys, loop_opening_params = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
+    return sys, input_vars, output_vars, loop_opening_params
 end
 
 function linearization_function(
@@ -175,11 +182,13 @@ function linearization_function(
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...
     )
-    sys, input_vars,
-        output_vars = linearization_ap_transform(
+    sys, input_vars, output_vars,
+        loop_opening_params = linearization_ap_transform(
         sys, inputs, outputs, loop_openings
     )
-    return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
+    return linearization_function(
+        system_modifier(sys), input_vars, output_vars; loop_opening_params, kwargs...
+    )
 end
 
 @doc """
