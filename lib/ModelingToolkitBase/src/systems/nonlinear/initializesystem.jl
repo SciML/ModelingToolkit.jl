@@ -56,6 +56,18 @@ function generate_initializesystem_timevarying(
         name = nameof(sys), kwargs...
     )
     _sys = reverse_transformations_for_initialization(sys)
+    # Systems that haven't gone through `mtkcompile` won't have this transformation applied.
+    # We rely on this to substitute `X => [X[1], X[2]]` in case e.g. `X[1]` is an observed and
+    # `X[2]` is an unknown. Ordinarily, `X[1]` shouldn't be an unknown and should be substituted
+    # away completely.
+    if !any_reversible_transformation(Base.Fix2(isa, ScalarizedArrayObserved), _sys)
+        _obs = copy(observed(_sys))
+        _dvs = unknowns(_sys)
+        tf = add_array_observed!(_obs, _dvs)
+        _sys = with_reversible_transformation(_sys, tf)
+        _obs = topsort_equations(_sys, _obs, [eq.lhs for eq in _obs])
+        @set! _sys.observed = _obs
+    end
     eqs = full_equations(_sys)
 
     # Firstly, all variables are initialization unknowns
