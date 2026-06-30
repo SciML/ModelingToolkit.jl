@@ -26,12 +26,12 @@ state = TearingState(pendulum)
 @test StructuralTransformations.maximal_matching(
     graph, eq -> true,
     v -> var_to_diff[v] === nothing
-) ==
-    map(
-    x -> x == 0 ? StructuralTransformations.unassigned : x,
-    [3, 4, 2, 5, 0, 0, 0, 0, 0]
-)
-
+) == map(state.fullvars) do v
+    if operation(v) isa Differential
+        return findfirst(eq -> isequal(eq.lhs, v), equations(state))
+    end
+    return StructuralTransformations.unassigned
+end
 eqs2 = [
     D(D(x)) ~ T * x,
     D(D(y)) ~ T * y - g,

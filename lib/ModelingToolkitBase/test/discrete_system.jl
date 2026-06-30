@@ -226,8 +226,10 @@ RHS2 = RHS
 
 @variables x(t) y(t) u(t)
 if @isdefined(ModelingToolkit)
-    eqs = [x ~ x(k - 1) + u, u ~ 1, y ~ x + u]
+    eqs = [x ~ x(k - 1) + u, u ~ 1]
     @mtkcompile de = System(eqs, t)
+    @set! de.observed = [ModelingToolkitBase.get_observed(de); [y ~ x + u]]
+    de = complete(de)
 else
     eqs = [x ~ x(k - 1) + u]
     @mtkcompile de = System(eqs, t) inputs = [u]
