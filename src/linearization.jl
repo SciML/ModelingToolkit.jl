@@ -10,11 +10,17 @@ When `t` is an `AbstractVector`, [`linearize`](@ref) calls [`linearization_funct
 once and evaluates the linearization at each time point, returning vectors of matrices and
 extras.
 
+The `op` keyword argument provides additional operating-point values that are merged into
+the solution-derived operating point at every time point (taking precedence). This is how
+values for variables that are not present in `sol` are supplied — in particular the
+parameters created by `loop_openings`, e.g.
+`LinearizationOpPoint(sol, t; op = Dict(opened_signal => 0))`.
+
 # Fields
 
 $(TYPEDFIELDS)
 """
-struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T}
+struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T, D <: AbstractDict}
     """
     The solution to extract operating point values from.
     """
@@ -23,6 +29,15 @@ struct LinearizationOpPoint{S <: SciMLBase.AbstractODESolution, T}
     The time point (or vector of time points) at which to evaluate the solution.
     """
     t::T
+    """
+    Additional operating-point values merged into the solution-derived operating point at
+    each time point (takes precedence over solution-derived values).
+    """
+    op::D
+end
+
+function LinearizationOpPoint(sol::SciMLBase.AbstractODESolution, t; op = Dict{SymbolicT, SymbolicT}())
+    return LinearizationOpPoint(sol, t, op)
 end
 
 function _build_op_from_solution(op::LinearizationOpPoint)
@@ -37,6 +52,9 @@ function _build_op_from_solution(op::LinearizationOpPoint)
     end
     for p in parameters(sol_sys)
         result[p] = getp(op.sol, p)(op.sol)
+    end
+    for (k, v) in op.op
+        result[unwrap(k)] = v
     end
     return result
 end
@@ -54,12 +72,14 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
         param_vals[p] = getp(op.sol, p)(op.sol)
     end
     # Interpolate once per time point to build the per-point operating-point dict.
+    extra_op = Dict{SymbolicT, SymbolicT}(unwrap(k) => v for (k, v) in op.op)
     return map(op.t) do ti
         u = op.sol(ti)
         result = copy(param_vals)
         for i in diff_idxs
             result[sts[i]] = u[i]
         end
+        merge!(result, extra_op)
         result
     end
 end
@@ -125,6 +145,7 @@ function linearization_function(
         missing_guess_value = MTKBase.default_missing_guess_value(),
         t = 0.0,
         ignore_system_initial_conditions = false,
+        loop_opening_params = SymbolicT[],
         kwargs...
     )
     op = Dict(op)
@@ -251,7 +272,8 @@ function linearization_function(
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
-        hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns
+        hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns,
+        collect(SymbolicT, loop_opening_params)
     )
     return lin_fun, sys
 end
@@ -421,6 +443,12 @@ mutable struct LinearizationFunction{
     Index of `Initial(x)` for every `x` in unknowns.
     """
     const initial_idxs_for_unknowns::Vector{ParameterIndex{SciMLStructures.Initials, Int}}
+    """
+    Variables turned into parameters by `loop_openings`. Their operating-point values are
+    not implied by the rest of the system, so they must be provided explicitly in the `op`
+    passed to `linearize`; otherwise an error is thrown.
+    """
+    const loop_opening_params::Vector{SymbolicT}
 end
 
 SymbolicIndexingInterface.symbolic_container(f::LinearizationFunction) = f.prob
@@ -934,6 +962,7 @@ function linearize(
     prob = LinearizationProblem(lin_fun, t)
     op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     evaluate_varmap!(op, keys(op))
+    _check_loop_opening_op(lin_fun.loop_opening_params, op)
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
         v = _resolve_op_value(prob, v)
@@ -966,6 +995,30 @@ function _resolve_op_value(prob, v)
     end
 end
 
+# Variables turned into parameters by `loop_openings` have no operating-point value implied
+# by the rest of the system, so they must be supplied explicitly in `op`. Error (rather than
+# silently using a stale/default value) if any of them is missing.
+function _check_loop_opening_op(loop_opening_params, op)
+    isempty(loop_opening_params) && return nothing
+    missing_params = SymbolicT[]
+    for p in loop_opening_params
+        v = get(op, p, COMMON_NOTHING)
+        isequal(v, COMMON_NOTHING) && push!(missing_params, p)
+    end
+    isempty(missing_params) && return nothing
+    params_str = join(string.(missing_params), ", ")
+    error(
+        """
+        The operating point does not provide values for the loop-opening parameter(s): \
+        $(params_str). When `loop_openings` is used, the opened signals become \
+        parameters whose operating-point values are not implied by the rest of the \
+        system, so they must be provided explicitly in `op` (e.g. set to zero). When \
+        linearizing along a trajectory with `LinearizationOpPoint`, pass them via its \
+        `op` keyword argument: `LinearizationOpPoint(sol, t; op = Dict(signal => value))`.
+        """
+    )
+end
+
 function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_derivatives)
     T = eltype(lin_fun.prob.u0)
     results = @NamedTuple{A::Matrix{T}, B::Matrix{T}, C::Matrix{T}, D::Matrix{T}}[]
@@ -980,6 +1033,8 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
     prob = LinearizationProblem(lin_fun, ts[1])
     op1 = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(ops[1]), COMMON_NOTHING)
     evaluate_varmap!(op1, keys(op1))
+    # The op keys are identical across time points, so checking the first one suffices.
+    _check_loop_opening_op(lin_fun.loop_opening_params, op1)
     op_keys = collect(keys(op1))
     setters = map(op_keys) do k
         is_parameter(prob, Initial(k)) ? setu(prob, Initial(k)) : setu(prob, k)
