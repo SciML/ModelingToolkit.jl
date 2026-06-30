@@ -20,7 +20,7 @@ res = analyze_initialization_jacobian(prob; verbose = false)
 # Overdetermined initialization with a redundant equation: two consistent initial
 # conditions on a single unknown. The analysis must report a redundant equation.
 @variables z(t)
-@named sys2 = System([D(z) ~ -z], t; initialization_eqs = [z ~ 1.0, z^2 ~ 1.0])
+@named sys2 = System([D(z) ~ -z], t; initialization_eqs = [log(exp(z)) ~ 1.0, z^2 ~ 1.0])
 sys2 = mtkcompile(sys2)
 prob2 = ODEProblem(sys2, [], (0.0, 1.0); guesses = [z => 0.9],
     warn_initialize_determined = false)
