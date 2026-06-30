@@ -182,11 +182,11 @@ function generated_argument_name(i::Int)
     return Symbol(:__mtk_arg_, i)
 end
 
-function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}())
-    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
+function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}(), ignore_arg_idxs = nothing)
+    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars, ignore_arg_idxs)
 end
 
-function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
+function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars, ignore_arg_idxs = nothing)
     # map array symbolic to an identically sized array where each element is (buffer_idx, idx_in_buffer)
     var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
     for (i, arg) in enumerate(args)
@@ -195,6 +195,10 @@ function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
         # scalarized array symbolic. This works because the only non-array element
         # is the independent variable
         arg isa Vector{SymbolicT} || continue
+        # entire arg-vectors whose decomposition is already accounted for (e.g. the
+        # parameter slice, handled via the cached `param_var_to_arridxs`) are skipped
+        # here so we never re-run `split_indexed_var`/`get_stable_index` on them.
+        ignore_arg_idxs === nothing || i in ignore_arg_idxs && continue
 
         # go through symbolics
         for (j, var) in enumerate(arg)
@@ -291,9 +295,9 @@ reconstruct array variables if they are present scalarized in `args`.
 """
 function array_variable_assignments(
         @nospecialize(args...); ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
-        argument_name = generated_argument_name, buffer_offset = 0
+        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing
     )
-    var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars)
+    var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars, ignore_arg_idxs)
     return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
 end
 
@@ -555,7 +559,7 @@ Base.@nospecializeinfer function build_function_wrapper(
                 param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name)
+        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
         append!(assignments, other_assigns)
     end
     append!(assignments, extra_assignments)
