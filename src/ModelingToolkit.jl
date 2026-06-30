@@ -152,6 +152,7 @@ end
 @reexport using .StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
+export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, linearization_ap_transform
