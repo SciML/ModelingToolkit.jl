@@ -15,8 +15,7 @@ function CacheWriter(
         exprs::SCCCacheVarsExprsElT, solsyms;
         eval_expression = false, eval_module = @__MODULE__, cse = true, sparse = false
     )
-    ps = parameters(sys; initial_parameters = true)
-    rps = reorder_parameters(sys, ps)
+    rps = reorder_parameters(sys)  # 1 arg to use the cached version
     cache_writes = SymbolicT[]
     for (i, T) in enumerate(buffer_types)
         regions = SU.RegionsT()

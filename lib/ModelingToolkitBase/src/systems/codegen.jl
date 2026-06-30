@@ -41,11 +41,10 @@ function generate_rhs(
         kwargs...
     )
     dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
-    p = reorder_parameters(sys, ps)
+    p = reorder_parameters(sys) # 1 arg to use the cached version
     if cachesyms isa Vector{Vector{SymbolicT}}
         append!(p, cachesyms)
     end
