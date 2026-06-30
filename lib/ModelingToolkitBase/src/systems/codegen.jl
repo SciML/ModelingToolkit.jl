@@ -1178,6 +1178,43 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
     return false
 end
 
+struct NamespaceMap
+    value::Dict{SymbolicT, SymbolicT}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{NamespaceMap}, patch::NamedTuple)
+    return haskey(patch, :name) || haskey(patch, :observed) || haskey(patch, :unknowns) ||
+           haskey(patch, :ps) || haskey(patch, :systems)
+end
+
+function _build_namespace_map(sys)
+    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    for sym in unknowns(sys)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    for sym in parameters(sys; initial_parameters = true)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    return ns_map
+end
+
+function get_namespace_map(sys)
+    if sys isa System && iscomplete(sys)
+        cached = check_mutable_cache(sys, NamespaceMap, NamespaceMap, nothing)
+        cached isa NamespaceMap && return cached.value
+        m = _build_namespace_map(sys)
+        store_to_mutable_cache!(sys, NamespaceMap, NamespaceMap(m))
+        return m
+    end
+    return _build_namespace_map(sys)
+end
+
 """
     build_explicit_observed_function(sys, ts; kwargs...) -> Function(s)
 
@@ -1283,19 +1320,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     end
 
     namespace_subs = Dict{SymbolicT, SymbolicT}()
-    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
-    for sym in unknowns(sys)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
-    for sym in parameters(sys; initial_parameters = true)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
+    ns_map = get_namespace_map(sys)
     allsyms = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), observables(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), parameters(sys; initial_parameters = true))
