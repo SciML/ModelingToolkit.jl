@@ -37,7 +37,7 @@ function eliminate_perfect_aliases!(state::TearingState)
     old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(
         state, eqs_to_rm, vars_to_rm; eqs_sorted_and_uniqued = true
     )
-    return nothing
+    return old_to_new_eq, old_to_new_var, aliases
 end
 
 """
@@ -103,14 +103,17 @@ end
 
 Pick the target variable for an alias group. Irreducible variables must remain as
 unknowns, so one of them is chosen as the target when the group contains any. Otherwise
-the variable with the highest `state_priority` wins. When priorities are tied, prefer
-the variable appearing in the most equations: visualization-only variables appear in a
-single alias equation, while physics variables appear in many dynamics equations.
+the variable with the highest `state_priority` wins; all other group members are
+eliminated in favour of the target. When positive priorities are tied, emit a warning and prefer the
+variable appearing in the most equations (visualization-only variables appear in a single alias
+equation, while physics variables appear in many dynamics equations); if that is also
+tied, one of the tied variables is chosen arbitrarily.
 """
 function pick_alias_target(
-        fullvars::Vector{SymbolicT}, group_vars::Vector{Int}, state_priorities, irreducibles::AtomicSetT,
-        graph = nothing
+        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT
     )
+    (; fullvars, structure) = state
+    (; graph, canonical_ranks, state_priorities) = structure
     irr_idx = findfirst(
         Base.Fix1(contains_possibly_indexed_element, irreducibles) ∘ Base.Fix1(getindex, fullvars),
         group_vars
@@ -118,9 +121,15 @@ function pick_alias_target(
     irr_idx === nothing || return group_vars[irr_idx]
     max_priority = maximum(Base.Fix1(getindex, state_priorities), group_vars)
     candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
-    if graph !== nothing && length(candidates) > 1
-        _, target_idx = findmax(v -> length(𝑑neighbors(graph, v)), candidates)
-        return candidates[target_idx]
+    if length(candidates) > 1 && max_priority > 0
+        if max_priority >= 100
+            tied_names = getindex.(Ref(fullvars), candidates)
+            @warn "Multiple variables in an alias group share the highest state_priority \
+            ($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
+        end
+        max_degree = maximum(v -> length(𝑑neighbors(graph, v)), candidates)
+        filter!(v -> length(𝑑neighbors(graph, v)) == max_degree, candidates)
+        sort!(candidates; by = Base.Fix1(getindex, canonical_ranks))
     end
     return candidates[1]
 end
@@ -140,7 +149,6 @@ function find_perfect_aliases!(
     (; sys, fullvars, structure) = state
     (; graph, solvable_graph, var_to_diff, state_priorities) = structure
 
-    @assert solvable_graph === nothing
     diff_to_var = invview(var_to_diff)
     aliases = Dict{Int, Int}()
     subs = Dict{SymbolicT, SymbolicT}()
@@ -156,7 +164,7 @@ function find_perfect_aliases!(
     parent = Dict{Int, Int}()
     parity = Dict{Int, Int8}()
     members = Dict{Int, Vector{Int}}()
-    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`. 
+    # Candidate alias equations `(ieq, v1_idx, v2_idx, edge_sign)`.
     # `edge_sign == ±1` encodes `v1 ~ edge_sign*v2`.
     # Removal is decided below once each group's target is known:
     # equations with a non-target irreducible endpoint must stay so
@@ -203,7 +211,6 @@ function find_perfect_aliases!(
     group_target = Dict{Int, Int}()
     sizehint!(group_target, length(members))
 
-    is_sticky = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v]) || state_priorities[v] > 0
     is_irreducible_v = (v) -> contains_possibly_indexed_element(irreducibles, fullvars[v])
 
     # Symbolic zero used as substitution target for variables in conflict groups.
@@ -230,6 +237,7 @@ function find_perfect_aliases!(
 
                 append!(eqs_to_substitute, 𝑑neighbors(graph, v))
                 BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), v, ())
+                solvable_graph === nothing || BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(solvable_graph), v, ())
 
                 dv = var_to_diff[v]
                 while dv isa Int
@@ -238,6 +246,7 @@ function find_perfect_aliases!(
 
                     append!(eqs_to_substitute, 𝑑neighbors(graph, dv))
                     BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(graph), dv, ())
+                    solvable_graph === nothing || BipartiteGraphs.set_neighbors!(BipartiteGraphs.invview(solvable_graph), dv, ())
 
                     dv = var_to_diff[dv]
                 end
@@ -246,13 +255,14 @@ function find_perfect_aliases!(
         end
         # For consistent groups pick a target (survives as unknown) and rebase
         # parities relative to it via `target_p`.
-        target = pick_alias_target(fullvars, group_vars, state_priorities, irreducibles, graph)
+        target = pick_alias_target(state, group_vars, irreducibles)
         group_target[root] = target
         target_p = parity[target]
         for v in group_vars
-            # In consistent groups sticky vars (irreducible OR priority>0) other
-            # than the target stay as unknowns.
-            if is_sticky(v) || v == target
+            # In consistent groups, irreducible vars other than the target stay as unknowns.
+            # All other non-target vars (including those with positive state_priority) are
+            # eliminated in favour of the highest-priority target.
+            if is_irreducible_v(v) || v == target
                 state.always_present[v] = true
                 continue
             end
@@ -268,6 +278,10 @@ function find_perfect_aliases!(
                 push!(eqs_to_substitute, e)
                 Graphs.rem_edge!(graph, e, v)
                 Graphs.add_edge!(graph, e, target)
+                if solvable_graph !== nothing && Graphs.has_edge(solvable_graph, BipartiteEdge(e, v))
+                    Graphs.rem_edge!(solvable_graph, e, v)
+                    Graphs.add_edge!(solvable_graph, e, target)
+                end
             end
 
             dv = var_to_diff[v]
@@ -285,6 +299,10 @@ function find_perfect_aliases!(
                     push!(eqs_to_substitute, e)
                     Graphs.rem_edge!(graph, e, dv)
                     Graphs.add_edge!(graph, e, dtarget)
+                    if solvable_graph !== nothing && Graphs.has_edge(solvable_graph, BipartiteEdge(e, dv))
+                        Graphs.rem_edge!(solvable_graph, e, dv)
+                        Graphs.add_edge!(solvable_graph, e, dtarget)
+                    end
                 end
 
                 dv = var_to_diff[dv]
@@ -297,7 +315,7 @@ function find_perfect_aliases!(
     #
     # Conflict groups: every variable is forced to `0`.
     # Take the first `length(irrs)` eq in the group to force the irrs to 0
-    # (overwriting the eq and replacing its graph row with the edge to `irr`). 
+    # (overwriting the eq and replacing its graph row with the edge to `irr`).
     # Remaining conflict eqs become `0 ~ 0` and are queued for removal.
     # Pinned eqs end up in `eqs_to_substitute` from the var-elim pass above
     # but `subber` leaves `irr ~ 0` untouched (irreducibles aren't in `subs`).
@@ -313,13 +331,16 @@ function find_perfect_aliases!(
             else
                 v_pin = pop!(irrs) # irreducible var to pin to 0
                 BipartiteGraphs.set_neighbors!(graph, ieq, [v_pin])
+                if solvable_graph !== nothing
+                    BipartiteGraphs.set_neighbors!(solvable_graph, ieq, [v_pin])
+                end
                 eqs[ieq] = fullvars[v_pin] ~ zero_sym
                 original_eqs[ieq] = fullvars[v_pin] ~ zero_sym
             end
         else
             target = group_target[parent[v1]]
-            c1 = is_sticky(v1) ? v1 : target
-            c2 = is_sticky(v2) ? v2 : target
+            c1 = is_irreducible_v(v1) ? v1 : target
+            c2 = is_irreducible_v(v2) ? v2 : target
             c1 == c2 && push!(eqs_to_rm, ieq)
         end
     end
@@ -353,6 +374,10 @@ function find_perfect_aliases!(
             𝑠neighbors(graph, e)
         )
         BipartiteGraphs.set_neighbors!(graph, e, new_row)
+        if solvable_graph !== nothing
+            filter!(v -> Graphs.has_edge(solvable_graph, BipartiteEdge(e, v)), new_row)
+            BipartiteGraphs.set_neighbors!(solvable_graph, e, new_row)
+        end
     end
 
     # After substitution, alias equations that connected a sticky non-target
@@ -360,7 +385,7 @@ function find_perfect_aliases!(
     # direct alias between the sticky variable and the target (since the
     # zero-priority variable was redirected to the target in the graph). Remove
     # all but the first copy of each (v_a, v_b) variable pair.
-    let seen = Set{Tuple{Int,Int}}()
+    let seen = Set{Tuple{Int, Int}}()
         eqs_rm_set = Set(eqs_to_rm)
         removed_additional_eqs = false
         for (ieq, _, _, _) in candidate_eqs
@@ -384,8 +409,10 @@ function find_perfect_aliases!(
     return aliases
 end
 
-function alias_elimination!(state::TearingState; fully_determined = true,
-                            print_underconstrained_variables = false, kwargs...)
+function alias_elimination!(
+        state::TearingState; fully_determined = true,
+        print_underconstrained_variables = false, kwargs...
+    )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
     vars_to_rm = Int[]

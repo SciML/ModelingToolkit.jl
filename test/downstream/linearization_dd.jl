@@ -18,7 +18,7 @@ using OrdinaryDiffEq
 connect = ModelingToolkit.connect
 
 function rm_bindings(sys)
-    @set sys.bindings = empty(bindings(sys))
+    return @set sys.bindings = empty(bindings(sys))
 end
 
 @independent_variables t
@@ -43,7 +43,7 @@ lin_inputs = [force.f.u]
 # => nothing to remove extra defaults
 op = Dict(
     cart.v => 0, link1.A => -pi / 2, link1.dA => 0, force.f.u => 0,
-    link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => nothing
+    link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => 0
 )
 guesses = [link1.fx1 => 0]
 @info "named_ss"
@@ -79,4 +79,4 @@ lsyss2 = (;
     C = integ[lsyss.C], D = integ[lsyss.D],
 )
 
-@test tf(ss(lsyss2...)) ≈ tf(ss(lsys...)) atol = 1e-8
+@test tf(ss(lsyss2...)) ≈ tf(ss(lsys...)) atol = 1.0e-8

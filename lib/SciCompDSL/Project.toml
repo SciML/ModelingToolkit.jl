@@ -1,7 +1,7 @@
 name = "SciCompDSL"
 uuid = "91a8cdf1-4ca6-467b-a780-87fda3fff15e"
 authors = ["Aayush Sabharwal <aayush.sabharwal@gmail.com>"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"

@@ -2,6 +2,7 @@
 $(DocStringExtensions.README)
 """
 module ModelingToolkit
+
 using PrecompileTools, Reexport
 @recompile_invalidations begin
     using StaticArrays
@@ -68,6 +69,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
     jacobian, hessian, derivative, sparsejacobian, sparsehessian,
     scalarize, hasderiv
 import ModelingToolkitBase as MTKBase
+import SimpleNonlinearSolve
 
 import DiffEqBase: @add_kwonly
 @reexport using Symbolics
@@ -150,6 +152,7 @@ end
 @reexport using .StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
+export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, linearization_ap_transform
@@ -161,13 +164,14 @@ export TearingState
 export Clock, SolverStepClock, TimeDomain
 export get_sensitivity_function, get_comp_sensitivity_function,
     get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer
+export isolate_subsystem
 
 function FMIComponent end
 
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
 
-include(pkgdir(ModelingToolkitBase, "src", "precompile.jl"))
+include("precompile.jl")
 
 function __init__()
     SU.hashcons(StructuralTransformations.NOTHING_EQ.lhs, true)
@@ -176,7 +180,7 @@ function __init__()
     SU.hashcons(unwrap(ODE_GAMMA[2]), true)
     SU.hashcons(unwrap(ODE_GAMMA[3]), true)
     SU.hashcons(unwrap(ODE_C), true)
-    SU.hashcons(SCC_EXPLICITFUN_CACHE_OUT, true)
+    return SU.hashcons(SCC_EXPLICITFUN_CACHE_OUT, true)
 end
 
 end # module

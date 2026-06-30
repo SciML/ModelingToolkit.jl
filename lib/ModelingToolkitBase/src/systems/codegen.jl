@@ -286,7 +286,7 @@ function generate_jacobian(
 end
 
 function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})
-    @assert findnz(arr)[1:2] == (I, J)
+    return @assert findnz(arr)[1:2] == (I, J)
 end
 
 function assert_jac_length_header(sys)
@@ -1116,8 +1116,10 @@ end
 function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
-    return MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true,
-        scale_rates = false, rescale_rates_on_update = false)
+    return MassActionJump(
+        rs, ns; param_mapper = pmapper, nocopy = true,
+        scale_rates = false, rescale_rates_on_update = false
+    )
 end
 
 function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
@@ -1313,20 +1315,15 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
     union!(allsyms, independent_variables(sys))
     dervars = Set{SymbolicT}()
-    dervals = Dict{SymbolicT, SymbolicT}()
     if isscheduled(sys)
         sched::Schedule = get_schedule(sys)
-        for (k, v) in sched.dummy_sub
-            ttk = default_toterm(k)
-            push!(dervars, ttk)
-            dervals[ttk] = v
+        for (k, _) in sched.dummy_sub
+            push!(dervars, default_toterm(k))
         end
     else
         for eq in equations(sys)
             isdiffeq(eq) || continue
-            ttk = default_toterm(eq.lhs)
-            push!(dervars, ttk)
-            dervals[ttk] = eq.rhs
+            push!(dervars, default_toterm(eq.lhs))
         end
     end
     pred = CheckInvalidAndTrackNamespaced(
@@ -1402,8 +1399,8 @@ Base.@nospecializeinfer function build_explicit_observed_function(
             p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
         ),
     }(
-            oop, iip
-        )
+        oop, iip
+    )
     return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? (f, f) : f
 end
 
@@ -1522,6 +1519,19 @@ function generate_update_A(
     )
     ps = reorder_parameters(sys)
 
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = size(A, 1)
+    push!(regions, SU.ShapeVecT((1:N, 1:size(A, 2))))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(A, 1), j in axes(A, 2)
+        v = A[i, j]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i, j:j)))
+        push!(values, Symbolics.SConst([v;;]))
+    end
+    A = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
+
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
         similarto = typeof(A), add_observed = false, kwargs...
@@ -1635,6 +1645,19 @@ function generate_update_b(
         cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = reorder_parameters(sys)
+
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = length(b)
+    push!(regions, SU.ShapeVecT((1:N,)))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(b, 1)
+        v = b[i]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i,)))
+        push!(values, Symbolics.SConst([v]))
+    end
+    b = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},

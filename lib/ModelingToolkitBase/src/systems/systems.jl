@@ -88,6 +88,11 @@ function mtkcompile(
         split = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+
+    # For backward compatibility with old ModelingToolkit which does not
+    # integrate with the reversible transformation API.
+    sys = with_reversible_transformation(sys, UnhackSystemTransformation)
+
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
     inputs = canonicalize_io(unwrap_vars(inputs), "input")
     outputs = canonicalize_io(unwrap_vars(outputs), "output")
@@ -243,14 +248,16 @@ function __mtkcompile(
     if !has_derivatives && !has_shifts
         obseqs = copy(original_obs)
         get_trivial_observed_equations!(Equation[], eqs, obseqs, all_dvs, nothing)
-        add_array_observed!(obseqs)
-        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
         map!(eq -> Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs), eqs, eqs)
         observables = Set{SymbolicT}()
         for eq in obseqs
             push!(observables, eq.lhs)
         end
         setdiff!(flat_dvs, observables)
+        sys = remove_unhack_system_transformation(sys)
+        tf = add_array_observed!(obseqs, flat_dvs)
+        sys = with_reversible_transformation(sys, tf)
+        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
         new_ps = [get_ps(sys); collect(inputs)]
         @set! sys.eqs = eqs
         @set! sys.unknowns = flat_dvs
@@ -370,8 +377,6 @@ function __mtkcompile(
         )
     end
     get_trivial_observed_equations!(diffeqs, alg_eqs, obseqs, all_dvs, iv)
-    add_array_observed!(obseqs)
-    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
     for i in eachindex(alg_eqs)
         eq = alg_eqs[i]
         alg_eqs[i] = 0 ~ subst(eq.rhs - eq.lhs)
@@ -385,6 +390,11 @@ function __mtkcompile(
     new_eqs = [diffeqs; alg_eqs]
     new_dvs = [diffvars; alg_vars]
     new_ps = [get_ps(sys); collect(inputs)]
+
+    sys = remove_unhack_system_transformation(sys)
+    tf = add_array_observed!(obseqs, new_dvs)
+    sys = with_reversible_transformation(sys, tf)
+    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
 
     for eq in new_eqs
         if SU.query(eq.rhs) do v
@@ -531,26 +541,70 @@ end
     ndims = ndims(arr)
 end
 
-function add_array_observed!(obseqs::Vector{Equation})
-    array_obsvars = Set{SymbolicT}()
-    for eq in obseqs
-        arr, isarr = split_indexed_var(eq.lhs)
-        isarr && push!(array_obsvars, arr)
+struct ScalarizedArrayObserved <: ReversibleTransformations
+    arrvars::Set{SymbolicT}
+end
+
+reverse_transformation_during_initialization(::ScalarizedArrayObserved) = false
+
+function add_array_observed!(obseqs::Vector{Equation}, unknowns::Vector{SymbolicT})
+    # map of array observed variable (unscalarized) to number of its
+    # scalarized terms that appear as observed variables
+    arr_obs_occurrences = Dict{SymbolicT, Int}()
+    for (i, eq) in enumerate(obseqs)
+        lhs = eq.lhs
+        rhs = eq.rhs
+        unscal, isarr = split_indexed_var(lhs)
+        isarr || continue
+        cnt = get(arr_obs_occurrences, unscal, 0)
+        arr_obs_occurrences[unscal] = cnt + 1
     end
-    for var in array_obsvars
-        firstind = first(SU.stable_eachindex(var))::SU.StableIndex{Int}
-        firstind = Tuple(firstind.idxs)
-        scal = SymbolicT[]
-        for i in SU.stable_eachindex(var)
-            push!(scal, var[i])
-        end
-        if all(isone, firstind)
-            push!(obseqs, var ~ reshape(scal, size(var)))
-            continue
-        end
-        push!(obseqs, var ~ offset_array(firstind, reshape(scal, size(var))))
+
+    # count variables in unknowns if they are scalarized forms of variables
+    # also present as observed. e.g. if `x[1]` is an unknown and `x[2] ~ (..)`
+    # is an observed equation.
+    for sym in unknowns
+        unscal, isarr = split_indexed_var(sym)
+        isarr || continue
+        cnt = get(arr_obs_occurrences, unscal, 0)
+        iszero(cnt) && continue
+        arr_obs_occurrences[unscal] = cnt + 1
     end
-    return
+
+    obs_arr_eqs = Equation[]
+    arrvars = Set{SymbolicT}()
+    for (arrvar, cnt) in arr_obs_occurrences
+        cnt == length(arrvar) || continue
+        firstind = (first(SU.stable_eachindex(arrvar))::SU.StableIndex{Int}).idxs
+        scal_args = Symbolics.SArgsT()
+        sizehint!(scal_args, length(arrvar)::Int)
+        push!(scal_args, Symbolics.SConst(size(arrvar)))
+        for i in SU.stable_eachindex(arrvar)
+            push!(scal_args, arrvar[i])
+        end
+        rhs = Symbolics.STerm(
+            SU.array_literal, scal_args;
+            type = SU.symtype(arrvar), shape = SU.shape(arrvar)
+        )
+        if !all(isone, firstind)
+            rhs = Symbolics.STerm(
+                offset_array,
+                Symbolics.SArgsT((Symbolics.SConst(Tuple(firstind)), rhs));
+                type = SU.symtype(arrvar), shape = SU.shape(arrvar)
+            )
+        end
+        push!(obs_arr_eqs, arrvar ~ rhs)
+        push!(arrvars, arrvar)
+    end
+    append!(obseqs, obs_arr_eqs)
+
+    return ScalarizedArrayObserved(arrvars)
+end
+
+function reverse_transformation(sys::AbstractSystem, tf::ScalarizedArrayObserved)
+    obs = copy(observed(sys))
+    filter!(eq -> !(eq.lhs in tf.arrvars), obs)
+    return @set! sys.observed = obs
 end
 
 """
@@ -842,7 +896,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
     obs = observed(snlsys)
     seqs = equations(snlsys)
-    trueobs = observed(unhack_system(snlsys))
+    trueobs = observed(reverse_all_default_reversible_transformations(snlsys))
     subs = Dict{SymbolicT, SymbolicT}()
     for eq in trueobs
         subs[eq.lhs] = eq.rhs
@@ -930,6 +984,12 @@ function observed2graph(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Ve
 end
 
 """
+Toggle to control whether `topsort_equations` prints the equations in the
+cycle, if present.
+"""
+TOPSORT_EQS_PRINT_CYCLE::Bool = false
+
+"""
     $(TYPEDSIGNATURES)
 
 Use Kahn's algorithm to topologically sort observed equations.
@@ -1000,7 +1060,37 @@ function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns:
         end
     end
 
-    (check && idx != neqs) && throw(ArgumentError("The equations have at least one cycle."))
+    if check && idx != neqs
+        # Build a directed eq→eq subgraph over unsorted equations, find smallest SCC.
+        if TOPSORT_EQS_PRINT_CYCLE
+            unsorted = findall(>(0), degrees)
+            unsorted_set = Set(unsorted)
+            n_unsorted = length(unsorted)
+            old_to_new = Dict(old => new for (new, old) in enumerate(unsorted))
+
+            g = SimpleDiGraph(n_unsorted)
+            for src_old in unsorted
+                for dst_old in 𝑑neighbors(graph, assigns[src_old])
+                    dst_old in unsorted_set || continue
+                    add_edge!(g, old_to_new[src_old], old_to_new[dst_old])
+                end
+            end
+
+            sccs = strongly_connected_components(g)
+            nontrivial = filter(scc -> length(scc) >= 2, sccs)
+            smallest_new = isempty(nontrivial) ? collect(1:n_unsorted) :
+                nontrivial[argmin(length.(nontrivial))]
+
+            println("=== topsort_equations: CYCLE DETECTED ===")
+            println("Smallest cycle ($(length(smallest_new)) equations):")
+            for new_idx in smallest_new
+                old_idx = unsorted[new_idx]
+                println("  LHS = $(unknowns[assigns[old_idx]])")
+                println("  EQ  = $(eqs[old_idx])")
+            end
+        end
+        throw(ArgumentError("The equations have at least one cycle."))
+    end
 
     return ordered_eqs
 end
@@ -1008,5 +1098,5 @@ end
 # Deprecation path
 function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
     @named misc = System(eqs, unknowns, [])
-    topsort_equations(misc, eqs, unknowns; check)
+    return topsort_equations(misc, eqs, unknowns; check)
 end

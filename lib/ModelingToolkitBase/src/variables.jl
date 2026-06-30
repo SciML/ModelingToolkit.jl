@@ -482,7 +482,7 @@ Create variables with a nominal value like this
 getnominal(x::Union{Num, Symbolics.Arr}) = getnominal(unwrap(x))
 function getnominal(x::SymbolicT)
     s = Symbolics.getmetadata_maybe_indexed(x, VariableNominal, nothing)
-    s === nothing ? 1.0 : s
+    return s === nothing ? 1.0 : s
 end
 
 """
@@ -492,7 +492,7 @@ Determine whether symbolic variable `x` has a nominal value associated with it.
 See also [`getnominal`](@ref).
 """
 function hasnominal(x)
-    Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
+    return Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
 end
 
 function setnominal(x::Num, val)

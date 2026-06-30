@@ -137,10 +137,17 @@ end
     # `irreducible` to make sure they are unknowns of the initialization system
     @variables x(t) [irreducible = true] y(t) [irreducible = true]
     @mtkcompile sys = System(
-        [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
-        guesses = [x => 2y, y => 2x]
+        [D(x) ~ x, D(y) ~ y], t
     )
-    @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
+    @test_warn ["Cycle", "unknowns", "x", "y"] try
+        # This should error. The default substitution limit (100) hides the error because
+        # `2^100` evaluates to `0`, though the warning still prints.
+        ODEProblem(
+            sys, [x => 2y, y => 2x], (0.0, 1.0);
+            warn_cyclic_dependency = true, build_initializeprob = false, substitution_limit = 4
+        )
+    catch e
+    end
     @test_throws ModelingToolkitBase.MissingVariablesError ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
         substitution_limit = 10
@@ -216,8 +223,8 @@ end
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
     @test_throws ["Cyclic guesses detected"] ODEProblem(
-        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc=false,
-        missing_guess_value=MissingGuessValue.Error()
+        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc = false,
+        missing_guess_value = MissingGuessValue.Error()
     )
 end
 
@@ -368,7 +375,7 @@ end
     @test prob.u0 isa SVector
     @test prob.p.tunable isa SVector
     @test prob.p.initials isa SVector
-    initdata = prob.f.initialization_data;
+    initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
     if @isdefined(ModelingToolkit)
         @test initdata.initializeprob isa SCCNonlinearProblem
@@ -459,5 +466,12 @@ if !@isdefined(ModelingToolkit)
         @mtkcompile sys = System(eqs, t)
         sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a mistake
         @test_throws ["duplicate entries", "X(t)"] ODEProblem(sys, sim_cond, (0.0, 10.0))
+    end
+    @testset "Issue#4641" begin
+        @parameters x0[1:2] = [1.0, 2.0]
+        @variables xc(t)[1:2] = x0
+        sys = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+        sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
+        @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
     end
 end

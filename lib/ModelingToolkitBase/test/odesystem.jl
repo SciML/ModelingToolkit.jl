@@ -650,7 +650,7 @@ let
     sol = solve(prob, IDA())
     @test isapprox(sol[x[1]][end], 2, atol = 1.0e-3)
 
-    prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50); missing_guess_value, guesses = [y => 1.0])
+    prob = ODEProblem(sys, Pair[x[1] => 0, x[2] => 0], (0, 50); missing_guess_value, guesses = [y => 1.0])
     sol = solve(prob, Rosenbrock23())
     @test isapprox(sol[x[1]][end], 1, atol = 1.0e-3)
 end

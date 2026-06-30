@@ -1170,7 +1170,7 @@ end
 DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper{T}) where {T} = dcapiw
 
 function DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper) where {T}
-    convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
+    return convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
 end
 
 function (dcapiw::DiffCacheAllocatorAPIWrapper)(reference, sz::NTuple{N, Int}) where {N}
@@ -1255,14 +1255,14 @@ Does nothing to integers or other number types.  Does affect Complex numbers.
 """
 struct LiteralRewriter{FloatType <: AbstractFloat} end
 
-(::LiteralRewriter{FT})(x::AbstractFloat) where FT = convert(FT, x)
+(::LiteralRewriter{FT})(x::AbstractFloat) where {FT} = convert(FT, x)
 function (rw::LiteralRewriter{FT})(x::Complex{F}) where {FT, F <: AbstractFloat}
     return convert(Complex{typeof(rw(one(F)))}, x)
 end
 function (rw::LiteralRewriter{FT})(x::AbstractArray{F}) where {FT, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
     return map(rw, x)
 end
-(::LiteralRewriter{FT})(x) where FT = x
+(::LiteralRewriter{FT})(x) where {FT} = x
 
 function (rw::LiteralRewriter)(x::SymbolicT)
     return Moshi.Match.@match x begin
@@ -1299,4 +1299,32 @@ function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatTy
     end
 
     return ConstructionBase.setproperties(sys; eqs = eqs, observed = obs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Use various heuristics to discover parameters that may be zero in `sys`. Useful when
+simplifying the system to avoid accidentally dividing by zero.
+"""
+function discover_maybe_zeros(sys::System)
+    defs = copy(parent(bindings(sys)))
+    left_merge!(defs, initial_conditions(sys))
+    filter!(Base.Fix2(!==, COMMON_MISSING) ∘ last, defs)
+    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(defs))
+    mbzs = copy(maybe_zeros(sys))
+    for k in [parameters(sys); unknowns(sys)]
+        is_variable_numeric(k) || continue
+        sh = SU.shape(k)
+        sh isa SU.ShapeVecT || continue
+        if !SU.is_array_shape(sh)
+            SU._iszero(subber(k)) && push_as_atomic_array!(mbzs, k)
+            continue
+        end
+        if any(SU._iszero ∘ subber ∘ Base.Fix1(getindex, k), SU.stable_eachindex(k))
+            push_as_atomic_array!(mbzs, k)
+        end
+    end
+
+    return @set! sys.maybe_zeros = mbzs
 end

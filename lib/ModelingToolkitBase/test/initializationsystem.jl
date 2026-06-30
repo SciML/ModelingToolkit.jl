@@ -326,8 +326,17 @@ end
 initprob = ModelingToolkitBase.InitializationProblem(sys, 0.0; missing_guess_value)
 conditions = getfield.(equations(initprob.f.sys), :rhs)
 
-@test initprob isa SCCNonlinearProblem
-@test initprob.probs isa Tuple{<:LinearProblem}
+# The init system as-is is linear. Since it is so severely overdetermined, MTK can sometimes
+# choose a bad simplification that results in a nonlinear system.
+# TODO: Support retaining `observed` equations in proper `mtkcompile` and generate
+# `x ~ Initial(x)` as such `observed` equations. This makes `mtkcompile`'s job easier
+# on initialization systems, but can lead to parameter-only equations.
+if !@isdefined(ModelingToolkit)
+    @test initprob isa Union{SCCNonlinearProblem, NonlinearLeastSquaresProblem}
+    if initprob isa SCCNonlinearProblem
+        @test initprob.probs isa Tuple{<:LinearProblem}
+    end
+end
 if @isdefined(ModelingToolkit)
     initsol = solve(initprob, reltol = 1.0e-12, abstol = 1.0e-12)
     @test SciMLBase.successful_retcode(initsol)
@@ -914,7 +923,7 @@ end
         @parameters p = 10.0
 
         eqs = [
-            0 ~ x^2 + 2p * x + 3p
+            0 ~ x^2 + 2p * x + 3p,
         ]
         @mtkcompile ns = System(eqs, [x], [p])
 
@@ -1344,7 +1353,7 @@ if @isdefined(ModelingToolkit)
         model = dc_motor()
         sys = mtkcompile(model)
 
-        prob = ODEProblem(sys, [sys.L1.i => 0.0], (0, 6.0); guesses = [sys.emf.flange.phi => 0])
+        prob = ODEProblem(sys, [sys.L1.i => 0.0, sys.emf.flange.phi => 0.0], (0, 6.0))
 
         @test_nowarn remake(prob, p = prob.p)
     end
@@ -1532,7 +1541,7 @@ end
     prob.ps[Initial(x)] = 0.5
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 0.5
-    @test abs.(integ[y]) ≈ [1.0, sqrt(2.75)] atol = 1e-6
+    @test abs.(integ[y]) ≈ [1.0, sqrt(2.75)] atol = 1.0e-6
     prob.ps[Initial(y[1])] = 0.5
     integ = init(prob, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test integ[x] ≈ 0.5
@@ -1728,14 +1737,10 @@ end
     # is only expected to pass with FullSpecialize.
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(complete(sys), [], (0.0, 1))
     if v"1.13-" <= VERSION
-        if @isdefined(ModelingToolkit)
+        # Don't run the inference test on pre-release versions
+        if VERSION >= v"1.13.0"
             @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
             @inferred solve(prob)
-        else
-            # Changes in how the initialization system simplifies cause changes in generated
-            # code and thus in inference behavior.
-            @test_broken @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
-            @test_broken @inferred solve(prob)
         end
     elseif v"1.12-" <= VERSION
         @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
@@ -1966,15 +1971,18 @@ end
     if @isdefined(ModelingToolkit)
         @parameters g
         @variables x(t) y(t) [state_priority = 10] λ(t)
-        eqs = [D(D(x)) ~ λ * x
-               D(D(y)) ~ λ * y - g
-               x^2 + y^2 ~ 1]
+        eqs = [
+            D(D(x)) ~ λ * x
+            D(D(y)) ~ λ * y - g
+            x^2 + y^2 ~ 1
+        ]
         @mtkcompile pend = System(eqs, t)
 
         iprob = ModelingToolkit.InitializationProblem(
             pend, 0.0,
             [x => 1.0, D(y) => 0.0, g => 1],
-            guesses = [λ => 1, y => 0.0])
+            guesses = [λ => 1, y => 0.0]
+        )
         isol = solve(iprob)
 
         # previous behavior was `==` for these
@@ -1994,8 +2002,10 @@ end
     # should produce a LinearProblem instead of a NonlinearProblem.
     @variables u(t)
     # initialization_eqs = [2u ~ 1] is linear in u, so x(0) = 0.5
-    @named linsys = System([D(u) ~ -u], t;
-        initialization_eqs = [2u ~ 1], guesses = [u => 0.5])
+    @named linsys = System(
+        [D(u) ~ -u], t;
+        initialization_eqs = [2u ~ 1], guesses = [u => 0.5]
+    )
     linsys = mtkcompile(linsys)
 
     if @isdefined(ModelingToolkit)
@@ -2017,7 +2027,7 @@ end
     @test prob.f.initializeprob.probs isa Tuple{<:LinearProblem}
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
-    @test sol[u][1] ≈ 0.5 atol = 1e-10
+    @test sol[u][1] ≈ 0.5 atol = 1.0e-10
 
     @testset "Is not used for underdetermined system" begin
         @mtkcompile linsys = System([D(u) ~ -u], t; guesses = [u => 0.5])
@@ -2059,7 +2069,7 @@ end
 
 @testset "Output arrays from constant RHS under ForwardDiff" begin
     # Issue #4457
-    @parameters m=1.5 d=9.0
+    @parameters m = 1.5 d = 9.0
     @variables s(t) v(t)
 
     eqs = [
@@ -2067,10 +2077,13 @@ end
         D(v) ~ (1 - d * v) / m
     ]
 
-    sys = mtkcompile(System(eqs, t;
-        name = :model,
-        initialization_eqs = [s ~ 0, v ~ 0],
-    ))
+    sys = mtkcompile(
+        System(
+            eqs, t;
+            name = :model,
+            initialization_eqs = [s ~ 0, v ~ 0],
+        )
+    )
 
     prob = ODEProblem(sys, [], (0.0, 200.0))
     sol = solve(prob, Tsit5(); saveat = 0.1)
@@ -2092,20 +2105,22 @@ end
         @parameters p1 = 0.5 [tunable = true] (p23[1:2] = [1, 3.0]) [tunable = true] p4 = 3 * p1 [tunable = false] y0 = 1.2 [tunable = true]
         @variables x(t) = 2p1 y(t) = y0 z(t) = x + y
 
-        eqs = [D(x) ~ p1 * x - p23[1] * x * y
+        eqs = [
+            D(x) ~ p1 * x - p23[1] * x * y
             D(y) ~ -p23[2] * y + p4 * x * y
-            z ~ x + y]
+            z ~ x + y
+        ]
 
-        mtkcompile(System(eqs, t, name=:sys))
+        mtkcompile(System(eqs, t, name = :sys))
     end
 
     sys = create_sys()
 
     sub_sys = subset_tunables(sys, [sys.p23])
 
-    prob = ODEProblem(sub_sys, [], (0, 1.))
+    prob = ODEProblem(sub_sys, [], (0, 1.0))
 
-    setter = setsym_oop(prob, Symbolics.scalarize(sys.p23));
+    setter = setsym_oop(prob, Symbolics.scalarize(sys.p23))
 
     function loss2(x, ps)
         setter, prob = ps
@@ -2115,7 +2130,32 @@ end
         sum(sol)
     end
 
-    @test_nowarn loss2([1., 2], (setter, prob))
+    @test_nowarn loss2([1.0, 2], (setter, prob))
 
-    @test_nowarn ForwardDiff.gradient(Base.Fix2(loss2, (setter, prob)), [1, 2.])
+    @test_nowarn ForwardDiff.gradient(Base.Fix2(loss2, (setter, prob)), [1, 2.0])
+end
+
+@testset "Parameters with values determined by a bound parameter" begin
+    # To ensure that the initialization system handles this dependency correctly
+    @parameters p1 p2 p3
+    @variables x(t)
+    @mtkcompile sys = System(
+        [D(x) ~ p1 * x + p2 * t + p3], t;
+        bindings = [p2 => p1], initial_conditions = [p3 => p2]
+    )
+    @test_nowarn prob = ODEProblem(sys, [x => 1.0, p1 => 1.0], (0.0, 1.0))
+end
+
+@testset "`full_equations` initialization correctly handles non-mtkcompile systems" begin
+    @parameters T = missing
+    @variables X(t)[1:2]
+    @mtkcomplete sys = System([D(X[1]) ~ X[1] + X[2]], t, [X[1]], [T]; observed = [X[2] ~ T - X[1]])
+
+    # Prior to the fix which runs `ScalarizedArrayObserved` if it isn't already run, the init system
+    # would contain the equation `X ~ [1.0, 2.0]` despite `X[2]` being eliminated as an observed. This
+    # is underdetermined, and would result in essentially random values for `X[2]` and `T`.
+    prob = ODEProblem(sys, [X => [1.0, 2.0]], (0.0, 1.0))
+    integ = init(prob, Tsit5())
+    @test integ[X] ≈ [1.0, 2.0]
+    @test integ.ps[T] ≈ 3.0
 end

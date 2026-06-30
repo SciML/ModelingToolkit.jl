@@ -134,7 +134,7 @@ cm = complete(model)
 
 op = Dict(
     cm.filter.y.u => 0.8 * (1 - 0.42),
-    cm.controller.gainPI.u => 0,
+    cm.feedback.input2.u => 311.585,
     cm.noise_filter.x => nothing,
     cm.controller.int.x => nothing,
 )
@@ -198,7 +198,7 @@ nsys = get_named_comp_sensitivity(model, :y; op)
     #
     # Printing `lin_fun` in a tuple (so it doesn't hit the pretty-printing method)
     # will likely segfault Julia. Somehow.
-    lin_fun, ssys = get_sensitivity_function(model, output; op = op1);
+    lin_fun, ssys = get_sensitivity_function(model, output; op = op1)
     matrices1, extras1 = linearize(ssys, lin_fun, op = op1)
     matrices2, extras2 = linearize(ssys, lin_fun, op = op2)
     @test extras1.x != extras2.x

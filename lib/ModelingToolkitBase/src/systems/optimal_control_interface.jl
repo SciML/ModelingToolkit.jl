@@ -421,8 +421,10 @@ function extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds = Di
     end
     tf_bounds = if symbolic_type(tf) === ScalarSymbolic() && hasbounds(tf)
         lo, hi = getbounds(tf)
-        (SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(lo, pmap))),
-            SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(hi, pmap))))
+        (
+            SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(lo, pmap))),
+            SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(hi, pmap))),
+        )
     else
         nothing
     end

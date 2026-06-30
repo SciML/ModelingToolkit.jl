@@ -55,16 +55,24 @@ function generate_initializesystem_timevarying(
         check_units = true, check_defguess = false,
         name = nameof(sys), kwargs...
     )
-    _sys = unhack_system(sys)
-    trueobs = observed(_sys)
-    eqs = equations(_sys)
-    # remove any observed equations that directly or indirectly contain
-    # delayed unknowns
-    isempty(trueobs) || filter_delay_equations_variables!(sys, trueobs)
+    _sys = reverse_transformations_for_initialization(sys)
+    # Systems that haven't gone through `mtkcompile` won't have this transformation applied.
+    # We rely on this to substitute `X => [X[1], X[2]]` in case e.g. `X[1]` is an observed and
+    # `X[2]` is an unknown. Ordinarily, `X[1]` shouldn't be an unknown and should be substituted
+    # away completely.
+    if !any_reversible_transformation(Base.Fix2(isa, ScalarizedArrayObserved), _sys)
+        _obs = copy(observed(_sys))
+        _dvs = unknowns(_sys)
+        tf = add_array_observed!(_obs, _dvs)
+        _sys = with_reversible_transformation(_sys, tf)
+        _obs = topsort_equations(_sys, _obs, [eq.lhs for eq in _obs])
+        @set! _sys.observed = _obs
+    end
+    eqs = full_equations(_sys)
 
-    # Firstly, all variables and observables are initialization unknowns
+    # Firstly, all variables are initialization unknowns
     init_vars_set = AtomicArraySet{OrderedDict{SymbolicT, Nothing}}()
-    add_trivial_initsys_vars!(init_vars_set, unknowns(_sys), trueobs)
+    foreach(Base.Fix1(push!, init_vars_set) ∘ first ∘ split_indexed_var, unknowns(_sys))
 
     eqs_ics = Equation[]
 
@@ -100,15 +108,21 @@ function generate_initializesystem_timevarying(
     newbinds = SymmapT()
     # All bound parameters are solvable. The corresponding equation comes from the binding
     for v in bound_parameters(sys)
-        push!(is_variable_floatingpoint(v) ? init_vars_set : init_ps, v)
+        push!(init_ps, v)
+        newbinds[v] = binds[v]
     end
     op::SymmapT = if fast_path
         op
     else
         build_operating_point(sys, op)
     end
-    initsys_sort_system_bindings!(init_vars_set, init_ps, eqs_ics, binds, newbinds, op, guesses)
+    subber = get_ir_info(_sys).obs_subber
+    obsvars = as_atomic_array_set(observables(_sys))
+    initsys_sort_system_bindings!(subber, init_vars_set, init_ps, obsvars, eqs_ics, binds, op, guesses)
 
+    # Derivative equations are added as-is instead of relying on `subber`. This allows
+    # properly handling singular systems. Without this, singular systems will always
+    # error as incomplete, since the system symbolically won't contain some unknowns.
     derivative_rules = DerivativeDict()
     dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
@@ -124,7 +138,9 @@ function generate_initializesystem_timevarying(
                 continue
             end
             push_as_atomic_array!(init_vars_set, ttk)
-            isequal(ttk, v) || push!(eqs_ics, ttk ~ v)
+            # Running `subber(ttk)` will make the LHS and RHS identical, so we
+            # avoid that.
+            isequal(ttk, v) || push!(eqs_ics, ttk ~ subber(v))
             derivative_rules[k] = ttk
         end
         merge!(derivative_rules, as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(derivative_rules), COMMON_NOTHING))
@@ -142,7 +158,7 @@ function generate_initializesystem_timevarying(
                     write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
                 end
                 push_as_atomic_array!(init_vars_set, ttk)
-                isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ eq.rhs)
+                isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
                 ttk
             end
         else
@@ -150,7 +166,8 @@ function generate_initializesystem_timevarying(
         end
     end
     D = Differential(get_iv(sys))
-    for eq in trueobs
+    ir = get_irstructure(_sys)
+    for eq in observed(_sys)
         # Observed derivatives aren't added the same way as dummy_sub/diffeqs because
         # doing so would require all observed equations to be symbolically differentiable.
         get!(derivative_rules, D(eq.lhs), D(eq.rhs))
@@ -159,13 +176,20 @@ function generate_initializesystem_timevarying(
             write_possibly_indexed_array!(guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
         end
     end
-    timevaring_initsys_process_op!(init_vars_set, init_ps, eqs_ics, op, derivative_rules, guesses)
+
+    # Always substitute `der_subber` and `subber` on any equations added to `eqs_ics`
+    der_subber = Symbolics.FixpointSubstituter(
+        SU.IRSubstituter{false}(
+            get_irstructure(sys), derivative_rules
+        ); maxiters = get_maxiters(derivative_rules)
+    )
+    timevaring_initsys_process_op!(subber, init_vars_set, init_ps, eqs_ics, op, der_subber, guesses)
 
     # process explicitly provided initialization equations
     if !algebraic_only
         initialization_eqs = [get_initialization_eqs(sys); initialization_eqs]
         for eq in initialization_eqs
-            eq = fixpoint_sub(eq, derivative_rules; maxiters = get_maxiters(derivative_rules)) # expand dummy derivatives
+            eq = subber(der_subber(eq))
             push!(eqs_ics, eq)
         end
     end
@@ -179,8 +203,6 @@ function generate_initializesystem_timevarying(
     #         #push!(guessed, eq.lhs) # should not encounter eq.lhs twice, so don't need to track it
     #     end
     # end
-
-    append!(eqs_ics, trueobs)
 
     vars = collect(init_vars_set)
     pars = collect(init_ps)
@@ -226,7 +248,7 @@ function generate_initializesystem_timeindependent(
         name = nameof(sys), kwargs...
     )
     eqs = equations(sys)
-    _sys = unhack_system(sys)
+    _sys = reverse_transformations_for_initialization(sys)
     trueobs = observed(_sys)
     eqs = equations(_sys)
     # remove any observed equations that directly or indirectly contain
@@ -366,16 +388,6 @@ function generate_initializesystem_timeindependent(
     return isys
 end
 
-function add_trivial_initsys_vars!(init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}}, dvs::Vector{SymbolicT}, trueobs::Vector{Equation})
-    for v in dvs
-        push!(init_vars_set, split_indexed_var(v)[1])
-    end
-    for eq in trueobs
-        push!(init_vars_set, split_indexed_var(eq.lhs)[1])
-    end
-    return
-end
-
 function initsys_sort_system_parameters!(
         init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
@@ -390,10 +402,12 @@ function initsys_sort_system_parameters!(
 end
 
 function initsys_sort_system_bindings!(
+        subber::ObsSubberT,
         init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        obsvars::AtomicArraySet{Dict{SymbolicT, Nothing}},
         eqs_ics::Vector{Equation}, binds::ROSymmapT,
-        newbinds::SymmapT, op::SymmapT, guesses::SymmapT
+        op::SymmapT, guesses::SymmapT
     )
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
@@ -404,21 +418,35 @@ function initsys_sort_system_bindings!(
             op[Initial(k)] = k
             continue
         end
-        if is_variable_floatingpoint(k)
-            push!(eqs_ics, k ~ v)
-            get!(guesses, k, v)
-        else
-            newbinds[k] = v
+        # Bindings for variables/observed are added as equations after
+        # substituting observed
+        if k in init_vars_set || k in obsvars
+            if SU.is_array_shape(SU.shape(k))
+                for (ki, vi) in zip(SU.stable_eachindex(k), SU.stable_eachindex(v))
+                    kki = subber(k[ki])
+                    vvi = subber(v[vi])
+                    # Ignore if identity
+                    isequal(kki, vvi) || push!(eqs_ics, kki ~ vvi)
+                end
+            else
+                kk = subber(k)
+                vv = subber(v)
+                isequal(kk, vv) || push!(eqs_ics, kk ~ vv)
+            end
+            continue
         end
+        delete!(init_ps, k)
     end
     return
 end
 
 function timevaring_initsys_process_op!(
+        subber::ObsSubberT,
         init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         init_ps::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
         eqs_ics::Vector{Equation}, op::SymmapT,
-        derivative_rules::DerivativeDict, guesses::SymmapT
+        der_subber::Symbolics.FixpointSubstituter,
+        guesses::SymmapT
     )
     for (k, v) in op
         # Late binding `missing` also makes the key solvable
@@ -449,7 +477,8 @@ function timevaring_initsys_process_op!(
         In case neither of these is the case, please open an issue in ModelingToolkit.jl \
         with a reproducible example.
         """
-        subk = fixpoint_sub(k, derivative_rules; maxiters = get_maxiters(derivative_rules))
+        # Always
+        subk = subber(der_subber(k))
         # FIXME: DAEs can have initial conditions that require reducing the system
         # to index zero. If `isdifferential(y)`, an initial condition was given for the
         # derivative of an algebraic variable, so ignore it. Otherwise, the initialization
@@ -489,12 +518,12 @@ function timevaring_initsys_process_op!(
                     write_possibly_indexed_array!(op, ikk, vv, COMMON_FALSE)
                 else
                     write_possibly_indexed_array!(guesses, kk, vv, COMMON_FALSE)
-                    vv = fixpoint_sub(vv, derivative_rules; maxiters = get_maxiters(derivative_rules))
+                    vv = subber(der_subber(vv))
                     push!(eqs_ics, subkk ~ vv)
                 end
             end
         else
-            v = fixpoint_sub(v, derivative_rules; maxiters = get_maxiters(derivative_rules))
+            v = subber(der_subber(v))
             isequal(subk, v) || push!(eqs_ics, subk ~ v)
         end
     end
@@ -886,17 +915,55 @@ function unhack_observed(obseqs, eqs)
 end
 
 """
+    $TYPEDEF
+
+Default reversible transformation applied to all systems in `mtkcompile` for backward
+compatibility.
+"""
+abstract type UnhackSystemTransformation <: ReversibleTransformations end
+
+function reverse_transformation(sys::AbstractSystem, ::Type{UnhackSystemTransformation})
+    return unhack_system(sys)
+end
+
+# NOTE:
+# 1. Only this MTKBase is loaded. `__mtkcompile` here will remove `UnhackSystemTransformation`
+# from the transformations to avoid it becoming an infinite loop. `unhack_system` also
+# checks to make sure it doesn't rerun itself.
+#
+# 2. This MTKBase + old MTKTearing + old MTK: MTKTearing will anyway do its own array
+# observed equations and remove them in `unhack_system`. The `UnhackSystemTransformation`
+# added in `__mtkcompile` will run `unhack_system` in `reverse_all_default_reversible_transformations`.
+#
+# 3. This MTKBase + new MTKTearing + old MTK: MTKTearing doesn't implement `unhack_system`
+# anymore and removes `UnhackSystemTransformation`. MTKTearing's own reversible transformations
+# will run as intended. Calls to `unhack_system` from MTK will not early-exit.
+#
+# 4. This MTKBase + new MTKTearing + new MTK: `unhack_system` is never called and
+# `UnhackSystemTransformation` is not present post-`mtkcompile`.
+
+function remove_unhack_system_transformation(sys::AbstractSystem)
+    return filter_reversible_transformations(
+        tf -> tf !== UnhackSystemTransformation, sys
+    )::System
+end
+
+"""
     unhack_system(sys::AbstractSystem)
 
 Given a system, remove any codegen oddities applied to it. This is typically used as a
 precursor to generating the initialization system. It is the successor of the now
 deprecated `unhack_observed`.
+
+DEPRECATED: See `with_reversible_transformation` and the reversible transformation API.
 """
 function unhack_system(sys)
-    obs, eqs = unhack_observed(observed(sys), equations(sys))
-    @set! sys.observed = obs
-    @set! sys.eqs = eqs
-    return sys
+    # See note above
+    tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
+    for tf in tfs
+        tf === UnhackSystemTransformation && return sys
+    end
+    return reverse_all_default_reversible_transformations(sys)
 end
 
 function UnknownsInTimeIndependentInitializationError(eq, non_params)

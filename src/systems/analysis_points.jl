@@ -182,6 +182,220 @@ function linearization_function(
     return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
 end
 
+"""
+    sys, input_vars, output_vars = isolate_subsystem(sys, input_aps, output_aps)
+
+Isolate the part of the unsimplified, hierarchical system `sys` bounded by the input
+analysis points `input_aps` and the output analysis points `output_aps`. The returned
+`sys` contains only the subsystems between the boundary analysis points at every level
+of the hierarchy; all upstream and downstream components, and all equations involving
+them, are removed.
+
+Boundary analysis points may reside at any level of the hierarchy and in different
+branches of the subsystem tree.
+
+Returns:
+- `sys`: The system with only the isolated subsystems and their internal connections.
+- `input_vars`: Variables at the inside face of each input analysis point.
+- `output_vars`: Variables at the inside face of each output analysis point.
+"""
+function isolate_subsystem(
+        sys::AbstractSystem,
+        input_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
+        output_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}
+    )
+    input_aps = canonicalize_ap(sys, input_aps)
+    output_aps = canonicalize_ap(sys, output_aps)
+
+    # Step 1: index every named subsystem in the hierarchy.
+    # paths[i] is the path of names from sys to that subsystem, e.g. [:inner, :P].
+    paths = Vector{Symbol}[]
+    path_to_idx = Dict{Vector{Symbol}, Int}()
+    function _collect_subsystems!(cur, path)
+        for s in get_systems(cur)
+            p = [path; nameof(s)]
+            push!(paths, p)
+            path_to_idx[p] = length(paths)
+            _collect_subsystems!(s, p)
+        end
+        return
+    end
+    _collect_subsystems!(sys, Symbol[])
+
+    g = SimpleGraph(length(paths))
+
+    input_ap_names = Set{Symbol}(nameof(ap) for ap in input_aps)
+    output_ap_names = Set{Symbol}(nameof(ap) for ap in output_aps)
+    boundary_ap_names = union(input_ap_names, output_ap_names)
+    sys_root_name = nameof(sys)
+
+    # Reconstruct the full canonical AP name (as produced by canonicalize_ap) from the
+    # local name seen in an equation at depth `parent_path` within `sys`.
+    function _full_ap_name(parent_path, local_name)
+        return Symbol(join(string.([sys_root_name; parent_path; local_name]), NAMESPACE_SEPARATOR))
+    end
+
+    # Map a connector (port System or signal SymbolicT) at a given parent path to the
+    # component path by stripping the last namespace segment (port or variable name).
+    function _conn_to_path(conn, parent_path)
+        segs = conn isa AbstractSystem ? namespace_hierarchy(nameof(conn)) :
+            namespace_hierarchy(getname(unwrap(conn)))
+        length(segs) <= 1 && return nothing
+        return [parent_path; segs[1:(end - 1)]]
+    end
+
+    function _try_add_edge!(p1, p2)
+        i1 = get(path_to_idx, p1, nothing)
+        i2 = get(path_to_idx, p2, nothing)
+        (i1 === nothing || i2 === nothing || i1 == i2) && return
+        return add_edge!(g, i1, i2)
+    end
+
+    # Step 2: walk every equation at every level of the hierarchy.
+    # For boundary AP equations, cut the edge and record which side is inside.
+    # For all other equations, add edges between the connected components.
+    inside_seeds = Int[]
+    input_vars = SymbolicT[]
+    output_vars = SymbolicT[]
+
+    function _build_graph!(cur, parent_path)
+        for eq in get_eqs(cur)
+            lhs_val = value(eq.lhs)
+            rhs_val = value(eq.rhs)
+            if lhs_val isa AnalysisPoint
+                ap_data = rhs_val::AnalysisPoint
+                fname = _full_ap_name(parent_path, nameof(ap_data))
+                in_conn = ap_data.input
+                out_conns = something(ap_data.outputs, [])
+                if fname in boundary_ap_names
+                    if fname in input_ap_names
+                        for c in out_conns
+                            push!(input_vars, ap_var(c))
+                            p = _conn_to_path(c, parent_path)
+                            if p !== nothing
+                                idx = get(path_to_idx, p, nothing)
+                                idx !== nothing && push!(inside_seeds, idx)
+                            end
+                        end
+                    end
+                    if fname in output_ap_names
+                        if in_conn !== nothing
+                            push!(output_vars, ap_var(in_conn))
+                            p = _conn_to_path(in_conn, parent_path)
+                            if p !== nothing
+                                idx = get(path_to_idx, p, nothing)
+                                idx !== nothing && push!(inside_seeds, idx)
+                            end
+                        end
+                    end
+                    # Do not add a graph edge — this connection is cut.
+                else
+                    in_path = in_conn !== nothing ? _conn_to_path(in_conn, parent_path) : nothing
+                    for c in out_conns
+                        out_path = _conn_to_path(c, parent_path)
+                        out_path === nothing && continue
+                        in_path !== nothing && _try_add_edge!(in_path, out_path)
+                    end
+                end
+            elseif rhs_val isa Connection
+                conn_list = get_systems(rhs_val)
+                conn_list === nothing && continue
+                cps = [
+                    p for c in conn_list
+                        for p in (_conn_to_path(c, parent_path),) if p !== nothing
+                ]
+                for i in eachindex(cps), j in (i + 1):length(cps)
+                    _try_add_edge!(cps[i], cps[j])
+                end
+            end
+        end
+        for s in get_systems(cur)
+            _build_graph!(s, [parent_path; nameof(s)])
+        end
+        return
+    end
+    _build_graph!(sys, Symbol[])
+
+    # Step 3: BFS from inside seeds to find all reachable (inside) components.
+    inside = falses(length(paths))
+    queue = unique!(copy(inside_seeds))
+    for v in queue
+        inside[v] = true
+    end
+    qi = 1
+    while qi <= length(queue)
+        v = queue[qi]
+        qi += 1
+        for w in Graphs.neighbors(g, v)
+            if !inside[w]
+                inside[w] = true
+                push!(queue, w)
+            end
+        end
+    end
+
+    # Build a prefix set so that has_inside(path) is an O(1) lookup:
+    # a path is "has inside" if any inside component lives under it.
+    inside_prefixes = Set{Vector{Symbol}}()
+    for i in eachindex(paths)
+        inside[i] || continue
+        p = paths[i]
+        for k in eachindex(p)
+            push!(inside_prefixes, p[1:k])
+        end
+    end
+    has_inside(path) = path in inside_prefixes
+
+    # Step 4: rebuild the system hierarchy keeping only inside components and equations.
+    # Systems that are directly inside (their path is in the `inside` set) are returned
+    # as-is — their internal structure belongs to the isolated subsystem.
+    # Systems that are containers (in inside_prefixes only because they wrap inside
+    # components) have their equations filtered and their own variables/parameters cleared.
+    function _reconstruct!(cur, parent_path)
+        idx = get(path_to_idx, parent_path, nothing)
+        if idx !== nothing && inside[idx]
+            # Directly-inside component — preserve it entirely.
+            return cur
+        end
+
+        # Container: filter subsystems and equations, clear own vars/params so that
+        # nothing from outside the isolated region leaks into the result.
+        new_systems = [
+            _reconstruct!(s, [parent_path; nameof(s)])
+                for s in get_systems(cur) if has_inside([parent_path; nameof(s)])
+        ]
+        new_eqs = filter(get_eqs(cur)) do eq
+            lhs_val = value(eq.lhs)
+            rhs_val = value(eq.rhs)
+            if lhs_val isa AnalysisPoint
+                ap_data = rhs_val::AnalysisPoint
+                _full_ap_name(parent_path, nameof(ap_data)) in boundary_ap_names && return false
+                in_conn = ap_data.input
+                out_conns = something(ap_data.outputs, [])
+                all_conns = in_conn === nothing ? out_conns : [in_conn; out_conns]
+                all_paths = [
+                    p for c in all_conns
+                        for p in (_conn_to_path(c, parent_path),) if p !== nothing
+                ]
+                return all(has_inside, all_paths)
+            elseif rhs_val isa Connection
+                conn_list = get_systems(rhs_val)
+                conn_list === nothing && return true
+                cps = [
+                    p for c in conn_list
+                        for p in (_conn_to_path(c, parent_path),) if p !== nothing
+                ]
+                return all(has_inside, cps)
+            else
+                return false
+            end
+        end
+        return System(new_eqs, get_iv(cur), SymbolicT[], SymbolicT[]; name = nameof(cur), systems = new_systems)
+    end
+
+    return _reconstruct!(sys, Symbol[]), input_vars, output_vars
+end
+
 @doc """
     get_sensitivity(sys, ap::AnalysisPoint; kwargs)
     get_sensitivity(sys, ap_name::Symbol; kwargs)

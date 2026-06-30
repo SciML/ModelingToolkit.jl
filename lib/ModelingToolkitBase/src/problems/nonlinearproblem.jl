@@ -75,11 +75,25 @@ function generate_nonlinear_bounds(sys::AbstractSystem, op)
     isempty(dvs) && return nothing, nothing
     lb = first.(getbounds.(dvs))
     ub = last.(getbounds.(dvs))
+    if all(!Base.Fix2(isa, SymbolicT) ∘ unwrap, lb) && all(!Base.Fix2(isa, SymbolicT) ∘ unwrap, ub)
+        if all(==(-Inf), lb) && all(==(Inf), ub)
+            return nothing, nothing
+        end
+        return lb, ub
+    end
     op = build_operating_point(sys, op)
-    lbmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> lb), COMMON_NOTHING)
+    lbmap = SymmapT()
+    for (var, b) in zip(dvs, lb)
+        b === -Inf && continue
+        write_possibly_indexed_array!(lbmap, var, Symbolics.SConst(b), COMMON_NOTHING)
+    end
     left_merge!(lbmap, op)
     lb = varmap_to_vars(lbmap, dvs; tofloat = false)
-    ubmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(dvs .=> ub), COMMON_NOTHING)
+    ubmap = SymmapT()
+    for (var, b) in zip(dvs, ub)
+        b === Inf && continue
+        write_possibly_indexed_array!(ubmap, var, Symbolics.SConst(b), COMMON_NOTHING)
+    end
     left_merge!(ubmap, op)
     ub = varmap_to_vars(ubmap, dvs; tofloat = false)
     if all(==(-Inf), lb) && all(==(Inf), ub)

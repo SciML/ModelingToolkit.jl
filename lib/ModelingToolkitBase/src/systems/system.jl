@@ -44,7 +44,7 @@ Check whether `sys` supports symbolic automatic differentiation. Throws an `Argu
 if the system has been marked with [`SymbolicADDisallowed`](@ref).
 """
 function check_symbolic_ad_allowed(sys::AbstractSystem)
-    if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
+    return if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
         reason = SymbolicUtils.getmetadata(sys, SymbolicADDisallowed, nothing)
         msg = "System $(nameof(sys)) does not support symbolic automatic differentiation."
         if reason isa AbstractString && !isempty(reason)
@@ -669,11 +669,14 @@ function System(
     # JumpProcesses must not re-apply factorial scaling on parameter updates.
     for j in jumps
         if j isa MassActionJump && j.rescale_rates_on_update
-            throw(ArgumentError(
-                "MassActionJump with rescale_rates_on_update = true is not supported " *
-                "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
-                "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
-                "or pass scale_rates = false when constructing the MassActionJump."))
+            throw(
+                ArgumentError(
+                    "MassActionJump with rescale_rates_on_update = true is not supported " *
+                        "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
+                        "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
+                        "or pass scale_rates = false when constructing the MassActionJump."
+                )
+            )
         end
     end
 
@@ -1173,7 +1176,7 @@ end
 
 Get the metadata associated with key `k` in system `sys` or `default` if it does not exist.
 """
-function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
+function SymbolicUtils.getmetadata(sys::AbstractSystem, @nospecialize(k::DataType), default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
@@ -1185,7 +1188,7 @@ Set the metadata associated with key `k` in system `sys` to value `v`. This is a
 out-of-place operation, and will return a shallow copy of `sys` with the appropriate
 metadata values.
 """
-function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
+function SymbolicUtils.setmetadata(sys::AbstractSystem, @nospecialize(k::DataType), @nospecialize(v))
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
     return @set sys.metadata = meta
@@ -1329,15 +1332,20 @@ Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
 
 Returns a `MassActionJump` — this is a convenience constructor, not a new type.
 """
-function SymbolicMassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false,
-        kwargs...)
+function SymbolicMassActionJump(
+        rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...
+    )
     if scale_rates
-        throw(ArgumentError(
-            "SymbolicMassActionJump requires pre-scaled rate expressions " *
-            "(scale_rates = false). scale_rates = true is not supported in " *
-            "ModelingToolkitBase."))
+        throw(
+            ArgumentError(
+                "SymbolicMassActionJump requires pre-scaled rate expressions " *
+                    "(scale_rates = false). scale_rates = true is not supported in " *
+                    "ModelingToolkitBase."
+            )
+        )
     end
-    MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+    return MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
 end
 
 """
@@ -1678,5 +1686,115 @@ end
 Get the `IRStructure` associated with the system.
 """
 function get_irstructure(sys::System)
-    get_irstructure_tlv(sys)[]::IRStructure{SymReal}
+    return get_irstructure_tlv(sys)[]::IRStructure{SymReal}
+end
+
+# Reversible transformation API
+
+abstract type ReversibleTransformations end
+
+"""
+    $TYPEDSIGNATURES
+
+Add `tf` to the list of reversible transformations applied to `sys`. Returns a modified
+copy of `sys`. Reversible transformations must define [`reverse_transformation`](@ref).
+They can also define several functions to determine when they are reversed. Transformations
+are reversed in the reverse order of application.
+"""
+function with_reversible_transformation(sys::System, @nospecialize(tf))
+    prev_tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    push!(new_tfs, tf)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if any of the reversible transformations applied to `sys` satisfy the predicate `f`.
+"""
+function any_reversible_transformation(f::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    return any(f, tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Filter the reversible transformations applied to `sys`. Return a new system with the
+updated list of transformations.
+"""
+function filter_reversible_transformations(fn::F, sys::System) where {F}
+    prev_tfs = getmetadata(sys, ReversibleTransformations, [])::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    filter!(fn, new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    function reverse_transformation(sys::System, tf)
+
+Reverse a reversible transformation ([`with_reversible_transformation`](@ref)) applied to `sys`.
+"""
+function reverse_transformation end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when performing operations that require reversing such transformations. Defaults to
+`true` for all transformations.
+"""
+reverse_transformation_by_default(@nospecialize(tf)) = true
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when building the initialization system.
+"""
+function reverse_transformation_during_initialization(@nospecialize(tf))
+    return reverse_transformation_by_default(tf)
+end
+
+function __reverse_transformations_helper(fn::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
+    new_tfs = []
+    for tf in Iterators.reverse(tfs)
+        if !fn(tf)::Bool
+            push!(new_tfs, tf)
+            continue
+        end
+        sys = reverse_transformation(sys, tf)::System
+    end
+    reverse!(new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)::System
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_by_default`](@ref) is `true`.
+"""
+function reverse_all_default_reversible_transformations(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_by_default, sys)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_during_initialization`](@ref) is `true`.
+"""
+function reverse_transformations_for_initialization(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_during_initialization, sys)
 end

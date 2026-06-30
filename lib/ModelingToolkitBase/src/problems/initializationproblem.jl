@@ -82,9 +82,16 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         binds[get_iv(sys)::SymbolicT] = Symbolics.COMMON_ZERO
         @set! isys.bindings = ROSymmapT(binds)
     end
+    pareqs, resteqs = find_all_parameter_equations(isys)
+    @set! isys.eqs = resteqs
     if simplify_system
         isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
     end
+    for i in eachindex(pareqs)
+        eq = pareqs[i]
+        pareqs[i] = Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs)
+    end
+    @set! isys.eqs = [equations(isys); pareqs]
 
     ts = get_tearing_state(isys)
     unassigned_vars = singular_check(ts)
@@ -100,6 +107,10 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
     end
 
     uninit = as_atomic_array_set(unknowns(sys))
+    for (k, v) in bindings(sys)
+        v === COMMON_MISSING || continue
+        push!(uninit, k)
+    end
     setdiff!(uninit, as_atomic_array_set(unknowns(isys)))
     setdiff!(uninit, as_atomic_array_set(observables(isys)))
 
@@ -111,6 +122,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         new_ps = copy(get_ps(isys))
         append!(new_ps, uninit)
         @set! isys.ps = new_ps
+        gs = ModelingToolkitBase.initial_conditions(isys)
+        sys_gs = ModelingToolkitBase.guesses(sys)
+        for k in uninit
+            haskey(gs, k) && continue
+            haskey(sys_gs, k) || continue
+            gs[k] = sys_gs[k]
+        end
         isys = complete(isys)
     end
 
@@ -118,6 +136,9 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         op = copy(op)
         op[get_iv(sys)] = t
     end
+    # Observed of `sys` aren't present in `isys` anymore, so this enables guess-propagation
+    # to work properly.
+    add_observed!(sys, ModelingToolkitBase.initial_conditions(isys))
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
     TProb = get_initialization_problem_type(
         sys, isys; warn_initialize_determined,
@@ -131,6 +152,9 @@ function overdetermined_initialization_message(neqs::Integer, nunknown::Integer,
     Initialization system is overdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
 
+    Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
+    equations are redundant (and which unknowns, if any, remain underdetermined).
+
     To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
     warning into an error, pass `fully_determined = true`.
     """
@@ -140,6 +164,9 @@ function underdetermined_initialization_message(neqs::Integer, nunknown::Integer
     return """
     Initialization system is underdetermined. $neqs equations for $nunknown unknowns. \
     Initialization will default to using least squares. $(extra)
+
+    Call `analyze_initialization_jacobian(prob)` on the constructed problem to see which \
+    unknowns are underdetermined (and which equations, if any, are redundant).
 
     To suppress this warning, pass `warn_initialize_determined = false`. To turn this \
     warning into an error, pass `fully_determined = true`.

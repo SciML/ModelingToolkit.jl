@@ -48,14 +48,14 @@ jobs:
           - {user: SciML, repo: SciMLSensitivity.jl, group: Core8, subpkg: ""}
           - {user: JuliaComputing, repo: StateSelection.jl, group: All, subpkg: ModelingToolkitTearing}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.julia-version }}
           arch: x64
       - uses: julia-actions/julia-buildpkg@latest
       - name: Clone Downstream
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ matrix.package.user }}/${{ matrix.package.repo }}
           path: downstream

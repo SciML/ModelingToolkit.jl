@@ -332,7 +332,7 @@ Keyword arguments:
   itself to get a numeric value for each variable in `vars`.
 """
 function varmap_to_vars(
-        varmap::AbstractDict, vars::Vector;
+        varmap::AbstractDict, vars::Vector; ir = nothing,
         tofloat = true, use_union = false, container_type = Array, buffer_eltype = Nothing,
         toterm = default_toterm, check = true, allow_symbolic = false,
         is_initializeprob = false, substitution_limit = 100, missing_values = MissingGuessValue.Error()
@@ -345,7 +345,21 @@ function varmap_to_vars(
     if toterm !== nothing
         add_toterms!(varmap; toterm)
     end
-    evaluate_varmap!(AtomicArrayDictSubstitutionWrapper(varmap), vars; limit = substitution_limit, allow_symbolic)
+    if ir !== nothing
+        evaluate_varmap!(
+            ir, AtomicArrayDictSubstitutionWrapper(varmap), vars;
+            limit = substitution_limit,
+            allow_symbolic = allow_symbolic ||
+                !Moshi.Data.isa_variant(missing_values, MissingGuessValue.Error)
+        )
+    else
+        evaluate_varmap!(
+            AtomicArrayDictSubstitutionWrapper(varmap), vars;
+            limit = substitution_limit,
+            allow_symbolic = allow_symbolic ||
+                !Moshi.Data.isa_variant(missing_values, MissingGuessValue.Error)
+        )
+    end
     if check && !allow_symbolic
         missing_vars = missingvars(varmap, vars; toterm)
         for var in vars
@@ -376,9 +390,9 @@ function varmap_to_vars(
             MissingGuessValue.HashedRandom() => begin
                 for var in missing_vars
                     if Symbolics.isarraysymbolic(var)
-                        varmap[var] = [hash(var,hash(i)) for i in SU.stable_eachindex(var)]./0x1p64
+                        varmap[var] = [hash(var, hash(i)) for i in SU.stable_eachindex(var)] ./ 0x1p64
                     else
-                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var)/0x1p64), COMMON_NOTHING)
+                        write_possibly_indexed_array!(varmap, var, Symbolics.SConst(hash(var) / 0x1p64), COMMON_NOTHING)
                     end
                 end
             end
@@ -515,6 +529,20 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
         varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+    end
+    return
+end
+
+function evaluate_varmap!(
+        ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        limit = 100, allow_symbolic = false
+    )
+    subber = Symbolics.FixpointSubstituter(SU.IRSubstituter{true}(ir, varmap); maxiters = limit, warn_maxiters = !allow_symbolic)
+    for k in vars
+        v = get(varmap, k, COMMON_NOTHING)
+        v === COMMON_NOTHING && continue
+        SU.isconst(v) && continue
+        varmap[k] = subber(v)
     end
     return
 end
@@ -772,6 +800,12 @@ function __apply_copy_template(valp, template)
         return p.constant[template.idx[1]][template.idx[2]]
     elseif template isa ParameterIndex{Nonnumeric, Tuple{Int, UnitRange{Int}}}
         return p.nonnumeric[template.idx[1]][template.idx[2]]
+    elseif template isa StaticBufferIndex{SciMLStructures.Discrete}
+        return _static_buffer(p.discrete, template)[template.range]
+    elseif template isa StaticBufferIndex{SciMLStructures.Constants}
+        return _static_buffer(p.constant, template)[template.range]
+    elseif template isa StaticBufferIndex{Nonnumeric}
+        return _static_buffer(p.nonnumeric, template)[template.range]
     elseif template isa UnitRange{Int}
         return u[template]
     elseif template isa ObservedWrapper
@@ -780,6 +814,12 @@ function __apply_copy_template(valp, template)
         return template(valp)
     elseif template isa IndepVarTemplate
         return current_time(valp)
+    elseif template isa ParameterIndex{SciMLStructures.Constants, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.constant[i][j][rest...]
+    elseif template isa ParameterIndex{SciMLStructures.Nonnumeric, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.nonnumeric[i][j][rest...]
     else
         # MethodError because this is a manual dispatch chain
         throw(MethodError(__apply_copy_template, (valp, template)))
@@ -787,7 +827,7 @@ function __apply_copy_template(valp, template)
 end
 
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
-    if IsRoot
+    return if IsRoot
         reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
     else
         buffers = map(Base.Fix1(__apply_copy_template, src), cp.template)
@@ -800,6 +840,27 @@ end
 
 struct IndepVarTemplate end
 const IV_TEMPLATE = IndepVarTemplate()
+
+"""
+    $TYPEDEF
+
+Template entry for `CopyParamsByTemplate` indexing into one of the inner buffers of a
+multi-buffer `MTKParameters` portion (discrete/constants/nonnumeric). Unlike
+`ParameterIndex{P, Tuple{Int, UnitRange{Int}}}`, the buffer index `I` is lifted into the
+type domain so that indexing the heterogeneously-typed tuple of buffers constant-folds and
+infers concretely. With a runtime buffer index the result is a small `Union` of the buffer
+types, which Enzyme's type analysis rejects (`IllegalTypeAnalysisException`) when it flows
+into `reshape` inside the `CopyParamsByTemplate` compile unit.
+"""
+struct StaticBufferIndex{P, I}
+    range::UnitRange{Int}
+end
+
+function StaticBufferIndex{P}(idx::Tuple{Int, UnitRange{Int}}) where {P}
+    return StaticBufferIndex{P, idx[1]}(idx[2])
+end
+
+@inline _static_buffer(bufs::Tuple, ::StaticBufferIndex{P, I}) where {P, I} = bufs[I]
 
 Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, elem_types::Set{DataType})
     if length(template) <= 4
@@ -875,6 +936,9 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         elseif _bufidx isa NTuple{2, Int}
             subidx = _bufidx[1]
             _bufidx[2]:_bufidx[2]
+        elseif _bufidx isa Tuple{Vararg{Int}} # indexing into a non-tunable array parameter
+            push!(template, symidx)
+            continue
         else
             # Will error due to the typeassert on `bufidx`
             nothing
@@ -890,7 +954,12 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
             continue
         end
         prev = template[end]
-        if prev isa ParameterIndex && prev.portion === symidx.portion && (subidx === nothing && last(prev.idx) + 1 == first(bufidx) || subidx == prev.idx[1] && last(prev.idx[2]) + 1 == first(bufidx))
+        if prev isa ParameterIndex && prev.portion === symidx.portion && (
+                subidx === nothing && prev.idx isa UnitRange{Int} &&
+                    last(prev.idx) + 1 == first(bufidx) ||
+                    prev.idx isa Tuple{Int, UnitRange{Int}} && subidx == prev.idx[1] &&
+                    last(prev.idx[2]) + 1 == first(bufidx)
+            )
             if subidx === nothing
                 template[end] = ParameterIndex(prev.portion, first(prev.idx):last(bufidx))
             else
@@ -907,8 +976,21 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
 
     for i in eachindex(template)
         if template[i] isa Vector{SymbolicT}
-            template[i] = concrete_getu(srcsys, template[i]; wrap_as_any = true, kws...)
+            template[i] = concrete_getu(srcsys, Symbolics.SConst(template[i]); wrap_as_any = true, kws...)
             delete!(elem_types, Vector{SymbolicT})
+            push!(elem_types, typeof(template[i]))
+        end
+    end
+
+    # Lift buffer indices of multi-buffer portions (discrete/constants/nonnumeric) into
+    # the type domain. This is done as a final pass so the contiguous-range merging above
+    # can keep operating on plain `ParameterIndex`es.
+    for i in eachindex(template)
+        entry = template[i]
+        # Only lift the `(bufidx, range)` form into the type domain.
+        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric} && entry.idx isa Tuple{Int, UnitRange{Int}}
+            delete!(elem_types, typeof(entry))
+            template[i] = StaticBufferIndex{typeof(entry.portion)}(entry.idx)
             push!(elem_types, typeof(template[i]))
         end
     end
@@ -1398,7 +1480,7 @@ function (p::PromoteToTunableEltype{F, floatT})(nlsol) where {F, floatT}
     raw isa AbstractArray || return raw
     isempty(raw) && return raw
     T = promote_type(eltype(raw), _tunable_eltype(parameter_values(nlsol)), floatT)
-    T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
+    return T === eltype(raw) ? raw : convert(AbstractArray{T}, raw)
 end
 
 _tunable_eltype(p::MTKParameters) = isempty(p.tunable) ? Bool : eltype(p.tunable)
@@ -1454,7 +1536,7 @@ function maybe_build_initialization_problem(
     initsys = initializeprob.f.sys::System
     needs_remake = false
     _u0 = state_values(initializeprob)
-     if _u0 !== nothing
+    if _u0 !== nothing
         if ArrayInterface.ismutable(_u0)
             __u0 = floatT.(_u0)
         else
@@ -1549,7 +1631,7 @@ function maybe_build_initialization_problem(
         update_initializeprob! = ModelingToolkitBase.update_initializeprob!
     end
 
-    missingvars = AtomicArraySet()
+    missingvars = Set{SymbolicT}()
     temp_op = copy(op)
     for (k, v) in op
         v === COMMON_MISSING || continue
@@ -1562,7 +1644,7 @@ function maybe_build_initialization_problem(
             has_possibly_indexed_key(parent(binds), v) && continue
             val = get_possibly_indexed(op, v, COMMON_NOTHING)
             if !SU.isconst(val) || val === COMMON_NOTHING
-                push_as_atomic_array!(missingvars, v)
+                push!(missingvars, v)
             end
         end
         if implicit_dae
@@ -1573,14 +1655,14 @@ function maybe_build_initialization_problem(
                         get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
                         # FIXME: Derivatives of algebraic variables aren't present
                         (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
-                    push_as_atomic_array!(missingvars, ttv)
+                    push!(missingvars, ttv)
                 end
             end
         end
     end
     for v in get_all_discretes_fast(sys)
         has_possibly_indexed_key(parent(binds), v) && continue
-        has_possibly_indexed_key(op, v) || push_as_atomic_array!(missingvars, v)
+        has_possibly_indexed_key(op, v) || push!(missingvars, v)
     end
     for (k, v) in binds
         v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
@@ -1598,7 +1680,7 @@ function maybe_build_initialization_problem(
     left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
     subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
     for p in missingvars
-        op[p] = subber(p)
+        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
     end
 
     return (;
@@ -1819,7 +1901,7 @@ function __process_SciMLProblem(
 
     add_initials!(sys, op)
 
-    _sys = unhack_system(sys)
+    _sys = reverse_all_default_reversible_transformations(sys)
     obs = observed(_sys)
 
     guesses = operating_point_preprocess(sys, guesses; name = "guesses")
@@ -1878,15 +1960,16 @@ function __process_SciMLProblem(
         end
     end
 
+    ir = get_irstructure(sys)
     if is_initializeprob
         u0 = varmap_to_vars(
-            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
             missing_values = missing_guess_value
         )
     else
         u0 = varmap_to_vars(
-            op, dvs; buffer_eltype = u0_eltype, container_type = u0Type,
+            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
         )
     end
@@ -2313,7 +2396,7 @@ function get_u0(sys::AbstractSystem, varmap; kwargs...)
     op = build_operating_point(sys, varmap)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
-    obs = observed(unhack_system(sys))
+    obs = observed(reverse_all_default_reversible_transformations(sys))
     add_observed_equations!(op, obs)
 
     return varmap_to_vars(op, unknowns(sys); kwargs...)
@@ -2331,7 +2414,7 @@ function get_p(sys::AbstractSystem, varmap; split = is_split(sys), kwargs...)
     binds = bindings(sys)
     no_override_merge_except_missing!(op, binds)
     add_initials!(sys, op)
-    obs = observed(unhack_system(sys))
+    obs = observed(reverse_all_default_reversible_transformations(sys))
     add_observed_equations!(op, obs)
 
     return if split

@@ -532,11 +532,13 @@ using ModelingToolkitBase: D_nounits
 
     @mtkcompile model = M()
 
-    u0 = [model.x => 10,
-          model.y => 0,
-          model.z => 0,
-          model.c => 0,
-          model.d => 0]
+    u0 = [
+        model.x => 10,
+        model.y => 0,
+        model.z => 0,
+        model.c => 0,
+        model.d => 0,
+    ]
 
     prob = ODEProblem(model, u0, (0, 5.0))
     sol = solve(prob, Tsit5(), tstops = [1.5, 2.5])

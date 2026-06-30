@@ -1,3 +1,7 @@
+```@meta
+Draft = true
+```
+
 # Importing FMUs
 
 ModelingToolkit is able to import FMUs following the [FMI Standard](https://fmi-standard.org/) versions 2 and 3.

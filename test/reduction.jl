@@ -359,6 +359,35 @@ ss = mtkcompile(sys)
     @test isequal(only(unknowns(sys)), y)
 end
 
+@testset "positive-priority variable is eliminated when target has higher priority" begin
+    # Both x and y have positive state_priority, but y's is higher.
+    # Old behaviour: both sticky → neither eliminated.
+    # New behaviour: x (lower priority) is eliminated as observed in favour of y.
+    @variables x(t) y(t)
+    @named sys = System([D(y) ~ -y, x ~ y], t; state_priorities = [x => 1, y => 2])
+    state = TearingState(sys)
+    ModelingToolkit.eliminate_perfect_aliases!(state)
+    @test any(eq -> isequal(eq.lhs, unwrap(x)), state.additional_observed)
+    @test any(isequal(unwrap(y)), state.fullvars)
+    @test !any(isequal(unwrap(x)), state.fullvars)
+end
+
+@testset "warning is emitted when state_priority is tied across alias group" begin
+    # x appears in two equations (D(x) ~ -x and x ~ y), y in one (x ~ y),
+    # so the equation-count heuristic picks x as target — but the priority tie
+    # (both at 5) must still emit a warning regardless of how the tie is broken.
+    @variables x(t) y(t)
+    @named sys = System([D(x) ~ -x, x ~ y], t; state_priorities = [x => 105, y => 105])
+    state = TearingState(sys)
+    @test_logs (:warn, r"state_priority") match_mode = :any ModelingToolkit.eliminate_perfect_aliases!(state)
+    # Exactly one of the two variables is eliminated as observed.
+    n_elim = count(
+        eq -> isequal(eq.lhs, unwrap(x)) || isequal(eq.lhs, unwrap(y)),
+        state.additional_observed
+    )
+    @test n_elim == 1
+end
+
 @testset "Perfect aliases do not eliminate irreducible variables" begin
     @variables x(t) y(t)
     @variables e(t) [irreducible = true]
@@ -368,13 +397,15 @@ end
     #   * {c, d, y}  -- two irreducibles + one non-irreducible. `y` is eliminated, both
     #                   irreducibles remain unknowns, bound by the surviving alias
     #                   equation between them.
-    @mtkcompile sys = System([
+    @mtkcompile sys = System(
+        [
             D(x) ~ x,
             D(c) ~ -c,
             e ~ x,
             c ~ d,
-            y ~ c
-        ], t)
+            y ~ c,
+        ], t
+    )
 
     @test Set(unknowns(sys)) == Set([e, c, d])
 end
@@ -384,7 +415,7 @@ end
     @mtkcompile sys = System([D(x) ~ x, y[1] ~ y[2], dot(x, y) ~ 1], t)
     @test any(equations(sys)) do eq
         isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[2], y[2]]))) ||
-        isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
+            isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
     end
 end
 
@@ -423,7 +454,8 @@ end
     @testset "mixed chain `x ~ y, y ~ -z`" begin
         @variables x(t) y(t) z(t)
         @named sys = System(
-            [D(x) ~ -x, x ~ y, y ~ -z], t; state_priorities = [x => 10])
+            [D(x) ~ -x, x ~ y, y ~ -z], t; state_priorities = [x => 10]
+        )
         state = TearingState(sys)
         ModelingToolkit.eliminate_perfect_aliases!(state)
         # y ~ x (sign +1) and z ~ -x (sign -1: y has +1, z has -1 via `y ~ -z`)
@@ -434,7 +466,8 @@ end
     @testset "double-negation transitivity `x ~ -y, y ~ -z` ⇒ `x ~ z`" begin
         @variables x(t) y(t) z(t)
         @named sys = System(
-            [D(x) ~ -x, x ~ -y, y ~ -z], t; state_priorities = [x => 10])
+            [D(x) ~ -x, x ~ -y, y ~ -z], t; state_priorities = [x => 10]
+        )
         state = TearingState(sys)
         ModelingToolkit.eliminate_perfect_aliases!(state)
         # y ~ -x (sign -1), z ~ x (sign +1: two negations cancel)
@@ -490,7 +523,8 @@ end
         eqs = equations(state.sys)
         for v in (a, b, c)
             @test any(
-                eq -> isequal(eq.lhs, unwrap(v)) && iszero(Symbolics.value(eq.rhs)), eqs)
+                eq -> isequal(eq.lhs, unwrap(v)) && iszero(Symbolics.value(eq.rhs)), eqs
+            )
         end
         @test any(eq -> isequal(eq.lhs, D(w)), eqs)
     end
@@ -528,7 +562,8 @@ end
         # is annihilated and its edge to that eq must be dropped even though
         # `b` itself wasn't substituted.
         @named sys = System(
-            [D(a) ~ x * b + a, D(b) ~ b, x ~ y, x ~ -y], t)
+            [D(a) ~ x * b + a, D(b) ~ b, x ~ y, x ~ -y], t
+        )
         state = TearingState(sys)
 
         eqs_before = collect(ModelingToolkit.equations(state))
@@ -547,8 +582,10 @@ end
         # `x ~ y` is a consistent alias. `x` gets eliminated in favor of `y`.
         # The non-alias eq `D(w) ~ x - y + w` becomes `D(w) ~ w`, so `y` is no
         # longer in the equation even though it was the alias *target*.
-        @named sys = System([D(w) ~ x - y + w, x ~ y], t;
-            state_priorities = [y => 10])
+        @named sys = System(
+            [D(w) ~ x - y + w, x ~ y], t;
+            state_priorities = [y => 10]
+        )
         state = TearingState(sys)
 
         eqs_before = collect(ModelingToolkit.equations(state))
@@ -562,7 +599,7 @@ end
     end
 end
 
-@testset "`eliminate_perfect_aliases!` correctly handles unscalarized array variabls" begin
+@testset "`eliminate_perfect_aliases!` correctly handles unscalarized array variables" begin
     @variables x(t)[1:2] y(t) z(t) [state_priority = -10] w(t)
     @named sys = System([0 ~ dot(x, Symbolics.SConst([y, z])), z ~ w], t)
     ts = TearingState(sys)

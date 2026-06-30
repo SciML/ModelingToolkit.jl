@@ -193,7 +193,7 @@ function AffectSystem(
     union!(accessed_params, sys_params)
 
     # add scalarized unknowns to the map.
-    _obs = observed(unhack_system(affectsys))
+    _obs = observed(reverse_all_default_reversible_transformations(affectsys))
     _dvs = vcat(unknowns(affectsys), map(eq -> eq.lhs, _obs))
     _dvs = __safe_scalarize_vars(_dvs)
     _discs = __safe_scalarize_vars(discretes)
@@ -1125,10 +1125,10 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
     eqs = reduce(vcat, eqs)
 
     @static if pkgversion(SciMLBase) < v"3"
-        affect     = VectorAffect(eq2affect, compiled.affects)
+        affect = VectorAffect(eq2affect, compiled.affects)
         affect_neg = VectorAffect(eq2affect, compiled.affect_negs)
         initialize = wrap_vector_optional_affect(compiled.inits, SciMLBase.INITIALIZE_DEFAULT)
-        finalize   = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
+        finalize = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
 
         return VectorContinuousCallback(
             trigger, affect, affect_neg, length(eqs); initialize, finalize,
@@ -1137,9 +1137,9 @@ function generate_callback(cbs::Vector{SymbolicContinuousCallback}, sys; kwargs.
             initialize_save_discretes = cbs[1].initialize_save_discretes
         )
     else
-        affect     = VectorAffect(eq2affect, compiled.affects, compiled.affect_negs)
+        affect = VectorAffect(eq2affect, compiled.affects, compiled.affect_negs)
         initialize = wrap_vector_optional_affect(compiled.inits, SciMLBase.INITIALIZE_DEFAULT)
-        finalize   = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
+        finalize = wrap_vector_optional_affect(compiled.finals, SciMLBase.FINALIZE_DEFAULT)
 
         return VectorContinuousCallback(
             trigger, affect, length(eqs); initialize, finalize,
@@ -1234,7 +1234,7 @@ function generate_callback(cb, sys; tspan = nothing, kwargs...)
     )
 
     initialize = isnothing(cb.initialize) ? init : InitFinalizeWrapper(init)
-    finalize   = isnothing(cb.finalize) ? final : InitFinalizeWrapper(final)
+    finalize = isnothing(cb.finalize) ? final : InitFinalizeWrapper(final)
 
     saved_clock_partitions = if is_split(sys)
         get(get_index_cache(sys).callback_to_clocks, cb, ())
@@ -1415,7 +1415,7 @@ Base.@nospecializeinfer function compile_explicit_affect(
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
 
-    _affsys = unhack_system(affsys)
+    _affsys = reverse_all_default_reversible_transformations(affsys)
     aff_ir_info = get_ir_info(affsys)
     aff_ir = get_irstructure(affsys)
     obseqs = Equation[]
@@ -1493,14 +1493,14 @@ Base.@nospecializeinfer function compile_implicit_affect(
     dvs_to_access = unknowns(affsys)
     ps_to_access = [unPre(p) for p in parameters(affsys)]
 
-    affu_getter  = getsym(sys, dvs_to_access)
-    affp_getter  = getsym(sys, ps_to_access)
+    affu_getter = getsym(sys, dvs_to_access)
+    affp_getter = getsym(sys, ps_to_access)
     affu_setter! = setsym(affsys, unknowns(affsys))
     affp_setter! = setsym(affsys, parameters(affsys))
-    u_setter!    = setsym(sys, dvs_to_update)
-    p_setter!    = setsym(sys, ps_to_update)
-    u_getter     = getsym(affsys, dvs_to_update)
-    p_getter     = getsym(affsys, ps_to_update)
+    u_setter! = setsym(sys, dvs_to_update)
+    p_setter! = setsym(sys, ps_to_update)
+    u_getter = getsym(affsys, dvs_to_update)
+    p_getter = getsym(affsys, ps_to_update)
 
     affprob = ImplicitDiscreteProblem(
         affsys, op, (0, 0);

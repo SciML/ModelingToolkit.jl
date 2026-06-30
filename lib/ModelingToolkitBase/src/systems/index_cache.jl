@@ -636,28 +636,31 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
         push!(result, nonnumeric_buf)
     end
     for p in ps
-        if haskey(ic.discrete_idx, p)
-            idx = ic.discrete_idx[p]
+        if (idx = get(ic.discrete_idx, p, nothing)) !== nothing
             disc_buf[idx.buffer_idx][idx.idx_in_buffer] = p
-        elseif haskey(ic.tunable_idx, p)
-            i = ic.tunable_idx[p]
+        elseif (i = get(ic.tunable_idx, p, nothing)) !== nothing
             if i isa Int
                 param_buf[i] = p
             else
-                param_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    param_buf[buf_i] = p[p_i]
+                end
             end
-        elseif haskey(ic.initials_idx, p)
-            i = ic.initials_idx[p]
+        elseif (i = get(ic.initials_idx, p, nothing)) !== nothing
             if i isa Int
                 initials_buf[i] = p
             else
-                initials_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    initials_buf[buf_i] = p[p_i]
+                end
             end
-        elseif haskey(ic.constant_idx, p)
-            i, j = ic.constant_idx[p]
+        elseif (ij = get(ic.constant_idx, p, nothing)) !== nothing
+            i, j = ij
             const_buf[i][j] = p
-        elseif haskey(ic.nonnumeric_idx, p)
-            i, j = ic.nonnumeric_idx[p]
+        elseif (ij = get(ic.nonnumeric_idx, p, nothing)) !== nothing
+            i, j = ij
             nonnumeric_buf[i][j] = p
         else
             error("Invalid parameter $p")

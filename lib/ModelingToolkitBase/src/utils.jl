@@ -335,19 +335,18 @@ function check_no_parameter_equations_recurse(ex::SymbolicT)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Validate that all equations of the system involve the unknowns/observables.
+Return a 2-tuple, where the first element is a list of all parameter-only equations
+in `sys`, and the second is all other equations.
 """
-function check_no_parameter_equations(sys::AbstractSystem)
-    if !isempty(get_systems(sys))
-        throw(ArgumentError("Expected flattened system"))
-    end
+function find_all_parameter_equations(sys::AbstractSystem)
     varsbuf = Set{SymbolicT}()
     pareqs = Equation[]
     allowed_vars = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
+    rest_eqs = Equation[]
     for eq in equations(sys)
         empty!(varsbuf)
         Symbolics.search_variables!(
@@ -356,8 +355,22 @@ function check_no_parameter_equations(sys::AbstractSystem)
         )
         isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
         intersect!(varsbuf, allowed_vars)
-        isempty(varsbuf) && push!(pareqs, eq)
+        push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
     end
+
+    return pareqs, rest_eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Validate that all equations of the system involve the unknowns/observables.
+"""
+function check_no_parameter_equations(sys::AbstractSystem)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("Expected flattened system"))
+    end
+    pareqs = find_all_parameter_equations(sys)[1]
 
     return if !isempty(pareqs)
         error(

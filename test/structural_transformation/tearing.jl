@@ -279,10 +279,11 @@ end
     @test length(equations(sys3)) == 1
     @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
 
-    idx = findfirst(isequal(sys3.resistor1.v), observables(sys3))
-    rhs = observed(sys3)[idx].rhs
-    @test operation(rhs) === getindex
-    @test operation(arguments(rhs)[1]) === (\)
+    idx = findfirst(observed(sys3)) do eq
+        arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
+        isarr && iscall(arr) && operation(arr) === (\)
+    end
+    @test idx !== nothing
 
     prob1 = ODEProblem(sys1, [], (0.0, 10.0); guesses = [sys1.resistor1.v => 1.0])
     prob2 = ODEProblem(sys2, [], (0.0, 10.0))
@@ -309,23 +310,25 @@ end
 
 @testset "AD through inline linear SCCs works" begin
     reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
-    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
-    prob = ODEProblem(sys, [], (0.0, 10.0))
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    prob = ODEProblem(sys, [x => [1.0, 2.3, 5.7], p => rand(3, 3)], (0.0, 10.0))
     @assert prob.p.nonnumeric[1] isa
         Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
     @assert SciMLBase.has_initializeprob(prob.f)
 
-    setter = setsym_oop(prob, [sys.R, sys.C])
+    setter = setsym_oop(prob, [p[1, 1]])
 
     function loss(x)
         new_u0, new_p = setter(prob, x)
-        new_prob = remake(prob; u0 = new_u0, p = new_p)
+        new_prob = remake(prob; p = new_p)
         sol = solve(new_prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
-        return sol[sys.capacitor.v][end]
+        return sol[sys.y[1]][end]
     end
 
     # Primal works: returns ~0.993
-    @test_nowarn loss([1.0, 1.0])
+    @test_nowarn loss([1.0])
 
-    @test_nowarn ForwardDiff.gradient(loss, [1.0, 1.0])
+    @test_nowarn ForwardDiff.gradient(loss, [1.0])
 end
