@@ -872,6 +872,30 @@ Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, e
     end
 end
 
+# Memo for the symbolic-fallback getters built by `CopyParamsByTemplate`. The init problem
+# builds several `CopyParamsByTemplate`s over the same `initsys` (e.g. `GetUpdatedU0` and the
+# `initializeprobmap`)
+abstract type TemplateGetuCache end
+const TemplateGetuCacheT = Dict{Vector{SymbolicT}, Any}
+
+function should_invalidate_mutable_cache_entry(::Type{TemplateGetuCache}, @nospecialize(patch::NamedTuple))
+    return false
+end
+
+function cached_template_getu(srcsys::AbstractSystem, batch::Vector{SymbolicT}; kws...)
+    if !(srcsys isa System)
+        return concrete_getu(srcsys, Symbolics.SConst(batch); wrap_as_any = true, kws...)
+    end
+    cache = check_mutable_cache(srcsys, TemplateGetuCache, TemplateGetuCacheT, nothing)
+    if cache === nothing
+        cache = TemplateGetuCacheT()
+        store_to_mutable_cache!(srcsys, TemplateGetuCache, cache)
+    end
+    return get!(cache, batch) do
+        concrete_getu(srcsys, Symbolics.SConst(batch); wrap_as_any = true, kws...)
+    end
+end
+
 function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{SymbolicT}; kws...)
     template = []
     elem_types = Set{DataType}()
@@ -976,7 +1000,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
 
     for i in eachindex(template)
         if template[i] isa Vector{SymbolicT}
-            template[i] = concrete_getu(srcsys, Symbolics.SConst(template[i]); wrap_as_any = true, kws...)
+            template[i] = cached_template_getu(srcsys, template[i]; kws...)
             delete!(elem_types, Vector{SymbolicT})
             push!(elem_types, typeof(template[i]))
         end
