@@ -553,6 +553,24 @@ function SciMLBase.SCCNonlinearProblem{iip}(
 
     build_caches!(sys, decomposition)
 
+    # Every SCC subsystem is derived from `sys` via `subset_unknowns_observed`, which shares
+    # the entire parameter portion of the index cache by reference, and none of the subsystem
+    # constructions (`subset_system`, `_collapse_into!`) touch `ps`. The default parameter
+    # reordering is therefore identical between `sys` and every (merged or unmerged) subsystem.
+    if get_index_cache(sys) !== nothing
+        reorder_parameters(sys)
+        cached_reorder = check_mutable_cache(
+            sys, MTKBase.ReorderedDefaultParameters, MTKBase.ReorderedDefaultParameters, nothing
+        )
+        if cached_reorder isa MTKBase.ReorderedDefaultParameters
+            for subsys in decomposition.subsystems
+                store_to_mutable_cache!(
+                    subsys, MTKBase.ReorderedDefaultParameters, cached_reorder
+                )
+            end
+        end
+    end
+
     for i in eachindex(decomposition.subsystems)
         cachevars = decomposition.scc_cachevars[i]
         cacheexprs = decomposition.scc_cacheexprs[i]
