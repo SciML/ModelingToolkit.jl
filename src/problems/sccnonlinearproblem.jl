@@ -558,16 +558,24 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     # constructions (`subset_system`, `_collapse_into!`) touch `ps`. The default parameter
     # reordering is therefore identical between `sys` and every (merged or unmerged) subsystem.
     if get_index_cache(sys) !== nothing
-        reorder_parameters(sys)
+        rp = reorder_parameters(sys)
         cached_reorder = check_mutable_cache(
             sys, MTKBase.ReorderedDefaultParameters, MTKBase.ReorderedDefaultParameters, nothing
         )
-        if cached_reorder isa MTKBase.ReorderedDefaultParameters
-            for subsys in decomposition.subsystems
+        # The parameter array decomposition (`ParameterArrayAssignments`) is likewise a pure
+        # function of the shared parameter layout. Compute it once (param-only) and propagate
+        # to every subsystem; `build_function_wrapper` decomposes each subsystem's small
+        # cachesym tail on top of it (see the `n_param_buffers` handling there).
+        param_paa = MTKBase.ParameterArrayAssignments(
+            MTKBase.compute_array_variable_buffer_idxs(rp)
+        )
+        for subsys in decomposition.subsystems
+            if cached_reorder isa MTKBase.ReorderedDefaultParameters
                 store_to_mutable_cache!(
                     subsys, MTKBase.ReorderedDefaultParameters, cached_reorder
                 )
             end
+            store_to_mutable_cache!(subsys, MTKBase.ParameterArrayAssignments, param_paa)
         end
     end
 
