@@ -45,6 +45,7 @@ function generate_rhs(
     obs = observed(sys)
     u = dvs
     p = reorder_parameters(sys) # 1 arg to use the cached version
+    n_param_buffers = length(p)  # # of parameter buffers, BEFORE any cachesyms are appended
     if cachesyms isa Vector{Vector{SymbolicT}}
         append!(p, cachesyms)
     end
@@ -109,7 +110,7 @@ function generate_rhs(
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments, u_arg,
+        sys, rhss, args...; p_start, extra_assignments, u_arg, n_param_buffers,
         expression = Val{true}, expression_module = eval_module, kwargs...
     )
     nargs = length(args) - length(p) + 1
@@ -1545,7 +1546,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), add_observed = false, kwargs...
+        similarto = typeof(A), add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
@@ -1582,7 +1583,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Vector{SymbolicT}, add_observed = false, kwargs...
+        similarto = Vector{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return DiagonalAMatrixWrapper(
         maybe_compile_function(
@@ -1628,7 +1629,7 @@ function generate_update_A(
     end
     res = build_function_wrapper(
         sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Matrix{SymbolicT}, add_observed = false, kwargs...
+        similarto = Matrix{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return BandedAMatrixWrapper(
         maybe_compile_function(
@@ -1672,7 +1673,7 @@ function generate_update_b(
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), add_observed = false, kwargs...
+        similarto = typeof(b), add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
