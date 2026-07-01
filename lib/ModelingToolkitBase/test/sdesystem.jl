@@ -825,7 +825,7 @@ end
         ρ => 2.33,
     ]
 
-    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0); seed = 42)
     # SOSRI only works for diagonal and scalar noise
     @test_throws ErrorException solve(prob, SOSRI()).retcode == ReturnCode.Success
     # ImplicitEM does work for non-diagonal noise

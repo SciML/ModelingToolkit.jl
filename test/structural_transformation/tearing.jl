@@ -238,56 +238,35 @@ prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
-using ModelingToolkitStandardLibrary.Electrical
-using ModelingToolkitStandardLibrary.Blocks: Constant
-
-function RCModel(; name)
-    pars = @parameters begin
-        R = 1.0
-        C = 1.0
-        V = 1.0
-    end
-    systems = @named begin
-        resistor1 = Resistor(R = R)
-        resistor2 = Resistor(R = R)
-        capacitor = Capacitor(C = C, v = 0.0)
-        source = Voltage()
-        constant = Constant(k = V)
-        ground = Ground()
-    end
-    eqs = [
-        connect(constant.output, source.V)
-        connect(source.p, resistor1.p)
-        connect(resistor1.n, resistor2.p)
-        connect(resistor2.n, capacitor.p)
-        connect(capacitor.n, source.n, ground.g)
-    ]
-    return System(eqs, t, [], pars; systems, name)
-end
-
-
 @testset "Inline linear SCCs" begin
-    reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
-    reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 0)
-    @mtkcompile sys1 = RCModel()
-    @mtkcompile sys2 = RCModel() reassemble_alg = reassemble_alg1
-    @mtkcompile sys3 = RCModel() reassemble_alg = reassemble_alg2
+    reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 5)
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys1 = System([D(x) ~ x, p * y ~ x], t)
+    @mtkcompile sys2 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg1
+    @mtkcompile sys3 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg2
 
-    @test length(equations(sys1)) == 2
-    @test length(equations(sys2)) == 1
-    @test isequal(only(unknowns(sys2)), sys2.capacitor.v)
-    @test length(equations(sys3)) == 1
-    @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
+    @test length(equations(sys1)) > 3
+    @test length(equations(sys2)) == 3
+    @test length(equations(sys3)) == 3
 
-    idx = findfirst(observed(sys3)) do eq
+    idx = findfirst(observed(sys2)) do eq
         arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
         isarr && iscall(arr) && operation(arr) === (\)
     end
     @test idx !== nothing
+    # This one is analytically solved
+    idx = findfirst(observed(sys3)) do eq
+        arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
+        isarr && iscall(arr) && operation(arr) === (\)
+    end
+    @test idx === nothing
 
-    prob1 = ODEProblem(sys1, [], (0.0, 10.0); guesses = [sys1.resistor1.v => 1.0])
-    prob2 = ODEProblem(sys2, [], (0.0, 10.0))
-    prob3 = ODEProblem(sys3, [], (0.0, 10.0))
+    pval = rand(3, 3)
+    prob1 = ODEProblem(sys1, [x => ones(3), p => pval], (0.0, 10.0); guesses = [y => ones(3)])
+    prob2 = ODEProblem(sys2, [x => ones(3), p => pval], (0.0, 10.0))
+    prob3 = ODEProblem(sys3, [x => ones(3), p => pval], (0.0, 10.0))
 
     sol1 = solve(prob1, Rodas5P(); abstol = 1.0e-8, reltol = 1.0e-8)
     sol2 = solve(prob2, Tsit5(), abstol = 1.0e-8, reltol = 1.0e-8)
@@ -297,15 +276,16 @@ end
     @test SciMLBase.successful_retcode(sol2)
     @test SciMLBase.successful_retcode(sol3)
 
-    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
-    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
+    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u rtol = 1.0e-6
+    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u rtol = 1.0e-6
 end
 
 @testset "`Initial` parameters are added for observed variables solved by inline linear SCCS" begin
     reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
-    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
-    @test Initial(sys.resistor1.v) in Set(ModelingToolkit.get_ps(sys))
-    @test Initial(sys.resistor2.v) in Set(ModelingToolkit.get_ps(sys))
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    @test Initial(y) in Set(ModelingToolkit.get_ps(sys))
 end
 
 @testset "AD through inline linear SCCs works" begin
