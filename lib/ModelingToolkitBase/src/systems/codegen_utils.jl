@@ -150,7 +150,16 @@ function eval_or_rgf(
     if eval_expression
         return eval_module.eval(expr)
     else
-        return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
+        # Only function-definition expressions benefit from RuntimeGeneratedFunction (avoids
+        # world-age issues with new methods).  Module-level references such as
+        # `:(ModelingToolkitBase._oop_unimplemented)` are not function definitions; wrapping
+        # them in an RGF would fail.  Evaluate them directly instead — no new method is
+        # introduced so there is no world-age concern.
+        if Meta.isexpr(expr, :function) || Meta.isexpr(expr, :->)
+            return drop_expr(RuntimeGeneratedFunction(eval_module, eval_module, expr))
+        else
+            return eval_module.eval(expr)
+        end
     end
 end
 
@@ -612,11 +621,35 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     optimize = resolve_optimize_option(optimize)
-    return Symbolics.codegen_function(ir, expr, args; wrap_code, similarto, cse, optimize, kwargs...)
+    result = Symbolics.codegen_function(ir, expr, args; wrap_code, similarto, cse, optimize, kwargs...)
+    # When iip_config disables one side, Symbolics generates an anonymous `unimplemented`
+    # function expression.  Replace it here — where we know which side is disabled — with a
+    # reference to a named module-level function so all downstream paths (expression=Val{true},
+    # eval_expression=true, distributed serialization) get a stable, serializable callable.
+    iip_config = get(kwargs, :iip_config, (true, true))
+    if result isa NTuple{2, Expr}
+        oop_expr, iip_expr = result
+        if !iip_config[1]
+            oop_expr = OOP_UNIMPLEMENTED_EXPR
+        end
+        if !iip_config[2]
+            iip_expr = IIP_UNIMPLEMENTED_EXPR
+        end
+        result = (oop_expr, iip_expr)
+    end
+    return result
 end
 
 resolve_optimize_option(x) = x
 resolve_optimize_option(::Nothing) = nothing
+
+# Module-level fallback functions for the disabled side of an `iip_config` pair.
+# Using named module-level functions ensures correct serialization across all codegen paths
+# (expression=Val{true} evaluated by the user, eval_expression=true, distributed workers).
+_oop_unimplemented(args...) = throw(Symbolics.FunctionUnimplementedError("out-of-place"))
+_iip_unimplemented(args...) = throw(Symbolics.FunctionUnimplementedError("in-place"))
+const OOP_UNIMPLEMENTED_EXPR = :($ModelingToolkitBase._oop_unimplemented)
+const IIP_UNIMPLEMENTED_EXPR = :($ModelingToolkitBase._iip_unimplemented)
 
 """
     $(TYPEDEF)
