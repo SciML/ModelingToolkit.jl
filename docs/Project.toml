@@ -35,6 +35,15 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
+[sources.ModelingToolkit]
+path = ".."
+
+[sources.ModelingToolkitBase]
+path = "../lib/ModelingToolkitBase"
+
+[sources.SciCompDSL]
+path = "../lib/SciCompDSL"
+
 [compat]
 Attractors = "1.24"
 BenchmarkTools = "1.3"
@@ -69,8 +78,3 @@ StochasticDiffEq = "6, 7"
 SymbolicIndexingInterface = "0.3.1"
 SymbolicUtils = "4"
 Symbolics = "7"
-
-[sources]
-ModelingToolkit = {path = ".."}
-ModelingToolkitBase = {path = "../lib/ModelingToolkitBase"}
-SciCompDSL = {path = "../lib/SciCompDSL"}
