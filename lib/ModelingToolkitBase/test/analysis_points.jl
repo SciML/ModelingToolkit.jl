@@ -206,6 +206,105 @@ if @isdefined(ModelingToolkit)
         @test matrices.D[] == 0
     end
 
+    @testset "LinearizationOpPoint" begin
+        # sys here is the two-analysis-point system (plant_input + plant_output)
+        # Simulate to obtain a solution, then verify that linearizing at t=0 via
+        # LinearizationOpPoint gives the same result as the default operating point.
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        matrices_ref, _ = linearize(sys, sys.plant_input, sys.plant_output)
+        matrices_op, _ = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0)
+        )
+        @test matrices_op.A ≈ matrices_ref.A
+        @test matrices_op.B ≈ matrices_ref.B
+        @test matrices_op.C ≈ matrices_ref.C
+        @test matrices_op.D ≈ matrices_ref.D
+
+        # Vector of time points: linearization_function is built once and reused.
+        ts = [0.0, 0.5, 1.0]
+        mats_vec, _, extras_vec = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec) == 3
+        @test length(extras_vec) == 3
+        # The system is linear so all operating points yield the same A,B,C,D.
+        for mats_t in mats_vec
+            @test mats_t.A ≈ matrices_ref.A
+            @test mats_t.B ≈ matrices_ref.B
+            @test mats_t.C ≈ matrices_ref.C
+            @test mats_t.D ≈ matrices_ref.D
+        end
+        # Two-arg form: linearize(ssys, lin_fun; op=LinearizationOpPoint(sol, ts))
+        lin_fun, ssys_lin = linearization_function(sys, sys.plant_input, sys.plant_output)
+        mats_vec2, extras_vec2 = linearize(
+            ssys_lin, lin_fun;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec2) == 3
+        for (m1, m2) in zip(mats_vec, mats_vec2)
+            @test m1.A ≈ m2.A
+            @test m1.B ≈ m2.B
+            @test m1.C ≈ m2.C
+            @test m1.D ≈ m2.D
+        end
+        # The vector-of-time-points path (which builds the problem and setters once and
+        # updates the operating point in place) must agree with calling the scalar
+        # LinearizationOpPoint form at each time point individually.
+        for (i, ti) in enumerate(ts)
+            mats_i, _ = linearize(
+                sys, sys.plant_input, sys.plant_output;
+                op = ModelingToolkit.LinearizationOpPoint(sol, ti)
+            )
+            @test mats_vec[i].A ≈ mats_i.A
+            @test mats_vec[i].B ≈ mats_i.B
+            @test mats_vec[i].C ≈ mats_i.C
+            @test mats_vec[i].D ≈ mats_i.D
+        end
+    end
+
+    @testset "loop_openings require an operating point" begin
+        # Opening a loop turns the opened signal into a parameter whose operating-point
+        # value is not implied by the solution. It must be provided explicitly, otherwise
+        # `linearize` errors instead of silently using a stale/default value.
+        # Linearize plant_input -> P.output.u while opening the `plant_output` analysis
+        # point (so the opened AP is neither the input nor the output).
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        ts = [0.0, 0.5, 1.0]
+
+        lf_lo, _ = linearization_function(
+            sys, sys.plant_input, P.output.u; loop_openings = [sys.plant_output]
+        )
+        lops = lf_lo.loop_opening_params
+        @test !isempty(lops)
+
+        # Not providing the loop-opening parameter errors (both vector and scalar paths).
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts),
+            loop_openings = [sys.plant_output]
+        )
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0),
+            loop_openings = [sys.plant_output]
+        )
+
+        # Providing it via the `op` keyword of `LinearizationOpPoint` works.
+        op_lo = Dict(p => 0.0 for p in lops)
+        mats_lo, _, _ = linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts; op = op_lo),
+            loop_openings = [sys.plant_output]
+        )
+        @test length(mats_lo) == length(ts)
+    end
+
     @testset "Complicated model" begin
         # Parameters
         m1 = 1
