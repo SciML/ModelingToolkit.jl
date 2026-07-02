@@ -768,7 +768,7 @@ Callable struct designed for use by `MTKParametersReconstructor`. Uses a fixed s
 act as a very dynamic (and limited) observed function returning an array. See `__apply_copy_template`
 for the supported templates.
 """
-struct CopyParamsByTemplate{IsRoot, T, N}
+struct CopyParamsByTemplate{IsRoot, T, N, G}
     """
     List of templates.
     """
@@ -777,10 +777,27 @@ struct CopyParamsByTemplate{IsRoot, T, N}
     Size of the returned buffer.
     """
     size::NTuple{N, Int}
+    """
+    Merged getter for all symbolic-fallback batches, or `nothing`.
+    """
+    fallback_getter::G
 end
 
-function CopyParamsByTemplate{IR}(temp::T, size::NTuple{N, Int}) where {IR, T, N}
-    return CopyParamsByTemplate{IR, T, N}(temp, size)
+function CopyParamsByTemplate{IR}(
+        temp::T, size::NTuple{N, Int}, fallback_getter::G = nothing
+    ) where {IR, T, N, G}
+    return CopyParamsByTemplate{IR, T, N, G}(temp, size, fallback_getter)
+end
+
+"""
+    $TYPEDEF
+
+Template entry indexing into the result of a `CopyParamsByTemplate`'s merged
+`fallback_getter`. `range` is the contiguous slice of that result corresponding to this
+fallback batch's symbols.
+"""
+struct FallbackSlice
+    range::UnitRange{Int}
 end
 
 function __apply_copy_template(valp, template)
@@ -826,9 +843,24 @@ function __apply_copy_template(valp, template)
     end
 end
 
+@inline function __apply_root_template(src, template, fb)
+    if template isa FallbackSlice
+        return fb[template.range]
+    else
+        return __apply_copy_template(src, template)
+    end
+end
+
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
     return if IsRoot
-        reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
+        if cp.fallback_getter === nothing
+            reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
+        else
+            fb = cp.fallback_getter(src)
+            reshape(
+                mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template), cp.size
+            )
+        end
     else
         buffers = map(Base.Fix1(__apply_copy_template, src), cp.template)
         if cp.template isa Tuple
@@ -869,6 +901,30 @@ Base.@nospecializeinfer function __specialize_templates(template::Vector{Any}, e
         return Vector{Union{collect(elem_types)...}}(template)
     else
         return template
+    end
+end
+
+# Memo for the symbolic-fallback getters built by `CopyParamsByTemplate`. The init problem
+# builds several `CopyParamsByTemplate`s over the same `initsys` (e.g. `GetUpdatedU0` and the
+# `initializeprobmap`)
+abstract type TemplateGetuCache end
+const TemplateGetuCacheT = Dict{Vector{SymbolicT}, Any}
+
+function should_invalidate_mutable_cache_entry(::Type{TemplateGetuCache}, @nospecialize(patch::NamedTuple))
+    return false
+end
+
+function cached_template_getu(srcsys::AbstractSystem, batch::Vector{SymbolicT}; kws...)
+    if !(srcsys isa System)
+        return concrete_getu(srcsys, Symbolics.SConst(batch); wrap_as_any = true, kws...)
+    end
+    cache = check_mutable_cache(srcsys, TemplateGetuCache, TemplateGetuCacheT, nothing)
+    if cache === nothing
+        cache = TemplateGetuCacheT()
+        store_to_mutable_cache!(srcsys, TemplateGetuCache, cache)
+    end
+    return get!(cache, batch) do
+        concrete_getu(srcsys, Symbolics.SConst(batch); wrap_as_any = true, kws...)
     end
 end
 
@@ -974,12 +1030,30 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
     end
 
+    fallback_idxs = Int[]
     for i in eachindex(template)
-        if template[i] isa Vector{SymbolicT}
-            template[i] = concrete_getu(srcsys, Symbolics.SConst(template[i]); wrap_as_any = true, kws...)
-            delete!(elem_types, Vector{SymbolicT})
-            push!(elem_types, typeof(template[i]))
+        template[i] isa Vector{SymbolicT} && push!(fallback_idxs, i)
+    end
+    fallback_getter = nothing
+    if length(fallback_idxs) == 1
+        i = fallback_idxs[1]
+        template[i] = cached_template_getu(srcsys, template[i]::Vector{SymbolicT}; kws...)
+        delete!(elem_types, Vector{SymbolicT})
+        push!(elem_types, typeof(template[i]))
+    elseif length(fallback_idxs) > 1
+        all_fallback = SymbolicT[]
+        for i in fallback_idxs
+            append!(all_fallback, template[i]::Vector{SymbolicT})
         end
+        fallback_getter = cached_template_getu(srcsys, all_fallback; kws...)
+        offset = 0
+        for i in fallback_idxs
+            len = length(template[i]::Vector{SymbolicT})
+            template[i] = FallbackSlice((offset + 1):(offset + len))
+            offset += len
+        end
+        delete!(elem_types, Vector{SymbolicT})
+        push!(elem_types, FallbackSlice)
     end
 
     # Lift buffer indices of multi-buffer portions (discrete/constants/nonnumeric) into
@@ -995,7 +1069,9 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
     end
 
-    return CopyParamsByTemplate{true}(__specialize_templates(template, elem_types), size(syms))
+    return CopyParamsByTemplate{true}(
+        __specialize_templates(template, elem_types), size(syms), fallback_getter
+    )
 end
 
 function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray; kws...)

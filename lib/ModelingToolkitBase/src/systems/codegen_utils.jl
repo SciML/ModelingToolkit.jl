@@ -182,11 +182,11 @@ function generated_argument_name(i::Int)
     return Symbol(:__mtk_arg_, i)
 end
 
-function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}())
-    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars)
+function compute_array_variable_buffer_idxs(@nospecialize(args); ignore_vars = Set{SymbolicT}(), ignore_arg_idxs = nothing)
+    return _compute_array_variable_buffer_idxs(args isa Vector ? args : collect(args), ignore_vars, ignore_arg_idxs)
 end
 
-function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
+function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars, ignore_arg_idxs = nothing)
     # map array symbolic to an identically sized array where each element is (buffer_idx, idx_in_buffer)
     var_to_arridxs = Dict{SymbolicT, Vector{Tuple{Int, Int}}}()
     for (i, arg) in enumerate(args)
@@ -195,6 +195,10 @@ function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars)
         # scalarized array symbolic. This works because the only non-array element
         # is the independent variable
         arg isa Vector{SymbolicT} || continue
+        # entire arg-vectors whose decomposition is already accounted for (e.g. the
+        # parameter slice, handled via the cached `param_var_to_arridxs`) are skipped
+        # here so we never re-run `split_indexed_var`/`get_stable_index` on them.
+        ignore_arg_idxs === nothing || i in ignore_arg_idxs && continue
 
         # go through symbolics
         for (j, var) in enumerate(arg)
@@ -291,9 +295,9 @@ reconstruct array variables if they are present scalarized in `args`.
 """
 function array_variable_assignments(
         @nospecialize(args...); ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
-        argument_name = generated_argument_name, buffer_offset = 0
+        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing
     )
-    var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars)
+    var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars, ignore_arg_idxs)
     return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
 end
 
@@ -463,7 +467,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         add_observed = true, obsidxs_to_use = nothing,
         create_bindings = false, output_type = nothing, mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
-        optimize = nothing, kwargs...
+        n_param_buffers = nothing, optimize = nothing, kwargs...
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     obs = observed(sys)
@@ -543,19 +547,40 @@ Base.@nospecializeinfer function build_function_wrapper(
     if non_standard_param_layout
         append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
     else
+        # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
+        # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
+        # suffix). When it is `nothing` the whole slice is parameters (no cachesym tail). The
+        # cache always stores the PARAM-ONLY decomposition (shared, propagated to SCC
+        # subsystems); the per-call cachesym tail is decomposed fresh and merged below.
+        pbuf_end = n_param_buffers === nothing ? p_end : (p_start + n_param_buffers - 1)
         cached = check_mutable_cache(sys, ParameterArrayAssignments, ParameterArrayAssignments, nothing)
         if cached isa ParameterArrayAssignments
             param_var_to_arridxs = cached.var_to_arridxs
         else
-            param_var_to_arridxs = compute_array_variable_buffer_idxs(args[p_start:p_end])
+            param_var_to_arridxs = compute_array_variable_buffer_idxs(args[p_start:pbuf_end])
             store_to_mutable_cache!(sys, ParameterArrayAssignments, ParameterArrayAssignments(param_var_to_arridxs))
+        end
+        # Merge the cachesym tail, shifting its slice-relative buffer indices past the
+        # parameter buffers. cachesyms are prior-SCC unknowns / CSE temporaries -- never array
+        # parameters -- so their array-variable keyset is disjoint from the params'. The
+        # merged dict is identical to decomposing the whole `args[p_start:p_end]` slice.
+        if pbuf_end < p_end
+            merged = copy(param_var_to_arridxs)
+            tail = compute_array_variable_buffer_idxs(
+                args[(pbuf_end + 1):p_end]; ignore_vars = keys(merged)
+            )
+            shift = pbuf_end - p_start + 1
+            for (arrvar, idxs) in tail
+                merged[arrvar] = [(i + shift, j) for (i, j) in idxs]
+            end
+            param_var_to_arridxs = merged
         end
         append!(
             assignments, array_variable_buffer_idxs_to_assignments(
                 param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name)
+        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
         append!(assignments, other_assigns)
     end
     append!(assignments, extra_assignments)

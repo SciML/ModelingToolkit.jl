@@ -15,8 +15,7 @@ function CacheWriter(
         exprs::SCCCacheVarsExprsElT, solsyms;
         eval_expression = false, eval_module = @__MODULE__, cse = true, sparse = false
     )
-    ps = parameters(sys; initial_parameters = true)
-    rps = reorder_parameters(sys, ps)
+    rps = reorder_parameters(sys)  # 1 arg to use the cached version
     cache_writes = SymbolicT[]
     for (i, T) in enumerate(buffer_types)
         regions = SU.RegionsT()
@@ -553,6 +552,32 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     eq_sccs = nothing
 
     build_caches!(sys, decomposition)
+
+    # Every SCC subsystem is derived from `sys` via `subset_unknowns_observed`, which shares
+    # the entire parameter portion of the index cache by reference, and none of the subsystem
+    # constructions (`subset_system`, `_collapse_into!`) touch `ps`. The default parameter
+    # reordering is therefore identical between `sys` and every (merged or unmerged) subsystem.
+    if get_index_cache(sys) !== nothing
+        rp = reorder_parameters(sys)
+        cached_reorder = check_mutable_cache(
+            sys, MTKBase.ReorderedDefaultParameters, MTKBase.ReorderedDefaultParameters, nothing
+        )
+        # The parameter array decomposition (`ParameterArrayAssignments`) is likewise a pure
+        # function of the shared parameter layout. Compute it once (param-only) and propagate
+        # to every subsystem; `build_function_wrapper` decomposes each subsystem's small
+        # cachesym tail on top of it (see the `n_param_buffers` handling there).
+        param_paa = MTKBase.ParameterArrayAssignments(
+            MTKBase.compute_array_variable_buffer_idxs(rp)
+        )
+        for subsys in decomposition.subsystems
+            if cached_reorder isa MTKBase.ReorderedDefaultParameters
+                store_to_mutable_cache!(
+                    subsys, MTKBase.ReorderedDefaultParameters, cached_reorder
+                )
+            end
+            store_to_mutable_cache!(subsys, MTKBase.ParameterArrayAssignments, param_paa)
+        end
+    end
 
     for i in eachindex(decomposition.subsystems)
         cachevars = decomposition.scc_cachevars[i]

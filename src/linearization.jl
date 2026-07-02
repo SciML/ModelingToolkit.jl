@@ -94,6 +94,10 @@ function linearization_function(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
         algebraic_only = true, guesses, missing_guess_value
     )
+    initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
+    for v in unknowns(sys)
+        push!(initial_idxs_for_unknowns, parameter_index(sys, Initial(v))::eltype(initial_idxs_for_unknowns))
+    end
     u0 = state_values(prob)
 
     ps = parameters(sys)
@@ -170,7 +174,7 @@ function linearization_function(
     lin_fun = LinearizationFunction(
         diff_idxs, alge_idxs, inputs, length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
-        hp_jac, initializealg, initialization_kwargs
+        hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns
     )
     return lin_fun, sys
 end
@@ -246,27 +250,27 @@ A callable struct which linearizes a system.
 
 $(TYPEDFIELDS)
 """
-struct LinearizationFunction{
+mutable struct LinearizationFunction{
         DI <: AbstractVector{Int}, AI <: AbstractVector{Int}, I, P <: ODEProblem,
         H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK,
     }
     """
     The indexes of differential equations in the linearized system.
     """
-    diff_idxs::DI
+    const diff_idxs::DI
     """
     The indexes of algebraic equations in the linearized system.
     """
-    alge_idxs::AI
+    const alge_idxs::AI
     """
     The indexes of parameters in the linearized system which represent
     input variables.
     """
-    inputs::I
+    const inputs::I
     """
     The number of unknowns in the linearized system.
     """
-    num_states::Int
+    const num_states::Int
     """
     The `ODEProblem` of the linearized system.
     """
@@ -274,35 +278,39 @@ struct LinearizationFunction{
     """
     A function which takes `(u, p, t)` and returns the outputs of the linearized system.
     """
-    h::H
+    const h::H
     """
     Any required cache buffers.
     """
-    caches::C
+    const caches::C
     """
     `PreparedJacobian` for calculating jacobian of `prob.f` w.r.t. `u`
     """
-    uf_jac::J1
+    const uf_jac::J1
     """
     `PreparedJacobian` for calculating jacobian of `h` w.r.t. `u`
     """
-    h_jac::J2
+    const h_jac::J2
     """
     `PreparedJacobian` for calculating jacobian of `prob.f` w.r.t. `p`
     """
-    pf_jac::J3
+    const pf_jac::J3
     """
     `PreparedJacobian` for calculating jacobian of `h` w.r.t. `p`
     """
-    hp_jac::J4
+    const hp_jac::J4
     """
     The initialization algorithm to use.
     """
-    initializealg::IA
+    const initializealg::IA
     """
     Keyword arguments to be passed to `SciMLBase.get_initial_values`.
     """
-    initialize_kwargs::IK
+    const initialize_kwargs::IK
+    """
+    Index of `Initial(x)` for every `x` in unknowns.
+    """
+    const initial_idxs_for_unknowns::Vector{ParameterIndex{SciMLStructures.Initials, Int}}
 end
 
 SymbolicIndexingInterface.symbolic_container(f::LinearizationFunction) = f.prob
@@ -311,6 +319,10 @@ function SymbolicIndexingInterface.parameter_values(f::LinearizationFunction)
     return parameter_values(f.prob)
 end
 SymbolicIndexingInterface.current_time(f::LinearizationFunction) = current_time(f.prob)
+function SymbolicIndexingInterface.set_state!(f::LinearizationFunction, val, idx)
+    f.prob.u0[idx] = val
+    return f.prob.p[f.initial_idxs_for_unknowns[idx]] = val
+end
 
 function Base.show(io::IO, mime::MIME"text/plain", lf::LinearizationFunction)
     printstyled(io, "LinearizationFunction"; bold = true, color = :blue)
@@ -473,6 +485,10 @@ SymbolicIndexingInterface.symbolic_container(p::LinearizationProblem) = p.f
 SymbolicIndexingInterface.state_values(p::LinearizationProblem) = state_values(p.f)
 SymbolicIndexingInterface.parameter_values(p::LinearizationProblem) = parameter_values(p.f)
 SymbolicIndexingInterface.current_time(p::LinearizationProblem) = p.t
+function SymbolicIndexingInterface.set_state!(p::LinearizationProblem, val, idx)
+    return SymbolicIndexingInterface.set_state!(p.f, val, idx)
+end
+
 
 function Base.getindex(prob::LinearizationProblem, idx)
     return getu(prob, idx)(prob)

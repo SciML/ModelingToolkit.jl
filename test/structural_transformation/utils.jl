@@ -26,11 +26,12 @@ eqs = [
     0 ~ x^2 + y^2 - L^2,
 ]
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
-state = TearingState(pendulum)
+state = TearingState(pendulum; sort_eqs = false)
 StateSelection.find_solvables!(state)
 sss = state.structure
 @unpack graph, solvable_graph, var_to_diff = sss
-@test sort(graph.fadjlist) == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]
+sym_incidence = [[D(x), w], [D(y), z], [D(w), T, x], [D(z), T, y], [x, y]]
+@test all([issetequal(state.fullvars[v], sym_incidence[i]) for (i, v) in enumerate(graph.fadjlist)])
 @test length(graph.badjlist) == 9
 @test ne(graph) == nnz(incidence_matrix(graph)) == 12
 @test nv(solvable_graph) == 9 + 5

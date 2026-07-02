@@ -84,6 +84,7 @@ import PreallocationTools
 import PreallocationTools: DiffCache
 import FillArrays
 using BipartiteGraphs
+import SciMLStructures
 
 @recompile_invalidations begin
     import StateSelection

@@ -46,11 +46,11 @@ function generate_rhs(
         kwargs...
     )
     dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
-    p = reorder_parameters(sys, ps)
+    p = reorder_parameters(sys) # 1 arg to use the cached version
+    n_param_buffers = length(p)  # # of parameter buffers, BEFORE any cachesyms are appended
     if cachesyms isa Vector{Vector{SymbolicT}}
         append!(p, cachesyms)
     end
@@ -123,7 +123,7 @@ function generate_rhs(
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments, u_arg, p_end_kw...,
+        sys, rhss, args...; p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
         expression = Val{true}, expression_module = eval_module, kwargs...
     )
     nargs = length(args) - length(p) + 1
@@ -1191,6 +1191,43 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
     return false
 end
 
+struct NamespaceMap
+    value::Dict{SymbolicT, SymbolicT}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{NamespaceMap}, patch::NamedTuple)
+    return haskey(patch, :name) || haskey(patch, :observed) || haskey(patch, :unknowns) ||
+           haskey(patch, :ps) || haskey(patch, :systems)
+end
+
+function _build_namespace_map(sys)
+    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    for sym in unknowns(sys)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    for sym in parameters(sys; initial_parameters = true)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    return ns_map
+end
+
+function get_namespace_map(sys)
+    if sys isa System && iscomplete(sys)
+        cached = check_mutable_cache(sys, NamespaceMap, NamespaceMap, nothing)
+        cached isa NamespaceMap && return cached.value
+        m = _build_namespace_map(sys)
+        store_to_mutable_cache!(sys, NamespaceMap, NamespaceMap(m))
+        return m
+    end
+    return _build_namespace_map(sys)
+end
+
 """
     build_explicit_observed_function(sys, ts; kwargs...) -> Function(s)
 
@@ -1296,19 +1333,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     end
 
     namespace_subs = Dict{SymbolicT, SymbolicT}()
-    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
-    for sym in unknowns(sys)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
-    for sym in parameters(sys; initial_parameters = true)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
+    ns_map = get_namespace_map(sys)
     allsyms = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), observables(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), parameters(sys; initial_parameters = true))
@@ -1534,7 +1559,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), add_observed = false, kwargs...
+        similarto = typeof(A), add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
@@ -1571,7 +1596,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Vector{SymbolicT}, add_observed = false, kwargs...
+        similarto = Vector{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return DiagonalAMatrixWrapper(
         maybe_compile_function(
@@ -1617,7 +1642,7 @@ function generate_update_A(
     end
     res = build_function_wrapper(
         sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Matrix{SymbolicT}, add_observed = false, kwargs...
+        similarto = Matrix{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return BandedAMatrixWrapper(
         maybe_compile_function(
@@ -1661,7 +1686,7 @@ function generate_update_b(
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), add_observed = false, kwargs...
+        similarto = typeof(b), add_observed = false, n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
