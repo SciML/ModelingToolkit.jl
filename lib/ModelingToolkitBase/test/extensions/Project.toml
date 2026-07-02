@@ -4,6 +4,7 @@ ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 ChainRulesTestUtils = "cdddcdb0-9152-4a09-a978-84456f9df70a"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+FunctionProperties = "f62d2435-5019-4c03-9749-2d4c77af0cbc"
 HomotopyContinuation = "f213a82b-91d6-5c5d-acf7-10f1c761b327"
 LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
@@ -26,6 +27,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 ModelingToolkitBase = {path = "../.."}
 
 [compat]
+FunctionProperties = "0.1.7"
 SafeTestsets = "0.1, 1"
 SciMLTesting = "1"
 TaylorDiff = "0.3.5"

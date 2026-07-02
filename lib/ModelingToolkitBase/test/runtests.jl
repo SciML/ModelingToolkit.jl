@@ -130,6 +130,7 @@ end
         activate_extensions_env()
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "LabelledArrays Test" include("extensions/labelledarrays.jl")
+        @safetestset "FunctionProperties Test" include("extensions/function_properties.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
