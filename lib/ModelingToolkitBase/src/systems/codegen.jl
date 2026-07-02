@@ -1024,7 +1024,7 @@ function calculate_control_jacobian(
         sparse = false, simplify = false
     )
     rhs = [eq.rhs for eq in full_equations(sys)]
-    ctrls = unbound_inputs(sys)
+    ctrls = default_codegen_inputs(sys)
 
     if sparse
         jac = sparsejacobian(rhs, ctrls, simplify = simplify)

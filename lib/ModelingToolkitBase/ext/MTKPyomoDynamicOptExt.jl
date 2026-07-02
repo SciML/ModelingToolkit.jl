@@ -5,8 +5,6 @@ using DiffEqBase
 using UnPack
 using NaNMath
 using Setfield
-using OrderedCollections: OrderedSet
-using Symbolics: SymbolicT, unwrap
 import SymbolicUtils as SU
 const MTK = ModelingToolkitBase
 
@@ -83,11 +81,14 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::PyomoDynamicOptModel
     kwargs::K
 
-    function PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function PyomoDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 
@@ -103,16 +104,15 @@ _getproperty(s, name::Val{fieldname}) where {fieldname} = getproperty(s, fieldna
 function MTK.PyomoDynamicOptProblem(
         sys::System, op, tspan;
         dt = nothing, steps = nothing, tune_parameters = false,
-        guesses = Dict(),
-        bounds = Dict(), kwargs...
+        guesses = Dict(), scales = Dict(), initial_trajectory = Dict(), bounds = Dict(), kwargs...
     )
     prob,
-        pmap = MTK.process_DynamicOptProblem(
+        pmap, scales = MTK.process_DynamicOptProblem(
         PyomoDynamicOptProblem, PyomoDynamicOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, scales, initial_trajectory, bounds, kwargs...
     )
     conc_model = prob.wrapped_model.model
-    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
+    MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan, scales)
     return prob
 end
 
@@ -175,8 +175,8 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
     end
 end
 
-function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunable_params)
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params)
     t = MTK.get_iv(sys)
     for (i, (lo, hi)) in state_bounds
         var = MTK.lowered_var(m, :U, i, t)
@@ -194,7 +194,7 @@ function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunabl
         MTK.add_constraint!(m, p_var ≳ lo)
         MTK.add_constraint!(m, p_var ≲ hi)
     end
-    return if !isnothing(tf_bounds)
+    if !isnothing(tf_bounds)
         tₛ_sym = pysym_getproperty(m.model_sym, :tₛ)
         MTK.add_constraint!(m, tₛ_sym ≳ tf_bounds[1])
         MTK.add_constraint!(m, tₛ_sym ≲ tf_bounds[2])

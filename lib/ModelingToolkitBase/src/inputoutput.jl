@@ -34,6 +34,23 @@ See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@re
 unbound_inputs(sys) = filter(x -> !is_bound(sys, x), inputs(sys))
 
 """
+    default_codegen_inputs(sys)
+
+The inputs to use by default for input-aware code generation.
+
+For scheduled (compiled) systems this is `inputs(sys)`: the inputs declared to
+`mtkcompile` are the contract the simplified system was built around. The
+[`unbound_inputs`](@ref) heuristic cannot be used there — after flattening and
+simplification an effective input appears in equations together with variables
+from other namespaces and is therefore classified as bound, so `unbound_inputs`
+is empty for compiled hierarchical systems.
+
+For unscheduled systems this is [`unbound_inputs`](@ref), which inspects the
+connection structure of the hierarchy to find external inputs.
+"""
+default_codegen_inputs(sys) = isscheduled(sys) ? inputs(sys) : unbound_inputs(sys)
+
+"""
     bound_outputs(sys)
 
 Return outputs that are bound within the system, i.e., internal outputs
@@ -184,7 +201,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 """
     (f_oop, f_ip), x_sym, p_sym, io_sys = generate_control_function(
             sys::System,
-            inputs                   = unbound_inputs(sys),
+            inputs                   = default_codegen_inputs(sys),
             disturbance_inputs       = disturbances(sys);
             known_disturbance_inputs = nothing,
             implicit_dae             = false,
@@ -222,7 +239,7 @@ f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(
-        sys::AbstractSystem, inputs = unbound_inputs(sys),
+        sys::AbstractSystem, inputs = default_codegen_inputs(sys),
         disturbance_inputs = disturbances(sys);
         known_disturbance_inputs = nothing,
         disturbance_argument = false,

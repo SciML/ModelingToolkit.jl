@@ -4,8 +4,7 @@ using CasADi
 using DiffEqBase
 using UnPack
 using NaNMath
-using OrderedCollections: OrderedSet
-using Symbolics: SymbolicT, unwrap
+using Symbolics: SymbolicT
 const MTK = ModelingToolkitBase
 
 function __init__()
@@ -71,11 +70,14 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::CasADiModel
     kwargs::K
 
-    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 
@@ -98,12 +100,11 @@ function MTK.CasADiDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
-        bounds = Dict(), kwargs...
+        guesses = Dict(), scales = Dict(), initial_trajectory = Dict(), bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        _, _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, scales, initial_trajectory, bounds, kwargs...
     )
     return prob
 end
@@ -156,8 +157,8 @@ end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
-function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params)
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params)
     for (i, (lo, hi)) in state_bounds
         subject_to!(m.model, m.U.u[i, :] >= lo)
         subject_to!(m.model, m.U.u[i, :] <= hi)
@@ -170,7 +171,7 @@ function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params,
         subject_to!(m.model, m.P[i] >= lo)
         subject_to!(m.model, m.P[i] <= hi)
     end
-    return if !isnothing(tf_bounds)
+    if !isnothing(tf_bounds)
         subject_to!(m.model, m.tₛ >= tf_bounds[1])
         subject_to!(m.model, m.tₛ <= tf_bounds[2])
     end
