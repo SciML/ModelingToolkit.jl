@@ -70,11 +70,14 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::CasADiModel
     kwargs::K
 
-    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 

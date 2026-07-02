@@ -81,11 +81,14 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::PyomoDynamicOptModel
     kwargs::K
 
-    function PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function PyomoDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 

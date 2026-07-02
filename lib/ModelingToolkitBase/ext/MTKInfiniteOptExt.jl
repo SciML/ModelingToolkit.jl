@@ -57,11 +57,14 @@ struct JuMPDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::InfiniteOptModel
     kwargs::K
 
-    function JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function JuMPDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return JuMPDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 
@@ -74,11 +77,14 @@ struct InfiniteOptDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::InfiniteOptModel
     kwargs::K
 
-    function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function InfiniteOptDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return InfiniteOptDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 
