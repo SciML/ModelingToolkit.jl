@@ -36,7 +36,7 @@
         wrap_gfw = Val{true}, cse, checkbounds
     )
 
-    n_controls = length(unbound_inputs(sys))
+    n_controls = length(default_codegen_inputs(sys))
     f_prototype = n_controls > 0 ? zeros(eltype(u0), length(dvs) - n_controls) : nothing
     bcresid_prototype = zeros(eltype(u0), length(u0_idxs) + length(constraints(sys)))
 

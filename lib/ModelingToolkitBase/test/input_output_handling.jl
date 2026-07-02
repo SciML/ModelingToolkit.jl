@@ -391,6 +391,44 @@ eqs = [D(x) ~ u]
     @test isequal(ModelingToolkitBase.outputs(ss1), [x[1], x[2], x[3]])
 end
 
+@testset "default_codegen_inputs: declared inputs on compiled hierarchical systems" begin
+    # After mtkcompile flattens a hierarchical model, an effective input appears
+    # in equations together with variables from other namespaces and is therefore
+    # classified as bound, so `unbound_inputs` is empty. Input-aware codegen must
+    # fall back to the inputs declared to `mtkcompile` instead of silently
+    # generating input-free dynamics.
+    function TestActuator(; name)
+        @variables u(t) [input = true] o(t) [output = true]
+        return System([o ~ 2u], t; name)
+    end
+    function TestPlant(; name)
+        @variables y(t) i(t)
+        return System([D(y) ~ -y + i], t; name)
+    end
+    @named act = TestActuator()
+    @named plant = TestPlant()
+    @named hier = System([plant.i ~ act.o], t; systems = [act, plant])
+    hier = complete(hier)
+    ss = mtkcompile(hier; inputs = [hier.act.u])
+
+    @test isempty(unbound_inputs(ss))
+    @test length(ModelingToolkitBase.default_codegen_inputs(ss)) == 1
+    @test isequal(
+        collect(ModelingToolkitBase.default_codegen_inputs(ss)),
+        ModelingToolkitBase.inputs(ss)
+    )
+
+    # The `ODEInputFunction` default must pick up the declared input rather than
+    # generating dynamics with the input bound to its operating-point value.
+    f = ModelingToolkitBase.SciMLBase.ODEInputFunction(ss)
+    p = ModelingToolkitBase.get_p(ss, Dict(hier.act.u => 0.0, hier.plant.y => 1.0))
+    @test f([1.0], [0.0], p, 0.0) == [-1.0]
+    @test f([1.0], [5.0], p, 0.0) == [9.0]
+
+    # The control jacobian wrt the declared inputs is non-empty.
+    @test size(ModelingToolkitBase.calculate_control_jacobian(ss)) == (1, 1)
+end
+
 using ModelingToolkitStandardLibrary.Blocks
 
 if @isdefined(ModelingToolkit)
