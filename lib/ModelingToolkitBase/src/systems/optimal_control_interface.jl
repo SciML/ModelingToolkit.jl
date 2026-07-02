@@ -120,7 +120,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
 @fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(
         sys::System;
-        inputs = unbound_inputs(sys),
+        inputs = default_codegen_inputs(sys),
         disturbance_inputs = disturbances(sys),
         u0 = nothing, tgrad = false,
         jac = false, controljac = false,
