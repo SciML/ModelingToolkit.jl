@@ -363,7 +363,7 @@ function process_DynamicOptProblem(
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    return prob_type(f, u0, tspan, p, fullmodel, kwargs...), pmap
+    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
 end
 
 function generate_time_variable! end
