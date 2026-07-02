@@ -229,6 +229,7 @@ include("systems/pde/pdesystem.jl")
 include("systems/unit_check.jl")
 include("systems/dependency_graphs.jl")
 include("discretedomain.jl")
+include("canonical_ordering.jl")
 include("systems/systems.jl")
 
 include("debugging.jl")

@@ -376,7 +376,10 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
         push!(decomposition.scc_cachevars, cachevars)
         push!(decomposition.scc_cacheexprs, cacheexprs)
 
-        for (k, v) in state
+        # Iterate `state` in canonical (hash/objectid-independent) order so the cache
+        # buffers, the generated cache-writer code and `cachetypes` are deterministic
+        # rather than ordered by the `Dict` hash of the (symbolic) keys / (type) buckets.
+        for (k, v) in sort!(collect(state); by = p -> MTKBase.canonical_sort_key(unwrap(first(p))))
             k = unwrap(k)
             v = unwrap(v)
             T = symtype(k)
@@ -385,9 +388,12 @@ function build_caches!(sys::System, decomposition::SCCDecomposition)
             buf = get!(() -> SymbolicT[], cacheexprs, T)
             push!(buf, k)
         end
-        all_cacheexprs = reduce(vcat, values(cacheexprs); init = SymbolicT[])
+        sorted_cache_types = sort!(collect(keys(cachevars)); by = string)
+        all_cacheexprs = reduce(
+            vcat, (cacheexprs[T] for T in sorted_cache_types); init = SymbolicT[])
         # update the sizes of cache buffers
-        for (T, buf) in cachevars
+        for T in sorted_cache_types
+            buf = cachevars[T]
             idx = findfirst(isequal(T), decomposition.cachetypes)
             if idx === nothing
                 push!(decomposition.cachetypes, T)
