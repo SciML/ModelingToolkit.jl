@@ -2,6 +2,7 @@ using ModelingToolkit, ADTypes, Test
 using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
+using SymbolicIndexingInterface
 
 # Test reorder_unknowns
 # sys = ssrand(1,1,4);
@@ -398,4 +399,27 @@ end
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
     )
+end
+
+@testset "Issue#4694: `setsym` on a variable `x` also updates `Initial(x)`" begin
+    @parameters a = 1.0
+    @variables x(t) = 1.0 u(t) = 0.0 [input = true]
+    @named sys = System([D(x) ~ -a * x^3 + u], t, [x, u], [a])
+    sys = complete(sys)
+    # Reference: a full rebuild at (x=2, a=3) gives A = -3*3*2^2 = -36.
+    Afresh(xv, av) = linearize(sys, [sys.u], [sys.x]; op = Dict(sys.x => xv, sys.a => av))[1].A[1]
+    @test Afresh(2.0, 3.0) ≈ -36.0
+    build() = LinearizationProblem(
+        linearization_function(sys, [sys.u], [sys.x]; op = Dict(sys.x => 1.0, sys.a => 1.0))[1], 0.0
+    )
+    A(lp) = solve(lp)[1].A[1]
+    ix = Initial(sys.x)
+    lp = build(); setsym(lp, [sys.x, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
+    lp = build(); setu(lp, sys.x)(lp, 2.0); setp(lp, sys.a)(lp, 3.0)
+    @test A(lp) ≈ -36.0
+    lp = build(); setsym(lp, [ix, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
+    lp = build(); setp(lp, [ix, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
 end
