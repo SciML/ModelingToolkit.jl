@@ -312,9 +312,13 @@ function process_DynamicOptProblem(
         [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
 
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
+    # `ODEInputFunction` defaults to `unbound_inputs(sys)`, which is empty on
+    # compiled systems; that would silently generate control-free dynamics with
+    # the inputs frozen at their operating-point values.
     f, u0,
         p = process_SciMLProblem(
         ODEInputFunction, sys, _op;
+        inputs = ctrls,
         t = tspan !== nothing ? tspan[1] : tspan, kwargs...
     )
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
