@@ -53,3 +53,12 @@ end
     @named sys = System([D(x) ~ x'], t)
     @test_nowarn mtkcompile(sys)
 end
+
+@testset "Necessary initial conditions" begin
+    @variables x(t) y(t)
+    @mtkcomplete sys = System([D(x) ~ t, x ~ y], t)
+    ics = ModelingToolkitBase.get_necessary_initial_conditions(sys)
+    ics[y] = "Because I want to"
+    sys = ModelingToolkitBase.set_necessary_initial_conditions(sys, ics)
+    @test_throws ModelingToolkitBase.MissingNecessaryInitialConditionsError ODEProblem(sys, [x => 1], (0.0, 1.0))
+end
