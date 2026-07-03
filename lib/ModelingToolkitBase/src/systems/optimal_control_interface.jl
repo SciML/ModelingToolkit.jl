@@ -291,6 +291,44 @@ end
 ##########################
 ### MODEL CONSTRUCTION ###
 ##########################
+
+# Collect the arity (number of call arguments) of every callable parameter that
+# appears in `expr`, e.g. `curvature(s)` or `forcing(t)`. Keyed by the bare
+# callable-parameter symbol (`default_toterm`ed to match `pmap` keys).
+function _collect_called_param_arities!(arities, expr)
+    expr = value(expr)
+    iscall(expr) || return arities
+    if iscalledparameter(expr)
+        arities[default_toterm(getcalledparameter(expr))] = length(arguments(expr))
+    end
+    for arg in arguments(expr)
+        _collect_called_param_arities!(arities, arg)
+    end
+    return arities
+end
+
+function callable_parameter_arities(sys)
+    arities = Dict{Any, Int}()
+    for eq in equations(sys)
+        _collect_called_param_arities!(arities, eq.lhs)
+        _collect_called_param_arities!(arities, eq.rhs)
+    end
+    for eq in observed(unhack_system(sys))
+        _collect_called_param_arities!(arities, eq.rhs)
+    end
+    cons = get_constraints(sys)
+    if cons !== nothing
+        for c in cons
+            _collect_called_param_arities!(arities, c.lhs)
+            _collect_called_param_arities!(arities, c.rhs)
+        end
+    end
+    for cost in get_costs(sys)
+        _collect_called_param_arities!(arities, cost)
+    end
+    return arities
+end
+
 function process_DynamicOptProblem(
         prob_type::Type{<:SciMLBase.AbstractDynamicOptProblem}, model_type, sys::System, op, tspan;
         dt = nothing,
@@ -369,12 +407,20 @@ function process_DynamicOptProblem(
 
     merge!(pmap, Dict(tunable_params .=> P_syms))
 
-    # Register callable parameters and update MTKParameters for numerical tracing (e.g. JuMP)
+    # Register callable parameters and update MTKParameters for numerical tracing (e.g. JuMP).
+    # Any parameter called in the equations (`curvature(s)`, `forcing(t)`, ...) must become a
+    # solver operator so the backend can trace it symbolically; this covers both `FunctionWrapper`
+    # values and bare callables (e.g. a `DataInterpolations` object stored unwrapped).
+    arities = callable_parameter_arities(sys)
     new_nonnumeric = Tuple(convert(Vector{Any}, copy(v)) for v in p.nonnumeric)
     p = MTKParameters(p.tunable, p.initials, p.discrete, p.constant, new_nonnumeric, p.caches)
     for (sym, val) in pmap
-        val isa FunctionWrapper || continue
-        dim = fieldcount(typeof(val).parameters[2])  # number of args from Tuple type
+        # Prefer the arity recorded from the call site; fall back to a `FunctionWrapper`'s own
+        # argument-tuple type. A parameter that is never called is left untouched.
+        dim = get(arities, sym) do
+            val isa FunctionWrapper ? fieldcount(typeof(val).parameters[2]) : nothing
+        end
+        dim === nothing && continue
         reg_op = register_operator!(fullmodel, dim, val, nameof(sym))
         pmap[sym] = reg_op
         setp(sys, sym)(p, reg_op)
@@ -404,6 +450,9 @@ function add_constraint! end
 get_param_for_pmap(model, P, i) = P isa AbstractArray ? P[i] : P
 # Some backends need symbolic accessors instead of raw variables (CasADi in particular)
 needs_individual_tunables(model) = false
+# Backend representation of the independent variable, used to lower a bare `t` (e.g. inside a
+# callable parameter). Backends without an explicit time decision variable return `nothing`.
+lowered_time_variable(model) = nothing
 
 function f_wrapper(f, Uₙ, Vₙ, p, P, t)
     if isempty(P)
@@ -537,6 +586,11 @@ function get_model_vars_substitution_rules!(rules::Dict{Any, Any}, model, sys, t
         rules[tf] = _tf
     end
     merge!(rules, fixed_t_map(model, x_ops, c_ops))
+    # Lower a bare independent variable (e.g. inside `forcing(t)`) onto the backend's time
+    # variable. State/input calls `x(t)` are replaced as whole subtrees before the traversal
+    # reaches their inner `t`, so this rule only fires on genuinely-bare occurrences.
+    tvar = lowered_time_variable(model)
+    tvar === nothing || (rules[unwrap(t)] = tvar)
     return nothing
 end
 
