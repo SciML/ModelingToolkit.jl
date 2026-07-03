@@ -2250,7 +2250,7 @@ function SymbolicTstops(
         t0,
         t1;
         expression = Val{true},
-        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true
+        p_start = 1, p_end = length(rps), force_SA = true
     )
     tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
         expression, tstops, nothing; eval_expression, eval_module

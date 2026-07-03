@@ -1560,7 +1560,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), add_observed = false, n_param_buffers = length(ps), kwargs...
+        similarto = typeof(A), n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
@@ -1597,7 +1597,7 @@ function generate_update_A(
 
     res = build_function_wrapper(
         sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Vector{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
+        similarto = Vector{SymbolicT}, n_param_buffers = length(ps), kwargs...
     )
     return DiagonalAMatrixWrapper(
         maybe_compile_function(
@@ -1643,7 +1643,7 @@ function generate_update_A(
     end
     res = build_function_wrapper(
         sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Matrix{SymbolicT}, add_observed = false, n_param_buffers = length(ps), kwargs...
+        similarto = Matrix{SymbolicT}, n_param_buffers = length(ps), kwargs...
     )
     return BandedAMatrixWrapper(
         maybe_compile_function(
@@ -1687,7 +1687,7 @@ function generate_update_b(
 
     res = build_function_wrapper(
         sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), add_observed = false, n_param_buffers = length(ps), kwargs...
+        similarto = typeof(b), n_param_buffers = length(ps), kwargs...
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;

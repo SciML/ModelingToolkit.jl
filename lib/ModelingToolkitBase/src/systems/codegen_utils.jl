@@ -435,10 +435,6 @@ generated functions, and `args` are the arguments.
 - `histfn_symbolic`: The symbolic history function variable to add as an argument to the
   generated function.
 - `wrap_code`: Forwarded to `build_function`.
-- `add_observed`: Whether to add assignment statements for observed equations in the
-  generated code.
-- `obsidxs_to_use`: An iterable of `Int` of the specific observed equations to use in this
-  function. This elides automatic observed detection.
 - `create_bindings`: Whether to explicitly destructure arrays of symbolics present in
   `args` in the generated code. If `false`, all usages of the individual symbolics will
   instead call `getindex` on the relevant argument. This is useful if the generated
@@ -464,13 +460,11 @@ Base.@nospecializeinfer function build_function_wrapper(
         p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), compress_args = UnitRange{Int}[],
         non_standard_param_layout = false, u_arg::Integer = -1,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
-        add_observed = true, obsidxs_to_use = nothing,
         create_bindings = false, @nospecialize(output_type::Union{Nothing, Type} = nothing), mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
         n_param_buffers::Int = -1, optimize = nothing, @nospecialize(kwargs...)
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
-    obs = observed(sys)
     args = Vector{Any}(collect(args))
     assignments = Assignment[]
 
