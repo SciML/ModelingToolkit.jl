@@ -465,9 +465,9 @@ Base.@nospecializeinfer function build_function_wrapper(
         non_standard_param_layout = false, u_arg::Integer = -1,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         add_observed = true, obsidxs_to_use = nothing,
-        create_bindings = false, output_type = nothing, mkarray = nothing,
+        create_bindings = false, @nospecialize(output_type::Union{Nothing, Type} = nothing), mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
-        n_param_buffers = nothing, optimize = nothing, kwargs...
+        n_param_buffers::Int = -1, optimize = nothing, @nospecialize(kwargs...)
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
     obs = observed(sys)
@@ -549,10 +549,10 @@ Base.@nospecializeinfer function build_function_wrapper(
     else
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
-        # suffix). When it is `nothing` the whole slice is parameters (no cachesym tail). The
-        # cache always stores the PARAM-ONLY decomposition (shared, propagated to SCC
-        # subsystems); the per-call cachesym tail is decomposed fresh and merged below.
-        pbuf_end = n_param_buffers === nothing ? p_end : (p_start + n_param_buffers - 1)
+        # suffix). When it is `-1` (unspecified) the whole slice is parameters (no cachesym
+        # tail). The cache always stores the PARAM-ONLY decomposition (shared, propagated to
+        # SCC subsystems); the per-call cachesym tail is decomposed fresh and merged below.
+        pbuf_end = n_param_buffers == -1 ? p_end : (p_start + n_param_buffers - 1)
         cached = check_mutable_cache(sys, ParameterArrayAssignments, ParameterArrayAssignments, nothing)
         if cached isa ParameterArrayAssignments
             param_var_to_arridxs = cached.var_to_arridxs
