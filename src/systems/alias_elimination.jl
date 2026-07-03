@@ -410,7 +410,7 @@ function find_perfect_aliases!(
 end
 
 function alias_elimination!(
-        state::TearingState; fully_determined = true,
+        state::TearingState;
         print_underconstrained_variables = false, kwargs...
     )
     StateSelection.complete!(state.structure)
