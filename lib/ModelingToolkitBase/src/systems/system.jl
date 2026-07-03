@@ -1798,3 +1798,42 @@ to `sys` for which [`reverse_transformation_during_initialization`](@ref) is `tr
 function reverse_transformations_for_initialization(sys::System)
     return __reverse_transformations_helper(reverse_transformation_during_initialization, sys)
 end
+
+# Necessary Initial Conditions API
+
+# Metadata key
+abstract type NecessaryInitialConditions end
+const NecessaryInitialConditionsT = OrderedDict{SymbolicT, Union{String, LazyString}}
+
+"""
+    $TYPEDSIGNATURES
+
+Get a map from variables in `sys` whose initial conditions are required to a `String`
+reason for why they are required. This can be mutated to change the necessary
+initial conditions. After mutation, [`set_necessary_initial_conditions`](@ref) MUST
+be called with the mutated map.
+"""
+function get_necessary_initial_conditions(sys::System)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("This is only valid for flattened systems!"))
+    end
+    return @something(
+        getmetadata(
+            sys, NecessaryInitialConditions, nothing
+        )::Union{NecessaryInitialConditionsT, Nothing},
+        NecessaryInitialConditionsT()
+    )
+end
+
+"""
+    $TYPEDSIGNATURES
+
+See [`get_necessary_initial_conditions`](@ref).
+"""
+function set_necessary_initial_conditions(sys::System, ics)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("This is only valid for flattened systems!"))
+    end
+    get_necessary_initial_conditions(sys) === ics && return sys
+    return setmetadata(sys, NecessaryInitialConditions, ics)::System
+end

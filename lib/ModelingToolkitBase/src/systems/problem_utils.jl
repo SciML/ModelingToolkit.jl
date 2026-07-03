@@ -1901,6 +1901,32 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     return op
 end
 
+struct MissingNecessaryInitialConditionsError <: Exception
+    missing_ics::NecessaryInitialConditionsT
+end
+
+const MISSING_NECESSARY_ICS_ERR_PRELUDE = """
+Missing necessary initial conditions for some variables. The missing variables are listed \
+below, along with the reason why the initial condition is required:
+"""
+
+function Base.showerror(io::IO, err::MissingNecessaryInitialConditionsError)
+    println(io, MISSING_NECESSARY_ICS_ERR_PRELUDE)
+    for (k, v) in err.missing_ics
+        printstyled(io, k; bold = true)
+        println(io, ": ", v)
+    end
+    return
+end
+
+function check_necessary_initial_conditions(sys::AbstractSystem, op::SymmapT)
+    ics = get_necessary_initial_conditions(sys)
+    isempty(ics) && return
+    missing_ics = filter(!Base.Fix1(has_possibly_indexed_key, op) ∘ first, ics)
+    isempty(missing_ics) || throw(MissingNecessaryInitialConditionsError(missing_ics))
+    return
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1972,6 +1998,7 @@ function __process_SciMLProblem(
     check_inputmap_keys(sys, op)
 
     op = getmetadata(sys, ProblemConstructionHook, identity)(op)::SymmapT
+    check_necessary_initial_conditions(sys, op)
 
     kwargs = NamedTuple(kwargs)
 
