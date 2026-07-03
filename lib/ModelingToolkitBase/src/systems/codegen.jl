@@ -1246,7 +1246,8 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `inputs = nothing` additinoal symbolic variables that should be provided to the generated function
 - `disturbance_inputs = nothing` symbolic variables representing unknown disturbance inputs (removed from parameters, not added as function arguments)
 - `known_disturbance_inputs = nothing` symbolic variables representing known disturbance inputs (removed from parameters, added as function arguments)
-- `checkbounds = true` checks bounds if true when destructuring parameters
+- `checkbounds`: whether to check bounds when destructuring parameters (defaults to
+  `false`, i.e. generated code is wrapped in `@inbounds`)
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
 - `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 - `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
@@ -1286,7 +1287,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         eval_expression = false,
         eval_module = @__MODULE__,
         output_type = Array,
-        checkbounds = true,
+        checkbounds = false,
         ps = parameters(sys; initial_parameters = true),
         return_inplace = Val(false),
         param_only = false,
@@ -1410,7 +1411,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end,
         output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays, kwargs...
+        wrap_delays, checkbounds, kwargs...
     )::NTuple{2, Expr}
     if expression === true || expression === Val{true}
         return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? fns : fns[1]
