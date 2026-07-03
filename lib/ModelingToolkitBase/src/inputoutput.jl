@@ -274,7 +274,7 @@ function generate_control_function(
     )
 
     if !isscheduled(sys)
-        sys = mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split)
+        sys = mtkcompile(sys; inputs, disturbance_inputs = all_disturbances, split, simplify)
     end
 
     # Add all disturbances to inputs for the purposes of io processing
