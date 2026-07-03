@@ -2,6 +2,12 @@ using SciMLTesting, ModelingToolkitBase, Test
 
 run_qa(
     ModelingToolkitBase;
+    # The bespoke JET type-stability suite lives in `jet.jl` (run separately in the same
+    # session). Because `using JET` there registers JET process-wide, `run_qa` would
+    # otherwise default `jet = true` and run a second, hard `JET.report_package` typo
+    # check on top -- one that never ran under the previous `Aqua.test_all` QA. Keep the
+    # JET coverage to `jet.jl` alone; `run_qa` here is Aqua + ExplicitImports only.
+    jet = false,
     # Pre-existing, tracked Aqua findings (https://github.com/SciML/ModelingToolkit.jl/issues/4670):
     #  * ambiguities / unbound_args: method ambiguities and unbound type parameters
     #    (e.g. `_remake_buffer` with an unbound `P`).
