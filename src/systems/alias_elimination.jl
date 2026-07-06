@@ -137,6 +137,82 @@ end
 """
     $TYPEDSIGNATURES
 
+If the substitution rules `subrules` contain a rule for an indexed array variable
+`v[i]`, add the rule `v => SConst(collect(v))`.
+"""
+function __add_unscalarized_array_subs!(subrules::Dict{SymbolicT, SymbolicT})
+    for k in collect(keys(subrules))
+        k, isarr = split_indexed_var(k)
+        isarr || continue
+        haskey(subrules, k) && continue
+        # We could do `SConst(collect(k))` but `collect` is unstable and slow. We can build the
+        # `array_literal` directly.
+        args = Symbolics.SArgsT()
+        sizehint!(args, length(k)::Int + 1)
+        push!(args, Symbolics.SConst(size(k)))
+        for i in SU.stable_eachindex(k)
+            push!(args, k[i])
+        end
+        scal_k = Symbolics.STerm(SU.array_literal, args; type = SU.symtype(k), shape = SU.shape(k))
+        subrules[k] = scal_k
+    end
+
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Perform the substitutions `subrules` on the subset of equations `eqs` and original equations
+`original_eqs` indicated by `eqs_to_substitute` (an iterable of indices). `eqs` and `original_eqs`
+should correspond to `𝑠vertices(state.structure.graph)`. Also update the incidence of
+`state.structure.graph` and `state.structure.solvable_graph`.
+
+NOTE: This assumes that the substitution in `state` does not introduce new incidence,
+and that `𝑠neighbors(state.structure.graph, ieq)` after substitution is a subset of its value
+before substitution.
+"""
+function __substitute_and_update_incidence!(
+        eqs::Vector{Equation}, original_eqs::Vector{Equation}, state::TearingState,
+        eqs_to_substitute, subrules::AbstractDict{SymbolicT, SymbolicT}
+    )
+    (; fullvars, sys, structure) = state
+    (; graph, solvable_graph) = structure
+
+    ir = get_irstructure(sys)
+    subber = SU.IRSubstituter{true}(ir, subrules)
+    new_vars = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
+    for e in eqs_to_substitute
+        olde = eqs[e]
+        # Double substitute to handle unscalarized array variables. First one
+        # substitutes `x` to `[x[1], x[2]]`. The second substitutes `x[1]` and `x[2]`.
+        eqs[e] = subber(subber(eqs[e]))
+        original_eqs[e] = subber(subber(original_eqs[e]))
+        # Substitution can drop vars beyond the one substituted: zero
+        # substitution annihilates multiplicative cofactors (`v*w` with `v→0`
+        # also removes `w`); alias substitution can cancel the target
+        # (`v - target` with `v→target` leaves neither). Substitution never
+        # introduces new vars, so the new incidence is a subset of the old —
+        # prune the row to entries actually present in the simplified RHS.
+        empty!(new_vars)
+        SU.search_variables!(new_vars, eqs[e])
+        new_row = filter(
+            v_idx -> fullvars[v_idx] in new_vars || split_indexed_var(fullvars[v_idx])[1] in new_vars,
+            𝑠neighbors(graph, e)
+        )
+        BipartiteGraphs.set_neighbors!(graph, e, new_row)
+        if solvable_graph !== nothing
+            filter!(v -> Graphs.has_edge(solvable_graph, BipartiteEdge(e, v)), new_row)
+            BipartiteGraphs.set_neighbors!(solvable_graph, e, new_row)
+        end
+    end
+
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
 Identify variable aliases in `state`. Intended to act before `solvable_graph` is populated.
 `eqs_to_rm` and `vars_to_rm` are buffers which will be appended with equations and
 variables to remove from `state` and `mm`. Return `aliases::Dict{Int, Int}` indicating
@@ -346,39 +422,9 @@ function find_perfect_aliases!(
     end
 
     # We need to handle unscalarized array variables
-    for k in keys(subs)
-        k, isarr = split_indexed_var(k)
-        isarr || continue
-        haskey(subs, k) && continue
-        subs[k] = Symbolics.SConst(collect(k))
-    end
+    __add_unscalarized_array_subs!(subs)
 
-    ir = get_irstructure(sys)
-    subber = SU.IRSubstituter{true}(ir, subs)
-    new_vars = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
-    for e in eqs_to_substitute
-        # Double substitute to handle unscalarized array variables. First one
-        # substitutes `x` to `[x[1], x[2]]`. The second substitutes `x[1]` and `x[2]`.
-        eqs[e] = subber(subber(eqs[e]))
-        original_eqs[e] = subber(subber(original_eqs[e]))
-        # Substitution can drop vars beyond the one substituted: zero
-        # substitution annihilates multiplicative cofactors (`v*w` with `v→0`
-        # also removes `w`); alias substitution can cancel the target
-        # (`v - target` with `v→target` leaves neither). Substitution never
-        # introduces new vars, so the new incidence is a subset of the old —
-        # prune the row to entries actually present in the simplified RHS.
-        empty!(new_vars)
-        SU.search_variables!(new_vars, eqs[e])
-        new_row = filter(
-            v_idx -> fullvars[v_idx] in new_vars || split_indexed_var(fullvars[v_idx])[1] in new_vars,
-            𝑠neighbors(graph, e)
-        )
-        BipartiteGraphs.set_neighbors!(graph, e, new_row)
-        if solvable_graph !== nothing
-            filter!(v -> Graphs.has_edge(solvable_graph, BipartiteEdge(e, v)), new_row)
-            BipartiteGraphs.set_neighbors!(solvable_graph, e, new_row)
-        end
-    end
+    __substitute_and_update_incidence!(eqs, original_eqs, state, eqs_to_substitute, subs)
 
     # After substitution, alias equations that connected a sticky non-target
     # variable to a zero-priority variable become structurally identical to the
