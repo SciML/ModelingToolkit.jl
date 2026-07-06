@@ -80,11 +80,12 @@ prob = HomotopyProblem(sys, op)
 prob = AbstractNonlinearProblem(sys, op)
 ```
 
-The `HomotopyProblem`'s `λspan` defaults to `(0.0, 1.0)`. It is solved by
-`NonlinearSolveBase.HomotopySweep`, a natural-parameter continuation solver that
-sweeps `λ` from `0` to `1`, solving a standard nonlinear problem at each step and
-warm-starting from the previous step's solution. A `HomotopyProblem` with no
-algorithm (`solve(prob)`) defaults to this solver.
+The `HomotopyProblem`'s `λspan` defaults to `(0.0, 1.0)`. It can be solved with
+any algorithm that supports the problem type; `solve(prob)` with no algorithm
+picks a suitable default. The current default is natural-parameter continuation
+(`NonlinearSolveBase.HomotopySweep`), which sweeps `λ` from `0` to `1`, solving a
+standard nonlinear problem at each step and warm-starting from the previous
+step's solution.
 
 ## Example: Out-of-Basin Rescue
 
@@ -99,7 +100,7 @@ using ModelingToolkit, NonlinearSolve
 @variables y
 @mtkcompile sys = System([0 ~ homotopy(atan(y - 3), y)])
 prob = HomotopyProblem(sys, [y => 12.0])
-sol = solve(prob, HomotopySweep())
+sol = solve(prob)
 sol[y] # ≈ 3.0 — the continuation rescued the out-of-basin guess
 ```
 

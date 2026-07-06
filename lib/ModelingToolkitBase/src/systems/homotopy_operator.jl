@@ -57,8 +57,8 @@ added to the system's parameters, and the user's parameter object `p` passes
 through untouched. All `homotopy` calls in a system share the single `λ`, per the
 Modelica spec's recommendation of (conceptually) one homotopy iteration over the
 whole model. The resulting `HomotopyProblem` (with `λspan` defaulting to
-`(0.0, 1.0)`) is solved by natural-parameter continuation
-(`NonlinearSolveBase.HomotopySweep`), which sweeps `λ` from `0` (`simplified`) to
+`(0.0, 1.0)`) can be solved with any algorithm that supports it; `solve(prob)`
+with no algorithm picks a default that sweeps `λ` from `0` (`simplified`) to
 `1` (`actual`).
 
 # Example
@@ -73,7 +73,7 @@ using ModelingToolkit, NonlinearSolve
 @variables y
 @mtkcompile sys = System([0 ~ homotopy(atan(y - 3), y)])
 prob = HomotopyProblem(sys, [y => 12.0])
-sol = solve(prob, HomotopySweep())
+sol = solve(prob)
 sol[y] # ≈ 3.0 — the continuation rescued the out-of-basin guess
 ```
 
