@@ -455,6 +455,340 @@ function find_perfect_aliases!(
     return aliases
 end
 
+function __filter_mm_eqs!(fn::F, mm::CLIL.SparseMatrixCLIL) where {F}
+    ptr = firstindex(mm.nzrows)
+    nnz = 0
+    for i in eachindex(mm.nzrows)
+        eqidx = mm.nzrows[i]
+        fn(eqidx) && continue
+        nnz += 1
+        mm.nzrows[ptr] = mm.nzrows[i]
+        mm.row_cols[ptr] = mm.row_cols[i]
+        mm.row_vals[ptr] = mm.row_vals[i]
+        ptr = nextind(mm.nzrows, ptr)
+    end
+    resize!(mm.nzrows, nnz)
+    resize!(mm.row_cols, nnz)
+    resize!(mm.row_vals, nnz)
+
+    return mm
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Runs `eliminate_zero_variables!` for a maximum of `maxiters` iterations. Returns the
+updated `mm`.
+"""
+function eliminate_zero_variables_fixpoint!(state::TearingState, mm::CLIL.SparseMatrixCLIL; maxiters = 4, kwargs...)
+    for i in 1:maxiters
+        mm, modified = eliminate_zero_variables!(state, mm; kwargs...)
+        modified || break
+    end
+    return mm
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Create a parameter reprsenting the value of `var` at `t = 0`. Requires that `var` is
+of the form `x(t)` or `x(t)[i, j, ...]`.
+"""
+function __create_t0_parameter_for(var::SymbolicT)
+    # FIXME: the parameter created here is of the form `x#0(t)`, but really it should be
+    # `x#0`. The only reason it is declared with `(t)` is in case it is updated in a callback.
+    # Callback affects are discrete systems, which require their unknowns to be `(t)`.
+    # Realistically, callbacks use none of the discrete infrastructure and actually are
+    # very similar to initialization systems. If we reuse that infrastructure, the
+    # `(t)` here can be dropped.
+    T = SU.symtype(var)
+    sh = SU.shape(var)
+    arrvar, isidx = split_indexed_var(var)
+    result = Moshi.Match.@match arrvar begin
+        BSImpl.Term(; f) && if f isa SymbolicT end => Moshi.Match.@match f begin
+            BSImpl.Sym(; name) => begin
+                io = IOBuffer()
+                print(io, name)
+                if isidx
+                    idxs = @view(arguments(var)[2:end])
+                    print(io, '[')
+                    for idx in idxs
+                        print(io, unwrap_const(idx)::Int, ", ")
+                    end
+                    seek(io, position(io) - 2)
+                    truncate(io, position(io))
+                    print(io, ']')
+                end
+                print(io, "#0")
+                newname = Symbol(take!(io))
+                toparam(
+                    Symbolics.SSym(
+                        newname; type = SU.FnType{Tuple, T, Nothing}, shape = sh
+                    )(arguments(arrvar)[1])
+                )
+            end
+        end
+    end
+    return result
+end
+
+"""
+    $TYPEDSIGNATURES
+
+If a row in `mm` only contains a single variable, that variable is identically zero.
+Eliminate such any such zero variables which can be identified from `mm`. Return the
+new `mm` and a boolean indicating if any variables were thus eliminated.
+"""
+function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL; allow_symbolic = false, allow_parameter = true, kws...)
+    StateSelection.complete!(state.structure)
+    (; sys, fullvars, structure, original_eqs) = state
+    (; var_to_diff, graph) = structure
+    diff_to_var = invview(var_to_diff)
+    zero_vars, zero_eqs, eqs_to_substitute = __eliminate_zero_variables!(state, mm)
+    isempty(zero_vars) && return mm, false
+
+    eqs = collect(equations(state))
+    aliases = Dict{Int, Int}()
+    vars_to_rm = Int[]
+    eqs_to_rm = Int[]
+    # Substitute the zeros into all other equations
+    subrules = Dict{SymbolicT, SymbolicT}()
+    sizehint!(subrules, length(zero_vars))
+    # Equations in `mm` to remove because they contain the integrated form of
+    # a variable eliminated as zero.
+    mm_eqs_to_rm = Set{Int}()
+    # List all analytically integrated variables
+    analytic_integ = Dict{SymbolicT, SymbolicT}()
+    # Create new parameters representing the `t = 0` values of analytically integrated
+    # variables. We do not reuse `Initial` parameters since they have their own distinct
+    # semantics. `Initial` parameters take the value of the variable at `tspan[1]`. The
+    # parameters added here represent the values at `t = 0`. For example, if `D(D(x)) ~ 0`
+    # then `x ~ dx_0 * t + x0`. Here, `x0` (`dx_0`) is the value of `x` (`D(x)`) at
+    # `t = 0` and not `tspan[1]`.
+    new_ps = SymbolicT[]
+    _guesses = copy(get_guesses(sys))
+    for v in zero_vars
+        sym = fullvars[v]
+        ttsym = StateSelection.is_only_discrete(structure) ? sym : default_toterm(sym)
+        subrules[sym] = Symbolics.COMMON_ZERO
+        subrules[ttsym] = Symbolics.COMMON_ZERO
+        push!(state.additional_observed, ttsym ~ Symbolics.COMMON_ZERO)
+        # Also need to handle corresponding integrated forms
+        ∫var = diff_to_var[v]
+        # If this is already the lowest order derivative, do nothing
+        ∫var isa Int || continue
+        iv = get_iv(sys)::SymbolicT
+        D = if StateSelection.is_only_discrete(structure)
+            Shift(iv, 1)
+        else
+            Differential(iv)
+        end
+        # Only integrated forms of the lowest order zero are polynomials in `t`.
+        # E.g. if `D(x)` and `D(D(x))` are in `zero_vars` and we process `D(D(x))`
+        # first, this check prevents us from writing `D(x) ~ Initial(D(x))`.
+        if ∫var in zero_vars
+            ∫sym = fullvars[∫var]
+            tt∫sym = default_toterm(∫sym)
+            # This must still be specified to correctly populate `schedule.dummy_sub`.
+            state.analytical_derivatives[D(tt∫sym)] = Symbolics.COMMON_ZERO
+            continue
+        end
+        rhs = Symbolics.COMMON_ZERO
+        root_var = sym
+
+        while ∫var isa Int
+            # This variable needs to be removed too, though it's not zero
+            push!(vars_to_rm, ∫var)
+            sym = fullvars[∫var]
+            ttsym = D isa Shift ? sym : default_toterm(sym)
+
+            # This will populate `get_schedule(sys)` during reassembly. This allows us to
+            # track derivative information even after eliminating it, and will add
+            # `ttsym ~ rhs` as an initialization equation.
+            state.analytical_derivatives[D(ttsym)] = rhs
+            # Reuse the parameter derivative mechanism for specifying derivatives of these
+            # variables. This prevents us from having to substitute every equation where this
+            # is present. It also allows the initial condition of the variable to be solved for
+            # from initial conditions of other observed variables.
+            state.param_derivative_map[D(sym)] = rhs
+            state.param_derivative_map[D(ttsym)] = rhs
+
+            # This pattern generates the Horner form of the polynomial. We know all
+            # `Initial` parameters will be present because `complete` adds `Initial`s
+            # for every observable.
+            t0_param = __create_t0_parameter_for(ttsym)
+            analytic_integ[sym] = t0_param
+            rhs = rhs * iv + t0_param
+            push!(new_ps, t0_param)
+            push!(state.additional_observed, ttsym ~ rhs)
+            _guesses[t0_param] = sym
+
+            nbors = 𝑑neighbors(graph, ∫var)
+            # If any of them are in `mm`, they shouldn't be
+            union!(mm_eqs_to_rm, nbors)
+
+            v = ∫var
+            ∫var = diff_to_var[∫var]
+        end
+    end
+    # All `t0` parameters are solvable
+    new_binds = copy(parent(get_bindings(sys)))
+    for p in new_ps
+        new_binds[p] = COMMON_MISSING
+    end
+
+    __filter_mm_eqs!(!in(mm_eqs_to_rm), mm)
+    append!(vars_to_rm, zero_vars)
+    append!(eqs_to_rm, zero_eqs)
+    __add_unscalarized_array_subs!(subrules)
+    __substitute_and_update_incidence!(eqs, original_eqs, state, eqs_to_substitute, subrules)
+    # It's possible that after substitution some higher order derivatives are not present
+    # anymore. For example, `D(x)` might only be present in an equation as `y * D(x)`, and
+    # we just substituted `y => 0`. Without the following, this will result in `D(x)` not being
+    # incident on any equation. This causes dummy derivatives to complain, since it sees
+    # `D(x)` as an unmatched highest differentiated variable, and thinks Pantelides made a
+    # mistake.
+    for v in 𝑑vertices(graph)
+        StateSelection.is_present(structure, v) || push!(vars_to_rm, v)
+    end
+
+    sys = ConstructionBase.setproperties(
+        sys;
+        analytically_integrated = merge(analytically_integrated(sys), analytic_integ),
+        ps = [get_ps(sys); new_ps], bindings = ROSymmapT(new_binds), eqs = eqs,
+        guesses = _guesses
+    )
+    state.sys = sys
+
+    old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(state, eqs_to_rm, vars_to_rm)
+    sys = state.sys
+    mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
+
+    eqs = equations(sys)
+
+    # After substitution, some equations may now be integer-coefficient linear combinations,
+    # and thus should be added to `mm`.
+    mm_rows = BitSet(mm.nzrows)
+    # Reuse buffers
+    empty!(vars_to_rm)
+    to_rm = vars_to_rm
+    empty!(eqs_to_rm)
+    coeffs = eqs_to_rm
+    for e in eqs_to_substitute
+        # Refer to equations by their new indices now
+        e = old_to_new_eq[e]
+        iszero(e) && continue
+        # Ignore ones already in `mm`
+        e in mm_rows && continue
+        eq = eqs[e]
+        all_int_vars, resid = StateSelection.find_eq_solvables!(state, e, to_rm, coeffs; allow_symbolic, allow_parameter)
+        if all_int_vars && SU._iszero(resid)
+            push!(mm.nzrows, e)
+            push!(mm.row_cols, copy(𝑠neighbors(state.structure.solvable_graph, e)))
+            push!(mm.row_vals, copy(coeffs))
+        end
+    end
+
+    return mm, true
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Helper for `eliminate_zero_variables!`. Returns:
+- `zero_vars`: A `Set{Int}` of variables identified to be identically zero.
+- `zero_eqs`: A `Set{Int}` of equations identifying such variables to be zero.
+- `eqs_to_substitute`: A `Set{Int}` of equations in `state` which contain variables
+  in `zero_vars`. These equations should be substituted to remove the zero variables.
+
+Also updates `mm` in-place to remove such zero variables/equations.
+"""
+function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL)
+    (; graph, var_to_diff) = state.structure
+
+    # Inverse mapping of `mm.nzrows`
+    nzrow_to_idx = Dict{Int, Int}()
+    sizehint!(nzrow_to_idx, length(mm.nzrows))
+    for (i, eqidx) in enumerate(mm.nzrows)
+        nzrow_to_idx[eqidx] = i
+    end
+    # Variables we can identify are zero via `mm`
+    zero_vars = Set{Int}()
+    # Equations in `mm` of the form `var ~ 0`
+    zero_eqs = Set{Int}()
+    # Equations that `zero_vars` are incident on and need to be substituted
+    eqs_to_substitute = Set{Int}()
+    # Queue of indices in `mm.nzrows` containing rows to check for being
+    # `var ~ 0`
+    queue = Queue{Int}()
+    # Initially check all rows with just one element
+    for i in eachindex(mm.nzrows)
+        isone(length(mm.row_cols[i])) && push!(queue, i)
+    end
+
+    process_neighbors! = let graph = graph, nzrow_to_idx = nzrow_to_idx,
+            eqs_to_substitute = eqs_to_substitute, queue = queue
+        function __process_neighbors!(zvar::Int)
+            nbors = 𝑑neighbors(graph, zvar)
+            union!(eqs_to_substitute, nbors)
+            for nbor in nbors
+                nzrow_idx = get(nzrow_to_idx, nbor, 0)
+                # If `nbor` is not present in `mm`, it must be substituted later
+                iszero(nzrow_idx) || push!(queue, nzrow_idx)
+            end
+            return
+        end
+    end
+
+    while !isempty(queue)
+        row_i = popfirst!(queue)
+        eqidx = mm.nzrows[row_i]
+        # Skip rows we already processed in case they show up twice
+        eqidx in zero_eqs && continue
+
+        # If a row only contains one non-zero element, that element is also zero.
+        # We filter `rcol` and `rval` to remove any zero elements. This could be
+        # done in the `for nbor in nbors` loop below. However, it's possible we process
+        # two zero variables both present in the same row before processing that row.
+        # This approach avoids the row being processed by each of the two zero variables
+        # individually in their `nbors` loop. We delay removing all zero elements to
+        # the latest possible time to aggregate updates.
+        rcol = mm.row_cols[row_i]
+        rval = mm.row_vals[row_i]
+        ptr = firstindex(rcol)
+        nnz = 0
+        for i in eachindex(rcol)
+            rcol[i] in zero_vars && continue
+            rcol[ptr] = rcol[i]
+            rval[ptr] = rval[i]
+            ptr = nextind(rcol, ptr)
+            nnz += 1
+        end
+        resize!(rcol, nnz)
+        resize!(rval, nnz)
+        isone(nnz) || continue
+
+        zvar = rcol[1]
+
+        push!(zero_vars, zvar)
+        push!(zero_eqs, eqidx)
+        process_neighbors!(zvar)
+        # All derivatives of this variable are also zero
+        dzvar = var_to_diff[zvar]
+        while dzvar isa Int
+            push!(zero_vars, dzvar)
+            process_neighbors!(dzvar)
+            dzvar = var_to_diff[dzvar]
+        end
+    end
+
+
+    # Remove zero equations from `mm`
+    isempty(zero_eqs) || __filter_mm_eqs!(!in(zero_eqs), mm)
+
+    return zero_vars, zero_eqs, eqs_to_substitute
+end
+
 function alias_elimination!(
         state::TearingState; fully_determined = true,
         print_underconstrained_variables = false, kwargs...
