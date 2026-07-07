@@ -330,8 +330,11 @@ function generate_control_function(
         args = (ddvs, args...)
     end
     f = build_function_wrapper(
-        sys, rhss, args...; u_arg = 1 + Int(implicit_dae), p_start = 3 + implicit_dae,
-        p_end = length(p) + 2 + implicit_dae, kwargs...
+        sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
+            u_arg = 1 + Int(implicit_dae), p_start = 3 + implicit_dae,
+            p_end = length(p) + 2 + implicit_dae,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        )
     )
     f = eval_or_rgf.(f; eval_expression, eval_module)
     f = GeneratedFunctionWrapper{

@@ -550,7 +550,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         wrap_mtkparameters, extra_assignments, n_param_buffers,
         codegen_function_options = Symbolics.CodegenFunctionOptions(; wrap_code, optimize, kwargs...)
     )
-    return build_function_wrapper(sys, expr, args, opts)
+    return build_function_wrapper(sys, expr, collect(Any, args), opts)
 end
 
 """
@@ -558,7 +558,7 @@ end
 
 A wrapper around `build_function` which performs the necessary transformations for
 code generation of all types of systems. `expr` is the expression returned from the
-generated functions, and `args` is the collection (tuple or vector) of arguments.
+generated functions, and `args` is the `Vector{Any}` of arguments.
 
 Options are supplied as a [`BuildFunctionWrapperOptions`](@ref); see its docstring for the
 available options. This is the primary method — the keyword-argument form of
@@ -566,7 +566,7 @@ available options. This is the primary method — the keyword-argument form of
 `BuildFunctionWrapperOptions` and calls this method.
 """
 Base.@nospecializeinfer function build_function_wrapper(
-        sys::AbstractSystem, @nospecialize(expr), @nospecialize(args),
+        sys::AbstractSystem, @nospecialize(expr), args::Vector{Any},
         opts::BuildFunctionWrapperOptions
     )
     (;
@@ -583,7 +583,9 @@ Base.@nospecializeinfer function build_function_wrapper(
     # `n_param_buffers` as `nothing`; normalize it to the sentinel here.
     n_param_buffers = n_param_buffers === nothing ? -1 : n_param_buffers
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
-    args = Vector{Any}(collect(args))
+    # Copy so the in-place mutations below (`insert!`, `deleteat!`, `setindex!`) do not
+    # affect the caller's vector.
+    args = copy(args)
     assignments = Assignment[]
 
     if u_arg != -1

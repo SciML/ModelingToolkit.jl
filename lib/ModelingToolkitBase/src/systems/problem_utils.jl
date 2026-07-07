@@ -2249,11 +2249,13 @@ function SymbolicTstops(
     tstops,
         _ = build_function_wrapper(
         sys, Symbolics.SConst(tstops),
-        rps...,
-        t0,
-        t1;
-        expression = Val{true},
-        p_start = 1, p_end = length(rps), force_SA = true
+        [rps; Any[t0, t1]],
+        BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(rps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, force_SA = true
+            )
+        )
     )
     tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
         expression, tstops, nothing; eval_expression, eval_module

@@ -1037,7 +1037,10 @@ Base.@nospecializeinfer function compile_condition(
     end
 
     fs = build_function_wrapper(
-        sys, condit, u, p..., t; u_arg = 1, kwargs...
+        sys, condit, [Any[u]; p; Any[t]], BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        )
     )
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
         Val{false}, fs...; eval_expression, eval_module
@@ -1485,15 +1488,25 @@ Base.@nospecializeinfer function compile_explicit_affect(
 
     u_up,
         u_up! = build_function_wrapper(
-        sys, (@view rhss[is_u]), dvs, _ps..., t;
-        u_arg = 1, wrap_code = add_integrator_header(sys, integ, :u),
-        outputidxs = u_idxs, wrap_mtkparameters, iip_config = (false, true)
+        sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                wrap_code = add_integrator_header(sys, integ, :u),
+                outputidxs = u_idxs, iip_config = (false, true)
+            )
+        )
     )
     p_up,
         p_up! = build_function_wrapper(
-        sys, (@view rhss[is_p]), dvs, _ps..., t;
-        u_arg = 1, wrap_code = add_integrator_header(sys, integ, :p),
-        outputidxs = p_idxs, wrap_mtkparameters, iip_config = (false, true)
+        sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                wrap_code = add_integrator_header(sys, integ, :p),
+                outputidxs = p_idxs, iip_config = (false, true)
+            )
+        )
     )
 
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)

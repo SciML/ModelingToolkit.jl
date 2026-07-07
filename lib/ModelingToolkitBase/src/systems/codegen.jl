@@ -123,8 +123,12 @@ function generate_rhs(
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-        expression = Val{true}, expression_module = eval_module, kwargs...
+        sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, expression_module = eval_module, kwargs...
+            )
+        )
     )
     nargs = length(args) - length(p) + 1
     if is_dde(sys)
@@ -161,7 +165,7 @@ function generate_diffusion_function(
         eqs = vec(eqs)
     end
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); u_arg = 1, kwargs...)
+    res = build_function_wrapper(sys, eqs, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)))
     if expression == Val{true}
         return res
     end
@@ -276,8 +280,13 @@ function generate_jacobian(
         nargs = 3
     end
     res = build_function_wrapper(
-        sys, jac, args...; wrap_code, u_arg = 1, expression = Val{true},
-        expression_module = eval_module, checkbounds, kwargs...
+        sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                wrap_code, expression = Val{true}, expression_module = eval_module,
+                checkbounds, kwargs...
+            )
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res;
@@ -322,13 +331,15 @@ function generate_tgrad(
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
         sys, tgrad,
-        dvs,
-        p...,
-        get_iv(sys);
-        u_arg = 1,
-        expression = Val{true},
-        expression_module = eval_module,
-        kwargs...
+        [Any[dvs]; p; Any[get_iv(sys)]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true},
+                expression_module = eval_module,
+                kwargs...
+            )
+        )
     )
 
     return maybe_compile_function(
@@ -409,8 +420,12 @@ function generate_W(
 
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
-        sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        u_arg = 1, p_end = 1 + length(p), checkbounds, kwargs...
+        sys, W, [Any[dvs]; p; Any[W_GAMMA, t]], BuildFunctionWrapperOptions(;
+            u_arg = 1, p_end = 1 + length(p),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                wrap_code, checkbounds, kwargs...
+            )
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module
@@ -450,8 +465,11 @@ function generate_dae_jacobian(
     jac = W_GAMMA * jac_du + jac_u
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
-        sys, jac, derivatives, dvs, p..., W_GAMMA, t;
-        u_arg = 2, p_start = 3, p_end = 2 + length(p), kwargs...
+        sys, jac, [Any[derivatives, dvs]; p; Any[W_GAMMA, t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 2, p_start = 3, p_end = 2 + length(p),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (3, 5, is_split(sys)), res;
@@ -477,9 +495,13 @@ function generate_history(
     )
     p = reorder_parameters(sys)
     res = build_function_wrapper(
-        sys, u0, p..., get_iv(sys); expression = Val{true},
-        expression_module = eval_module, p_start = 1, p_end = length(p),
-        similarto = typeof(u0), wrap_delays = false, kwargs...
+        sys, u0, [p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(p), wrap_delays = false,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, expression_module = eval_module,
+                similarto = typeof(u0), kwargs...
+            )
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module
@@ -673,9 +695,12 @@ function generate_boundary_conditions(
     _p = reorder_parameters(sys, ps)
 
     res = build_function_wrapper(
-        sys, exprs, _p..., iv; output_type = Array,
-        p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
-        histfn_symbolic = BVP_SOLUTION, wrap_delays = true, kwargs...
+        sys, exprs, [_p; Any[iv]], BuildFunctionWrapperOptions(;
+            output_type = Array,
+            p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
+            histfn_symbolic = BVP_SOLUTION, wrap_delays = true,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
@@ -716,8 +741,11 @@ function generate_cost(
     end
     u_arg = is_time_dependent(sys) ? -1 : 1
     res = build_function_wrapper(
-        sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays, u_arg,
-        histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...
+        sys, obj, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, p_end, wrap_delays, u_arg,
+            histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)
+        )
     )[1]
     if expression == Val{true}
         return res
@@ -761,14 +789,17 @@ function generate_bvp_cost(
     # Build function with signature (sol, p) where sol = BVP_SOLUTION
     # The histfn mechanism replaces BVP_SOLUTION with the sol argument
     res = build_function_wrapper(
-        sys, obj, ps...;
-        expression = Val{true},
-        p_start = 1,  # sol goes before parameters
-        p_end = length(ps),
-        wrap_delays = true,
-        histfn = (p, t) -> BVP_SOLUTION(t),
-        histfn_symbolic = BVP_SOLUTION,
-        checkbounds, kwargs...
+        sys, obj, Vector{Any}(ps),
+        BuildFunctionWrapperOptions(;
+            p_start = 1,  # sol goes before parameters
+            p_end = length(ps),
+            wrap_delays = true,
+            histfn = (p, t) -> BVP_SOLUTION(t),
+            histfn_symbolic = BVP_SOLUTION,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, checkbounds, kwargs...
+            )
+        )
     )[1]
 
     # (2, 2, is_split) means: 2 args out-of-place, 2 original args, split status
@@ -809,7 +840,7 @@ function generate_cost_gradient(
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
-    res = build_function_wrapper(sys, exprs, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -868,7 +899,7 @@ function generate_cost_hessian(
     if sparse
         sparsity = similar(exprs, Float64)
     end
-    res = build_function_wrapper(sys, exprs, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -900,7 +931,7 @@ function generate_cons(
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    res = build_function_wrapper(sys, cons, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -957,7 +988,7 @@ function generate_constraint_jacobian(
         sparsity = calculate_constraint_jacobian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, jac, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1016,7 +1047,7 @@ function generate_constraint_hessian(
         sparsity = calculate_constraint_hessian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, hess, dvs, ps...; u_arg = 1, expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, hess, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1069,7 +1100,7 @@ function generate_control_jacobian(
     ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); u_arg = 1, kwargs...)
+    res = build_function_wrapper(sys, jac, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1078,11 +1109,14 @@ end
 function generate_rate_function(js::System, rate)
     p = reorder_parameters(js)
     return build_function_wrapper(
-        js, rate, unknowns(js), p...,
-        get_iv(js),
-        u_arg = 1,
-        expression = Val{true},
-        iip_config = (true, false),
+        js, rate, [Any[unknowns(js)]; p; Any[get_iv(js)]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true},
+                iip_config = (true, false)
+            )
+        )
     )[1]
 end
 
@@ -1408,9 +1442,13 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     p_start = length(dvs) + length(inputs) + 1
     p_end = length(dvs) + length(inputs) + length(rps)
     fns = build_function_wrapper(
-        sys, ts, args...; p_start, p_end,
-        output_type, mkarray, try_namespaced = true, expression = Val{true},
-        wrap_delays, checkbounds, kwargs...
+        sys, ts, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, p_end,
+            output_type, mkarray, wrap_delays,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                try_namespaced = true, expression = Val{true}, checkbounds, kwargs...
+            )
+        )
     )::NTuple{2, Expr}
     if expression === true || expression === Val{true}
         return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? fns : fns[1]
@@ -1558,8 +1596,12 @@ function generate_update_A(
     A = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
 
     res = build_function_wrapper(
-        sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), n_param_buffers = length(ps), kwargs...
+        sys, A, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, similarto = typeof(A), kwargs...
+            )
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
@@ -1595,8 +1637,12 @@ function generate_update_A(
     ps = reorder_parameters(sys)
 
     res = build_function_wrapper(
-        sys, parent(A), ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Vector{SymbolicT}, n_param_buffers = length(ps), kwargs...
+        sys, parent(A), [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, similarto = Vector{SymbolicT}, kwargs...
+            )
+        )
     )
     return DiagonalAMatrixWrapper(
         maybe_compile_function(
@@ -1641,8 +1687,12 @@ function generate_update_A(
         parA[i] = Symbolics.COMMON_ZERO
     end
     res = build_function_wrapper(
-        sys, parA, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = Matrix{SymbolicT}, n_param_buffers = length(ps), kwargs...
+        sys, parA, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, similarto = Matrix{SymbolicT}, kwargs...
+            )
+        )
     )
     return BandedAMatrixWrapper(
         maybe_compile_function(
@@ -1685,8 +1735,12 @@ function generate_update_b(
     b = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
 
     res = build_function_wrapper(
-        sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), n_param_buffers = length(ps), kwargs...
+        sys, b, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, similarto = typeof(b), kwargs...
+            )
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
