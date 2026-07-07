@@ -627,13 +627,13 @@ Base.@nospecializeinfer function build_function_wrapper(
     end
 
     optimize = resolve_optimize_option(optimize)
-    # Bundle the code-generation options into a single `Symbolics.CodegenOptions` rather than
+    # Bundle the code-generation options into a single `Symbolics.CodegenFunctionOptions` rather than
     # splatting them (and any stray forwarded keyword arguments) as `kwargs...`. Because
-    # `CodegenOptions` is one concrete type regardless of the option values, `codegen_function`
+    # `CodegenFunctionOptions` is one concrete type regardless of the option values, `codegen_function`
     # only needs to be compiled once instead of once per distinct set of keyword arguments.
-    # Unknown keyword arguments are ignored by the `CodegenOptions` constructor, matching the
+    # Unknown keyword arguments are ignored by the `CodegenFunctionOptions` constructor, matching the
     # previous behaviour where `codegen_function` silently dropped them.
-    codegen_options = Symbolics.CodegenOptions(; wrap_code, similarto, cse, optimize, kwargs...)
+    codegen_options = Symbolics.CodegenFunctionOptions(; wrap_code, similarto, cse, optimize, kwargs...)
     return Symbolics.codegen_function(ir, expr, args, codegen_options)
 end
 
