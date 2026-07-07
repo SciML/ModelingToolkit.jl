@@ -961,6 +961,7 @@ const SYS_PROPS = [
     :isscheduled
     :costs
     :consolidate
+    :analytically_integrated
 ]
 
 for prop in SYS_PROPS
@@ -1591,6 +1592,17 @@ function unknowns(sys::AbstractSystem)
         append!(result, namespace_variables(subsys))
     end
     return result
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return the list of analytically integrated variables in `sys`. Requires that `sys` is
+flattened, since analytically integrated variables cannot be specified for unflattened systems.
+"""
+function analytically_integrated(sys::AbstractSystem)
+    @assert isempty(get_systems(sys))
+    return get_analytically_integrated(sys)
 end
 
 """
@@ -2589,17 +2601,26 @@ function Base.show(
     end
 
     # Print variables
-    for varfunc in [unknowns, parameters]
+    varsets = Any[unknowns]
+    if has_iv(sys) && get_iv(sys) isa SymbolicT && isempty(get_systems(sys)) &&
+            has_analytically_integrated(sys) && !isempty(analytically_integrated(sys))
+        push!(varsets, analytically_integrated)
+    end
+    push!(varsets, parameters)
+    for varfunc in varsets
         vars = varfunc(sys)
+        if varfunc === analytically_integrated
+            vars = keys(vars)
+        end
         nvars = length(vars)
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
+        header = replace(header, '_' => ' ')
         printstyled(io, "\n$header ($nvars):"; bold)
         hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_bindings(sys) ? bindings(sys) : nothing
-        for i in 1:nrows
-            s = vars[i]
+        for s in Iterators.take(vars, nrows)
             print(io, "\n  ", s)
             if !isnothing(defs)
                 val = get(defs, s, nothing)
