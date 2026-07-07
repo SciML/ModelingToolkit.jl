@@ -1,7 +1,7 @@
 @fallback_iip_specialize function SciMLBase.SDDEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, expression = Val{false},
         eval_expression = false, eval_module = @__MODULE__, checkbounds = false,
-        initialization_data = nothing, cse = true, check_compatibility = true,
+        initialization_data = nothing, check_compatibility = true,
         sparse = false, simplify = false, analytic = nothing, kwargs...
     ) where {iip, spec}
     check_complete(sys, SDDEFunction)
@@ -9,11 +9,11 @@
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse, kwargs...
+        eval_expression, eval_module, checkbounds = checkbounds, kwargs...
     )
     g = generate_diffusion_function(
         sys; expression,
-        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...
+        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, kwargs...
     )
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
@@ -31,7 +31,7 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; expression, eval_expression, eval_module, checkbounds, cse
+        sys; expression, eval_expression, eval_module, checkbounds
     )
 
     kwargs = (;
@@ -48,7 +48,7 @@ end
 
 @fallback_iip_specialize function SciMLBase.SDDEProblem{iip, spec}(
         sys::System, op, tspan;
-        callback = nothing, check_length = true, cse = true, checkbounds = false,
+        callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, sparse = false, sparsenoise = sparse,
         expression = Val{false}, kwargs...
@@ -60,13 +60,13 @@ end
     f, u0,
         p = process_SciMLProblem(
         SDDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, cse, checkbounds,
+        t = tspan !== nothing ? tspan[1] : tspan, check_length, checkbounds,
         eval_expression, eval_module, check_compatibility, sparse, symbolic_u0 = true,
         expression, u0_constructor, kwargs...
     )
 
     h = generate_history(
-        sys, u0; expression, wrap_gfw = Val{true}, cse, eval_expression, eval_module,
+        sys, u0; expression, wrap_gfw = Val{true}, eval_expression, eval_module,
         checkbounds
     )
 

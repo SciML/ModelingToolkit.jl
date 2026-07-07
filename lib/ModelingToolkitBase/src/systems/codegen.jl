@@ -742,7 +742,7 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_bvp_cost(
         sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, cse = true,
+        eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, kwargs...
     )
     obj = cost(sys)
@@ -768,7 +768,7 @@ function generate_bvp_cost(
         wrap_delays = true,
         histfn = (p, t) -> BVP_SOLUTION(t),
         histfn_symbolic = BVP_SOLUTION,
-        cse, checkbounds, kwargs...
+        checkbounds, kwargs...
     )[1]
 
     # (2, 2, is_split) means: 2 args out-of-place, 2 original args, split status
@@ -1250,7 +1250,6 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
   `false`, i.e. generated code is wrapped in `@inbounds`)
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
 - `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
-- `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
 - `wrap_delays = is_dde(sys)`: Whether to add an argument for the history function and use
   it to calculate all delayed variables.
 
@@ -1292,7 +1291,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         return_inplace = Val(false),
         param_only = false,
         throw = true,
-        cse = true,
+
         mkarray = nothing,
         wrap_delays = is_dde(sys) && !param_only,
         force_time_independent = false,
@@ -1410,7 +1409,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     p_end = length(dvs) + length(inputs) + length(rps)
     fns = build_function_wrapper(
         sys, ts, args...; p_start, p_end,
-        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
+        output_type, mkarray, try_namespaced = true, expression = Val{true},
         wrap_delays, checkbounds, kwargs...
     )::NTuple{2, Expr}
     if expression === true || expression === Val{true}

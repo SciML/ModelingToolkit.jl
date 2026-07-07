@@ -1005,7 +1005,7 @@ Base.@nospecializeinfer function compile_condition(
     end
 
     fs = build_function_wrapper(
-        sys, condit, u, p..., t; u_arg = 1, kwargs..., cse = false
+        sys, condit, u, p..., t; u_arg = 1, kwargs...
     )
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
         Val{false}, fs...; eval_expression, eval_module

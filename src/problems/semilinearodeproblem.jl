@@ -4,7 +4,7 @@
         stiff_linear = true, stiff_quadratic = false, stiff_nonlinear = false,
         eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, sparse = false, check_compatibility = true,
-        jac = false, checkbounds = false, cse = true, initialization_data = nothing,
+        jac = false, checkbounds = false, initialization_data = nothing,
         analytic = nothing, kwargs...
     ) where {iip, specialize}
     check_complete(sys, SemilinearODEFunction)
@@ -44,7 +44,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds
     )
 
     args = (; f1)

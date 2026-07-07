@@ -461,7 +461,7 @@ Base.@nospecializeinfer function build_function_wrapper(
         non_standard_param_layout = false, u_arg::Integer = -1,
         wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
         create_bindings = false, @nospecialize(output_type::Union{Nothing, Type} = nothing), mkarray = nothing,
-        wrap_mtkparameters = true, extra_assignments = Assignment[], cse = true,
+        wrap_mtkparameters = true, extra_assignments = Assignment[],
         n_param_buffers::Int = -1, optimize = nothing, @nospecialize(kwargs...)
     )
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
@@ -633,7 +633,7 @@ Base.@nospecializeinfer function build_function_wrapper(
     # only needs to be compiled once instead of once per distinct set of keyword arguments.
     # Unknown keyword arguments are ignored by the `CodegenFunctionOptions` constructor, matching the
     # previous behaviour where `codegen_function` silently dropped them.
-    codegen_options = Symbolics.CodegenFunctionOptions(; wrap_code, similarto, cse, optimize, kwargs...)
+    codegen_options = Symbolics.CodegenFunctionOptions(; wrap_code, similarto, optimize, kwargs...)
     return Symbolics.codegen_function(ir, expr, args, codegen_options)
 end
 

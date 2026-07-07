@@ -2,7 +2,7 @@
         sys::System; u0 = nothing, p = nothing, jac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
         checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         resid_prototype = nothing, check_compatibility = true, expression = Val{false},
         kwargs...
     ) where {iip, spec}
@@ -11,7 +11,7 @@
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+        eval_expression, eval_module, checkbounds = checkbounds,
         kwargs...
     )
 
@@ -29,7 +29,7 @@
     if jac
         _jac = generate_jacobian(
             sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            wrap_gfw = Val{true}, simplify, sparse, eval_expression, eval_module,
             checkbounds, kwargs...
         )
     else
@@ -37,8 +37,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     if sparse

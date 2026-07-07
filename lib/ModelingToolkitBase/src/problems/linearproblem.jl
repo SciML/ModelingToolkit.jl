@@ -22,7 +22,7 @@ Moshi.Derive.@derive StructuralHint[Show]
 function LinearFunction{iip}(
         sys::System; expression = Val{false}, check_compatibility = true,
         sparse = false, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true,
+        checkbounds = false,
         structural_hint::StructuralHint.Type = StructuralHint.NoHint(), kwargs...
     ) where {iip}
     check_complete(sys, LinearProblem)
@@ -39,15 +39,14 @@ function LinearFunction{iip}(
     end
     update_A = generate_update_A(
         sys, A; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, cse, kwargs...
+        eval_module, checkbounds, kwargs...
     )
     update_b = generate_update_b(
         sys, b; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, cse, kwargs...
+        eval_module, checkbounds, kwargs...
     )
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     if expression == Val{true}

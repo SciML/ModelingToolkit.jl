@@ -2,7 +2,7 @@
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         expression = Val{false}, check_compatibility = true, kwargs...
     ) where {iip, spec}
     check_complete(sys, DAEFunction)
@@ -10,7 +10,7 @@
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
+        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds,
         kwargs...
     )
 
@@ -28,7 +28,7 @@
     if jac
         _jac = generate_dae_jacobian(
             sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            wrap_gfw = Val{true}, simplify, sparse, eval_expression, eval_module,
             checkbounds, kwargs...
         )
     else
@@ -36,7 +36,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds
     )
 
     jac_prototype = if sparse

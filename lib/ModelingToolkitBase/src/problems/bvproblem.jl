@@ -1,6 +1,6 @@
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, op, tspan;
-        check_compatibility = true, cse = true,
+        check_compatibility = true,
         checkbounds = false, eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, guesses = Dict(), callback = nothing,
         kwargs...
@@ -19,13 +19,13 @@
     fode, u0,
         p = process_SciMLProblem(
         ODEFunction{_iip, spec}, sys, _op; guesses,
-        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false, cse,
+        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
         checkbounds, time_dependent_init = false, expression, kwargs...
     )
 
     fcost = generate_bvp_cost(
         sys; expression = Val{false}, wrap_gfw = Val{false},
-        eval_expression, eval_module, cse, checkbounds
+        eval_expression, eval_module, checkbounds
     )
 
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
@@ -33,7 +33,7 @@
         [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
     fbc = generate_boundary_conditions(
         sys, u0, u0_idxs, tspan[1]; expression = Val{false},
-        wrap_gfw = Val{true}, cse, checkbounds
+        wrap_gfw = Val{true}, checkbounds
     )
 
     n_controls = length(default_codegen_inputs(sys))
