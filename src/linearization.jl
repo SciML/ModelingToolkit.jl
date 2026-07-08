@@ -555,14 +555,42 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
+    matrices, simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs;
+        simplify = false,
+        allow_input_derivatives = false,
+        eval_expression = false,
+        eval_module = @__MODULE__,
+        split = true,
+        kwargs...)
 
-Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
+Symbolically linearize `sys` between `inputs` and `outputs`.
 
-See [`linearize`](@ref) for a description of the arguments.
+Unlike [`linearize`](@ref), this uses `Symbolics.jacobian` and returns symbolic
+matrices instead of numerical matrices evaluated at an operating point.
 
-# Extended help
-The named tuple returned as the first argument additionally contains the jacobians `f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u` of
+# Arguments
+
+- `sys`: the system to linearize. This function calls [`mtkcompile`](@ref) internally.
+- `inputs`: input variables used as the columns of the `B` and `D` matrices.
+- `outputs`: output variables used as the rows of the `C` and `D` matrices.
+
+# Keyword Arguments
+
+- `simplify`: whether to run additional symbolic simplification during compilation.
+- `allow_input_derivatives`: whether differentiated inputs may appear in the
+  linearized equations. If `true`, `B` and `D` include extra columns for those derivatives.
+- `eval_expression`: whether generated expressions are evaluated directly instead of
+  using runtime-generated functions.
+- `eval_module`: the module used when `eval_expression = true`.
+- `split`: whether generated functions use a tuple of parameters or splatted parameters.
+- `kwargs...`: additional keyword arguments forwarded to [`mtkcompile`](@ref).
+
+# Returns
+
+A pair `(matrices, simplified_sys)`. `matrices` is a `NamedTuple` containing `A`,
+`B`, `C`, and `D`, plus the symbolic Jacobian blocks `f_x`, `f_z`, `g_x`, `g_z`,
+`f_u`, `g_u`, `h_x`, `h_z`, and `h_u` of
+
 ```math
 \\begin{aligned}
 ẋ &= f(x, z, u) \\\\
@@ -570,7 +598,27 @@ ẋ &= f(x, z, u) \\\\
 y &= h(x, z, u)
 \\end{aligned}
 ```
-where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs.
+
+Here `x` are differential unknowns, `z` are algebraic unknowns, `u` are inputs,
+and `y` are outputs.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0 y(t) = 0.0
+eqs = [D(x) ~ -x + u,
+       y ~ x]
+@named sys = System(eqs, t)
+
+matrices, simplified_sys = ModelingToolkit.linearize_symbolic(sys, [u], [y])
+matrices.A
+```
+
+See also [`linearize`](@ref), [`linearization_function`](@ref), and
+[`reorder_unknowns`](@ref).
 """
 function linearize_symbolic(
         sys::AbstractSystem, inputs,
@@ -845,7 +893,21 @@ end
 """
     (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
 
-Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+Transform the state coordinates of a linear state-space model.
+
+# Arguments
+
+- `sys`: a `NamedTuple` with matrices `A`, `B`, `C`, and `D`, as returned by
+  [`linearize`](@ref) or [`linearize_symbolic`](@ref).
+- `T`: the coordinate transformation matrix where `T * x̃ = x`.
+
+# Keyword Arguments
+
+- `unitary`: if `true`, use the adjoint `T'` instead of factoring and solving with `T`.
+
+# Returns
+
+A `NamedTuple` `(; A, B, C, D)` containing
 
 ```
 Ã = T⁻¹AT
@@ -854,7 +916,15 @@ C̃ = CT
 D̃ = D
 ```
 
-If `unitary=true`, `T` is assumed unitary and the matrix adjoint is used instead of the inverse.
+# Examples
+
+```julia
+sys = (; A = [-1.0 0.0; 0.0 -2.0], B = [1.0; 0.0;;],
+       C = [0.0 1.0], D = zeros(1, 1))
+T = [0.0 1.0; 1.0 0.0]
+
+transformed = ModelingToolkit.similarity_transform(sys, T; unitary = true)
+```
 """
 function similarity_transform(sys::NamedTuple, T; unitary = false)
     if unitary
@@ -873,16 +943,28 @@ end
 """
     reorder_unknowns(sys::NamedTuple, old, new)
 
-Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state unknown is changed from `old` to `new`
-Example:
+Permute the state ordering of a linearized system.
 
-```
+# Arguments
+
+- `sys`: a `NamedTuple` with matrices `A`, `B`, `C`, and `D`, as returned by
+  [`linearize`](@ref) or [`linearize_symbolic`](@ref).
+- `old`: the current state order, typically `unknowns(simplified_sys)`.
+- `new`: the desired state order. It must contain the same entries as `old`.
+
+# Returns
+
+A `NamedTuple` `(; A, B, C, D)` whose state-space matrices use the order `new`.
+
+# Examples
+
+```julia
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # Unknowns that are present in unknowns(ssys)
 lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), desired_order)
 ```
 
-See also [`ModelingToolkit.similarity_transform`](@ref)
+See also [`similarity_transform`](@ref).
 """
 function reorder_unknowns(sys::NamedTuple, old, new)
     nx = length(old)

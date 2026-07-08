@@ -4,6 +4,21 @@
 
 const NOTHING_EQ = nothing ~ nothing
 
+"""
+    pantelides_reassemble(state::TearingState, var_eq_matching)
+
+Reassemble a `System` after Pantelides index reduction.
+
+# Arguments
+
+- `state`: tearing state containing the original system and derivative graphs.
+- `var_eq_matching`: variable-equation matching returned by the Pantelides pass.
+
+# Returns
+
+A system whose equations and unknowns include the differentiated equations selected by
+the Pantelides algorithm.
+"""
 function pantelides_reassemble(state::TearingState, var_eq_matching)
     fullvars = state.fullvars
     @unpack var_to_diff, eq_to_diff = state.structure

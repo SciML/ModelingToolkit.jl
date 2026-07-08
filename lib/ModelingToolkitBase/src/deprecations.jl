@@ -1,8 +1,34 @@
-@deprecate structural_simplify(sys; kwargs...) mtkcompile(sys; kwargs...)
-@deprecate structural_simplify(sys, io; kwargs...) mtkcompile(
-    sys; inputs = io[1], outputs = io[2], kwargs...
-)
+"""
+    structural_simplify(sys; kwargs...)
+    structural_simplify(sys, io; kwargs...)
 
+Deprecated alias for [`mtkcompile`](@ref).
+
+Use `mtkcompile(sys; kwargs...)` in new code.
+"""
+function structural_simplify(sys; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys; kwargs...)` is deprecated. Use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify
+    )
+    return mtkcompile(sys; kwargs...)
+end
+
+function structural_simplify(sys, io; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys, io; kwargs...)` is deprecated. Use `mtkcompile(sys; inputs = io[1], outputs = io[2], kwargs...)` instead.",
+        :structural_simplify
+    )
+    return mtkcompile(sys; inputs = io[1], outputs = io[2], kwargs...)
+end
+
+"""
+    @mtkbuild expr
+
+Deprecated alias for [`@mtkcompile`](@ref).
+
+Use `@mtkcompile` in new code.
+"""
 macro mtkbuild(exprs...)
     return quote
         Base.depwarn("`@mtkbuild` is deprecated. Use `@mtkcompile` instead.", :mtkbuild)
@@ -15,6 +41,13 @@ macro mtkbuild(exprs...)
     end |> esc
 end
 
+"""
+    ODESystem(args...; kwargs...)
+
+Deprecated alias for [`System`](@ref).
+
+Use `System(args...; kwargs...)` in new code.
+"""
 const ODESystem = IntermediateDeprecationSystem
 
 function IntermediateDeprecationSystem(args...; kwargs...)
@@ -202,6 +235,13 @@ for T in [
     end
 end
 
+"""
+    @brownian xs...
+
+Deprecated alias for [`@brownians`](@ref).
+
+Use `@brownians` in new code.
+"""
 macro brownian(xs...)
     return quote
         Base.depwarn(

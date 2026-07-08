@@ -1,6 +1,22 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
+"""
+    alias_elimination(sys)
+
+Run the alias-elimination pass on `sys`.
+
+This is a lower-level structural simplification pass used by [`mtkcompile`](@ref).
+End-user code should usually call `mtkcompile` instead.
+
+# Arguments
+
+- `sys`: system to transform.
+
+# Returns
+
+The alias-eliminated system.
+"""
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
 
 """

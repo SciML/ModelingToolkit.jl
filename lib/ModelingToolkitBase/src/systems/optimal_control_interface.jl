@@ -1,5 +1,25 @@
+"""
+    AbstractCollocation
+
+Abstract supertype for dynamic-optimization collocation method descriptors.
+
+Concrete collocation types are provided by backend extensions such as JuMP, InfiniteOpt,
+CasADi, and Pyomo.
+"""
 abstract type AbstractCollocation end
 
+"""
+    DynamicOptSolution(model, sol, input_sol)
+
+Solution wrapper returned by dynamic-optimization backends.
+
+# Fields
+
+- `model`: backend-specific optimization model.
+- `sol`: state trajectory as an `ODESolution`.
+- `input_sol`: controller/input trajectory as an `ODESolution`, or `nothing` when the
+  backend does not return one.
+"""
 struct DynamicOptSolution
     model::Any
     sol::ODESolution

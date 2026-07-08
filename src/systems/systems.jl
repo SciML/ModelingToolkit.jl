@@ -146,11 +146,37 @@ Given a system that has been simplified via `mtkcompile`, return a `Dict` mappin
 variables of the system to equations that are used to solve for them. This includes
 observed variables.
 
+# Arguments
+
+- `sys`: a system returned by [`mtkcompile`](@ref) or another simplification path that
+  records a tearing state.
+
 # Keyword Arguments
 
 - `rename_dummy_derivatives`: Whether to rename dummy derivative variable keys into their
   `Differential` forms. For example, this would turn the key `yˍt(t)` into
   `Differential(t)(y(t))`.
+
+# Returns
+
+A `Dict` mapping unknown or observed symbolic variables to the equations used to solve
+for them.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1 y(t) = 0
+eqs = [D(x) ~ -x,
+       y ~ x + 1]
+@named sys = System(eqs, t)
+simplified = mtkcompile(sys)
+
+mapping = map_variables_to_equations(simplified)
+mapping[y]
+```
 """
 function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivatives = true)
     if !has_tearing_state(sys)

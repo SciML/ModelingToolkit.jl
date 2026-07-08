@@ -150,6 +150,15 @@ abstract type AbstractSystem end
 # See `deprecations.jl`.
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
+"""
+    independent_variable
+
+Generic function for querying the primary independent variable of a system-like object.
+
+Most users should call [`independent_variables`](@ref), which returns the independent
+variables as a vector. Packages that define custom system types may extend
+`independent_variable` when a scalar independent-variable interface is required.
+"""
 function independent_variable end
 
 # this has to be included early to deal with dependency issues
@@ -237,9 +246,36 @@ include("inputoutput.jl")
 
 include("deprecations.jl")
 
+"""
+    t_nounits
+
+Unitless default independent variable used by ModelingToolkit examples and constructors.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+t = ModelingToolkitBase.t_nounits
+```
+"""
 const t_nounits = let
     only(@independent_variables t)
 end
+
+"""
+    D_nounits
+
+Default unitless differential operator `Differential(t_nounits)`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+D = ModelingToolkitBase.D_nounits
+```
+"""
 const D_nounits = Differential(t_nounits)
 
 export CompilerOptions

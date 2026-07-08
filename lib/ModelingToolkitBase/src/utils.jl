@@ -536,6 +536,20 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     return
 end
 
+"""
+    collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
+
+Populate `vars` with mappings from symbolic variable names to variables.
+
+# Arguments
+
+- `vars`: dictionary updated in place.
+- `xs`: symbolic variables to inspect.
+
+# Returns
+
+`nothing`. Throws `ArgumentError` if two distinct variables have the same name.
+"""
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue

@@ -97,6 +97,33 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     return state
 end
 
+"""
+    mtkcompile!(state::TearingState; kwargs...)
+
+Mutating structural simplification entry point for an existing tearing state.
+
+This is developer-facing API used by ModelingToolkit internals and extension packages that
+already have a `TearingState`. User code should normally call [`mtkcompile`](@ref) on a
+`System` instead.
+
+# Arguments
+
+- `state`: tearing state to simplify in place.
+
+# Keyword Arguments
+
+- `check_consistency`: whether to check the transformed system for structural consistency.
+- `fully_determined`: whether the transformed system is expected to have a square
+  equation/unknown structure.
+- `inputs`: variables to treat as external inputs.
+- `outputs`: variables to treat as requested outputs.
+- `disturbance_inputs`: input variables that should be treated as disturbances.
+- `kwargs...`: additional simplification options forwarded to the internal compiler.
+
+# Returns
+
+The simplified `System`.
+"""
 function mtkcompile!(
         state::TearingState;
         check_consistency = true, fully_determined = true,

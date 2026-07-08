@@ -167,6 +167,38 @@ export get_sensitivity_function, get_comp_sensitivity_function,
     get_looptransfer_function, get_sensitivity, get_comp_sensitivity, get_looptransfer
 export isolate_subsystem
 
+"""
+    FMIComponent(version; fmu, type, name, kwargs...)
+
+Construct a ModelingToolkit component from a Functional Mock-up Unit (FMU).
+
+# Arguments
+
+- `version`: a `Val` selecting the FMI major version, for example `Val(2)`.
+
+# Keyword Arguments
+
+- `fmu`: the loaded FMU object.
+- `type`: the FMI interface type, such as `:ME` for model exchange.
+- `name`: the component name used by `@named`.
+- `kwargs...`: additional FMI extension options.
+
+# Returns
+
+An `AbstractSystem` component representing the FMU interface.
+
+# Examples
+
+```julia
+using ModelingToolkit
+
+@named model = ModelingToolkit.FMIComponent(Val(2); fmu, type = :ME)
+```
+
+!!! note
+    `FMIComponent` is implemented by the FMI extension. Load the FMI dependency before
+    constructing FMU-backed components.
+"""
 function FMIComponent end
 
 @public linearize_symbolic, reorder_unknowns
