@@ -344,7 +344,7 @@ eqs = [
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
 dx = ModelingToolkit.default_toterm(unwrap(D(x)))
-@test issetequal(observed(ss), [x ~ 0, dx ~ 0, y ~ dx - x])
+@test issetequal(observed(ss), [x ~ 0, dx ~ 0, y ~ 0])
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])
