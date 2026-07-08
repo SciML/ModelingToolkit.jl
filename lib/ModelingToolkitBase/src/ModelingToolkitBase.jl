@@ -349,7 +349,8 @@ const set_scalar_metadata = setmetadata
 @public VariableType, MTKVariableTypeCtx, VariableBounds, VariableConnectType
 @public VariableDescription, VariableInput, VariableIrreducible, VariableMisc
 @public VariableOutput, VariableStatePriority, VariableUnit, collect_scoped_vars!
-@public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
+@public collect_var_to_name!, collect_expression_vars!, collect_vars!
+@public eqtype_supports_collect_vars, hasdefault
 @public getdefault, setdefault, setguess, iscomplete, isparameter, modified_unknowns!
 @public renamespace, namespace_equations
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry

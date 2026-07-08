@@ -1,7 +1,9 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitBase: value, parse_variable
+using OrderedCollections: OrderedSet
 using SymbolicUtils: <ₑ
 import SymbolicUtils as SU
+import Symbolics
 
 @parameters α β δ
 expr = (((1 / β - 1) + δ) / α)^(1 / (α - 1))
@@ -9,6 +11,26 @@ ref = sort([β, δ, α], lt = <ₑ)
 sol = sort(Num.(ModelingToolkitBase.get_variables(expr)), lt = <ₑ)
 @test all(x -> x isa Num, sol[i] == ref[i] for i in 1:3)
 @test all(isequal(sol[i], ref[i]) for i in 1:3)
+
+@testset "collect_expression_vars!" begin
+    @independent_variables τ
+    @variables X(τ) Y(τ) Z(τ) = α
+    @parameters k_obs k_ratio eps_val
+
+    us = OrderedSet{Symbolics.SymbolicT}()
+    ps = OrderedSet{Symbolics.SymbolicT}()
+    ModelingToolkitBase.collect_expression_vars!(
+        us, ps, k_obs + k_ratio * (X + eps_val) + τ, Symbolics.unwrap(τ)
+    )
+    @test issetequal(us, Symbolics.unwrap.([X]))
+    @test issetequal(ps, Symbolics.unwrap.([k_obs, k_ratio, eps_val]))
+
+    empty!(us)
+    empty!(ps)
+    ModelingToolkitBase.collect_expression_vars!(us, ps, Y + Z, Symbolics.unwrap(τ))
+    @test issetequal(us, Symbolics.unwrap.([Y, Z]))
+    @test Symbolics.unwrap(α) in ps
+end
 
 @parameters γ
 s = α => γ
