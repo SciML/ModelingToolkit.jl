@@ -504,7 +504,28 @@ end
 """
     setnominal(x, val)
 
-Attach nominal value `val` to symbolic variable `x`.
+Return `x` with nominal-value metadata set to `val`.
+
+# Arguments
+
+- `x`: symbolic variable to annotate.
+- `val`: nominal value used for scaling and numerical conditioning.
+
+# Returns
+
+A symbolic variable equivalent to `x` with updated `VariableNominal` metadata.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+x = setnominal(x, 10.0)
+getnominal(x)
+```
+
+See also [`getnominal`](@ref) and [`hasnominal`](@ref).
 """
 function setnominal(x::Num, val)
     return setmetadata(x, VariableNominal, val)
@@ -716,6 +737,14 @@ isbrownian(s) = getvariabletype(s) === BROWNIAN
 $(SIGNATURES)
 
 Define one or more Brownian variables.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@brownians B
+```
 """
 macro brownians(xs...)
     all(
