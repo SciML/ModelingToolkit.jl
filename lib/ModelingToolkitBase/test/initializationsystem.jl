@@ -1109,6 +1109,19 @@ end
     end
 end
 
+@testset "ForwardDiff-tagged symbolic constants before initialization remakes" begin
+    @parameters P
+    @variables sx(t)
+    seed_sys = mtkcompile(System([D(sx) ~ P], t, [sx], [P]; name = :seed_sys))
+
+    function x_at_1(Pval)
+        prob = ODEProblem(seed_sys, [sx => Pval, seed_sys.P => Pval], (0.0, 1.0))
+        return solve(prob, Tsit5())(1.0)
+    end
+
+    @test ForwardDiff.derivative(Pval -> x_at_1(Pval), 1.0) ≈ [2.0]
+end
+
 @testset "`remake` changes initialization problem types" begin
     @variables _x(..) y(t) z(t)
     @parameters p q

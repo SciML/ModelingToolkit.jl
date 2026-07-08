@@ -660,7 +660,7 @@ function _remake_initialization_data_impl(
         u0 = to_varmap(u0, dvs)
         symbols_to_symbolics!(sys, u0)
     end
-    u0map = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(u0), COMMON_NOTHING)
+    u0map = as_atomic_dict_with_defaults(_symbolic_varmap_dict(u0), COMMON_NOTHING)
     if eltype(p) <: Pair
         if p isa Union{AbstractArray, Tuple}
             p = Dict(p)
@@ -673,7 +673,7 @@ function _remake_initialization_data_impl(
         p = to_varmap(p, ps)
         symbols_to_symbolics!(sys, p)
     end
-    pmap = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(p), COMMON_NOTHING)
+    pmap = as_atomic_dict_with_defaults(_symbolic_varmap_dict(p), COMMON_NOTHING)
     op = merge!(u0map, pmap)
     guesses = SymmapT()
     use_scc = true
