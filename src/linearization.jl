@@ -101,7 +101,10 @@ function linearization_function(
     u0 = state_values(prob)
 
     ps = parameters(sys)
-    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
+    h = build_explicit_observed_function(
+        sys, outputs,
+        GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    )
 
     initialization_kwargs = (;
         abstol = initialization_abstol, reltol = initialization_reltol,
@@ -586,11 +589,14 @@ function linearize_symbolic(
     ps = parameters(sys; initial_parameters = true)
     p = Tuple(reorder_parameters(sys, ps))
 
-    fun_result = generate_rhs(sys; expression = Val{true})
+    fun_result = generate_rhs(sys, GeneratedFunctionOptions(; expression = Val{true}))
     fun_expr = fun_result isa Tuple ? fun_result[1] : fun_result
     fun = eval_or_rgf(fun_expr; eval_expression, eval_module)
 
-    h = build_explicit_observed_function(sys, outputs; eval_expression, eval_module)
+    h = build_explicit_observed_function(
+        sys, outputs,
+        GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    )
     if split
         dx = fun(sts, p, t)
         y = h(sts, p, t)

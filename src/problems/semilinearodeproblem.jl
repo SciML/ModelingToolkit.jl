@@ -20,19 +20,22 @@
     _M = concrete_massmatrix(M; sparse, u0)
     dvs = unknowns(sys)
 
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+    )
+
     f1,
         f2 = generate_semiquadratic_functions(
-        sys, A, B, C; stiff_linear, stiff_quadratic,
-        stiff_nonlinear, expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, kwargs...
+        sys, A, B, C, codegen_opts;
+        stiff_linear, stiff_quadratic, stiff_nonlinear
     )
 
     if jac
         check_symbolic_ad_allowed(sys)
         Cjac = (C === nothing || !stiff_nonlinear) ? nothing : Symbolics.jacobian(C, dvs)
         _jac = generate_semiquadratic_jacobian(
-            sys, A, B, C, Cjac; sparse, expression,
-            wrap_gfw = Val{true}, eval_expression, eval_module, kwargs...
+            sys, A, B, C, Cjac, codegen_opts; sparse
         )
         _W_sparsity = get_semiquadratic_W_sparsity(
             sys, A, B, C, Cjac; stiff_linear, stiff_quadratic, stiff_nonlinear, mm = M

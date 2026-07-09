@@ -478,8 +478,11 @@ function SCCNonlinearFunction{iip}(
     end
     rps = reorder_parameters(subsys)
     f = generate_rhs(
-        subsys; expression = Val{false}, wrap_gfw = Val{true}, cachesyms,
-        eval_expression, eval_module,
+        subsys,
+        GeneratedFunctionOptions(;
+            expression = Val{false}, wrap_gfw = Val{true}, eval_expression, eval_module
+        );
+        cachesyms
     )
 
     return NonlinearFunction{iip}(f; sys = subsys)
@@ -609,8 +612,8 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             push!(
                 explicitfuns,
                 CacheWriter(
-                    sys, decomposition.cachetypes, cacheexprs, solsyms;
-                    eval_expression, eval_module
+                    sys, decomposition.cachetypes, cacheexprs, solsyms,
+                    GeneratedFunctionOptions(; eval_expression, eval_module)
                 )
             )
         end
