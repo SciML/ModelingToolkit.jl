@@ -1307,24 +1307,21 @@ For example, a function `g(op, unknowns, p..., inputs, t, known_disturbances)` w
 an array of inputs `inputs` is given, `known_disturbance_inputs` is provided, and `param_only` is false for a time-dependent system.
 """
 Base.@nospecializeinfer function build_explicit_observed_function(
-        sys, @nospecialize(ts);
+        sys, @nospecialize(ts), opts::GeneratedFunctionOptions;
         inputs = nothing,
         disturbance_inputs = nothing,
         known_disturbance_inputs = nothing,
         disturbance_argument = false,
-        expression = false,
-        eval_expression = false,
-        eval_module = @__MODULE__,
         output_type = Array,
-        checkbounds = false,
         ps = parameters(sys; initial_parameters = true),
         return_inplace = Val(false),
         param_only = false,
         throw = true,
         wrap_delays = is_dde(sys) && !param_only,
-        force_time_independent = false,
-        kwargs...
+        force_time_independent = false
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
     if inputs === nothing
         inputs = ()
     else
@@ -1438,17 +1435,13 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     fns = build_function_wrapper(
         sys, ts, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, p_end,
-            output_type, wrap_delays,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                try_namespaced = true, expression = Val{true}, checkbounds, kwargs...
-            )
+            output_type, wrap_delays, codegen_function_options = opts.codegen
         )
     )::NTuple{2, Expr}
-    if expression === true || expression === Val{true}
+    if expression === Val{true}
         return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? fns : fns[1]
     end
 
-    compiler_options = get(kwargs, :compiler_options, CompilerOptions())
     oop = eval_or_rgf(fns[1]; eval_expression, eval_module, compiler_options)
     iip = eval_or_rgf(fns[2]; eval_expression, eval_module, compiler_options)
     f = GeneratedFunctionWrapper{

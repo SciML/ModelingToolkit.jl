@@ -185,6 +185,11 @@ include("utils.jl")
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
+# codegen_utils.jl defines the codegen option structs (GeneratedFunctionOptions,
+# BuildFunctionWrapperOptions, CompilerOptions). It must precede any file whose method
+# *signatures* annotate those types (e.g. the `opts::GeneratedFunctionOptions` positional
+# in callbacks.jl), since signature type annotations are resolved at definition time.
+include("systems/codegen_utils.jl")
 include("systems/connectiongraph.jl")
 include("systems/connectors.jl")
 include("systems/imperative_affect.jl")
@@ -192,7 +197,6 @@ include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/analysis_points.jl")
 include("systems/ir_info.jl")
-include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
 include("systems/codegen_compat.jl")

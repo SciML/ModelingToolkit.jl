@@ -296,3 +296,69 @@ function generate_custom_function(
         cachesyms
     )
 end
+
+Base.@nospecializeinfer function build_explicit_observed_function(
+        sys, @nospecialize(ts);
+        inputs = nothing, disturbance_inputs = nothing, known_disturbance_inputs = nothing,
+        disturbance_argument = false, expression = false, eval_expression = false,
+        eval_module = @__MODULE__, output_type = Array, checkbounds = false,
+        ps = parameters(sys; initial_parameters = true), return_inplace = Val(false),
+        param_only = false, throw = true, wrap_delays = is_dde(sys) && !param_only,
+        force_time_independent = false, compiler_options::CompilerOptions = CompilerOptions(),
+        kwargs...
+    )
+    return build_explicit_observed_function(
+        sys, ts,
+        GeneratedFunctionOptions(;
+            expression, eval_expression, eval_module, compiler_options,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
+        );
+        inputs, disturbance_inputs, known_disturbance_inputs, disturbance_argument,
+        output_type, ps, return_inplace, param_only, throw, wrap_delays, force_time_independent
+    )
+end
+
+Base.@nospecializeinfer function compile_condition(
+        @nospecialize(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}),
+        sys, @nospecialize(dvs), @nospecialize(ps);
+        eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
+    return compile_condition(
+        cbs, sys, dvs, ps,
+        GeneratedFunctionOptions(;
+            eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        )
+    )
+end
+
+Base.@nospecializeinfer function compile_explicit_affect(
+        @nospecialize(aff::AffectSystem), sys;
+        reset_jumps = false, eval_expression = false, eval_module = @__MODULE__, kwargs...
+    )
+    return compile_explicit_affect(
+        aff, sys,
+        GeneratedFunctionOptions(;
+            eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        );
+        reset_jumps
+    )
+end
+
+function generate_control_function(
+        sys::AbstractSystem, inputs = default_codegen_inputs(sys),
+        disturbance_inputs = disturbances(sys);
+        known_disturbance_inputs = nothing, disturbance_argument = false,
+        implicit_dae = false, simplify = false, eval_expression = false,
+        eval_module = @__MODULE__, split = true, kwargs...
+    )
+    return generate_control_function(
+        sys, inputs, disturbance_inputs,
+        GeneratedFunctionOptions(;
+            eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        );
+        known_disturbance_inputs, disturbance_argument, implicit_dae, simplify, split
+    )
+end

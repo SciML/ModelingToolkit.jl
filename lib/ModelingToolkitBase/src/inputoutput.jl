@@ -239,17 +239,14 @@ f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(
-        sys::AbstractSystem, inputs = default_codegen_inputs(sys),
-        disturbance_inputs = disturbances(sys);
+        sys::AbstractSystem, inputs, disturbance_inputs, opts::GeneratedFunctionOptions;
         known_disturbance_inputs = nothing,
         disturbance_argument = false,
         implicit_dae = false,
         simplify = false,
-        eval_expression = false,
-        eval_module = @__MODULE__,
-        split = true,
-        kwargs...
+        split = true
     )
+    (; eval_expression, eval_module) = opts
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     # Handle backward compatibility for disturbance_argument
@@ -333,7 +330,7 @@ function generate_control_function(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             u_arg = 1 + Int(implicit_dae), p_start = 3 + implicit_dae,
             p_end = length(p) + 2 + implicit_dae,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            codegen_function_options = opts.codegen
         )
     )
     f = eval_or_rgf.(f; eval_expression, eval_module)
