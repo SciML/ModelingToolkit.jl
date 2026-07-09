@@ -204,10 +204,13 @@ $SEMILINEAR_A_B_C_CONSTRAINT
 $(MTKBase.EXPERIMENTAL_WARNING)
 """
 function generate_semiquadratic_functions(
-        sys::System, A, B, C; stiff_linear = true,
-        stiff_quadratic = false, stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys::System, A, B, C, opts::GeneratedFunctionOptions;
+        stiff_linear::Bool = true, stiff_quadratic::Bool = false,
+        stiff_nonlinear::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     if A === nothing && B === nothing
         throw(ArgumentError("Cannot generate split form for the system - it has no linear or quadratic part."))
     end
@@ -337,36 +340,28 @@ function generate_semiquadratic_functions(
         sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 2, p_start = 3, extra_assignments = f1_iip_ir,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )[1]
     f2_iip = build_function_wrapper(
         sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 2, p_start = 3, extra_assignments = f2_iip_ir,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )[1]
     f1_oop = build_function_wrapper(
         sys, f1_expr, [Any[dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )[1]
     f2_oop = build_function_wrapper(
         sys, f2_expr, [Any[dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )[1]
 
@@ -402,10 +397,13 @@ $SEMILINEAR_A_B_C_CONSTRAINT
 $EXPERIMENTAL_WARNING
 """
 function generate_semiquadratic_jacobian(
-        sys::System, A, B, C, Cjac; sparse = false, stiff_linear = true, stiff_quadratic = false,
-        stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys::System, A, B, C, Cjac, opts::GeneratedFunctionOptions;
+        sparse::Bool = false, stiff_linear::Bool = true, stiff_quadratic::Bool = false,
+        stiff_nonlinear::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     if sparse
         error("Sparse analytical jacobians for split ODEs is not implemented.")
     end
@@ -536,18 +534,14 @@ function generate_semiquadratic_jacobian(
         sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 2, p_start = 3, extra_assignments = iip_ir,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )
     j_oop, _ = build_function_wrapper(
         sys, oop_expr, [Any[dvs]; ps; Any[iv]],
         BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, iip_config = (true, false), kwargs...
-            )
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
         )
     )
     return maybe_compile_function(
