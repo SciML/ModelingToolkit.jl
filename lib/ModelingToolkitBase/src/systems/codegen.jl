@@ -1280,7 +1280,6 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `checkbounds`: whether to check bounds when destructuring parameters (defaults to
   `false`, i.e. generated code is wrapped in `@inbounds`)
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
-- `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
 - `wrap_delays = is_dde(sys)`: Whether to add an argument for the history function and use
   it to calculate all delayed variables.
 
@@ -1322,8 +1321,6 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         return_inplace = Val(false),
         param_only = false,
         throw = true,
-
-        mkarray = nothing,
         wrap_delays = is_dde(sys) && !param_only,
         force_time_independent = false,
         kwargs...
@@ -1441,7 +1438,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     fns = build_function_wrapper(
         sys, ts, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, p_end,
-            output_type, mkarray, wrap_delays,
+            output_type, wrap_delays,
             codegen_function_options = Symbolics.CodegenFunctionOptions(;
                 try_namespaced = true, expression = Val{true}, checkbounds, kwargs...
             )
