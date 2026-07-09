@@ -12,9 +12,10 @@ const SCC_EXPLICITFUN_CACHE_OUT = unwrap(only(@parameters __outₘₜₖ::Vector
 
 function CacheWriter(
         sys::AbstractSystem, buffer_types::Vector{TypeT},
-        exprs::SCCCacheVarsExprsElT, solsyms;
-        eval_expression = false, eval_module = @__MODULE__, sparse = false
+        exprs::SCCCacheVarsExprsElT, solsyms, opts::GeneratedFunctionOptions;
+        sparse = false
     )
+    (; eval_expression, eval_module) = opts
     rps = reorder_parameters(sys)  # 1 arg to use the cached version
     cache_writes = SymbolicT[]
     for (i, T) in enumerate(buffer_types)
@@ -46,15 +47,27 @@ function CacheWriter(
         BuildFunctionWrapperOptions(;
             p_start = length(solsyms) + 2, p_end = length(rps) + length(solsyms) + 1,
             compress_args = [2:(length(solsyms) + 1)],
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true},
-                iip_config = (true, false)
+            codegen_function_options = ConstructionBase.setproperties(
+                opts.codegen, (; iip_config = (true, false))
             )
         )
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
     return CacheWriter{Any}(fn)
+end
+
+# Backward-compatibility keyword method. The positional `opts::GeneratedFunctionOptions`
+# method above is the primary; this wrapper preserves the historical keyword API.
+function CacheWriter(
+        sys::AbstractSystem, buffer_types::Vector{TypeT},
+        exprs::SCCCacheVarsExprsElT, solsyms;
+        eval_expression = false, eval_module = @__MODULE__, sparse = false
+    )
+    return CacheWriter(
+        sys, buffer_types, exprs, solsyms,
+        GeneratedFunctionOptions(; eval_expression, eval_module); sparse
+    )
 end
 
 # This phrasing allows us to precompile the calls
