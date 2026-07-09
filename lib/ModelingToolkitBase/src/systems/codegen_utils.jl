@@ -49,6 +49,61 @@ end
 
 _has_options(co::CompilerOptions) = co.optlevel != -1 || co.compile != -1 || co.infer != -1
 
+# Normalize an `expression`/`wrap_gfw`-style option (`Val{true}`/`Val{false}` as a type or
+# instance, or a `Bool`) to a `Bool`.
+_gfo_bool(::Type{Val{B}}) where {B} = B::Bool
+_gfo_bool(::Val{B}) where {B} = B::Bool
+_gfo_bool(b::Bool) = b
+
+"""
+    GeneratedFunctionOptions{expression, wrap_gfw}(; kwargs...)
+
+Options for the code-generation entry points (`generate_rhs`, `generate_jacobian`, ...):
+the "output/compile" layer sitting one level above [`BuildFunctionWrapperOptions`](@ref).
+It controls how the generated code is realized (returned as an `Expr` vs compiled to a
+callable, and whether wrapped in a `GeneratedFunctionWrapper`) and holds a nested
+`Symbolics.CodegenFunctionOptions` (`codegen`) with the low-level code-generation options
+threaded down to `build_function_wrapper`.
+
+`expression` and `wrap_gfw` are `Bool` type parameters (each accepts `Val{true}`/`Val{false}`
+or a `Bool` in the keyword constructor). Both gate the return type of the generators —
+`expression` selects `Expr` vs a compiled callable, `wrap_gfw` selects wrapping in a
+`GeneratedFunctionWrapper` — so making them type parameters lets the generators branch on
+them statically. All other options are fields, so for a fixed `(expression, wrap_gfw)` the
+type is invariant to their values.
+
+# Keyword arguments
+
+- `expression`, `wrap_gfw`: as above (lifted into the type parameters).
+- `eval_expression`: whether to `eval` the generated code (vs `RuntimeGeneratedFunctions`).
+- `eval_module`: the module used to realize the generated code.
+- `compiler_options`: a [`CompilerOptions`](@ref).
+- `codegen_function_options`: a `Symbolics.CodegenFunctionOptions` with the code-generation
+  options forwarded down to `build_function_wrapper`.
+"""
+struct GeneratedFunctionOptions{expression, wrap_gfw}
+    eval_expression::Bool
+    eval_module::Module
+    compiler_options::CompilerOptions
+    codegen::Symbolics.CodegenFunctionOptions
+end
+
+function GeneratedFunctionOptions(;
+        expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
+    )
+    return GeneratedFunctionOptions{_gfo_bool(expression), _gfo_bool(wrap_gfw)}(
+        eval_expression, eval_module, compiler_options, codegen_function_options
+    )
+end
+
+# Recover the `expression`/`wrap_gfw` switches as `Val` types for dispatch into
+# `maybe_compile_function` / for branching in generator bodies.
+expression_val(::GeneratedFunctionOptions{E}) where {E} = Val{E}
+wrap_gfw_val(::GeneratedFunctionOptions{E, W}) where {E, W} = Val{W}
+
 const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 
 # Fallback modules with module-level compiler options for Julia versions

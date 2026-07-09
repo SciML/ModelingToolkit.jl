@@ -195,6 +195,7 @@ include("systems/ir_info.jl")
 include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
+include("systems/codegen_compat.jl")
 include("systems/problem_utils.jl")
 # Operator + lowering layer; must load before the problem constructors that
 # consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).

@@ -38,13 +38,13 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_rhs(
-        sys::System; implicit_dae = false,
-        scalar = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        cachesyms = nothing, extra_args::Tuple = (),
-        compiler_options::CompilerOptions = CompilerOptions(),
-        kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        implicit_dae::Bool = false, scalar::Bool = false,
+        override_discrete::Bool = false, cachesyms = nothing, extra_args::Tuple = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     eqs = equations(sys)
     obs = observed(sys)
@@ -125,9 +125,7 @@ function generate_rhs(
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, expression_module = eval_module, kwargs...
-            )
+            codegen_function_options = opts.codegen
         )
     )
     nargs = length(args) - length(p) + 1
@@ -152,11 +150,10 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_diffusion_function(
-        sys::System; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
-    )
+function generate_diffusion_function(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     eqs = get_noise_eqs(sys)
@@ -165,7 +162,7 @@ function generate_diffusion_function(
         eqs = vec(eqs)
     end
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, eqs, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)))
+    res = build_function_wrapper(sys, eqs, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     if expression == Val{true}
         return res
     end
@@ -259,16 +256,17 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(
-        sys::System;
-        simplify = false, sparse = false, eval_expression = false,
-        eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        checkbounds = false, compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t !== nothing && sparse && checkbounds
+    if t !== nothing && sparse && opts.codegen.checkbounds
         wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
     else
         wrap_code = (identity, identity)
@@ -282,10 +280,7 @@ function generate_jacobian(
     res = build_function_wrapper(
         sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                wrap_code, expression = Val{true}, expression_module = eval_module,
-                checkbounds, kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
         )
     )
     return maybe_compile_function(
@@ -320,11 +315,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_tgrad(
-        sys::System;
-        simplify = false, eval_expression = false, eval_module = @__MODULE__,
-        expression = Val{true}, wrap_gfw = Val{false},
-        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, opts::GeneratedFunctionOptions; simplify::Bool = false
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     tgrad = calculate_tgrad(sys, simplify = simplify)
@@ -334,11 +329,7 @@ function generate_tgrad(
         [Any[dvs]; p; Any[get_iv(sys)]],
         BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true},
-                expression_module = eval_module,
-                kwargs...
-            )
+            codegen_function_options = opts.codegen
         )
     )
 
@@ -399,10 +390,12 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_W(
-        sys::System;
-        simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
@@ -412,7 +405,7 @@ function generate_W(
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = W_GAMMA * M + J
     t = get_iv(sys)
-    if t !== nothing && sparse && checkbounds
+    if t !== nothing && sparse && opts.codegen.checkbounds
         wrap_code = assert_jac_length_header(sys)
     else
         wrap_code = (identity, identity)
@@ -422,9 +415,7 @@ function generate_W(
     res = build_function_wrapper(
         sys, W, [Any[dvs]; p; Any[W_GAMMA, t]], BuildFunctionWrapperOptions(;
             u_arg = 1, p_end = 1 + length(p),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                wrap_code, checkbounds, kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
         )
     )
     return maybe_compile_function(
@@ -447,11 +438,12 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_dae_jacobian(
-        sys::System; simplify = false, sparse = false,
-        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__,
-        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
@@ -468,7 +460,7 @@ function generate_dae_jacobian(
         sys, jac, [Any[derivatives, dvs]; p; Any[W_GAMMA, t]],
         BuildFunctionWrapperOptions(;
             u_arg = 2, p_start = 3, p_end = 2 + length(p),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            codegen_function_options = opts.codegen
         )
     )
     return maybe_compile_function(
@@ -489,18 +481,15 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_history(
-        sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
+function generate_history(sys::System, u0, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     p = reorder_parameters(sys)
     res = build_function_wrapper(
         sys, u0, [p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(;
             p_start = 1, p_end = length(p), wrap_delays = false,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, expression_module = eval_module,
-                similarto = typeof(u0), kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(u0)))
         )
     )
     return maybe_compile_function(
@@ -665,10 +654,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_boundary_conditions(
-        sys::System, u0, u0_idxs, t0; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        kwargs...
+        sys::System, u0, u0_idxs, t0, opts::GeneratedFunctionOptions
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     iv = get_iv(sys)
     sts = unknowns(sys)
     ps = parameters(sys)
@@ -699,7 +689,7 @@ function generate_boundary_conditions(
             output_type = Array,
             p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
             histfn_symbolic = BVP_SOLUTION, wrap_delays = true,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            codegen_function_options = opts.codegen
         )
     )
     return maybe_compile_function(
@@ -718,10 +708,10 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cost(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
+function generate_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
@@ -744,7 +734,7 @@ function generate_cost(
         sys, obj, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, p_end, wrap_delays, u_arg,
             histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)
+            codegen_function_options = opts.codegen
         )
     )[1]
     if expression == Val{true}
@@ -768,11 +758,10 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_bvp_cost(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, kwargs...
-    )
+function generate_bvp_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
     _iszero(obj) && return nothing
 
@@ -796,9 +785,7 @@ function generate_bvp_cost(
             wrap_delays = true,
             histfn = (p, t) -> BVP_SOLUTION(t),
             histfn_symbolic = BVP_SOLUTION,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, checkbounds, kwargs...
-            )
+            codegen_function_options = opts.codegen
         )
     )[1]
 
@@ -833,14 +820,16 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_cost_gradient(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions; simplify::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
-    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -887,10 +876,12 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_cost_hessian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, simplify = false,
-        sparse = false, return_sparsity = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false, return_sparsity::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
@@ -899,7 +890,7 @@ function generate_cost_hessian(
     if sparse
         sparsity = similar(exprs, Float64)
     end
-    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -924,14 +915,14 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cons(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
+function generate_cons(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     cons = canonical_constraints(sys)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
-    res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
+    res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -978,17 +969,19 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_constraint_jacobian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     jac,
         sparsity = calculate_constraint_jacobian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
+    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1037,17 +1030,19 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_constraint_hessian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = reorder_parameters(sys)
     hess,
         sparsity = calculate_constraint_hessian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, hess, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; expression = Val{true}, kwargs...)))
+    res = build_function_wrapper(sys, hess, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1092,15 +1087,17 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_control_jacobian(
-        sys::AbstractSystem;
-        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...
+        sys::AbstractSystem, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, jac, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)))
+    res = build_function_wrapper(sys, jac, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
     )
@@ -1576,10 +1573,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_A(
-        sys::System, A::AbstractMatrix; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, A::AbstractMatrix, opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
     regions = SU.RegionsT()
@@ -1598,9 +1596,7 @@ function generate_update_A(
     res = build_function_wrapper(
         sys, A, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
             p_start = 1, n_param_buffers = length(ps),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, similarto = typeof(A), kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(A)))
         )
     )
     return maybe_compile_function(
@@ -1630,18 +1626,18 @@ function (f::DiagonalAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where 
 end
 
 function generate_update_A(
-        sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}}; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}},
+        opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
     res = build_function_wrapper(
         sys, parent(A), [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
             p_start = 1, n_param_buffers = length(ps),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, similarto = Vector{SymbolicT}, kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; similarto = Vector{SymbolicT}))
         )
     )
     return DiagonalAMatrixWrapper(
@@ -1675,10 +1671,12 @@ function (f::BandedAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {O
 end
 
 function generate_update_A(
-        sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}}; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}},
+        opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
     parA = parent(A)
@@ -1689,9 +1687,7 @@ function generate_update_A(
     res = build_function_wrapper(
         sys, parA, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
             p_start = 1, n_param_buffers = length(ps),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, similarto = Matrix{SymbolicT}, kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; similarto = Matrix{SymbolicT}))
         )
     )
     return BandedAMatrixWrapper(
@@ -1715,10 +1711,11 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_b(
-        sys::System, b::AbstractVector; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms = (), compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::System, b::AbstractVector, opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
     regions = SU.RegionsT()
@@ -1737,13 +1734,65 @@ function generate_update_b(
     res = build_function_wrapper(
         sys, b, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
             p_start = 1, n_param_buffers = length(ps),
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                expression = Val{true}, similarto = typeof(b), kwargs...
-            )
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(b)))
         )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
         compiler_options, eval_expression, eval_module
     )
+end
+"""
+```julia
+generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
+                         ps = parameters(sys); kwargs...)
+```
+
+Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
+array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
+may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
+[`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
+`f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
+time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
+[`mtkcompile`](@ref) or [`@mtkcompile`](@ref), `p` is expected to be an `MTKParameters`
+object.
+"""
+function generate_custom_function(
+        sys::AbstractSystem, exprs, dvs, ps, opts::GeneratedFunctionOptions;
+        cachesyms::Tuple = ()
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
+    end
+    p = reorder_parameters(sys, unwrap.(ps))
+    isscalar = !(exprs isa AbstractArray)
+    fnexpr = if is_time_dependent(sys)
+        build_function_wrapper(
+            sys, exprs,
+            [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = opts.codegen
+            )
+        )
+    else
+        build_function_wrapper(
+            sys, exprs,
+            [Any[dvs]; p],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = opts.codegen
+            )
+        )
+    end
+    if expression == Val{true}
+        return fnexpr
+    end
+    if SU.is_array_shape(SU.shape(unwrap(exprs)))
+        return eval_or_rgf.(fnexpr; eval_expression, eval_module)
+    else
+        return eval_or_rgf(fnexpr[1]; eval_expression, eval_module)
+    end
 end

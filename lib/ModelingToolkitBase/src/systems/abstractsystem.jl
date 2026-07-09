@@ -8,67 +8,6 @@ end
 
 GUIMetadata(type) = GUIMetadata(type, nothing)
 
-"""
-```julia
-generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-                         ps = parameters(sys); kwargs...)
-```
-
-Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
-array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
-may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
-[`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
-`f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
-time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
-[`mtkcompile`](@ref) or [`@mtkcompile`](@ref), `p` is expected to be an `MTKParameters`
-object.
-"""
-function generate_custom_function(
-        sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true);
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms::Tuple = (), kwargs...
-    )
-    if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
-    end
-    p = reorder_parameters(sys, unwrap.(ps))
-    isscalar = !(exprs isa AbstractArray)
-    fnexpr = if is_time_dependent(sys)
-        build_function_wrapper(
-            sys, exprs,
-            [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
-            BuildFunctionWrapperOptions(;
-                u_arg = 1,
-                codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                    kwargs...,
-                    expression = Val{true}
-                )
-            )
-        )
-    else
-        build_function_wrapper(
-            sys, exprs,
-            [Any[dvs]; p],
-            BuildFunctionWrapperOptions(;
-                u_arg = 1,
-                codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                    kwargs...,
-                    expression = Val{true}
-                )
-            )
-        )
-    end
-    if expression == Val{true}
-        return fnexpr
-    end
-    if SU.is_array_shape(SU.shape(unwrap(exprs)))
-        return eval_or_rgf.(fnexpr; eval_expression, eval_module)
-    else
-        return eval_or_rgf(fnexpr[1]; eval_expression, eval_module)
-    end
-end
-
 function wrap_assignments(isscalar, assignments; let_block = false)
     function wrapper(expr)
         return Func(expr.args, [], Let(assignments, expr.body, let_block))
