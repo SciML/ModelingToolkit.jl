@@ -69,7 +69,9 @@
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
     # Inner problems (SDEProblem/ODEProblem) are created with _skip_tstops = true
     # to avoid duplication.
-    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    tstops = SymbolicTstops(
+        sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    )
 
     dvs = unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))

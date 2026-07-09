@@ -7,10 +7,13 @@ function SciMLBase.IntervalNonlinearFunction(
     check_complete(sys, IntervalNonlinearFunction)
     check_compatibility && check_compatible_system(IntervalNonlinearFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        scalar = true, eval_expression, eval_module, checkbounds, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts; scalar = true)
 
     observedfun = ObservedFunctionCache(
         sys; steady_state = false, expression, eval_expression, eval_module, checkbounds

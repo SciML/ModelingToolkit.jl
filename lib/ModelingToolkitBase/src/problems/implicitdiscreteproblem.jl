@@ -11,11 +11,13 @@
 
     iv = get_iv(sys)
     dvs = unknowns(sys)
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds,
-        override_discrete = true, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true, override_discrete = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing

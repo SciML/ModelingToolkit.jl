@@ -7,14 +7,14 @@
     check_complete(sys, SDDEFunction)
     check_compatibility && check_compatible_system(SDDEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
-    g = generate_diffusion_function(
-        sys; expression,
-        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, kwargs...
-    )
+
+    f = generate_rhs(sys, codegen_opts)
+    g = generate_diffusion_function(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -66,8 +66,11 @@ end
     )
 
     h = generate_history(
-        sys, u0; expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        checkbounds
+        sys, u0,
+        GeneratedFunctionOptions(;
+            expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
+        )
     )
 
     if expression == Val{true}

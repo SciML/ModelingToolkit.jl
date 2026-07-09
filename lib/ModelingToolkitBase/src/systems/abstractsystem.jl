@@ -241,7 +241,9 @@ function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
-    return build_explicit_observed_function(sys, sym; param_only = true)
+    return build_explicit_observed_function(
+        sys, sym, GeneratedFunctionOptions(; expression = Val{false}); param_only = true
+    )
 end
 
 """
@@ -384,7 +386,11 @@ function SymbolicIndexingInterface.observed(
         end
     end
     return build_explicit_observed_function(
-        sys, sym; eval_expression, eval_module, checkbounds, optimize
+        sys, sym,
+        GeneratedFunctionOptions(;
+            expression = Val{false}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, optimize)
+        )
     )
 end
 

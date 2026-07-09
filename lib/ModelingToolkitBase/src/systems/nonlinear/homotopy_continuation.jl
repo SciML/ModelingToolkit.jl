@@ -521,12 +521,18 @@ end
     )
     fn = remake(fn; sys = sys, observed = obsfn)
 
-    denominator = build_explicit_observed_function(sys2, denoms)
-    unpolynomialize = build_explicit_observed_function(sys2, all_solutions)
+    denominator = build_explicit_observed_function(
+        sys2, denoms, GeneratedFunctionOptions(; expression = Val{false})
+    )
+    unpolynomialize = build_explicit_observed_function(
+        sys2, all_solutions, GeneratedFunctionOptions(; expression = Val{false})
+    )
 
     inv_mapping = Dict(v => k for (k, v) in transformation.substitution_rules)
     polynomialize_terms = [get(inv_mapping, var, var) for var in unknowns(sys2)]
-    polynomialize = build_explicit_observed_function(sys, polynomialize_terms)
+    polynomialize = build_explicit_observed_function(
+        sys, polynomialize_terms, GeneratedFunctionOptions(; expression = Val{false})
+    )
 
     return HomotopyNonlinearFunction{iip, specialize}(
         fn; polynomialize, unpolynomialize, denominator

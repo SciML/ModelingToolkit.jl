@@ -8,11 +8,13 @@
     check_complete(sys, DAEFunction)
     check_compatibility && check_compatible_system(DAEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds,
-        kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -26,11 +28,7 @@
     end
 
     if jac
-        _jac = generate_dae_jacobian(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, eval_expression, eval_module,
-            checkbounds, kwargs...
-        )
+        _jac = generate_dae_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end

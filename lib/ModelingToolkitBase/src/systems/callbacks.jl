@@ -1424,7 +1424,12 @@ Base.@nospecializeinfer function compile_equational_affect(
     end
     if isempty(equations(system(aff)))
         return compile_explicit_affect(
-            aff, sys; reset_jumps, eval_expression, eval_module, kwargs...
+            aff, sys,
+            GeneratedFunctionOptions(;
+                eval_expression, eval_module,
+                codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            );
+            reset_jumps
         )
     else
         return compile_implicit_affect(

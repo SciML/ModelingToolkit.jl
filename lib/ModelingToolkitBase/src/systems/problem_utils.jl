@@ -2199,7 +2199,9 @@ function process_kwargs(
         end
 
         if !_skip_tstops
-            tstops = SymbolicTstops(sys; expression, eval_expression, eval_module)
+            tstops = SymbolicTstops(
+                sys, GeneratedFunctionOptions(; expression, eval_expression, eval_module)
+            )
             if tstops !== nothing
                 kwargs1 = merge(kwargs1, (; tstops))
             end
