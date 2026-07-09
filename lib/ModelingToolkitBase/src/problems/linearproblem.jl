@@ -137,7 +137,7 @@ Base.@nospecializeinfer function wrap_symbolic_linear_interface(
         symbolic_interface::SciMLBase.SymbolicLinearInterface, iip::Bool, A, b, p
     )
     # We'll never infer the type of these, so no point specializing on them
-    @nospecialize symbolic_interface, A, b, p
+    @nospecialize symbolic_interface A b p
     if iip
         elT = eltype(A)
         pT = typeof(p)
