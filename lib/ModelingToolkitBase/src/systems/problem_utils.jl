@@ -1876,23 +1876,6 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     return op
 end
 
-_has_forwarddiff_dual(x) = x isa ForwardDiff.Dual
-_has_forwarddiff_dual(x::Union{AbstractArray, Tuple}) = any(_has_forwarddiff_dual, x)
-
-function _symbolic_varmap_dict(varmap)
-    dict = Dict{SymbolicT, SymbolicT}()
-    sizehint!(dict, length(varmap))
-    for (k, v) in varmap
-        val = if _has_forwarddiff_dual(v)
-            BSImpl.Const{VartypeT}(v; unsafe = true)
-        else
-            BSImpl.Const{VartypeT}(v)
-        end
-        dict[BSImpl.Const{VartypeT}(k)] = val
-    end
-    return dict
-end
-
 function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     if !fast_path
         op = operating_point_preprocess(sys, op)
@@ -1901,7 +1884,7 @@ function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     # and doesn't override them. This is because explicit `nothing` values in `op`
     # should be considered as overrides for initial conditions in `ics`.
     map!(x -> @something(x, CommonSentinel()), values(op))
-    op = as_atomic_dict_with_defaults(_symbolic_varmap_dict(op), COMMON_NOTHING)
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
     ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
     left_merge!(op, ics)
     map!(values(op)) do v
