@@ -36,6 +36,8 @@ SciMLBase.ImplicitDiscreteProblem
 ```@docs
 SciMLBase.NonlinearFunction
 SciMLBase.NonlinearProblem
+SciMLBase.AbstractNonlinearProblem(::System, ::Any)
+SciMLBase.HomotopyProblem
 SciMLBase.SCCNonlinearProblem
 SciMLBase.NonlinearLeastSquaresProblem
 SciMLBase.SteadyStateProblem
