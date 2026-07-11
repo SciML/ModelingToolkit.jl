@@ -22,10 +22,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 TaylorDiff = "b36ab563-344f-407b-a36a-4f200bebf99c"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
-[sources]
-ModelingToolkitBase = {path = "../.."}
-
 [compat]
 SafeTestsets = "0.1, 1"
-SciMLTesting = "1"
+SciMLTesting = "2.1"
 TaylorDiff = "0.3.5"

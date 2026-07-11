@@ -27,13 +27,10 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-[sources]
-ModelingToolkitBase = {path = "../.."}
-
 [compat]
 CasADi = "1.0.7"
 DataInterpolations = "8.8"
 OrdinaryDiffEqExplicitTableaus = "2"
 OrdinaryDiffEqImplicitTableaus = "2"
 SafeTestsets = "0.1, 1"
-SciMLTesting = "1"
+SciMLTesting = "2.1"

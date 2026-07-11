@@ -9,4 +9,5 @@ run_qa(
     JET = JET,
     jet = true,
     jet_kwargs = (; target_defined_modules = true),
+    api_docs_kwargs = (; rendered = true),
 )

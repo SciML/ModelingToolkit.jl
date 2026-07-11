@@ -1,4 +1,5 @@
-using SafeTestsets, Pkg, Test
+using SafeTestsets, Test
+using SciMLTesting
 # https://github.com/JuliaLang/julia/issues/54664
 import REPL
 
@@ -14,27 +15,31 @@ const GROUP = _G == _SUB ? "Core" :
     (startswith(_G, _SUB * "_") ? _G[(length(_SUB) + 2):end] : _G)
 
 function activate_extensions_env()
-    Pkg.activate("extensions")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
-    return Pkg.instantiate()
+    return activate_group_env(
+        joinpath(@__DIR__, "extensions");
+        parent = dirname(@__DIR__),
+    )
 end
 
 function activate_optimization_env()
-    Pkg.activate("optimization")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
-    return Pkg.instantiate()
+    return activate_group_env(
+        joinpath(@__DIR__, "optimization");
+        parent = dirname(@__DIR__),
+    )
 end
 
 function activate_qa_env()
-    Pkg.activate("qa")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
-    return Pkg.instantiate()
+    return activate_group_env(
+        joinpath(@__DIR__, "qa");
+        parent = dirname(@__DIR__),
+    )
 end
 
 function activate_downstream_env()
-    Pkg.activate("downstream")
-    Pkg.develop([PackageSpec(path = dirname(@__DIR__))])
-    return Pkg.instantiate()
+    return activate_group_env(
+        joinpath(@__DIR__, "downstream");
+        parent = dirname(@__DIR__),
+    )
 end
 
 @time begin

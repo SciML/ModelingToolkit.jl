@@ -9,4 +9,4 @@ SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 [compat]
 FMI = "0.14"
 SafeTestsets = "0.1, 1"
-SciMLTesting = "1"
+SciMLTesting = "2.1"

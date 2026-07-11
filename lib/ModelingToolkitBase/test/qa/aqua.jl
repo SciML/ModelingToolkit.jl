@@ -1,4 +1,10 @@
 using ModelingToolkitBase
-using Aqua
+using SciMLTesting
 
-Aqua.test_all(ModelingToolkitBase)
+run_qa(
+    ModelingToolkitBase;
+    api_docs_kwargs = (;
+        rendered = true,
+        docs_src = joinpath(dirname(dirname(dirname(dirname(@__DIR__)))), "docs", "src"),
+    ),
+)
