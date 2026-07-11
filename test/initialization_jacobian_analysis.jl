@@ -55,3 +55,13 @@ prob4 = ODEProblem(sys4, [a => 1.0, b => 2.0], (0.0, 1.0))
 res4 = analyze_initialization_jacobian(prob4; verbose = false)
 @test res4.nullity == 0
 @test res4.redundancy == 0
+
+# The default finite-difference Jacobian must agree with an AD backend passed through
+# the `autodiff` option.
+using ADTypes: AutoForwardDiff
+res_ad = analyze_initialization_jacobian(prob; verbose = false, autodiff = AutoForwardDiff())
+res_fd = analyze_initialization_jacobian(prob; verbose = false)
+@test res_ad.rank == res_fd.rank
+@test res_ad.nullity == res_fd.nullity
+@test res_ad.redundancy == res_fd.redundancy
+@test isapprox(res_ad.jacobian, res_fd.jacobian; atol = 1.0e-6, rtol = 1.0e-6)

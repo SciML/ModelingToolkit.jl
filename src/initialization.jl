@@ -49,7 +49,7 @@ function MTKBase.get_initialization_problem_type(
 end
 
 """
-    analyze_initialization_jacobian(prob; rtol = 1e-8, atol = 0.0, threshold = 1e-3, verbose = true)
+    analyze_initialization_jacobian(prob; rtol = 1e-8, atol = 0.0, threshold = 1e-3, verbose = true, autodiff = nothing)
 
 Diagnose rank deficiency of a system's initialization problem by inspecting the singular
 value decomposition of its residual Jacobian, and report both the **unknowns** that span
@@ -70,8 +70,11 @@ the offending degrees of freedom explicit:
     constrain any additional degree of freedom. These explain why an initialization can
     have more equations than unknowns yet still be underdetermined.
 
-It evaluates the Jacobian of the initialization residual at the initial guess `u0` (via
-`ForwardDiff`) and computes its SVD. `prob` may be a problem that carries initialization
+It evaluates the Jacobian of the initialization residual at the initial guess `u0` and
+computes its SVD. By default the Jacobian is formed by central finite differences, which
+reuses the already-compiled residual function; pass an ADTypes backend via `autodiff`
+(e.g. `AutoForwardDiff()`) to differentiate through `DifferentiationInterface` instead,
+at the cost of compiling the residual for the backend's number types. `prob` may be a problem that carries initialization
 data (e.g. an `ODEProblem`/`DAEProblem` built from a `System`), or an initialization
 `NonlinearProblem`/`NonlinearLeastSquaresProblem` directly.
 
@@ -83,6 +86,11 @@ data (e.g. an `ODEProblem`/`DAEProblem` built from a `System`), or an initializa
   - `threshold`: only unknowns/equations whose participation exceeds this value are
     reported.
   - `verbose`: print a human-readable report.
+  - `autodiff`: `nothing` (default) computes the Jacobian by central finite differences
+    with step `cbrt(eps)`, whose truncation error is far below the default rank tolerance
+    and whose first call avoids recompiling the generated residual (the dominant cost of
+    dual-number AD on large systems). Alternatively an ADTypes backend evaluated through
+    `DifferentiationInterface`.
 
 # Returns
 
@@ -106,7 +114,7 @@ unknowns); a `redundancy` of `0` means full row rank (no redundant equations).
     rank deficient at a particular operating point, and vice versa.
 """
 function analyze_initialization_jacobian(
-        prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true
+        prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true, autodiff = nothing
     )
     empty_result = (;
         jacobian = nothing, singular_values = Float64[], rank = 0,
@@ -133,7 +141,8 @@ function analyze_initialization_jacobian(
     else
         u -> f(u, p)
     end
-    J = ForwardDiff.jacobian(residual, u0)
+    J = autodiff === nothing ? _central_difference_jacobian(residual, u0) :
+        DI.jacobian(residual, autodiff, u0)
     nrows, ncols = size(J)
     fact = svd(J; full = true)
     S = fact.S
@@ -210,6 +219,29 @@ end
 # Return the initialization `NonlinearProblem`/`NonlinearLeastSquaresProblem` carried by
 # `prob`, or `prob` itself if it is already a nonlinear problem, or `nothing` if there is
 # no initialization problem to analyze.
+# Dense Jacobian by central finite differences. Reuses the residual function already
+# compiled for the element type of `u0`; `ForwardDiff.jacobian` instead triggers a
+# dual-number recompilation of the generated residual, which dominates the runtime on
+# large systems. The O(h^2) truncation error (h = cbrt(eps)) is far below the default
+# singular-value tolerance of the rank analysis.
+function _central_difference_jacobian(residual, u0)
+    T = eltype(u0)
+    up = copy(u0)
+    um = copy(u0)
+    J = nothing
+    for i in eachindex(u0)
+        h = cbrt(eps(T)) * max(one(T), abs(u0[i]))
+        up[i] = u0[i] + h
+        um[i] = u0[i] - h
+        col = (residual(up) .- residual(um)) ./ (2h)
+        J === nothing && (J = similar(col, length(col), length(u0)))
+        J[:, i] = col
+        up[i] = u0[i]
+        um[i] = u0[i]
+    end
+    return J === nothing ? zeros(T, 0, length(u0)) : J
+end
+
 function _initialization_problem(prob)
     prob isa SciMLBase.AbstractNonlinearProblem && return prob
     f = prob.f
