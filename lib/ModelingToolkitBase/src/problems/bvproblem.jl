@@ -28,9 +28,15 @@ end
     dvs = unknowns(sys)
     ctrls = inputs(sys)
     op = to_varmap(op, dvs)
+    # Optimal-control BVPs (systems carrying a cost) deliberately pin only the
+    # operating-point initial conditions — the remaining degrees of freedom are
+    # what the cost selects — and their algebraic equations (e.g. lifted output
+    # bounds) do not imply a fully determined initial state. Only plain algebraic
+    # BVPs skip the guess merge and pin every state.
+    is_full_ic = has_alg_eqs(sys) && isempty(get_costs(sys))
     # Systems without algebraic equations should use both fixed values + guesses
     # for initialization.
-    _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
+    _op = is_full_ic ? op : merge(Dict(op), Dict(guesses))
 
     if isempty(ctrls)
         fode, u0,
@@ -56,6 +62,10 @@ end
         )
         fode = BVPStackedControlRHS(fin, length(dvs))
         f_prototype = zeros(eltype(u0), length(dvs))
+        # The bare wrapper hides the generated function's mass matrix from
+        # BVPFunction's `__has_mass_matrix` probe; forward it explicitly so
+        # algebraic (lifted-output) rows keep their zero mass rows.
+        mass_matrix = fin.mass_matrix
     end
 
     fcost = generate_bvp_cost(
@@ -67,7 +77,7 @@ end
     )
 
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
-    u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) :
+    u0_idxs = is_full_ic ? collect(1:length(dvs)) :
         [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
     # The boundary-condition residual is generated from the state-length `u0`;
     # the controls are appended to the problem's decision vector afterwards.
@@ -86,7 +96,13 @@ end
         u0 = vcat(u0, c0)
     end
 
-    bvpfn = BVPFunction{_iip}(fode, fbc; cost = fcost, f_prototype, bcresid_prototype)
+    bvpfn = if isempty(ctrls)
+        BVPFunction{_iip}(fode, fbc; cost = fcost, f_prototype, bcresid_prototype)
+    else
+        BVPFunction{_iip}(
+            fode, fbc; cost = fcost, f_prototype, bcresid_prototype, mass_matrix
+        )
+    end
 
     if (length(constraints(sys)) + length(op) > length(dvs))
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
