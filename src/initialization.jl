@@ -106,10 +106,13 @@ unknowns); a `redundancy` of `0` means full row rank (no redundant equations).
     rank deficient at a particular operating point, and vice versa.
 """
 function analyze_initialization_jacobian(
-        prob; rtol = 1e-8, atol = 0.0, threshold = 1e-3, verbose = true)
-    empty_result = (; jacobian = nothing, singular_values = Float64[], rank = 0,
+        prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true
+    )
+    empty_result = (;
+        jacobian = nothing, singular_values = Float64[], rank = 0,
         nullity = 0, redundancy = 0, underdetermined_unknowns = Pair[],
-        redundant_equations = Pair[])
+        redundant_equations = Pair[],
+    )
     iprob = _initialization_problem(prob)
     if iprob === nothing
         verbose &&
@@ -148,24 +151,28 @@ function analyze_initialization_jacobian(
     # Participation = diagonal of the null-space projector (squared row norm over an
     # orthonormal null-space basis), invariant to the arbitrary basis within the null space.
     col_w = nullity == 0 ? zeros(ncols) :
-            vec(sum(abs2, @view(fact.V[:, col_isnull]); dims = 2))
+        vec(sum(abs2, @view(fact.V[:, col_isnull]); dims = 2))
     row_w = redundancy == 0 ? zeros(nrows) :
-            vec(sum(abs2, @view(fact.U[:, row_isnull]); dims = 2))
+        vec(sum(abs2, @view(fact.U[:, row_isnull]); dims = 2))
     syms = variable_symbols(iprob)
     eqs = _initialization_equations(iprob)
     underdetermined_unknowns = sort(
         [syms[i] => col_w[i] for i in 1:ncols if col_w[i] > threshold];
-        by = last, rev = true)
+        by = last, rev = true
+    )
     redundant_equations = sort(
         [(eqs === nothing ? i : eqs[i]) => row_w[i] for i in 1:nrows if row_w[i] > threshold];
-        by = last, rev = true)
+        by = last, rev = true
+    )
     if verbose
         println("Initialization Jacobian rank analysis")
         println("  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
         if !isempty(S)
             k = min(5, length(S))
-            println("  smallest $k singular value(s): ",
-                round.(S[(end - k + 1):end], sigdigits = 3))
+            println(
+                "  smallest $k singular value(s): ",
+                round.(S[(end - k + 1):end], sigdigits = 3)
+            )
         end
         if nullity == 0
             println("  Full column rank at u0 — no underdetermined unknowns.")
@@ -184,8 +191,10 @@ function analyze_initialization_jacobian(
             end
         end
     end
-    return (; jacobian = J, singular_values = S, rank, nullity, redundancy,
-        underdetermined_unknowns, redundant_equations)
+    return (;
+        jacobian = J, singular_values = S, rank, nullity, redundancy,
+        underdetermined_unknowns, redundant_equations,
+    )
 end
 
 # Symbolic equations of an initialization problem, in residual order, or `nothing` if not
