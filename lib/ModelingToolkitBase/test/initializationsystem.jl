@@ -1610,6 +1610,24 @@ end
     @test integ1[X1] ≈ 1.0
 end
 
+@testset "Initial-dependent array parameter guesses" begin
+    @variables X1(t) X2(t)
+    @parameters k1 k2 Γ[1:1] = missing [guess = [Initial(X1 + X2)]]
+    eqs = [D(X1) ~ k1 * (Γ[1] - X1) - k2 * X1]
+    @named osys = System(
+        eqs, t, [X1], [k1, k2, Γ]; observed = [X2 ~ Γ[1] - X1]
+    )
+    osys = complete(osys)
+    prob = ODEProblem(
+        osys,
+        [X1 => 1.0, X2 => 2.0, k1 => 0.1, k2 => 0.2],
+        (0.0, 1.0)
+    )
+
+    @test prob[X2] == 2.0
+    @test prob.ps[Γ[1]] == 3.0
+end
+
 if @isdefined(ModelingToolkit)
     @testset "Trivial initialization is run on problem construction" begin
         @variables _x(..) y(t)

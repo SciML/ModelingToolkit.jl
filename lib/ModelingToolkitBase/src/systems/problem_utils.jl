@@ -537,7 +537,13 @@ function evaluate_varmap!(
         ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
         limit = 100, allow_symbolic = false
     )
-    subber = Symbolics.FixpointSubstituter(SU.IRSubstituter{true}(ir, varmap); maxiters = limit, warn_maxiters = !allow_symbolic)
+    # Use `FPSubFilterer{Nothing}` so substitution descends into operator calls such as
+    # `Initial`, matching the generic `fixpoint_sub` path. The default IR filterer treats
+    # operators as atomic, leaving `Initial`-dependent guesses unresolved.
+    subber = Symbolics.FixpointSubstituter(
+        SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
+        maxiters = limit, warn_maxiters = !allow_symbolic
+    )
     for k in vars
         v = get(varmap, k, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
