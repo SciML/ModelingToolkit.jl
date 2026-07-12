@@ -1197,7 +1197,7 @@ end
 
 function should_invalidate_mutable_cache_entry(::Type{NamespaceMap}, patch::NamedTuple)
     return haskey(patch, :name) || haskey(patch, :observed) || haskey(patch, :unknowns) ||
-           haskey(patch, :ps) || haskey(patch, :systems)
+        haskey(patch, :ps) || haskey(patch, :systems)
 end
 
 function _build_namespace_map(sys)
