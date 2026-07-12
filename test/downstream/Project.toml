@@ -2,6 +2,7 @@
 ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
@@ -17,6 +18,7 @@ SimpleDiffEq = "05bca326-078c-5bf0-a5bf-ce7c7982d7fd"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [compat]
+LinearSolve = "3.66"
 ModelingToolkitStandardLibrary = "2.19"
 SafeTestsets = "0.1, 1"
 SciMLTesting = "1"
