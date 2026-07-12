@@ -1,3 +1,18 @@
+# Adapts dynamics generated with an explicit control argument, `f(du, x, u, p, t)`,
+# to the stacked decision vector the BVP solvers hand out: each mesh-node vector is
+# `[states; controls]`, the controls being extra per-node decision variables with no
+# differential equations of their own (`f_prototype` tells the solver how many
+# defect rows exist).
+struct BVPStackedControlRHS{F} <: Function
+    f::F
+    nx::Int
+end
+function (w::BVPStackedControlRHS)(du, xu, p, t)
+    w.f(du, @view(xu[1:(w.nx)]), @view(xu[(w.nx + 1):end]), p, t)
+    return nothing
+end
+(w::BVPStackedControlRHS)(xu, p, t) = w.f(@view(xu[1:(w.nx)]), @view(xu[(w.nx + 1):end]), p, t)
+
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true,
@@ -11,17 +26,37 @@
 
     _iip = resolve_iip(iip, op)
     dvs = unknowns(sys)
+    ctrls = inputs(sys)
     op = to_varmap(op, dvs)
     # Systems without algebraic equations should use both fixed values + guesses
     # for initialization.
     _op = has_alg_eqs(sys) ? op : merge(Dict(op), Dict(guesses))
 
-    fode, u0,
-        p = process_SciMLProblem(
-        ODEFunction{_iip, spec}, sys, _op; guesses,
-        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
-        checkbounds, time_dependent_init = false, expression, kwargs...
-    )
+    if isempty(ctrls)
+        fode, u0,
+            p = process_SciMLProblem(
+            ODEFunction{_iip, spec}, sys, _op; guesses,
+            t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
+            checkbounds, time_dependent_init = false, expression, kwargs...
+        )
+        f_prototype = nothing
+    else
+        # Like `process_DynamicOptProblem`: a plain `ODEFunction` on a compiled
+        # system would freeze the inputs at their operating-point parameter values
+        # and silently generate control-free dynamics. Generate with an explicit
+        # control argument instead and stack the controls onto each node's decision
+        # vector; their initial values come from the processed parameter object.
+        expression == Val{false} ||
+            error("`expression = Val{true}` is not supported for BVProblems with control inputs.")
+        fin, u0,
+            p = process_SciMLProblem(
+            ODEInputFunction{_iip, spec}, sys, _op; guesses, inputs = ctrls,
+            t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
+            checkbounds, time_dependent_init = false, expression, kwargs...
+        )
+        fode = BVPStackedControlRHS(fin, length(dvs))
+        f_prototype = zeros(eltype(u0), length(dvs))
+    end
 
     fcost = generate_bvp_cost(
         sys,
@@ -34,6 +69,8 @@
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) :
         [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
+    # The boundary-condition residual is generated from the state-length `u0`;
+    # the controls are appended to the problem's decision vector afterwards.
     fbc = generate_boundary_conditions(
         sys, u0, u0_idxs, tspan[1],
         GeneratedFunctionOptions(;
@@ -42,9 +79,12 @@
         )
     )
 
-    n_controls = length(default_codegen_inputs(sys))
-    f_prototype = n_controls > 0 ? zeros(eltype(u0), length(dvs) - n_controls) : nothing
     bcresid_prototype = zeros(eltype(u0), length(u0_idxs) + length(constraints(sys)))
+
+    if !isempty(ctrls)
+        c0 = collect(eltype(u0), SymbolicIndexingInterface.getp(sys, ctrls)(p))
+        u0 = vcat(u0, c0)
+    end
 
     bvpfn = BVPFunction{_iip}(fode, fbc; cost = fcost, f_prototype, bcresid_prototype)
 
