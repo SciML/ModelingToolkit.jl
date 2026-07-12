@@ -665,34 +665,34 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             prob = LinearProblem{iip}(A, b, p; f = symbolic_interface, u0 = _u0)
         else
             if !isempty(symbolic_idxs)
-                Moshi.Match.@match missing_guess_value begin
-                    MissingGuessValue.Constant(val) => begin
-                        _u0[symbolic_idxs] .= val
-                        _u0 = unwrap_const.(_u0)
-                        cval = Symbolics.SConst(val)
-                        for j in symbolic_idxs
-                            write_possibly_indexed_array!(op, dvs[vscc[j]], cval, COMMON_NOTHING)
-                        end
+                missing_guess_data = getfield(missing_guess_value, :data)
+                if Moshi.Data.isa_variant(missing_guess_value, MissingGuessValue.Constant)
+                    val = getfield(missing_guess_data, 1)
+                    _u0[symbolic_idxs] .= val
+                    _u0 = unwrap_const.(_u0)
+                    cval = Symbolics.SConst(val)
+                    for j in symbolic_idxs
+                        write_possibly_indexed_array!(op, dvs[vscc[j]], cval, COMMON_NOTHING)
                     end
-                    MissingGuessValue.Random(rng) => begin
-                        newval = rand(rng, length(symbolic_idxs))
-                        _u0[symbolic_idxs] .= newval
-                        for (idx, j) in enumerate(symbolic_idxs)
-                            write_possibly_indexed_array!(
-                                op, dvs[vscc[j]], Symbolics.SConst(newval[idx]), COMMON_NOTHING
-                            )
-                        end
+                elseif Moshi.Data.isa_variant(missing_guess_value, MissingGuessValue.Random)
+                    rng = getfield(missing_guess_data, 1)
+                    newval = rand(rng, length(symbolic_idxs))
+                    _u0[symbolic_idxs] .= newval
+                    for (idx, j) in enumerate(symbolic_idxs)
+                        write_possibly_indexed_array!(
+                            op, dvs[vscc[j]], Symbolics.SConst(newval[idx]), COMMON_NOTHING
+                        )
                     end
-                    MissingGuessValue.HashedRandom() => begin
-                        newval = [hash(dvs[vscc[j]]) for j in symbolic_idxs] ./ 0x1p64
-                        _u0[symbolic_idxs] .= newval
-                        for (idx, j) in enumerate(symbolic_idxs)
-                            write_possibly_indexed_array!(
-                                op, dvs[vscc[j]], Symbolics.SConst(newval[idx]), COMMON_NOTHING
-                            )
-                        end
+                elseif Moshi.Data.isa_variant(missing_guess_value, MissingGuessValue.HashedRandom)
+                    newval = [hash(dvs[vscc[j]]) for j in symbolic_idxs] ./ 0x1p64
+                    _u0[symbolic_idxs] .= newval
+                    for (idx, j) in enumerate(symbolic_idxs)
+                        write_possibly_indexed_array!(
+                            op, dvs[vscc[j]], Symbolics.SConst(newval[idx]), COMMON_NOTHING
+                        )
                     end
-                    MissingGuessValue.Error() => throw(MissingGuessError(dvs[vscc], _u0))
+                elseif Moshi.Data.isa_variant(missing_guess_value, MissingGuessValue.Error)
+                    throw(MissingGuessError(dvs[vscc], _u0))
                 end
             end
             _u0 = u0_constructor(u0_eltype.(_u0))

@@ -66,13 +66,11 @@ function dummy_derivative(
             J = similar(_J, Int)
             for i in eachindex(_J)
                 el = _J[i]
-                Moshi.Match.@match el begin
-                    BSImpl.Const(; val) && if val isa Number end => begin
-                        safe_isinteger(val)|| return nothing
-                        J[i] = convert(Int, val)::Int
-                    end
-                    _ => return nothing
-                end
+                SU.isconst(el) || return nothing
+                val = SU.unwrap_const(el)
+                val isa Number || return nothing
+                safe_isinteger(val) || return nothing
+                J[i] = convert(Int, val)::Int
             end
             return J
         end

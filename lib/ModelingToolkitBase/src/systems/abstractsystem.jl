@@ -1330,6 +1330,15 @@ renamespace(sys, x::Arr{T, N}) where {T, N} = Arr{T, N}(renamespace(sys, unwrap(
 renamespace(sys, x::CallAndWrap{T}) where {T} = CallAndWrap{T}(renamespace(sys, unwrap(x)))
 renamespace(sys, x::AbstractArray{SymbolicT}) = map(Base.Fix1(renamespace, sys), x)
 
+renamespace(names::AbstractVector, eq::Equation) = foldr(renamespace, names, init = eq)
+renamespace(names::AbstractVector, sys::AbstractSystem) = foldr(renamespace, names, init = sys)
+renamespace(names::AbstractVector, sym::Symbol) = foldr(renamespace, names, init = sym)
+renamespace(names::AbstractVector, x::Num) = foldr(renamespace, names, init = x)
+renamespace(names::AbstractVector, x::Arr{T, N}) where {T, N} = foldr(renamespace, names, init = x)
+renamespace(names::AbstractVector, x::CallAndWrap{T}) where {T} = foldr(renamespace, names, init = x)
+renamespace(names::AbstractVector, x::AbstractArray{SymbolicT}) = foldr(renamespace, names, init = x)
+renamespace(names::AbstractVector, x::SymbolicT) = foldr(renamespace, names, init = x)
+
 """
     $(TYPEDSIGNATURES)
 

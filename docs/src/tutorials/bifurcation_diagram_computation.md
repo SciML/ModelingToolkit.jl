@@ -125,11 +125,11 @@ plot(bf;
 
 Here, the value of `x` in the steady state does not change, however, at `μ=0` a Hopf bifurcation occur and the steady state turn unstable.
 
-We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch `bf.γ`, the index of the Hopf point we want to branch from: 2 in this case and a method `PeriodicOrbitOCollProblem(20, 5)` to compute periodic orbits.
+We compute the branch of periodic orbits which is nearby the Hopf Bifurcation. We thus provide the branch `bf.γ`, the index of the Hopf point we want to branch from: 2 in this case and a collocation method `Collocation(20, 5)` to compute periodic orbits.
 
 ```@example Bif2
 br_po = continuation(bf.γ, 2, opts_br,
-    PeriodicOrbitOCollProblem(20, 5);)
+    Collocation(20, 5);)
 
 plot(bf; putspecialptlegend = false,
     markersize = 2,

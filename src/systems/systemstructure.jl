@@ -320,6 +320,10 @@ struct DifferentiatedVariableNotUnknownError <: Exception
     undifferentiated::Any
 end
 
+expected_scope_depth(::LocalScope) = 0
+expected_scope_depth(scope::ParentScope) = 1 + expected_scope_depth(scope.parent)
+expected_scope_depth(::GlobalScope) = -1
+
 function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
     undiff = err.undifferentiated
     diff = err.differentiated

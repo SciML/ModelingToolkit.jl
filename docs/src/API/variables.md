@@ -409,6 +409,21 @@ Shift
 EvalAt
 ```
 
+Several lower-level Symbolics and SymbolicUtils utilities are reexported for users who
+need to inspect or rewrite symbolic expressions.
+
+```@docs
+ModelingToolkit.@symbolic_wrap
+ModelingToolkit.@wrapped
+ModelingToolkit.RuleSet
+ModelingToolkit.get_canonical_expr
+ModelingToolkit.infimum
+ModelingToolkit.supremum
+ModelingToolkit.is_derivative
+ModelingToolkit.istree
+ModelingToolkit.solve_for
+```
+
 While not an operator, `ShiftIndex` is commonly used to use `Shift` operators in a more
 convenient way when writing discrete systems.
 

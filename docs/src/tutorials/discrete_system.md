@@ -5,7 +5,8 @@ In this example, we will use the [`System`](@ref) API to create an SIR model.
 ```@example discrete
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t
-using OrdinaryDiffEq: solve, FunctionMap
+using OrdinaryDiffEq: solve
+using OrdinaryDiffEqFunctionMap: FunctionMap
 
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)

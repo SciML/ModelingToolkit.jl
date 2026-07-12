@@ -108,6 +108,33 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...
     ) where {iip, spec}
+    return _odeproblem(
+        SciMLBase.ODEProblem{iip, spec}, sys, op, tspan; callback, check_length,
+        eval_expression, expression, eval_module, check_compatibility, _skip_events, kwargs...
+    )
+end
+
+Base.@nospecializeinfer function SciMLBase.ODEProblem{
+        iip, SciMLBase.FunctionWrapperSpecialize,
+    }(
+        sys::System, @nospecialize(op), tspan;
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
+        expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
+        _skip_events = false, kwargs...
+    ) where {iip}
+    return _odeproblem(
+        SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}, sys, op, tspan;
+        callback, check_length, eval_expression, expression, eval_module, check_compatibility,
+        _skip_events, kwargs...
+    )
+end
+
+function _odeproblem(
+        ::Type{SciMLBase.ODEProblem{iip, spec}}, sys::System, @nospecialize(op), tspan;
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
+        expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
+        _skip_events = false, kwargs...
+    ) where {iip, spec}
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
@@ -132,7 +159,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{i
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)
-    maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
 end
 
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(

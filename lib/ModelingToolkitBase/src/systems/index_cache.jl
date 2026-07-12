@@ -597,9 +597,11 @@ function should_invalidate_mutable_cache_entry(::Type{ReorderedDefaultParameters
 end
 
 function _copy_reordered(v::ReorderedParametersT)
-    return ReorderedParametersT(map(v) do inner
-        inner isa Vector{SymbolicT} ? copy(inner) : map(copy, inner)
-    end)
+    return ReorderedParametersT(
+        map(v) do inner
+            inner isa Vector{SymbolicT} ? copy(inner) : map(copy, inner)
+        end
+    )
 end
 
 function reorder_parameters(sys::AbstractSystem; kwargs...)
@@ -842,6 +844,8 @@ function subset_unknowns_observed(
     @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
     return ic
 end
+
+subset_unknowns_observed(::Nothing, sys::AbstractSystem, newunknowns, newobsvars) = nothing
 
 function with_additional_constant_parameter(sys::AbstractSystem, par)
     par = unwrap(par)

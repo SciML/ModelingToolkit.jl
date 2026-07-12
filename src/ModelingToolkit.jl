@@ -20,8 +20,8 @@ import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
     isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
     @rule, Rewriters, substitute, metadata, BasicSymbolic,
     symtype
-using SymbolicUtils.Code
-import SymbolicUtils.Code: toexpr
+import SymbolicUtils: Code
+using SymbolicUtils.Code: Assignment, AtIndex, Let, MakeArray, SetArray
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 using DocStringExtensions
 @recompile_invalidations begin

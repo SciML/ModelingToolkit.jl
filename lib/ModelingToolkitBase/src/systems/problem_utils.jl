@@ -1767,8 +1767,11 @@ function maybe_build_initialization_problem(
     )
 end
 
-rm_union(::Type{Union{T, Nothing}}) where {T} = T
-rm_union(::Type{T}) where {T} = T
+function rm_union(::Type{T}) where {T}
+    types = filter(!=(Nothing), Base.uniontypes(T))
+    isempty(types) && return T
+    return Core.apply_type(Union, types...)
+end
 
 """
     $(TYPEDSIGNATURES)

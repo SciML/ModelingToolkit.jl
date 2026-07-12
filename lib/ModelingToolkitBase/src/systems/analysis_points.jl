@@ -177,6 +177,8 @@ function renamespace(sys, ap::AnalysisPoint)
     )
 end
 
+renamespace(names::AbstractVector, ap::AnalysisPoint) = foldr(renamespace, names, init = ap)
+
 # create analysis points via `connect`
 function connect(in, ap::AnalysisPoint, outs...; verbose = true)
     return AnalysisPoint() ~ AnalysisPoint(unwrap(in), ap.name, collect(unwrap.(outs)); verbose)

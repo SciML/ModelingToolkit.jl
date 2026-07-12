@@ -76,18 +76,19 @@ and family.
 """
 function (cw::CondRewriter)(expr, dep)
     # single variable, trivial case
-    Moshi.Match.@match expr begin
-        BSImpl.Sym() => return (expr, expr, !expr)
-        BSImpl.Term(; f) && if f isa SymbolicT && !SU.is_function_symbolic(f) end => begin
-            return (expr, expr, !expr)
-        end
-        BSImpl.Const(; val) && if val isa Bool end => return (expr, expr, !expr)
-        BSImpl.Const(; val) && if val isa Int end => return (expr, COMMON_TRUE, COMMON_TRUE)
-        if !iscall(expr) end => begin
-            @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
-            return (expr, COMMON_TRUE, COMMON_TRUE) # error case => conservative assumption is that both true and false have to be evaluated
-        end
-        _ => nothing
+    issym(expr) && return (expr, expr, !expr)
+    if iscall(expr)
+        f = operation(expr)
+        f isa SymbolicT && !SU.is_function_symbolic(f) && return (expr, expr, !expr)
+    end
+    if SU.isconst(expr)
+        val = SU.unwrap_const(expr)
+        val isa Bool && return (expr, expr, !expr)
+        val isa Int && return (expr, COMMON_TRUE, COMMON_TRUE)
+    end
+    if !iscall(expr)
+        @warn "Automatic conversion of if statements to events requires use of a limited conditional grammar; see the documentation. Skipping due to $expr"
+        return (expr, COMMON_TRUE, COMMON_TRUE) # error case => conservative assumption is that both true and false have to be evaluated
     end
     if operation(expr) == Base.:(|) # OR of two conditions
         a, b = arguments(expr)

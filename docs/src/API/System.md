@@ -16,10 +16,16 @@ Several utility constructors also exist to easily construct alternative system f
 
 ```@docs
 NonlinearSystem
+DiscreteSystem
+ImplicitDiscreteSystem
 SDESystem
 JumpSystem
 OptimizationSystem
 ```
+
+`DiscreteSystem(args...; kwargs...)` and
+`ImplicitDiscreteSystem(args...; kwargs...)` are deprecated aliases for
+`System(args...; kwargs...)`. Use `System` directly in new code.
 
 ## Accessor functions
 

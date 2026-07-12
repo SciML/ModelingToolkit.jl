@@ -150,8 +150,9 @@ investigate what this means:
 
 ```@example tearing
 using ModelingToolkit.BipartiteGraphs
+using Graphs
 ts = TearingState(expand_connections(big_rc))
-inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
+inc_org = Graphs.incidence_matrix(ts.structure.graph)
 # Note: sorted_incidence_matrix requires the system and matrix dimensions to match
 # blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys)
 ```

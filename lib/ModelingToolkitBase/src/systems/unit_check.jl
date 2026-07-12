@@ -9,6 +9,23 @@ struct ValidationError <: Exception
 end
 
 struct PleaseImportDynamicQuantities end
+
+"""
+    t
+
+Default unitful independent variable used with DynamicQuantities.
+
+Import DynamicQuantities before using this binding. For unitless models, use
+[`t_nounits`](@ref) instead.
+
+# Examples
+
+```julia
+using DynamicQuantities, ModelingToolkitBase
+
+t = ModelingToolkitBase.t
+```
+"""
 global t::Union{PleaseImportDynamicQuantities, Num} = PleaseImportDynamicQuantities()
 
 function Base.show(io::IO, ::PleaseImportDynamicQuantities)
@@ -22,4 +39,21 @@ function __import_dynamic_quantities(_...)
         """
     )
 end
+
+"""
+    D
+
+Default unitful differential operator with respect to [`t`](@ref).
+
+Import DynamicQuantities before using this binding. For unitless models, use
+[`D_nounits`](@ref) instead.
+
+# Examples
+
+```julia
+using DynamicQuantities, ModelingToolkitBase
+
+D = ModelingToolkitBase.D
+```
+"""
 global D::Union{typeof(__import_dynamic_quantities), Differential} = __import_dynamic_quantities

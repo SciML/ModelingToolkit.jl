@@ -26,8 +26,8 @@ import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
     isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
     @rule, Rewriters, substitute, metadata, BasicSymbolic
-using SymbolicUtils.Code
-import SymbolicUtils.Code: toexpr
+import SymbolicUtils: Code
+using SymbolicUtils.Code: Assignment, DestructuredArgs, Func, Let, MakeTuple
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 using DocStringExtensions
 using SpecialFunctions, NaNMath
@@ -58,7 +58,7 @@ using Compat
 using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
     PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-    NoInit
+    NoInit, AbstractNonlinearProblem
 import Moshi
 using Moshi.Data: @data
 using Reexport
@@ -94,6 +94,173 @@ export independent_variables, unknowns, observables, parameters, bound_parameter
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
+"""
+    @symbolic_wrap expr
+
+Evaluate `expr` and wrap any symbolic result in the high-level Symbolics wrapper type.
+
+This is a Symbolics utility reexported by ModelingToolkitBase. It is mainly useful when
+writing low-level symbolic utilities that must preserve the wrapped `Num` interface.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+wrapped_x = @symbolic_wrap Symbolics.unwrap(x)
+```
+"""
+var"@symbolic_wrap"
+
+"""
+    @wrapped expr
+    @wrapped expr wrap_arrays
+
+Evaluate `expr` with symbolic arguments unwrapped, then wrap the result.
+
+This is a Symbolics utility reexported by ModelingToolkitBase. It is useful for defining
+helpers that operate on the internal symbolic representation while returning wrapped
+values to users.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+y = @wrapped Symbolics.unwrap(x)
+```
+"""
+var"@wrapped"
+
+"""
+    RuleSet(rules)
+
+Container for a collection of SymbolicUtils rewrite rules.
+
+`RuleSet` is reexported for users who build custom symbolic simplification or rewriting
+passes before handing expressions to ModelingToolkit.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+using SymbolicUtils: @rule
+
+rules = RuleSet([@rule sin(~x)^2 + cos(~x)^2 => 1])
+```
+"""
+RuleSet
+
+"""
+    get_canonical_expr(ir, idx)
+
+Return the canonical expression stored at index `idx` in a SymbolicUtils IR structure.
+
+This is a low-level SymbolicUtils helper reexported through Symbolics. Most ModelingToolkit
+users should work with symbolic expressions directly instead of using the IR interface.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+# `get_canonical_expr(ir, idx)` is used after constructing a SymbolicUtils IR.
+```
+"""
+get_canonical_expr
+
+"""
+    infimum(domain)
+
+Return the lower endpoint of a symbolic interval domain.
+
+This extends DomainSets interval queries to intervals whose endpoints are Symbolics
+expressions.
+
+# Examples
+
+```julia
+using DomainSets, ModelingToolkitBase
+
+@variables a b
+lo = infimum(a .. b)
+```
+"""
+infimum
+
+"""
+    supremum(domain)
+
+Return the upper endpoint of a symbolic interval domain.
+
+This extends DomainSets interval queries to intervals whose endpoints are Symbolics
+expressions.
+
+# Examples
+
+```julia
+using DomainSets, ModelingToolkitBase
+
+@variables a b
+hi = supremum(a .. b)
+```
+"""
+supremum
+
+"""
+    is_derivative(x) -> Bool
+
+Return whether `x` is a symbolic derivative expression.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+@variables x(t)
+is_derivative(Symbolics.unwrap(D(x)))
+```
+"""
+is_derivative
+
+"""
+    istree(x) -> Bool
+
+Deprecated alias for `iscall(x)` from SymbolicUtils.
+
+Use `iscall` in new code to check whether a symbolic value has an operation and
+arguments.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+iscall(Symbolics.unwrap(sin(x)))
+```
+"""
+istree
+
+"""
+    solve_for(eq, var; simplify = false, check = true)
+
+Solve a symbolic equation or equation system for `var`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x y
+solve_for(2x + y ~ 0, x)
+```
+"""
+solve_for
+
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 import SciMLPublic: @public
@@ -109,6 +276,26 @@ import SCCNonlinearSolve
 using TaskLocalValues: TaskLocalValue
 
 export @derivatives
+
+"""
+    toexpr(x; kwargs...)
+
+Convert a symbolic ModelingToolkit object to a Julia expression.
+
+`toexpr` is used by ModelingToolkit's generated-code and serialization utilities. For
+plain SymbolicUtils code-generation objects, this delegates to `SymbolicUtils.Code.toexpr`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+using ModelingToolkitBase: t_nounits as t
+
+@variables x(t)
+expr = toexpr(Differential(t)(x) ~ x)
+```
+"""
+toexpr(x; kw...) = Code.toexpr(x; kw...)
 
 for fun in [:toexpr]
     @eval begin
@@ -205,6 +392,9 @@ include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
 include("systems/problem_utils.jl")
+# Operator + lowering layer; must load before the problem constructors that
+# consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
+include("systems/homotopy_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -213,6 +403,7 @@ include("problems/daeproblem.jl")
 include("problems/sdeproblem.jl")
 include("problems/sddeproblem.jl")
 include("problems/nonlinearproblem.jl")
+include("problems/homotopyproblem.jl")
 include("problems/intervalnonlinearproblem.jl")
 include("problems/implicitdiscreteproblem.jl")
 include("problems/discreteproblem.jl")
@@ -287,6 +478,10 @@ export ImplicitDiscreteProblem, ImplicitDiscreteFunction
 export ODEProblem, SDEProblem
 export NonlinearFunction
 export NonlinearProblem
+# `AbstractNonlinearProblem(sys, op)` is the automatic constructor that selects a
+# `HomotopyProblem` when `sys` contains `homotopy(...)` nodes (see
+# `problems/homotopyproblem.jl`); re-exported so it is reachable unqualified.
+export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
 export OptimizationProblem, constraints
@@ -340,6 +535,8 @@ export generate_initializesystem, Initial, isinitial, InitializationProblem
 
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
+
+export homotopy
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes

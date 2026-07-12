@@ -197,20 +197,20 @@ function find_perfect_aliases!(
         v1 = fullvars[snbors[1]]
         v2 = fullvars[snbors[2]]
         local edge_sign::Int8
-        Moshi.Match.@match eq.rhs begin
-            BSImpl.AddMul(; variant, coeff, dict) && if variant == SU.AddMulVariant.ADD end => begin
-                SU._iszero(coeff) || continue
-                length(dict) == 2 || continue
-                haskey(dict, v1) && haskey(dict, v2) || continue
-                if SU._iszero(dict[v1] + dict[v2])
-                    edge_sign = Int8(1)   # v1 ~ v2
-                elseif SU._iszero(dict[v1] - dict[v2])
-                    edge_sign = Int8(-1)  # v1 ~ -v2
-                else
-                    continue
-                end
-            end
-            _ => continue
+        isadd(eq.rhs) || continue
+        variant = getproperty(eq.rhs, :variant)
+        variant == SU.AddMulVariant.ADD || continue
+        coeff = getproperty(eq.rhs, :coeff)
+        SU._iszero(coeff) || continue
+        dict = getproperty(eq.rhs, :dict)
+        length(dict) == 2 || continue
+        haskey(dict, v1) && haskey(dict, v2) || continue
+        if SU._iszero(dict[v1] + dict[v2])
+            edge_sign = Int8(1)   # v1 ~ v2
+        elseif SU._iszero(dict[v1] - dict[v2])
+            edge_sign = Int8(-1)  # v1 ~ -v2
+        else
+            continue
         end
         push!(candidate_eqs, (ieq, snbors[1], snbors[2], edge_sign))
         union_with_sign!(parent, parity, members, snbors[1], snbors[2], edge_sign)

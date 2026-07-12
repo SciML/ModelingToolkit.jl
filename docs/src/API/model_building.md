@@ -8,6 +8,19 @@ recommended to read the page on the [`System`](@ref System_type) before this.
 ModelingToolkit provides common definitions for the independent variable `t` (time) and the
 derivative with respect to it `D`.
 
+`ModelingToolkit.t_nounits` is the unitless default independent variable used by
+ModelingToolkit examples and constructors.
+
+`ModelingToolkit.D_nounits` is the unitless default differential operator,
+`Differential(ModelingToolkit.t_nounits)`.
+
+`ModelingToolkit.t` is the unitful default independent variable. Import
+DynamicQuantities before using this binding; otherwise it throws an error asking
+for DynamicQuantities to be loaded.
+
+`ModelingToolkit.D` is the unitful default differential operator with respect to
+`ModelingToolkit.t`. Import DynamicQuantities before using this binding.
+
 ```@docs
 ModelingToolkit.t_nounits
 ModelingToolkit.D_nounits

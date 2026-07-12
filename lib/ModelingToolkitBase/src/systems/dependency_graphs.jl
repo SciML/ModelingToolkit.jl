@@ -47,7 +47,7 @@ function equation_dependencies(
         # For Equations, only examine RHS (dependencies, not what's modified).
         # For jumps, use the whole object (specialized search_variables! handles it).
         target = eq isa Equation ? eq.rhs : eq
-        get_variables!(deps, target, variables)
+        jump_variables!(deps, target, variables)
         depeqs_to_vars[i] = [value(v) for v in deps]
         empty!(deps)
     end
