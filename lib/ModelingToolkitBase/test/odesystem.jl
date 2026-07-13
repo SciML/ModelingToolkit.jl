@@ -51,7 +51,7 @@ ssort(eqs) = sort(eqs, by = string)
 @named des[1:3] = System(eqs, t)
 @test length(unique(x -> ModelingToolkitBase.get_tag(x), des)) == 1
 
-de2 = eval(toexpr(de))
+de2 = eval(ModelingToolkitBase.toexpr(de))
 @test issetequal(equations(de2), eqs)
 @test issetequal(unknowns(de2), unknowns(de))
 @test issetequal(parameters(de2), parameters(de))

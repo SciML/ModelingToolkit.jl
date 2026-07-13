@@ -42,6 +42,7 @@ makedocs(
         # this link tends to fail linkcheck stochastically and often takes much longer to succeed
         # even in the browser it takes ages
         "http://www.scholarpedia.org/article/Differential-algebraic_equations",
+        "https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/",
         "https://link.springer.com/book/10.1007/978-3-030-91032-7",
 
     ],

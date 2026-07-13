@@ -41,12 +41,10 @@ What we would like to optimize here is the final height of the rocket. We do thi
 
 Now we can construct a problem and solve it. Let us use JuMP as our backend here. Note that the package trigger is actually [InfiniteOpt](https://infiniteopt.github.io/InfiniteOpt.jl/stable/), and not JuMP - this package includes JuMP but is designed for optimization on function spaces. Additionally we need to load the solver package - we will use [Ipopt](https://github.com/jump-dev/Ipopt.jl) here (a good choice in general).
 
-Here we use the default collocation tableau. Pass a custom tableau to `JuMPCollocation`
-only when a different collocation scheme is required.
+The collocation solver uses a default ODE tableau. A custom tableau can still be supplied when needed.
 
 ```@example dynamic_opt
 using InfiniteOpt, Ipopt
-using ModelingToolkit: @mtkcompile, @parameters, @variables
 jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
 jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer));
 ```

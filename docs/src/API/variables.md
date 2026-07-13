@@ -12,7 +12,6 @@ Symbolics.@variables
 @parameters
 @constants
 @brownians
-@brownian
 ```
 
 Symbolic variables can have metadata attached to them. The defaults and guesses assigned
