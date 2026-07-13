@@ -1098,7 +1098,8 @@ end
         @test init(prob2, alg; abstol = 1.0e-6, reltol = 1.0e-6).ps[p] ≈ 3 + exp(1) atol = 1.0e-4
         # solve for `x` given `p` and `y`
         prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(y)])
-        @test init(prob3, alg; abstol = 1.0e-6, reltol = 1.0e-6)[x] ≈ 1 - exp(1) atol = 1.0e-6
+        # Allow platform-level variation at the requested 1e-6 solver tolerance.
+        @test init(prob3, alg; abstol = 1.0e-6, reltol = 1.0e-6)[x] ≈ 1 - exp(1) atol = 2.0e-6
         @test_logs (:warn, r"overdetermined") remake(
             prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0]
         )
