@@ -491,7 +491,7 @@ end
 """
     $TYPEDSIGNATURES
 
-Create a parameter reprsenting the value of `var` at `t = 0`. Requires that `var` is
+Create a parameter representing the value of `var` at `t = 0`. Requires that `var` is
 of the form `x(t)` or `x(t)[i, j, ...]`.
 """
 function __create_t0_parameter_for(var::SymbolicT)
