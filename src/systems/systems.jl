@@ -86,8 +86,9 @@ function MTKBase.__mtkcompile(
                 if !iszero(new_idxs[i]) &&
                 invview(var_to_diff)[i] === nothing
         ]
+        # Analytically eliminating `D(x) = 0` causes problems for SDEs
         ode_sys = mtkcompile(
-            sys; inputs, outputs, disturbance_inputs, kwargs...
+            sys; inputs, outputs, disturbance_inputs, eliminate_mm_zeros = false, kwargs...
         )
         eqs = equations(ode_sys)
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))

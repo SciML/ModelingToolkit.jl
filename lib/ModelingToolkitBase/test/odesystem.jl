@@ -1062,9 +1062,9 @@ end
 
 @testset "Non-1-indexed variable array (issue #2670)" begin
     @variables x(t)[0:1] # 0-indexed variable array
-    @named sys = System([x[0] ~ 0.0, D(x[1]) ~ x[0]], t, [x], [])
+    @named sys = System([x[0] ~ 1.0, D(x[1]) ~ x[0]], t, [x], [])
     sys = @test_nowarn mtkcompile(sys)
-    @test full_equations(sys) == [D(x[1]) ~ 0.0]
+    @test full_equations(sys) == [D(x[1]) ~ 1.0]
 end
 
 # Namespacing of array variables

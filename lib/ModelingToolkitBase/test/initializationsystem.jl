@@ -656,7 +656,7 @@ end
         sys1,
         System([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
     ) |> mtkcompile
-    ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
+    ics2 = [x => 2]
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0); fully_determined = true)
     sol2 = solve(prob2, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test SciMLBase.successful_retcode(sol2)

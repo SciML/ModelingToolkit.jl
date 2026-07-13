@@ -1311,7 +1311,9 @@ function discover_maybe_zeros(sys::System)
     defs = copy(parent(bindings(sys)))
     left_merge!(defs, initial_conditions(sys))
     filter!(Base.Fix2(!==, COMMON_MISSING) ∘ last, defs)
-    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(defs))
+    subber = Symbolics.FixpointSubstituter{true}(
+        AADSubWrapper(defs); maxiters = clamp(length(defs), 10, 1000), warn_maxiters = false
+    )
     mbzs = copy(maybe_zeros(sys))
     for k in [parameters(sys); unknowns(sys)]
         is_variable_numeric(k) || continue

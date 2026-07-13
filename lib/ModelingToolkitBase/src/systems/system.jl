@@ -340,6 +340,19 @@ struct System <: IntermediateDeprecationSystem
     The `Schedule` containing additional information about the simplified system.
     """
     schedule::Union{Schedule, Nothing}
+    """
+    Keys are variables that `mtkcompile` managed to integrate analytically. The analytically integrated
+    expression is present as an observed equation. Despite being observed, these variables
+    require initial conditions, typically to solve for auxililar parameters. For example,
+    `D(x) ~ 0` may be analytically solved as `x ~ x0`, in which case the new parameter `x0`
+    requires a value. Initialization solves for this value given an initial condition for `x`.
+    Currently, setting this field is only valid for flattened systems.
+
+    The values correspond to the introduced parameter for the constant of integration. This
+    must be solvable (have a binding of `missing`) and is allowed to be modified by callbacks
+    as a proxy for updating the analytically integrated variable.
+    """
+    analytically_integrated::Dict{SymbolicT, SymbolicT}
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
@@ -354,8 +367,8 @@ struct System <: IntermediateDeprecationSystem
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
             irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
-            irstructure_tlv = __new_irstructure_tlv(), isscheduled = false, schedule = nothing;
-            checks::Union{Bool, Int} = true
+            irstructure_tlv = __new_irstructure_tlv(), isscheduled = false, schedule = nothing,
+            analytically_integrated = Dict{SymbolicT, SymbolicT}(); checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
             throw(
@@ -418,7 +431,7 @@ struct System <: IntermediateDeprecationSystem
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             state_priorities, irreducibles, maybe_zeros, irstructure_tlv,
-            isscheduled, schedule
+            isscheduled, schedule, analytically_integrated
         )
     end
 end

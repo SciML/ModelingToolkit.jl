@@ -89,7 +89,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, bound_parameters,
-    continuous_events, discrete_events
+    continuous_events, discrete_events, analytically_integrated
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
