@@ -24,7 +24,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         t, op = Dict();
         fast_path = false,
         guesses = [],
-        check_length = true,
+        # `check_length` defaults to `nothing`, meaning "no opinion — let the underlying
+        # problem constructor apply its own default". It is only forwarded below when the
+        # caller explicitly sets it. This matters because the initialization problem types
+        # have different defaults (`NonlinearProblem` uses `true` for square systems,
+        # `NonlinearLeastSquaresProblem` uses `false` for non-square); forwarding a single
+        # value unconditionally would override and break one of those cases.
+        check_length = nothing,
         warn_initialize_determined = true,
         initialization_eqs = [],
         fully_determined = nothing,
@@ -144,7 +150,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         sys, isys; warn_initialize_determined,
         kwargs...
     )
-    TProb{_iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
+    # Only forward `check_length` when the caller explicitly set it; otherwise let the
+    # underlying problem type apply its own default (see the keyword's definition above).
+    check_length_kw = check_length === nothing ? (;) : (; check_length)
+    TProb{_iip}(
+        isys, op; kwargs..., check_length_kw...,
+        build_initializeprob = false, is_initializeprob = true
+    )
 end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)

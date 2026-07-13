@@ -413,7 +413,7 @@ SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = true, cse = true, optimize = nothing,
+        checkbounds = true, optimize = nothing,
     )
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
@@ -440,7 +440,7 @@ function SymbolicIndexingInterface.observed(
         end
     end
     return build_explicit_observed_function(
-        sys, sym; eval_expression, eval_module, checkbounds, cse, optimize
+        sys, sym; eval_expression, eval_module, checkbounds, optimize
     )
 end
 
@@ -2286,24 +2286,23 @@ struct ObservedFunctionCache{S, O}
     eval_expression::Bool
     eval_module::Module
     checkbounds::Bool
-    cse::Bool
     optimize::O
 end
 
 function ObservedFunctionCache(
         sys; expression = Val{false}, steady_state = false, eval_expression = false,
-        eval_module = @__MODULE__, checkbounds = true, cse = true, optimize = nothing,
+        eval_module = @__MODULE__, checkbounds = true, optimize = nothing,
     )
     return if expression == Val{true}
         :(
             $ObservedFunctionCache(
                 $sys, Dict(), $steady_state, $eval_expression,
-                $eval_module, $checkbounds, $cse, $optimize
+                $eval_module, $checkbounds, $optimize
             )
         )
     else
         ObservedFunctionCache(
-            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse,
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds,
             optimize,
         )
     end
@@ -2317,10 +2316,9 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
     checkbounds = ofc.checkbounds
-    cse = ofc.cse
     optimize = ofc.optimize
     newofc = ObservedFunctionCache(
-        sys, dict, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds, optimize
     )
     stackdict[ofc] = newofc
     return newofc
@@ -2330,7 +2328,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds, cse = ofc.cse,
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds,
             optimize = ofc.optimize
         )
     end

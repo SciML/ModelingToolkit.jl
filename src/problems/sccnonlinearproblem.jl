@@ -13,7 +13,7 @@ const SCC_EXPLICITFUN_CACHE_OUT = unwrap(only(@parameters __outₘₜₖ::Vector
 function CacheWriter(
         sys::AbstractSystem, buffer_types::Vector{TypeT},
         exprs::SCCCacheVarsExprsElT, solsyms;
-        eval_expression = false, eval_module = @__MODULE__, cse = true, sparse = false
+        eval_expression = false, eval_module = @__MODULE__, sparse = false
     )
     rps = reorder_parameters(sys)  # 1 arg to use the cached version
     cache_writes = SymbolicT[]
@@ -45,7 +45,7 @@ function CacheWriter(
         sys, body, SCC_EXPLICITFUN_CACHE_OUT, solsyms..., rps...;
         p_start = length(solsyms) + 2, p_end = length(rps) + length(solsyms) + 1,
         compress_args = [2:(length(solsyms) + 1)],
-        expression = Val{true}, cse,
+        expression = Val{true},
         iip_config = (true, false)
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
@@ -448,14 +448,14 @@ struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
         decomposition::SCCDecomposition, i::Int, cachesyms, op; eval_expression = false,
-        eval_module = @__MODULE__, cse = true, kwargs...
+        eval_module = @__MODULE__, kwargs...
     ) where {iip}
     subsys = decomposition.subsystems[i]
     islin = decomposition.islinear[i]
     # generate linear problem instead
     if islin
         return LinearFunction{iip}(
-            subsys; eval_expression, eval_module, cse, cachesyms,
+            subsys; eval_expression, eval_module, cachesyms,
             structural_hint = decomposition.hints[i], kwargs...
         )
     end
@@ -474,7 +474,7 @@ end
 
 function SciMLBase.SCCNonlinearProblem{iip}(
         sys::System, op; eval_expression = false,
-        eval_module = @__MODULE__, cse = true, u0_constructor = identity,
+        eval_module = @__MODULE__, u0_constructor = identity,
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
     ) where {iip}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
@@ -514,7 +514,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
                 sys, op; eval_expression, eval_module,
-                u0_constructor, cse, kwargs...
+                u0_constructor, kwargs...
             )
             # Required for filling missing parameter values when this is an initialization
             # problem
@@ -527,7 +527,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
             return NonlinearProblem{iip}(
-                sys, op; eval_expression, eval_module, u0_constructor, cse, missing_guess_value, kwargs...
+                sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
             )
         end
     end
@@ -593,7 +593,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                 explicitfuns,
                 CacheWriter(
                     sys, decomposition.cachetypes, cacheexprs, solsyms;
-                    eval_expression, eval_module, cse
+                    eval_expression, eval_module
                 )
             )
         end
@@ -603,7 +603,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            eval_expression, eval_module, cse, kwargs...
+            eval_expression, eval_module, kwargs...
         )
         push!(nlfuns, f)
     end

@@ -133,12 +133,12 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         sparsity = false,
         analytic = nothing,
         initialization_data = nothing,
-        cse = true,
+
         kwargs...
     ) where {iip, specialize}
     f, _,
         _ = generate_control_function(
-        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...
+        sys, inputs, disturbance_inputs; eval_module, kwargs...
     )
     f = f[1]
 
@@ -148,7 +148,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
             simplify = simplify,
             expression = Val{true},
             wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
+            expression_module = eval_module,
             checkbounds = checkbounds, kwargs...
         )
     else
@@ -161,7 +161,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
             simplify = simplify, sparse = sparse,
             expression = Val{true},
             wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
+            expression_module = eval_module,
             checkbounds = checkbounds, kwargs...
         )
     else
@@ -173,7 +173,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
             sys;
             simplify = simplify, sparse = sparse,
             expression = Val{true}, wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
+            expression_module = eval_module,
             checkbounds = checkbounds, kwargs...
         )
     else
@@ -184,7 +184,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; steady_state, eval_expression, eval_module, checkbounds
     )
 
     _W_sparsity = W_sparsity(sys)

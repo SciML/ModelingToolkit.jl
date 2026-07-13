@@ -7,7 +7,7 @@ function SciMLBase.OptimizationFunction{iip}(
         u0 = nothing, p = nothing, grad = false, hess = false,
         sparse = false, cons_j = false, cons_h = false, cons_sparse = false,
         linenumbers = true, eval_expression = false, eval_module = @__MODULE__,
-        simplify = false, check_compatibility = true, checkbounds = false, cse = true,
+        simplify = false, check_compatibility = true, checkbounds = false,
         expression = Val{false}, kwargs...
     ) where {iip}
     check_complete(sys, OptimizationFunction)
@@ -17,13 +17,13 @@ function SciMLBase.OptimizationFunction{iip}(
 
     f = generate_cost(
         sys; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, cse, kwargs...
+        eval_module, checkbounds, kwargs...
     )
 
     if grad
         _grad = generate_cost_gradient(
             sys; expression, wrap_gfw = Val{true},
-            eval_expression, eval_module, checkbounds, cse, kwargs...
+            eval_expression, eval_module, checkbounds, kwargs...
         )
     else
         _grad = nothing
@@ -32,7 +32,7 @@ function SciMLBase.OptimizationFunction{iip}(
         _hess,
             hess_prototype = generate_cost_hessian(
             sys; expression, wrap_gfw = Val{true}, eval_expression,
-            eval_module, checkbounds, cse, sparse, simplify, return_sparsity = true,
+            eval_module, checkbounds, sparse, simplify, return_sparsity = true,
             kwargs...
         )
     else
@@ -47,13 +47,13 @@ function SciMLBase.OptimizationFunction{iip}(
     else
         cons = generate_cons(
             sys; expression, wrap_gfw = Val{true},
-            eval_expression, eval_module, checkbounds, cse, kwargs...
+            eval_expression, eval_module, checkbounds, kwargs...
         )
         if cons_j
             _cons_j,
                 cons_jac_prototype = generate_constraint_jacobian(
                 sys; expression, wrap_gfw = Val{true}, eval_expression,
-                eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
+                eval_module, checkbounds, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...
             )
         else
@@ -63,7 +63,7 @@ function SciMLBase.OptimizationFunction{iip}(
             _cons_h,
                 cons_hess_prototype = generate_constraint_hessian(
                 sys; expression, wrap_gfw = Val{true}, eval_expression,
-                eval_module, checkbounds, cse, simplify, sparse = cons_sparse,
+                eval_module, checkbounds, simplify, sparse = cons_sparse,
                 return_sparsity = true, kwargs...
             )
         else
@@ -75,7 +75,7 @@ function SciMLBase.OptimizationFunction{iip}(
     obj_expr = Code.toexpr(expand(cost(sys)))
 
     observedfun = ObservedFunctionCache(
-        sys; expression, eval_expression, eval_module, checkbounds, cse
+        sys; expression, eval_expression, eval_module, checkbounds
     )
 
     args = (; f, ad = SciMLBase.NoAD())

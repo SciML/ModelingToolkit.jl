@@ -492,7 +492,7 @@ end
 
 @fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::System; eval_expression = false, eval_module = @__MODULE__,
-        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
+        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions,
         kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys)
@@ -515,9 +515,9 @@ end
 
     # we want to create f, jac etc. according to `sys2` since that will do the solving
     # but the `sys` inside for symbolic indexing should be the non-polynomial system
-    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, cse, kwargs...)
+    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, kwargs...)
     obsfn = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false)
     )
     fn = remake(fn; sys = sys, observed = obsfn)
 

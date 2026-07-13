@@ -1,7 +1,7 @@
 function SciMLBase.IntervalNonlinearFunction(
         sys::System; u0 = nothing, p = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
-        analytic = nothing, cse = true, initialization_data = nothing,
+        analytic = nothing, initialization_data = nothing,
         check_compatibility = true, kwargs...
     )
     check_complete(sys, IntervalNonlinearFunction)
@@ -9,12 +9,11 @@ function SciMLBase.IntervalNonlinearFunction(
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        scalar = true, eval_expression, eval_module, checkbounds, cse, kwargs...
+        scalar = true, eval_expression, eval_module, checkbounds, kwargs...
     )
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     args = (; f)

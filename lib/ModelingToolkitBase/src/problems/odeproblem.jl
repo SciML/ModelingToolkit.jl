@@ -22,7 +22,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, @nospecialize(analytic = nothing),
-        simplify = false, cse = true, @nospecialize(initialization_data = nothing), expression = Val{false},
+        simplify = false, @nospecialize(initialization_data = nothing), expression = Val{false},
         check_compatibility = true, nlstep = false, nlstep_compile = true, nlstep_scc = false,
         optimize = nothing, kwargs...
     ) where {iip, spec}
@@ -31,7 +31,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+        eval_expression, eval_module, checkbounds = checkbounds,
         optimize, kwargs...
     )
 
@@ -49,7 +49,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     if tgrad
         _tgrad = generate_tgrad(
             sys; expression, wrap_gfw = Val{true},
-            simplify, cse, eval_expression, eval_module, checkbounds, optimize, kwargs...
+            simplify, eval_expression, eval_module, checkbounds, optimize, kwargs...
         )
     else
         _tgrad = nothing
@@ -58,7 +58,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     if jac
         _jac = generate_jacobian(
             sys; expression, wrap_gfw = Val{true},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, optimize,
+            simplify, sparse, eval_expression, eval_module, checkbounds, optimize,
             kwargs...
         )
     else
@@ -75,7 +75,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, optimize
     )
 
     _W_sparsity = W_sparsity(sys)

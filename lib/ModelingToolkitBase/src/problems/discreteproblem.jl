@@ -1,7 +1,7 @@
 @fallback_iip_specialize function SciMLBase.DiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         eval_expression = false, eval_module = @__MODULE__, expression = Val{false},
-        checkbounds = false, analytic = nothing, simplify = false, cse = true,
+        checkbounds = false, analytic = nothing, simplify = false,
         initialization_data = nothing, check_compatibility = true,
         kwargs...
     ) where {iip, spec}
@@ -10,7 +10,7 @@
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+        eval_expression, eval_module, checkbounds = checkbounds,
         kwargs...
     )
 
@@ -26,8 +26,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     kwargs = (;

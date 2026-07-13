@@ -2,7 +2,7 @@
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, SDEFunction)
@@ -10,12 +10,12 @@
 
     f = generate_rhs(
         sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
+        eval_expression, eval_module, checkbounds = checkbounds,
         kwargs...
     )
     g = generate_diffusion_function(
         sys; expression,
-        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...
+        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, kwargs...
     )
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
@@ -32,7 +32,7 @@
     if tgrad
         _tgrad = generate_tgrad(
             sys; expression,
-            wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
+            wrap_gfw = Val{true}, simplify, eval_expression, eval_module, checkbounds,
             kwargs...
         )
     else
@@ -42,7 +42,7 @@
     if jac
         _jac = generate_jacobian(
             sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
+            wrap_gfw = Val{true}, simplify, sparse, eval_expression, eval_module,
             checkbounds, kwargs...
         )
     else
@@ -53,7 +53,7 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds
     )
 
     _W_sparsity = W_sparsity(sys)
