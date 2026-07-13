@@ -49,4 +49,5 @@ run_tests(;
         "Optimization",
         "QA",
     ],
+    isolate_group_environments = true,
 )
