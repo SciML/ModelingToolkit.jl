@@ -3,6 +3,14 @@ using ModelingToolkitBase: value, parse_variable
 using SymbolicUtils: <ₑ
 import SymbolicUtils as SU
 
+@variables x
+@test ModelingToolkitBase.float_type_from_varmap(
+    [x => Union{Nothing, BigFloat}[nothing]]
+) == BigFloat
+@test ModelingToolkitBase.float_type_from_varmap(
+    [x => Union{Nothing, Float32}[nothing]]
+) == Float32
+
 @parameters α β δ
 expr = (((1 / β - 1) + δ) / α)^(1 / (α - 1))
 ref = sort([β, δ, α], lt = <ₑ)

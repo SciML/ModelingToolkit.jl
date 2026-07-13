@@ -1767,9 +1767,6 @@ function maybe_build_initialization_problem(
     )
 end
 
-rm_union(::Type{Union{T, Nothing}}) where {T} = T
-rm_union(::Type{T}) where {T} = T
-
 """
     $(TYPEDSIGNATURES)
 
@@ -1783,8 +1780,7 @@ function float_type_from_varmap(varmap, floatT = Bool)
         is_array_of_symbolics(v) && continue
         v = unwrap_const(v)
         if v isa AbstractArray
-            # Remove union in case some elements of the array are `nothing`
-            floatT = promote_type(floatT, rm_union(eltype(unwrap_const(v))))
+            floatT = promote_type(floatT, typeintersect(eltype(v), Number))
         elseif v isa Number
             floatT = promote_type(floatT, typeof(unwrap_const(v)))
         end
