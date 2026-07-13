@@ -140,7 +140,7 @@ function find_singular_subterms(eq, expr, sub_map, diagnosis)
     args = SymbolicUtils.arguments(expr)
 
     if op === (/) #division, singular if we divide by small thing
-        d = Symbolics.value(Symbolics.substitute(args[2], sub_map))
+        d = Symbolics.value(SymbolicUtils.substitute(args[2], sub_map))
         if d isa Number && abs(d) < 1e-10
             push!(diagnosis, "in equation $eq: division by very small value $(args[2]) ≈ $(@sprintf("%.4g", d)) leads to singularity.")
         end
