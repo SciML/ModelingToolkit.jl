@@ -24,3 +24,4 @@ jobs:
           julia-version: "${{ matrix.version }}"
           script: "benchmark/benchmarks.jl"
           extra-pkgs: "${{ github.event.pull_request.head.repo.clone_url }}#${{ github.event.pull_request.head.sha }}:lib/ModelingToolkitBase,ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault"
+          job-summary: "${{ github.event.pull_request.head.repo.fork }}"
