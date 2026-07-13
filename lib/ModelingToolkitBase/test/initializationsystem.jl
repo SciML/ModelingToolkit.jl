@@ -2159,3 +2159,24 @@ end
     @test integ[X] ≈ [1.0, 2.0]
     @test integ.ps[T] ≈ 3.0
 end
+
+cube_plus(v) = v^3 + v
+@register_symbolic cube_plus(v)
+if @isdefined(ModelingToolkit)
+    @testset "When no required guesses for `SCCNonlinearProblem` are present" begin
+        # `SCCNonlinearProblem` created an interim `u0` of type `Vector{SymbolicT}`,
+        # which coerced all HashRandom guesses to `Const` symbolics.
+        @variables xv(t)[1:5] y(t) = 0.0
+        @parameters pa = 1.2 pb = 0.8
+        eqs = [
+            xv[1] ~ pa
+            xv[5] ~ pb
+            [0 ~ cube_plus(xv[i]) - (1.0 + i) for i in 2:4]
+            D(y) ~ xv[1] + xv[2] + xv[3] + xv[4] + xv[5]
+        ]
+        @mtkcompile sys = System(
+            eqs, t, [xv, y], [pa, pb]
+        )
+        @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+    end
+end
