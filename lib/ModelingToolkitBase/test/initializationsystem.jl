@@ -1742,7 +1742,7 @@ end
             @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
             @inferred solve(prob)
         end
-    elseif v"1.12-" <= VERSION
+    elseif VERSION >= v"1.11"
         @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
         @inferred solve(prob)
     else
