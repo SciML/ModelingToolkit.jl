@@ -134,7 +134,7 @@ function SciMLBase.diagnose_symbolic_instability(integrator::SciMLBase.DEIntegra
 end
 
 function find_singular_subterms(eq, expr, sub_map, diagnosis)
-    expr = Symbolics.unwrap(expr)
+    expr = unwrap(expr)
     !SymbolicUtils.iscall(expr) && return diagnosis
     op = SymbolicUtils.operation(expr)
     args = SymbolicUtils.arguments(expr)
