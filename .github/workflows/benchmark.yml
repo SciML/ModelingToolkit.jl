@@ -23,4 +23,4 @@ jobs:
         with:
           julia-version: "${{ matrix.version }}"
           script: "benchmark/benchmarks.jl"
-          extra-pkgs: "ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault"
+          extra-pkgs: "${{ github.event.pull_request.head.repo.clone_url }}#${{ github.event.pull_request.head.sha }}:lib/ModelingToolkitBase,ModelingToolkitStandardLibrary,OrdinaryDiffEqDefault"
