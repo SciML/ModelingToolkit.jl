@@ -639,7 +639,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     subber = Symbolics.FixpointSubstituter{true}(AtomicArrayDictSubstitutionWrapper(op))
     for (i, (f, vscc)) in enumerate(zip(nlfuns, decomposition.var_sccs))
         _u0 = SymbolicUtils.Code.create_array(
-            typeof(u0), eltype(u0), Val(1), Val(length(vscc)), u0[vscc]...
+            typeof(u0), Any, Val(1), Val(length(vscc)), u0[vscc]...
         )
         symbolic_idxs = findall(x -> x === nothing || symbolic_type(x) !== NotSymbolic(), _u0)
         if f isa LinearFunction
