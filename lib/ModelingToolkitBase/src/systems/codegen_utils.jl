@@ -406,11 +406,26 @@ function find_arrvars_is_atomic(ex::SymbolicT)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    BuildFunctionWrapperOptions(; kwargs...)
 
-A wrapper around `build_function` which performs the necessary transformations for
-code generation of all types of systems. `expr` is the expression returned from the
-generated functions, and `args` are the arguments.
+Options for [`build_function_wrapper`](@ref). Bundles the wrapper-specific options
+together with a nested `Symbolics.CodegenFunctionOptions` (the `codegen` field)
+holding the code-generation options that are ultimately forwarded to
+`codegen_function`.
+
+Threading a single `BuildFunctionWrapperOptions` (one concrete type) instead of a
+`kwargs...` bundle means the body of `build_function_wrapper` is compiled once
+regardless of which options are set. Keeping the code-generation options in a
+nested `CodegenFunctionOptions` means that if `codegen_function` gains new options
+this struct does not need to change — they ride along inside `codegen`.
+
+The keyword constructor mirrors the historical keyword arguments of
+`build_function_wrapper`. The code-generation options (including `wrap_code` and
+`optimize`) are collected into the nested `codegen`. `build_function_wrapper` reads
+`wrap_code`/`optimize` from `codegen` and writes the transformed values back — the
+composed `wrap_code`, the resolved `optimize`, and the `output_type`-derived
+`similarto` — before calling `codegen_function`. Keywords not recognized by
+`CodegenFunctionOptions` are ignored, matching the previous behaviour.
 
 # Keyword Arguments
 
@@ -434,7 +449,6 @@ generated functions, and `args` are the arguments.
   term `x(expr)`, this is called as `histfn(p, expr)` where `p` is the parameter object.
 - `histfn_symbolic`: The symbolic history function variable to add as an argument to the
   generated function.
-- `wrap_code`: Forwarded to `build_function`.
 - `create_bindings`: Whether to explicitly destructure arrays of symbolics present in
   `args` in the generated code. If `false`, all usages of the individual symbolics will
   instead call `getindex` on the relevant argument. This is useful if the generated
@@ -452,20 +466,126 @@ generated functions, and `args` are the arguments.
   argument.
 - `extra_assignments`: Extra `Assignment` statements to prefix to `expr`, after all other
   assignments.
+- `codegen_function_options`: A [`Symbolics.CodegenFunctionOptions`](@ref) holding the
+  code-generation options forwarded to `codegen_function`. `build_function_wrapper` reads
+  `wrap_code` and `optimize` from it and writes the transformed values back (the composed
+  `wrap_code`, the resolved `optimize`, and the `output_type`-derived `similarto`) before
+  generating code. The backwards-compatible keyword form of `build_function_wrapper`
+  assembles this from loose keyword arguments; direct callers of this constructor must pass
+  a fully-formed `CodegenFunctionOptions` (the constructor accepts no other keywords).
+"""
+struct BuildFunctionWrapperOptions
+    p_start::Int
+    # `nothing` means "resolve from `sys`/`args` in the struct-based method"
+    p_end::Union{Nothing, Int}
+    compress_args::Vector{UnitRange{Int}}
+    non_standard_param_layout::Bool
+    u_arg::Int
+    # `nothing` means "resolve to `is_dde(sys)` in the struct-based method"
+    wrap_delays::Union{Nothing, Bool}
+    histfn::Any
+    histfn_symbolic::SymbolicT
+    create_bindings::Bool
+    output_type::Any
+    mkarray::Any
+    wrap_mtkparameters::Bool
+    extra_assignments::Vector{Assignment}
+    n_param_buffers::Union{Nothing, Int}
+    codegen::Symbolics.CodegenFunctionOptions
+end
 
-All other keyword arguments are forwarded to `build_function`.
+function BuildFunctionWrapperOptions(;
+        p_start::Integer = 2, p_end = nothing, compress_args = UnitRange{Int}[],
+        non_standard_param_layout = false, u_arg::Integer = -1, wrap_delays = nothing,
+        histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
+        create_bindings = false, output_type = nothing, mkarray = nothing,
+        wrap_mtkparameters = true, extra_assignments = Assignment[],
+        n_param_buffers = nothing,
+        codegen_function_options::Symbolics.CodegenFunctionOptions = Symbolics.CodegenFunctionOptions()
+    )
+    # The constructor only accepts valid `build_function_wrapper` options; there is no
+    # `kwargs...` sink. Code-generation options are supplied as a fully-formed
+    # `CodegenFunctionOptions` via `codegen_function_options` (`build_function_wrapper` reads
+    # `wrap_code`/`optimize` from it and writes the transformed values back before calling
+    # `codegen_function`). The backwards-compatible keyword form of `build_function_wrapper`
+    # is responsible for assembling that `CodegenFunctionOptions` from loose keywords.
+    return BuildFunctionWrapperOptions(
+        p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
+        histfn, histfn_symbolic, create_bindings, output_type, mkarray,
+        wrap_mtkparameters, extra_assignments, n_param_buffers, codegen_function_options
+    )
+end
+
+"""
+    build_function_wrapper(sys::AbstractSystem, expr, args...; kwargs...)
+
+Backwards-compatibility keyword-argument form of `build_function_wrapper`. The keyword
+arguments (documented on [`BuildFunctionWrapperOptions`](@ref)) are bundled into a
+`BuildFunctionWrapperOptions` and forwarded to the primary method,
+[`build_function_wrapper(sys, expr, args, opts::BuildFunctionWrapperOptions)`](@ref). This
+method exists only for backwards compatibility; new code should construct a
+`BuildFunctionWrapperOptions` and call that method directly.
 """
 Base.@nospecializeinfer function build_function_wrapper(
         sys::AbstractSystem, @nospecialize(expr), @nospecialize(args...); p_start = 2,
-        p_end = is_time_dependent(sys) ? length(args) - 1 : length(args), compress_args = UnitRange{Int}[],
+        p_end = nothing, compress_args = UnitRange{Int}[],
         non_standard_param_layout = false, u_arg::Integer = -1,
-        wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn, wrap_code = identity,
+        wrap_delays = is_dde(sys), histfn = DDE_HISTORY_FUN, histfn_symbolic = histfn,
+        wrap_code = (identity, identity),
         create_bindings = false, @nospecialize(output_type::Union{Nothing, Type} = nothing), mkarray = nothing,
         wrap_mtkparameters = true, extra_assignments = Assignment[],
         n_param_buffers::Int = -1, optimize = nothing, @nospecialize(kwargs...)
     )
+    # Thin, backwards-compatible keyword entry point: bundle the options into a single
+    # `BuildFunctionWrapperOptions` (computing the `sys`-dependent defaults here, where
+    # `sys`/`args` are in scope) and dispatch to the struct-based method below, whose body
+    # is compiled once regardless of the options. This shim is the one place that accepts
+    # loose code-generation keywords: `wrap_code` and `optimize` (which the struct-based
+    # method reads back out of `codegen`) together with any other keywords in `kwargs...`
+    # ride into a `CodegenFunctionOptions` (which drops any it does not recognize) passed
+    # via `codegen_function_options`.
+    opts = BuildFunctionWrapperOptions(;
+        p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
+        histfn, histfn_symbolic, create_bindings, output_type, mkarray,
+        wrap_mtkparameters, extra_assignments, n_param_buffers,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; wrap_code, optimize, kwargs...)
+    )
+    return build_function_wrapper(sys, expr, collect(Any, args), opts)
+end
+
+"""
+    build_function_wrapper(sys::AbstractSystem, expr, args, opts::BuildFunctionWrapperOptions)
+
+A wrapper around `build_function` which performs the necessary transformations for
+code generation of all types of systems. `expr` is the expression returned from the
+generated functions, and `args` is the `Vector{Any}` of arguments.
+
+Options are supplied as a [`BuildFunctionWrapperOptions`](@ref); see its docstring for the
+available options. This is the primary method — the keyword-argument form of
+`build_function_wrapper` is a backwards-compatibility shim that bundles its keywords into a
+`BuildFunctionWrapperOptions` and calls this method.
+"""
+Base.@nospecializeinfer function build_function_wrapper(
+        sys::AbstractSystem, @nospecialize(expr), args::Vector{Any},
+        opts::BuildFunctionWrapperOptions
+    )
+    (;
+        p_start, p_end, compress_args, non_standard_param_layout, u_arg, wrap_delays,
+        histfn_symbolic, create_bindings, output_type, mkarray, wrap_mtkparameters,
+        extra_assignments, n_param_buffers,
+    ) = opts
+    # Resolve the `sys`/`args`-dependent defaults (left as `nothing` when constructing the
+    # options without a `sys` in scope). `length(args)` here is the original argument count,
+    # before `wrap_delays` may insert the history-function argument below.
+    p_end = p_end === nothing ? (is_time_dependent(sys) ? length(args) - 1 : length(args)) : p_end
+    wrap_delays = wrap_delays === nothing ? is_dde(sys) : wrap_delays
+    # `-1` is the "unset" sentinel used below (`pbuf_end`). Direct callers may leave
+    # `n_param_buffers` as `nothing`; normalize it to the sentinel here.
+    n_param_buffers = n_param_buffers === nothing ? -1 : n_param_buffers
     isscalar = !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
-    args = Vector{Any}(collect(args))
+    # Copy so the in-place mutations below (`insert!`, `deleteat!`, `setindex!`) do not
+    # affect the caller's vector.
+    args = copy(args)
     assignments = Assignment[]
 
     if u_arg != -1
@@ -614,26 +734,29 @@ Base.@nospecializeinfer function build_function_wrapper(
         append!(assignments, pref)
     end
 
-    wrap_code = wrap_code .∘ wrap_assignments(false, assignments)
+    wrap_code = opts.codegen.wrap_code .∘ wrap_assignments(false, assignments)
 
-    # handling of `output_type` and `mkarray`
-    similarto = nothing
+    # handling of `output_type` and `mkarray`. A `similarto` already present on
+    # `opts.codegen` (set directly via `codegen_function_options` by callers such as
+    # `generate_history`, bypassing the `output_type` wrapper option) takes precedence over
+    # the `output_type`-derived value, matching the pre-`BuildFunctionWrapperOptions`
+    # behaviour where such an explicit `similarto` was passed as a later keyword argument.
+    similarto = opts.codegen.similarto
     if output_type === Tuple
         expr = MakeTuple(Tuple(expr))
     elseif mkarray === nothing
-        similarto = output_type
+        similarto = similarto === nothing ? output_type : similarto
     else
         expr = mkarray(expr, output_type)
     end
 
-    optimize = resolve_optimize_option(optimize)
-    # Bundle the code-generation options into a single `Symbolics.CodegenFunctionOptions` rather than
-    # splatting them (and any stray forwarded keyword arguments) as `kwargs...`. Because
-    # `CodegenFunctionOptions` is one concrete type regardless of the option values, `codegen_function`
-    # only needs to be compiled once instead of once per distinct set of keyword arguments.
-    # Unknown keyword arguments are ignored by the `CodegenFunctionOptions` constructor, matching the
-    # previous behaviour where `codegen_function` silently dropped them.
-    codegen_options = Symbolics.CodegenFunctionOptions(; wrap_code, similarto, optimize, kwargs...)
+    optimize = resolve_optimize_option(opts.codegen.optimize)
+    # Write the wrapper-derived code-generation options (the composed `wrap_code`, the
+    # `output_type`-derived `similarto`, and the resolved `optimize`) into the nested
+    # `CodegenFunctionOptions`. `setproperties` overrides only these fields and preserves the
+    # rest (`nanmath`, `checkbounds`, `iip_config`, ...), so `codegen_function` still sees a
+    # single concrete `CodegenFunctionOptions` type and is compiled once.
+    codegen_options = setproperties(opts.codegen, (; wrap_code, similarto, optimize))
     return Symbolics.codegen_function(ir, expr, args, codegen_options)
 end
 

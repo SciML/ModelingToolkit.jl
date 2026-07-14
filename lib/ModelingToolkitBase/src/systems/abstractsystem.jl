@@ -32,26 +32,31 @@ function generate_custom_function(
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
     end
-    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
+    p = reorder_parameters(sys, unwrap.(ps))
     isscalar = !(exprs isa AbstractArray)
     fnexpr = if is_time_dependent(sys)
         build_function_wrapper(
             sys, exprs,
-            dvs,
-            p...,
-            get_iv(sys);
-            u_arg = 1,
-            kwargs...,
-            expression = Val{true}
+            [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                    kwargs...,
+                    expression = Val{true}
+                )
+            )
         )
     else
         build_function_wrapper(
             sys, exprs,
-            dvs,
-            p...;
-            u_arg = 1,
-            kwargs...,
-            expression = Val{true}
+            [Any[dvs]; p],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                    kwargs...,
+                    expression = Val{true}
+                )
+            )
         )
     end
     if expression == Val{true}
