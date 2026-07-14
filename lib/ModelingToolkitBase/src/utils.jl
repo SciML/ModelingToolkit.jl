@@ -846,6 +846,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
         Moshi.Match.@match var begin
+            BSImpl.Const() => nothing
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
