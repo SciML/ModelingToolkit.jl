@@ -100,16 +100,13 @@ function get_assertions_expr(sys::AbstractSystem)
     return term
 end
 
-function SciMLBase.diagnose_symbolic_instability(integrator::SciMLBase.DEIntegrator)
-    sys = integrator.f.sys
-    u = integrator.u
-    uprev = integrator.uprev
+function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
     diagnosis = String[]
 
     #check for assertion failures
     unks = unknowns(sys)
-    curr_substitution_map = Dict(zip(unks, u))
-    prev_substitution_map = Dict(zip(unknowns(sys), uprev))
+    curr_substitution_map = Dict(zip(unks, Symbolics.unwrap.(Symbolics.Num.(u))))
+    prev_substitution_map = Dict(zip(unknowns(sys), Symbolics.unwrap.(Symbolics.Num.(uprev))))
 
     for (cond, msg) in assertions(sys)
         subclauses = String[]
@@ -122,8 +119,10 @@ function SciMLBase.diagnose_symbolic_instability(integrator::SciMLBase.DEIntegra
 
     #find singularity causes in equations
     singularities = String[]
-    for eq in equations(sys)
-        find_singular_subterms(eq, eq.rhs, prev_substitution_map, singularities)
+    visited = IdDict()
+    subber = SymbolicUtils.IRSubstituter{true}(get_irstructure(sys), prev_substitution_map)
+    for eq in full_equations(sys)
+        find_singular_subterms(eq, eq.rhs, subber, singularities, visited)
     end
     if !isempty(singularities)
         push!(diagnosis, "\nSymbolic Analysis of MTK System:")
@@ -133,30 +132,32 @@ function SciMLBase.diagnose_symbolic_instability(integrator::SciMLBase.DEIntegra
     return isempty(diagnosis) ? "" : join(diagnosis, "\n")
 end
 
-function find_singular_subterms(eq, expr, sub_map, diagnosis)
+function find_singular_subterms(eq, expr, sub_map, diagnosis, visited)
     expr = unwrap(expr)
     !SymbolicUtils.iscall(expr) && return diagnosis
     op = SymbolicUtils.operation(expr)
     args = SymbolicUtils.arguments(expr)
+    haskey(visited, expr) && return diagnosis  
+    visited[expr] = nothing
 
     if op === (/) #division, singular if we divide by small thing
-        d = Symbolics.value(SymbolicUtils.substitute(args[2], sub_map))
+        d = Symbolics.value(sub_map(args[2]))
         if d isa Number && abs(d) < 1e-10
             push!(diagnosis, "in equation $eq: division by very small value $(args[2]) ≈ $(@sprintf("%.4g", d)) leads to singularity.")
         end
     elseif op === log #singular if we log small thing
-        x = Symbolics.value(Symbolics.substitute(args[1], sub_map))
+        x = Symbolics.value(sub_map(args[1]))
         if x isa Number && x <= 1e-10
             push!(diagnosis, "in equation $eq: log of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
         end
     elseif op === sqrt 
-        x = Symbolics.value(Symbolics.substitute(args[1], sub_map))
+        x = Symbolics.value(sub_map(args[1]))
         if x isa Number && x < 1e-10
             push!(diagnosis, "in equation $eq: sqrt of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
         end
     elseif op === (^)
-        e = Symbolics.value(Symbolics.substitute(args[2], sub_map))
-        b = Symbolics.value(Symbolics.substitute(args[1], sub_map))
+        e = Symbolics.value(sub_map(args[2]))
+        b = Symbolics.value(sub_map(args[1]))
         if e isa Number && b isa Number #two cases
             if e < 0 && abs(b) < 1e-10
                 push!(diagnosis, "in equation $eq: ($(args[1])) raised to power $e with base ≈ $(@sprintf("%.4g", b)) going to 0; result diverges.")
@@ -167,7 +168,7 @@ function find_singular_subterms(eq, expr, sub_map, diagnosis)
     end
 
     for arg in args
-        find_singular_subterms(eq, arg, sub_map, diagnosis)
+        find_singular_subterms(eq, arg, sub_map, diagnosis, visited)
     end
     return diagnosis
 end
