@@ -781,6 +781,11 @@ function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
     return GeneratedFunctionWrapper{P, O, I}(foop, fiip)
 end
 
+# The wrapped functions are stateless generated functions, so there is nothing to
+# deep-copy. Overriding this as the identity avoids `deepcopy` recursing into the
+# function internals, which improves `juliac` trimmability.
+Base.deepcopy_internal(gfw::GeneratedFunctionWrapper, ::IdDict) = gfw
+
 function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
     return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
 end
