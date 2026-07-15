@@ -105,8 +105,8 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
 
     #check for assertion failures
     unks = unknowns(sys)
-    curr_substitution_map = Dict(zip(unks, Symbolics.unwrap.(Symbolics.Num.(u))))
-    prev_substitution_map = Dict(zip(unknowns(sys), Symbolics.unwrap.(Symbolics.Num.(uprev))))
+    curr_substitution_map = Dict{SymbolicT, SymbolicT}(zip(unks, u))
+    prev_substitution_map = Dict{SymbolicT, SymbolicT}(zip(unknowns(sys), uprev))
 
     for (cond, msg) in assertions(sys)
         subclauses = String[]
