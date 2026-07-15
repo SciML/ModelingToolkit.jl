@@ -1850,6 +1850,11 @@ function state_priorities(sys::AbstractSystem)
     return sps
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Get the irreducible variables of a system `sys` and its subsystems.
+"""
 function irreducibles(sys::AbstractSystem)
     ircs = get_irreducibles(sys)
     systems = get_systems(sys)
@@ -1861,6 +1866,11 @@ function irreducibles(sys::AbstractSystem)
     return ircs
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Get the variables that should be treated as possible zeros in `sys` and its subsystems.
+"""
 function maybe_zeros(sys::AbstractSystem)
     dds = get_maybe_zeros(sys)
     systems = get_systems(sys)

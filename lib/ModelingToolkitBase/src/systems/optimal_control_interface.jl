@@ -1,5 +1,16 @@
+"""
+    AbstractCollocation
+
+Abstract supertype for dynamic optimization collocation solver descriptors.
+"""
 abstract type AbstractCollocation end
 
+"""
+    DynamicOptSolution
+
+Container returned by dynamic optimization solves, holding the optimized model, state
+trajectory solution, and optional input trajectory solution.
+"""
 struct DynamicOptSolution
     model::Any
     sol::ODESolution

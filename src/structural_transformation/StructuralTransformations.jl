@@ -66,6 +66,11 @@ export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable
 include("utils.jl")
 include("pantelides.jl")
 
+"""
+    $TYPEDSIGNATURES
+
+Apply tearing substitutions to `sys` and clear its schedule.
+"""
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs

@@ -536,6 +536,11 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     return
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Populate `vars` with a mapping from each named symbolic variable in `xs` to that variable.
+"""
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue

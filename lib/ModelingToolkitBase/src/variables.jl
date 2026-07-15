@@ -495,6 +495,11 @@ function hasnominal(x)
     return Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
 end
 
+"""
+    setnominal(x, val)
+
+Attach nominal value `val` to symbolic variable `x`.
+"""
 function setnominal(x::Num, val)
     return setmetadata(x, VariableNominal, val)
 end
