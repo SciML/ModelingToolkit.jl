@@ -37,11 +37,12 @@ jobs:
           - {user: SciML, repo: SBMLToolkit.jl, group: All, subpkg: ""}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1, subpkg: ""}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2, subpkg: ""}
-          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream, subpkg: ""}
+          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelOrderReduction.jl, group: Core, subpkg: ""}
-          - {user: SciML, repo: MethodOfLines.jl, group: Interface, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface1, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface2, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core, subpkg: ""}
