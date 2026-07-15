@@ -127,6 +127,7 @@ end
 
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
     COMMON_TRUE, COMMON_FALSE, COMMON_INF
+using ModelingToolkitBase: build_function_wrapper, BuildFunctionWrapperOptions
 
 @recompile_invalidations begin
     include("linearization.jl")

@@ -42,11 +42,15 @@ function CacheWriter(
     )
 
     fn, _ = build_function_wrapper(
-        sys, body, SCC_EXPLICITFUN_CACHE_OUT, solsyms..., rps...;
-        p_start = length(solsyms) + 2, p_end = length(rps) + length(solsyms) + 1,
-        compress_args = [2:(length(solsyms) + 1)],
-        expression = Val{true},
-        iip_config = (true, false)
+        sys, body, [Any[SCC_EXPLICITFUN_CACHE_OUT]; solsyms; rps],
+        BuildFunctionWrapperOptions(;
+            p_start = length(solsyms) + 2, p_end = length(rps) + length(solsyms) + 1,
+            compress_args = [2:(length(solsyms) + 1)],
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true},
+                iip_config = (true, false)
+            )
+        )
     )
     fn = eval_or_rgf(fn; eval_expression, eval_module)
     fn = GeneratedFunctionWrapper{(3, 3, is_split(sys))}(fn, nothing)
