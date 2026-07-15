@@ -1022,9 +1022,9 @@ Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` r
 """
 Base.@nospecializeinfer function compile_condition(
         @nospecialize(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}),
-        sys, @nospecialize(dvs), @nospecialize(ps);
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys, @nospecialize(dvs), @nospecialize(ps), opts::GeneratedFunctionOptions
     )
+    (; eval_expression, eval_module) = opts
     u = map(value, dvs)
     p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
@@ -1039,7 +1039,7 @@ Base.@nospecializeinfer function compile_condition(
     fs = build_function_wrapper(
         sys, condit, [Any[u]; p; Any[t]], BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            codegen_function_options = opts.codegen
         )
     )
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
@@ -1424,7 +1424,12 @@ Base.@nospecializeinfer function compile_equational_affect(
     end
     if isempty(equations(system(aff)))
         return compile_explicit_affect(
-            aff, sys; reset_jumps, eval_expression, eval_module, kwargs...
+            aff, sys,
+            GeneratedFunctionOptions(;
+                eval_expression, eval_module,
+                codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            );
+            reset_jumps
         )
     else
         return compile_implicit_affect(
@@ -1443,9 +1448,10 @@ variables and discrete parameters via `build_function_wrapper`.
 Called from [`compile_equational_affect`](@ref) when `isempty(equations(system(aff)))`.
 """
 Base.@nospecializeinfer function compile_explicit_affect(
-        @nospecialize(aff::AffectSystem), sys;
-        reset_jumps = false, eval_expression = false, eval_module = @__MODULE__, kwargs...
+        @nospecialize(aff::AffectSystem), sys, opts::GeneratedFunctionOptions;
+        reset_jumps = false
     )
+    (; eval_expression, eval_module) = opts
     affsys = system(aff)
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
@@ -1491,9 +1497,11 @@ Base.@nospecializeinfer function compile_explicit_affect(
         sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
             u_arg = 1, wrap_mtkparameters,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                wrap_code = add_integrator_header(sys, integ, :u),
-                outputidxs = u_idxs, iip_config = (false, true)
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :u),
+                    outputidxs = u_idxs, iip_config = (false, true),
+                )
             )
         )
     )
@@ -1502,9 +1510,11 @@ Base.@nospecializeinfer function compile_explicit_affect(
         sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
         BuildFunctionWrapperOptions(;
             u_arg = 1, wrap_mtkparameters,
-            codegen_function_options = Symbolics.CodegenFunctionOptions(;
-                wrap_code = add_integrator_header(sys, integ, :p),
-                outputidxs = p_idxs, iip_config = (false, true)
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :p),
+                    outputidxs = p_idxs, iip_config = (false, true),
+                )
             )
         )
     )

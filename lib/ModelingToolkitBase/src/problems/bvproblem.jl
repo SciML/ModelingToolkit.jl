@@ -24,16 +24,22 @@
     )
 
     fcost = generate_bvp_cost(
-        sys; expression = Val{false}, wrap_gfw = Val{false},
-        eval_expression, eval_module, checkbounds
+        sys,
+        GeneratedFunctionOptions(;
+            expression = Val{false}, wrap_gfw = Val{false}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
+        )
     )
 
     stidxmap = Dict([v => i for (i, v) in enumerate(dvs)])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(dvs)) :
         [stidxmap[k] for (k, v) in op if haskey(stidxmap, k)]
     fbc = generate_boundary_conditions(
-        sys, u0, u0_idxs, tspan[1]; expression = Val{false},
-        wrap_gfw = Val{true}, checkbounds
+        sys, u0, u0_idxs, tspan[1],
+        GeneratedFunctionOptions(;
+            expression = Val{false}, wrap_gfw = Val{true},
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
+        )
     )
 
     n_controls = length(default_codegen_inputs(sys))

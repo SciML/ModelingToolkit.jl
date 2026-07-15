@@ -37,14 +37,17 @@ function LinearFunction{iip}(
             BandedMatrix{SymbolicT, Matrix{SymbolicT}}(A, (lower_band_size, upper_band_size))
         end
     end
-    update_A = generate_update_A(
-        sys, A; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, kwargs...
+    # `cachesyms` is a structural kwarg of the update generators (not a codegen option);
+    # in the SCC path it arrives via `kwargs`, so extract it rather than funnelling it
+    # into the codegen options where it would be dropped.
+    cachesyms = get(kwargs, :cachesyms, ())
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
-    update_b = generate_update_b(
-        sys, b; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, kwargs...
-    )
+    update_A = generate_update_A(sys, A, codegen_opts; cachesyms)
+    update_b = generate_update_b(sys, b, codegen_opts; cachesyms)
     observedfun = ObservedFunctionCache(
         sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
@@ -239,10 +242,14 @@ function get_A_b_from_LinearFunction(
     (; A, b, interface) = f
     if expression == Val{true}
         get_A = build_explicit_observed_function(
-            sys, A; param_only = true, eval_expression, eval_module
+            sys, A,
+            GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module);
+            param_only = true
         )
         get_b = build_explicit_observed_function(
-            sys, b; param_only = true, eval_expression, eval_module
+            sys, b,
+            GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module);
+            param_only = true
         )
         A = u0_constructor(u0_eltype.(get_A(p)))
         b = u0_constructor(u0_eltype.(get_b(p)))

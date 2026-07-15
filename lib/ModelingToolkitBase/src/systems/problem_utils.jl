@@ -2199,7 +2199,9 @@ function process_kwargs(
         end
 
         if !_skip_tstops
-            tstops = SymbolicTstops(sys; expression, eval_expression, eval_module)
+            tstops = SymbolicTstops(
+                sys, GeneratedFunctionOptions(; expression, eval_expression, eval_module)
+            )
             if tstops !== nothing
                 kwargs1 = merge(kwargs1, (; tstops))
             end
@@ -2230,10 +2232,9 @@ function (st::SymbolicTstops)(p, tspan)
     end
 end
 
-function SymbolicTstops(
-        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__
-    )
+function SymbolicTstops(sys::AbstractSystem, opts::GeneratedFunctionOptions)
+    expression = expression_val(opts)
+    (; eval_expression, eval_module) = opts
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
     t0 = gensym(:t0)
@@ -2266,6 +2267,18 @@ function SymbolicTstops(
     else
         return SymbolicTstops(tstops)
     end
+end
+
+# Backward-compatibility keyword method. The positional `opts::GeneratedFunctionOptions`
+# method above is the primary; this wrapper preserves the historical keyword API. It must
+# be defined after `struct SymbolicTstops` so it registers as a method on that binding.
+function SymbolicTstops(
+        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__
+    )
+    return SymbolicTstops(
+        sys, GeneratedFunctionOptions(; expression, eval_expression, eval_module)
+    )
 end
 
 """
