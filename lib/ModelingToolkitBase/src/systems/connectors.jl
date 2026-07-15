@@ -1336,6 +1336,13 @@ function instream_rt(
         vars::Vararg{Any, N}
     ) where {inner_n, outer_n, N}
     @assert N == 2 * (inner_n + outer_n)
+    if any(Base.Fix2(isa, SymbolicT), vars)
+        # In case `instream_rt` goes through `scalarize`.
+        return BSImpl.Term{VartypeT}(
+            instream_rt, Symbolics.SArgsT((ins, outs, vars...));
+            type = Real, shape = SU.ShapeVecT()
+        )
+    end
 
     # inner: mj.c.m_flow
     # outer: ck.m_flow
