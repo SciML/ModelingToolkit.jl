@@ -105,8 +105,8 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
 
     #check for assertion failures
     unks = unknowns(sys)
-    curr_substitution_map = Dict(zip(unks, Symbolics.unwrap.(Symbolics.Num.(u))))
-    prev_substitution_map = Dict(zip(unknowns(sys), Symbolics.unwrap.(Symbolics.Num.(uprev))))
+    curr_substitution_map = Dict(zip(unks, u))
+    prev_substitution_map = Dict(zip(unknowns(sys), uprev))
 
     for (cond, msg) in assertions(sys)
         subclauses = String[]
@@ -119,7 +119,7 @@ function SciMLBase.diagnose_symbolic_instability(sys::AbstractSystem, u, uprev)
 
     #find singularity causes in equations
     singularities = String[]
-    visited = IdDict()
+    visited = IdDict{SymbolicT, Nothing}()
     subber = SymbolicUtils.IRSubstituter{true}(get_irstructure(sys), prev_substitution_map)
     for eq in full_equations(sys)
         find_singular_subterms(eq, eq.rhs, subber, singularities, visited)
