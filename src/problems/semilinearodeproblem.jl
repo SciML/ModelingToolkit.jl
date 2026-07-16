@@ -22,7 +22,7 @@
 
     codegen_opts = GeneratedFunctionOptions(;
         expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
 
     f1,
