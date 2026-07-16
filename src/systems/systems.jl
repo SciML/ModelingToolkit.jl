@@ -31,7 +31,7 @@ function MTKBase.__mtkcompile(
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     sys = MTKBase.discover_maybe_zeros(sys)
-    state = TearingState(sys, source_info; sort_eqs)
+    state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state

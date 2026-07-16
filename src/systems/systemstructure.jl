@@ -106,6 +106,7 @@ function mtkcompile!(
         kwargs...
     )
     if !is_time_dependent(state.sys)
+        MTKTearing.scalarize_tearing_state_eqs!(state)
         return _mtkcompile!(
             state; check_consistency,
             inputs, outputs, disturbance_inputs,
@@ -142,6 +143,7 @@ function mtkcompile!(
         )
     end
     if length(tss) > 1
+        MTKTearing.scalarize_tearing_state_eqs!(tss[continuous_id])
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(
@@ -172,6 +174,7 @@ function mtkcompile!(
             )
         )
     end
+    MTKTearing.scalarize_tearing_state_eqs!(state)
     if get_is_discrete(state.sys) ||
             continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
