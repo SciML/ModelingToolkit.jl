@@ -165,6 +165,7 @@ function __mtkcompile(
     sys = expand_connections(sys)
     sys = discrete_unknowns_to_parameters(sys)
     sys = discover_globalscoped(sys)
+    sys = apply_limited_lowering(sys)
     flat_dvs = scalarized_vars(unknowns(sys))
     original_vars = Set{SymbolicT}(flat_dvs)
     eqs = flatten_equations(equations(sys))

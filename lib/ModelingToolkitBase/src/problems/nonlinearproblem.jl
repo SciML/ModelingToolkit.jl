@@ -8,6 +8,14 @@
     ) where {iip, spec}
     check_complete(sys, NonlinearFunction)
     check_compatibility && check_compatible_system(NonlinearFunction, sys)
+    if has_any_limited(sys)
+        throw(
+            ArgumentError(
+                "the system contains `limited(...)` nodes that were not lowered; " *
+                    "`limited` requires the system to be compiled with `mtkcompile`."
+            )
+        )
+    end
 
     codegen_opts = GeneratedFunctionOptions(;
         expression, wrap_gfw = Val{true}, eval_expression, eval_module,
@@ -16,6 +24,19 @@
     )
 
     f = generate_rhs(sys, codegen_opts)
+
+    postcondition = if getmetadata(sys, LimitedCtx, nothing) === nothing
+        nothing
+    elseif expression == Val{true}
+        throw(
+            ArgumentError(
+                "`expression = Val{true}` is not supported for systems with `limited` " *
+                    "quantities; the generated `postcondition` hook is a runtime closure."
+            )
+        )
+    else
+        generate_limited_postcondition(sys, iip; eval_expression, eval_module)
+    end
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing
@@ -52,6 +73,7 @@
         jac_prototype,
         resid_prototype,
         initialization_data,
+        postcondition,
     )
     args = (; f)
 
