@@ -1,8 +1,12 @@
 """
     SciMLBase.HomotopyProblem(sys::System, op; λspan = (0.0, 1.0), kwargs...)
+    SciMLBase.HomotopyProblem{iip}(sys::System, op; λspan = (0.0, 1.0), kwargs...)
 
 Build a [`SciMLBase.HomotopyProblem`](@ref) from a `System` whose equations
 contain Modelica `homotopy(actual, simplified)` nodes (Modelica spec 3.7.4.2).
+The zero-parameter form derives in-place-ness from `op` (out-of-place iff `op`
+is a `StaticArray`); the `{iip}` form uses the requested `iip` (as the other
+problem constructors do), which is what the initialization path passes through.
 
 The standard nonlinear residual is built from `sys` (and used only to obtain
 `u0`, `p`, the observed function, and the residual prototype), then the residual
@@ -24,8 +28,21 @@ be wrong mid-sweep.
     `expression = Val{true}` (codegen-to-`Expr`) is not yet supported for the
     homotopy constructor; this can be added in a future PR.
 """
-function SciMLBase.HomotopyProblem(
-        sys::System, op;
+# `HomotopyProblem(sys, op)` derives in-place-ness from `op` (out-of-place iff `op` is a
+# `StaticArray`), matching the other problem constructors' zero-parameter form.
+# `HomotopyProblem{iip}(sys, op)` honors an explicitly requested `iip` instead — used by
+# the initialization path, which has already resolved `iip` from the calling problem and
+# must not re-derive it (an out-of-place system's `op` is still a plain varmap, so the
+# `Both` derivation would wrongly pick in-place).
+function SciMLBase.HomotopyProblem(sys::System, op; kwargs...)
+    return _homotopy_problem(sys, op, resolve_iip(Both, op); kwargs...)
+end
+function SciMLBase.HomotopyProblem{iip}(sys::System, op; kwargs...) where {iip}
+    return _homotopy_problem(sys, op, resolve_iip(iip, op); kwargs...)
+end
+
+function _homotopy_problem(
+        sys::System, op, _iip;
         expression = Val{false}, λspan = (0.0, 1.0),
         check_length = true, check_compatibility = true,
         eval_expression = false, eval_module = @__MODULE__,
@@ -55,7 +72,6 @@ function SciMLBase.HomotopyProblem(
         )
     end
 
-    _iip = resolve_iip(Both, op)
     f, u0,
         p = process_SciMLProblem(
         SciMLBase.NonlinearFunction{_iip}, sys, op;

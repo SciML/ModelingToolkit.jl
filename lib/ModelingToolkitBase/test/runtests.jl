@@ -96,6 +96,7 @@ end
             @safetestset "Homotopy lowering" include("homotopy_lowering.jl")
             @safetestset "Homotopy problem construction & sweep" include("homotopy_problem.jl")
             @safetestset "Homotopy OMC parity" include("homotopy_omc_parity.jl")
+            @safetestset "Homotopy initialization routing" include("homotopy_initialization.jl")
             @safetestset "PDE Construction Test" include("pdesystem.jl")
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Poissonians Test" include("poissonians.jl")
