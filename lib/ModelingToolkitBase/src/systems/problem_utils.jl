@@ -2362,7 +2362,10 @@ macro fallback_iip_specialize(ex)
     call_kwargs = map(call_args[1].args) do arg
         Meta.isexpr(arg, :...) && return arg
         @assert Meta.isexpr(arg, :kw) "Expected keyword argument, got $(arg)"
-        return Expr(:kw, arg.args[1], arg.args[1])
+        # `arg.args[1]` is the kwarg's name, optionally type-annotated (`name` or
+        # `name::T`). Forwarding calls need the bare name either way.
+        name = Meta.isexpr(arg.args[1], :(::)) ? arg.args[1].args[1] : arg.args[1]
+        return Expr(:kw, name, name)
     end
     call_args[1] = Expr(:parameters, call_kwargs...)
 
