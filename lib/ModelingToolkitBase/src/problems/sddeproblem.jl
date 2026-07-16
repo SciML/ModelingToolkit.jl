@@ -1,5 +1,5 @@
 @fallback_iip_specialize function SciMLBase.SDDEFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, expression = Val{false},
+        sys::System; u0 = nothing, p = nothing, t = nothing, expression = Val{false},
         eval_expression = false, eval_module = @__MODULE__, checkbounds = false,
         initialization_data = nothing, check_compatibility = true,
         sparse = false, simplify = false, analytic = nothing, kwargs...
