@@ -72,3 +72,9 @@ ModelingToolkitBase.validate_operator(::MyOp, args...; kws...) = nothing
     @named sys = System([D(x) ~ x + SU.term(MyOp(), [0.0]; type = Real, shape = SU.ShapeVecT())], t)
     @test issetequal(unknowns(sys), [x])
 end
+
+@testset "Variable discovery `x[i]` where `i` is a variable" begin
+    @variables x(t)[1:2] i(t)::Int
+    @named sys = System([x[i] ~ 0], t)
+    @test issetequal(unknowns(sys), [x, i])
+end
