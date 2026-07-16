@@ -93,6 +93,7 @@ end
             @safetestset "SDESystem Test" include("sdesystem.jl")
             @safetestset "DDESystem Test" include("dde.jl")
             @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+            @safetestset "Limited operator (PCNR iterate limiting)" include("limited_operator.jl")
             @safetestset "Homotopy lowering" include("homotopy_lowering.jl")
             @safetestset "Homotopy problem construction & sweep" include("homotopy_problem.jl")
             @safetestset "Homotopy OMC parity" include("homotopy_omc_parity.jl")

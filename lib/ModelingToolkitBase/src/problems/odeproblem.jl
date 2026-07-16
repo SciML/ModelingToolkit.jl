@@ -28,6 +28,14 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     ) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
+    if has_any_limited(sys)
+        throw(
+            ArgumentError(
+                "the system contains `limited(...)` nodes that were not stripped; " *
+                    "`limited` requires the system to be compiled with `mtkcompile`."
+            )
+        )
+    end
 
     codegen_opts = GeneratedFunctionOptions(;
         expression, wrap_gfw = Val{true}, eval_expression, eval_module,

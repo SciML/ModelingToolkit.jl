@@ -31,6 +31,7 @@ function MTKBase.__mtkcompile(
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     sys = MTKBase.discover_maybe_zeros(sys)
+    sys, source_info = MTKBase.apply_limited_lowering(sys, source_info)
     state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
     append!(state.statemachines, statemachines)
 

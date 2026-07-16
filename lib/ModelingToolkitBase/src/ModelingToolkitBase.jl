@@ -204,6 +204,9 @@ include("systems/problem_utils.jl")
 # Operator + lowering layer; must load before the problem constructors that
 # consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
 include("systems/homotopy_operator.jl")
+# The `limited` operator: symbolic SPICE-style iterate limiting (PCNR), lowered during
+# `mtkcompile` (`apply_limited_lowering`) and consumed by `problems/nonlinearproblem.jl`.
+include("systems/limited_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -319,6 +322,7 @@ export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
 export homotopy
+export limited, limitnew, limitold
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes
