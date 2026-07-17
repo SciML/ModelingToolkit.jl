@@ -8,9 +8,11 @@ a key but `x[1]` cannot.
 struct AtomicArrayDict{V, D <: AbstractDict{SymbolicT, V}} <: AbstractDict{SymbolicT, V}
     dict::D
 
-    function AtomicArrayDict(dict::AbstractDict{SymbolicT, V}) where {V}
-        for k in keys(dict)
-            validate_atomic_array_key(k)
+    function AtomicArrayDict(dict::AbstractDict{SymbolicT, V}; __check = true) where {V}
+        if __check
+            for k in keys(dict)
+                validate_atomic_array_key(k)
+            end
         end
         return new{V, typeof(dict)}(dict)
     end
@@ -41,7 +43,7 @@ function validate_atomic_array_key(k::SymbolicT)
     return split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
 end
 
-Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict))
+Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict); __check = false)
 function Base.empty(dd::AtomicArrayDict, ::Type{K}, ::Type{V}) where {K, V}
     return AtomicArrayDict(empty(dd.dict, K, V))
 end
