@@ -348,8 +348,9 @@ function compile_functional_affect(
         zeros(sz)
     end
     obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs);
-        mkarray = (es, _) -> MakeTuple(es)
+        sys, Symbolics.scalarize.(obs_exprs),
+        GeneratedFunctionOptions(; expression = Val{false});
+        output_type = Tuple
     )
     obs_sym_tuple = (obs_syms...,)
 
@@ -357,8 +358,9 @@ function compile_functional_affect(
     mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(first.(mod_pairs));
-        mkarray = (es, _) -> MakeTuple(es)
+        sys, Symbolics.scalarize.(first.(mod_pairs)),
+        GeneratedFunctionOptions(; expression = Val{false});
+        output_type = Tuple
     )
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))

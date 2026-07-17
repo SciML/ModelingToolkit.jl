@@ -1,7 +1,7 @@
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false},
-        checkbounds = false, analytic = nothing, simplify = false, cse = true,
+        checkbounds = false, analytic = nothing, simplify = false,
         initialization_data = nothing, check_compatibility = true, kwargs...
     ) where {
         iip, spec,
@@ -11,11 +11,13 @@
 
     iv = get_iv(sys)
     dvs = unknowns(sys)
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
-        override_discrete = true, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true, override_discrete = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -31,7 +33,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds, cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     args = (; f)

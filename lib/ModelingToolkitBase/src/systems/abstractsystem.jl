@@ -8,62 +8,6 @@ end
 
 GUIMetadata(type) = GUIMetadata(type, nothing)
 
-"""
-```julia
-generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-                         ps = parameters(sys); kwargs...)
-```
-
-Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
-array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
-may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
-[`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
-`f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
-time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
-[`mtkcompile`](@ref) or [`@mtkcompile`](@ref), `p` is expected to be an `MTKParameters`
-object.
-"""
-function generate_custom_function(
-        sys::AbstractSystem, exprs, dvs = unknowns(sys),
-        ps = parameters(sys; initial_parameters = true);
-        expression = Val{true}, eval_expression = false, eval_module = @__MODULE__,
-        cachesyms::Tuple = (), kwargs...
-    )
-    if !iscomplete(sys)
-        error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
-    end
-    p = (reorder_parameters(sys, unwrap.(ps))..., cachesyms...)
-    isscalar = !(exprs isa AbstractArray)
-    fnexpr = if is_time_dependent(sys)
-        build_function_wrapper(
-            sys, exprs,
-            dvs,
-            p...,
-            get_iv(sys);
-            u_arg = 1,
-            kwargs...,
-            expression = Val{true}
-        )
-    else
-        build_function_wrapper(
-            sys, exprs,
-            dvs,
-            p...;
-            u_arg = 1,
-            kwargs...,
-            expression = Val{true}
-        )
-    end
-    if expression == Val{true}
-        return fnexpr
-    end
-    if SU.is_array_shape(SU.shape(unwrap(exprs)))
-        return eval_or_rgf.(fnexpr; eval_expression, eval_module)
-    else
-        return eval_or_rgf(fnexpr[1]; eval_expression, eval_module)
-    end
-end
-
 function wrap_assignments(isscalar, assignments; let_block = false)
     function wrapper(expr)
         return Func(expr.args, [], Let(assignments, expr.body, let_block))
@@ -297,7 +241,9 @@ function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSyste
 end
 
 function SymbolicIndexingInterface.parameter_observed(sys::AbstractSystem, sym)
-    return build_explicit_observed_function(sys, sym; param_only = true)
+    return build_explicit_observed_function(
+        sys, sym, GeneratedFunctionOptions(; expression = Val{false}); param_only = true
+    )
 end
 
 """
@@ -413,7 +359,7 @@ SymbolicIndexingInterface.supports_tuple_observed(::AbstractSystem) = true
 
 function SymbolicIndexingInterface.observed(
         sys::AbstractSystem, sym; eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = true, cse = true, optimize = nothing,
+        checkbounds = true, optimize = nothing,
     )
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         if sym isa Symbol
@@ -440,7 +386,11 @@ function SymbolicIndexingInterface.observed(
         end
     end
     return build_explicit_observed_function(
-        sys, sym; eval_expression, eval_module, checkbounds, cse, optimize
+        sys, sym,
+        GeneratedFunctionOptions(;
+            expression = Val{false}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, optimize)
+        )
     )
 end
 
@@ -706,7 +656,9 @@ function complete(
         if has_continuous_events(sys) && is_time_dependent(sys)
             cevts = SymbolicContinuousCallback[]
             for ev in get_continuous_events(sys)
-                ev = complete(ev; iv = get_iv(sys)::SymbolicT, extra_eqs = cb_alg_eqs)
+                ev = complete(
+                    ev; iv = get_iv(sys)::SymbolicT, parent_sys = sys
+                )
                 push!(cevts, ev)
             end
             @set! sys.continuous_events = cevts
@@ -714,7 +666,9 @@ function complete(
         if has_discrete_events(sys) && is_time_dependent(sys)
             devts = SymbolicDiscreteCallback[]
             for ev in get_discrete_events(sys)
-                ev = complete(ev; iv = get_iv(sys)::SymbolicT, extra_eqs = cb_alg_eqs)
+                ev = complete(
+                    ev; iv = get_iv(sys)::SymbolicT, parent_sys = sys
+                )
                 push!(devts, ev)
             end
             @set! sys.discrete_events = devts
@@ -961,6 +915,7 @@ const SYS_PROPS = [
     :isscheduled
     :costs
     :consolidate
+    :analytically_integrated
 ]
 
 for prop in SYS_PROPS
@@ -1600,6 +1555,17 @@ function unknowns(sys::AbstractSystem)
         append!(result, namespace_variables(subsys))
     end
     return result
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return the list of analytically integrated variables in `sys`. Requires that `sys` is
+flattened, since analytically integrated variables cannot be specified for unflattened systems.
+"""
+function analytically_integrated(sys::AbstractSystem)
+    @assert isempty(get_systems(sys))
+    return get_analytically_integrated(sys)
 end
 
 """
@@ -2339,24 +2305,23 @@ struct ObservedFunctionCache{S, O}
     eval_expression::Bool
     eval_module::Module
     checkbounds::Bool
-    cse::Bool
     optimize::O
 end
 
 function ObservedFunctionCache(
         sys; expression = Val{false}, steady_state = false, eval_expression = false,
-        eval_module = @__MODULE__, checkbounds = true, cse = true, optimize = nothing,
+        eval_module = @__MODULE__, checkbounds = true, optimize = nothing,
     )
     return if expression == Val{true}
         :(
             $ObservedFunctionCache(
                 $sys, Dict(), $steady_state, $eval_expression,
-                $eval_module, $checkbounds, $cse, $optimize
+                $eval_module, $checkbounds, $optimize
             )
         )
     else
         ObservedFunctionCache(
-            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds, cse,
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds,
             optimize,
         )
     end
@@ -2370,10 +2335,9 @@ function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
     eval_expression = ofc.eval_expression
     eval_module = ofc.eval_module
     checkbounds = ofc.checkbounds
-    cse = ofc.cse
     optimize = ofc.optimize
     newofc = ObservedFunctionCache(
-        sys, dict, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
+        sys, dict, steady_state, eval_expression, eval_module, checkbounds, optimize
     )
     stackdict[ofc] = newofc
     return newofc
@@ -2383,7 +2347,7 @@ function (ofc::ObservedFunctionCache)(obsvar, args...)
     obs = get!(ofc.dict, value(obsvar)) do
         SymbolicIndexingInterface.observed(
             ofc.sys, obsvar; eval_expression = ofc.eval_expression,
-            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds, cse = ofc.cse,
+            eval_module = ofc.eval_module, checkbounds = ofc.checkbounds,
             optimize = ofc.optimize
         )
     end
@@ -2642,17 +2606,26 @@ function Base.show(
     end
 
     # Print variables
-    for varfunc in [unknowns, parameters]
+    varsets = Any[unknowns]
+    if has_iv(sys) && get_iv(sys) isa SymbolicT && isempty(get_systems(sys)) &&
+            has_analytically_integrated(sys) && !isempty(analytically_integrated(sys))
+        push!(varsets, analytically_integrated)
+    end
+    push!(varsets, parameters)
+    for varfunc in varsets
         vars = varfunc(sys)
+        if varfunc === analytically_integrated
+            vars = keys(vars)
+        end
         nvars = length(vars)
         nvars == 0 && continue # skip
         header = titlecase(String(nameof(varfunc))) # e.g. "Unknowns"
+        header = replace(header, '_' => ' ')
         printstyled(io, "\n$header ($nvars):"; bold)
         hint && print(io, " see $(nameof(varfunc))($name)")
         nrows = min(nvars, limit ? rows : nvars)
         defs = has_bindings(sys) ? bindings(sys) : nothing
-        for i in 1:nrows
-            s = vars[i]
+        for s in Iterators.take(vars, nrows)
             print(io, "\n  ", s)
             if !isnothing(defs)
                 val = get(defs, s, nothing)

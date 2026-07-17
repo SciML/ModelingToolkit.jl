@@ -1,17 +1,19 @@
 @fallback_iip_specialize function SciMLBase.DDEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
-        initialization_data = nothing, cse = true, check_compatibility = true,
+        initialization_data = nothing, check_compatibility = true,
         sparse = false, simplify = false, analytic = nothing, kwargs...
     ) where {iip, spec}
     check_complete(sys, DDEFunction)
     check_compatibility && check_compatible_system(DDEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -28,7 +30,7 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; expression, eval_expression, eval_module, checkbounds, cse
+        sys; expression, eval_expression, eval_module, checkbounds
     )
 
     kwargs = (;
@@ -45,7 +47,7 @@ end
 
 @fallback_iip_specialize function SciMLBase.DDEProblem{iip, spec}(
         sys::System, op, tspan;
-        callback = nothing, check_length = true, cse = true, checkbounds = false,
+        callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, expression = Val{false}, kwargs...
     ) where {iip, spec}
@@ -56,14 +58,17 @@ end
     f, u0,
         p = process_SciMLProblem(
         DDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, cse, checkbounds,
+        t = tspan !== nothing ? tspan[1] : tspan, check_length, checkbounds,
         eval_expression, eval_module, check_compatibility, symbolic_u0 = true,
         expression, u0_constructor, kwargs...
     )
 
     h = generate_history(
-        sys, u0; expression, wrap_gfw = Val{true}, cse, eval_expression, eval_module,
-        checkbounds
+        sys, u0,
+        GeneratedFunctionOptions(;
+            expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
+        )
     )
 
     if expression == Val{true}

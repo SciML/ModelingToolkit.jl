@@ -2,21 +2,20 @@
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, SDEFunction)
     check_compatibility && check_compatible_system(SDEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
-    g = generate_diffusion_function(
-        sys; expression,
-        wrap_gfw = Val{true}, eval_expression, eval_module, checkbounds, cse, kwargs...
-    )
+
+    f = generate_rhs(sys, codegen_opts)
+    g = generate_diffusion_function(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -30,21 +29,13 @@
     end
 
     if tgrad
-        _tgrad = generate_tgrad(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, cse, eval_expression, eval_module, checkbounds,
-            kwargs...
-        )
+        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
-            checkbounds, kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
@@ -53,7 +44,7 @@
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds
     )
 
     _W_sparsity = W_sparsity(sys)

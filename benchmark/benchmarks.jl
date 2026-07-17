@@ -1,7 +1,3 @@
-import Pkg
-
-Pkg.develop(; path = joinpath(@__DIR__, "..", "lib", "ModelingToolkitBase"))
-
 using ModelingToolkit, BenchmarkTools
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Electrical

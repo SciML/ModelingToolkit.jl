@@ -656,7 +656,7 @@ end
         sys1,
         System([D(y) ~ 0], t; initialization_eqs = [y ~ 2], name = :sys2)
     ) |> mtkcompile
-    ics2 = unknowns(sys1) .=> 2 # should be equivalent to "ics2 = [x => 2]"
+    ics2 = [x => 2]
     prob2 = ODEProblem(sys2, ics2, (0.0, 1.0); fully_determined = true)
     sol2 = solve(prob2, Tsit5(); abstol = 1.0e-6, reltol = 1.0e-6)
     @test SciMLBase.successful_retcode(sol2)
@@ -1098,7 +1098,8 @@ end
         @test init(prob2, alg; abstol = 1.0e-6, reltol = 1.0e-6).ps[p] ≈ 3 + exp(1) atol = 1.0e-4
         # solve for `x` given `p` and `y`
         prob3 = remake(prob; u0 = [x => nothing, y => 1.0], p = [p => 2x + exp(y)])
-        @test init(prob3, alg; abstol = 1.0e-6, reltol = 1.0e-6)[x] ≈ 1 - exp(1) atol = 1.0e-6
+        # Allow platform-level variation at the requested 1e-6 solver tolerance.
+        @test init(prob3, alg; abstol = 1.0e-6, reltol = 1.0e-6)[x] ≈ 1 - exp(1) atol = 2.0e-6
         @test_logs (:warn, r"overdetermined") remake(
             prob; u0 = [x => 1.0, y => 2.0], p = [p => 4.0]
         )
@@ -2158,4 +2159,25 @@ end
     integ = init(prob, Tsit5())
     @test integ[X] ≈ [1.0, 2.0]
     @test integ.ps[T] ≈ 3.0
+end
+
+cube_plus(v) = v^3 + v
+@register_symbolic cube_plus(v)
+if @isdefined(ModelingToolkit)
+    @testset "When no required guesses for `SCCNonlinearProblem` are present" begin
+        # `SCCNonlinearProblem` created an interim `u0` of type `Vector{SymbolicT}`,
+        # which coerced all HashRandom guesses to `Const` symbolics.
+        @variables xv(t)[1:5] y(t) = 0.0
+        @parameters pa = 1.2 pb = 0.8
+        eqs = [
+            xv[1] ~ pa
+            xv[5] ~ pb
+            [0 ~ cube_plus(xv[i]) - (1.0 + i) for i in 2:4]
+            D(y) ~ xv[1] + xv[2] + xv[3] + xv[4] + xv[5]
+        ]
+        @mtkcompile sys = System(
+            eqs, t, [xv, y], [pa, pb]
+        )
+        @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+    end
 end

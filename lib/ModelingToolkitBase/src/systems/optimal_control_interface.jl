@@ -153,49 +153,37 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         sparsity = false,
         analytic = nothing,
         initialization_data = nothing,
-        cse = true,
+
         kwargs...
     ) where {iip, specialize}
     f, _,
         _ = generate_control_function(
-        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...
+        sys, inputs, disturbance_inputs; eval_module, kwargs...
     )
     f = f[1]
 
+    # NOTE: the historical calls passed `expression_module = eval_module`, which was never a
+    # recognized keyword (it was silently dropped), so `eval_module` defaulted here. That
+    # behavior is preserved: `codegen_opts` does not set `eval_module`.
+    codegen_opts = GeneratedFunctionOptions(;
+        expression = Val{true}, wrap_gfw = Val{true},
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
+    )
+
     if tgrad
-        _tgrad = generate_tgrad(
-            sys;
-            simplify = simplify,
-            expression = Val{true},
-            wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys;
-            simplify = simplify, sparse = sparse,
-            expression = Val{true},
-            wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
 
     if controljac
-        _cjac = generate_control_jacobian(
-            sys;
-            simplify = simplify, sparse = sparse,
-            expression = Val{true}, wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _cjac = generate_control_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _cjac = nothing
     end
@@ -204,7 +192,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; steady_state, eval_expression, eval_module, checkbounds
     )
 
     _W_sparsity = W_sparsity(sys)

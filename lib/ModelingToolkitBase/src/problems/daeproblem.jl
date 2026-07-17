@@ -2,17 +2,19 @@
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         expression = Val{false}, check_compatibility = true, kwargs...
     ) where {iip, spec}
     check_complete(sys, DAEFunction)
     check_compatibility && check_compatible_system(DAEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -26,17 +28,13 @@
     end
 
     if jac
-        _jac = generate_dae_jacobian(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
-            checkbounds, kwargs...
-        )
+        _jac = generate_dae_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds
     )
 
     jac_prototype = if sparse

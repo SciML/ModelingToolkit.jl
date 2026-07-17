@@ -149,10 +149,9 @@ between the blocks. We can use the bipartite graph functionality to dig in and
 investigate what this means:
 
 ```@example tearing
-using ModelingToolkit.BipartiteGraphs
-using Graphs
-ts = TearingState(expand_connections(big_rc))
-inc_org = Graphs.incidence_matrix(ts.structure.graph)
+using Graphs.LinAlg: incidence_matrix
+using ModelingToolkitBase: asgraph, expand_connections
+inc_org = incidence_matrix(asgraph(expand_connections(big_rc)))
 # Note: sorted_incidence_matrix requires the system and matrix dimensions to match
 # blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys)
 ```

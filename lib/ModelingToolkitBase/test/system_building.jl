@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+import SymbolicUtils as SU
 
 @testset "`state_priorities` and `irreducibles` kwargs take priority over metadata" begin
     @variables x(t) [state_priority = 3] y(t) [irreducible = false]
@@ -61,4 +62,19 @@ end
     ics[y] = "Because I want to"
     sys = ModelingToolkitBase.set_necessary_initial_conditions(sys, ics)
     @test_throws ModelingToolkitBase.MissingNecessaryInitialConditionsError ODEProblem(sys, [x => 1], (0.0, 1.0))
+end
+
+struct MyOp <: SU.Operator end
+ModelingToolkitBase.validate_operator(::MyOp, args...; kws...) = nothing
+
+@testset "Const argument of operator is not considered a variable" begin
+    @variables x(t)
+    @named sys = System([D(x) ~ x + SU.term(MyOp(), [0.0]; type = Real, shape = SU.ShapeVecT())], t)
+    @test issetequal(unknowns(sys), [x])
+end
+
+@testset "Variable discovery `x[i]` where `i` is a variable" begin
+    @variables x(t)[1:2] i(t)::Int
+    @named sys = System([x[i] ~ 0], t)
+    @test issetequal(unknowns(sys), [x, i])
 end

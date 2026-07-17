@@ -4,7 +4,7 @@
         stiff_linear = true, stiff_quadratic = false, stiff_nonlinear = false,
         eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, sparse = false, check_compatibility = true,
-        jac = false, checkbounds = false, cse = true, initialization_data = nothing,
+        jac = false, checkbounds = false, initialization_data = nothing,
         analytic = nothing, kwargs...
     ) where {iip, specialize}
     check_complete(sys, SemilinearODEFunction)
@@ -20,19 +20,22 @@
     _M = concrete_massmatrix(M; sparse, u0)
     dvs = unknowns(sys)
 
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+    )
+
     f1,
         f2 = generate_semiquadratic_functions(
-        sys, A, B, C; stiff_linear, stiff_quadratic,
-        stiff_nonlinear, expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, kwargs...
+        sys, A, B, C, codegen_opts;
+        stiff_linear, stiff_quadratic, stiff_nonlinear
     )
 
     if jac
         check_symbolic_ad_allowed(sys)
         Cjac = (C === nothing || !stiff_nonlinear) ? nothing : Symbolics.jacobian(C, dvs)
         _jac = generate_semiquadratic_jacobian(
-            sys, A, B, C, Cjac; sparse, expression,
-            wrap_gfw = Val{true}, eval_expression, eval_module, kwargs...
+            sys, A, B, C, Cjac, codegen_opts; sparse
         )
         _W_sparsity = get_semiquadratic_W_sparsity(
             sys, A, B, C, Cjac; stiff_linear, stiff_quadratic, stiff_nonlinear, mm = M
@@ -44,7 +47,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds, cse
+        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds
     )
 
     args = (; f1)

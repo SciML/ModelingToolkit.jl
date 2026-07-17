@@ -133,13 +133,15 @@ end
 
 function AffectSystem(
         affect::Vector{Equation}; discrete_parameters = SymbolicT[],
-        iv = nothing, extra_eqs = Equation[], kwargs...
+        iv = nothing, parent_sys, kwargs...
     )
     isempty(affect) && return nothing
     if isnothing(iv)
         iv = t_nounits
         @warn "No independent variable specified. Defaulting to t_nounits."
     end
+    _unhack_sys = reverse_all_default_reversible_transformations(parent_sys)
+    extra_eqs = Equation[alg_equations(_unhack_sys); observed(_unhack_sys)]
     affect = [affect; extra_eqs]
 
     discrete_parameters = SymbolicAffect(affect; discrete_parameters).discrete_parameters
@@ -149,17 +151,47 @@ function AffectSystem(
             error("Non-time dependent parameter $p passed in as a discrete. Must be declared as @parameters $p(t).")
     end
 
+    parent_dvs = Set{SymbolicT}()
+    for var in [unknowns(parent_sys); observables(parent_sys)]
+        push!(parent_dvs, var)
+        push!(parent_dvs, split_indexed_var(var)[1])
+    end
+    for var in values(analytically_integrated(parent_sys))
+        push!(discrete_parameters, var)
+    end
+    parent_ps = Set{SymbolicT}(parameters(parent_sys))
+    for p in parameters(parent_sys)
+        p in parent_dvs && continue
+        push!(parent_ps, split_indexed_var(p)[1])
+    end
+    iv = get_iv(parent_sys)::SymbolicT
+
     dvs = OrderedSet{SymbolicT}()
     params = OrderedSet{SymbolicT}()
     _varsbuf = Set{SymbolicT}()
     for eq in affect
-        collect_vars!(dvs, params, eq, iv, Pre)
         empty!(_varsbuf)
-        SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Pre}())
-        filter!(x -> iscall(x) && operation(x) === Pre(), _varsbuf)
-        union!(params, _varsbuf)
-        diffvs = collect_applied_operators(eq, Differential)
-        union!(dvs, diffvs)
+        SU.search_variables!(_varsbuf, eq; is_atomic = OperatorIsAtomic{Union{Pre, Differential}}())
+        for var in _varsbuf
+            isequal(var, iv) && continue
+            Moshi.Match.@match var begin
+                BSImpl.Term(; f) && if f isa Pre end => begin
+                    push!(params, var)
+                    continue
+                end
+                BSImpl.Term(; f) && if f isa Differential end => begin
+                    push!(dvs, var)
+                    continue
+                end
+                _ => nothing
+            end
+
+            if var in parent_dvs
+                push!(dvs, var)
+                continue
+            end
+            push!(params, var)
+        end
     end
     pre_params = filter(haspre, params)
     sys_params = SymbolicT[]
@@ -990,9 +1022,9 @@ Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` r
 """
 Base.@nospecializeinfer function compile_condition(
         @nospecialize(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}),
-        sys, @nospecialize(dvs), @nospecialize(ps);
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys, @nospecialize(dvs), @nospecialize(ps), opts::GeneratedFunctionOptions
     )
+    (; eval_expression, eval_module) = opts
     u = map(value, dvs)
     p = map.(value, reorder_parameters(sys, ps))
     t = get_iv(sys)
@@ -1005,7 +1037,10 @@ Base.@nospecializeinfer function compile_condition(
     end
 
     fs = build_function_wrapper(
-        sys, condit, u, p..., t; u_arg = 1, kwargs..., cse = false
+        sys, condit, [Any[u]; p; Any[t]], BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = opts.codegen
+        )
     )
     fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
         Val{false}, fs...; eval_expression, eval_module
@@ -1382,14 +1417,19 @@ Base.@nospecializeinfer function compile_equational_affect(
         @nospecialize(op = nothing), kwargs...
     )
     if aff isa AbstractVector
-        aff = make_affect(aff; iv = get_iv(sys))
+        aff = make_affect(aff; iv = get_iv(sys), parent_sys = sys)
     end
     if op === nothing
         op = default_operating_point(aff)
     end
     if isempty(equations(system(aff)))
         return compile_explicit_affect(
-            aff, sys; reset_jumps, eval_expression, eval_module, kwargs...
+            aff, sys,
+            GeneratedFunctionOptions(;
+                eval_expression, eval_module,
+                codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+            );
+            reset_jumps
         )
     else
         return compile_implicit_affect(
@@ -1408,9 +1448,10 @@ variables and discrete parameters via `build_function_wrapper`.
 Called from [`compile_equational_affect`](@ref) when `isempty(equations(system(aff)))`.
 """
 Base.@nospecializeinfer function compile_explicit_affect(
-        @nospecialize(aff::AffectSystem), sys;
-        reset_jumps = false, eval_expression = false, eval_module = @__MODULE__, kwargs...
+        @nospecialize(aff::AffectSystem), sys, opts::GeneratedFunctionOptions;
+        reset_jumps = false
     )
+    (; eval_expression, eval_module) = opts
     affsys = system(aff)
     ps_to_update = discretes(aff)
     dvs_to_update = setdiff(unknowns(aff), getfield.(observed(sys), :lhs))
@@ -1453,15 +1494,29 @@ Base.@nospecializeinfer function compile_explicit_affect(
 
     u_up,
         u_up! = build_function_wrapper(
-        sys, (@view rhss[is_u]), dvs, _ps..., t;
-        u_arg = 1, wrap_code = add_integrator_header(sys, integ, :u),
-        outputidxs = u_idxs, wrap_mtkparameters, iip_config = (false, true)
+        sys, (@view rhss[is_u]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :u),
+                    outputidxs = u_idxs, iip_config = (false, true),
+                )
+            )
+        )
     )
     p_up,
         p_up! = build_function_wrapper(
-        sys, (@view rhss[is_p]), dvs, _ps..., t;
-        u_arg = 1, wrap_code = add_integrator_header(sys, integ, :p),
-        outputidxs = p_idxs, wrap_mtkparameters, iip_config = (false, true)
+        sys, (@view rhss[is_p]), [Any[dvs]; _ps; Any[t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1, wrap_mtkparameters,
+            codegen_function_options = setproperties(
+                opts.codegen, (;
+                    wrap_code = add_integrator_header(sys, integ, :p),
+                    outputidxs = p_idxs, iip_config = (false, true),
+                )
+            )
+        )
     )
 
     u_up! = eval_or_rgf(u_up!; eval_expression, eval_module)

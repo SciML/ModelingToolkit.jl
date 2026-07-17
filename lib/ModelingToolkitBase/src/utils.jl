@@ -860,6 +860,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
         Moshi.Match.@match var begin
+            BSImpl.Const() => nothing
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
@@ -967,8 +968,15 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
         )
     end
     arr, isarr = split_indexed_var(var)
-    if isarr && SU.is_array_shape(SU.shape(var))
-        # `var` is indexed, and it is an array, so it must be a slice. Replace it with `arr`.
+    if isarr && (
+            # `var` is indexed, and it is an array, so it must be a slice. Replace it with `arr`.
+            SU.is_array_shape(SU.shape(var)) ||
+                # `var` is of the form `x[i]` where `i` is also a variable/expression
+                any(!SU.isconst, Iterators.drop(arguments(var), 1))
+        )
+        for arg in Iterators.drop(arguments(var), 1)
+            collect_vars!(unknowns, parameters, arg, iv)
+        end
         var = arr
     end
     check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing

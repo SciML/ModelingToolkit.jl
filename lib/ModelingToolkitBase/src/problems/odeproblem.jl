@@ -22,18 +22,22 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false, @nospecialize(analytic = nothing),
-        simplify = false, cse = true, @nospecialize(initialization_data = nothing), expression = Val{false},
+        simplify = false, @nospecialize(initialization_data = nothing), expression = Val{false},
         check_compatibility = true, nlstep = false, nlstep_compile = true, nlstep_scc = false,
         optimize = nothing, kwargs...
     ) where {iip, spec}
     check_complete(sys, ODEFunction)
     check_compatibility && check_compatible_system(ODEFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        optimize, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(;
+            checkbounds, optimize, kwargs...
+        )
     )
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -47,20 +51,13 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     end
 
     if tgrad
-        _tgrad = generate_tgrad(
-            sys; expression, wrap_gfw = Val{true},
-            simplify, cse, eval_expression, eval_module, checkbounds, optimize, kwargs...
-        )
+        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys; expression, wrap_gfw = Val{true},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, optimize,
-            kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
@@ -75,7 +72,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
     end
 
     observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse, optimize
+        sys; expression, steady_state, eval_expression, eval_module, checkbounds, optimize
     )
 
     _W_sparsity = W_sparsity(sys)

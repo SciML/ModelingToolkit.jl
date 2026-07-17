@@ -1,20 +1,22 @@
 function SciMLBase.IntervalNonlinearFunction(
         sys::System; u0 = nothing, p = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
-        analytic = nothing, cse = true, initialization_data = nothing,
+        analytic = nothing, initialization_data = nothing,
         check_compatibility = true, kwargs...
     )
     check_complete(sys, IntervalNonlinearFunction)
     check_compatibility && check_compatible_system(IntervalNonlinearFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        scalar = true, eval_expression, eval_module, checkbounds, cse, kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
 
+    f = generate_rhs(sys, codegen_opts; scalar = true)
+
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     args = (; f)

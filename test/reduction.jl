@@ -344,7 +344,7 @@ eqs = [
 ss = mtkcompile(sys)
 @test isempty(equations(ss))
 dx = ModelingToolkit.default_toterm(unwrap(D(x)))
-@test issetequal(observed(ss), [x ~ 0, dx ~ 0, y ~ dx - x])
+@test issetequal(observed(ss), [x ~ 0, dx ~ 0, y ~ 0])
 
 eqs = [D(D(x)) ~ -x]
 @named sys = System(eqs, t, [x], [])
@@ -610,4 +610,216 @@ end
     # Prior to the fix, this only had `y` and `w` since unscalarized array incidence
     # was not handled correctly in the pass.
     @test issetequal(𝑠neighbors(ts.structure.graph, 1), 1:4)
+end
+
+@testset "`eliminate_zero_variables!`" begin
+    SS = ModelingToolkit.StateSelection
+    analytically_integrated = ModelingToolkit.analytically_integrated
+
+    # Build a fresh `TearingState`, populate the integer-coefficient linear
+    # incidence matrix `mm` via `linear_subsys_adjmat!`, and run the zero-variable
+    # elimination pass directly on it. Mirrors how `mtkcompile!` invokes the pass.
+    function run_zero_var_pass(sys; kwargs...)
+        ts = TearingState(sys)
+        SS.complete!(ts.structure)
+        mm = SS.linear_subsys_adjmat!(ts)
+        mm, modified = ModelingToolkit.eliminate_zero_variables!(ts, mm; kwargs...)
+        return ts, mm, modified
+    end
+
+    # Is variable `v` still present in `fullvars`?
+    hasvar(ts, v) = any(isequal(unwrap(v)), ts.fullvars)
+    # The `additional_observed` equation whose lhs matches the (already unwrapped) `v`.
+    obs_for(ts, v) = only(filter(o -> isequal(o.lhs, v), ts.additional_observed))
+    # `default_toterm` of a differential variable, e.g. `D(x) -> xˍt(t)`.
+    tt(v) = ModelingToolkit.default_toterm(unwrap(v))
+    obs_lhss(ts) = [o.lhs for o in ts.additional_observed]
+    all_obs_zero(ts) = all(o -> iszero(Symbolics.value(o.rhs)), ts.additional_observed)
+    # Parameters the pass introduced (the `t = 0` values of analytically integrated
+    # variables), i.e. those absent from the original system `sys`.
+    new_params(ts, sys) = setdiff(parameters(ts.sys), parameters(sys))
+
+    @testset "a purely algebraic zero variable is eliminated" begin
+        # `0 ~ 2y` forces `y == 0`. The row for that equation in `mm` has a single
+        # non-zero entry, which is how the pass identifies `y` as zero.
+        @variables x(t) y(t)
+        @named sys = System([D(x) ~ x + y, 0 ~ 2y], t)
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        @test !hasvar(ts, y)
+        @test hasvar(ts, x) && hasvar(ts, D(x))
+        # `y ~ 0` is recorded as an observed equation.
+        @test isequal(only(ts.additional_observed).lhs, unwrap(y))
+        @test iszero(Symbolics.value(only(ts.additional_observed).rhs))
+        # `y` is not a derivative, so nothing is analytically integrated and no
+        # `t = 0` parameters are introduced.
+        @test isempty(analytically_integrated(ts.sys))
+        @test isempty(new_params(ts, sys))
+    end
+
+    @testset "returns `mm` unchanged when there are no zero variables" begin
+        @variables x(t) y(t)
+        @named sys = System([D(x) ~ y, D(y) ~ -x], t)
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test !modified
+        @test isempty(ts.additional_observed)
+        # `D(x), x, D(y), y` all survive.
+        @test length(ts.fullvars) == 4
+    end
+
+    @testset "derivatives of a zero variable are also zeroed" begin
+        # `0 ~ 2x` forces `x == 0`, and hence `D(x) == 0`. Both must be removed and
+        # recorded as observed to be zero.
+        @variables x(t)
+        @named sys = System([0 ~ 2x, D(x) ~ 3x], t, [x], [])
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        @test !hasvar(ts, x) && !hasvar(ts, D(x))
+        @test issetequal(obs_lhss(ts), [unwrap(x), tt(D(x))])
+        @test all_obs_zero(ts)
+        # Every variable here is genuinely zero (not integrated), so nothing is
+        # analytically integrated and no `t = 0` parameters are introduced.
+        @test isempty(analytically_integrated(ts.sys))
+        @test isempty(new_params(ts, sys))
+    end
+
+    @testset "a zero first derivative integrates to a constant" begin
+        # `D(x) ~ 0` means `x` is constant. Rather than remaining an unknown, `x` is
+        # "analytically integrated": eliminated in favour of `x ~ x0`, where `x0` is a
+        # fresh parameter holding its value at `t = 0`.
+        @variables x(t)
+        @named sys = System([D(x) ~ 0], t, [x], [])
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        # `D(x) ~ 0`
+        @test iszero(Symbolics.value(obs_for(ts, tt(D(x))).rhs))
+        # `x` is recorded as analytically integrated.
+        @test issetequal(keys(analytically_integrated(ts.sys)), [unwrap(x)])
+        # Exactly one fresh `t = 0` parameter is introduced, and `x ~ x0`.
+        x0 = only(new_params(ts, sys))
+        @test isequal(obs_for(ts, unwrap(x)).rhs, x0)
+        # The `t = 0` parameter is solvable (bound to `missing`).
+        @test isequal(ModelingToolkit.get_bindings(ts.sys)[x0], ModelingToolkit.COMMON_MISSING)
+        # The analytical derivative of `x` is recorded as zero.
+        @test iszero(Symbolics.value(ts.analytical_derivatives[unwrap(D(x))]))
+    end
+
+    @testset "a zero second derivative integrates to a polynomial in time" begin
+        # `D(D(x)) ~ 0` is constant-velocity motion. Neither `x` nor `D(x)` is zero;
+        # both are analytically integrated into polynomials in `t`, parameterised by
+        # their `t = 0` values `x0` and `v0`:
+        #   D(x) ~ v0
+        #   x    ~ x0 + v0 * t
+        @variables x(t)
+        @named sys = System([D(D(x)) ~ 0], t, [x], [])
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        # `D(D(x)) ~ 0`
+        @test iszero(Symbolics.value(obs_for(ts, tt(D(D(x)))).rhs))
+        # Both `x` and `D(x)` are analytically integrated, introducing two fresh
+        # `t = 0` parameters.
+        @test issetequal(keys(analytically_integrated(ts.sys)), [unwrap(x), unwrap(D(x))])
+        newps = new_params(ts, sys)
+        @test length(newps) == 2
+        # `D(x) ~ v0`, a single `t = 0` parameter.
+        v0 = obs_for(ts, tt(D(x))).rhs
+        @test any(isequal(v0), newps)
+        # `x ~ x0 + v0 * t`: the value at `t = 0` and the coefficient of `t` are exactly
+        # the two new parameters, and the linear coefficient is `v0`.
+        rhs_x = obs_for(ts, unwrap(x)).rhs
+        x0 = Symbolics.value(Symbolics.substitute(rhs_x, Dict(unwrap(t) => 0)))
+        dxdt = (rhs_x - x0) / t
+        @test issetequal([x0, dxdt], newps)
+        @test isequal(dxdt, v0)
+        # Evaluate the polynomial at `x0 = 2`, `v0 = 3`, `t = 5`: `2 + 3*5 = 17`.
+        val = Symbolics.value(Symbolics.substitute(rhs_x, Dict(x0 => 2.0, v0 => 3.0, unwrap(t) => 5.0)))
+        @test val == 17.0
+        # Analytical derivatives are recorded for reassembly.
+        @test iszero(Symbolics.value(ts.analytical_derivatives[D(tt(D(x)))]))
+        @test isequal(ts.analytical_derivatives[unwrap(D(x))], v0)
+    end
+
+    @testset "cascaded zeros are found within a single pass" begin
+        # `0 ~ 2z` gives `z == 0`. Substituting into `0 ~ y - z` leaves `0 ~ y`, so
+        # `y == 0` too. Both are discovered in one invocation because the pass queues
+        # equations incident on a freshly-zeroed variable.
+        @variables x(t) y(t) z(t)
+        @named sys = System([0 ~ 2z, 0 ~ y - z, D(x) ~ x + y + z], t, [x, y, z], [])
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        @test !hasvar(ts, y) && !hasvar(ts, z)
+        @test hasvar(ts, x)
+        @test issetequal(obs_lhss(ts), [unwrap(y), unwrap(z)])
+        @test all_obs_zero(ts)
+    end
+
+    @testset "`eliminate_zero_variables_fixpoint!` discovers zeros across iterations" begin
+        # `w` is a parameter, so `0 ~ w*z + y` is not integer-linear and is absent from
+        # `mm` initially. Only after `z -> 0` (first iteration) does it become `0 ~ y`
+        # and get added to `mm`, so a second iteration is required to find `y == 0`.
+        @variables x(t) y(t) z(t)
+        @parameters w
+        @named sys = System([0 ~ 2z, 0 ~ w * z + y, D(x) ~ x + y + z], t, [x, y, z], [w])
+
+        # A single pass only finds `z`.
+        ts1 = TearingState(sys)
+        SS.complete!(ts1.structure)
+        mm1 = SS.linear_subsys_adjmat!(ts1)
+        mm1, _ = ModelingToolkit.eliminate_zero_variables!(ts1, mm1)
+        @test !hasvar(ts1, z)
+        @test hasvar(ts1, y)
+
+        # The fixpoint driver iterates until convergence and finds both.
+        ts2 = TearingState(sys)
+        SS.complete!(ts2.structure)
+        mm2 = SS.linear_subsys_adjmat!(ts2)
+        mm2 = ModelingToolkit.eliminate_zero_variables_fixpoint!(ts2, mm2)
+        @test !hasvar(ts2, y) && !hasvar(ts2, z)
+        @test issetequal(obs_lhss(ts2), [unwrap(y), unwrap(z)])
+
+        # `maxiters = 1` stops after the first iteration, matching the single pass.
+        ts3 = TearingState(sys)
+        SS.complete!(ts3.structure)
+        mm3 = SS.linear_subsys_adjmat!(ts3)
+        mm3 = ModelingToolkit.eliminate_zero_variables_fixpoint!(ts3, mm3; maxiters = 1)
+        @test hasvar(ts3, y)
+    end
+
+    @testset "zero variables are substituted through `mtkcompile`" begin
+        # End-to-end: `0 ~ 2y` should vanish and `y -> 0` should be substituted into
+        # the surviving dynamics, leaving `D(x) ~ x`.
+        @variables x(t) y(t)
+        @mtkcompile sys = System([D(x) ~ x + y, 0 ~ 2y], t)
+        @test length(equations(sys)) == 1
+        eq = only(equations(sys))
+        @test isequal(eq.lhs, unwrap(D(x)))
+        @test isequal(eq.rhs, unwrap(x))
+        @test any(o -> isequal(o.lhs, unwrap(y)) && iszero(Symbolics.value(o.rhs)), observed(sys))
+    end
+
+    @testset "analytically integrated variables reconstruct the trajectory" begin
+        # `D(D(x)) ~ 0` compiles to a system with no equations and no unknowns: the
+        # entire trajectory lives in `observed` as `x ~ x0 + v0 * t`, with `x0` and `v0`
+        # parameters standing in for the `t = 0` position and velocity.
+        @variables x(t)
+        @mtkcompile sys = System([D(D(x)) ~ 0], t, [x], [])
+        @test isempty(equations(sys))
+        @test isempty(unknowns(sys))
+        @test issetequal(keys(analytically_integrated(sys)), [unwrap(x), unwrap(D(x))])
+
+        # The observed expression for `x` is `x0 + v0 * t`, and its two parameters are
+        # exactly the parameters of the compiled system.
+        obsx = only(filter(o -> isequal(o.lhs, unwrap(x)), observed(sys)))
+        x0 = Symbolics.value(Symbolics.substitute(obsx.rhs, Dict(unwrap(t) => 0)))
+        v0 = (obsx.rhs - x0) / t
+        @test issetequal([x0, v0], parameters(sys))
+
+        # Initial conditions for `x` and `D(x)` determine `x0` and `v0`; the observed
+        # function then reconstructs the trajectory (`x(0) = 2`, `x(5) = 2 + 3*5 = 17`).
+        prob = ODEProblem(sys, [x => 2.0, D(x) => 3.0], (0.0, 5.0))
+        @test prob.f.observed(unwrap(x), prob.u0, prob.p, 0.0) == 2.0
+        @test prob.f.observed(unwrap(x), prob.u0, prob.p, 5.0) == 17.0
+        # With no initialization information at all, construction fails.
+        @test_throws ModelingToolkit.IncompleteInitializationError ODEProblem(sys, [], (0.0, 5.0))
+    end
 end

@@ -1,7 +1,7 @@
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true, aggregator = JumpProcesses.NullAggregator(),
+        checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
         callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
@@ -23,13 +23,13 @@
         if has_eqs && has_noise
             prob = SDEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
-                build_initializeprob = false, checkbounds, cse, check_length = false,
+                build_initializeprob = false, checkbounds, check_length = false,
                 _skip_events = true, _skip_tstops = true, kwargs...
             )
         elseif has_eqs
             prob = ODEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
-                build_initializeprob = false, checkbounds, cse, check_length = false,
+                build_initializeprob = false, checkbounds, check_length = false,
                 _skip_events = true, _skip_tstops = true, kwargs...
             )
         else
@@ -41,7 +41,7 @@
             )
             observedfun = ObservedFunctionCache(
                 sys; eval_expression, eval_module,
-                checkbounds, cse
+                checkbounds
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
@@ -51,12 +51,12 @@
         _f, u0,
             p = process_SciMLProblem(
             EmptySciMLFunction{iip}, sys, op;
-            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, cse, kwargs...
+            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, kwargs...
         )
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(
-            sys; eval_expression, eval_module, checkbounds, cse
+            sys; eval_expression, eval_module, checkbounds
         )
 
         df = DiscreteFunction{true, true}(
@@ -69,7 +69,9 @@
     # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
     # Inner problems (SDEProblem/ODEProblem) are created with _skip_tstops = true
     # to avoid duplication.
-    tstops = SymbolicTstops(sys; eval_expression, eval_module)
+    tstops = SymbolicTstops(
+        sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    )
 
     dvs = unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))

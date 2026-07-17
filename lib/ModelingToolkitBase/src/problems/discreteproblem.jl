@@ -1,18 +1,20 @@
 @fallback_iip_specialize function SciMLBase.DiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         eval_expression = false, eval_module = @__MODULE__, expression = Val{false},
-        checkbounds = false, analytic = nothing, simplify = false, cse = true,
+        checkbounds = false, analytic = nothing, simplify = false,
         initialization_data = nothing, check_compatibility = true,
         kwargs...
     ) where {iip, spec}
     check_complete(sys, DiscreteFunction)
     check_compatibility && check_compatible_system(DiscreteFunction, sys)
 
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    codegen_opts = GeneratedFunctionOptions(;
+        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
     )
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -26,8 +28,7 @@
     end
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
+        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
     )
 
     kwargs = (;
