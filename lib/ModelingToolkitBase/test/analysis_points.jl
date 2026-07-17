@@ -1084,6 +1084,53 @@ if @isdefined(ModelingToolkit)
             @test isempty(ModelingToolkit.get_unknowns(isolated))
             @test isempty(ModelingToolkit.get_ps(isolated))
         end
+
+        import ModelingToolkitTearing as MTKTearing
+        @testset "Clock information inferred from removed sections is retained" begin
+            # The model is such that the clocks of variables in `Middle` and `End` are
+            # only inferrable from the `Sample`s in `Provider`. Since `Provider` and `End`
+            # are removed by `isolate_subsystem`, ordinarily this would infer `Provider`'s
+            # variables as continuous. This is incorrect, and clock information from
+            # the full system should be used to ensure correct clock propagation in the
+            # isolated one.
+            @component function Provider(; name)
+                @variables x(t) xd(t) [output = true]
+                clk = Clock(0.1)
+                k = ShiftIndex(clk)
+                return System([D(x) ~ x, xd ~ Sample(clk)(x)], t, [x, xd], []; name)
+            end
+
+            @component function Middle(; name)
+                @variables xd(t) [input = true] yd(t) [output = true]
+                k = ShiftIndex()
+                return System([yd ~ 2xd], t, [xd, yd], []; name)
+            end
+            @component function End(; name)
+                @variables xd(t) [input = true]
+                k = ShiftIndex()
+                return System(Equation[], t, [xd], []; name)
+            end
+
+            @component function Model(; name)
+                @named begin
+                    provider = Provider()
+                    middle = Middle()
+                    final = End()
+                end
+                eqs = [
+                    connect(provider.xd, :A, middle.xd)
+                    connect(middle.yd, :B, final.xd)
+                ]
+                return System(eqs, t; name, systems = [provider, middle, final])
+            end
+
+            @named model = Model()
+            snippy, ips, ops = isolate_subsystem(model, model.A, model.B)
+            ts = TearingState(snippy)
+            ci = MTKTearing.ClockInference(ts)
+            MTKTearing.infer_clocks!(ci)
+            @test ci.var_domain == [Clock(0.1), Clock(0.1)]
+        end
     end
 end
 

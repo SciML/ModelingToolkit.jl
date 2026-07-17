@@ -204,6 +204,29 @@ function isolate_subsystem(
         input_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         output_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}
     )
+    # Run clock inference first to be able to port the results to the isolated subsystem
+    ts = TearingState(expand_connections(sys))
+    ci = MTKTearing.ClockInference(ts)
+    MTKTearing.infer_clocks!(ci)
+    all_clock_subs = Dict{SymbolicT, SymbolicT}()
+    if length(ci.all_clocks) > 1
+        sizehint!(all_clock_subs, length(ci.var_domain))
+        for (var, clk) in zip(ts.fullvars, ci.var_domain)
+            # Clock operators either define a clock or depend on the clock of their inputs.
+            # Neither case needs to be propagated, and this simplifies downstream
+            # implementation.
+            Moshi.Match.@match var begin
+                BSImpl.Term(; f) && if f isa Operator end => continue
+                _ => nothing
+            end
+            all_clock_subs[var] = setmetadata(var, VariableTimeDomain, clk)
+            arr, isidx = split_indexed_var(var)
+            if isidx
+                get!(() -> setmetadata(arr, VariableTimeDomain, clk), all_clock_subs, var)
+            end
+        end
+    end
+
     input_aps = canonicalize_ap(sys, input_aps)
     output_aps = canonicalize_ap(sys, output_aps)
 
@@ -351,17 +374,43 @@ function isolate_subsystem(
     # as-is — their internal structure belongs to the isolated subsystem.
     # Systems that are containers (in inside_prefixes only because they wrap inside
     # components) have their equations filtered and their own variables/parameters cleared.
-    function _reconstruct!(cur, parent_path)
+    function _get_next_clock_substitutions(cur_subs::Dict{SymbolicT, SymbolicT}, name::Symbol)
+        new_subs = empty(cur_subs)
+        sizehint!(new_subs, length(cur_subs))
+        for (k, v) in cur_subs
+            hierarchy = namespace_hierarchy(getname(k))
+            length(hierarchy) == 1 && continue
+            first(hierarchy) == name || continue
+            new_name = Symbol(join(Iterators.drop(hierarchy, 1), NAMESPACE_SEPARATOR_SYMBOL))
+            new_k = rename(k, new_name)
+            new_v = rename(v, new_name)
+            new_subs[new_k] = new_v
+        end
+
+        return new_subs
+    end
+
+    function _recursively_clock_subsystems(cur, clock_subs)
+        isempty(clock_subs) && return cur
+        eqs = copy(get_eqs(cur))
+        clock_subber = SU.IRSubstituter{false}(get_irstructure(sys), clock_subs)
+        map!(clock_subber, eqs, eqs)
+        syss = copy(get_systems(cur))
+        map!(s -> _recursively_clock_subsystems(s, _get_next_clock_substitutions(clock_subs, nameof(s))), syss, syss)
+        return ConstructionBase.setproperties(cur; eqs = eqs, systems = syss)
+    end
+
+    function _reconstruct!(cur, parent_path, clock_subs)
         idx = get(path_to_idx, parent_path, nothing)
         if idx !== nothing && inside[idx]
             # Directly-inside component — preserve it entirely.
-            return cur
+            return _recursively_clock_subsystems(cur, clock_subs)
         end
 
         # Container: filter subsystems and equations, clear own vars/params so that
         # nothing from outside the isolated region leaks into the result.
         new_systems = [
-            _reconstruct!(s, [parent_path; nameof(s)])
+            _reconstruct!(s, [parent_path; nameof(s)], _get_next_clock_substitutions(clock_subs, nameof(s)))
                 for s in get_systems(cur) if has_inside([parent_path; nameof(s)])
         ]
         new_eqs = filter(get_eqs(cur)) do eq
@@ -390,10 +439,14 @@ function isolate_subsystem(
                 return false
             end
         end
+        if !isempty(clock_subs)
+            clock_subber = SU.IRSubstituter{false}(get_irstructure(sys), clock_subs)
+            map!(clock_subber, new_eqs, new_eqs)
+        end
         return System(new_eqs, get_iv(cur), SymbolicT[], SymbolicT[]; name = nameof(cur), systems = new_systems)
     end
 
-    return _reconstruct!(sys, Symbol[]), input_vars, output_vars
+    return _reconstruct!(sys, Symbol[], all_clock_subs), input_vars, output_vars
 end
 
 @doc """
