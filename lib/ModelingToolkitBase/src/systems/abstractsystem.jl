@@ -1342,8 +1342,9 @@ function namespace_equations(sys::AbstractSystem, visitor = NoVisitor())
     if eqs === get_eqs(sys)
         eqs = copy(eqs)
     end
+    cache = Base.IdDict{SymbolicT, SymbolicT}()
     for i in eachindex(eqs)
-        eqs[i] = namespace_equation(eqs[i], sys)
+        eqs[i] = namespace_equation(eqs[i], sys; cache)
     end
     return eqs
 end
@@ -1353,7 +1354,8 @@ function namespace_initialization_equations(
     )
     eqs = initialization_equations(sys)
     isempty(eqs) && return Equation[]
-    return map(eq -> namespace_equation(eq, sys; ivs), eqs)
+    cache = Base.IdDict{SymbolicT, SymbolicT}()
+    return map(eq -> namespace_equation(eq, sys; cache, ivs), eqs)
 end
 
 function namespace_tstops(sys::AbstractSystem)
@@ -1373,10 +1375,11 @@ function namespace_equation(
         eq::Equation,
         sys,
         n = nameof(sys);
+        cache = Base.IdDict{SymbolicT, SymbolicT}(),
         ivs = independent_variables(sys)
     )
-    _lhs = namespace_expr(eq.lhs, sys, n; ivs)
-    _rhs = namespace_expr(eq.rhs, sys, n; ivs)
+    _lhs = namespace_expr(eq.lhs, sys, n; cache, ivs)
+    _rhs = namespace_expr(eq.rhs, sys, n; cache, ivs)
     return (_lhs ~ _rhs)::Equation
 end
 
@@ -1454,38 +1457,48 @@ end
 function namespace_expr(O::Union{Num, Symbolics.Arr, Symbolics.CallAndWrap}, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
     return typeof(O)(namespace_expr(unwrap(O), sys, n; kw...))
 end
-function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
+function namespace_expr(O::AbstractArray, sys::AbstractSystem, n::Symbol = nameof(sys); cache = Base.IdDict{SymbolicT, SymbolicT}(), ivs = independent_variables(sys))
     is_array_of_symbolics(O) || return O
     O = copy(O)
     for i in eachindex(O)
-        O[i] = namespace_expr(O[i], sys, n; ivs)
+        O[i] = namespace_expr(O[i], sys, n; cache, ivs)
     end
     return O
 end
-function namespace_expr(O::AbstractDict, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+function namespace_expr(O::AbstractDict, sys::AbstractSystem, n::Symbol = nameof(sys); cache = Base.IdDict{SymbolicT, SymbolicT}(), ivs = independent_variables(sys))
     O2 = empty(O)
     for (k, v) in O
-        O2[namespace_expr(k, sys, n; kw...)] = namespace_expr(v, sys, n; kw...)
+        vv = namespace_expr(v, sys, n; cache, ivs)
+        kk = namespace_expr(k, sys, n; cache, ivs)
+        if O isa AtomicArrayDict
+            __unsafe_aad_setindex!(O2, vv, kk)
+        else
+            O2[kk] = vv
+        end
     end
     return O2
 end
-function namespace_expr(O::AbstractSet, sys::AbstractSystem, n::Symbol = nameof(sys); kw...)
+function namespace_expr(O::AbstractSet, sys::AbstractSystem, n::Symbol = nameof(sys); cache = Base.IdDict{SymbolicT, SymbolicT}(), kw...)
     O2 = empty(O)
     for v in O
-        push!(O2, namespace_expr(v, sys, n; kw...))
+        push!(O2, namespace_expr(v, sys, n; cache, kw...))
     end
     return O2
 end
-function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); ivs = independent_variables(sys))
+function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sys); cache = Base.IdDict{SymbolicT, SymbolicT}(), ivs = independent_variables(sys))
     any(isequal(O), ivs) && return O
+    cached = get(cache, O, nothing)
+    if cached !== nothing
+        return cached
+    end
     isvar = isvariable(O)
     return Moshi.Match.@match O begin
-        BSImpl.Const() => return O
-        BSImpl.Sym() => return isvar ? renamespace(n, O) : O
+        BSImpl.Const() => (return cache[O] = O)
+        BSImpl.Sym() => (return cache[O] = (isvar ? renamespace(n, O) : O))
         BSImpl.Term(; f, args, metadata, type, shape) => begin
             newargs = copy(parent(args))
             for i in eachindex(args)
-                newargs[i] = namespace_expr(newargs[i], sys, n; ivs)
+                newargs[i] = namespace_expr(newargs[i], sys, n; cache, ivs)
             end
             if isvar
                 rescoped = renamespace(n, O)
@@ -1497,27 +1510,27 @@ function namespace_expr(O::SymbolicT, sys::AbstractSystem, n::Symbol = nameof(sy
             else
                 meta = metadata
             end
-            return BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata = meta)
+            return cache[O] = BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata = meta)
         end
         BSImpl.AddMul(; coeff, dict, variant, type, shape, metadata) => begin
             newdict = copy(dict)
             empty!(newdict)
             for (k, v) in dict
-                newdict[namespace_expr(k, sys, n; ivs)] = v
+                newdict[namespace_expr(k, sys, n; cache, ivs)] = v
             end
-            return BSImpl.AddMul{VartypeT}(coeff, newdict, variant; type, shape, metadata)
+            return cache[O] = BSImpl.AddMul{VartypeT}(coeff, newdict, variant; type, shape, metadata)
         end
         BSImpl.Div(; num, den, type, shape, metadata) => begin
-            num = namespace_expr(num, sys, n; ivs)
-            den = namespace_expr(den, sys, n; ivs)
-            return BSImpl.Div{VartypeT}(num, den, false; type, shape, metadata)
+            num = namespace_expr(num, sys, n; cache, ivs)
+            den = namespace_expr(den, sys, n; cache, ivs)
+            return cache[O] = BSImpl.Div{VartypeT}(num, den, false; type, shape, metadata)
         end
         BSImpl.ArrayOp(; output_idx, expr, term, ranges, reduce, type, shape, metadata) => begin
             if term isa SymbolicT
-                term = namespace_expr(term, sys, n; ivs)
+                term = namespace_expr(term, sys, n; cache, ivs)
             end
-            expr = namespace_expr(expr, sys, n; ivs)
-            return BSImpl.ArrayOp{VartypeT}(output_idx, expr, reduce, term, ranges; type, shape, metadata)
+            expr = namespace_expr(expr, sys, n; cache, ivs)
+            return cache[O] = BSImpl.ArrayOp{VartypeT}(output_idx, expr, reduce, term, ranges; type, shape, metadata)
         end
     end
 end
@@ -1822,7 +1835,7 @@ parameters(sys::AbstractSystem, v::Symbolics.Arr) = toparam(unknowns(sys, v))
 parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(unknowns(sys, v))
 for f in [:unknowns, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
-        return map(v -> $f(sys, v), vs)
+        return namespace_expr(vs, sys)
     end
 end
 
