@@ -61,7 +61,11 @@ Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
-    validate_atomic_array_key(unwrap(k))
+    validate_atomic_array_key(k)
+    return __unsafe_aad_setindex!(dd, v, k)
+end
+
+function __unsafe_aad_setindex!(dd::AtomicArrayDict, v, k::SymbolicT)
     return setindex!(dd.dict, v, k)
 end
 
