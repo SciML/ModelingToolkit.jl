@@ -474,37 +474,31 @@ Base.show(io::IO, x::Initial) = print(io, "Initial")
 distribute_shift_into_operator(::Initial) = false
 validate_operator(::Initial, args, iv; context = nothing) = true
 
-function (f::Initial)(x)
-    # wrap output if wrapped input
-    iw = Symbolics.iswrapped(x)
-    x = unwrap(x)
+(f::Initial)(x) = x
+(f::Initial)(x::Num) = Num(f(unwrap(x)))
+(f::Initial)(x::Symbolics.Arr{T, N}) where {T, N} = Symbolics.Arr{T, N}(f(unwrap(x)))
+function (f::Initial)(x::SymbolicT)
     # non-symbolic values don't change
-    if symbolic_type(x) == NotSymbolic()
-        return x
+    Moshi.Match.@match x begin
+        BSImpl.Const() => return x
+        BSImpl.Term(; f) => if f isa Union{Differential, Shift}
+            # differential variables are default-toterm-ed
+            x = default_toterm(x)
+        elseif f isa Initial
+            # don't double wrap
+            return x
+        end
+        _ => nothing
     end
-    # differential variables are default-toterm-ed
-    if iscall(x) && operation(x) isa Union{Differential, Shift}
-        x = default_toterm(x)
-    end
-    # don't double wrap
-    iscall(x) && operation(x) isa Initial && return x
-    sh = SU.shape(x)
-    result = if SU.is_array_shape(sh)
-        term(f, x; type = symtype(x), shape = sh)
-    elseif iscall(x) && operation(x) === getindex
+    arr, isidx = split_indexed_var(x)
+    if isidx
         # instead of `Initial(x[1])` create `Initial(x)[1]`
         # which allows parameter indexing to handle this case automatically.
-        arr = arguments(x)[1]
-        f(arr)[arguments(x)[2:end]...]
-    else
-        term(f, x; type = symtype(x), shape = sh)
+        sidx = get_stable_index(x)
+        return f(arr)[sidx]
     end
     # the result should be a parameter
-    result = toparam(result)
-    if iw
-        result = wrap(result)
-    end
-    return result
+    return toparam(BSImpl.Term{VartypeT}(f, Symbolics.SArgsT((x,)); type = symtype(x), shape = SU.shape(x)))
 end
 
 supports_initialization(sys::AbstractSystem) = true
