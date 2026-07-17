@@ -361,10 +361,12 @@ function find_perfect_aliases!(
             end
 
             dv = var_to_diff[v]
+            # `prev_dtarget` must always be one level of differentiation below `dtarget`.
+            prev_dtarget = target
             dtarget = var_to_diff[target]
             while dv isa Int
                 if dtarget === nothing
-                    dtarget = StateSelection.var_derivative!(state, target)
+                    dtarget = StateSelection.var_derivative!(state, prev_dtarget)
                 end
                 push!(vars_to_rm, dv)
 
@@ -382,6 +384,7 @@ function find_perfect_aliases!(
                 end
 
                 dv = var_to_diff[dv]
+                prev_dtarget = dtarget
                 dtarget = var_to_diff[dtarget]
             end
         end
