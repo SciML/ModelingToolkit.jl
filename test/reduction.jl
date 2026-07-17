@@ -823,3 +823,38 @@ end
         @test_throws ModelingToolkit.IncompleteInitializationError ODEProblem(sys, [], (0.0, 5.0))
     end
 end
+
+@testset "Issue#4776: `eliminate_perfect_aliases!` correctly handles missing higher order derivatives" begin
+    # The issue is that in an alias group, if `var_to_diff[var_to_diff[v]]` exists but
+    # `var_to_diff[var_to_diff[target]]` doesn't, it used to differentiate `target`.
+    # This is fixed by making sure `prev_dtarget` is always one level of differentiation below
+    # `dtarget`, and we differentiate `prev_dtarget`.
+    @variables begin
+        v001(t)
+        v004(t)
+        v005(t)
+        v006(t), [state_priority = -1]
+        v023(t), [state_priority = -1]
+        v027(t), [guess = 0.0]
+        v031(t), [state_priority = -1]
+        v035(t)
+        v050(t), [state_priority = -1]
+    end
+
+    eqs = [
+        v004 ~ 0.0,
+        v005 ~ 0.0,
+        v006 ~ 0,
+        v001 ~ D(D(v006)),
+        v035 ~ D(v031),
+        v027 ~ D(v035),
+        v006 ~ v050,
+        0 ~ v004,
+        0 ~ v005,
+        v050 ~ v023,
+        v023 ~ v031,
+    ]
+    @mtkcompile sys = System(eqs, t)
+    # Everything is identically zero
+    @test isempty(equations(sys))
+end
