@@ -93,7 +93,7 @@ MTKTrackerExt = "Tracker"
 [compat]
 ADTypes = "1.14.0"
 AbstractTrees = "0.3, 0.4"
-ArrayInterface = "6, 7"
+ArrayInterface = "7"
 BoundaryValueDiffEqAscher = "1.6.0"
 BoundaryValueDiffEqMIRK = "1.7.0"
 BandedMatrices = "1.11.0"
