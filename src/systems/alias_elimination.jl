@@ -547,8 +547,17 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     (; sys, fullvars, structure, original_eqs) = state
     (; var_to_diff, graph) = structure
     diff_to_var = invview(var_to_diff)
-    zero_vars, zero_eqs, eqs_to_substitute = __eliminate_zero_variables!(state, mm)
+    zero_vars, zero_eqs, eqs_to_substitute, protected_vars, protected_eqs = __eliminate_zero_variables!(state, mm)
     isempty(zero_vars) && return mm, false
+
+    # Zero variables that are actually eliminated (not protected by irreducibility).
+    unprotected_zero_vars = setdiff(zero_vars, protected_vars)
+    # Equations we substitute the zeros into. Protected `var ~ 0` equations are retained
+    # verbatim, so we must not substitute into them (that would turn them into `0 ~ 0`).
+    real_subs = setdiff(eqs_to_substitute, protected_eqs)
+    # If every zero variable is protected and none of them appears in any other equation,
+    # there is nothing to eliminate or substitute, so the system is unchanged.
+    isempty(unprotected_zero_vars) && isempty(real_subs) && return mm, false
 
     eqs = collect(equations(state))
     aliases = Dict{Int, Int}()
@@ -575,6 +584,11 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
         ttsym = StateSelection.is_only_discrete(structure) ? sym : default_toterm(sym)
         subrules[sym] = Symbolics.COMMON_ZERO
         subrules[ttsym] = Symbolics.COMMON_ZERO
+        # Protected variables (whose differential chain contains an irreducible variable)
+        # are retained as unknowns along with their `var ~ 0` equation. We still substitute
+        # their zero value into other equations (via `subrules`), but do not eliminate them,
+        # mark them observed, or analytically integrate their antiderivatives.
+        v in protected_vars && continue
         push!(state.additional_observed, ttsym ~ Symbolics.COMMON_ZERO)
         # Also need to handle corresponding integrated forms
         ∫var = diff_to_var[v]
@@ -641,10 +655,10 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     end
 
     __filter_mm_eqs!(!in(mm_eqs_to_rm), mm)
-    append!(vars_to_rm, zero_vars)
-    append!(eqs_to_rm, zero_eqs)
+    append!(vars_to_rm, unprotected_zero_vars)
+    append!(eqs_to_rm, setdiff(zero_eqs, protected_eqs))
     __add_unscalarized_array_subs!(subrules)
-    __substitute_and_update_incidence!(eqs, original_eqs, state, eqs_to_substitute, subrules)
+    __substitute_and_update_incidence!(eqs, original_eqs, state, real_subs, subrules)
     # It's possible that after substitution some higher order derivatives are not present
     # anymore. For example, `D(x)` might only be present in an equation as `y * D(x)`, and
     # we just substituted `y => 0`. Without the following, this will result in `D(x)` not being
@@ -677,7 +691,7 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     to_rm = vars_to_rm
     empty!(eqs_to_rm)
     coeffs = eqs_to_rm
-    for e in eqs_to_substitute
+    for e in real_subs
         # Refer to equations by their new indices now
         e = old_to_new_eq[e]
         iszero(e) && continue
@@ -703,11 +717,20 @@ Helper for `eliminate_zero_variables!`. Returns:
 - `zero_eqs`: A `Set{Int}` of equations identifying such variables to be zero.
 - `eqs_to_substitute`: A `Set{Int}` of equations in `state` which contain variables
   in `zero_vars`. These equations should be substituted to remove the zero variables.
+- `protected_vars`: A `Set{Int}`, subset of `zero_vars`, whose differential chain (the
+  variable together with all its derivatives and antiderivatives) contains an irreducible
+  variable. These zero variables should still be substituted into other equations, but
+  neither they nor their `var ~ 0` equations should be eliminated from the system.
+- `protected_eqs`: A `Set{Int}`, subset of `zero_eqs`, of the `var ~ 0` equations
+  identifying variables in `protected_vars` to be zero. These must be retained.
 
-Also updates `mm` in-place to remove such zero variables/equations.
+Also updates `mm` in-place to remove non-protected zero variables/equations.
 """
 function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL)
     (; graph, var_to_diff) = state.structure
+    fullvars = state.fullvars
+    diff_to_var = invview(var_to_diff)
+    irreducibles = get_irreducibles(state.sys)
 
     # Inverse mapping of `mm.nzrows`
     nzrow_to_idx = Dict{Int, Int}()
@@ -719,6 +742,8 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     zero_vars = Set{Int}()
     # Equations in `mm` of the form `var ~ 0`
     zero_eqs = Set{Int}()
+    # Maps each zero variable to the `var ~ 0` equation (in `zero_eqs`) identifying it.
+    zero_var_to_eq = Dict{Int, Int}()
     # Equations that `zero_vars` are incident on and need to be substituted
     eqs_to_substitute = Set{Int}()
     # Queue of indices in `mm.nzrows` containing rows to check for being
@@ -775,6 +800,7 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
 
         push!(zero_vars, zvar)
         push!(zero_eqs, eqidx)
+        zero_var_to_eq[zvar] = eqidx
         process_neighbors!(zvar)
         # All derivatives of this variable are also zero
         dzvar = var_to_diff[zvar]
@@ -786,10 +812,46 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     end
 
 
-    # Remove zero equations from `mm`
-    isempty(zero_eqs) || __filter_mm_eqs!(!in(zero_eqs), mm)
+    # A zero variable is protected if its full differential chain (the root
+    # antiderivative, the variable itself, and all its derivatives) contains an
+    # irreducible variable. Such variables must not be eliminated. Only the members
+    # of the chain that are genuinely zero (i.e. in `zero_vars`) are protected here;
+    # the antiderivatives are kept as unknowns by skipping their integration.
+    protected_vars = Set{Int}()
+    if !isempty(irreducibles)
+        for v in zero_vars
+            # Walk down to the lowest order antiderivative.
+            root = v
+            while (∫root = diff_to_var[root]) isa Int
+                root = ∫root
+            end
+            # Walk up the chain looking for an irreducible variable.
+            c = root
+            protected = false
+            while c isa Int
+                if contains_possibly_indexed_element(irreducibles, fullvars[c])
+                    protected = true
+                    break
+                end
+                c = var_to_diff[c]
+            end
+            protected && push!(protected_vars, v)
+        end
+    end
+    # `var ~ 0` equations of protected variables must be retained. Only the lowest-order
+    # zero of a chain has such an equation; higher derivatives are zeroed by inference.
+    protected_eqs = Set{Int}()
+    for v in protected_vars
+        eq = get(zero_var_to_eq, v, 0)
+        iszero(eq) || push!(protected_eqs, eq)
+    end
 
-    return zero_vars, zero_eqs, eqs_to_substitute
+    # Remove non-protected zero equations from `mm`. Protected `var ~ 0` equations are
+    # retained since they still define the (retained) variable.
+    eqs_to_remove = setdiff(zero_eqs, protected_eqs)
+    isempty(eqs_to_remove) || __filter_mm_eqs!(!in(eqs_to_remove), mm)
+
+    return zero_vars, zero_eqs, eqs_to_substitute, protected_vars, protected_eqs
 end
 
 function alias_elimination!(

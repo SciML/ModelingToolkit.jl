@@ -822,6 +822,63 @@ end
         # With no initialization information at all, construction fails.
         @test_throws ModelingToolkit.IncompleteInitializationError ODEProblem(sys, [], (0.0, 5.0))
     end
+
+    @testset "Issue#4764: irreducible variables in a zero chain are retained" begin
+        # `D(y) ~ 0` would normally analytically integrate `y` into a constant,
+        # eliminating it as an unknown. Marking `y` irreducible must keep it (and its
+        # `D(y) ~ 0` equation) in the system so the user can set it in an integrator.
+        @variables x(t) y(t) [irreducible = true]
+        @named sys = System([D(x) ~ x - x * y, D(y) ~ 0], t)
+        ts, mm, modified = run_zero_var_pass(sys)
+        # Nothing is eliminated or substituted, so the pass reports no modification.
+        @test !modified
+        @test hasvar(ts, y) && hasvar(ts, D(y)) && hasvar(ts, x) && hasvar(ts, D(x))
+        # `y` is not analytically integrated and no `t = 0` parameters are introduced.
+        @test isempty(analytically_integrated(ts.sys))
+        @test isempty(new_params(ts, sys))
+        # `y` is not marked observed; it remains an unknown.
+        @test isempty(ts.additional_observed)
+    end
+
+    @testset "Issue#4764: an irreducible higher-order zero chain is fully retained" begin
+        # `D(D(y)) ~ 0`: the entire chain `y`, `D(y)`, `D(D(y))` is retained (rather
+        # than integrated into a polynomial in `t`) because `y` is irreducible.
+        @variables x(t) y(t) [irreducible = true]
+        @named sys = System([D(x) ~ x - y, D(D(y)) ~ 0], t, [x, y], [])
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test !modified
+        @test hasvar(ts, y) && hasvar(ts, D(y)) && hasvar(ts, D(D(y)))
+        @test isempty(analytically_integrated(ts.sys))
+        @test isempty(new_params(ts, sys))
+        @test isempty(ts.additional_observed)
+    end
+
+    @testset "Issue#4764: irreducible zero derivative is substituted elsewhere but retained" begin
+        # `D(y)` is genuinely zero and appears in the `x` equation. It should still be
+        # substituted to `0` there, while `D(y) ~ 0` and `y` are retained.
+        @variables x(t) y(t) [irreducible = true]
+        @named sys = System([D(x) ~ x - D(y), D(y) ~ 0], t)
+        ts, mm, modified = run_zero_var_pass(sys)
+        @test modified
+        @test hasvar(ts, y) && hasvar(ts, D(y))
+        # `D(y)` was substituted out of the `x` equation, leaving `D(x) ~ x`.
+        eqx = only(filter(e -> isequal(e.lhs, unwrap(D(x))), equations(ts)))
+        @test isequal(eqx.rhs, unwrap(x))
+        # No integration happened.
+        @test isempty(analytically_integrated(ts.sys))
+    end
+
+    @testset "Issue#4764: irreducible variable survives `mtkcompile`" begin
+        @variables x(t) y(t) [irreducible = true]
+        @mtkcompile sys = System([D(x) ~ x - x * y, D(y) ~ 0], t)
+        @test unwrap(y) in Set(unknowns(sys))
+        @test isempty(analytically_integrated(sys))
+        # `D(y) ~ 0` is retained as an equation.
+        @test any(
+            e -> isequal(e.lhs, unwrap(D(y))) && iszero(Symbolics.value(e.rhs)),
+            equations(sys)
+        )
+    end
 end
 
 @testset "Issue#4776: `eliminate_perfect_aliases!` correctly handles missing higher order derivatives" begin
