@@ -784,9 +784,9 @@ end
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
         indp, oldbuf::MTKParameters{T, I, D, C, N, H},
-        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex{P}}},
+        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex}},
         vals::Union{AbstractArray, Tuple}; validate = true
-    ) where {T, I, D, C, N, H, P}
+    ) where {T, I, D, C, N, H}
 
     # fallback to non-generated method if values aren't type-stable
     if vals <: AbstractArray && !isconcretetype(eltype(vals))
@@ -1012,10 +1012,8 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ::AbstractSystem, ps::MTKParameters, args::Pair{A, B}...
-    ) where {
-        A, B <: NestedGetIndex,
-    }
+        ::AbstractSystem, ps::MTKParameters, args::Pair{<:Any, <:NestedGetIndex}...
+    )
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
             copyto!(view(ps.discrete[j], Block(i)), val)
