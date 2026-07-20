@@ -254,7 +254,7 @@ const D_nounits = Differential(t_nounits)
 @doc """
     t
 
-Default independent variable without units.
+Default independent variable with units.
 """
 t
 
