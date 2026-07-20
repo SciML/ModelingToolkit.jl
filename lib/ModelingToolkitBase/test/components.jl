@@ -74,9 +74,13 @@ end
     @test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
     @test ModelingToolkitBase.n_expanded_connection_equations(capacitor) == 2
     if @isdefined(ModelingToolkit)
-        @test length(equations(mtkcompile(rc_model, allow_parameter = false))) == 2
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+        kws = (; reassemble_alg)
+        @test length(equations(mtkcompile(rc_model; allow_parameter = false, reassemble_alg))) == 2
+    else
+        kws = (;)
     end
-    sys = mtkcompile(rc_model)
+    sys = mtkcompile(rc_model; kws...)
     @test_throws ModelingToolkitBase.RepeatedStructuralSimplificationError mtkcompile(sys)
     if @isdefined(ModelingToolkit)
         @test length(equations(sys)) == 1
@@ -151,7 +155,8 @@ end
 include("common/serial_inductor.jl")
 if @isdefined(ModelingToolkit)
     @testset "Serial inductor" begin
-        sys = mtkcompile(ll_model)
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+        sys = mtkcompile(ll_model; reassemble_alg)
         @test length(equations(sys)) == 2
         u0 = unknowns(sys) .=> 0
         @test_nowarn ODEProblem(

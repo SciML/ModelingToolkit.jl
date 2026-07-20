@@ -21,7 +21,7 @@ end
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
 # Manually do index reduction to allow testing with MTKBase
-function index_reduced_pend(; name)
+function index_reduced_pend(; name, kwargs...)
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
     return if @isdefined(ModelingToolkit)
@@ -30,7 +30,7 @@ function index_reduced_pend(; name)
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ 1
         ]
-        mtkcompile(System(eqs, t; name))
+        mtkcompile(System(eqs, t; name); kwargs...)
     else
         eqs = [
             0 ~ 1 - y^2 - x^2
@@ -1766,11 +1766,11 @@ end
     sol = solve(prob, FBDF())
 
     @testset "Guesses of initialization problem copied to algebraic variables" begin
-        prob.f.initialization_data.initializeprob[λ] = 1.0
+        prob.f.initialization_data.initializeprob[x] = 1.0
         prob2 = DiffEqBase.get_updated_symbolic_problem(
             pend, prob; u0 = prob.u0, p = prob.p
         )
-        @test prob2[λ] ≈ 1.0
+        @test prob2[x] ≈ 1.0
     end
 
     @testset "Initial values for algebraic variables are retained" begin
@@ -2046,7 +2046,9 @@ if @isdefined(ModelingToolkit)
     @testset "Cache buffers are correctly promoted during initialization" begin
         @parameters g
         @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
-        @mtkcomplete pend = index_reduced_pend()
+        @mtkcomplete pend = index_reduced_pend(;
+            reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+        )
         g_true = 9.81
         prob = ODEProblem(
             pend, [x => 1, D(y) => 0, g => g_true], (0.0, 0.5);
