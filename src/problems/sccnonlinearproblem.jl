@@ -477,6 +477,21 @@ function SCCNonlinearFunction{iip}(
         )
     end
     rps = reorder_parameters(subsys)
+
+    if MTKBase.has_any_homotopy(subsys)
+        # This block carries Modelica `homotopy(actual, simplified)` nodes, so compile the
+        # λ-swept residual `f(u, p, λ)` instead of the opaque-`actual` one: the block is
+        # built as a `SciMLBase.HomotopyProblem` below and solved by continuation. `λ` is a
+        # trailing argument, never a parameter, so the block's cache buffers (which are
+        # appended to the parameter list) are unaffected.
+        shadow, λ = MTKBase.lower_homotopy(subsys)
+        hf = MTKBase.generate_homotopy_residual(
+            shadow, λ; expression = Val{false}, wrap_gfw = Val{true},
+            eval_expression, eval_module, cachesyms
+        )
+        return NonlinearFunction{iip}(hf; sys = subsys)
+    end
+
     f = generate_rhs(
         subsys,
         GeneratedFunctionOptions(;
@@ -716,7 +731,15 @@ function SciMLBase.SCCNonlinearProblem{iip}(
                 end
             end
             _u0 = u0_constructor(u0_eltype.(_u0))
-            prob = NonlinearProblem(f, _u0, p)
+            prob = if MTKBase.has_any_homotopy(decomposition.subsystems[i])
+                # `f` is the λ-swept residual for this block (see `SCCNonlinearFunction`);
+                # solving the block sweeps λ from the `simplified` form to `actual`. Blocks
+                # are solved in dependency order, so each one reaches `λ = 1` before the
+                # next begins.
+                SciMLBase.HomotopyProblem(f, _u0, p; λspan = (0.0, 1.0))
+            else
+                NonlinearProblem(f, _u0, p)
+            end
         end
         push!(subprobs, prob)
     end

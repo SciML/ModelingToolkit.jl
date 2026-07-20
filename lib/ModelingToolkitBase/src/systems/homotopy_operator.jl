@@ -54,9 +54,14 @@ through `AbstractNonlinearProblem(sys, op)` — regenerates the residual with ev
 
 compiled as `f(u, p, λ)` with `λ` an explicit trailing argument — `λ` is never
 added to the system's parameters, and the user's parameter object `p` passes
-through untouched. All `homotopy` calls in a system share the single `λ`, per the
-Modelica spec's recommendation of (conceptually) one homotopy iteration over the
-whole model. The resulting `HomotopyProblem` (with `λspan` defaulting to
+through untouched. All `homotopy` calls in the lowered system share that single
+`λ`. Note that initialization applies this per strongly connected component: an
+init system that tears into SCC blocks builds a `HomotopyProblem` only for those
+blocks whose equations carry `homotopy` nodes, so each such block sweeps its own
+`λ` (in dependency order, reaching `λ = 1` before the next block begins) while
+the remaining blocks keep their plain Newton solves. An init system with no SCC
+decomposition to hang that off is swept as a whole with one `λ`. The resulting
+`HomotopyProblem` (with `λspan` defaulting to
 `(0.0, 1.0)`) can be solved with any algorithm that supports it; `solve(prob)`
 with no algorithm picks a default that sweeps `λ` from `0` (`simplified`) to
 `1` (`actual`).
