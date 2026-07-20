@@ -156,22 +156,10 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    if TProb === SciMLBase.HomotopyProblem
-        # The init system contains Modelica `homotopy` nodes: build a `HomotopyProblem`
-        # so the initialization is solved by continuation from the `simplified` form.
-        # Pass the resolved `_iip` explicitly (like the sibling `TProb{_iip}` branch): the
-        # bare `HomotopyProblem(sys, op)` would re-derive in-place-ness from `op`, which is
-        # a varmap and so always reads as in-place — wrong for an out-of-place system.
-        SciMLBase.HomotopyProblem{_iip}(
-            isys, op; kwargs..., check_length_kw...,
-            build_initializeprob = false, is_initializeprob = true
-        )
-    else
-        TProb{_iip}(
-            isys, op; kwargs..., check_length_kw...,
-            build_initializeprob = false, is_initializeprob = true
-        )
-    end
+    TProb{_iip}(
+        isys, op; kwargs..., check_length_kw...,
+        build_initializeprob = false, is_initializeprob = true
+    )
 end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
@@ -235,9 +223,8 @@ function get_initialization_problem_type(
         # form), otherwise `NonlinearProblem`. (A `homotopy` node whose arguments are
         # constant in the unknowns collapses to an affine term and is correctly caught by
         # the `LinearInitializationProblem` branch above instead — there is nothing to
-        # continue. `get_nonlinear_problem_type` is only defined for `System`; other
-        # `AbstractSystem`s keep the previous `NonlinearProblem` behavior.)
-        isys isa System ? get_nonlinear_problem_type(isys) : NonlinearProblem
+        # continue.)
+        get_nonlinear_problem_type(isys)
     else
         NonlinearLeastSquaresProblem
     end

@@ -29,7 +29,16 @@ function MTKBase.get_initialization_problem_type(
     return if nunknown > 0 && nunknown <= neqs && calculate_A_b(isys; throw = false) !== nothing
         LinearInitializationProblem
     elseif neqs == nunknown && isempty(unassigned_vars)
-        if use_scc && neqs > 0
+        if MTKBase.has_any_homotopy(isys)
+            # Modelica's `homotopy(actual, simplified)` shares a single continuation
+            # parameter λ across the whole model (spec 3.7.4.2), so the init system is
+            # solved as one `HomotopyProblem` rather than torn into SCC blocks: the blocks
+            # are solved sequentially, each of which would sweep its own λ. Continuation is
+            # also the point of the operator — the system is annotated precisely because it
+            # is not solvable from a cold start, which is what the per-block Newton solves
+            # of an `SCCNonlinearProblem` would attempt.
+            SciMLBase.HomotopyProblem
+        elseif use_scc && neqs > 0
             if is_split(isys)
                 SCCNonlinearProblem
             else
