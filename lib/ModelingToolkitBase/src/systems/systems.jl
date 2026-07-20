@@ -106,7 +106,8 @@ function mtkcompile(
         newsys = pass(newsys)
     end
     @set! newsys.parent = toggle_namespacing(sys, false)
-    newsys = complete(newsys; split)
+    # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
+    newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
 end
 

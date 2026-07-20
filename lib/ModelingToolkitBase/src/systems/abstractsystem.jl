@@ -632,7 +632,8 @@ This namespacing functionality can also be toggled independently of `complete`
 using [`toggle_namespacing`](@ref).
 """
 function complete(
-        sys::T; split = true, flatten = true, add_initial_parameters = true
+        sys::T; split = true, flatten = true, add_initial_parameters = true,
+        allow_parameter_eqs = false
     ) where {T <: AbstractSystem}
     sys = discover_globalscoped(sys)
 
@@ -647,7 +648,7 @@ function complete(
             @set! newsys.parent = complete(sys; split = false, flatten = false)::T
         end
         sys = newsys
-        check_no_parameter_equations(sys)
+        allow_parameter_eqs || check_no_parameter_equations(sys)
         _unhack_sys = reverse_all_default_reversible_transformations(sys)
         if add_initial_parameters
             sys = add_initialization_parameters(sys; split, _unhack_sys)::T
