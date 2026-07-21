@@ -554,10 +554,10 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     unprotected_zero_vars = setdiff(zero_vars, protected_vars)
     # Equations we substitute the zeros into. Protected `var ~ 0` equations are retained
     # verbatim, so we must not substitute into them (that would turn them into `0 ~ 0`).
-    real_subs = setdiff(eqs_to_substitute, protected_eqs)
+    setdiff!(eqs_to_substitute, protected_eqs)
     # If every zero variable is protected and none of them appears in any other equation,
     # there is nothing to eliminate or substitute, so the system is unchanged.
-    isempty(unprotected_zero_vars) && isempty(real_subs) && return mm, false
+    isempty(unprotected_zero_vars) && isempty(eqs_to_substitute) && return mm, false
 
     eqs = collect(equations(state))
     aliases = Dict{Int, Int}()
@@ -658,7 +658,7 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     append!(vars_to_rm, unprotected_zero_vars)
     append!(eqs_to_rm, setdiff(zero_eqs, protected_eqs))
     __add_unscalarized_array_subs!(subrules)
-    __substitute_and_update_incidence!(eqs, original_eqs, state, real_subs, subrules)
+    __substitute_and_update_incidence!(eqs, original_eqs, state, eqs_to_substitute, subrules)
     # It's possible that after substitution some higher order derivatives are not present
     # anymore. For example, `D(x)` might only be present in an equation as `y * D(x)`, and
     # we just substituted `y => 0`. Without the following, this will result in `D(x)` not being
@@ -691,7 +691,7 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
     to_rm = vars_to_rm
     empty!(eqs_to_rm)
     coeffs = eqs_to_rm
-    for e in real_subs
+    for e in eqs_to_substitute
         # Refer to equations by their new indices now
         e = old_to_new_eq[e]
         iszero(e) && continue
@@ -812,30 +812,16 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     end
 
 
-    # A zero variable is protected if its full differential chain (the root
-    # antiderivative, the variable itself, and all its derivatives) contains an
-    # irreducible variable. Such variables must not be eliminated. Only the members
-    # of the chain that are genuinely zero (i.e. in `zero_vars`) are protected here;
-    # the antiderivatives are kept as unknowns by skipping their integration.
+    # A zero variable is protected if its lowest order derivative is marked as irreducible
     protected_vars = Set{Int}()
     if !isempty(irreducibles)
         for v in zero_vars
             # Walk down to the lowest order antiderivative.
-            root = v
+            root::Int = v
             while (∫root = diff_to_var[root]) isa Int
                 root = ∫root
             end
-            # Walk up the chain looking for an irreducible variable.
-            c = root
-            protected = false
-            while c isa Int
-                if contains_possibly_indexed_element(irreducibles, fullvars[c])
-                    protected = true
-                    break
-                end
-                c = var_to_diff[c]
-            end
-            protected && push!(protected_vars, v)
+            contains_possibly_indexed_element(irreducibles, fullvars[root]) && push!(protected_vars, v)
         end
     end
     # `var ~ 0` equations of protected variables must be retained. Only the lowest-order
