@@ -183,16 +183,19 @@ Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 # SampleTime
 
 """
-    function SampleTime()
+$(TYPEDEF)
 
 `SampleTime()` can be used in the equations of a hybrid system to represent time sampled
 at the inferred clock for that equation.
 """
 struct SampleTime <: Operator
-    SampleTime() = SymbolicUtils.term(SampleTime, type = Real)
+    init::Union{Nothing,Real}
 end
-SymbolicUtils.promote_symtype(::Type{SampleTime}) = Real
-SymbolicUtils.promote_shape(::Type{SampleTime}) = SU.ShapeVecT()
+
+SampleTime(; init::Union{Nothing,Real} = nothing) = SampleTime(init)
+(D::SampleTime)() = STerm(D, SArgsT((D.init,)); type = Real)
+SymbolicUtils.promote_symtype(::SampleTime, ::Type{T}) where {T} = Real
+SymbolicUtils.promote_shape(::SampleTime, @nospecialize(x::SU.ShapeT)) = x
 Base.nameof(::SampleTime) = :SampleTime
 SymbolicUtils.isbinop(::SampleTime) = false
 
