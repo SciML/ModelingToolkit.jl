@@ -1783,6 +1783,77 @@ end
 """
     $TYPEDSIGNATURES
 
+Given `sys` and an iterable of `name => value` pairs (e.g. from keyword arguments or a
+`Dict`), resolve each `name` to the corresponding unknown/parameter/variable of `sys` and
+update its default. This follows the same semantics as providing the value via variable
+metadata, i.e. `@variables var(t) = value`:
+
+  - If `value` is `nothing`, any existing binding/initial condition for the variable is
+    removed.
+  - If `value` is `missing`, the variable is recorded as having a `missing` binding (see
+    the corresponding semantics of `@parameters par = missing`).
+  - If `value` is symbolic, the variable is recorded as being bound to it (see
+    [`bindings`](@ref)).
+  - Otherwise, `value` is recorded as the variable's initial condition (see
+    [`initial_conditions`](@ref)).
+
+`name` can be a `Symbol`, a `String`, or a symbolic variable of `sys`. `Symbol`/`String`
+names may use `NAMESPACE_SEPARATOR` (`₊`) or `.` to refer to a variable owned by a
+subsystem of `sys`, e.g. `:inner₊x`. Names are resolved relative to `sys` itself, so they
+should _not_ be prefixed with the name of `sys`.
+
+Returns a new system with the same equations/variables as `sys`, but with the bindings and
+initial conditions updated according to `pairs`. Does not mutate `sys`.
+"""
+function set_defaults(sys::AbstractSystem, pairs)
+    pairs = collect(pairs)
+    isempty(pairs) && return sys
+
+    ics = copy(get_initial_conditions(sys))
+    binds = copy(parent(get_bindings(sys)))
+    for (name, val) in pairs
+        var = unwrap(_set_defaults_resolve_name(sys, name))
+        delete!(ics, var)
+        delete!(binds, var)
+        # `val`/`u` may already be hash-consed constant nodes wrapping `nothing`/`missing`
+        # (e.g. because `val` was promoted to `Num` by sitting in a homogeneous collection
+        # alongside other symbolic values), so compare against both the raw singleton and
+        # its symbolic form, and otherwise classify by structure (is it a literal
+        # constant, once unwrapped?) rather than by the static type of `val` itself.
+        u = unwrap(val)
+        if u === nothing || u === COMMON_NOTHING
+            continue
+        elseif u === missing || u === COMMON_MISSING
+            binds[var] = COMMON_MISSING
+        elseif u isa SymbolicT && !SU.isconst(u)
+            binds[var] = u
+        else
+            ics[var] = u isa SymbolicT ? u : SConst(u)
+        end
+    end
+
+    @set! sys.initial_conditions = ics
+    @set! sys.bindings = ROSymmapT(binds)
+    # the cached dependency graph is stale now that bindings have changed
+    @set! sys.parameter_bindings_graph = nothing
+    return sys
+end
+
+# The first path segment names a variable/subsystem owned directly by `sys`, so it must be
+# resolved *without* namespacing to match the flat (un-namespaced) keys used in
+# `get_initial_conditions`/`get_bindings`; subsequent segments descend into an
+# already-resolved subsystem, which namespaces normally, accumulating the qualified name
+# (e.g. `inner₊x`) that matches how a parent's `bindings`/`initial_conditions` merges in
+# namespaced entries from its subsystems. `toggle_namespacing` only affects `sys` itself
+# (not its subsystems), so this is exactly what `parse_variable` needs to do the right
+# thing at every level without reimplementing its name/derivative/array-index parsing.
+_set_defaults_resolve_name(sys::AbstractSystem, name::Union{Symbol, AbstractString}) =
+    parse_variable(toggle_namespacing(sys, false), string(name))
+_set_defaults_resolve_name(sys::AbstractSystem, name) = name
+
+"""
+    $TYPEDSIGNATURES
+
 Get the state priorities of a system `sys` and its subsystems.
 """
 function state_priorities(sys::AbstractSystem)
@@ -3510,16 +3581,36 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
         str = _string_view_inner(str, 0, 2 + length(iv))
     end
 
-    cur = sys
-    for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
-        ident = Symbol(ident)
-        hasproperty(cur, ident) ||
+    sym_name = Symbol(str)
+    sym = nothing
+    # This case handles when `sys` is a flattened system without a parent
+    for v in get_unknowns(sys)
+        if hasname(v) && getname(v) === sym_name
+            sym = v
+            break
+        end
+    end
+    for v in get_ps(sys)
+        if hasname(v) && getname(v) === sym_name
+            sym = v
+            break
+        end
+    end
+    if sym === nothing
+        cur = sys
+        for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
+            ident = Symbol(ident)
+            hasproperty(cur, ident) ||
             throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
-        cur = getproperty(cur, ident)
+            cur = getproperty(cur, ident)
+        end
+    else
+        cur = sym
     end
 
     if arr_idxs !== nothing
-        cur = cur[arr_idxs...]
+        sidx = SU.StableIndex(arr_idxs)
+        cur = cur[sidx]
     end
 
     for i in 1:(derivative_level + dummyderivative_level)
