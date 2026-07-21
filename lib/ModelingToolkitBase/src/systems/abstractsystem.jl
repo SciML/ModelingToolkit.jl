@@ -2334,24 +2334,9 @@ struct ObservedFunctionCache{S, O}
     optimize::O
 end
 
-function ObservedFunctionCache(
-        sys; expression = Val{false}, steady_state = false, eval_expression = false,
-        eval_module = @__MODULE__, checkbounds = true, optimize = nothing,
-    )
-    return if expression == Val{true}
-        :(
-            $ObservedFunctionCache(
-                $sys, Dict(), $steady_state, $eval_expression,
-                $eval_module, $checkbounds, $optimize
-            )
-        )
-    else
-        ObservedFunctionCache(
-            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds,
-            optimize,
-        )
-    end
-end
+# Constructors (taking a `GeneratedFunctionOptions` directly, and a backward-compatible
+# keyword wrapper around it) are defined in `codegen_utils.jl`, since they need
+# `GeneratedFunctionOptions` to already exist.
 
 # This is hit because ensemble problems do a deepcopy
 function Base.deepcopy_internal(ofc::ObservedFunctionCache, stackdict::IdDict)
