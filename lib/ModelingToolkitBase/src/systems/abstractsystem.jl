@@ -3608,7 +3608,7 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
         for ident in eachsplit(str, ('.', NAMESPACE_SEPARATOR))
             ident = Symbol(ident)
             hasproperty(cur, ident) ||
-            throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
+                throw(ArgumentError("System $(nameof(cur)) does not have a subsystem/variable named $(ident)"))
             cur = getproperty(cur, ident)
         end
     else
