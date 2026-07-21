@@ -4,22 +4,40 @@ end
 
 function SciMLBase.OptimizationFunction{iip}(
         sys::System;
-        u0 = nothing, p = nothing, grad = false, hess = false,
-        sparse = false, cons_j = false, cons_h = false, cons_sparse = false,
-        linenumbers = true, eval_expression = false, eval_module = @__MODULE__,
+        u0 = nothing, p = nothing, t = nothing, grad = false, hess = false,
+        sparse = false, cons_j = false, cons_h = false,
+        cons_sparse = false,
+        linenumbers = true, eval_expression = false,
+        eval_module = @__MODULE__,
         simplify = false, check_compatibility = true, checkbounds = false,
-        expression = Val{false}, kwargs...
+        expression = Val{false}, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip}
+    opts = SciMLFunctionOptions(;
+        u0, p, t, sparse, simplify, expression, check_compatibility,
+        eval_expression, eval_module, compiler_options, checkbounds, optimize, kwargs...,
+    )
+    return OptimizationFunction{iip}(sys, opts; grad, hess, cons_j, cons_h, cons_sparse)
+end
+
+"""
+    SciMLBase.OptimizationFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds an `OptimizationFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.OptimizationFunction{iip}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        grad::Bool = false, hess::Bool = false, cons_j::Bool = false, cons_h::Bool = false,
+        cons_sparse::Bool = false
+    ) where {iip, E}
     check_complete(sys, OptimizationFunction)
-    check_compatibility && check_compatible_system(OptimizationFunction, sys)
+    opts.check_compatibility && check_compatible_system(OptimizationFunction, sys)
 
     cstr = constraints(sys)
 
-    codegen_opts = GeneratedFunctionOptions(;
-        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
-        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
-    )
+    (; u0, p, sparse, simplify) = opts
+    codegen_opts = opts.codegen
 
     f = generate_cost(sys, codegen_opts)
 
@@ -65,9 +83,7 @@ function SciMLBase.OptimizationFunction{iip}(
 
     obj_expr = Code.toexpr(expand(cost(sys)))
 
-    observedfun = ObservedFunctionCache(
-        sys; expression, eval_expression, eval_module, checkbounds
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     args = (; f, ad = SciMLBase.NoAD())
     kwargs = (;
@@ -85,7 +101,7 @@ function SciMLBase.OptimizationFunction{iip}(
         observed = observedfun,
     )
 
-    return maybe_codegen_scimlfn(expression, OptimizationFunction{iip}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, OptimizationFunction{iip}, args; kwargs...)
 end
 
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)

@@ -110,9 +110,8 @@ wrap_gfw_val(::GeneratedFunctionOptions{E, W}) where {E, W} = Val{W}
 Build an `ObservedFunctionCache` for `sys`, taking `eval_expression`, `eval_module`,
 `checkbounds`, and `optimize` from `opts` (its own `expression` type parameter decides
 whether an `Expr` or a live `ObservedFunctionCache` is returned) rather than as separate
-keywords. This is the form to use wherever a `GeneratedFunctionOptions` is already on
-hand (e.g. nested inside a higher-level options struct), instead of re-listing its
-fields as separate keywords.
+keywords. This is the form every `*Function` constructor should use, since they already
+have a `GeneratedFunctionOptions` (`opts.codegen` off a `SciMLFunctionOptions`) on hand.
 """
 function ObservedFunctionCache(
         sys, opts::GeneratedFunctionOptions{E}; steady_state::Bool = false
@@ -152,6 +151,119 @@ function ObservedFunctionCache(
     )
     return ObservedFunctionCache(sys, opts; steady_state)
 end
+
+"""
+    SciMLFunctionOptions{expression}(; kwargs...)
+
+Bundle of options shared by the `SciMLBase.*Function` constructors (`ODEFunction`,
+`DAEFunction`, `SDEFunction`, `NonlinearFunction`, `OptimizationFunction`,
+`DDEFunction`, `SDDEFunction`, `DiscreteFunction`, `ImplicitDiscreteFunction`,
+`IntervalNonlinearFunction`, `SemilinearODEFunction`, `ODEInputFunction`). Holds a
+nested [`GeneratedFunctionOptions`](@ref) (`codegen`) for the code-generation
+options, plus the options specific to assembling a `*Function` (Jacobian/tgrad
+requests, sparsity, initialization data, the `u0`/`p`/`t` specialization inputs).
+
+`expression` is a `Bool` **type parameter** (not a field), matching
+`GeneratedFunctionOptions`: `SciMLFunctionOptions{true}` requests code generation
+that returns an `Expr`, `SciMLFunctionOptions{false}` requests a runtime-callable
+function. Everything else is a field, so for a fixed `expression` the type is
+invariant to the option *values* — constructors that thread this struct through
+are not recompiled per keyword-set, but they *are* specialized (deliberately) on
+`expression`. `wrap_gfw` is not exposed here: every `*Function` constructor
+builds its `codegen` with `wrap_gfw = Val{true}`, so it is fixed rather than
+threaded through as an option.
+
+Not every field is consumed by every constructor (e.g. `OptimizationFunction`
+does not consume `analytic`/`initialization_data`; `ODEInputFunction` does not
+consume `expression`/`check_compatibility`) — these are documented no-ops on
+constructors that don't have a use for them, rather than a reason to keep the
+field out of the shared struct. `t` in particular is only relevant for
+time-dependent functions; constructors for time-independent problems (e.g.
+`NonlinearFunction`, `OptimizationFunction`, `IntervalNonlinearFunction`) simply
+don't consume it.
+
+# Keyword arguments
+
+- `u0`, `p`, `t`: the operating point / independent variable inputs used for
+  `iip`/`spec` specialization.
+- `jac`, `tgrad`, `sparsity`: whether to generate a Jacobian / time-gradient, and
+  whether to report Jacobian sparsity.
+- `sparse`: whether generated Jacobians/mass matrices should be sparse.
+- `analytic`: an optional analytic solution function.
+- `simplify`: whether to run `SymbolicUtils.simplify` on the symbolic
+  derivative-related quantities (Jacobians, time-gradients, mass matrices, and,
+  for `OptimizationFunction`, cost/constraint gradients and Hessians) after
+  differentiation and before code generation. It never affects RHS codegen.
+- `initialization_data`: optional `OverrideInitData` for problem initialization.
+- `check_compatibility`: whether to validate the system against the target
+  `*Function`/`*Problem` type before assembling it.
+- `expression`, `eval_expression`, `eval_module`, `compiler_options`, and the
+  `Symbolics.CodegenFunctionOptions` fields (`checkbounds`, `optimize`,
+  `nanmath`, `wrap_code`, `iip_config`, `sort_addmul`, `similarto`,
+  `outputidxs`, `skipzeros`): forwarded into the nested `codegen`.
+
+Any other keyword is accepted and silently dropped (forwarded into, and
+discarded by, `Symbolics.CodegenFunctionOptions`'s own trailing `kwargs...`).
+This is the backward-compatibility escape hatch for the `kwargs...` wrappers
+each `*Function` constructor keeps around this struct: unknown keywords —
+whether genuinely irrelevant or leaked in from unrelated call sites (e.g.
+MTKBase's initialization-problem plumbing, which forwards a problem's keywords
+indiscriminately to every constructor it touches) — are ignored rather than
+raising a `MethodError`.
+"""
+struct SciMLFunctionOptions{expression}
+    codegen::GeneratedFunctionOptions{expression, true}
+    u0::Any
+    p::Any
+    t::Any
+    jac::Bool
+    tgrad::Bool
+    sparse::Bool
+    sparsity::Bool
+    analytic::Any
+    simplify::Bool
+    initialization_data::Any
+    check_compatibility::Bool
+end
+
+function SciMLFunctionOptions(;
+        u0 = nothing, p = nothing, t = nothing,
+        jac::Bool = false, tgrad::Bool = false, sparse::Bool = false,
+        sparsity::Bool = false, analytic = nothing, simplify::Bool = false,
+        initialization_data = nothing, expression = Val{false},
+        check_compatibility::Bool = true,
+        eval_expression::Bool = false, eval_module::Module = @__MODULE__,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        checkbounds::Bool = false, optimize = nothing,
+        nanmath::Bool = true, wrap_code::Tuple = (identity, identity),
+        iip_config::NTuple{2, Bool} = (true, true), sort_addmul::Bool = false,
+        similarto = nothing, outputidxs = nothing, skipzeros::Bool = false,
+        kwargs...,
+    )
+    E = _gfo_bool(expression)
+    # The leftover `kwargs...` here is the backward-compatibility escape hatch: callers of
+    # the `*Function` constructors' `kwargs...` wrappers may pass keywords that belong to
+    # neither `SciMLFunctionOptions` nor `Symbolics.CodegenFunctionOptions` (e.g. options
+    # that only apply to a sibling constructor, or that leak in through MTKBase's
+    # initialization-problem plumbing). `CodegenFunctionOptions` has its own trailing
+    # `kwargs...` that silently discards anything it doesn't recognize, so nothing needs
+    # to be named here for this to be safe — unknown keywords are dropped, not errored on.
+    codegen = GeneratedFunctionOptions(;
+        expression = Val{E}, wrap_gfw = Val{true}, eval_expression, eval_module,
+        compiler_options,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(;
+            nanmath, wrap_code, checkbounds, iip_config, sort_addmul, optimize,
+            similarto, outputidxs, skipzeros, kwargs...,
+        )
+    )
+    return SciMLFunctionOptions{E}(
+        codegen, u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify,
+        initialization_data, check_compatibility,
+    )
+end
+
+# Recover the `expression` switch as a `Val` type for dispatch/return in method bodies.
+expression_val(::SciMLFunctionOptions{E}) where {E} = Val{E}
 
 const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 

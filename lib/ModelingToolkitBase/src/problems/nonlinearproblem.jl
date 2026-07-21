@@ -1,19 +1,35 @@
 @fallback_iip_specialize function SciMLBase.NonlinearFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, jac = false,
+        sys::System; u0 = nothing, p = nothing, t = nothing, jac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
         checkbounds = false, sparsity = false, analytic = nothing,
         simplify = false, initialization_data = nothing,
         resid_prototype = nothing, check_compatibility = true, expression = Val{false},
+        optimize = nothing, compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     ) where {iip, spec}
-    check_complete(sys, NonlinearFunction)
-    check_compatibility && check_compatible_system(NonlinearFunction, sys)
-
-    codegen_opts = GeneratedFunctionOptions(;
-        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
-        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, sparse, sparsity, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return NonlinearFunction{iip, spec}(sys, opts; resid_prototype)
+end
+
+"""
+    SciMLBase.NonlinearFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `NonlinearFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.NonlinearFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        resid_prototype = nothing,
+    ) where {iip, spec, E}
+    check_complete(sys, NonlinearFunction)
+    opts.check_compatibility && check_compatible_system(NonlinearFunction, sys)
+
+    (; u0, p, jac, sparse, analytic, simplify, initialization_data) = opts
+    codegen_opts = opts.codegen
 
     f = generate_rhs(sys, codegen_opts)
 
@@ -21,7 +37,7 @@
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
@@ -34,9 +50,7 @@
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
     if sparse
         jac_prototype = similar(calculate_jacobian(sys; sparse), eltype(u0))
@@ -55,7 +69,7 @@
     )
     args = (; f)
 
-    return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
 """
