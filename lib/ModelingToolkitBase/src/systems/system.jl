@@ -1130,7 +1130,7 @@ function flatten(sys::System, noeqs = false)
         # retain `initial_conditions(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
         gui_metadata = get_gui_metadata(sys),
-        description = description(sys), name = nameof(sys)
+        description = description(sys), name = nameof(sys), checks = false
     )
 end
 
