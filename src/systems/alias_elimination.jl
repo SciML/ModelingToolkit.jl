@@ -1,6 +1,11 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
+"""
+    $TYPEDSIGNATURES
+
+Return a system with perfect aliases eliminated.
+"""
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
 
 """

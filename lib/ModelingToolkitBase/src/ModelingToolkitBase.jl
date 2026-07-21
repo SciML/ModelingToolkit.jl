@@ -150,6 +150,11 @@ abstract type AbstractSystem end
 # See `deprecations.jl`.
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
+"""
+    independent_variable(x)
+
+Return the independent variable associated with `x`.
+"""
 function independent_variable end
 
 # this has to be included early to deal with dependency issues
@@ -250,6 +255,34 @@ const t_nounits = let
     only(@independent_variables t)
 end
 const D_nounits = Differential(t_nounits)
+
+@doc """
+    t
+
+Default independent variable with units.
+"""
+t
+
+@doc """
+    D
+
+Default differential operator with respect to [`t`](@ref).
+"""
+D
+
+@doc """
+    t_nounits
+
+Default independent variable without units.
+"""
+t_nounits
+
+@doc """
+    D_nounits
+
+Default differential operator with respect to [`t_nounits`](@ref).
+"""
+D_nounits
 
 export CompilerOptions
 export ODEFunction, convert_system_indepvar,

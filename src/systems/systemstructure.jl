@@ -97,6 +97,12 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     return state
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Compile the system stored in `state` in place, updating its tearing state and returning the
+compiled [`System`](@ref).
+"""
 function mtkcompile!(
         state::TearingState;
         check_consistency = true, fully_determined = true,
