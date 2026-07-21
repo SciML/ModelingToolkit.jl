@@ -581,7 +581,9 @@ function linearize_symbolic(
         eval_expression = false, eval_module = @__MODULE__, split = true,
         kwargs...
     )
-    sys = mtkcompile(sys; inputs, outputs, simplify, split, kwargs...)
+    # We cannot use `inline_linear_sccs` since it prevents symbolic AD
+    reassemble_alg = MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    sys = mtkcompile(sys; inputs, outputs, simplify, split, reassemble_alg, kwargs...)
     check_symbolic_ad_allowed(sys)
     diff_idxs, alge_idxs = eq_idxs(sys)
     sts = unknowns(sys)

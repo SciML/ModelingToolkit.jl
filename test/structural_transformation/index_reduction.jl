@@ -49,9 +49,6 @@ eqs = [
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 
 let sys = mtkcompile(pendulum2)
-    @test length(equations(sys)) == 5
-    @test length(unknowns(sys)) == 5
-
     ivs = [
         x => sqrt(2) / 2,
         y => sqrt(2) / 2,

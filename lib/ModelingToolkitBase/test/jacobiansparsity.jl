@@ -179,7 +179,7 @@ if @isdefined(ModelingToolkit)
         t = ModelingToolkitBase.t_nounits
         D = ModelingToolkitBase.D_nounits
         @variables x(t) y(t)
-        @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t)
+        @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
         @test ModelingToolkitBase.jacobian_sparsity(sys) == [1 1; 1 1] # all nonzero
         J1 = calculate_jacobian(sys)
         J2 = isequal(unknowns(sys)[1], x) ? [2x - y -x; 1 -1] : [-1 1; -x 2x - y] # analytical result
