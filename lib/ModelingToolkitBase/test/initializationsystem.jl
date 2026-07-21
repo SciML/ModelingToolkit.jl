@@ -21,7 +21,7 @@ end
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
 # Manually do index reduction to allow testing with MTKBase
-function index_reduced_pend(; name, kwargs...)
+function index_reduced_pend(; name, inline_linear_sccs = true, kwargs...)
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
     return if @isdefined(ModelingToolkit)
@@ -30,7 +30,12 @@ function index_reduced_pend(; name, kwargs...)
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ 1
         ]
-        mtkcompile(System(eqs, t; name); kwargs...)
+        mtkcompile(
+            System(eqs, t; name);
+            reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(;
+                inline_linear_sccs
+            ), kwargs...
+        )
     else
         eqs = [
             0 ~ 1 - y^2 - x^2
@@ -1851,7 +1856,7 @@ end
 @testset "Initialization system retains `split` kwarg of parent" begin
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t)
-    @named pend = index_reduced_pend()
+    @named pend = index_reduced_pend(; inline_linear_sccs = false)
     pend = complete(pend; split = false)
     prob = ODEProblem(
         pend, [x => 1.0, D(x) => 0.0, g => 1.0], (0.0, 1.0); guesses = [y => 1.0, λ => 1.0]

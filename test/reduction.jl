@@ -412,8 +412,10 @@ end
 
 @testset "`eliminate_perfect_aliases!` correctly handles unscalarized arrays" begin
     @variables x(t)[1:2] y(t)[1:2]
-    @mtkcompile sys = System([D(x) ~ x, y[1] ~ y[2], dot(x, y) ~ 1], t)
-    @test any(equations(sys)) do eq
+    @named sys = System([D(x) ~ x, y[1] ~ y[2], dot(x, y) ~ 1], t)
+    ts = TearingState(sys)
+    ModelingToolkit.eliminate_perfect_aliases!(ts)
+    @test any(equations(ts)) do eq
         isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[2], y[2]]))) ||
             isequal(eq, 0 ~ 1 - dot(x, Symbolics.SConst([y[1], y[1]])))
     end
