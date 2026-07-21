@@ -11,6 +11,8 @@ import DiffEqNoiseProcess
 using Setfield: @set!
 import SymbolicUtils as SU
 
+struct FwdDiffTag end
+const DualT{T} = ForwardDiff.Dual{ForwardDiff.Tag{FwdDiffTag, T}, T, 1}
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
 missing_guess_value = if @isdefined(ModelingToolkit)
     MissingGuessValue.Error()
@@ -1020,7 +1022,7 @@ end
 
             # changing types works
             ps = parameter_values(prob)
-            newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+            newps = SciMLStructures.replace(Tunable(), ps, DualT{Float64}.(ps.tunable))
             prob3 = remake(prob; p = newps)
             @test prob3.f.initialization_data !== nothing
             @test eltype(state_values(prob3.f.initialization_data.initializeprob)) <:
@@ -1149,7 +1151,7 @@ end
         end
         @test is_variable(prob.f.initialization_data.initializeprob, q)
         ps = prob.p
-        newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+        newps = SciMLStructures.replace(Tunable(), ps, DualT{Float64}.(ps.tunable))
         prob2 = remake(prob; p = newps)
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
@@ -1159,7 +1161,7 @@ end
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
             state_values(prob.f.initialization_data.initializeprob)
 
-        prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
+        prob2 = remake(prob; u0 = DualT{Float64}.(prob.u0))
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
@@ -1167,7 +1169,7 @@ end
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
             state_values(prob.f.initialization_data.initializeprob)
 
-        prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
+        prob2 = remake(prob; u0 = DualT{Float64}.(prob.u0), p = newps)
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
@@ -1176,8 +1178,8 @@ end
             state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(
-            prob; u0 = [x => ForwardDiff.Dual(1.0)],
-            p = [p => ForwardDiff.Dual(1.0), q => missing]
+            prob; u0 = [x => DualT{Float64}(1.0)],
+            p = [p => DualT{Float64}(1.0), q => missing]
         )
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
@@ -1594,7 +1596,7 @@ end
     @mtkcompile sys = System(x ~ p * t, t)
     prob = @test_nowarn ODEProblem(sys, [p => 1.0], (0.0, 1.0))
     @test_nowarn remake(prob, p = [p => 1.0])
-    @test_nowarn remake(prob, p = [p => ForwardDiff.Dual(1.0)])
+    @test_nowarn remake(prob, p = [p => DualT{Float64}(1.0)])
 end
 
 @testset "`late_binding_update_u0_p` copies `newp`" begin
