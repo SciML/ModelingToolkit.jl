@@ -104,6 +104,55 @@ end
 expression_val(::GeneratedFunctionOptions{E}) where {E} = Val{E}
 wrap_gfw_val(::GeneratedFunctionOptions{E, W}) where {E, W} = Val{W}
 
+"""
+    ObservedFunctionCache(sys, opts::GeneratedFunctionOptions; steady_state = false)
+
+Build an `ObservedFunctionCache` for `sys`, taking `eval_expression`, `eval_module`,
+`checkbounds`, and `optimize` from `opts` (its own `expression` type parameter decides
+whether an `Expr` or a live `ObservedFunctionCache` is returned) rather than as separate
+keywords. This is the form to use wherever a `GeneratedFunctionOptions` is already on
+hand (e.g. nested inside a higher-level options struct), instead of re-listing its
+fields as separate keywords.
+"""
+function ObservedFunctionCache(
+        sys, opts::GeneratedFunctionOptions{E}; steady_state::Bool = false
+    ) where {E}
+    (; eval_expression, eval_module) = opts
+    checkbounds = opts.codegen.checkbounds
+    optimize = opts.codegen.optimize
+    return if E
+        :(
+            $ObservedFunctionCache(
+                $sys, Dict(), $steady_state, $eval_expression,
+                $eval_module, $checkbounds, $optimize
+            )
+        )
+    else
+        ObservedFunctionCache(
+            sys, Dict(), steady_state, eval_expression, eval_module, checkbounds,
+            optimize,
+        )
+    end
+end
+
+"""
+    ObservedFunctionCache(sys; expression, steady_state, eval_expression, eval_module, checkbounds, optimize)
+
+Backward-compatible keyword constructor, kept for callers that don't have a
+`GeneratedFunctionOptions` on hand. Assembles one from the given keywords and forwards to
+[`ObservedFunctionCache(sys, ::GeneratedFunctionOptions)`](@ref).
+"""
+function ObservedFunctionCache(
+        sys; expression = Val{false}, steady_state::Bool = false, eval_expression = false,
+        eval_module = @__MODULE__, checkbounds = true, optimize = nothing,
+    )
+    opts = GeneratedFunctionOptions(;
+        expression, eval_expression, eval_module,
+        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, optimize)
+    )
+    return ObservedFunctionCache(sys, opts; steady_state)
+end
+
 const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 
 # Fallback modules with module-level compiler options for Julia versions
