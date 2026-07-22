@@ -1145,8 +1145,9 @@ end
 Apply function `f` to each variable in expression `ex`. `f` should be a function that takes
 a variable and returns the replacement to use. A "variable" in this context refers to a
 symbolic quantity created directly from a variable creation macro such as
-[`Symbolics.@variables`](@ref), [`@independent_variables`](@ref), [`@parameters`](@ref),
-[`@constants`](@ref) or [`@brownians`](@ref).
+[`@variables`](https://docs.sciml.ai/Symbolics/stable/manual/variables/#Symbolics.@variables),
+[`@independent_variables`](@ref), [`@parameters`](@ref), [`@constants`](@ref) or
+[`@brownians`](@ref).
 """
 apply_to_variables(f, ex) = _apply_to_variables(f, ex)
 apply_to_variables(f, ex::Num) = wrap(_apply_to_variables(f, unwrap(ex)))

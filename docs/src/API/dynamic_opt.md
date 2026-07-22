@@ -24,11 +24,13 @@ InfiniteOptCollocation(Ipopt.Optimizer, OrthogonalCollocation(3))
 ```
 
 ```@docs; canonical = false
+AbstractCollocation
 JuMPCollocation
 InfiniteOptCollocation
 CasADiCollocation
 PyomoCollocation
 CommonSolve.solve(::AbstractDynamicOptProblem)
+DynamicOptSolution
 ```
 
 ### Problem constructors
