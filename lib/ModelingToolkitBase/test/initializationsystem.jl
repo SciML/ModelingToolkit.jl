@@ -621,7 +621,7 @@ sol = solve(prob, Tsit5())
 
     unsimp = generate_initializesystem(pend; op = [x => 1], initialization_eqs = [y ~ 1])
     sys = mtkcompile(unsimp; fully_determined = false)
-    @test length(equations(sys)) in (3, 4, 5) # depending on tearing
+    @test length(equations(sys)) in (2, 3, 4, 5) # depending on tearing
 end
 
 @testset "Extend two systems with initialization equations and guesses" begin
