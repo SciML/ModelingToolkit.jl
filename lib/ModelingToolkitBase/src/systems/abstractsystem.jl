@@ -3587,12 +3587,14 @@ function parse_variable(sys::AbstractSystem, str::AbstractString)
     sym = nothing
     # This case handles when `sys` is a flattened system without a parent
     for v in get_unknowns(sys)
+        v = split_indexed_var(v)[1]
         if hasname(v) && getname(v) === sym_name
             sym = v
             break
         end
     end
     for v in get_ps(sys)
+        v = split_indexed_var(v)[1]
         if hasname(v) && getname(v) === sym_name
             sym = v
             break

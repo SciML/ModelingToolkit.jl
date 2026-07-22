@@ -44,6 +44,18 @@ aov = ModelingToolkitBase.collect_applied_operators(eq, Differential)
 ts = collect_ivs([eq])
 @test ts == Set([t])
 
+@testset "parse_variable with scalarized arrays" begin
+    @variables scalarized_x(t)[1:2]
+    @parameters scalarized_p[1:2]
+    scalarized_sys = System(
+        Equation[], t, collect(scalarized_x), collect(scalarized_p); name = :scalarized
+    )
+    @test isequal(parse_variable(scalarized_sys, "scalarized_x"), scalarized_x)
+    @test isequal(parse_variable(scalarized_sys, "scalarized_x[2]"), scalarized_x[2])
+    @test isequal(parse_variable(scalarized_sys, "scalarized_p"), scalarized_p)
+    @test isequal(parse_variable(scalarized_sys, "scalarized_p[2]"), scalarized_p[2])
+end
+
 @testset "parse_variable with iv: $iv" for iv in [t, only(@independent_variables tt)]
     D = Differential(iv)
     function Lorenz(; name)
