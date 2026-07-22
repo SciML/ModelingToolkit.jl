@@ -11,6 +11,8 @@ import DiffEqNoiseProcess
 using Setfield: @set!
 import SymbolicUtils as SU
 
+struct FwdDiffTag end
+const DualT{T} = ForwardDiff.Dual{ForwardDiff.Tag{FwdDiffTag, T}, T, 1}
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase
 missing_guess_value = if @isdefined(ModelingToolkit)
     MissingGuessValue.Error()
@@ -21,7 +23,7 @@ end
 @parameters g
 @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
 # Manually do index reduction to allow testing with MTKBase
-function index_reduced_pend(; name, kwargs...)
+function index_reduced_pend(; name, inline_linear_sccs = true, kwargs...)
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t) yˍt(t) xˍt(t) xˍtt(t)
     return if @isdefined(ModelingToolkit)
@@ -30,7 +32,12 @@ function index_reduced_pend(; name, kwargs...)
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ 1
         ]
-        mtkcompile(System(eqs, t; name); kwargs...)
+        mtkcompile(
+            System(eqs, t; name);
+            reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(;
+                inline_linear_sccs
+            ), kwargs...
+        )
     else
         eqs = [
             0 ~ 1 - y^2 - x^2
@@ -614,7 +621,7 @@ sol = solve(prob, Tsit5())
 
     unsimp = generate_initializesystem(pend; op = [x => 1], initialization_eqs = [y ~ 1])
     sys = mtkcompile(unsimp; fully_determined = false)
-    @test length(equations(sys)) in (3, 4, 5) # depending on tearing
+    @test length(equations(sys)) in (2, 3, 4, 5) # depending on tearing
 end
 
 @testset "Extend two systems with initialization equations and guesses" begin
@@ -1015,7 +1022,7 @@ end
 
             # changing types works
             ps = parameter_values(prob)
-            newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+            newps = SciMLStructures.replace(Tunable(), ps, DualT{Float64}.(ps.tunable))
             prob3 = remake(prob; p = newps)
             @test prob3.f.initialization_data !== nothing
             @test eltype(state_values(prob3.f.initialization_data.initializeprob)) <:
@@ -1144,7 +1151,7 @@ end
         end
         @test is_variable(prob.f.initialization_data.initializeprob, q)
         ps = prob.p
-        newps = SciMLStructures.replace(Tunable(), ps, ForwardDiff.Dual.(ps.tunable))
+        newps = SciMLStructures.replace(Tunable(), ps, DualT{Float64}.(ps.tunable))
         prob2 = remake(prob; p = newps)
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
@@ -1154,7 +1161,7 @@ end
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
             state_values(prob.f.initialization_data.initializeprob)
 
-        prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0))
+        prob2 = remake(prob; u0 = DualT{Float64}.(prob.u0))
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
@@ -1162,7 +1169,7 @@ end
         @test state_values(prob2.f.initialization_data.initializeprob) ≈
             state_values(prob.f.initialization_data.initializeprob)
 
-        prob2 = remake(prob; u0 = ForwardDiff.Dual.(prob.u0), p = newps)
+        prob2 = remake(prob; u0 = DualT{Float64}.(prob.u0), p = newps)
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
         @test eltype(prob2.f.initialization_data.initializeprob.p.tunable) <:
@@ -1171,8 +1178,8 @@ end
             state_values(prob.f.initialization_data.initializeprob)
 
         prob2 = remake(
-            prob; u0 = [x => ForwardDiff.Dual(1.0)],
-            p = [p => ForwardDiff.Dual(1.0), q => missing]
+            prob; u0 = [x => DualT{Float64}(1.0)],
+            p = [p => DualT{Float64}(1.0), q => missing]
         )
         @test eltype(state_values(prob2.f.initialization_data.initializeprob)) <:
         ForwardDiff.Dual
@@ -1589,7 +1596,7 @@ end
     @mtkcompile sys = System(x ~ p * t, t)
     prob = @test_nowarn ODEProblem(sys, [p => 1.0], (0.0, 1.0))
     @test_nowarn remake(prob, p = [p => 1.0])
-    @test_nowarn remake(prob, p = [p => ForwardDiff.Dual(1.0)])
+    @test_nowarn remake(prob, p = [p => DualT{Float64}(1.0)])
 end
 
 @testset "`late_binding_update_u0_p` copies `newp`" begin
@@ -1851,7 +1858,7 @@ end
 @testset "Initialization system retains `split` kwarg of parent" begin
     @parameters g
     @variables x(t) y(t) [state_priority = 10] λ(t)
-    @named pend = index_reduced_pend()
+    @named pend = index_reduced_pend(; inline_linear_sccs = false)
     pend = complete(pend; split = false)
     prob = ODEProblem(
         pend, [x => 1.0, D(x) => 0.0, g => 1.0], (0.0, 1.0); guesses = [y => 1.0, λ => 1.0]

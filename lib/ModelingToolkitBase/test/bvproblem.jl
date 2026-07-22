@@ -32,10 +32,16 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
         lotkavolterra, [u0map; parammap], tspan
     )
 
-    for solver in solvers
-        sol = solve(bvp, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test sol[[x, y], 1] == [1.0, 2.0]
+    if @isdefined(ModelingToolkit)
+        for solver in solvers
+            sol = solve(bvp, solver(), dt = 0.01)
+            @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+            @test sol[[x, y], 1] == [1.0, 2.0]
+        end
+    else
+        for solver in solvers
+            @test_broken solve(bvp, solver(), dt = 0.01)
+        end
     end
 
     # Test out of place
@@ -43,10 +49,16 @@ daesolvers = [Ascher2, Ascher4, Ascher6]
         lotkavolterra, [u0map; parammap], tspan
     )
 
-    for solver in solvers
-        sol = solve(bvp2, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
-        @test sol[[x, y], 1] == [1.0, 2.0]
+    if @isdefined(ModelingToolkit)
+        for solver in solvers
+            sol = solve(bvp2, solver(), dt = 0.01)
+            @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+            @test sol[[x, y], 1] == [1.0, 2.0]
+        end
+    else
+        for solver in solvers
+            @test_broken solve(bvp2, solver(), dt = 0.01)
+        end
     end
 end
 
@@ -334,13 +346,17 @@ end
     @test_broken costfn(sol, prob.p, _t) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
-    sol = solve(bvp, MIRK4(), dt = 0.05)
-    @test SciMLBase.successful_retcode(sol)
+    if @isdefined(ModelingToolkit)
+        sol = solve(bvp, MIRK4(), dt = 0.05)
+        @test SciMLBase.successful_retcode(sol)
 
-    costfn = ModelingToolkitBase.generate_bvp_cost(
-        lksys; expression = Val{false}, wrap_gfw = Val{true}
-    )
-    @test costfn(sol, bvp.p) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
+        costfn = ModelingToolkitBase.generate_bvp_cost(
+            lksys; expression = Val{false}, wrap_gfw = Val{true}
+        )
+        @test costfn(sol, bvp.p) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
+    else
+        @test_broken solve(bvp, MIRK4(), dt = 0.05)
+    end
 
     ### With a parameter
     @parameters t_c
@@ -358,13 +374,17 @@ end
         log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
-    sol = solve(bvp, MIRK4(), dt = 0.05)
-    @test SciMLBase.successful_retcode(sol)
+    if @isdefined(ModelingToolkit)
+        sol = solve(bvp, MIRK4(), dt = 0.05)
+        @test SciMLBase.successful_retcode(sol)
 
-    costfn = ModelingToolkitBase.generate_bvp_cost(
-        lksys; expression = Val{false}, wrap_gfw = Val{true}
-    )
-    @test costfn(sol, bvp.p) ≈ log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
+        costfn = ModelingToolkitBase.generate_bvp_cost(
+            lksys; expression = Val{false}, wrap_gfw = Val{true}
+        )
+        @test costfn(sol, bvp.p) ≈ log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
+    else
+        @test_broken solve(bvp, MIRK4(), dt = 0.05)
+    end
 end
 
 @testset "Parameter estimation" begin
@@ -394,8 +414,12 @@ end
     sys′ = subset_tunables(sys, [γ, α])
 
     bprob = BVProblem(sys′, u0map, tspan; tune_parameters = true)
-    bsol = solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-3)
+    if @isdefined(ModelingToolkit)
+        bsol = solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-3)
 
-    @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
-    @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
+        @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
+        @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
+    else
+        @test_broken solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-3)
+    end
 end

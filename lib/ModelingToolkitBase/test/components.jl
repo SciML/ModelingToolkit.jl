@@ -166,7 +166,7 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, DFBDF())
         @test sol.retcode == SciMLBase.ReturnCode.Success
 
-        sys2 = mtkcompile(ll2_model)
+        sys2 = mtkcompile(ll2_model; reassemble_alg)
         @test length(equations(sys2)) == 3
         u0 = [sys2.inductor2.i => 0]
         prob = ODEProblem(sys2, u0, (0, 10.0))

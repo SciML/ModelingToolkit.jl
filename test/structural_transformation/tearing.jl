@@ -10,6 +10,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 import StateSelection
 import SymbolicUtils as SU
 using ForwardDiff
+import ModelingToolkitTearing as MTKTearing
 
 ###
 ### Nonlinear system
@@ -254,13 +255,13 @@ sol = solve(prob_complex, Tsit5())
 
     idx = findfirst(observed(sys2)) do eq
         arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
-        isarr && iscall(arr) && operation(arr) === (\)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
     end
     @test idx !== nothing
     # This one is analytically solved
     idx = findfirst(observed(sys3)) do eq
         arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
-        isarr && iscall(arr) && operation(arr) === (\)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
     end
     @test idx === nothing
 
