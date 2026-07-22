@@ -7,7 +7,6 @@ addition to `@variables`, ModelingToolkit defines `@parameters`, `@independent_v
 ModelingToolkit to attach additional metadata.
 
 ```@docs
-Symbolics.@variables
 @independent_variables
 @parameters
 @constants
