@@ -37,11 +37,12 @@ jobs:
           - {user: SciML, repo: SBMLToolkit.jl, group: All, subpkg: ""}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE1, subpkg: ""}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE2, subpkg: ""}
-          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Downstream, subpkg: ""}
+          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelOrderReduction.jl, group: Core, subpkg: ""}
-          - {user: SciML, repo: MethodOfLines.jl, group: Interface, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface1, subpkg: ""}
+          - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface2, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core, subpkg: ""}
@@ -63,27 +64,17 @@ jobs:
         shell: julia --color=yes --project=downstream {0}
         run: |
           using Pkg
-          try
-            # force it to use this PR's version of the package
-            Pkg.develop(PackageSpec(path="./lib/ModelingToolkitBase"))  # resolver may fail with main deps
-            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
-            subpkg = "${{ matrix.package.subpkg }}"
-            if subpkg != ""
-              Pkg.develop(PackageSpec(path=joinpath("./downstream/lib", subpkg)))
-            end
-            Pkg.update()
-            if subpkg != ""
-              Pkg.test(subpkg)
-            else
-              Pkg.test(coverage=true)  # resolver may fail with test time deps
-            end
-          catch err
-            err isa Pkg.Resolve.ResolverError || rethrow()
-            # If we can't resolve that means this is incompatible by SemVer and this is fine
-            # It means we marked this as a breaking change, so we don't need to worry about
-            # Mistakenly introducing a breaking change, as we have intentionally made one
-            @info "Not compatible with this release. No problem." exception=err
-            exit(0)  # Exit immediately, as a success
+          Pkg.develop(PackageSpec(path="./lib/ModelingToolkitBase"))
+          Pkg.develop(PackageSpec(path="."))
+          subpkg = "${{ matrix.package.subpkg }}"
+          if subpkg != ""
+            Pkg.develop(PackageSpec(path=joinpath("./downstream/lib", subpkg)))
+          end
+          Pkg.update()
+          if subpkg != ""
+            Pkg.test(subpkg)
+          else
+            Pkg.test(coverage=true)
           end
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v7
