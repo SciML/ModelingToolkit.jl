@@ -1188,3 +1188,19 @@ if !@isdefined(ModelingToolkit)
         @test isequal(ModelingToolkitBase.get_noise_eqs(ssys), noise_eqs)
     end
 end
+
+if @isdefined(ModelingToolkit)
+    @testset "MTK `mtkcompile` retains `DiffCache` param info" begin
+        @variables X(t) A(t)
+        @parameters p d k
+        eqs = [
+            D(X) ~ p - d * X
+            k + A^3 ~ 3 + 2 * X^2
+        ]
+        noise_eqs = [2p 1; 0 0]
+        @named sys = System(eqs, t; noise_eqs)
+        sys, dcp = ModelingToolkitBase.add_diffcache(sys, 3)
+        ssys = mtkcompile(sys)
+        @test SU.getmetadata(ssys, ModelingToolkitBase.DiffCacheParams, nothing)[dcp] == 3
+    end
+end

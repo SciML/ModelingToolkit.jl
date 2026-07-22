@@ -132,6 +132,17 @@ function MTKBase.__mtkcompile(
             gui_metadata = get_gui_metadata(sys),
             tstops = symbolic_tstops(sys)
         )
+        diffcache_params = SU.getmetadata(
+            ode_sys, DiffCacheParams, Dict{SymbolicT, Int}()
+        )::Dict{SymbolicT, Int}
+        ssys = SU.setmetadata(ssys, DiffCacheParams, copy(diffcache_params))
+        # Reuse `LinearExpander` cache
+        linear_expansion_cache = check_mutable_cache(
+            ode_sys, LinearExpansionCache, LinearExpansionCacheT, nothing
+        )
+        if linear_expansion_cache !== nothing
+            store_to_mutable_cache!(ssys, LinearExpansionCache, linear_expansion_cache)
+        end
         return ssys
     end
 end
