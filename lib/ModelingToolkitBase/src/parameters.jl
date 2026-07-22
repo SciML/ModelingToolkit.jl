@@ -103,7 +103,9 @@ $(SIGNATURES)
 Define one or more known parameters. A parameter is a non-time-dependent quantity
 in the model.
 
-See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
+See also [`@independent_variables`](@ref),
+[`@variables`](https://docs.sciml.ai/Symbolics/stable/manual/variables/#Symbolics.@variables)
+and [`@constants`](@ref).
 """
 macro parameters(xs...)
     return Symbolics.parse_vars(
