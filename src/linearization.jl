@@ -497,14 +497,20 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == length(u) ||
             error("Number of unknown variables ($(linfun.num_states)) does not match the number of input unknowns ($(length(u)))")
         integ_cache = (linfun.caches,)
+        T = promote_type_with_nothing(Union{}, u)
+        T = promote_type_with_nothing(T, u)
+        T = promote_type(T, typeof(t))
+        u = promote_with_nothing(T, u)
+        p = promote_with_nothing(T, p)
         integ = MockIntegrator{true}(u, p, t, fun, integ_cache, nothing)
+        prob = remake(linfun.prob; u0 = u, p = p)
         u, p,
             success = SciMLBase.get_initial_values(
-            linfun.prob, integ, fun, linfun.initializealg, Val(true);
+            prob, integ, fun, linfun.initializealg, Val(true);
             linfun.initialize_kwargs...
         )
-        u = u::typeof(linfun.prob.u0)
-        p = p::typeof(linfun.prob.p)
+        u = u::typeof(prob.u0)
+        p = p::typeof(prob.p)
         success = success::Bool
         if !success
             error("Initialization algorithm $(linfun.initializealg) failed with `unknowns = $u` and `p = $p`.")
