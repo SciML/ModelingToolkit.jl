@@ -1,8 +1,13 @@
 """
     SciMLBase.HomotopyProblem(sys::System, op; λspan = (0.0, 1.0), kwargs...)
+    SciMLBase.HomotopyProblem{iip}(sys::System, op; λspan = (0.0, 1.0), kwargs...)
+    SciMLBase.HomotopyProblem{iip, spec}(sys::System, op; λspan = (0.0, 1.0), kwargs...)
 
 Build a [`SciMLBase.HomotopyProblem`](@ref) from a `System` whose equations
 contain Modelica `homotopy(actual, simplified)` nodes (Modelica spec 3.7.4.2).
+As with the other problem constructors, the zero-parameter form derives
+in-place-ness from `op` and the `{iip}` form uses the requested `iip` (which is
+what the initialization path passes through).
 
 The standard nonlinear residual is built from `sys` (and used only to obtain
 `u0`, `p`, the observed function, and the residual prototype), then the residual
@@ -24,13 +29,13 @@ be wrong mid-sweep.
     `expression = Val{true}` (codegen-to-`Expr`) is not yet supported for the
     homotopy constructor; this can be added in a future PR.
 """
-function SciMLBase.HomotopyProblem(
+@fallback_iip_specialize function SciMLBase.HomotopyProblem{iip, spec}(
         sys::System, op;
         expression = Val{false}, λspan = (0.0, 1.0),
         check_length = true, check_compatibility = true,
         eval_expression = false, eval_module = @__MODULE__,
         checkbounds = false, cse = true, kwargs...
-    )
+    ) where {iip, spec}
     if expression !== Val{false}
         throw(
             ArgumentError(
@@ -55,10 +60,10 @@ function SciMLBase.HomotopyProblem(
         )
     end
 
-    _iip = resolve_iip(Both, op)
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SciMLBase.NonlinearFunction{_iip}, sys, op;
+        SciMLBase.NonlinearFunction{_iip, spec}, sys, op;
         check_length, check_compatibility, expression,
         eval_expression, eval_module, checkbounds, cse, kwargs...
     )

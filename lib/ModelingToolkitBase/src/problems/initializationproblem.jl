@@ -5,11 +5,14 @@ struct InitializationProblem{iip, specialization} end
     InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
 
-Generate a `LinearProblem`, `NonlinearProblem`, `SCCNonlinearProblem` or
-`NonlinearLeastSquaresProblem` to represent a consistent initialization of `sys` given the
-initial time `t` and operating point `op`. The initial time can be `nothing` for
-time-independent systems. A `LinearProblem` is used when the initialization system is
-linear (affine).
+Generate a `LinearProblem`, `NonlinearProblem`, `SCCNonlinearProblem`,
+`NonlinearLeastSquaresProblem` or `SciMLBase.HomotopyProblem` to represent a consistent
+initialization of `sys` given the initial time `t` and operating point `op`. The initial
+time can be `nothing` for time-independent systems. A `LinearProblem` is used when the
+initialization system is linear (affine). A `SciMLBase.HomotopyProblem` is used when the
+(square) initialization system contains Modelica `homotopy(actual, simplified)` nodes, so
+the initialization is solved by continuation from the `simplified` form (see
+[`homotopy`](@ref)).
 
 # Keyword arguments
 
@@ -188,8 +191,12 @@ end
 """
     $TYPEDSIGNATURES
 
-Get the type of the initialization problem (Nonlinear problem) to use, given the system
-`sys`, initialization system `isys` and arbitrary keyword arguments.
+Get the type of the initialization problem to use, given the system `sys`, initialization
+system `isys` and arbitrary keyword arguments. Returns `LinearInitializationProblem` for an
+affine init system, `NonlinearLeastSquaresProblem` for a non-square one, and — for a square
+one — the type selected by `get_nonlinear_problem_type(isys)`: `SciMLBase.HomotopyProblem`
+when `isys` contains Modelica `homotopy(actual, simplified)` nodes, otherwise
+`NonlinearProblem`.
 """
 function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
@@ -209,7 +216,15 @@ function get_initialization_problem_type(
     return if isys isa System && nunknown > 0 && nunknown <= neqs && calculate_A_b(isys; throw = false) !== nothing
         LinearInitializationProblem
     elseif neqs == nunknown
-        NonlinearProblem
+        # Square nonlinear init system: select the concrete problem type with the same
+        # dispatch as `AbstractNonlinearProblem(isys, op)`. When the init system carries
+        # Modelica `homotopy(actual, simplified)` nodes that depend on the unknowns this
+        # returns `SciMLBase.HomotopyProblem` (solved by continuation from the `simplified`
+        # form), otherwise `NonlinearProblem`. (A `homotopy` node whose arguments are
+        # constant in the unknowns collapses to an affine term and is correctly caught by
+        # the `LinearInitializationProblem` branch above instead — there is nothing to
+        # continue.)
+        get_nonlinear_problem_type(isys)
     else
         NonlinearLeastSquaresProblem
     end

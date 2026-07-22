@@ -31,6 +31,10 @@ function MTKBase.get_initialization_problem_type(
     elseif neqs == nunknown && isempty(unassigned_vars)
         if use_scc && neqs > 0
             if is_split(isys)
+                # Modelica `homotopy(actual, simplified)` nodes are handled per-SCC inside
+                # the `SCCNonlinearProblem` constructor: a block whose equations carry them
+                # is built as a `HomotopyProblem` and solved by continuation, while the
+                # remaining blocks keep their plain Newton solves.
                 SCCNonlinearProblem
             else
                 @warn """
@@ -38,10 +42,12 @@ function MTKBase.get_initialization_problem_type(
                 Simplify your `System` with `split = true` or pass `use_scc = false` to \
                 disable this warning
                 """
-                NonlinearProblem
+                MTKBase.get_nonlinear_problem_type(isys)
             end
         else
-            NonlinearProblem
+            # No SCC decomposition to hang per-block continuation off, so a
+            # `homotopy`-carrying system is solved as a single `HomotopyProblem`.
+            MTKBase.get_nonlinear_problem_type(isys)
         end
     else
         NonlinearLeastSquaresProblem
