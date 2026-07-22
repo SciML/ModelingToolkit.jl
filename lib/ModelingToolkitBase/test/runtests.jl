@@ -100,13 +100,13 @@ end
             @safetestset "JumpSystem Test" include("jumpsystem.jl")
             @safetestset "Poissonians Test" include("poissonians.jl")
             @safetestset "Extend SDE/Jump Test" include("extend_sde_jump.jl")
-            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
             @safetestset "print_tree" include("print_tree.jl")
             @safetestset "Analysis Points Test" include("analysis_points.jl")
             @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
             @safetestset "Debugging Test" include("debugging.jl")
             @safetestset "Namespacing test" include("namespacing.jl")
             @safetestset "LinearProblem Tests" include("linearproblem.jl")
+            @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
         end
     end
 
