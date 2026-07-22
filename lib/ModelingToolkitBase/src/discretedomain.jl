@@ -192,8 +192,8 @@ struct SampleTime <: Operator
     init::Union{Nothing,Real}
 end
 
-SampleTime(; init::Union{Nothing,Real} = nothing) = SampleTime(init)
-(D::SampleTime)() = STerm(D, SArgsT((D.init,)); type = Real)
+SampleTime(; init::Union{Nothing,Real} = nothing) = SampleTime(init)()
+(D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
 SymbolicUtils.promote_symtype(::SampleTime, ::Type{T}) where {T} = Real
 SymbolicUtils.promote_shape(::SampleTime, @nospecialize(x::SU.ShapeT)) = x
 Base.nameof(::SampleTime) = :SampleTime
