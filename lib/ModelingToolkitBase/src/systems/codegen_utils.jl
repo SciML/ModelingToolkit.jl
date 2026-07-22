@@ -871,18 +871,28 @@ resolve_optimize_option(::Nothing) = nothing
     $(TYPEDEF)
 
 A wrapper around a generated in-place and out-of-place function. The type-parameter `P`
-must be a 3-tuple where the first element is the index of the parameter object in the
-arguments, the second is the expected number of arguments in the out-of-place variant
-of the function, and the third is a boolean indicating whether the generated functions
-are for a split system. For scalar functions, the inplace variant can be `nothing`.
+must be a `Tuple` type `Tuple{A, B, C}` where the first element `A` is the index of the
+parameter object in the arguments, the second `B` is the expected number of arguments in
+the out-of-place variant of the function, and the third `C` is a boolean indicating whether
+the generated functions are for a split system. Encoding these as a `Tuple` type (rather
+than a tuple value) allows dispatching on the individual elements. For scalar functions,
+the inplace variant can be `nothing`.
+
+For backward compatibility, `P` may also be provided as the old 3-tuple *value* form
+`(A, B, C)`, which is converted to the `Tuple{A, B, C}` type form.
 """
 struct GeneratedFunctionWrapper{P, O, I} <: Function
     f_oop::O
     f_iip::I
 end
 
+# Normalize the `P` type parameter to a `Tuple{...}` type. The old form passed a tuple
+# *value* (e.g. `(2, 3, true)`); the new form is a `Tuple` *type* (e.g. `Tuple{2, 3, true}`).
+_gfw_params_type(P::Tuple) = Tuple{P...}
+_gfw_params_type(::Type{P}) where {P <: Tuple} = P
+
 function GeneratedFunctionWrapper{P}(foop::O, fiip::I) where {P, O, I}
-    return GeneratedFunctionWrapper{P, O, I}(foop, fiip)
+    return GeneratedFunctionWrapper{_gfw_params_type(P), O, I}(foop, fiip)
 end
 
 # The wrapped functions are stateless generated functions, so there is nothing to
@@ -891,7 +901,7 @@ end
 Base.deepcopy_internal(gfw::GeneratedFunctionWrapper, ::IdDict) = gfw
 
 function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
-    return :($(GeneratedFunctionWrapper{P})($foop, $fiip))
+    return :($(GeneratedFunctionWrapper{_gfw_params_type(P)})($foop, $fiip))
 end
 
 function GeneratedFunctionWrapper{P}(
@@ -904,47 +914,35 @@ function GeneratedFunctionWrapper{P}(
     )
 end
 
-function (gfw::GeneratedFunctionWrapper)(args...)
-    return _generated_call(gfw, args...)
-end
-
-function SciMLBase.numargs(::GeneratedFunctionWrapper{P}) where {P}
-    n_oop = P[2]
-    return (n_oop, n_oop + 1)
-end
-
-@generated function _generated_call(gfw::GeneratedFunctionWrapper{P}, args...) where {P}
-    paramidx, nargs, issplit = P
-    iip = false
-    # IIP case has one more argument
-    if length(args) == nargs + 1
-        nargs += 1
-        paramidx += 1
-        iip = true
-    end
-    if length(args) != nargs
-        throw(ArgumentError("Expected $nargs arguments, got $(length(args))."))
-    end
-
-    # the function to use
-    f = iip ? :(gfw.f_iip) : :(gfw.f_oop)
+function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg{Any, NArgs}) where {PIdx, NArgs, Split}
     # non-split systems just call it as-is
-    if !issplit
-        return :($f(args...))
-    end
-    if args[paramidx] <: Union{Tuple, MTKParameters} &&
-            !(args[paramidx] <: Tuple{Vararg{Number}})
+    Split || return gfw.f_oop(args...)
+    if args[PIdx] isa Union{Tuple, MTKParameters} && !(args[PIdx] isa Tuple{Vararg{Number}})
         # for split systems, call it as-is if the parameter object is a tuple or MTKParameters
         # but not if it is a tuple of numbers
-        return :($f(args...))
-    else
-        # The user provided a single buffer/tuple for the parameter object, so wrap that
-        # one in a tuple
-        fargs = ntuple(Val(length(args))) do i
-            i == paramidx ? :((args[$i], nothing)) : :(args[$i])
-        end
-        return :($f($(fargs...)))
+        return gfw.f_oop(args...)
     end
+    # The user provided a single buffer/tuple for the parameter object, so wrap that
+    # one in a tuple
+    @set! args[PIdx] = (args[PIdx], nothing)
+    return gfw.f_oop(args...)
+end
+
+function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg{Any, N}) where {PIdx, NArgs, Split, N}
+    # IIP case has one more argument
+    if NArgs + 1 != N
+        throw(MethodError(gfw, args))
+    end
+    Split || return gfw.f_iip(args...)
+    if args[PIdx + 1] isa Union{Tuple, MTKParameters} && !(args[PIdx + 1] isa Tuple{Vararg{Number}})
+        return gfw.f_iip(args...)
+    end
+    @set! args[PIdx + 1] = (args[PIdx + 1], nothing)
+    return gfw.f_iip(args...)
+end
+
+function SciMLBase.numargs(::GeneratedFunctionWrapper{Tuple{P, N, S}}) where {P, N, S}
+    return (N, N + 1)
 end
 
 """

@@ -1598,8 +1598,8 @@ end
 struct DiagonalAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
     f::F
 
-    function DiagonalAMatrixWrapper(f::GeneratedFunctionWrapper{P}) where {P}
-        return new{P[2], typeof(f)}(f)
+    function DiagonalAMatrixWrapper(f::GeneratedFunctionWrapper{Tuple{P1, P2, P3}}) where {P1, P2, P3}
+        return new{P2, typeof(f)}(f)
     end
 end
 
@@ -1643,8 +1643,8 @@ struct BandedAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
     nrows::Int
     bands::NTuple{2, Int}
 
-    function BandedAMatrixWrapper(f::GeneratedFunctionWrapper{P}, nr, bands) where {P}
-        return new{P[2], typeof(f)}(f, nr, bands)
+    function BandedAMatrixWrapper(f::GeneratedFunctionWrapper{Tuple{P1, P2, P3}}, nr, bands) where {P1, P2, P3}
+        return new{P2, typeof(f)}(f, nr, bands)
     end
 end
 
