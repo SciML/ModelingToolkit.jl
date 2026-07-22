@@ -71,6 +71,36 @@ end
     @test !any(p -> p isa SciMLBase.HomotopyProblem, iprob.probs)
 end
 
+@testset "single-block homotopy init degrades to a HomotopyProblem" begin
+    # A one-equation init system is solved directly by the `SCCNonlinearProblem` constructor
+    # rather than wrapped; with a `homotopy` node it must degrade to a `HomotopyProblem`, not
+    # a plain `NonlinearProblem`, so the λ-sweep is kept.
+    @variables x(t) y(t)
+    @mtkcompile sys = System(
+        [D(x) ~ -x, 0 ~ homotopy(atan(y - 3), y)], t; guesses = [y => 12.0]
+    )
+    iprob = ModelingToolkit.InitializationProblem(
+        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+    )
+    @test iprob isa SciMLBase.HomotopyProblem
+    @test !(iprob isa SciMLBase.SCCNonlinearProblem)
+    sol = solve(iprob; abstol = 1.0e-12, reltol = 1.0e-12)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[y] ≈ 3.0 atol = 1.0e-6
+end
+
+@testset "non-homotopy single-block init stays a plain NonlinearProblem" begin
+    @variables x(t) y(t)
+    @mtkcompile sys = System(
+        [D(x) ~ -x, 0 ~ atan(y - 3)], t; guesses = [y => 0.5]
+    )
+    iprob = ModelingToolkit.InitializationProblem(
+        sys, 0.0, [x => 1.0]; warn_initialize_determined = false
+    )
+    @test iprob isa SciMLBase.NonlinearProblem
+    @test !(iprob isa SciMLBase.HomotopyProblem)
+end
+
 @testset "use_scc = false falls back to a whole-system HomotopyProblem" begin
     # with no SCC decomposition to hang per-block continuation off, the whole init system
     # is solved as a single HomotopyProblem

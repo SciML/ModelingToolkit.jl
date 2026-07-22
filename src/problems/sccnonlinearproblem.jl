@@ -561,7 +561,13 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             end
             return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
         else
-            return NonlinearProblem{iip}(
+            # A single nonlinear block is solved directly rather than wrapped in an
+            # `SCCNonlinearProblem`. When it carries Modelica `homotopy(actual, simplified)`
+            # nodes this must be a `HomotopyProblem` so the block is solved by continuation
+            # (the multi-block path below already builds `HomotopyProblem` blocks); a plain
+            # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
+            TProb = MTKBase.get_nonlinear_problem_type(sys)
+            return TProb{iip}(
                 sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
             )
         end
