@@ -1,23 +1,34 @@
 function SciMLBase.IntervalNonlinearFunction(
-        sys::System; u0 = nothing, p = nothing, eval_expression = false,
+        sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
         analytic = nothing, initialization_data = nothing,
-        check_compatibility = true, kwargs...
+        check_compatibility = true, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    check_complete(sys, IntervalNonlinearFunction)
-    check_compatibility && check_compatible_system(IntervalNonlinearFunction, sys)
+    opts = SciMLFunctionOptions(;
+        u0, p, t, analytic, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
+    )
+    return IntervalNonlinearFunction(sys, opts)
+end
 
-    codegen_opts = GeneratedFunctionOptions(;
-        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
-        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
-    )
+"""
+    SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions)
+
+Public entry point that builds an `IntervalNonlinearFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions{E}) where {E}
+    check_complete(sys, IntervalNonlinearFunction)
+    opts.check_compatibility && check_compatible_system(IntervalNonlinearFunction, sys)
+
+    (; u0, p, analytic, initialization_data) = opts
+    codegen_opts = opts.codegen
 
     f = generate_rhs(sys, codegen_opts; scalar = true)
 
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     args = (; f)
     kwargs = (;
@@ -28,7 +39,7 @@ function SciMLBase.IntervalNonlinearFunction(
     )
 
     return maybe_codegen_scimlfn(
-        expression, IntervalNonlinearFunction{false}, args; kwargs...
+        Val{E}, IntervalNonlinearFunction{false}, args; kwargs...
     )
 end
 
