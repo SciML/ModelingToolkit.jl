@@ -120,13 +120,13 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
     utility_fun = Symbol(f, :_function)
     @eval function $f(
             sys, ap, args...; loop_openings = [], system_modifier = identity,
-            allow_input_derivatives = true, kwargs...
+            allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), kwargs...
         )
         lin_fun,
             ssys = $(utility_fun)(
-            sys, ap, args...; loop_openings, system_modifier, kwargs...
+            sys, ap, args...; loop_openings, system_modifier, op, kwargs...
         )
-        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; allow_input_derivatives)
+        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives)
         return mats, ssys, extras
     end
 end
