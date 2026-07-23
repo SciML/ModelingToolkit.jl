@@ -212,6 +212,7 @@ custom `AbstractSystem` subtypes.
 ```@docs
 ModelingToolkit.collect_scoped_vars!
 ModelingToolkit.collect_var_to_name!
+ModelingToolkitBase.collect_expression_vars!
 ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
