@@ -91,7 +91,7 @@ end
 
 function _linearization_wrap_odeproblem_f(@nospecialize(prob::ODEProblem), ::Type{T}) where {T}
     f = SciMLBase.Void{Any}(prob.f.f)
-    u0 = T.(prob.u0)
+    u0 = prob.u0 === nothing ? T[] : T.(prob.u0)
     t = T(prob.tspan[1])
     f = SciMLBase.wrapfun_iip(f, (u0, u0, prob.p, t))
     odef = remake(prob.f; f = f)
@@ -232,7 +232,7 @@ function linearization_function(
     prob = _linearization_wrap_odeproblem_f(prob, T)
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
-        u0
+        T[]
     else
         T.(u0)
     end
