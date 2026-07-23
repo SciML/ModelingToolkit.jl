@@ -223,7 +223,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
         controljac_prototype = nothing
     end
 
-    ODEInputFunction{iip, specialize}(
+    return ODEInputFunction{iip, specialize}(
         f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
