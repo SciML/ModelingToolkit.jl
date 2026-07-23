@@ -405,6 +405,7 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
+@public tobrownian, toparam
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)
