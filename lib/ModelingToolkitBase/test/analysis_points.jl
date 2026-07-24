@@ -941,6 +941,29 @@ if @isdefined(ModelingToolkit)
             @test isequal(only(output_vars), P2.output.u)
         end
 
+        @testset "boundary connection duplicated as plain connection is still cut" begin
+            @named P1 = FirstOrder(k = 1, T = 1)
+            @named P2 = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [
+                connect(C.output, :u, P1.input)
+                connect(P1.output, P2.input)
+                # The output boundary connection is duplicated as a plain connection.
+                connect(P2.output, :y, C.input)
+                connect(P2.output, C.input)
+            ]
+            sys = System(eqs, t, systems = [P1, P2, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            # `C` must remain excluded even though the plain connection re-adds its edge.
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P1, :P2])
+            @test length(ModelingToolkit.get_eqs(isolated)) == 1
+            @test isequal(only(input_vars), P1.input.u)
+            @test isequal(only(output_vars), P2.output.u)
+        end
+
         @testset "reachability finds intermediate inside components" begin
             @named P1 = FirstOrder(k = 1, T = 1)
             @named P_mid = FirstOrder(k = 1, T = 1)

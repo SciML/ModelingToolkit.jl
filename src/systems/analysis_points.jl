@@ -284,11 +284,16 @@ function isolate_subsystem(
     end
 
     # Step 2: walk every equation at every level of the hierarchy.
-    # For boundary AP equations, cut the edge and record which side is inside.
-    # For all other equations, add edges between the connected components.
+    # Every connection (including boundary APs) adds edges between the connected
+    # components. Boundary AP edges are additionally recorded in `cut_edges` so they can
+    # be removed after the full graph is built. Recording rather than skipping is
+    # essential: a boundary connection may be duplicated as a plain `connect` equation,
+    # which would re-add the edge. Since the graph is simple, the duplicate `add_edge!` is
+    # a no-op and a single `rem_edge!` afterwards guarantees the edge stays cut.
     inside_seeds = Int[]
     input_vars = SymbolicT[]
     output_vars = SymbolicT[]
+    cut_edges = Tuple{Int, Int}[]
 
     function _build_graph!(cur, parent_path)
         for eq in get_eqs(cur)
@@ -299,34 +304,38 @@ function isolate_subsystem(
                 fname = _full_ap_name(parent_path, nameof(ap_data))
                 in_conn = ap_data.input
                 out_conns = something(ap_data.outputs, [])
-                if fname in boundary_ap_names
-                    if fname in input_ap_names
-                        for c in out_conns
-                            push!(input_vars, ap_var(c))
-                            p = _conn_to_path(c, parent_path)
-                            if p !== nothing
-                                idx = get(path_to_idx, p, nothing)
-                                idx !== nothing && push!(inside_seeds, idx)
-                            end
-                        end
-                    end
-                    if fname in output_ap_names
-                        if in_conn !== nothing
-                            push!(output_vars, ap_var(in_conn))
-                            p = _conn_to_path(in_conn, parent_path)
-                            if p !== nothing
-                                idx = get(path_to_idx, p, nothing)
-                                idx !== nothing && push!(inside_seeds, idx)
-                            end
-                        end
-                    end
-                    # Do not add a graph edge — this connection is cut.
-                else
-                    in_path = in_conn !== nothing ? _conn_to_path(in_conn, parent_path) : nothing
+                is_boundary = fname in boundary_ap_names
+                if is_boundary && fname in input_ap_names
                     for c in out_conns
-                        out_path = _conn_to_path(c, parent_path)
-                        out_path === nothing && continue
-                        in_path !== nothing && _try_add_edge!(in_path, out_path)
+                        push!(input_vars, ap_var(c))
+                        p = _conn_to_path(c, parent_path)
+                        if p !== nothing
+                            idx = get(path_to_idx, p, nothing)
+                            idx !== nothing && push!(inside_seeds, idx)
+                        end
+                    end
+                end
+                if is_boundary && fname in output_ap_names
+                    if in_conn !== nothing
+                        push!(output_vars, ap_var(in_conn))
+                        p = _conn_to_path(in_conn, parent_path)
+                        if p !== nothing
+                            idx = get(path_to_idx, p, nothing)
+                            idx !== nothing && push!(inside_seeds, idx)
+                        end
+                    end
+                end
+                in_path = in_conn !== nothing ? _conn_to_path(in_conn, parent_path) : nothing
+                in_idx = in_path === nothing ? nothing : get(path_to_idx, in_path, nothing)
+                for c in out_conns
+                    out_path = _conn_to_path(c, parent_path)
+                    out_path === nothing && continue
+                    in_path === nothing && continue
+                    _try_add_edge!(in_path, out_path)
+                    if is_boundary && in_idx !== nothing
+                        out_idx = get(path_to_idx, out_path, nothing)
+                        (out_idx === nothing || out_idx == in_idx) && continue
+                        push!(cut_edges, (in_idx, out_idx))
                     end
                 end
             elseif rhs_val isa Connection
@@ -347,6 +356,12 @@ function isolate_subsystem(
         return
     end
     _build_graph!(sys, Symbol[])
+
+    # Remove the boundary-connection edges now that the full graph (including any
+    # duplicate plain connections) has been built.
+    for (i1, i2) in cut_edges
+        rem_edge!(g, i1, i2)
+    end
 
     # Step 3: BFS from inside seeds to find all reachable (inside) components.
     inside = falses(length(paths))
@@ -452,6 +467,9 @@ function isolate_subsystem(
             clock_subber = SU.IRSubstituter{false}(get_irstructure(sys), clock_subs)
             map!(clock_subber, new_eqs, new_eqs)
         end
+        # Build a fresh container so its own variables, parameters, observed equations,
+        # initial conditions and non-connection equations are stripped — only the filtered
+        # connections and inside subsystems are retained.
         return System(new_eqs, get_iv(cur), SymbolicT[], SymbolicT[]; name = nameof(cur), systems = new_systems)
     end
 
