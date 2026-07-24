@@ -102,23 +102,23 @@ Reserved placeholder for the *previously accepted* value of a limited quantity i
 const limitold = wrap(LIMIT_OLD)
 
 """
+    IsLimitedNode()
+
+Predicate matching `limited(actual, limiter)` call nodes. Used both as a `query`
+predicate and as an `is_atomic` for `search_variables!`, which then collects the
+`limited` nodes themselves rather than the variables inside them.
+"""
+struct IsLimitedNode end
+
+(::IsLimitedNode)(x) = iscall(x) && operation(x) === limited
+
+"""
     has_limited(expr)
 
 Return `true` iff `expr` contains at least one `limited(...)` node.
 """
 function has_limited(expr)
-    x = unwrap(expr)
-    return _has_limited(x)
-end
-
-function _has_limited(x)
-    if !iscall(x)
-        return false
-    end
-    if operation(x) === limited
-        return true
-    end
-    return any(_has_limited, arguments(x))
+    return SU.query(IsLimitedNode(), unwrap(expr))
 end
 
 """
@@ -147,22 +147,26 @@ function has_any_limited(sys)
 end
 
 """
-    _strip_limited(x)
+    collect_limited_nodes!(nodes, ir, exprs)
 
-Recursively replace every `limited(actual, limiter)` node in the unwrapped expression `x`
-with `actual`, discarding the limiter (and with it any `limitnew`/`limitold` sentinels).
+Collect every distinct `limited(...)` node reachable from `exprs` into the ordered set
+`nodes`, in a deterministic order (`limited_k` numbering must be stable across processes
+for precompilation). Backed by `IRStructure`, so shared subexpressions of large flattened
+models are visited once rather than once per occurrence.
 """
-function _strip_limited(x)
-    if !iscall(x)
-        return x
+function collect_limited_nodes!(nodes::OrderedSet{SymbolicT}, ir::IRStructure, exprs)
+    buffer = SU.IRStructureSearchBuffer(ir, nodes)
+    for expr in exprs
+        SU.search_variables!(buffer, unwrap(expr); is_atomic = IsLimitedNode())
     end
-    op = operation(x)
-    args = arguments(x)
-    if op === limited
-        return _strip_limited(args[1])
-    end
-    new_args = map(_strip_limited, args)
-    return maketerm(typeof(x), op, new_args, metadata(x))
+    return nodes
+end
+
+# Rewrite `exprs` (equations) by substituting the given node => replacement rules through
+# an `IRSubstituter`, which caches by IR index instead of rebuilding shared subtrees.
+function _substitute_equations(ir::IRStructure, rules::Dict{SymbolicT, SymbolicT}, eqs)
+    subber = SU.IRSubstituter{false}(ir, rules)
+    return [Equation(subber(unwrap(eq.lhs)), subber(unwrap(eq.rhs))) for eq in eqs]
 end
 
 # The `limitnew`/`limitold` sentinels appear inside limiter arguments, so `System`'s
@@ -184,13 +188,25 @@ function _remove_sentinels(vars)
     return filter(v -> _sentinel_kind(v) === :none, vars)
 end
 
-function _canonicalize_sentinels(x)
-    kind = _sentinel_kind(x)
-    kind === :new && return LIMIT_NEW
-    kind === :old && return LIMIT_OLD
-    iscall(x) || return x
-    new_args = map(_canonicalize_sentinels, arguments(x))
-    return maketerm(typeof(x), operation(x), new_args, metadata(x))
+struct IsSentinel end
+
+(::IsSentinel)(x) = _sentinel_kind(x) !== :none
+
+# Map namespaced sentinel occurrences back to the toplevel `LIMIT_NEW`/`LIMIT_OLD`, so a
+# limiter written inside a subsystem compiles against the same two placeholders. Built as
+# a substitution rule set (the sentinels are leaves) and applied with the IR substituter.
+function _canonicalize_sentinels(ir::IRStructure, x)
+    x = unwrap(x)
+    sentinels = OrderedSet{SymbolicT}()
+    SU.search_variables!(
+        SU.IRStructureSearchBuffer(ir, sentinels), x; is_atomic = IsSentinel()
+    )
+    isempty(sentinels) && return x
+    rules = Dict{SymbolicT, SymbolicT}()
+    for s in sentinels
+        rules[s] = _sentinel_kind(s) === :new ? LIMIT_NEW : LIMIT_OLD
+    end
+    return SU.IRSubstituter{false}(ir, rules)(x)
 end
 
 """
@@ -201,11 +217,21 @@ observed equations replaced by `actual`. Used for time-dependent compilation, wh
 iterate limiting does not apply.
 """
 function strip_limited_system(sys::AbstractSystem)
-    rew(x) = _strip_limited(unwrap(x))
-    new_eqs = [Equation(rew(eq.lhs), rew(eq.rhs)) for eq in equations(sys)]
-    new_obs = [Equation(rew(eq.lhs), rew(eq.rhs)) for eq in observed(sys)]
+    ir = get_irstructure(sys)
+    eqs = equations(sys)
+    obs = observed(sys)
+    nodes = collect_limited_nodes!(
+        OrderedSet{SymbolicT}(), ir,
+        Iterators.flatten(((eq.lhs, eq.rhs) for eq in Iterators.flatten((eqs, obs))))
+    )
+    isempty(nodes) && return sys
+    # `limited(actual, limiter) -> actual`; the substituter applies the rules bottom-up,
+    # so a (rejected elsewhere, but harmless here) nested annotation still resolves.
+    rules = Dict{SymbolicT, SymbolicT}(node => unwrap(arguments(node)[1]) for node in nodes)
     return ConstructionBase.setproperties(
-        sys; eqs = new_eqs, observed = new_obs,
+        sys;
+        eqs = _substitute_equations(ir, rules, eqs),
+        observed = _substitute_equations(ir, rules, obs),
         unknowns = _remove_sentinels(unknowns(sys)),
         ps = _remove_sentinels(get_ps(sys))
     )
@@ -219,36 +245,6 @@ Metadata key under which [`lower_limited`](@ref) records the limiter registry: a
 limiter expression (in terms of `LIMIT_NEW`/`LIMIT_OLD` and parameters).
 """
 struct LimitedCtx end
-
-# Replace every node in `x` that appears as a key of `repl` (an ordered
-# node => variable map keyed by `isequal`) with its replacement.
-function _replace_limited_nodes(x, repl)
-    if !iscall(x)
-        return x
-    end
-    for (node, var) in repl
-        if isequal(x, node)
-            return var
-        end
-    end
-    new_args = map(Base.Fix2(_replace_limited_nodes, repl), arguments(x))
-    return maketerm(typeof(x), operation(x), new_args, metadata(x))
-end
-
-function _collect_limited_nodes!(nodes, x)
-    if !iscall(x)
-        return nodes
-    end
-    if operation(x) === limited
-        if !any(Base.Fix1(isequal, x), nodes)
-            push!(nodes, x)
-        end
-        # `limited` nodes may not be nested; the actual/limiter arguments are searched
-        # so nesting is caught by the guard in `lower_limited`.
-    end
-    foreach(arg -> _collect_limited_nodes!(nodes, arg), arguments(x))
-    return nodes
-end
 
 """
     lower_limited(sys::AbstractSystem)
@@ -269,32 +265,14 @@ Returns the augmented system.
 """
 function lower_limited(sys::AbstractSystem)
     eqs = equations(sys)
-    nodes = SymbolicT[]
-    for eq in eqs
-        _collect_limited_nodes!(nodes, unwrap(eq.lhs))
-        _collect_limited_nodes!(nodes, unwrap(eq.rhs))
-    end
+    ir = get_irstructure(sys)
+    nodes = collect_limited_nodes!(
+        OrderedSet{SymbolicT}(), ir,
+        Iterators.flatten(((eq.lhs, eq.rhs) for eq in eqs))
+    )
     isempty(nodes) && return sys
 
-    # Guard against collisions with the auxiliary variable names about to be created.
-    # (The sentinels themselves are legitimately present: variable discovery collects
-    # them from the limiter arguments; they are removed from the unknowns below.)
-    reserved = Set{Symbol}()
-    for k in eachindex(nodes)
-        push!(reserved, Symbol(:limited_, k))
-    end
-    for v in Iterators.flatten((unknowns(sys), parameters(sys; initial_parameters = true)))
-        if hasname(v) && getname(v) in reserved
-            throw(
-                ArgumentError(
-                    "the symbol `$(getname(v))` collides with a name reserved by the " *
-                        "`limited` operator lowering; rename the variable."
-                )
-            )
-        end
-    end
-
-    repl = Pair{SymbolicT, SymbolicT}[]
+    rules = Dict{SymbolicT, SymbolicT}()
     specs = Pair{SymbolicT, SymbolicT}[]
     new_vars = SymbolicT[]
     new_eqs = Equation[]
@@ -302,20 +280,23 @@ function lower_limited(sys::AbstractSystem)
     for (k, node) in enumerate(nodes)
         args = arguments(node)
         actual, limiter = unwrap(args[1]), unwrap(args[2])
-        if _has_limited(actual) || _has_limited(limiter)
+        if has_limited(actual) || has_limited(limiter)
             throw(ArgumentError("`limited` operators may not be nested; found $(node)."))
         end
-        name = Symbol(:limited_, k)
+        # `#` makes the generated name unwritable as a Julia identifier, so it cannot
+        # collide with a user symbol and no collision guard is needed. The index makes
+        # it a pure function of the (deterministically ordered) node list, keeping
+        # codegen reproducible across processes.
+        name = Symbol("#limited_", k)
         var = unwrap(only(@variables $name [irreducible = true]))
         push!(new_vars, var)
-        push!(repl, node => var)
-        push!(specs, var => _canonicalize_sentinels(limiter))
+        rules[node] = var
+        push!(specs, var => _canonicalize_sentinels(ir, limiter))
         push!(new_eqs, wrap(var) ~ wrap(actual))
         push!(guessmap, var => actual)
     end
 
-    rew(x) = _replace_limited_nodes(unwrap(x), repl)
-    lowered_eqs = [Equation(rew(eq.lhs), rew(eq.rhs)) for eq in eqs]
+    lowered_eqs = _substitute_equations(ir, rules, eqs)
 
     # The consistency value `actual` is written both as a default (consumed by plain
     # `u0` construction) and as a guess (consumed by initialization machinery), so the
@@ -407,8 +388,10 @@ function generate_limited_postcondition(
     specs = getmetadata(sys, LimitedCtx, nothing)
     specs === nothing && return nothing
     dvs = unknowns(sys)
-    udvs = unwrap.(dvs)
+    dvset = Set{SymbolicT}(unwrap.(dvs))
     ps = parameters(sys)
+    ir = get_irstructure(sys)
+    varbuffer = Set{SymbolicT}()
     lims = map(specs) do (var, lexpr)
         idx = findfirst(isequal(var), dvs)
         if idx === nothing
@@ -421,16 +404,15 @@ function generate_limited_postcondition(
         # Limiters are functions of the proposed/previous value and (possibly bound)
         # parameters only; referencing other unknowns is not supported since the hook
         # sees the limited entries, not the whole state.
-        bad = [
-            v for v in unwrap.(Symbolics.get_variables(lexpr))
-                if any(Base.Fix1(isequal, v), udvs)
-        ]
+        empty!(varbuffer)
+        SU.search_variables!(SU.IRStructureSearchBuffer(ir, varbuffer), unwrap(lexpr))
+        bad = filter(in(dvset), varbuffer)
         if !isempty(bad)
             throw(
                 ArgumentError(
                     "the limiter expression `$(lexpr)` for `$(var)` may only reference " *
                         "`limitnew`, `limitold`, and parameters; it references the " *
-                        "unknowns $(bad)."
+                        "unknowns $(collect(bad))."
                 )
             )
         end
@@ -441,26 +423,36 @@ function generate_limited_postcondition(
         (idx, fn)
     end
     lims = Tuple(lims)
-    if iip
-        return let lims = lims
-            function limited_postcondition_iip(up, uprev, p)
-                for (idx, fn) in lims
-                    up[idx] = fn((up[idx], uprev[idx]), p)
-                end
-                return nothing
-            end
-        end
-    else
-        return let lims = lims
-            function limited_postcondition_oop(up, uprev, p)
-                for (idx, fn) in lims
-                    val = fn((up[idx], uprev[idx]), p)
-                    up = _limited_setindex(up, val, idx)
-                end
-                return up
-            end
-        end
+    return iip ? LimitedPostcondition{true, typeof(lims)}(lims) :
+        LimitedPostcondition{false, typeof(lims)}(lims)
+end
+
+"""
+    LimitedPostcondition{iip}(limiters)
+
+The `NonlinearFunction.postcondition` callable generated by
+[`generate_limited_postcondition`](@ref). `limiters` is a tuple of
+`(index into unknowns, compiled limiter)` pairs; calling it applies each limiter to its
+entry of the proposed iterate. A struct rather than a closure so every captured field is
+explicit.
+"""
+struct LimitedPostcondition{iip, L}
+    limiters::L
+end
+
+function (h::LimitedPostcondition{true})(up, uprev, p)
+    for (idx, fn) in h.limiters
+        up[idx] = fn((up[idx], uprev[idx]), p)
     end
+    return nothing
+end
+
+function (h::LimitedPostcondition{false})(up, uprev, p)
+    for (idx, fn) in h.limiters
+        val = fn((up[idx], uprev[idx]), p)
+        up = _limited_setindex(up, val, idx)
+    end
+    return up
 end
 
 function _limited_setindex(u, val, idx)
