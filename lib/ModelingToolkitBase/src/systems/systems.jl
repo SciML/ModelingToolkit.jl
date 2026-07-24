@@ -80,6 +80,7 @@ performs order reduction for ODEs and handles simple discrete/implicit-discrete 
 
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
++ `analytic_integration=true` controls whether variables with trivial dynamics (e.g. `D(x) ~ 0`) are analytically integrated and eliminated from the unknowns. Set `analytic_integration=false` to keep them as numerically integrated unknowns. Variables modified by a discrete or continuous event are never analytically integrated regardless of this flag.
 """
 function mtkcompile(
         sys::System; additional_passes = (),
