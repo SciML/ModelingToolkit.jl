@@ -154,7 +154,23 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    return setdiff!(SU.search_variables(expr), all_symbols(sys))
+    valid = all_symbols(sys)
+    invalid = Set{Any}()
+    for var in SU.search_variables(expr)
+        # An array-valued variable (e.g. an array-valued observed handle in a
+        # reduce-style affect) is stored in a flattened system as its scalarized
+        # elements, not the bare array symbolic. Mirror `unassignable_variables`:
+        # accept the whole-array symbol if present, else check each element.
+        if Symbolics.isarraysymbolic(var)
+            var in valid && continue
+            for idx in SU.stable_eachindex(var)
+                var[idx] in valid || push!(invalid, var[idx])
+            end
+        else
+            var in valid || push!(invalid, var)
+        end
+    end
+    return invalid
 end
 
 function unassignable_variables(sys, expr)
