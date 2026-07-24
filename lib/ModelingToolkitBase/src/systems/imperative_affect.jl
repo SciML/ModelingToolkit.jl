@@ -154,20 +154,34 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    valid = all_symbols(sys)
-    invalid = Set{Any}()
-    for var in SU.search_variables(expr)
-        # An array-valued variable (e.g. an array-valued observed handle in a
-        # reduce-style affect) is stored in a flattened system as its scalarized
-        # elements, not the bare array symbolic. Mirror `unassignable_variables`:
-        # accept the whole-array symbol if present, else check each element.
-        if Symbolics.isarraysymbolic(var)
-            var in valid && continue
-            for idx in SU.stable_eachindex(var)
-                var[idx] in valid || push!(invalid, var[idx])
+    # Mirror `unassignable_variables`: build the set of valid symbols, scalarizing any
+    # array-valued symbol into its elements (a flattened system stores arrays as their
+    # scalar elements, not the bare array symbolic). A `Set` is required so membership
+    # tests use `isequal`/hashing and return `Bool`; `x in all_symbols(sys)` would use
+    # symbolic `==` (`all_symbols` returns a `Vector`) and error in a boolean context.
+    valid = Set{SymbolicT}()
+    for sym in all_symbols(sys)
+        if Symbolics.isarraysymbolic(sym)
+            for idx in SU.stable_eachindex(sym)
+                push!(valid, sym[idx])
             end
         else
-            var in valid || push!(invalid, var)
+            push!(valid, sym)
+        end
+    end
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr)
+    invalid = SymbolicT[]
+    for var in vars
+        if Symbolics.isarraysymbolic(var)
+            for idx in SU.stable_eachindex(var)
+                sym = var[idx]
+                sym in valid && continue
+                push!(invalid, sym)
+            end
+        else
+            var in valid && continue
+            push!(invalid, var)
         end
     end
     return invalid
