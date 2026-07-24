@@ -256,6 +256,64 @@ unknowns(a::AffectSystem) = a.unknowns
 parameters(a::AffectSystem) = a.parameters
 all_equations(a::AffectSystem) = vcat(equations(system(a)), observed(system(a)))
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return an `AtomicArraySet` of the variables that are modified (written to) by any discrete or
+continuous event of `sys`. This is used by `mtkcompile` to avoid analytically integrating (and
+thereby removing from the unknowns) a variable that an event impulsively modifies: such a
+variable is not a smooth function of time, so it must remain a numerically integrated unknown.
+Both a variable and its `default_toterm` form are collected, so callers may match against either
+representation.
+"""
+function variables_modified_by_events(sys::AbstractSystem)
+    mvars = SymbolicT[]
+    for cb in Iterators.flatten((get_continuous_events(sys), get_discrete_events(sys)))
+        _collect_event_modified_variables!(mvars, cb)
+    end
+    return as_atomic_array_set(mvars)
+end
+
+function _collect_event_modified_variables!(mvars, cb::AbstractCallback)
+    _collect_affect_modified_variables!(mvars, cb.affect)
+    cb isa SymbolicContinuousCallback &&
+        _collect_affect_modified_variables!(mvars, cb.affect_neg)
+    _collect_affect_modified_variables!(mvars, cb.initialize)
+    _collect_affect_modified_variables!(mvars, cb.finalize)
+    return mvars
+end
+
+_collect_affect_modified_variables!(mvars, ::Nothing) = mvars
+function _collect_affect_modified_variables!(mvars, aff::SymbolicAffect)
+    for eq in aff.affect
+        # The LHS of an affect equation is the quantity it writes to.
+        for v in Symbolics.get_variables(eq.lhs)
+            _push_modified_variable!(mvars, v)
+        end
+    end
+    return mvars
+end
+function _collect_affect_modified_variables!(mvars, aff::ImperativeAffect)
+    for v in modified(aff)
+        _push_modified_variable!(mvars, v)
+    end
+    return mvars
+end
+function _collect_affect_modified_variables!(mvars, aff::AffectSystem)
+    for v in unknowns(aff)
+        _push_modified_variable!(mvars, v)
+    end
+    return mvars
+end
+
+function _push_modified_variable!(mvars, var)
+    var = unwrap(var)
+    push!(mvars, var)
+    tt = default_toterm(var)
+    isequal(tt, var) || push!(mvars, tt)
+    return mvars
+end
+
 function Base.show(iio::IO, aff::AffectSystem)
     println(iio, "Affect system defined by equations:")
     eqs = all_equations(aff)

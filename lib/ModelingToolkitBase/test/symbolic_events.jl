@@ -868,6 +868,39 @@ end
     @test sign.(cos.(3 * (required_crossings_c2 .+ 1.0e-6))) == sign.(last.(cr2))
 end
 
+@testset "ImperativeAffect with array-valued observed" begin
+    # An affect whose `observed` clause reads a whole array-valued variable must compile.
+    # A flattened system stores an array as its scalar elements, so `invalid_variables`
+    # has to scalarize the array symbol before checking it against the system's symbols
+    # (mirroring `unassignable_variables`); reading the bare array previously errored.
+    @variables x(t) = 1.0
+    @variables arr(t)[1:2] = [2.0, 3.0]
+    recorded = Vector{Float64}[]
+    function record_array(mod, obs, ctx, integ)
+        push!(ctx, collect(obs.a))
+        return (;)
+    end
+    evt = ModelingToolkitBase.SymbolicDiscreteCallback(
+        1.0, (f = record_array, observed = (; a = arr), ctx = recorded)
+    )
+    @named sys = System([D(x) ~ -x, D(arr) ~ -arr], t; discrete_events = [evt])
+    ssys = mtkcompile(sys)
+    prob = ODEProblem(ssys, [], (0.0, 3.0))
+    sol = solve(prob, @isdefined(ModelingToolkit) ? Tsit5() : Rodas5P())
+    @test SciMLBase.successful_retcode(sol)
+    # The affect fired and recorded the whole array (`arr(t) = [2, 3] .* exp(-t)`).
+    @test !isempty(recorded)
+    @test all(v -> length(v) == 2, recorded)
+    @test recorded[1] ≈ [2.0, 3.0] .* exp(-1.0) rtol = 1.0e-3
+
+    # Unit-level: `invalid_variables` scalarizes array symbols and only flags genuinely
+    # missing variables (and returns `Bool`-valued membership, not a symbolic `==`).
+    @variables missingvar(t)
+    @test isempty(ModelingToolkitBase.invalid_variables(ssys, Symbolics.unwrap(arr)))
+    @test isempty(ModelingToolkitBase.invalid_variables(ssys, Symbolics.unwrap(x)))
+    @test !isempty(ModelingToolkitBase.invalid_variables(ssys, Symbolics.unwrap(missingvar)))
+end
+
 if @isdefined(ModelingToolkit)
     @testset "Discrete event reinitialization (#3142)" begin
         @connector function LiquidPort(; name, p = nothing, Vdot = nothing)

@@ -825,6 +825,74 @@ end
         @test_throws ModelingToolkit.IncompleteInitializationError ODEProblem(sys, [], (0.0, 5.0))
     end
 
+    @testset "variables modified by events are not analytically integrated" begin
+        # A variable with trivial dynamics (`D(x) ~ 0`) that is impulsively kicked by a
+        # discrete event must NOT be analytically integrated: an impulsive update makes it
+        # non-smooth, so it has to remain a numerically integrated unknown. Previously the
+        # zero-elimination pass moved `x` to `observed` (with a `missing`-bound `x#0`
+        # parameter), which made a functional (`ImperativeAffect`) kick error at `ODEProblem`
+        # construction ("... refers to missing variable(s) ... reduced away").
+        @variables x(t)
+
+        # (1) Equational affect kick: `x` is retained as an unknown with `D(x) ~ 0`, and the
+        # trajectory is a staircase kicked by +1 at t = 5, 10, 15.
+        eqn_sys = mtkcompile(
+            System(
+                [D(x) ~ 0], t; name = :eqn_sys,
+                discrete_events = [5.0 => [x ~ Pre(x) + 1]]
+            )
+        )
+        @test isempty(analytically_integrated(eqn_sys))
+        @test unwrap(x) in Set(unknowns(eqn_sys))
+        @test any(
+            e -> isequal(e.lhs, unwrap(D(x))) && iszero(Symbolics.value(e.rhs)),
+            equations(eqn_sys)
+        )
+        sol = solve(ODEProblem(eqn_sys, [x => 0.0], (0.0, 20.0)), Tsit5())
+        @test sol(4.0; idxs = x) ≈ 0.0
+        @test sol(7.0; idxs = x) ≈ 1.0
+        @test sol(12.0; idxs = x) ≈ 2.0
+        @test sol(17.0; idxs = x) ≈ 3.0
+
+        # (2) Functional (imperative) affect kick — this previously threw at `ODEProblem`
+        # construction because `x` had been reduced away.
+        aff = ModelingToolkit.ImperativeAffect(modified = (; x)) do m, o, i, c
+            (; x = m.x + 1)
+        end
+        imp_sys = mtkcompile(
+            System(
+                [D(x) ~ 0], t; name = :imp_sys, discrete_events = [5.0 => aff]
+            )
+        )
+        @test isempty(analytically_integrated(imp_sys))
+        @test unwrap(x) in Set(unknowns(imp_sys))
+        imp_sol = solve(ODEProblem(imp_sys, [x => 0.0], (0.0, 20.0)), Tsit5())
+        @test imp_sol(4.0; idxs = x) ≈ 0.0
+        @test imp_sol(7.0; idxs = x) ≈ 1.0
+        @test imp_sol(17.0; idxs = x) ≈ 3.0
+
+        # (3) `analytic_integration = false` disables the transformation wholesale, keeping
+        # `x` as an unknown even without an event.
+        flag_sys = mtkcompile(
+            System([D(x) ~ 0], t; name = :flag_sys); analytic_integration = false
+        )
+        @test isempty(analytically_integrated(flag_sys))
+        @test unwrap(x) in Set(unknowns(flag_sys))
+
+        # (4) Only event-modified variables are protected; unrelated trivial dynamics (`y`)
+        # are still analytically integrated.
+        @variables y(t)
+        sel_sys = mtkcompile(
+            System(
+                [D(x) ~ 0, D(y) ~ 0], t, [x, y], []; name = :sel_sys,
+                discrete_events = [5.0 => [x ~ Pre(x) + 1]]
+            )
+        )
+        @test issetequal(keys(analytically_integrated(sel_sys)), [unwrap(y)])
+        @test unwrap(x) in Set(unknowns(sel_sys))
+        @test !(unwrap(y) in Set(unknowns(sel_sys)))
+    end
+
     @testset "Issue#4764: irreducible variables in a zero chain are retained" begin
         # `D(y) ~ 0` would normally analytically integrate `y` into a constant,
         # eliminating it as an unknown. Marking `y` irreducible must keep it (and its
