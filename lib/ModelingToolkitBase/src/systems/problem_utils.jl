@@ -1927,6 +1927,95 @@ function check_necessary_initial_conditions(sys::AbstractSystem, op::SymmapT)
 end
 
 """
+    SciMLProblemOptions(sys::AbstractSystem; kwargs...)
+
+Bundle of options for [`process_SciMLProblem`](@ref)/`__process_SciMLProblem`, which build
+the `SciMLFunction` (and its `u0`/`p`/`du0`) shared by every `SciMLBase.*Problem`
+constructor. Nests a [`SciMLFunctionOptions`](@ref) (`fn_opts`) for the options that are
+ultimately relevant to the `SciMLFunction` being constructed (`t`, `eval_expression`,
+`eval_module`, `compiler_options`, and everything else `SciMLFunctionOptions` recognizes),
+plus the fields specific to processing the operating point and building the initialization
+problem — none of which are meaningful to a `*Function` constructor on their own.
+
+`sys` is not stored on the struct; it is only used, if `guesses` is not already a `SymmapT`,
+to resolve any `Symbol` keys in `guesses` to the corresponding symbolic variable of `sys`
+(via [`symbols_to_symbolics!`](@ref)) before `guesses` is converted to a `SymmapT`.
+
+`expression` is a type parameter (matching `SciMLFunctionOptions`) so that `fn_opts` is
+concretely typed; `__process_SciMLProblem` itself never branches on it.
+
+Like `SciMLFunctionOptions`, this struct does not attempt to hold every keyword a
+`*Function` constructor might recognize (e.g. `jac`, `steady_state`, or any other
+constructor-specific extra) — `__process_SciMLProblem` still takes a trailing `kwargs...`
+for those, forwarded blindly to `constructor` exactly as before.
+"""
+struct SciMLProblemOptions{expression}
+    fn_opts::SciMLFunctionOptions{expression}
+    floatT::Any
+    u0Type::Any
+    u0_eltype::Any
+    build_initializeprob::Bool
+    implicit_dae::Bool
+    guesses::SymmapT
+    warn_initialize_determined::Bool
+    initialization_eqs::Vector{Equation}
+    fully_determined::Union{Nothing, Bool}
+    check_initialization_units::Bool
+    tofloat::Bool
+    u0_constructor::Any
+    p_constructor::Any
+    check_length::Bool
+    symbolic_u0::Bool
+    warn_cyclic_dependency::Bool
+    circular_dependency_max_cycle_length::Int
+    circular_dependency_max_cycles::Int
+    initsys_mtkcompile_kwargs::Any
+    substitution_limit::Int
+    use_scc::Bool
+    time_dependent_init::Bool
+    algebraic_only::Bool
+    missing_guess_value::MissingGuessValue.Type
+    allow_incomplete::Bool
+    is_initializeprob::Bool
+    is_steadystateprob::Bool
+    return_operating_point::Bool
+    init_compiler_options::CompilerOptions
+end
+
+function SciMLProblemOptions(
+        sys::AbstractSystem;
+        fn_opts::SciMLFunctionOptions{E},
+        floatT, u0Type, u0_eltype,
+        build_initializeprob::Bool, implicit_dae::Bool = false, guesses = AnyDict(),
+        warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
+        fully_determined = nothing, check_initialization_units::Bool = false,
+        tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
+        check_length::Bool = true, symbolic_u0::Bool = false,
+        warn_cyclic_dependency::Bool = false, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
+        substitution_limit = 100, use_scc::Bool = true, time_dependent_init::Bool,
+        algebraic_only::Bool = false, missing_guess_value = default_missing_guess_value(),
+        allow_incomplete::Bool = false, is_initializeprob::Bool = false,
+        is_steadystateprob::Bool = false, return_operating_point::Bool = false,
+        init_compiler_options::CompilerOptions = CompilerOptions(),
+    ) where {E}
+    if !(guesses isa SymmapT)
+        guesses = anydict(guesses)
+        symbols_to_symbolics!(sys, guesses)
+        guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
+    end
+    return SciMLProblemOptions{E}(
+        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    )
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
@@ -1953,28 +2042,13 @@ All other keyword arguments are passed as-is to `constructor`.
 Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
         u0_eltype = nothing, u0_constructor = identity, p_constructor = identity,
-        symbolic_u0 = false, kwargs...
-    )
-    u0Type = pType = typeof(op)
-    op = operating_point_preprocess(sys, op)
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
-    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
-    p_constructor = get_p_constructor(p_constructor, pType, floatT)
-
-    __process_SciMLProblem(constructor, sys, op; floatT, u0Type, u0_eltype, u0_constructor, p_constructor, symbolic_u0, kwargs...)
-end
-
-function __process_SciMLProblem(
-        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict;
-        floatT, u0Type, u0_eltype,
+        symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, p_constructor = identity,
-        check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
+        check_length = true, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
@@ -1985,6 +2059,44 @@ function __process_SciMLProblem(
         init_compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     )
+    u0Type = pType = typeof(op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(u0_eltype, floatT)
+    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
+    p_constructor = get_p_constructor(p_constructor, pType, floatT)
+
+    fn_opts = SciMLFunctionOptions(; t, eval_expression, eval_module, compiler_options, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    )
+
+    __process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+end
+
+function __process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict,
+        opts::SciMLProblemOptions; kwargs...
+    )
+    (;
+        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    ) = opts
+    (; t) = fn_opts
+    (; eval_expression, eval_module, compiler_options) = fn_opts.codegen
+
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
