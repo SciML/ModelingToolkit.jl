@@ -48,23 +48,29 @@ function IntermediateDeprecationSystem(args...; kwargs...)
     return System(args...; kwargs...)
 end
 
-for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
-    @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)
-end
+"""
+    NonlinearSystem(args...; kwargs...)
 
-@doc """
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
+"""
+@deprecate NonlinearSystem(args...; kwargs...) System(args...; kwargs...)
+
+"""
     DiscreteSystem(args...; kwargs...)
 
-Deprecated alias constructor for [`System`](@ref).
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
 """
-DiscreteSystem
+@deprecate DiscreteSystem(args...; kwargs...) System(args...; kwargs...)
 
-@doc """
+"""
     ImplicitDiscreteSystem(args...; kwargs...)
 
-Deprecated alias constructor for [`System`](@ref).
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
 """
-ImplicitDiscreteSystem
+@deprecate ImplicitDiscreteSystem(args...; kwargs...) System(args...; kwargs...)
 
 for T in [
         :ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,

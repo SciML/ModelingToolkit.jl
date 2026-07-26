@@ -13,10 +13,6 @@ SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 StateSelection = "64909d44-ed92-46a8-bbd9-f047dfbdc84b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-[sources]
-ModelingToolkit = {path = "../.."}
-ModelingToolkitBase = {path = "../../lib/ModelingToolkitBase"}
-
 [compat]
 Aqua = "0.8"
 FMIImport = "1"
@@ -27,7 +23,7 @@ OrdinaryDiffEqBDF = "1, 2"
 OrdinaryDiffEqDefault = "1.2, 2"
 OrdinaryDiffEqRosenbrock = "1, 2"
 SafeTestsets = "0.1, 1"
-SciMLTesting = "1, 2.1"
+SciMLTesting = "2.4"
 StateSelection = "1.10.5"
 Test = "1"
 julia = "1.10"
