@@ -6,10 +6,21 @@ Deprecated alias for [`mtkcompile`](@ref).
 
 Use `mtkcompile(sys; kwargs...)` in new code.
 """
-@deprecate structural_simplify(sys; kwargs...) mtkcompile(sys; kwargs...)
-@deprecate structural_simplify(sys, io; kwargs...) mtkcompile(
-    sys; inputs = io[1], outputs = io[2], kwargs...
-)
+function structural_simplify(sys; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; kwargs...)
+end
+
+function structural_simplify(sys, io; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys, io; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; inputs = io[1], outputs = io[2], kwargs...)
+end
 
 """
     @mtkbuild expr
@@ -54,7 +65,13 @@ end
 Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
 new code.
 """
-@deprecate NonlinearSystem(args...; kwargs...) System(args...; kwargs...)
+function NonlinearSystem(args...; kwargs...)
+    Base.depwarn(
+        "`NonlinearSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :NonlinearSystem,
+    )
+    return System(args...; kwargs...)
+end
 
 """
     DiscreteSystem(args...; kwargs...)
@@ -62,7 +79,13 @@ new code.
 Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
 new code.
 """
-@deprecate DiscreteSystem(args...; kwargs...) System(args...; kwargs...)
+function DiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`DiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :DiscreteSystem,
+    )
+    return System(args...; kwargs...)
+end
 
 """
     ImplicitDiscreteSystem(args...; kwargs...)
@@ -70,7 +93,13 @@ new code.
 Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
 new code.
 """
-@deprecate ImplicitDiscreteSystem(args...; kwargs...) System(args...; kwargs...)
+function ImplicitDiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`ImplicitDiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :ImplicitDiscreteSystem,
+    )
+    return System(args...; kwargs...)
+end
 
 for T in [
         :ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,
