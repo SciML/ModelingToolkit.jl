@@ -2923,6 +2923,8 @@ macro namespace(expr)
     return esc(_config(expr, true))
 end
 
+const _HAS_PER_METHOD_COMPILER_OPTIONS = isdefined(Base.Experimental, :set_compile!)
+
 function component_post_processing(__source__, expr, isconnector)
     @assert expr isa Expr && (
         expr.head == :function || (
@@ -2938,10 +2940,20 @@ function component_post_processing(__source__, expr, isconnector)
     fname = sig.args[1]
     args = sig.args[2:end]
 
-    out = quote
-        $Base.@__doc__ function $fname($(args...))
+    # On Julia with per-method `@compiler_options` support, wrap both the
+    # outer constructor and the inner closure (where the symbolic build
+    # actually happens) so only these methods get cheap-compile, leaving
+    # the rest of the user module at full optimization.
+    closure_call = if _HAS_PER_METHOD_COMPILER_OPTIONS
+        :($Base.Experimental.@compiler_options(compile = min, optimize = 0, infer = false, () -> $body)())
+    else
+        :((() -> $body)())
+    end
+
+    fexpr_block = quote
+        function $fname($(args...))
             # we need to create a closure to escape explicit return in `body`.
-            res = (() -> $body)()
+            res = $closure_call
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
                 name = $(Meta.quot(fname))
                 if $isconnector
@@ -2959,24 +2971,30 @@ function component_post_processing(__source__, expr, isconnector)
             end
         end
     end
+    func_expr = fexpr_block.args[end]
+    if _HAS_PER_METHOD_COMPILER_OPTIONS
+        func_expr = :($Base.Experimental.@compiler_options compile = min optimize = 0 infer = false $func_expr)
+    end
+
+    out = quote
+        $Base.@__doc__ $func_expr
+    end
     return set_component_line_number!(__source__, out)
 end
 
 function set_component_line_number!(__source__::LineNumberNode, expr::Expr)
-    # To set the LineNumberNode correctly (and thus fix Go-to-definition), we modify the
-    # LineNumberNode in the `function` body. `dump(expr)` looks like this:
-    #   head: Symbol block
-    #     2: Expr
-    #       head: Symbol macrocall
-    #         3: Expr
-    #           head: Symbol function
-    #           args: Array{Any}((2,))
-    #             2: Expr
-    #               head: Symbol block
-    #               args: Array{Any}((5,))
-    #                 1: LineNumberNode
-    @assert expr.args[2].args[3].args[2].args[1] isa LineNumberNode
-    expr.args[2].args[3].args[2].args[1] = __source__
+    # `expr` is the :block returned by the outer `quote`. `expr.args[2]` is
+    # the outermost macrocall (`@__doc__`, possibly wrapping
+    # `@compiler_options`, which wraps the function definition). Walk
+    # through the macrocall chain to find the function, then update the
+    # LineNumberNode at the top of its body so Go-to-definition works.
+    fexpr = expr.args[2]
+    while fexpr isa Expr && fexpr.head === :macrocall
+        fexpr = fexpr.args[end]
+    end
+    @assert fexpr isa Expr && fexpr.head === :function
+    @assert fexpr.args[2].args[1] isa LineNumberNode
+    fexpr.args[2].args[1] = __source__
     return expr
 end
 
