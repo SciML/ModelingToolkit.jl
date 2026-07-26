@@ -13,9 +13,9 @@ $(FIELDS)
 # Examples
 
 ```jldoctest
-julia> using Symbolics
+julia> using ModelingToolkitBase
 
-julia> Δ = Shift(t)
+julia> Δ = Shift(t_nounits)
 (::Shift) (generic function with 2 methods)
 ```
 """
@@ -220,9 +220,9 @@ $(FIELDS)
 # Examples
 
 ```jldoctest
-julia> using Symbolics
+julia> using ModelingToolkitBase
 
-julia> t = ModelingToolkit.t_nounits
+julia> t = t_nounits
 
 julia> Δ = Sample(0.01)
 (::Sample) (generic function with 2 methods)
