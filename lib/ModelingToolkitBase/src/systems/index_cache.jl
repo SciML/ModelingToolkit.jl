@@ -125,15 +125,25 @@ function IndexCache(sys::AbstractSystem)
     events = Union{SymbolicContinuousCallback, SymbolicDiscreteCallback}[cevs; devs]
     parse_callbacks_for_discretes!(sys, cevs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, 0)
     parse_callbacks_for_discretes!(sys, devs, disc_param_callbacks, constant_buffers, nonnumeric_buffers, length(cevs))
-    clock_partitions = unique(collect(values(disc_param_callbacks)))::Vector{BitSet}
-    disc_symtypes = Set{TypeT}()
-    for x in keys(disc_param_callbacks)
-        push!(disc_symtypes, symtype(x))
+    # The discrete-parameter buffer layout must be deterministic. `Dict`/`Set` iteration
+    # over the discrete parameters (`keys`) or their symtypes (`Set{TypeT}`) is
+    # objectid-based and unstable for freshly-created-per-compile parameter types, so
+    # order everything by the stable `canonical_sort_key` of the parameters: partitions by
+    # their sorted contents, symtypes by first appearance in canonical parameter order, and
+    # the parameters within each symtype likewise.
+    clock_partitions = sort!(unique(collect(values(disc_param_callbacks))); by = collect)::Vector{BitSet}
+    sorted_disc_params = canonical_sort(keys(disc_param_callbacks))
+    disc_symtypes = TypeT[]
+    disc_symtype_idx = Dict{TypeT, Int}()
+    for sym in sorted_disc_params
+        st = symtype(sym)::TypeT
+        if !haskey(disc_symtype_idx, st)
+            push!(disc_symtypes, st)
+            disc_symtype_idx[st] = length(disc_symtypes)
+        end
     end
-    disc_symtypes = collect(disc_symtypes)::Vector{TypeT}
-    disc_symtype_idx = Dict{TypeT, Int}(zip(disc_symtypes, eachindex(disc_symtypes)))
     disc_syms_by_symtype = [SymbolicParam[] for _ in disc_symtypes]
-    for sym in keys(disc_param_callbacks)
+    for sym in sorted_disc_params
         push!(disc_syms_by_symtype[disc_symtype_idx[symtype(sym)]], sym)
     end
     disc_syms_by_symtype_by_partition = [Vector{SymbolicParam}[] for _ in disc_symtypes]
@@ -468,7 +478,16 @@ end
 function get_buffer_sizes_and_idxs(::Type{BufT}, sys::AbstractSystem, buffers::Dict) where {BufT}
     idxs = BufT()
     buffer_sizes = BufferTemplate[]
-    for (i, (T, buf)) in enumerate(buffers)
+    # The buffer layout (which type maps to which buffer, and which symbol to which slot)
+    # must be deterministic. Iterating `buffers::Dict{TypeT,Set}` directly is NOT: the buffer
+    # types can be freshly-created per compile (e.g. `FunctionWrapper`/closure types), so
+    # their `Dict`/`Set` iteration order is `objectid`-based and varies run-to-run within a
+    # single session. Order the buckets (and the symbols within each) by the stable
+    # `canonical_sort_key` of the symbolic parameters instead.
+    sorted_buffers = [(T, canonical_sort(buf)) for (T, buf) in buffers]
+    sort!(sorted_buffers; by = b -> canonical_sort_key(first(b[2])),
+        alg = Base.Sort.DEFAULT_STABLE)
+    for (i, (T, buf)) in enumerate(sorted_buffers)
         for (j, p) in enumerate(buf)
             ttp = default_toterm(p)
             rp = renamespace(sys, p)
