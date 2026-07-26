@@ -490,6 +490,7 @@ function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fract
     return num, den
 end
 
+"""$(function_docstring(HomotopyNonlinearFunction, false, Symbol[]; extra_kwargs = "- `fraction_cancel_fn`: Function used to simplify fractions in polynomial expressions."))"""
 @fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::System; eval_expression = false, eval_module = @__MODULE__,
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions,

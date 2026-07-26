@@ -138,6 +138,7 @@ end
 
 is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
+"""$(function_docstring(ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac]))"""
 @fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(
         sys::System;
         inputs = default_codegen_inputs(sys),

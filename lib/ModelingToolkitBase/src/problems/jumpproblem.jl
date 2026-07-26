@@ -1,3 +1,4 @@
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false))"""
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,

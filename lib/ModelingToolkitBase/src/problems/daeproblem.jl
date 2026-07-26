@@ -1,3 +1,4 @@
+"""$(function_docstring(DAEFunction, true, [:jac, :tgrad]))"""
 @fallback_iip_specialize function SciMLBase.DAEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__,
@@ -80,6 +81,7 @@ function SciMLBase.DAEFunction{iip, spec}(
     return maybe_codegen_scimlfn(Val{E}, DAEFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.DAEProblem, DAEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,

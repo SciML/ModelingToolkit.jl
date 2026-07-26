@@ -1,3 +1,4 @@
+"""$(function_docstring(DDEFunction, true, Symbol[]))"""
 @fallback_iip_specialize function SciMLBase.DDEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
@@ -58,6 +59,7 @@ function SciMLBase.DDEFunction{iip, spec}(
     return maybe_codegen_scimlfn(Val{E}, DDEFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.DDEProblem, DDEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DDEProblem{iip, spec}(
         sys::System, op, tspan;
         callback = nothing, check_length = true, checkbounds = false,
