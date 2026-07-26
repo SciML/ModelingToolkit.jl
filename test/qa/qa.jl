@@ -29,21 +29,6 @@ const MTK_EXTENSIONS = (
     end
 end
 
-# Public names that reach ModelingToolkit's API surface only through
-# `@reexport using Symbolics` in ModelingToolkitBase. They are owned (and undocumented) by
-# Symbolics/SymbolicUtils, so ModelingToolkit is not the right place to document them.
-const SYMBOLICS_OWNED_REEXPORTS = (
-    Symbol("@symbolic_wrap"),
-    Symbol("@wrapped"),
-    :RuleSet,
-    :get_canonical_expr,
-    :infimum,
-    :is_derivative,
-    :istree,
-    :solve_for,
-    :supremum,
-)
-
 # Names the extensions must reach for which no public spelling exists.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # ModelingToolkitBase: the FMI extension's variable metadata helpers.
@@ -83,12 +68,10 @@ run_qa(
     Aqua = Aqua,
     JET = JET,
     jet = true,
-    jet_kwargs = (; target_defined_modules = true),
     aqua_kwargs = (;
         piracies = (; treat_as_own = (MTKBASE_OWNED_TYPES..., STRUCTURAL_TYPES...)),
     ),
     ei_kwargs = (;
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),
-    api_docs_kwargs = (; ignore = SYMBOLICS_OWNED_REEXPORTS),
 )

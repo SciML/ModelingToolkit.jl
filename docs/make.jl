@@ -35,8 +35,7 @@ makedocs(
     sitename = "ModelingToolkit.jl",
     authors = "Chris Rackauckas",
     modules = [ModelingToolkitBase, ModelingToolkit, MTKFMIExt],
-    clean = true, doctest = false, linkcheck = true,
-    warnonly = [:docs_block, :missing_docs, :cross_references],
+    clean = true, doctest = true, checkdocs = :exports, linkcheck = true,
     linkcheck_ignore = [
         "https://epubs.siam.org/doi/10.1137/0903023",
         # this link tends to fail linkcheck stochastically and often takes much longer to succeed

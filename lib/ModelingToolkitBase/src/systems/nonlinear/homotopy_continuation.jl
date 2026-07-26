@@ -539,11 +539,23 @@ end
     )
 end
 
-struct HomotopyContinuationProblem{iip, specialization} end
+"""
+    HomotopyContinuationProblem(sys::System, args...; kwargs...)
 
-@doc problem_docstring(
-    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false
-) HomotopyContinuationProblem
+Construct a homotopy-continuation problem from a nonlinear `sys`. This problem type is
+intended for solvers that track solution paths from a start system to the target system.
+
+# Example
+
+```julia
+@variables x = 1.0
+@mtkcompile sys = System([x^2 - 1 ~ 0])
+prob = HomotopyContinuationProblem(sys, [])
+```
+
+See [`NonlinearProblem`](@ref) for the standard nonlinear-problem constructor.
+"""
+struct HomotopyContinuationProblem{iip, specialization} end
 
 function HomotopyContinuationProblem(sys::System, args...; kwargs...)
     return HomotopyContinuationProblem{true}(sys, args...; kwargs...)
