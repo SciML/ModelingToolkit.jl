@@ -3,6 +3,48 @@ symconvert(::Type{T}, ::Type{F}, x::V) where {T <: Real, F, V} = convert(T, x)
 symconvert(::Type{Real}, ::Type{F}, x::Integer) where {F} = convert(F, x)
 symconvert(::Type{V}, ::Type{F}, x) where {V <: AbstractArray, F} = symconvert.(eltype(V), F, x)
 
+"""
+    OpaqueNonnumeric{K}
+
+Type-erasing wrapper around the `K` nonnumeric parameter buffers.
+
+The nonnumeric buffers are the only part of `MTKParameters` whose element types
+come from user-declared parameter types (a `CubicSpline`, a callable, an arbitrary
+struct). Storing them concretely puts those types into the `MTKParameters` type,
+which makes every solver specialization keyed on the parameter object unique per
+nonnumeric type — so two models differing only in, say, `CubicSpline` vs
+`LinearInterpolation` share no compiled code and each pays a full first-solve
+compilation.
+
+Holding them behind a `Ref{Any}` keeps the *buffer count* `K` in the type (the
+generated parameter-path dispatch needs it) while erasing the element types, so
+those models share one `MTKParameters` type. The payload is held by reference, so
+in-place writes to the buffers remain visible.
+
+`nonnumeric` is the only slot that can be erased this way: `tunable` and
+`initials` must stay concrete because AD differentiates through them, and the AD
+extensions already treat the nonnumeric slot as non-differentiable (Mooncake's
+`increment_and_get_rdata!` skips it outright).
+"""
+struct OpaqueNonnumeric{K}
+    ref::Base.RefValue{Any}
+end
+
+OpaqueNonnumeric(t::Tuple) = OpaqueNonnumeric{length(t)}(Ref{Any}(t))
+OpaqueNonnumeric(o::OpaqueNonnumeric) = o
+
+"""
+    nonnumeric_payload(o::OpaqueNonnumeric) -> Tuple
+
+The concrete nonnumeric buffers. Deliberately not type-stable; call sites that
+need inference (generated parameter access) must assert the concrete tuple type,
+which the index cache knows at codegen time.
+"""
+nonnumeric_payload(o::OpaqueNonnumeric) = getfield(o, :ref)[]
+
+nonnumeric_count(::OpaqueNonnumeric{K}) where {K} = K
+nonnumeric_count(::Type{OpaqueNonnumeric{K}}) where {K} = K
+
 struct MTKParameters{T, I, D, C, N, H}
     tunable::T
     initials::I
@@ -13,8 +55,7 @@ struct MTKParameters{T, I, D, C, N, H}
 
     function MTKParameters{T, I, D, C, N, H}(
             tunables::T, initials::I, discrete::D,
-            constant::C, nonnumeric::N,
-            caches::H
+            constant::C, nonnumeric, caches::H
         ) where {T, I, D, C, N, H}
         if tunables isa StaticVector{0}
             tunables = SVector{0, eltype(tunables)}()
@@ -22,22 +63,32 @@ struct MTKParameters{T, I, D, C, N, H}
         if initials isa StaticVector{0}
             initials = SVector{0, eltype(initials)}()
         end
-        return new{typeof(tunables), typeof(initials), D, C, N, H}(
+        nn = OpaqueNonnumeric(nonnumeric)
+        return new{typeof(tunables), typeof(initials), D, C, typeof(nn), H}(
             tunables, initials,
             discrete, constant,
-            nonnumeric, caches
+            nn, caches
         )
     end
     function MTKParameters(
             tunables::T, initials::I, discrete::D,
-            constant::C, nonnumeric::N,
+            constant::C, nonnumeric,
             caches::H
-        ) where {T, I, D, C, N, H}
-        return MTKParameters{T, I, D, C, N, H}(
+        ) where {T, I, D, C, H}
+        nn = OpaqueNonnumeric(nonnumeric)
+        return MTKParameters{T, I, D, C, typeof(nn), H}(
             tunables, initials, discrete, constant,
-            nonnumeric, caches
+            nn, caches
         )
     end
+end
+
+# `p.nonnumeric` yields the concrete buffers so the existing call sites (indexing,
+# copying, remake, SciMLStructures) are unchanged; `getfield(p, :nonnumeric)`
+# reaches the opaque wrapper itself.
+function Base.getproperty(p::MTKParameters, s::Symbol)
+    s === :nonnumeric && return nonnumeric_payload(getfield(p, :nonnumeric))
+    return getfield(p, s)
 end
 
 """
@@ -849,14 +900,12 @@ end
         end
         bufT
     end
-    nonnumericT = ntuple(Val(fieldcount(N))) do i
-        bufT = eltype(fieldtype(N, i))
-        for (j, idxT) in enumerate(idxtypes)
-            idxT <: ParameterIndex{Nonnumeric, i} || continue
-            bufT = promote_valtype(i, bufT)
-        end
-        bufT
-    end
+    # The nonnumeric buffers' element types are erased from `N` (see
+    # `OpaqueNonnumeric`), so they cannot be promoted at the type level. They are
+    # rebuilt dynamically below with an `Any` eltype, which is invisible to the
+    # `MTKParameters` type and matches what the other rebuild paths
+    # (`as_any_buffer`, `__remake_buffer`) already do for these buffers.
+    nonnumeric_n = nonnumeric_count(N)
 
     expr = quote
         tunables = $similar(oldbuf.tunable, $tunablesT)
@@ -897,16 +946,10 @@ end
             Expr(
                 :tuple,
                 (
-                    :($similar(oldbuf.nonnumeric[$i], $(nonnumericT[i])))
-                        for i in 1:length(nonnumericT)
+                    :($copyto!($similar(oldbuf.nonnumeric[$i], Any), oldbuf.nonnumeric[$i]))
+                        for i in 1:nonnumeric_n
                 )...
             )
-        )
-        $(
-            (
-                :($copyto!(nonnumerics[$i], oldbuf.nonnumeric[$i]))
-                    for i in 1:length(nonnumericT)
-            )...
         )
         caches = copy.(oldbuf.caches)
         newbuf = MTKParameters(
@@ -960,15 +1003,7 @@ end
         push!(
             expr.args,
             :(
-                nonnumerics = $(
-                    Expr(
-                        :tuple,
-                        (
-                            :($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i]))
-                                for i in 1:length(nonnumericT)
-                        )...
-                    )
-                )
+                # nonnumeric buffers keep their dynamic form (types erased from `N`)
             )
         )
         push!(
@@ -1096,7 +1131,7 @@ end
     for i in 1:fieldcount(C)
         push!(paths, :(ps.constant[$i]))
     end
-    for i in 1:fieldcount(N)
+    for i in 1:nonnumeric_count(N)
         push!(paths, :(ps.nonnumeric[$i]))
     end
     for i in 1:fieldcount(H)
@@ -1123,7 +1158,7 @@ end
     if !(I <: SVector{0})
         len += 1
     end
-    len += fieldcount(D) + fieldcount(C) + fieldcount(N) + fieldcount(H)
+    len += fieldcount(D) + fieldcount(C) + nonnumeric_count(N) + fieldcount(H)
     return len
 end
 
