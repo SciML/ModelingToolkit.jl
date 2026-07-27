@@ -300,8 +300,8 @@ numerical problem from a `System`.
 Moshi.Data.@data MissingGuessValue begin
     Constant(Number)
     Random(AbstractRNG)
-    HashedRandom
-    Error
+    HashedRandom()
+    Error()
 end
 
 # To be overloaded downstream by MTK
