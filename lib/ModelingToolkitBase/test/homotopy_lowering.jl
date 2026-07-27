@@ -2,6 +2,7 @@ using ModelingToolkitBase
 using ModelingToolkitBase: homotopy, has_homotopy, has_any_homotopy,
     _rewrite_with_lambda, lower_homotopy,
     t_nounits as t, D_nounits as D
+import SymbolicUtils as SU
 using Symbolics
 using Test
 
@@ -43,7 +44,7 @@ end
     # blend side: lowering the factor homotopy(0,1) → (1-λ)*1 + λ*0 = 1-λ yields
     # the true derivative of the blended expression through the simplified
     # branch: d/db [(1-λ)b^2 + λa] = (1-λ)*2b = (1-0.3)*2*2 = 2.8.
-    blended = _rewrite_with_lambda(Symbolics.unwrap(d2), Symbolics.unwrap(λ))
+    blended = _rewrite_with_lambda(SU.IRStructure{SU.SymReal}(), Symbolics.unwrap(d2), Symbolics.unwrap(λ))
     fblend = Symbolics.build_function(blended, λ, b; expression = Val(false))
     @test fblend(0.3, 2.0) ≈ 2.8
 end
@@ -169,7 +170,7 @@ end
     # nesting path through the public API is the testset above.
     @variables w λtest
     shadowex = ModelingToolkitBase._rewrite_with_lambda(
-        Symbolics.unwrap(homotopy(homotopy(w^3, w^2), w)), Symbolics.unwrap(λtest)
+        SU.IRStructure{SU.SymReal}(), Symbolics.unwrap(homotopy(homotopy(w^3, w^2), w)), Symbolics.unwrap(λtest)
     )
     @test Symbolics.value(
         Symbolics.substitute(
