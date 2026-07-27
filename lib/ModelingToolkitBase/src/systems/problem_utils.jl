@@ -2016,6 +2016,41 @@ function SciMLProblemOptions(
 end
 
 """
+    $TYPEDSIGNATURES
+
+Equivalent to the keyword-argument-based `maybe_build_initialization_problem`, sourcing
+the overlapping keywords from `opts` instead of requiring the caller to name them all
+individually. `opts.check_initialization_units` and `opts.init_compiler_options` are
+forwarded as `check_units` and `compiler_options` respectively, matching the naming used
+by `InitializationProblem`/`get_initialization_problem_type`.
+"""
+function maybe_build_initialization_problem(
+        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
+        opts::SciMLProblemOptions; kwargs...
+    )
+    (;
+        floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
+        fully_determined, check_initialization_units, u0_constructor, p_constructor,
+        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
+        time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_steadystateprob, init_compiler_options,
+    ) = opts
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    return maybe_build_initialization_problem(
+        sys, iip, op, t, guesses; initsys_mtkcompile_kwargs,
+        warn_initialize_determined, initialization_eqs,
+        eval_expression, eval_module, fully_determined,
+        warn_cyclic_dependency, check_units = check_initialization_units,
+        circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
+        algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
+        time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
+        compiler_options = init_compiler_options,
+        kwargs...
+    )
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
@@ -2127,15 +2162,7 @@ function __process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses; initsys_mtkcompile_kwargs,
-            warn_initialize_determined, initialization_eqs,
-            eval_expression, eval_module, fully_determined,
-            warn_cyclic_dependency, check_units = check_initialization_units,
-            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
-            compiler_options = init_compiler_options,
-            kwargs...
+            op, t, guesses, opts; kwargs...
         )
 
         kwargs = merge(kwargs, kws)
