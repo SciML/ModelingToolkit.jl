@@ -400,7 +400,11 @@ function process_DynamicOptProblem(
     return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
 end
 
-function set_initial_trajectory! end
+# Set the start values of state `idx` from a function-valued trajectory.
+# Backends without a method for their model type do not support this.
+function set_initial_trajectory!(model, U, idx, traj)
+    throw(ArgumentError("The `initial_trajectory` keyword argument is not supported by the $(nameof(typeof(model))) backend."))
+end
 function generate_time_variable! end
 function generate_internal_model end
 function generate_state_variable! end

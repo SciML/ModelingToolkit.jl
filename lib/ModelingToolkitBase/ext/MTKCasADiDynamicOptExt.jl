@@ -121,6 +121,14 @@ function MTK.generate_state_variable!(model::Opti, u0, ns, tsteps)
     return MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
 end
 
+function MTK.set_initial_trajectory!(m::Opti, U, idx, traj)
+    # The collocation grid is fixed when the variables are created, so the
+    # trajectory is sampled onto it. This overrides the constant `u0` seed set
+    # in `generate_state_variable!` for the entries of state `idx`.
+    t_samples = traj.(U.t)
+    return set_initial!(m, U[idx], DM(t_samples))
+end
+
 function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
     nt = length(tsteps)
     V = CasADi.variable!(model, nc, nt)
