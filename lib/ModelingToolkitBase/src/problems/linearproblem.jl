@@ -9,8 +9,8 @@ struct LinearFunction{iip} <: SciMLBase.AbstractSciMLFunction{iip}
 end
 
 Moshi.Data.@data StructuralHint begin
-    NoHint
-    Diagonal
+    NoHint()
+    Diagonal()
     struct Banded
         lower_band_size::Int
         upper_band_size::Int
