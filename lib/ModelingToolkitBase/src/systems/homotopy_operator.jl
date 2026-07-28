@@ -125,19 +125,16 @@ Symbolics.@register_derivative homotopy(actual, simplified) 2 SymbolicUtils.term
 
 Return `true` iff `expr` contains at least one `homotopy(...)` node.
 """
-function has_homotopy(expr)
+function has_homotopy(expr::Union{Symbolics.Arr, Num, SymbolicT})
     x = unwrap(expr)
-    return _has_homotopy(x)
+    ir = SU.IRStructure{VartypeT}()
+    SU.populate_ir!(ir, x)
+    return has_homotopy(ir, x)
 end
 
-function _has_homotopy(x)
-    if !iscall(x)
-        return false
-    end
-    if operation(x) === homotopy
-        return true
-    end
-    return any(_has_homotopy, arguments(x))
+__has_homotopy_predicate(e) = iscall(e) && operation(e) === homotopy
+function has_homotopy(ir::IRStructure{VartypeT}, expr::SymbolicT)
+    return SU.query(__has_homotopy_predicate, ir, expr)
 end
 
 """
@@ -161,14 +158,15 @@ end
 Return `true` iff `sys` contains a `homotopy(...)` node anywhere in its
 equations OR its observed equations.
 """
-function has_any_homotopy(sys)
-    has_homotopy_in_equations(equations(sys)) && return true
-    # `observed(sys)` always returns a `Vector{Equation}`, never `nothing`.
-    return any(eq -> has_homotopy(eq.lhs) || has_homotopy(eq.rhs), observed(sys))
+function has_any_homotopy(sys::AbstractSystem)
+    ir = get_irstructure(sys)
+    irinfo = get_ir_info(sys)
+    predicate = Base.Fix1(has_homotopy, ir) ∘ Base.Fix1(getindex, ir)
+    return any(predicate, irinfo.eqs_idxs) || any(predicate, irinfo.obs_idxs)
 end
 
 """
-    _rewrite_with_lambda(x, λ)
+    _rewrite_with_lambda(ir, x, λ)
 
 Recursively replace every `homotopy(a, s)` node in the unwrapped expression `x`
 with `(1 - λ)*s + λ*a`, where `λ` is supplied by the caller. At λ=1 the lowered
@@ -178,18 +176,40 @@ expression reduces numerically to `actual` (trivial form); at λ=0 it reduces to
 Hand-written TermInterface walk rather than a SymbolicUtils `@rule` — keeps the
 recursion explicit and avoids the rule-rewriter overhead for a single-node rewrite.
 """
-function _rewrite_with_lambda(x, λ)
-    if !iscall(x)
-        return x
+function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::SymbolicT)
+    xidx = SU.populate_ir!(ir, x)
+    SU.populate_ir!(ir, λ)
+    oneminus = 1 - λ
+    reachability = SU.get_reachability(ir, xidx)
+    push!(reachability, xidx)
+    old_to_new_idxs = Dict{Int32, Int32}()
+
+    for idx in reachability
+        sym = ir[idx]
+        iscall(sym) || continue
+
+        op = operation(sym)
+        nbors = Graphs.outneighbors(ir.dependency_graph, idx)
+        dirty = any(Base.Fix1(haskey, old_to_new_idxs), nbors)
+        if dirty
+            args = Symbolics.SArgsT()
+            for nbor in nbors
+                push!(args, ir[get(old_to_new_idxs, nbor, nbor)])
+            end
+        else
+            args = parent(arguments(sym))
+        end
+        if op === homotopy
+            new_sym = λ * args[1] + oneminus * args[2]
+            old_to_new_idxs[idx] = SU.populate_ir!(ir, new_sym)
+            dirty = true
+        elseif dirty
+            new_sym = maketerm(SymbolicT, op, args, SU.metadata(sym))
+            old_to_new_idxs[idx] = SU.populate_ir!(ir, new_sym)
+        end
     end
-    op = operation(x)
-    args = arguments(x)
-    new_args = map(arg -> _rewrite_with_lambda(arg, λ), args)
-    if op === homotopy
-        a, s = new_args[1], new_args[2]
-        return (1 - λ) * s + λ * a
-    end
-    return maketerm(typeof(x), op, new_args, metadata(x))
+
+    return ir[get(old_to_new_idxs, xidx, xidx)]
 end
 
 # The continuation parameter is a fixed sentinel symbol, NOT `gensym`. A
@@ -253,7 +273,8 @@ function lower_homotopy(sys::AbstractSystem)
             )
         end
     end
-    rew(x) = _rewrite_with_lambda(unwrap(x), λ)
+    ir = get_irstructure(sys)
+    rew(x) = _rewrite_with_lambda(ir, unwrap(x), λ)
     new_eqs = [Equation(rew(eq.lhs), rew(eq.rhs)) for eq in equations(sys)]
     new_obs = [Equation(rew(eq.lhs), rew(eq.rhs)) for eq in observed(sys)]
     # All other fields (incl. `tearing_state`/`schedule`) are carried over by
