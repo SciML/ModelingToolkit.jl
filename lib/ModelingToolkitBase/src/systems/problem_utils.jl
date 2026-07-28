@@ -1584,195 +1584,6 @@ __iip_u0_ad_wrapper(x) = x
 """
     $(TYPEDSIGNATURES)
 
-Build and return the initialization problem and associated data as a `NamedTuple` to be passed
-to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`, initial
-time `t`, system defaults `defs`, user-provided `guesses`, and list of unknowns which don't
-have a value in `op`. The keyword `implicit_dae` denotes whether the `SciMLProblem` being
-constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments are forwarded
-to `InitializationProblem`.
-"""
-function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses;
-        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
-        p_constructor = identity, floatT = Float64, initialization_eqs = [],
-        use_scc = true, eval_expression = false, eval_module = @__MODULE__,
-        missing_guess_value = default_missing_guess_value(),
-        # Intercept `expression` because we don't support it here yet
-        implicit_dae = false, is_steadystateprob = false, expression = Val{false}, kwargs...
-    )
-    guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
-
-    if t === nothing && is_time_dependent(sys)
-        t = zero(floatT)
-    end
-
-    orig_op = copy(op)
-    initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
-        missing_guess_value, is_steadystateprob, kwargs...
-    )
-    initsys = initializeprob.f.sys::System
-    needs_remake = false
-    _u0 = state_values(initializeprob)
-    if _u0 !== nothing
-        if ArrayInterface.ismutable(_u0)
-            __u0 = floatT.(_u0)
-        else
-            __u0 = similar_type(_u0, floatT)(_u0)
-        end
-        if eltype(__u0) != eltype(_u0)
-            _u0 = __u0
-            needs_remake = true
-        end
-    end
-    initp = parameter_values(initializeprob)
-    if is_split(sys)
-        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), initp)
-        _initp = repack(floatT.(buffer))
-        if !(initp.initials isa StaticVector{0})
-            buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), _initp)
-            _initp = repack(floatT.(buffer))
-        end
-        if eltype(_initp.tunable) != eltype(initp.tunable) || eltype(_initp.initials) != eltype(initp.initials)
-            initp = _initp
-            needs_remake = true
-        end
-    elseif initp isa AbstractArray
-        if ArrayInterface.ismutable(initp)
-            initp′ = similar(initp, floatT)
-            if eltype(initp′) != eltype(initp)
-                copyto!(initp′, initp)
-                initp = initp′
-                needs_remake = true
-            end
-        else
-            initp′ = similar_type(initp, floatT)(initp)
-            if eltype(initp′) != eltype(initp)
-                initp = initp′
-                needs_remake = true
-            end
-        end
-    end
-    if needs_remake
-        initializeprob = remake(initializeprob; u0 = _u0, p = initp)
-    end
-
-    get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
-    else
-        nothing
-    end
-    meta = InitializationMetadata(
-        orig_op,
-        as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING),
-        Vector{Equation}(initialization_eqs),
-        use_scc, time_dependent_init,
-        ReconstructInitializeprob(
-            sys, initsys; u0_constructor,
-            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
-        ),
-        get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
-    )
-
-    if time_dependent_init
-        all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
-        if isempty(solved_unknowns)
-            initializeprobmap = nothing
-        else
-            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(CopyParamsByTemplate(initializeprob.f.sys, solved_unknowns; eval_expression, eval_module, kwargs...), floatT)
-            if iip
-                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
-            end
-        end
-    else
-        initializeprobmap = nothing
-    end
-
-    punknowns = [
-        p
-            for p in all_variable_symbols(initializeprob)
-            if is_parameter(sys, p)
-    ]
-    if initializeprobmap === nothing && isempty(punknowns)
-        initializeprobpmap = nothing
-    else
-        initializeprobpmap = construct_initializeprobpmap(
-            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
-        )
-    end
-
-    # we still want the `initialization_data` because it helps with `remake`
-    if initializeprobmap === nothing && initializeprobpmap === nothing
-        update_initializeprob! = nothing
-    else
-        update_initializeprob! = ModelingToolkitBase.update_initializeprob!
-    end
-
-    missingvars = Set{SymbolicT}()
-    temp_op = copy(op)
-    for (k, v) in op
-        v === COMMON_MISSING || continue
-        push!(missingvars, k)
-        delete!(temp_op, k)
-    end
-    binds = bindings(sys)
-    if time_dependent_init
-        for v in unknowns(sys)
-            has_possibly_indexed_key(parent(binds), v) && continue
-            val = get_possibly_indexed(op, v, COMMON_NOTHING)
-            if !SU.isconst(val) || val === COMMON_NOTHING
-                push!(missingvars, v)
-            end
-        end
-        if implicit_dae
-            for v in unknowns(sys)
-                v = Differential(get_iv(sys))(v)
-                ttv = default_toterm(v)
-                if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING &&
-                        get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
-                        # FIXME: Derivatives of algebraic variables aren't present
-                        (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
-                    push!(missingvars, ttv)
-                end
-            end
-        end
-    end
-    for v in get_all_discretes_fast(sys)
-        has_possibly_indexed_key(parent(binds), v) && continue
-        has_possibly_indexed_key(op, v) || push!(missingvars, v)
-    end
-    for (k, v) in binds
-        v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
-    end
-    for p in as_atomic_array_set(parameters(sys))
-        haskey(binds, p) && continue
-        haskey(op, p) || push!(missingvars, p)
-    end
-    missingvars = collect(missingvars)
-
-    for (i, v) in enumerate(unknowns(initsys))
-        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
-    end
-    add_observed!(initsys, temp_op)
-    left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
-    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
-    for p in missingvars
-        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
-    end
-
-    return (;
-        initialization_data = SciMLBase.OverrideInitData(
-            initializeprob, update_initializeprob!, initializeprobmap,
-            initializeprobpmap; metadata = meta, is_update_oop = Val(true)
-        ),
-    )
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Calculate the floating point type to use from the given `varmap` by looking at variables
 with a constant value.
 """
@@ -2016,17 +1827,22 @@ function SciMLProblemOptions(
 end
 
 """
-    $TYPEDSIGNATURES
+    $(TYPEDSIGNATURES)
 
-Equivalent to the keyword-argument-based `maybe_build_initialization_problem`, sourcing
-the overlapping keywords from `opts` instead of requiring the caller to name them all
-individually. `opts.check_initialization_units` and `opts.init_compiler_options` are
-forwarded as `check_units` and `compiler_options` respectively, matching the naming used
-by `InitializationProblem`/`get_initialization_problem_type`.
+Build and return the initialization problem and associated data as a `NamedTuple` to be passed
+to the `SciMLFunction` constructor. Requires the system `sys`, whether the resulting
+`SciMLFunction` is in-place (`iip`), the operating point `op`, initial time `t`, and
+user-provided `guesses`. `opts.implicit_dae` denotes whether the `SciMLProblem` being
+constructed is in implicit DAE form (`DAEProblem`). `opts.check_initialization_units` and
+`opts.init_compiler_options` are forwarded to `InitializationProblem` as `check_units` and
+`compiler_options` respectively. All other keyword arguments are forwarded as-is to
+`InitializationProblem`.
 """
 function maybe_build_initialization_problem(
         sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
-        opts::SciMLProblemOptions; kwargs...
+        opts::SciMLProblemOptions;
+        # Intercept `expression` because we don't support it here yet
+        expression = Val{false}, kwargs...
     )
     (;
         floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
@@ -2037,16 +1853,178 @@ function maybe_build_initialization_problem(
         is_steadystateprob, init_compiler_options,
     ) = opts
     (; eval_expression, eval_module) = opts.fn_opts.codegen
-    return maybe_build_initialization_problem(
-        sys, iip, op, t, guesses; initsys_mtkcompile_kwargs,
-        warn_initialize_determined, initialization_eqs,
-        eval_expression, eval_module, fully_determined,
-        warn_cyclic_dependency, check_units = check_initialization_units,
-        circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-        algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-        time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
-        compiler_options = init_compiler_options,
-        kwargs...
+
+    guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
+
+    if t === nothing && is_time_dependent(sys)
+        t = zero(floatT)
+    end
+
+    orig_op = copy(op)
+    initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
+        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
+        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
+        missing_guess_value, is_steadystateprob, warn_initialize_determined,
+        fully_determined, check_units = check_initialization_units, warn_cyclic_dependency,
+        circular_dependency_max_cycle_length, circular_dependency_max_cycles,
+        initsys_mtkcompile_kwargs, algebraic_only, allow_incomplete,
+        compiler_options = init_compiler_options, kwargs...
+    )
+    initsys = initializeprob.f.sys::System
+    needs_remake = false
+    _u0 = state_values(initializeprob)
+    if _u0 !== nothing
+        if ArrayInterface.ismutable(_u0)
+            __u0 = floatT.(_u0)
+        else
+            __u0 = similar_type(_u0, floatT)(_u0)
+        end
+        if eltype(__u0) != eltype(_u0)
+            _u0 = __u0
+            needs_remake = true
+        end
+    end
+    initp = parameter_values(initializeprob)
+    if is_split(sys)
+        buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), initp)
+        _initp = repack(floatT.(buffer))
+        if !(initp.initials isa StaticVector{0})
+            buffer, repack, _ = SciMLStructures.canonicalize(SciMLStructures.Initials(), _initp)
+            _initp = repack(floatT.(buffer))
+        end
+        if eltype(_initp.tunable) != eltype(initp.tunable) || eltype(_initp.initials) != eltype(initp.initials)
+            initp = _initp
+            needs_remake = true
+        end
+    elseif initp isa AbstractArray
+        if ArrayInterface.ismutable(initp)
+            initp′ = similar(initp, floatT)
+            if eltype(initp′) != eltype(initp)
+                copyto!(initp′, initp)
+                initp = initp′
+                needs_remake = true
+            end
+        else
+            initp′ = similar_type(initp, floatT)(initp)
+            if eltype(initp′) != eltype(initp)
+                initp = initp′
+                needs_remake = true
+            end
+        end
+    end
+    if needs_remake
+        initializeprob = remake(initializeprob; u0 = _u0, p = initp)
+    end
+
+    get_initial_unknowns = if time_dependent_init
+        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
+    else
+        nothing
+    end
+    meta = InitializationMetadata(
+        orig_op,
+        as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING),
+        Vector{Equation}(initialization_eqs),
+        use_scc, time_dependent_init,
+        ReconstructInitializeprob(
+            sys, initsys; u0_constructor,
+            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
+        ),
+        get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
+    )
+
+    if time_dependent_init
+        all_init_syms = Set(all_symbols(initializeprob))
+        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        if isempty(solved_unknowns)
+            initializeprobmap = nothing
+        else
+            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(CopyParamsByTemplate(initializeprob.f.sys, solved_unknowns; eval_expression, eval_module, kwargs...), floatT)
+            if iip
+                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
+            end
+        end
+    else
+        initializeprobmap = nothing
+    end
+
+    punknowns = [
+        p
+            for p in all_variable_symbols(initializeprob)
+            if is_parameter(sys, p)
+    ]
+    if initializeprobmap === nothing && isempty(punknowns)
+        initializeprobpmap = nothing
+    else
+        initializeprobpmap = construct_initializeprobpmap(
+            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
+        )
+    end
+
+    # we still want the `initialization_data` because it helps with `remake`
+    if initializeprobmap === nothing && initializeprobpmap === nothing
+        update_initializeprob! = nothing
+    else
+        update_initializeprob! = ModelingToolkitBase.update_initializeprob!
+    end
+
+    missingvars = Set{SymbolicT}()
+    temp_op = copy(op)
+    for (k, v) in op
+        v === COMMON_MISSING || continue
+        push!(missingvars, k)
+        delete!(temp_op, k)
+    end
+    binds = bindings(sys)
+    if time_dependent_init
+        for v in unknowns(sys)
+            has_possibly_indexed_key(parent(binds), v) && continue
+            val = get_possibly_indexed(op, v, COMMON_NOTHING)
+            if !SU.isconst(val) || val === COMMON_NOTHING
+                push!(missingvars, v)
+            end
+        end
+        if implicit_dae
+            for v in unknowns(sys)
+                v = Differential(get_iv(sys))(v)
+                ttv = default_toterm(v)
+                if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING &&
+                        get_possibly_indexed(op, ttv, COMMON_NOTHING) === COMMON_NOTHING &&
+                        # FIXME: Derivatives of algebraic variables aren't present
+                        (is_variable(initsys, ttv) || has_observed_with_lhs(initsys, ttv))
+                    push!(missingvars, ttv)
+                end
+            end
+        end
+    end
+    for v in get_all_discretes_fast(sys)
+        has_possibly_indexed_key(parent(binds), v) && continue
+        has_possibly_indexed_key(op, v) || push!(missingvars, v)
+    end
+    for (k, v) in binds
+        v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
+    end
+    for p in as_atomic_array_set(parameters(sys))
+        haskey(binds, p) && continue
+        haskey(op, p) || push!(missingvars, p)
+    end
+    missingvars = collect(missingvars)
+
+    for (i, v) in enumerate(unknowns(initsys))
+        write_possibly_indexed_array!(temp_op, v, SConst(_u0[i]), COMMON_NOTHING)
+    end
+    add_observed!(initsys, temp_op)
+    left_merge!(temp_op, ModelingToolkitBase.guesses(sys))
+    subber = Symbolics.FixpointSubstituter{true}(AADSubWrapper(temp_op))
+    for p in missingvars
+        write_possibly_indexed_array!(op, p, subber(p), COMMON_NOTHING)
+    end
+
+    return (;
+        initialization_data = SciMLBase.OverrideInitData(
+            initializeprob, update_initializeprob!, initializeprobmap,
+            initializeprobpmap; metadata = meta, is_update_oop = Val(true)
+        ),
     )
 end
 
