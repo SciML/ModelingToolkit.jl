@@ -113,6 +113,24 @@ for T in [
             """
             return $T{iip, spec}(sys, merge($uCanonical, $pCanonical), tspan; kw...)
         end
+        if T === :ODEProblem
+            @eval function SciMLBase.ODEProblem{
+                    iip, SciMLBase.FunctionWrapperSpecialize,
+                }(
+                    sys::System, u0::$uType, tspan, p::$pType; kw...
+                ) where {iip}
+                ctor = string(ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize})
+                uCan = string($(QuoteNode(uCanonical)))
+                pCan = string($(QuoteNode(pCanonical)))
+                @warn """
+                `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
+                `$ctor(sys, merge($uCan, $pCan), tspan)` instead.
+                """
+                return ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(
+                    sys, merge($uCanonical, $pCanonical), tspan; kw...
+                )
+            end
+        end
     end
 
     for pType in [SciMLBase.NullParameters, Nothing], uType in [Any, Nothing]
@@ -147,6 +165,23 @@ for T in [
             `$ctor(sys, u0, tspan)` instead.
             """
             return $T{iip, spec}(sys, u0, tspan; kw...)
+        end
+        if T === :ODEProblem
+            @eval function SciMLBase.ODEProblem{
+                    iip, SciMLBase.FunctionWrapperSpecialize,
+                }(
+                    sys::System, u0::$uType, tspan, p::$pType; kw...
+                ) where {iip}
+                ctor = string(ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize})
+                pT = string($(QuoteNode(pType)))
+                @warn """
+                `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
+                `$ctor(sys, u0, tspan)` instead.
+                """
+                return ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(
+                    sys, u0, tspan; kw...
+                )
+            end
         end
     end
 end

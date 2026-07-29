@@ -28,6 +28,15 @@ nsys = toggle_namespacing(sys, false)
     Equation[], t; systems = [nsys], name = :a
 )
 
+@testset "Vector namespaces" begin
+    outer = System(Equation[], t; name = :outer)
+    names = [outer, sys]
+    for value in (:value, x, D(x) ~ x, [ModelingToolkitBase.unwrap(x)])
+        expected = renamespace(outer, renamespace(sys, value))
+        @test isequal(renamespace(names, value), expected)
+    end
+end
+
 @testset "Variables of variables" begin
     @variables x(t) y(x)
     @named inner = System([D(x) ~ x, y ~ 2x + 1], t)

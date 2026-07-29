@@ -1270,16 +1270,31 @@ end
 
 const AllScopes = Union{LocalScope, ParentScope, GlobalScope}
 
-renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
+_renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
 
-renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
+renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
+renamespace(names::AbstractVector, eq::Equation) = _renamespace(names, eq)
+
+renamespace(names::AbstractVector, x) = _renamespace(names, x)
 
 renamespace(sys, tgt::AbstractSystem) = rename(tgt, renamespace(sys, nameof(tgt)))
+renamespace(names::AbstractVector, tgt::AbstractSystem) = _renamespace(names, tgt)
 renamespace(sys, tgt::Symbol) = Symbol(getname(sys), NAMESPACE_SEPARATOR_SYMBOL, tgt)
+renamespace(names::AbstractVector, tgt::Symbol) = _renamespace(names, tgt)
 renamespace(sys, x::Num) = Num(renamespace(sys, unwrap(x)))
+renamespace(names::AbstractVector, x::Num) = _renamespace(names, x)
 renamespace(sys, x::Arr{T, N}) where {T, N} = Arr{T, N}(renamespace(sys, unwrap(x)))
+function renamespace(names::AbstractVector, x::Arr{T, N}) where {T, N}
+    return _renamespace(names, x)
+end
 renamespace(sys, x::CallAndWrap{T}) where {T} = CallAndWrap{T}(renamespace(sys, unwrap(x)))
+function renamespace(names::AbstractVector, x::CallAndWrap{T}) where {T}
+    return _renamespace(names, x)
+end
 renamespace(sys, x::AbstractArray{SymbolicT}) = map(Base.Fix1(renamespace, sys), x)
+function renamespace(names::AbstractVector, x::AbstractArray{SymbolicT})
+    return _renamespace(names, x)
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -1326,6 +1341,8 @@ function renamespace(sys, x::SymbolicT)
         end
     end
 end
+
+renamespace(names::AbstractVector, x::SymbolicT) = _renamespace(names, x)
 
 namespace_variables(sys::AbstractSystem) = unknowns(sys, unknowns(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
