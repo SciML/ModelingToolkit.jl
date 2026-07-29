@@ -19,7 +19,7 @@ function MTKTearing.input_timedomain(::SampleTime, arg = nothing)
     return ModelingToolkit.MTKTearing.InputTimeDomainElT[]
 end
 function MTKTearing.output_timedomain(::SampleTime, arg = nothing)
-    ModelingToolkit.MTKTearing.InferredDiscrete(1)
+    return ModelingToolkit.MTKTearing.InferredDiscrete(1)
 end
 
 function MTKTearing.output_timedomain(::Hold, _::MTKTearing.IOTimeDomainArgsT = nothing)
