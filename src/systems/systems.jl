@@ -31,7 +31,7 @@ function MTKBase.__mtkcompile(
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     sys = MTKBase.discover_maybe_zeros(sys)
-    state = TearingState(sys, source_info; sort_eqs)
+    state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
@@ -86,8 +86,9 @@ function MTKBase.__mtkcompile(
                 if !iszero(new_idxs[i]) &&
                 invview(var_to_diff)[i] === nothing
         ]
+        # Analytically eliminating `D(x) = 0` causes problems for SDEs
         ode_sys = mtkcompile(
-            sys; inputs, outputs, disturbance_inputs, kwargs...
+            sys; inputs, outputs, disturbance_inputs, eliminate_mm_zeros = false, kwargs...
         )
         eqs = equations(ode_sys)
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
@@ -131,6 +132,17 @@ function MTKBase.__mtkcompile(
             gui_metadata = get_gui_metadata(sys),
             tstops = symbolic_tstops(sys)
         )
+        diffcache_params = SU.getmetadata(
+            ode_sys, DiffCacheParams, Dict{SymbolicT, Int}()
+        )::Dict{SymbolicT, Int}
+        ssys = SU.setmetadata(ssys, DiffCacheParams, copy(diffcache_params))
+        # Reuse `LinearExpander` cache
+        linear_expansion_cache = check_mutable_cache(
+            ode_sys, LinearExpansionCache, LinearExpansionCacheT, nothing
+        )
+        if linear_expansion_cache !== nothing
+            store_to_mutable_cache!(ssys, LinearExpansionCache, linear_expansion_cache)
+        end
         return ssys
     end
 end

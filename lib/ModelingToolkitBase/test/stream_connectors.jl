@@ -1,8 +1,10 @@
 using Test
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using Symbolics
 using OrdinaryDiffEq
 using SciMLBase
+import SymbolicUtils as SU
 
 @connector function TwoPhaseFluidPort(; name, P = 0.0, m_flow = 0.0, h_outflow = 0.0)
     pars = @parameters begin
@@ -715,4 +717,10 @@ end
         sol = solve(prob, Tsit5())
         @test SciMLBase.successful_retcode(sol)
     end
+end
+
+@testset "`instream_rt` can go through `scalarize`" begin
+    @variables x(t) y(t) a(t) b(t)
+    term = Symbolics.STerm(ModelingToolkitBase.instream_rt, [Val(1), Val(1), x, y, a, b]; type = Real, shape = UnitRange{Int}[])
+    @test isequal(term, SU.scalarize(term))
 end

@@ -10,6 +10,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 import StateSelection
 import SymbolicUtils as SU
 using ForwardDiff
+import ModelingToolkitTearing as MTKTearing
 
 ###
 ### Nonlinear system
@@ -239,11 +240,12 @@ sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
 @testset "Inline linear SCCs" begin
+    reassemble_alg0 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
     reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
     reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 5)
     @variables x(t)[1:3] y(t)[1:3]
     @parameters p[1:3, 1:3]
-    @mtkcompile sys1 = System([D(x) ~ x, p * y ~ x], t)
+    @mtkcompile sys1 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg0
     @mtkcompile sys2 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg1
     @mtkcompile sys3 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg2
 
@@ -253,13 +255,13 @@ sol = solve(prob_complex, Tsit5())
 
     idx = findfirst(observed(sys2)) do eq
         arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
-        isarr && iscall(arr) && operation(arr) === (\)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
     end
     @test idx !== nothing
     # This one is analytically solved
     idx = findfirst(observed(sys3)) do eq
         arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
-        isarr && iscall(arr) && operation(arr) === (\)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
     end
     @test idx === nothing
 

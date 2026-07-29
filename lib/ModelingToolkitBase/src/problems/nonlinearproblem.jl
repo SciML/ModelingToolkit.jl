@@ -1,25 +1,43 @@
 @fallback_iip_specialize function SciMLBase.NonlinearFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, jac = false,
+        sys::System; u0 = nothing, p = nothing, t = nothing, jac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
         checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
+        simplify = false, initialization_data = nothing,
         resid_prototype = nothing, check_compatibility = true, expression = Val{false},
+        optimize = nothing, compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     ) where {iip, spec}
-    check_complete(sys, NonlinearFunction)
-    check_compatibility && check_compatible_system(NonlinearFunction, sys)
-
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, sparse, sparsity, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return NonlinearFunction{iip, spec}(sys, opts; resid_prototype)
+end
+
+"""
+    SciMLBase.NonlinearFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `NonlinearFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.NonlinearFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        resid_prototype = nothing,
+    ) where {iip, spec, E}
+    check_complete(sys, NonlinearFunction)
+    opts.check_compatibility && check_compatible_system(NonlinearFunction, sys)
+
+    (; u0, p, jac, sparse, analytic, simplify, initialization_data) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
@@ -27,19 +45,12 @@
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
-            checkbounds, kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
     if sparse
         jac_prototype = similar(calculate_jacobian(sys; sparse), eltype(u0))
@@ -58,7 +69,7 @@
     )
     args = (; f)
 
-    return maybe_codegen_scimlfn(expression, NonlinearFunction{iip, spec}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, NonlinearFunction{iip, spec}, args; kwargs...)
 end
 
 """
@@ -130,6 +141,31 @@ end
     return maybe_codegen_scimlproblem(
         expression, NonlinearProblem{_iip}, args; lb, ub, kwargs...
     )
+end
+
+"""
+    get_nonlinear_problem_type(sys::System)
+
+The concrete `AbstractNonlinearProblem` type that `AbstractNonlinearProblem(sys, op)`
+builds for `sys`: [`SciMLBase.HomotopyProblem`](@ref) when `sys` contains Modelica
+`homotopy(actual, simplified)` nodes, otherwise [`SciMLBase.NonlinearProblem`](@ref).
+"""
+function get_nonlinear_problem_type(sys::System)
+    return has_any_homotopy(sys) ? SciMLBase.HomotopyProblem : SciMLBase.NonlinearProblem
+end
+
+"""
+    SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
+
+Build a nonlinear problem from `sys`, automatically selecting the concrete type via
+`get_nonlinear_problem_type`: a [`SciMLBase.HomotopyProblem`](@ref) when `sys`
+contains Modelica `homotopy(actual, simplified)` nodes (so the equations are solved by
+continuation from the `simplified` form), otherwise a plain
+[`SciMLBase.NonlinearProblem`](@ref). Keyword arguments are forwarded to the selected
+constructor; `λspan` only applies to the `HomotopyProblem` branch.
+"""
+function SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
+    return get_nonlinear_problem_type(sys)(sys, op; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(

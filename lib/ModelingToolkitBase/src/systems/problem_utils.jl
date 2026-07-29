@@ -300,8 +300,8 @@ numerical problem from a `System`.
 Moshi.Data.@data MissingGuessValue begin
     Constant(Number)
     Random(AbstractRNG)
-    HashedRandom
-    Error
+    HashedRandom()
+    Error()
 end
 
 # To be overloaded downstream by MTK
@@ -537,7 +537,10 @@ function evaluate_varmap!(
         ir::IRStructure{SymReal}, varmap::AtomicArrayDictSubstitutionWrapper, vars;
         limit = 100, allow_symbolic = false
     )
-    subber = Symbolics.FixpointSubstituter(SU.IRSubstituter{true}(ir, varmap); maxiters = limit, warn_maxiters = !allow_symbolic)
+    subber = Symbolics.FixpointSubstituter(
+        SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
+        maxiters = limit, warn_maxiters = !allow_symbolic
+    )
     for k in vars
         v = get(varmap, k, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
@@ -1767,9 +1770,6 @@ function maybe_build_initialization_problem(
     )
 end
 
-rm_union(::Type{Union{T, Nothing}}) where {T} = T
-rm_union(::Type{T}) where {T} = T
-
 """
     $(TYPEDSIGNATURES)
 
@@ -1783,8 +1783,7 @@ function float_type_from_varmap(varmap, floatT = Bool)
         is_array_of_symbolics(v) && continue
         v = unwrap_const(v)
         if v isa AbstractArray
-            # Remove union in case some elements of the array are `nothing`
-            floatT = promote_type(floatT, rm_union(eltype(unwrap_const(v))))
+            floatT = promote_type(floatT, typeintersect(eltype(v), Number))
         elseif v isa Number
             floatT = promote_type(floatT, typeof(unwrap_const(v)))
         end
@@ -2196,7 +2195,9 @@ function process_kwargs(
         end
 
         if !_skip_tstops
-            tstops = SymbolicTstops(sys; expression, eval_expression, eval_module)
+            tstops = SymbolicTstops(
+                sys, GeneratedFunctionOptions(; expression, eval_expression, eval_module)
+            )
             if tstops !== nothing
                 kwargs1 = merge(kwargs1, (; tstops))
             end
@@ -2227,10 +2228,9 @@ function (st::SymbolicTstops)(p, tspan)
     end
 end
 
-function SymbolicTstops(
-        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__
-    )
+function SymbolicTstops(sys::AbstractSystem, opts::GeneratedFunctionOptions)
+    expression = expression_val(opts)
+    (; eval_expression, eval_module) = opts
     tstops = symbolic_tstops(sys)
     isempty(tstops) && return nothing
     t0 = gensym(:t0)
@@ -2246,11 +2246,13 @@ function SymbolicTstops(
     tstops,
         _ = build_function_wrapper(
         sys, Symbolics.SConst(tstops),
-        rps...,
-        t0,
-        t1;
-        expression = Val{true},
-        p_start = 1, p_end = length(rps), add_observed = false, force_SA = true
+        [rps; Any[t0, t1]],
+        BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(rps),
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true}, force_SA = true
+            )
+        )
     )
     tstops = GeneratedFunctionWrapper{(1, 3, is_split(sys))}(
         expression, tstops, nothing; eval_expression, eval_module
@@ -2261,6 +2263,18 @@ function SymbolicTstops(
     else
         return SymbolicTstops(tstops)
     end
+end
+
+# Backward-compatibility keyword method. The positional `opts::GeneratedFunctionOptions`
+# method above is the primary; this wrapper preserves the historical keyword API. It must
+# be defined after `struct SymbolicTstops` so it registers as a method on that binding.
+function SymbolicTstops(
+        sys::AbstractSystem; expression = Val{false}, eval_expression = false,
+        eval_module = @__MODULE__
+    )
+    return SymbolicTstops(
+        sys, GeneratedFunctionOptions(; expression, eval_expression, eval_module)
+    )
 end
 
 """
@@ -2348,7 +2362,10 @@ macro fallback_iip_specialize(ex)
     call_kwargs = map(call_args[1].args) do arg
         Meta.isexpr(arg, :...) && return arg
         @assert Meta.isexpr(arg, :kw) "Expected keyword argument, got $(arg)"
-        return Expr(:kw, arg.args[1], arg.args[1])
+        # `arg.args[1]` is the kwarg's name, optionally type-annotated (`name` or
+        # `name::T`). Forwarding calls need the bare name either way.
+        name = Meta.isexpr(arg.args[1], :(::)) ? arg.args[1].args[1] : arg.args[1]
+        return Expr(:kw, name, name)
     end
     call_args[1] = Expr(:parameters, call_kwargs...)
 

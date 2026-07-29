@@ -248,7 +248,6 @@ function function_docstring(
     $EVAL_EXPR_MOD_KWARGS
     - `checkbounds`: Whether to enable bounds checking in the generated code.
     - `simplify`: Whether to `simplify` any symbolically computed jacobians/hessians/etc.
-    - `cse`: Whether to enable Common Subexpression Elimination (CSE) on the generated code.
       This typically improves performance of the generated code but reduces readability.
     - `sparse`: Whether to generate jacobian/hessian/etc. functions that return/operate on
       sparse matrices. Also controls whether the mass matrix is sparse, wherever applicable.
@@ -387,7 +386,6 @@ subtype indicating the level of specialization of the $func.
 $EVAL_EXPR_MOD_KWARGS
 - `checkbounds`: Whether to enable bounds checking in the generated code.
 - `simplify`: Whether to `simplify` any symbolically computed jacobians/hessians/etc.
-- `cse`: Whether to enable Common Subexpression Elimination (CSE) on the generated code.
   This typically improves performance of the generated code but reduces readability.
 - `fraction_cancel_fn`: The function to use to simplify fractions in the polynomial
   expression. A more powerful function can increase processing time but be able to

@@ -3,6 +3,18 @@
     sys; inputs = io[1], outputs = io[2], kwargs...
 )
 
+@doc """
+    structural_simplify(sys; kwargs...)
+
+Deprecated alias for [`mtkcompile`](@ref).
+"""
+structural_simplify
+
+"""
+    @mtkbuild sys = Constructor(args...; kwargs...)
+
+Deprecated alias for [`@mtkcompile`](@ref).
+"""
 macro mtkbuild(exprs...)
     return quote
         Base.depwarn("`@mtkbuild` is deprecated. Use `@mtkcompile` instead.", :mtkbuild)
@@ -17,6 +29,13 @@ end
 
 const ODESystem = IntermediateDeprecationSystem
 
+@doc """
+    ODESystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref).
+"""
+ODESystem
+
 function IntermediateDeprecationSystem(args...; kwargs...)
     Base.depwarn(
         "`ODESystem(args...; kwargs...)` is deprecated. Use `System(args...; kwargs...) instead`.",
@@ -29,6 +48,20 @@ end
 for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
     @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)
 end
+
+@doc """
+    DiscreteSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref).
+"""
+DiscreteSystem
+
+@doc """
+    ImplicitDiscreteSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref).
+"""
+ImplicitDiscreteSystem
 
 for T in [
         :ODEProblem, :DDEProblem, :SDEProblem, :SDDEProblem, :DAEProblem,
@@ -202,6 +235,11 @@ for T in [
     end
 end
 
+"""
+    @brownian xs...
+
+Deprecated alias for [`@brownians`](@ref).
+"""
 macro brownian(xs...)
     return quote
         Base.depwarn(

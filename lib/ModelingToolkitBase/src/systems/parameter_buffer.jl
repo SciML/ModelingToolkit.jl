@@ -108,7 +108,7 @@ function MTKParameters(
     # specified array values are never substituted into expressions (issue #4607).
     wrapped_op = AADSubWrapper(op)
     ir = get_irstructure(sys)
-    evaluate_varmap!(ir, wrapped_op, all_ps; limit = substitution_limit)
+    evaluate_varmap!(ir, wrapped_op, all_ps; limit = substitution_limit, allow_symbolic = true)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length
@@ -171,7 +171,11 @@ function MTKParameters(
 
     for sym in all_ps
         haskey(diffcache_params, sym) && continue
-        val = fixpoint_sub(sym, wrapped_op; maxiters = max(div(substitution_limit, 2), 2), fold = Val(true))
+        _sym = Moshi.Match.@match sym begin
+            BSImpl.Term(; f, args) && if f isa Pre end => args[1]
+            _ => sym
+        end
+        val = @something get(wrapped_op, sym, nothing) get(wrapped_op, _sym, sym)
         ctype = symtype(sym)
         if !SU.isconst(val) && isinitial(sym)
             # The value of an `Initial` parameter that cannot be fully evaluated
@@ -780,9 +784,9 @@ end
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
         indp, oldbuf::MTKParameters{T, I, D, C, N, H},
-        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex{P}}},
+        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex}},
         vals::Union{AbstractArray, Tuple}; validate = true
-    ) where {T, I, D, C, N, H, P}
+    ) where {T, I, D, C, N, H}
 
     # fallback to non-generated method if values aren't type-stable
     if vals <: AbstractArray && !isconcretetype(eltype(vals))
@@ -1008,10 +1012,8 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ::AbstractSystem, ps::MTKParameters, args::Pair{A, B}...
-    ) where {
-        A, B <: NestedGetIndex,
-    }
+        ::AbstractSystem, ps::MTKParameters, args::Pair{<:Any, <:NestedGetIndex}...
+    )
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
             copyto!(view(ps.discrete[j], Block(i)), val)

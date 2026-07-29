@@ -112,7 +112,7 @@ end
     M3 = change_independent_variable(M2, b, extraeqs)
 
     if @isdefined(ModelingToolkit)
-        M1 = mtkcompile(M1)
+        M1 = mtkcompile(M1; eliminate_mm_zeros = false)
         M2 = mtkcompile(M2; allow_symbolic = true)
         M3 = mtkcompile(M3; allow_symbolic = true)
         @test length(unknowns(M3)) == length(unknowns(M2)) == length(unknowns(M1)) - 1

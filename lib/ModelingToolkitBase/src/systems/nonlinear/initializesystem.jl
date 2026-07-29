@@ -23,8 +23,6 @@ only solve for solvable parameters of the system.
   initialization.
 - `algebraic_only`: If `false`, does not use initialization equations (provided via the
   keyword or part of the system) to construct initialization.
-- `check_defguess`: Whether to error when a variable does not have a default or guess
-  despite ModelingToolkitBase expecting it to.
 - `name`: The name of the initialization system.
 
 All other keyword arguments are forwarded to the [`System`](@ref) constructor.
@@ -52,7 +50,7 @@ function generate_initializesystem_timevarying(
         default_dd_guess = Bool(0),
         fast_path = false,
         algebraic_only = false,
-        check_units = true, check_defguess = false,
+        check_units = true,
         name = nameof(sys), kwargs...
     )
     _sys = reverse_transformations_for_initialization(sys)
@@ -243,7 +241,7 @@ function generate_initializesystem_timeindependent(
         initialization_eqs = [],
         guesses = Dict(),
         algebraic_only = false,
-        check_units = true, check_defguess = false,
+        check_units = true,
         fast_path = false,
         name = nameof(sys), kwargs...
     )

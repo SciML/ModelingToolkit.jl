@@ -7,6 +7,7 @@ using SymbolicIndexingInterface
 using Test
 using ControlSystemsMTK: tf, ss, get_named_sensitivity, get_named_comp_sensitivity
 using ModelingToolkit: t_nounits as t, D_nounits as D
+import ModelingToolkitTearing as MTKTearing
 # ==============================================================================
 ## Mixing tank
 # This tests a common workflow in control engineering, the use of an inverse-based
@@ -152,13 +153,14 @@ sol = solve(prob, Rodas5P())
 
 # we need to provide `op` so the initialization system knows what to hold constant
 # the values don't matter
-Sf, simplified_sys = get_sensitivity_function(model, :y; op); # This should work without providing an operating opint containing a dummy derivative
+reassemble_alg = MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
+Sf, simplified_sys = get_sensitivity_function(model, :y; op, reassemble_alg); # This should work without providing an operating opint containing a dummy derivative
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
-matrices2, _ = get_sensitivity(model, :y; op); # Test that we get the same result when calling the higher-level API
+matrices2, _ = get_sensitivity(model, :y; op, reassemble_alg); # Test that we get the same result when calling the higher-level API
 @test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
 nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result when calling an even higher-level API
 @test matrices2.A ≈ nsys.A
@@ -166,14 +168,14 @@ nsys = get_named_sensitivity(model, :y; op) # Test that we get the same result w
 # Test the same thing for comp sensitivities
 
 # This should work without providing an operating opint containing a dummy derivative
-Sf, simplified_sys = get_comp_sensitivity_function(model, :y; op);
+Sf, simplified_sys = get_comp_sensitivity_function(model, :y; op, reassemble_alg);
 x = state_values(Sf)
 p = parameter_values(Sf)
 # If this somehow passes, mention it on
 # https://github.com/SciML/ModelingToolkit.jl/issues/2786
 matrices1 = Sf(x, p, 0)
 # Test that we get the same result when calling the higher-level API
-matrices2, _ = get_comp_sensitivity(model, :y; op)
+matrices2, _ = get_comp_sensitivity(model, :y; op, reassemble_alg)
 @test matrices1.f_x ≈ matrices2.A[1:6, 1:6]
 # Test that we get the same result when calling an even higher-level API
 nsys = get_named_comp_sensitivity(model, :y; op)

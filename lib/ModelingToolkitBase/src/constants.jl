@@ -23,7 +23,8 @@ $(SIGNATURES)
 
 Define one or more constants.
 
-See also [`@independent_variables`](@ref), [`@parameters`](@ref) and [`@variables`](@ref).
+See also [`@independent_variables`](@ref), [`@parameters`](@ref) and
+[`@variables`](https://docs.sciml.ai/Symbolics/stable/manual/variables/#Symbolics.@variables).
 """
 macro constants(xs...)
     return Symbolics.parse_vars(

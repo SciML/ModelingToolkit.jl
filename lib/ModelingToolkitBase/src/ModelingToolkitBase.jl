@@ -62,7 +62,7 @@ using Compat
 using AbstractTrees
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
     PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-    NoInit
+    NoInit, AbstractNonlinearProblem
 import Moshi
 using Moshi.Data: @data
 using Reexport
@@ -93,7 +93,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 
 import DiffEqBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, bound_parameters,
-    continuous_events, discrete_events
+    continuous_events, discrete_events, analytically_integrated
 @reexport using Symbolics
 @reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -154,6 +154,11 @@ abstract type AbstractSystem end
 # See `deprecations.jl`.
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
+"""
+    independent_variable(x)
+
+Return the independent variable associated with `x`.
+"""
 function independent_variable end
 
 # this has to be included early to deal with dependency issues
@@ -189,6 +194,11 @@ include("utils.jl")
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
 include("systems/abstractsystem.jl")
+# codegen_utils.jl defines the codegen option structs (GeneratedFunctionOptions,
+# BuildFunctionWrapperOptions, CompilerOptions). It must precede any file whose method
+# *signatures* annotate those types (e.g. the `opts::GeneratedFunctionOptions` positional
+# in callbacks.jl), since signature type annotations are resolved at definition time.
+include("systems/codegen_utils.jl")
 include("systems/connectiongraph.jl")
 include("systems/connectors.jl")
 include("systems/imperative_affect.jl")
@@ -196,10 +206,13 @@ include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/analysis_points.jl")
 include("systems/ir_info.jl")
-include("systems/codegen_utils.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
+include("systems/codegen_compat.jl")
 include("systems/problem_utils.jl")
+# Operator + lowering layer; must load before the problem constructors that
+# consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
+include("systems/homotopy_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -208,6 +221,7 @@ include("problems/daeproblem.jl")
 include("problems/sdeproblem.jl")
 include("problems/sddeproblem.jl")
 include("problems/nonlinearproblem.jl")
+include("problems/homotopyproblem.jl")
 include("problems/intervalnonlinearproblem.jl")
 include("problems/implicitdiscreteproblem.jl")
 include("problems/discreteproblem.jl")
@@ -246,6 +260,34 @@ const t_nounits = let
 end
 const D_nounits = Differential(t_nounits)
 
+@doc """
+    t
+
+Default independent variable with units.
+"""
+t
+
+@doc """
+    D
+
+Default differential operator with respect to [`t`](@ref).
+"""
+D
+
+@doc """
+    t_nounits
+
+Default independent variable without units.
+"""
+t_nounits
+
+@doc """
+    D_nounits
+
+Default differential operator with respect to [`t_nounits`](@ref).
+"""
+D_nounits
+
 export CompilerOptions
 export ODEFunction, convert_system_indepvar,
     System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
@@ -255,6 +297,10 @@ export ImplicitDiscreteProblem, ImplicitDiscreteFunction
 export ODEProblem, SDEProblem
 export NonlinearFunction
 export NonlinearProblem
+# `AbstractNonlinearProblem(sys, op)` is the automatic constructor that selects a
+# `HomotopyProblem` when `sys` contains `homotopy(...)` nodes (see
+# `problems/homotopyproblem.jl`); re-exported so it is reachable unqualified.
+export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
 export OptimizationProblem, constraints
@@ -282,6 +328,7 @@ export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, equations, observed, full_equations, jumps, cost,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
+export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
 export solve
@@ -308,6 +355,8 @@ export generate_initializesystem, Initial, isinitial, InitializationProblem
 
 export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
+
+export homotopy
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes
@@ -360,6 +409,8 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
+@public tobrownian, toparam
+@public ProblemTypeCtx
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

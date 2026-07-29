@@ -52,6 +52,8 @@ ModelingToolkit.has_unknowns
 ModelingToolkit.get_unknowns
 unknowns
 ModelingToolkit.unknowns_toplevel
+irreducibles
+maybe_zeros
 ModelingToolkit.has_ps
 ModelingToolkit.get_ps
 parameters

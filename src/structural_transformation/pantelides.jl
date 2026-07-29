@@ -4,6 +4,11 @@
 
 const NOTHING_EQ = nothing ~ nothing
 
+"""
+    $TYPEDSIGNATURES
+
+Reassemble a system from Pantelides structural state and a variable-equation matching.
+"""
 function pantelides_reassemble(state::TearingState, var_eq_matching)
     fullvars = state.fullvars
     @unpack var_to_diff, eq_to_diff = state.structure

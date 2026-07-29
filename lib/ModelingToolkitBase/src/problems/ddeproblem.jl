@@ -1,23 +1,40 @@
 @fallback_iip_specialize function SciMLBase.DDEFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, eval_expression = false,
+        sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false}, checkbounds = false,
-        initialization_data = nothing, cse = true, check_compatibility = true,
-        sparse = false, simplify = false, analytic = nothing, kwargs...
+        initialization_data = nothing, check_compatibility = true,
+        sparse = false, simplify = false, analytic = nothing,
+        optimize = nothing, compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
-    check_complete(sys, DDEFunction)
-    check_compatibility && check_compatible_system(DDEFunction, sys)
-
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    opts = SciMLFunctionOptions(;
+        u0, p, t, sparse, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return DDEFunction{iip, spec}(sys, opts)
+end
+
+"""
+    SciMLBase.DDEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
+
+Public entry point that builds a `DDEFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.DDEFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E}
+    ) where {iip, spec, E}
+    check_complete(sys, DDEFunction)
+    opts.check_compatibility && check_compatible_system(DDEFunction, sys)
+
+    (; u0, p, t, sparse, analytic, initialization_data) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on DDEFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p, $t)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
@@ -27,9 +44,7 @@
     M = calculate_massmatrix(sys)
     _M = concrete_massmatrix(M; sparse, u0)
 
-    observedfun = ObservedFunctionCache(
-        sys; expression, eval_expression, eval_module, checkbounds, cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     kwargs = (;
         sys = sys,
@@ -40,12 +55,12 @@
     )
     args = (; f)
 
-    return maybe_codegen_scimlfn(expression, DDEFunction{iip, spec}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, DDEFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.DDEProblem{iip, spec}(
         sys::System, op, tspan;
-        callback = nothing, check_length = true, cse = true, checkbounds = false,
+        callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, expression = Val{false}, kwargs...
     ) where {iip, spec}
@@ -56,14 +71,17 @@ end
     f, u0,
         p = process_SciMLProblem(
         DDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, cse, checkbounds,
+        t = tspan !== nothing ? tspan[1] : tspan, check_length, checkbounds,
         eval_expression, eval_module, check_compatibility, symbolic_u0 = true,
         expression, u0_constructor, kwargs...
     )
 
     h = generate_history(
-        sys, u0; expression, wrap_gfw = Val{true}, cse, eval_expression, eval_module,
-        checkbounds
+        sys, u0,
+        GeneratedFunctionOptions(;
+            expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
+        )
     )
 
     if expression == Val{true}

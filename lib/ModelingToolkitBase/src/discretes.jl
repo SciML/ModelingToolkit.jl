@@ -19,7 +19,9 @@ $(SIGNATURES)
 Define one or more discrete variables, for use in events of continuous systems. All
 symbolics declare with this macro must be dependent variables.
 
-See also [`@independent_variables`](@ref), [`@variables`](@ref) and [`@constants`](@ref).
+See also [`@independent_variables`](@ref),
+[`@variables`](https://docs.sciml.ai/Symbolics/stable/manual/variables/#Symbolics.@variables)
+and [`@constants`](@ref).
 """
 macro discretes(xs...)
     return Symbolics.parse_vars(

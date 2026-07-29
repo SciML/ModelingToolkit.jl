@@ -617,6 +617,7 @@ end
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
+        @test SciMLBase.successful_retcode(sol)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
         @test sol(40.0)[1] == 0
@@ -963,9 +964,9 @@ if @isdefined(ModelingToolkit)
             ]
 
             discrete_events = [
-                [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+                [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0, binary_valve_2.S ~ 0.0]
                 [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.Δp ~ 1.0]
-                [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+                [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.S ~ Pre(binary_valve_2.S)]
             ]
 
             return System(equations, t, vars, pars; name, systems, discrete_events)
@@ -981,7 +982,8 @@ if @isdefined(ModelingToolkit)
         # constant after that point anyway. Just make sure it hits the last event and
         # had the correct `u`.
         @test sol.t[end] >= 120.0
-        @test sol[[sys.binary_valve_1.S, sys.binary_valve_2.Δp]][end] == [0.0, 0.0]
+        @test sol[sys.binary_valve_1.S][end] == 0.0
+        @test sol[sys.binary_valve_2.S][end] == 0.0
     end
 end
 

@@ -5,11 +5,14 @@ struct InitializationProblem{iip, specialization} end
     InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
 
-Generate a `LinearProblem`, `NonlinearProblem`, `SCCNonlinearProblem` or
-`NonlinearLeastSquaresProblem` to represent a consistent initialization of `sys` given the
-initial time `t` and operating point `op`. The initial time can be `nothing` for
-time-independent systems. A `LinearProblem` is used when the initialization system is
-linear (affine).
+Generate a `LinearProblem`, `NonlinearProblem`, `SCCNonlinearProblem`,
+`NonlinearLeastSquaresProblem` or `SciMLBase.HomotopyProblem` to represent a consistent
+initialization of `sys` given the initial time `t` and operating point `op`. The initial
+time can be `nothing` for time-independent systems. A `LinearProblem` is used when the
+initialization system is linear (affine). A `SciMLBase.HomotopyProblem` is used when the
+(square) initialization system contains Modelica `homotopy(actual, simplified)` nodes, so
+the initialization is solved by continuation from the `simplified` form (see
+[`homotopy`](@ref)).
 
 # Keyword arguments
 
@@ -24,7 +27,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         t, op = Dict();
         fast_path = false,
         guesses = [],
-        check_length = true,
+        # `check_length` defaults to `nothing`, meaning "no opinion — let the underlying
+        # problem constructor apply its own default". It is only forwarded below when the
+        # caller explicitly sets it. This matters because the initialization problem types
+        # have different defaults (`NonlinearProblem` uses `true` for square systems,
+        # `NonlinearLeastSquaresProblem` uses `false` for non-square); forwarding a single
+        # value unconditionally would override and break one of those cases.
+        check_length = nothing,
         warn_initialize_determined = true,
         initialization_eqs = [],
         fully_determined = nothing,
@@ -144,7 +153,13 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         sys, isys; warn_initialize_determined,
         kwargs...
     )
-    TProb{_iip}(isys, op; kwargs..., build_initializeprob = false, is_initializeprob = true)
+    # Only forward `check_length` when the caller explicitly set it; otherwise let the
+    # underlying problem type apply its own default (see the keyword's definition above).
+    check_length_kw = check_length === nothing ? (;) : (; check_length)
+    TProb{_iip}(
+        isys, op; kwargs..., check_length_kw...,
+        build_initializeprob = false, is_initializeprob = true
+    )
 end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
@@ -176,8 +191,12 @@ end
 """
     $TYPEDSIGNATURES
 
-Get the type of the initialization problem (Nonlinear problem) to use, given the system
-`sys`, initialization system `isys` and arbitrary keyword arguments.
+Get the type of the initialization problem to use, given the system `sys`, initialization
+system `isys` and arbitrary keyword arguments. Returns `LinearInitializationProblem` for an
+affine init system, `NonlinearLeastSquaresProblem` for a non-square one, and — for a square
+one — the type selected by `get_nonlinear_problem_type(isys)`: `SciMLBase.HomotopyProblem`
+when `isys` contains Modelica `homotopy(actual, simplified)` nodes, otherwise
+`NonlinearProblem`.
 """
 function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
@@ -197,7 +216,15 @@ function get_initialization_problem_type(
     return if isys isa System && nunknown > 0 && nunknown <= neqs && calculate_A_b(isys; throw = false) !== nothing
         LinearInitializationProblem
     elseif neqs == nunknown
-        NonlinearProblem
+        # Square nonlinear init system: select the concrete problem type with the same
+        # dispatch as `AbstractNonlinearProblem(isys, op)`. When the init system carries
+        # Modelica `homotopy(actual, simplified)` nodes that depend on the unknowns this
+        # returns `SciMLBase.HomotopyProblem` (solved by continuation from the `simplified`
+        # form), otherwise `NonlinearProblem`. (A `homotopy` node whose arguments are
+        # constant in the unknowns collapses to an affine term and is correctly caught by
+        # the `LinearInitializationProblem` branch above instead — there is nothing to
+        # continue.)
+        get_nonlinear_problem_type(isys)
     else
         NonlinearLeastSquaresProblem
     end

@@ -291,6 +291,7 @@ still is the problem using the `connected` system above):
 
 ```@example ode2
 using BenchmarkTools
+using OrdinaryDiffEqRosenbrock: Rodas4
 @btime solve(prob, Rodas4());
 nothing # hide
 ```

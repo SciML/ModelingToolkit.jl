@@ -63,6 +63,7 @@ distribute_shift
 SystemStructure
 TearingState
 TransformationState
+mtkcompile!
 isdiffvar
 isdervar
 isalgvar

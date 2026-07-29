@@ -90,5 +90,9 @@ function (nlp::NLStep_probmap)(nlsol)
 end
 
 function generate_nlprobmap(sys::System, nlsys::System)
-    return NLStep_probmap(build_explicit_observed_function(nlsys, unknowns(sys)))
+    return NLStep_probmap(
+        build_explicit_observed_function(
+            nlsys, unknowns(sys), GeneratedFunctionOptions(; expression = Val{false})
+        )
+    )
 end

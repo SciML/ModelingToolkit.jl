@@ -87,6 +87,7 @@ end
     @test_throws ArgumentError reorder_dimension_by_tunables!(dst, sys, src, [p, q, r])
     @test_throws ArgumentError reorder_dimension_by_tunables(sys, src, [p, q, r])
     sys = complete(sys)
+    @test parameter_index(sys, r[:, 1]).idx == [5, 6]
     # and the arrays must have matching size
     @test_throws ArgumentError reorder_dimension_by_tunables!(
         zeros(2, 4), sys, src, [p, q, r]

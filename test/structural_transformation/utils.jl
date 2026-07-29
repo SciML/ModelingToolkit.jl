@@ -169,7 +169,8 @@ end
                 D(D(y)) ~ λ * y - g
                 x^2 + y^2 ~ 1
             ]
-            @mtkcompile sys = System(eqs, t)
+            reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+            @mtkcompile sys = System(eqs, t) reassemble_alg = reassemble_alg
             mapping = map_variables_to_equations(sys)
 
             yt = default_toterm(unwrap(D(y)))

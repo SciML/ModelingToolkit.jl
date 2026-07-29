@@ -1,13 +1,18 @@
 """
     $(TYPEDSIGNATURES)
 
-Given a list of analysis points, break the connection for each and set the output to zero.
+Given a list of analysis points, break the connection for each. The output of each broken
+analysis point is turned into a parameter of the system. Returns the modified system and a
+vector of the variables that were turned into parameters (the "loop-opening parameters"),
+whose operating-point values must be supplied by the user when linearizing.
 """
 function handle_loop_openings(sys::AbstractSystem, aps)
+    loop_opening_params = SymbolicT[]
     for ap in canonicalize_ap(sys, aps)
         sys, (d_vs,) = apply_transformation(Break(ap, true), sys)
+        append!(loop_opening_params, d_vs)
     end
-    return sys
+    return sys, loop_opening_params
 end
 
 const DOC_LOOP_OPENINGS = """
@@ -41,7 +46,7 @@ function get_linear_analysis_function(
     )
     dus = SymbolicT[]
     us = SymbolicT[]
-    sys = handle_loop_openings(sys, loop_openings)
+    sys, loop_opening_params = handle_loop_openings(sys, loop_openings)
     aps = canonicalize_ap(sys, aps)
     for ap in aps
         sys, (du, u) = apply_transformation(transform(ap), sys)
@@ -58,7 +63,7 @@ function get_linear_analysis_function(
             append!(us, u)
         end
     end
-    return linearization_function(system_modifier(sys), dus, us; kwargs...)
+    return linearization_function(system_modifier(sys), dus, us; loop_opening_params, kwargs...)
 end
 """
     $(TYPEDSIGNATURES)
@@ -115,13 +120,13 @@ for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
     utility_fun = Symbol(f, :_function)
     @eval function $f(
             sys, ap, args...; loop_openings = [], system_modifier = identity,
-            allow_input_derivatives = true, kwargs...
+            allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), kwargs...
         )
         lin_fun,
             ssys = $(utility_fun)(
-            sys, ap, args...; loop_openings, system_modifier, kwargs...
+            sys, ap, args...; loop_openings, system_modifier, op, kwargs...
         )
-        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; allow_input_derivatives)
+        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives)
         return mats, ssys, extras
     end
 end
@@ -135,6 +140,8 @@ Returns
 - `sys`: The transformed system.
 - `input_vars`: A vector of input variables corresponding to the input analysis points.
 - `output_vars`: A vector of output variables corresponding to the output analysis points.
+- `loop_opening_params`: A vector of the variables that were turned into parameters by the
+  `loop_openings` (their operating-point values must be supplied when linearizing).
 """
 function linearization_ap_transform(
         sys,
@@ -166,8 +173,8 @@ function linearization_ap_transform(
         end
         push!(output_vars, output_var)
     end
-    sys = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
-    return sys, input_vars, output_vars
+    sys, loop_opening_params = handle_loop_openings(sys, map(AnalysisPoint, collect(loop_openings)))
+    return sys, input_vars, output_vars, loop_opening_params
 end
 
 function linearization_function(
@@ -175,11 +182,13 @@ function linearization_function(
         inputs::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         outputs; loop_openings = [], system_modifier = identity, kwargs...
     )
-    sys, input_vars,
-        output_vars = linearization_ap_transform(
+    sys, input_vars, output_vars,
+        loop_opening_params = linearization_ap_transform(
         sys, inputs, outputs, loop_openings
     )
-    return linearization_function(system_modifier(sys), input_vars, output_vars; kwargs...)
+    return linearization_function(
+        system_modifier(sys), input_vars, output_vars; loop_opening_params, kwargs...
+    )
 end
 
 """
@@ -204,6 +213,29 @@ function isolate_subsystem(
         input_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}},
         output_aps::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}
     )
+    # Run clock inference first to be able to port the results to the isolated subsystem
+    ts = TearingState(expand_connections(sys))
+    ci = MTKTearing.ClockInference(ts)
+    MTKTearing.infer_clocks!(ci)
+    all_clock_subs = Dict{SymbolicT, SymbolicT}()
+    if length(ci.all_clocks) > 1
+        sizehint!(all_clock_subs, length(ci.var_domain))
+        for (var, clk) in zip(ts.fullvars, ci.var_domain)
+            # Clock operators either define a clock or depend on the clock of their inputs.
+            # Neither case needs to be propagated, and this simplifies downstream
+            # implementation.
+            Moshi.Match.@match var begin
+                BSImpl.Term(; f) && if f isa Operator end => continue
+                _ => nothing
+            end
+            all_clock_subs[var] = setmetadata(var, VariableTimeDomain, clk)
+            arr, isidx = split_indexed_var(var)
+            if isidx
+                get!(() -> setmetadata(arr, VariableTimeDomain, clk), all_clock_subs, var)
+            end
+        end
+    end
+
     input_aps = canonicalize_ap(sys, input_aps)
     output_aps = canonicalize_ap(sys, output_aps)
 
@@ -252,11 +284,16 @@ function isolate_subsystem(
     end
 
     # Step 2: walk every equation at every level of the hierarchy.
-    # For boundary AP equations, cut the edge and record which side is inside.
-    # For all other equations, add edges between the connected components.
+    # Every connection (including boundary APs) adds edges between the connected
+    # components. Boundary AP edges are additionally recorded in `cut_edges` so they can
+    # be removed after the full graph is built. Recording rather than skipping is
+    # essential: a boundary connection may be duplicated as a plain `connect` equation,
+    # which would re-add the edge. Since the graph is simple, the duplicate `add_edge!` is
+    # a no-op and a single `rem_edge!` afterwards guarantees the edge stays cut.
     inside_seeds = Int[]
     input_vars = SymbolicT[]
     output_vars = SymbolicT[]
+    cut_edges = Tuple{Int, Int}[]
 
     function _build_graph!(cur, parent_path)
         for eq in get_eqs(cur)
@@ -267,34 +304,38 @@ function isolate_subsystem(
                 fname = _full_ap_name(parent_path, nameof(ap_data))
                 in_conn = ap_data.input
                 out_conns = something(ap_data.outputs, [])
-                if fname in boundary_ap_names
-                    if fname in input_ap_names
-                        for c in out_conns
-                            push!(input_vars, ap_var(c))
-                            p = _conn_to_path(c, parent_path)
-                            if p !== nothing
-                                idx = get(path_to_idx, p, nothing)
-                                idx !== nothing && push!(inside_seeds, idx)
-                            end
-                        end
-                    end
-                    if fname in output_ap_names
-                        if in_conn !== nothing
-                            push!(output_vars, ap_var(in_conn))
-                            p = _conn_to_path(in_conn, parent_path)
-                            if p !== nothing
-                                idx = get(path_to_idx, p, nothing)
-                                idx !== nothing && push!(inside_seeds, idx)
-                            end
-                        end
-                    end
-                    # Do not add a graph edge — this connection is cut.
-                else
-                    in_path = in_conn !== nothing ? _conn_to_path(in_conn, parent_path) : nothing
+                is_boundary = fname in boundary_ap_names
+                if is_boundary && fname in input_ap_names
                     for c in out_conns
-                        out_path = _conn_to_path(c, parent_path)
-                        out_path === nothing && continue
-                        in_path !== nothing && _try_add_edge!(in_path, out_path)
+                        push!(input_vars, ap_var(c))
+                        p = _conn_to_path(c, parent_path)
+                        if p !== nothing
+                            idx = get(path_to_idx, p, nothing)
+                            idx !== nothing && push!(inside_seeds, idx)
+                        end
+                    end
+                end
+                if is_boundary && fname in output_ap_names
+                    if in_conn !== nothing
+                        push!(output_vars, ap_var(in_conn))
+                        p = _conn_to_path(in_conn, parent_path)
+                        if p !== nothing
+                            idx = get(path_to_idx, p, nothing)
+                            idx !== nothing && push!(inside_seeds, idx)
+                        end
+                    end
+                end
+                in_path = in_conn !== nothing ? _conn_to_path(in_conn, parent_path) : nothing
+                in_idx = in_path === nothing ? nothing : get(path_to_idx, in_path, nothing)
+                for c in out_conns
+                    out_path = _conn_to_path(c, parent_path)
+                    out_path === nothing && continue
+                    in_path === nothing && continue
+                    _try_add_edge!(in_path, out_path)
+                    if is_boundary && in_idx !== nothing
+                        out_idx = get(path_to_idx, out_path, nothing)
+                        (out_idx === nothing || out_idx == in_idx) && continue
+                        push!(cut_edges, (in_idx, out_idx))
                     end
                 end
             elseif rhs_val isa Connection
@@ -315,6 +356,12 @@ function isolate_subsystem(
         return
     end
     _build_graph!(sys, Symbol[])
+
+    # Remove the boundary-connection edges now that the full graph (including any
+    # duplicate plain connections) has been built.
+    for (i1, i2) in cut_edges
+        rem_edge!(g, i1, i2)
+    end
 
     # Step 3: BFS from inside seeds to find all reachable (inside) components.
     inside = falses(length(paths))
@@ -351,17 +398,43 @@ function isolate_subsystem(
     # as-is — their internal structure belongs to the isolated subsystem.
     # Systems that are containers (in inside_prefixes only because they wrap inside
     # components) have their equations filtered and their own variables/parameters cleared.
-    function _reconstruct!(cur, parent_path)
+    function _get_next_clock_substitutions(cur_subs::Dict{SymbolicT, SymbolicT}, name::Symbol)
+        new_subs = empty(cur_subs)
+        sizehint!(new_subs, length(cur_subs))
+        for (k, v) in cur_subs
+            hierarchy = namespace_hierarchy(getname(k))
+            length(hierarchy) == 1 && continue
+            first(hierarchy) == name || continue
+            new_name = Symbol(join(Iterators.drop(hierarchy, 1), NAMESPACE_SEPARATOR_SYMBOL))
+            new_k = rename(k, new_name)
+            new_v = rename(v, new_name)
+            new_subs[new_k] = new_v
+        end
+
+        return new_subs
+    end
+
+    function _recursively_clock_subsystems(cur, clock_subs)
+        isempty(clock_subs) && return cur
+        eqs = copy(get_eqs(cur))
+        clock_subber = SU.IRSubstituter{false}(get_irstructure(sys), clock_subs)
+        map!(clock_subber, eqs, eqs)
+        syss = copy(get_systems(cur))
+        map!(s -> _recursively_clock_subsystems(s, _get_next_clock_substitutions(clock_subs, nameof(s))), syss, syss)
+        return ConstructionBase.setproperties(cur; eqs = eqs, systems = syss)
+    end
+
+    function _reconstruct!(cur, parent_path, clock_subs)
         idx = get(path_to_idx, parent_path, nothing)
         if idx !== nothing && inside[idx]
             # Directly-inside component — preserve it entirely.
-            return cur
+            return _recursively_clock_subsystems(cur, clock_subs)
         end
 
         # Container: filter subsystems and equations, clear own vars/params so that
         # nothing from outside the isolated region leaks into the result.
         new_systems = [
-            _reconstruct!(s, [parent_path; nameof(s)])
+            _reconstruct!(s, [parent_path; nameof(s)], _get_next_clock_substitutions(clock_subs, nameof(s)))
                 for s in get_systems(cur) if has_inside([parent_path; nameof(s)])
         ]
         new_eqs = filter(get_eqs(cur)) do eq
@@ -390,10 +463,17 @@ function isolate_subsystem(
                 return false
             end
         end
+        if !isempty(clock_subs)
+            clock_subber = SU.IRSubstituter{false}(get_irstructure(sys), clock_subs)
+            map!(clock_subber, new_eqs, new_eqs)
+        end
+        # Build a fresh container so its own variables, parameters, observed equations,
+        # initial conditions and non-connection equations are stripped — only the filtered
+        # connections and inside subsystems are retained.
         return System(new_eqs, get_iv(cur), SymbolicT[], SymbolicT[]; name = nameof(cur), systems = new_systems)
     end
 
-    return _reconstruct!(sys, Symbol[]), input_vars, output_vars
+    return _reconstruct!(sys, Symbol[], all_clock_subs), input_vars, output_vars
 end
 
 @doc """

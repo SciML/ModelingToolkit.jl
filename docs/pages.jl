@@ -47,6 +47,7 @@ pages = [
     "Basics" => Any[
         "basics/Composition.md",
         "basics/Events.md",
+        "basics/Homotopy.md",
         "basics/Linearization.md",
         "basics/InputOutput.md",
         "basics/MTKLanguage.md",

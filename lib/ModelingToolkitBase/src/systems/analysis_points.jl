@@ -459,6 +459,7 @@ function get_analysis_variable(var, name, iv; perturb = true)
         pvar = unwrap(only(@variables $name(iv)::T))
         default = zero(T)
     end
+    pvar = SU.setmetadata(pvar, AnalysisVariable, true)
     return pvar, default
 end
 

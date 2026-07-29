@@ -4,7 +4,7 @@ using Optimization, RecursiveArrayTools, OptimizationOptimJL
 using SymbolicIndexingInterface
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics: value
-using SciMLBase: parameterless_type
+using SciMLBase: parameterless_type, successful_retcode
 
 N = 32
 const xyd_brusselator = range(0, stop = 1, length = N)
@@ -78,6 +78,7 @@ prob = OptimizationProblem(
     sys, [unknowns(sys) .=> x0; parameters(sys) .=> p], grad = true, hess = true
 )
 sol = solve(prob, NelderMead())
+@test successful_retcode(sol)
 @test sol.objective < 1.0e-8
 
 sol = solve(prob, BFGS())

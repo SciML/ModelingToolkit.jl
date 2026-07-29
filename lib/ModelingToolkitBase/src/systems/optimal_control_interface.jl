@@ -1,5 +1,16 @@
+"""
+    AbstractCollocation
+
+Abstract supertype for dynamic optimization collocation solver descriptors.
+"""
 abstract type AbstractCollocation end
 
+"""
+    DynamicOptSolution
+
+Container returned by dynamic optimization solves, holding the optimized model, state
+trajectory solution, and optional input trajectory solution.
+"""
 struct DynamicOptSolution
     model::Any
     sol::ODESolution
@@ -133,49 +144,65 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         sparsity = false,
         analytic = nothing,
         initialization_data = nothing,
-        cse = true,
-        kwargs...
+        optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, specialize}
+    # `ODEInputFunction` doesn't expose `expression`/`check_compatibility` as user-facing
+    # keywords (it always builds an `Expr` internally and never checks compatibility), so
+    # `SciMLFunctionOptions` is built with `expression = Val{true}` fixed rather than
+    # threading a user-provided value through.
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data,
+        expression = Val{true}, compiler_options, checkbounds, optimize, kwargs...,
+    )
+    return ODEInputFunction{iip, specialize}(
+        sys, opts; inputs, disturbance_inputs, controljac, steady_state, eval_expression,
+        eval_module
+    )
+end
+
+"""
+    SciMLBase.ODEInputFunction{iip, specialize}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds an `ODEInputFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.ODEInputFunction{iip, specialize}(
+        sys::System, opts::SciMLFunctionOptions;
+        inputs = default_codegen_inputs(sys), disturbance_inputs = disturbances(sys),
+        controljac::Bool = false, steady_state::Bool = false,
+        eval_expression::Bool = false, eval_module::Module = @__MODULE__
+    ) where {iip, specialize}
+    (; u0, p, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
+    checkbounds = opts.codegen.codegen.checkbounds
+
     f, _,
         _ = generate_control_function(
-        sys, inputs, disturbance_inputs; eval_module, cse, kwargs...
+        sys, inputs, disturbance_inputs; eval_module
     )
     f = f[1]
 
+    # NOTE: the historical calls passed `expression_module = eval_module`, which was never a
+    # recognized keyword (it was silently dropped), so `eval_module` defaulted here. That
+    # behavior is preserved: `codegen_opts` does not set `eval_module` (or `eval_expression`,
+    # which was likewise never passed here) — `opts.codegen` was built without them, so it
+    # already reflects that.
+    codegen_opts = opts.codegen
+
     if tgrad
-        _tgrad = generate_tgrad(
-            sys;
-            simplify = simplify,
-            expression = Val{true},
-            wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys;
-            simplify = simplify, sparse = sparse,
-            expression = Val{true},
-            wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
 
     if controljac
-        _cjac = generate_control_jacobian(
-            sys;
-            simplify = simplify, sparse = sparse,
-            expression = Val{true}, wrap_gfw = Val{true},
-            expression_module = eval_module, cse,
-            checkbounds = checkbounds, kwargs...
-        )
+        _cjac = generate_control_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _cjac = nothing
     end
@@ -184,7 +211,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
     _M = concrete_massmatrix(M; sparse, u0)
 
     observedfun = ObservedFunctionCache(
-        sys; steady_state, eval_expression, eval_module, checkbounds, cse
+        sys; steady_state, eval_expression, eval_module, checkbounds
     )
 
     _W_sparsity = W_sparsity(sys)
@@ -196,7 +223,7 @@ is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
         controljac_prototype = nothing
     end
 
-    ODEInputFunction{iip, specialize}(
+    return ODEInputFunction{iip, specialize}(
         f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,

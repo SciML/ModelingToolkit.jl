@@ -45,6 +45,12 @@ struct VariableMisc end
 struct VariableUnshifted end
 struct VariableShift end
 struct VariableTimeDomain end
+"""
+    $TYPEDEF
+
+Metadata key used to mark variables introduced by analysis point transformations.
+"""
+struct AnalysisVariable end
 
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
@@ -495,6 +501,11 @@ function hasnominal(x)
     return Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
 end
 
+"""
+    setnominal(x, val)
+
+Attach nominal value `val` to symbolic variable `x`.
+"""
 function setnominal(x::Num, val)
     return setmetadata(x, VariableNominal, val)
 end

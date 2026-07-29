@@ -1,24 +1,44 @@
 @fallback_iip_specialize function SciMLBase.DAEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
-        t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
-        steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing,
-        expression = Val{false}, check_compatibility = true, kwargs...
+        t = nothing, eval_expression = false, eval_module = @__MODULE__,
+        sparse = false,
+        steady_state = false, checkbounds = false, sparsity = false,
+        analytic = nothing,
+        simplify = false, initialization_data = nothing,
+        expression = Val{false}, check_compatibility = true, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
-    check_complete(sys, DAEFunction)
-    check_compatibility && check_compatible_system(DAEFunction, sys)
-
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return DAEFunction{iip, spec}(sys, opts; steady_state)
+end
+
+"""
+    SciMLBase.DAEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `DAEFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.DAEFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        steady_state::Bool = false
+    ) where {iip, spec, E}
+    check_complete(sys, DAEFunction)
+    opts.check_compatibility && check_compatible_system(DAEFunction, sys)
+
+    (; u0, p, t, jac, tgrad, sparse, analytic, simplify, initialization_data) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $u0, $p, $t)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, u0, p, t))
@@ -26,18 +46,12 @@
     end
 
     if jac
-        _jac = generate_dae_jacobian(
-            sys; expression,
-            wrap_gfw = Val{true}, simplify, sparse, cse, eval_expression, eval_module,
-            checkbounds, kwargs...
-        )
+        _jac = generate_dae_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state)
 
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
@@ -63,7 +77,7 @@
     )
     args = (; f)
 
-    return maybe_codegen_scimlfn(expression, DAEFunction{iip, spec}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, DAEFunction{iip, spec}, args; kwargs...)
 end
 
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(

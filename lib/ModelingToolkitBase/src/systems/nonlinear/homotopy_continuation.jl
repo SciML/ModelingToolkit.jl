@@ -492,7 +492,7 @@ end
 
 @fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::System; eval_expression = false, eval_module = @__MODULE__,
-        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions, cse = true,
+        p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions,
         kwargs...
     ) where {iip, specialize}
     if !iscomplete(sys)
@@ -515,18 +515,24 @@ end
 
     # we want to create f, jac etc. according to `sys2` since that will do the solving
     # but the `sys` inside for symbolic indexing should be the non-polynomial system
-    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, cse, kwargs...)
+    fn = NonlinearFunction{iip}(sys2; p, eval_expression, eval_module, kwargs...)
     obsfn = ObservedFunctionCache(
-        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false), cse
+        sys; eval_expression, eval_module, checkbounds = get(kwargs, :checkbounds, false)
     )
     fn = remake(fn; sys = sys, observed = obsfn)
 
-    denominator = build_explicit_observed_function(sys2, denoms)
-    unpolynomialize = build_explicit_observed_function(sys2, all_solutions)
+    denominator = build_explicit_observed_function(
+        sys2, denoms, GeneratedFunctionOptions(; expression = Val{false})
+    )
+    unpolynomialize = build_explicit_observed_function(
+        sys2, all_solutions, GeneratedFunctionOptions(; expression = Val{false})
+    )
 
     inv_mapping = Dict(v => k for (k, v) in transformation.substitution_rules)
     polynomialize_terms = [get(inv_mapping, var, var) for var in unknowns(sys2)]
-    polynomialize = build_explicit_observed_function(sys, polynomialize_terms)
+    polynomialize = build_explicit_observed_function(
+        sys, polynomialize_terms, GeneratedFunctionOptions(; expression = Val{false})
+    )
 
     return HomotopyNonlinearFunction{iip, specialize}(
         fn; polynomialize, unpolynomialize, denominator

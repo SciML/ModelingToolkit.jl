@@ -1,21 +1,38 @@
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false},
-        checkbounds = false, analytic = nothing, simplify = false, cse = true,
-        initialization_data = nothing, check_compatibility = true, kwargs...
+        checkbounds = false, analytic = nothing, simplify = false,
+        initialization_data = nothing, check_compatibility = true,
+        optimize = nothing, compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {
         iip, spec,
     }
+    opts = SciMLFunctionOptions(;
+        u0, p, t, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
+    )
+    return ImplicitDiscreteFunction{iip, spec}(sys, opts)
+end
+
+"""
+    SciMLBase.ImplicitDiscreteFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
+
+Public entry point that builds an `ImplicitDiscreteFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E}
+    ) where {iip, spec, E}
     check_complete(sys, ImplicitDiscreteFunction)
-    check_compatibility && check_compatible_system(ImplicitDiscreteFunction, sys)
+    opts.check_compatibility && check_compatible_system(ImplicitDiscreteFunction, sys)
 
     iv = get_iv(sys)
     dvs = unknowns(sys)
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        implicit_dae = true, eval_expression, eval_module, checkbounds = checkbounds, cse,
-        override_discrete = true, kwargs...
-    )
+    (; u0, p, t, analytic, initialization_data) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts; implicit_dae = true, override_discrete = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -30,9 +47,7 @@
         resid_prototype = calculate_resid_prototype(length(equations(sys)), u0, p)
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds, cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     args = (; f)
     kwargs = (;
@@ -44,7 +59,7 @@
     )
 
     return maybe_codegen_scimlfn(
-        expression, ImplicitDiscreteFunction{iip, spec}, args; kwargs...
+        Val{E}, ImplicitDiscreteFunction{iip, spec}, args; kwargs...
     )
 end
 

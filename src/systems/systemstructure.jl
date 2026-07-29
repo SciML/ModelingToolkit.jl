@@ -97,6 +97,12 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     return state
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Compile the system stored in `state` in place, updating its tearing state and returning the
+compiled [`System`](@ref).
+"""
 function mtkcompile!(
         state::TearingState;
         check_consistency = true, fully_determined = true,
@@ -106,6 +112,7 @@ function mtkcompile!(
         kwargs...
     )
     if !is_time_dependent(state.sys)
+        MTKTearing.scalarize_tearing_state_eqs!(state)
         return _mtkcompile!(
             state; check_consistency,
             inputs, outputs, disturbance_inputs,
@@ -142,6 +149,7 @@ function mtkcompile!(
         )
     end
     if length(tss) > 1
+        MTKTearing.scalarize_tearing_state_eqs!(tss[continuous_id])
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(
@@ -172,6 +180,7 @@ function mtkcompile!(
             )
         )
     end
+    MTKTearing.scalarize_tearing_state_eqs!(state)
     if get_is_discrete(state.sys) ||
             continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
@@ -197,6 +206,7 @@ function _mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        eliminate_mm_zeros = true,
         kwargs...
     )
     if fully_determined isa Bool
@@ -216,6 +226,11 @@ function _mtkcompile!(
     old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
+    if eliminate_mm_zeros
+        # Do this after the second `eliminate_perfect_aliases!` so if any zeros we eliminate are
+        # aliases, we eliminate the "right" alias.
+        mm = eliminate_zero_variables_fixpoint!(state, mm; kwargs...)
+    end
     state.mm = mm
     @assert mm.nparentrows == nsrcs(state.structure.graph) && mm.ncols == ndsts(state.structure.graph) lazy"""
     Invalid `mm`. Got `nparentrows, ncols` = ($(mm.nparentrows), $(mm.ncols)).

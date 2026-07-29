@@ -26,18 +26,33 @@ end
 ###
 ### Structural and symbolic utilities
 ###
+"""
+    $TYPEDSIGNATURES
+
+Return a predicate selecting variables with no differentiated successor in the tearing state.
+"""
 function highest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
         v -> isempty(outneighbors(v2d, v))
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return a predicate selecting variables with no lower-order predecessor in the tearing state.
+"""
 function lowest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
         v -> isempty(inneighbors(v2d, v))
     end
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return a block upper triangular incidence matrix and block boundaries for `ts`.
+"""
 function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
     graph = complete(ts.structure.graph)
     var_eq_matching = complete(maximal_matching(graph; srcfilter = _ -> true, dstfilter = varmask))

@@ -127,6 +127,8 @@ end
 
 using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
     COMMON_TRUE, COMMON_FALSE, COMMON_INF
+using ModelingToolkitBase: build_function_wrapper, BuildFunctionWrapperOptions,
+    GeneratedFunctionOptions
 
 @recompile_invalidations begin
     include("linearization.jl")
@@ -135,6 +137,7 @@ using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
 
     include("problems/docs.jl")
     include("systems/codegen.jl")
+    include("systems/codegen_compat.jl")
     include("problems/semilinearodeproblem.jl")
     include("problems/sccnonlinearproblem.jl")
 
@@ -156,7 +159,7 @@ export SemilinearODEFunction, SemilinearODEProblem
 export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
-    LinearizationProblem, linearization_ap_transform
+    LinearizationProblem, LinearizationOpPoint, linearization_ap_transform
 export solve
 export map_variables_to_equations, substitute_component
 
