@@ -1666,32 +1666,55 @@ end
 end
 
 @testset "`full_equations` doesn't recurse infinitely" begin
-    code = """
-    using ModelingToolkitBase
-    using ModelingToolkitBase: t_nounits as t, D_nounits as D
-    @variables x(t)[1:3]=[0,0,1]
-    @variables u1(t)=0 u2(t)=0
-    y₁, y₂, y₃ = x
-    k₁, k₂, k₃ = 1,1,1
-    eqs = [
-        D(y₁) ~ -k₁*y₁ + k₃*y₂*y₃ + u1
-        D(y₂) ~ k₁*y₁ - k₃*y₂*y₃ - k₂*y₂^2 + u2
-        y₁ + y₂ + y₃ ~ 1
-    ]
+    mktempdir(pwd()) do tempdir
+        ready_file = joinpath(tempdir, "ready")
+        code = """
+        using ModelingToolkitBase
+        using ModelingToolkitBase: t_nounits as t, D_nounits as D
+        @variables x(t)[1:3]=[0,0,1]
+        @variables u1(t)=0 u2(t)=0
+        y₁, y₂, y₃ = x
+        k₁, k₂, k₃ = 1,1,1
+        eqs = [
+            D(y₁) ~ -k₁*y₁ + k₃*y₂*y₃ + u1
+            D(y₂) ~ k₁*y₁ - k₃*y₂*y₃ - k₂*y₂^2 + u2
+            y₁ + y₂ + y₃ ~ 1
+        ]
 
-    @named sys = System(eqs, t)
+        @named sys = System(eqs, t)
 
-    inputs = [u1, u2]
-    outputs = [y₁, y₂, y₃]
-    ss = mtkcompile(sys; inputs)
-    full_equations(ss)
-    """
+        inputs = [u1, u2]
+        outputs = [y₁, y₂, y₃]
+        ss = mtkcompile(sys; inputs)
+        touch($(repr(ready_file)))
+        full_equations(ss)
+        """
 
-    cmd = `$(Base.julia_cmd()) --project=$(pwd()) -e $code`
-    proc = run(cmd, stdin, stdout, stderr; wait = false)
-    sleep(180)
-    @test !process_running(proc)
-    kill(proc, Base.SIGKILL)
+        cmd = `$(Base.julia_cmd()) --project=$(pwd()) -e $code`
+        proc = run(cmd, stdin, stdout, stderr; wait = false)
+
+        # Package loading can wait on a shared precompile cache.
+        setup_status = timedwait(
+            () -> isfile(ready_file) || !process_running(proc), 3600
+        )
+        @test setup_status == :ok
+
+        run_status = :not_started
+        if setup_status == :ok
+            setup_ready = isfile(ready_file)
+            @test setup_ready
+            if setup_ready
+                run_status = timedwait(() -> !process_running(proc), 180)
+                @test run_status == :ok
+            end
+        end
+
+        process_running(proc) && kill(proc, Base.SIGKILL)
+        wait(proc)
+        if run_status == :ok
+            @test success(proc)
+        end
+    end
 end
 
 @testset "`ProblemTypeCtx`" begin
