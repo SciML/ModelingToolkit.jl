@@ -406,6 +406,7 @@ const set_scalar_metadata = setmetadata
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
 @public tobrownian, toparam
+@public ProblemTypeCtx
 
 for prop in [SYS_PROPS; [:continuous_events, :discrete_events]]
     getter = Symbol(:get_, prop)

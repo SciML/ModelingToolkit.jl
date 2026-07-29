@@ -48,6 +48,16 @@ SciMLBase.HomotopyNonlinearFunction
 SciMLBase.LinearProblem
 ```
 
+## Problem type metadata
+
+Systems can carry a `problem_type` that is forwarded to the constructed problem. This is
+how discretization packages attach their own metadata to a generated problem and recover
+it downstream, for example to wrap a solution in a richer solution type.
+
+```@docs
+ModelingToolkit.ProblemTypeCtx
+```
+
 ## Optimization and optimal control
 
 ```@docs
