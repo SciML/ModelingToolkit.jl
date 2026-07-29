@@ -194,8 +194,8 @@ end
 
 SampleTime(; init::Union{Nothing, Real} = nothing) = SampleTime(init)()
 (D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
-SymbolicUtils.promote_symtype(::SampleTime, ::Type{T}) where {T} = Real
-SymbolicUtils.promote_shape(::SampleTime, @nospecialize(x::SU.ShapeT)) = x
+SymbolicUtils.promote_symtype(::SampleTime) = Real
+SymbolicUtils.promote_shape(::SampleTime) = SU.ShapeVecT()
 Base.nameof(::SampleTime) = :SampleTime
 SymbolicUtils.isbinop(::SampleTime) = false
 
