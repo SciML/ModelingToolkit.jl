@@ -371,11 +371,11 @@ function process_DynamicOptProblem(
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
-    # Apply function-valued start trajectories
+    # Apply start trajectories, compiling the symbolic expressions to callables
     for (var, traj) in initial_trajectory
         idx = get(stidxmap, var, nothing)
         idx === nothing && continue
-        set_initial_trajectory!(model, U, idx, traj)
+        set_initial_trajectory!(model, U, idx, build_trajectory_function(sys, var, traj, pmap))
     end
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     P = generate_tunable_params!(model, p0, length(tunable_params))
@@ -400,7 +400,43 @@ function process_DynamicOptProblem(
     return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
 end
 
-# Set the start values of state `idx` from a function-valued trajectory.
+"""
+    build_trajectory_function(sys, var, traj, pmap)
+
+Compile an `initial_trajectory` entry for `var` into a callable of the independent
+variable of `sys`.
+
+`traj` is a symbolic expression in the independent variable; any parameters it
+references are resolved numerically from `pmap`. Expressions that reduce to a constant
+become constant functions. A `Function` is passed through unchanged, which lets guesses
+that cannot be written symbolically (an interpolation of measured data, say) still be
+used.
+
+The result is a `Function`, which is what backends such as InfiniteOpt require of
+`JuMP.set_start_value`.
+"""
+function build_trajectory_function(sys, var, traj, pmap)
+    traj isa Function && return traj
+
+    iv = get_iv(sys)
+    expr = SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(unwrap(traj), pmap)))
+    # A guess that does not vary in time is still a valid trajectory.
+    symbolic_type(expr) === NotSymbolic() && return Returns(expr)
+
+    unresolved = setdiff(Symbolics.get_variables(expr), [unwrap(iv)])
+    isempty(unresolved) || throw(
+        ArgumentError(
+            "The `initial_trajectory` for $var may only depend on the independent " *
+                "variable $iv and on parameters, but it also depends on " *
+                "$(join(unresolved, ", ")). Parameters are resolved from the operating " *
+                "point, so anything left over cannot be evaluated."
+        )
+    )
+
+    return Symbolics.build_function(expr, iv; expression = Val(false))
+end
+
+# Set the start values of state `idx` from a trajectory callable.
 # Backends without a method for their model type do not support this.
 function set_initial_trajectory!(model, U, idx, traj)
     throw(ArgumentError("The `initial_trajectory` keyword argument is not supported by the $(nameof(typeof(model))) backend."))
