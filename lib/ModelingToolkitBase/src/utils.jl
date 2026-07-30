@@ -936,6 +936,18 @@ function collect_vars!(
     return nothing
 end
 
+# Break the inference cycle between the mutually recursive collectors. Julia 1.10
+# can otherwise miscompile the cycle after unrelated method additions. The
+# abstractly typed cell keeps downstream `collect_vars!` dispatch dynamic, while
+# the explicit keyword preserves metadata recursion's depth-zero semantics.
+const _COLLECT_VARS_DISPATCH = Ref{Function}(collect_vars!)
+
+@noinline Base.@constprop :none function _call_collect_vars!(
+        unknowns, parameters, expr, iv
+    )
+    return _COLLECT_VARS_DISPATCH[](unknowns, parameters, expr, iv; depth = 0)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -966,7 +978,7 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
                 any(!SU.isconst, Iterators.drop(arguments(var), 1))
         )
         for arg in Iterators.drop(arguments(var), 1)
-            collect_vars!(unknowns, parameters, arg, iv)
+            _call_collect_vars!(unknowns, parameters, arg, iv)
         end
         var = arr
     end
@@ -975,7 +987,7 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
-        collect_vars!(unknowns, parameters, arguments(var), iv)
+        _call_collect_vars!(unknowns, parameters, arguments(var), iv)
     elseif isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
     else
@@ -984,55 +996,55 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
     # Add also any parameters that appear only as defaults in the var
     if hasdefault(var) && (def = getdefault(var)) !== missing
         if def isa SymbolicT
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Num
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Num}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Arr{Num, 1}}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Arr{Num, 2}}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         else
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         end
     end
     # Add also any parameters that appear only in the bounds of the var
     if hasbounds(var)
         (lo, hi) = getbounds(var)
         if lo isa SymbolicT
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Num
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         else
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         end
         if hi isa SymbolicT
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Num
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         else
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         end
     end
     return nothing
