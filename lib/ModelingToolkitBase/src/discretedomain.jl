@@ -15,8 +15,8 @@ $(FIELDS)
 ```jldoctest
 julia> using ModelingToolkitBase
 
-julia> Δ = Shift(t_nounits)
-(::Shift) (generic function with 2 methods)
+julia> Δ = Shift(ModelingToolkitBase.t_nounits)
+Shift(t, 1)
 ```
 """
 struct Shift <: Operator
@@ -222,10 +222,8 @@ $(FIELDS)
 ```jldoctest
 julia> using ModelingToolkitBase
 
-julia> t = t_nounits
-
 julia> Δ = Sample(0.01)
-(::Sample) (generic function with 2 methods)
+Sample(SciMLBase.PeriodicClock(0.01, 0.0))
 ```
 """
 struct Sample <: Operator
