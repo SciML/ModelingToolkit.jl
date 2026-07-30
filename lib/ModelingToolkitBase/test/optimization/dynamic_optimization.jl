@@ -855,7 +855,7 @@ end
 
 struct UnsupportedTrajectoryBackend end
 
-@testset "Function-valued initial trajectories" begin
+@testset "Expression-valued initial trajectories" begin
     @variables x(..) v(..)
     @variables u(..) [bounds = (-1.0, 1.0), input = true]
     constr = [v(1.0) ~ 0.0]
@@ -870,8 +870,8 @@ struct UnsupportedTrajectoryBackend end
     tspan = (0.0, 1.0)
     parammap = [u(t) => 0.0]
 
-    # Provide function-valued trajectories
-    traj = Dict(x(t) => t -> 0.125 * t^2, v(t) => t -> 0.25 * t)
+    # Trajectories are symbolic expressions in the independent variable
+    traj = Dict(x(t) => 0.125 * t^2, v(t) => 0.25 * t)
 
     iprob = InfiniteOptDynamicOptProblem(
         block, [u0map; parammap], tspan; dt = 0.01,
@@ -898,4 +898,28 @@ struct UnsupportedTrajectoryBackend end
     @test_throws ArgumentError M.set_initial_trajectory!(
         UnsupportedTrajectoryBackend(), nothing, 1, identity
     )
+
+    # Expressions are compiled to callables of the independent variable
+    pmap_test = Dict()
+    fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, pmap_test)
+    @test fx isa Function
+    @test fx(2.0) ≈ 0.5
+
+    # A constant expression is still a valid trajectory
+    fc = M.build_trajectory_function(block, x(t), 3.0, pmap_test)
+    @test fc isa Function
+    @test fc(2.0) == 3.0
+
+    # Callables pass through unchanged, for guesses that aren't expressible symbolically
+    g = τ -> 7.0
+    @test M.build_trajectory_function(block, x(t), g, pmap_test) === g
+
+    # Parameters are resolved from the operating point
+    @parameters a
+    fp = M.build_trajectory_function(block, x(t), a * t, Dict(a => 4.0))
+    @test fp(2.0) ≈ 8.0
+
+    # Anything left unresolved after substitution is reported
+    @parameters b
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, pmap_test)
 end
