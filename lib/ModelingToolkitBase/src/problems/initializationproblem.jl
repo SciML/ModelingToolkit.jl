@@ -22,6 +22,52 @@ $INTERNAL_INITIALIZEPROB_KWARGS
 All other keyword arguments are forwarded to the wrapped problem constructor.
 """ InitializationProblem
 
+"""
+    $(TYPEDSIGNATURES)
+
+Equivalent to the keyword-argument-based `InitializationProblem`, given a pre-assembled
+[`SciMLProblemOptions`](@ref). Public entry point for callers (namely
+`maybe_build_initialization_problem`) that already hold an options struct, mirroring the
+`(sys, opts::SciMLFunctionOptions)` methods on the `*Function` constructors.
+
+`opts.check_length` is intentionally *not* used here: unlike the rest of `opts`, this
+function's own `check_length` keyword is a nullable sentinel ("no opinion — let the
+underlying problem constructor pick its default"), which has no equivalent in
+`SciMLProblemOptions` (there, `check_length` is a concrete, always-set `Bool` describing a
+different check on the outer system). Callers that want to override it must still pass it
+as an explicit keyword.
+"""
+function InitializationProblem{iip}(
+        sys::AbstractSystem, t, op, opts::SciMLProblemOptions; kwargs...
+    ) where {iip}
+    return InitializationProblem{iip, SciMLBase.AutoSpecialize}(sys, t, op, opts; kwargs...)
+end
+
+function InitializationProblem{iip, specialize}(
+        sys::AbstractSystem, t, op, opts::SciMLProblemOptions;
+        fast_path = false, guesses = [], check_length = nothing, kwargs...
+    ) where {iip, specialize}
+    (;
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, allow_incomplete, algebraic_only,
+        time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
+        u0_constructor, p_constructor, use_scc, missing_guess_value,
+        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, init_compiler_options,
+    ) = opts
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    return InitializationProblem{iip, specialize}(
+        sys, t, op; fast_path, guesses, check_length,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_units = check_initialization_units, allow_incomplete, algebraic_only,
+        time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
+        u0_constructor, p_constructor, use_scc, missing_guess_value,
+        eval_expression, eval_module, warn_cyclic_dependency,
+        circular_dependency_max_cycle_length, circular_dependency_max_cycles,
+        compiler_options = init_compiler_options, kwargs...
+    )
+end
+
 @fallback_iip_specialize function InitializationProblem{iip, specialize}(
         sys::AbstractSystem,
         t, op = Dict();

@@ -1796,8 +1796,13 @@ end
 function SciMLProblemOptions(
         sys::AbstractSystem;
         fn_opts::SciMLFunctionOptions{E},
-        floatT, u0Type, u0_eltype,
-        build_initializeprob::Bool, implicit_dae::Bool = false, guesses = AnyDict(),
+        # `floatT`/`u0Type`/`u0_eltype` are derived from the actual operating point passed
+        # to `process_SciMLProblem`, not free-standing options. These defaults exist so
+        # that `opts` can be constructed before `op` is known (e.g. by a caller that only
+        # has keyword arguments to go on); `process_SciMLProblem(constructor, sys, op,
+        # opts::SciMLProblemOptions)` always recomputes and overrides them from `op`.
+        floatT = Float64, u0Type = Nothing, u0_eltype = nothing,
+        build_initializeprob::Bool = false, implicit_dae::Bool = false, guesses = AnyDict(),
         warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
         fully_determined = nothing, check_initialization_units::Bool = false,
         tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
@@ -1862,13 +1867,7 @@ function maybe_build_initialization_problem(
 
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
-        missing_guess_value, is_steadystateprob, warn_initialize_determined,
-        fully_determined, check_units = check_initialization_units, warn_cyclic_dependency,
-        circular_dependency_max_cycle_length, circular_dependency_max_cycles,
-        initsys_mtkcompile_kwargs, algebraic_only, allow_incomplete,
-        compiler_options = init_compiler_options, kwargs...
+        sys, t, op, opts; guesses, fast_path = true, kwargs...
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false
@@ -2072,17 +2071,10 @@ Base.@nospecializeinfer function process_SciMLProblem(
         init_compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     )
-    u0Type = pType = typeof(op)
-    op = operating_point_preprocess(sys, op)
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
-    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
-    p_constructor = get_p_constructor(p_constructor, pType, floatT)
-
     fn_opts = SciMLFunctionOptions(; t, eval_expression, eval_module, compiler_options, kwargs...)
     opts = SciMLProblemOptions(
         sys;
-        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        fn_opts, u0_eltype, build_initializeprob, implicit_dae, guesses,
         warn_initialize_determined, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
         symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
@@ -2090,6 +2082,36 @@ Base.@nospecializeinfer function process_SciMLProblem(
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
     )
+
+    process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Equivalent to the keyword-argument-based `process_SciMLProblem`, given a pre-assembled
+[`SciMLProblemOptions`](@ref). Public entry point for callers that already hold (or want to
+share/reuse) an options struct, mirroring the `(sys, opts::SciMLFunctionOptions)` methods on
+the `*Function` constructors.
+
+`opts.floatT`, `opts.u0Type`, `opts.u0_eltype`, `opts.u0_constructor`, and
+`opts.p_constructor` are derived from the actual `op` passed here — not free-standing
+options — so they are recomputed and overridden regardless of what `opts` was built with.
+`opts.u0_constructor`/`opts.p_constructor`/`opts.symbolic_u0` are used as the *requested*
+constructor/flag fed into that computation, exactly as the corresponding keyword arguments
+are in the keyword-based method.
+"""
+Base.@nospecializeinfer function process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op),
+        opts::SciMLProblemOptions; kwargs...
+    )
+    u0Type = pType = typeof(op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(opts.u0_eltype, floatT)
+    u0_constructor = get_u0_constructor(opts.u0_constructor, u0Type, floatT, opts.symbolic_u0)
+    p_constructor = get_p_constructor(opts.p_constructor, pType, floatT)
+    opts = setproperties(opts; floatT, u0Type, u0_eltype, u0_constructor, p_constructor)
 
     __process_SciMLProblem(constructor, sys, op, opts; kwargs...)
 end
