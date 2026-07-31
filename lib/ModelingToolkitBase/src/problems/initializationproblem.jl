@@ -28,7 +28,8 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
 Equivalent to the keyword-argument-based `InitializationProblem`, given a pre-assembled
 [`SciMLProblemOptions`](@ref). Public entry point for callers (namely
 `maybe_build_initialization_problem`) that already hold an options struct, mirroring the
-`(sys, opts::SciMLFunctionOptions)` methods on the `*Function` constructors.
+`(sys, opts::SciMLFunctionOptions)` methods on the `*Function` constructors. This is the
+primary implementation; the keyword-argument-based method builds `opts` and delegates here.
 
 `opts.check_length` is intentionally *not* used here: unlike the rest of `opts`, this
 function's own `check_length` keyword is a nullable sentinel ("no opinion — let the
@@ -56,41 +57,8 @@ function InitializationProblem{iip, specialize}(
         circular_dependency_max_cycles, init_compiler_options,
     ) = opts
     (; eval_expression, eval_module) = opts.fn_opts.codegen
-    return InitializationProblem{iip, specialize}(
-        sys, t, op; fast_path, guesses, check_length,
-        warn_initialize_determined, initialization_eqs, fully_determined,
-        check_units = check_initialization_units, allow_incomplete, algebraic_only,
-        time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
-        u0_constructor, p_constructor, use_scc, missing_guess_value,
-        eval_expression, eval_module, warn_cyclic_dependency,
-        circular_dependency_max_cycle_length, circular_dependency_max_cycles,
-        compiler_options = init_compiler_options, kwargs...
-    )
-end
+    check_units = check_initialization_units
 
-@fallback_iip_specialize function InitializationProblem{iip, specialize}(
-        sys::AbstractSystem,
-        t, op = Dict();
-        fast_path = false,
-        guesses = [],
-        # `check_length` defaults to `nothing`, meaning "no opinion — let the underlying
-        # problem constructor apply its own default". It is only forwarded below when the
-        # caller explicitly sets it. This matters because the initialization problem types
-        # have different defaults (`NonlinearProblem` uses `true` for square systems,
-        # `NonlinearLeastSquaresProblem` uses `false` for non-square); forwarding a single
-        # value unconditionally would override and break one of those cases.
-        check_length = nothing,
-        warn_initialize_determined = true,
-        initialization_eqs = [],
-        fully_determined = nothing,
-        check_units = true,
-        allow_incomplete = false,
-        algebraic_only = false,
-        time_dependent_init = is_time_dependent(sys),
-        initsys_mtkcompile_kwargs = (;),
-        is_steadystateprob = false,
-        kwargs...
-    ) where {iip, specialize}
     if !iscomplete(sys)
         error("A completed system is required. Call `complete` or `mtkcompile` on the system before creating an `ODEProblem`")
     end
@@ -197,15 +165,16 @@ end
     # to work properly.
     add_observed!(sys, ModelingToolkitBase.initial_conditions(isys))
     filter!(!Base.Fix2(===, COMMON_MISSING) ∘ last, op)
-    TProb = get_initialization_problem_type(
-        sys, isys; warn_initialize_determined,
-        kwargs...
-    )
+    TProb = get_initialization_problem_type(sys, isys; warn_initialize_determined, use_scc)
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
     TProb{_iip}(
         isys, op; kwargs..., check_length_kw...,
+        u0_constructor, p_constructor, missing_guess_value,
+        eval_expression, eval_module, warn_cyclic_dependency,
+        circular_dependency_max_cycle_length, circular_dependency_max_cycles,
+        compiler_options = init_compiler_options,
         build_initializeprob = false, is_initializeprob = true
     )
 end
@@ -406,6 +375,52 @@ function initialization_deficit_message(kind::Symbol, size::Union{Nothing, Tuple
 end
 
 pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
+
+@fallback_iip_specialize function InitializationProblem{iip, specialize}(
+        sys::AbstractSystem,
+        t, op = Dict();
+        fast_path = false,
+        guesses = [],
+        # `check_length` defaults to `nothing`, meaning "no opinion — let the underlying
+        # problem constructor apply its own default". It is only forwarded below when the
+        # caller explicitly sets it. This matters because the initialization problem types
+        # have different defaults (`NonlinearProblem` uses `true` for square systems,
+        # `NonlinearLeastSquaresProblem` uses `false` for non-square); forwarding a single
+        # value unconditionally would override and break one of those cases.
+        check_length = nothing,
+        warn_initialize_determined = true,
+        initialization_eqs = [],
+        fully_determined = nothing,
+        check_units = true,
+        allow_incomplete = false,
+        algebraic_only = false,
+        time_dependent_init = is_time_dependent(sys),
+        initsys_mtkcompile_kwargs = (;),
+        is_steadystateprob = false,
+        u0_constructor = identity, p_constructor = identity, use_scc = true,
+        missing_guess_value = default_missing_guess_value(),
+        eval_expression = false, eval_module = @__MODULE__,
+        warn_cyclic_dependency = false,
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        circular_dependency_max_cycles = 10,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        kwargs...
+    ) where {iip, specialize}
+    fn_opts = SciMLFunctionOptions(; eval_expression, eval_module)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units = check_units, allow_incomplete, algebraic_only,
+        time_dependent_init, initsys_mtkcompile_kwargs, is_steadystateprob,
+        u0_constructor, p_constructor, use_scc, missing_guess_value,
+        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, init_compiler_options = compiler_options,
+        build_initializeprob = false,
+    )
+    return InitializationProblem{iip, specialize}(
+        sys, t, op, opts; fast_path, guesses, check_length, kwargs...
+    )
+end
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
     return """
