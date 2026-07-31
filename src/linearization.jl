@@ -976,6 +976,7 @@ function linearize(
     _check_loop_opening_op(lin_fun.loop_opening_params, op)
     for (k, v) in op
         isequal(v, COMMON_NOTHING) && continue
+        v === COMMON_MISSING && continue
         v = _resolve_op_value(prob, v)
         if is_parameter(prob, Initial(k))
             setu(prob, Initial(k))(prob, v)

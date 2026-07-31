@@ -423,3 +423,27 @@ end
     lp = build(); setp(lp, [ix, sys.a])(lp, [2.0, 3.0])
     @test A(lp) ≈ -36.0
 end
+
+@testset "Issue#4830: Loop opening variables can be given a `missing` value in `op`" begin
+    @component function FirstOrder(; name, k = 1.0)
+        @variables begin
+            u(t), [input = true]
+            x(t) = 0.0
+            y(t), [output = true]
+        end
+        @parameters k = k
+        System([D(x) ~ -x + k * u, y ~ x], t; name)
+    end
+    @named P = FirstOrder(k = 1.0)
+    @named C = FirstOrder(k = -2.0)
+    eqs = [connect(P.y, :y, C.u), connect(C.y, :u, P.u)]
+    @named sys = System(eqs, t; systems = [P, C])
+    csys = complete(sys) # for operating-point key access only
+
+    m1, _ = ModelingToolkit.linearize(sys, :u, :y; loop_openings = [:y], op = Dict(csys.C.u => 0.0))
+    m2, _ = ModelingToolkit.linearize(sys, :u, :y; loop_openings = [:y], op = Dict(csys.C.u => missing))
+    @test m1.A ≈ m2.A
+    @test m1.B ≈ m2.B
+    @test m1.C ≈ m2.C
+    @test m1.D ≈ m2.D
+end
