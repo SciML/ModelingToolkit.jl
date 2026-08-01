@@ -1,8 +1,8 @@
 module MTKOrdinaryDiffEqDefaultExt
 
 using ModelingToolkit
-using OrdinaryDiffEqDefault
-using PrecompileTools
+using OrdinaryDiffEqDefault: OrdinaryDiffEqDefault
+using PrecompileTools: @compile_workload, @setup_workload
 using ModelingToolkit: t_nounits, D_nounits
 
 @setup_workload begin
