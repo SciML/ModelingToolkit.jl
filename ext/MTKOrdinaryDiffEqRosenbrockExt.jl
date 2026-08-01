@@ -1,8 +1,8 @@
 module MTKOrdinaryDiffEqRosenbrockExt
 
 using ModelingToolkit
-using OrdinaryDiffEqRosenbrock
-using PrecompileTools
+using OrdinaryDiffEqRosenbrock: Rodas5P
+using PrecompileTools: @compile_workload, @setup_workload
 using ModelingToolkit: t_nounits, D_nounits
 
 @setup_workload begin

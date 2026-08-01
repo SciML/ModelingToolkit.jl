@@ -1,7 +1,11 @@
 [deps]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+FMIImport = "9fcbc62e-52a0-44e9-a616-1359a0008194"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
+OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
+OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -11,7 +15,11 @@ ModelingToolkit = {path = "../.."}
 
 [compat]
 Aqua = "0.8"
+FMIImport = "1"
 JET = "0.9,0.10,0.11"
+OrdinaryDiffEqBDF = "1, 2"
+OrdinaryDiffEqDefault = "1.2, 2"
+OrdinaryDiffEqRosenbrock = "1, 2"
 SafeTestsets = "0.1, 1"
 SciMLTesting = "1, 2.1"
 Test = "1"

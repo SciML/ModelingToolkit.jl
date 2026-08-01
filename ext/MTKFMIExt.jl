@@ -1,12 +1,19 @@
 module MTKFMIExt
 
 using ModelingToolkit
-using SymbolicIndexingInterface
-using ModelingToolkit: t_nounits as t, D_nounits as D
-using DocStringExtensions
+using SymbolicIndexingInterface: NotSymbolic, symbolic_type
+using ModelingToolkitBase: t_nounits, D_nounits
+using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
+import ModelingToolkitBase as MTKBase
 import SciMLBase
+import SymbolicUtils
 import FMIImport as FMI
+
+# Spelled as `const` rather than `t_nounits as t`, because ExplicitImports reports a
+# renaming import as stale (it tracks the pre-rename name, which never appears in use).
+const t = t_nounits
+const D = D_nounits
 
 """
     $(TYPEDSIGNATURES)
@@ -173,7 +180,7 @@ function MTK.FMIComponent(
     inputs = []
     fmi_variables_to_mtk_variables!(
         fmu, FMI.getInputValueReferencesAndNames(fmu),
-        value_references, inputs, states, observed; postprocess_variable = v -> MTK.setinput(
+        value_references, inputs, states, observed; postprocess_variable = v -> MTKBase.setinput(
             v, true
         )
     )
@@ -187,7 +194,7 @@ function MTK.FMIComponent(
     outputs = []
     fmi_variables_to_mtk_variables!(
         fmu, FMI.getOutputValueReferencesAndNames(fmu),
-        value_references, outputs, states, observed; postprocess_variable = v -> MTK.setoutput(
+        value_references, outputs, states, observed; postprocess_variable = v -> MTKBase.setoutput(
             v, true
         )
     )
@@ -361,22 +368,22 @@ function fmi_variables_to_mtk_variables!(
         end
         if parameters
             vars = [
-                postprocess_variable(MTK.unwrap(only(@parameters $sname::stateT)))
+                postprocess_variable(SymbolicUtils.unwrap(only(@parameters $sname::stateT)))
                     for sname in snames
             ]
         else
             vars = [
-                postprocess_variable(MTK.unwrap(only(@variables $sname(t)::stateT)))
+                postprocess_variable(SymbolicUtils.unwrap(only(@variables $sname(t)::stateT)))
                     for sname in snames
             ]
         end
         for i in eachindex(vars)
             der = ders[i]
-            vars[i] = MTK.unwrap(vars[i])
+            vars[i] = SymbolicUtils.unwrap(vars[i])
             for j in 1:der
                 vars[i] = D(vars[i])
             end
-            vars[i] = MTK.default_toterm(vars[i])
+            vars[i] = MTKBase.default_toterm(vars[i])
         end
         for i in eachindex(vars)
             if i == 1
