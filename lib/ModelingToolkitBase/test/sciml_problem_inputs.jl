@@ -196,7 +196,9 @@ end
     @testset "$ctor" for (sys, ctor) in [
             (odesys, ODEProblem),
             (odesys, ODEProblem{true}),
-            (odesys, ODEProblem{true, SciMLBase.FullSpecialize}), (odesys, BVProblem),
+            (odesys, ODEProblem{true, SciMLBase.FullSpecialize}),
+            (odesys, ODEProblem{true, SciMLBase.FunctionWrapperSpecialize}),
+            (odesys, BVProblem),
             (odesys, BVProblem{true}),
             (odesys, BVProblem{true, SciMLBase.FullSpecialize}), (sdesys, SDEProblem),
             (sdesys, SDEProblem{true}),

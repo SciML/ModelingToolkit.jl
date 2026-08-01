@@ -305,12 +305,14 @@ function _split_helper(buf_v::T, recurse, raw, idx) where {T}
 end
 
 function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{N}, raw, idx) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v)
 end
 
 function _split_helper(
         ::Type{<:AbstractArray}, buf_v::BlockedArray, ::Val{N}, raw, idx
     ) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return BlockedArray(
         map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v),
         blocksizes(buf_v, 1)
@@ -318,14 +320,11 @@ function _split_helper(
 end
 
 function _split_helper(::Type{<:AbstractArray}, buf_v::Tuple, ::Val{N}, raw, idx) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return ntuple(
         i -> _split_helper(eltype(buf_v[i]), buf_v[i], Val(N - 1), raw, idx),
         Val(length(buf_v))
     )
-end
-
-function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{0}, raw, idx)
-    return _split_helper((), buf_v, (), raw, idx)
 end
 
 function _split_helper(_, buf_v, _, raw, idx)
