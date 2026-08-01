@@ -936,16 +936,14 @@ function collect_vars!(
     return nothing
 end
 
-# Break the inference cycle between the mutually recursive collectors. Julia 1.10
-# can otherwise miscompile the cycle after unrelated method additions. The
-# abstractly typed cell keeps downstream `collect_vars!` dispatch dynamic, while
-# the explicit keyword preserves metadata recursion's depth-zero semantics.
-const _COLLECT_VARS_DISPATCH = Ref{Function}(collect_vars!)
-
-@noinline Base.@constprop :none function _call_collect_vars!(
-        unknowns, parameters, expr, iv
-    )
-    return _COLLECT_VARS_DISPATCH[](unknowns, parameters, expr, iv; depth = 0)
+# Break the inference cycle between the mutually recursive collectors, which Julia
+# 1.10 can otherwise miscompile after unrelated method additions. Dispatching in the
+# latest world age also means a downstream `collect_vars!` method defined while this
+# call is already running is still found; because the four-argument fallback returns
+# `nothing`, missing it would silently drop parameters rather than error. The explicit
+# keyword preserves metadata recursion's depth-zero semantics.
+function _call_collect_vars!(unknowns, parameters, expr, iv)
+    return @invokelatest collect_vars!(unknowns, parameters, expr, iv; depth = 0)
 end
 
 """

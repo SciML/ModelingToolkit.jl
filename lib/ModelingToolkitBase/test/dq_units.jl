@@ -282,6 +282,10 @@ struct CollectorInvalidationExpression
     parameter::Symbolics.SymbolicT
 end
 
+struct CollectorSameWorldExpression
+    parameter::Symbolics.SymbolicT
+end
+
 function collect_default_parameters(var)
     unknowns = OrderedSet{Symbolics.SymbolicT}()
     parameters = OrderedSet{Symbolics.SymbolicT}()
@@ -326,4 +330,34 @@ end
 
     @test Symbolics.unwrap(scale_test) in collect_default_parameters(custom_default)
     @test Symbolics.unwrap(x0_test) in collect_default_parameters(x_test)
+end
+
+# Defines the downstream method from inside a running call, so the enclosing frame
+# keeps its old world age while collecting.
+function define_then_collect(var)
+    @eval function MT.collect_vars!(
+            unknowns::OrderedSet{Symbolics.SymbolicT},
+            parameters::OrderedSet{Symbolics.SymbolicT},
+            expr::CollectorSameWorldExpression,
+            ::Union{Symbolics.SymbolicT, Nothing};
+            depth = 0
+        )
+        push!(parameters, expr.parameter)
+        return nothing
+    end
+    return collect_default_parameters(var)
+end
+
+@testset "collect_vars! dispatches to same-world-age downstream methods" begin
+    @parameters same_world_test
+    @variables same_world_var(t)
+
+    target = MT.setdefault(
+        same_world_var, CollectorSameWorldExpression(Symbolics.unwrap(same_world_test))
+    )
+
+    # The four-argument fallback returns `nothing`, so failing to see the method here
+    # would drop the parameter silently instead of raising a `MethodError`.
+    @test Symbolics.unwrap(same_world_test) in define_then_collect(target)
+    @test Symbolics.unwrap(same_world_test) in collect_default_parameters(target)
 end
