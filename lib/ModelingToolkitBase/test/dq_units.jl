@@ -2,6 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, JumpProcesses, DynamicQuantities
 using Symbolics
 import SymbolicUtils as SU
 using Test
+using DataStructures: OrderedSet
 MT = ModelingToolkitBase
 using ModelingToolkitBase: t, D
 @parameters τ [unit = u"s"] γ
@@ -273,30 +274,90 @@ let
     @test MT.get_unit(x_mat) == u"1"
 end
 
-# Issue #4211: collect_vars! must discover parameters in defaults with DynamicQuantities loaded
-# On Julia 1.10, loading DynamicQuantities could cause collect_vars! to fail to discover
-# parameters used in variable defaults due to a method invalidation bug.
-@testset "Issue #4211: collect_vars! discovers parameters in defaults" begin
-    using DataStructures: OrderedSet
+struct CollectorInvalidationString
+    value::String
+end
 
-    @parameters X0_test
-    @variables X_test(t) = X0_test
+struct CollectorInvalidationExpression
+    parameter::Symbolics.SymbolicT
+end
 
-    us = OrderedSet{Symbolics.SymbolicT}()
-    ps = OrderedSet{Symbolics.SymbolicT}()
-    MT.collect_vars!(us, ps, Symbolics.unwrap(X_test), Symbolics.unwrap(t), Symbolics.Operator; depth = 0)
+struct CollectorSameWorldExpression
+    parameter::Symbolics.SymbolicT
+end
 
-    # X0_test should be discovered in X_test's default value
-    @test Symbolics.unwrap(X0_test) in ps
+function collect_default_parameters(var)
+    unknowns = OrderedSet{Symbolics.SymbolicT}()
+    parameters = OrderedSet{Symbolics.SymbolicT}()
+    MT.collect_vars!(
+        unknowns, parameters, Symbolics.unwrap(var), Symbolics.unwrap(t),
+        Symbolics.Operator; depth = 0
+    )
+    return parameters
+end
 
-    # Test with expression in default
-    @parameters a_test b_test
-    @variables Y_test(t) = a_test + 2 * b_test
+@testset "collect_vars! survives late method invalidation" begin
+    @parameters x0_test y0_test scale_test
+    @variables x_test(t) = x0_test y_test(t) = scale_test * y0_test
 
-    empty!(us)
-    empty!(ps)
-    MT.collect_vars!(us, ps, Symbolics.unwrap(Y_test), Symbolics.unwrap(t), Symbolics.Operator; depth = 0)
+    @test Symbolics.unwrap(x0_test) in collect_default_parameters(x_test)
 
-    @test Symbolics.unwrap(a_test) in ps
-    @test Symbolics.unwrap(b_test) in ps
+    # This late definition exercises the Julia 1.10 invalidation that caused
+    # parameters in defaults to disappear after loading unrelated packages.
+    @eval Base.convert(::Type{Symbol}, value::CollectorInvalidationString) =
+        Symbol(value.value)
+
+    x_parameters = collect_default_parameters(x_test)
+    y_parameters = collect_default_parameters(y_test)
+
+    @test Symbolics.unwrap(x0_test) in x_parameters
+    @test Symbolics.unwrap(y0_test) in y_parameters
+    @test Symbolics.unwrap(scale_test) in y_parameters
+
+    custom_default = MT.setdefault(
+        x_test, CollectorInvalidationExpression(Symbolics.unwrap(scale_test))
+    )
+    @eval function MT.collect_vars!(
+            unknowns::OrderedSet{Symbolics.SymbolicT},
+            parameters::OrderedSet{Symbolics.SymbolicT},
+            expr::CollectorInvalidationExpression,
+            ::Union{Symbolics.SymbolicT, Nothing};
+            depth = 0
+        )
+        push!(parameters, expr.parameter)
+        return nothing
+    end
+
+    @test Symbolics.unwrap(scale_test) in collect_default_parameters(custom_default)
+    @test Symbolics.unwrap(x0_test) in collect_default_parameters(x_test)
+end
+
+# Defines the downstream method from inside a running call, so the enclosing frame
+# keeps its old world age while collecting.
+function define_then_collect(var)
+    @eval function MT.collect_vars!(
+            unknowns::OrderedSet{Symbolics.SymbolicT},
+            parameters::OrderedSet{Symbolics.SymbolicT},
+            expr::CollectorSameWorldExpression,
+            ::Union{Symbolics.SymbolicT, Nothing};
+            depth = 0
+        )
+        push!(parameters, expr.parameter)
+        return nothing
+    end
+    return collect_default_parameters(var)
+end
+
+@testset "collect_vars! dispatches to same-world-age downstream methods" begin
+    @parameters same_world_test
+    @variables same_world_var(t)
+
+    target = MT.setdefault(
+        same_world_var, CollectorSameWorldExpression(Symbolics.unwrap(same_world_test))
+    )
+
+    # The four-argument fallback returns `nothing`, so failing to see the method here
+    # would drop the parameter silently instead of raising a `MethodError`.
+    @test Symbolics.unwrap(same_world_test) in define_then_collect(target)
+    @test Symbolics.unwrap(same_world_test) in collect_default_parameters(target)
 end
