@@ -293,7 +293,8 @@ const D_nounits = Differential(t_nounits)
 
 export CompilerOptions
 export ODEFunction, convert_system_indepvar,
-    System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
+    System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem,
+    DiscreteSystem, ImplicitDiscreteSystem
 export SDEFunction
 export DiscreteProblem, DiscreteFunction
 export ImplicitDiscreteProblem, ImplicitDiscreteFunction
