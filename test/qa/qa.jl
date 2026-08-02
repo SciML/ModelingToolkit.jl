@@ -1,4 +1,7 @@
 using ModelingToolkit
+using ModelingToolkitBase
+using ModelingToolkitTearing
+using StateSelection
 using Aqua
 using JET
 using SciMLTesting
@@ -54,12 +57,36 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :RefValue,
 )
 
+# ModelingToolkit is the upper half of ModelingToolkitBase: the two are one library split
+# across a monorepo boundary, with the compilation and problem-construction layer living
+# here and dispatching on the system and operator types defined below it. Methods added to
+# those types are extensions of the pair's own API, so Aqua should not count them as piracy.
+const MTKBASE_OWNED_TYPES = (
+    ModelingToolkitBase.Hold,
+    ModelingToolkitBase.Sample,
+    ModelingToolkitBase.SampleTime,
+    ModelingToolkitBase.ShiftIndex,
+    ModelingToolkitBase.System,
+)
+
+# ModelingToolkit is also where the structural-transformation stack is wired to
+# ModelingToolkitBase's hooks, which means forwarding a handful of MTKBase functions to the
+# StateSelection/ModelingToolkitTearing implementations on their own types. `TearingState`
+# is not yet public in ModelingToolkitTearing, so it has to be reached by qualified access.
+const STRUCTURAL_TYPES = (
+    ModelingToolkitTearing.TearingState,
+    StateSelection.DiffGraph,
+)
+
 run_qa(
     ModelingToolkit;
     Aqua = Aqua,
     JET = JET,
     jet = true,
     jet_kwargs = (; target_defined_modules = true),
+    aqua_kwargs = (;
+        piracies = (; treat_as_own = (MTKBASE_OWNED_TYPES..., STRUCTURAL_TYPES...)),
+    ),
     ei_kwargs = (;
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),
