@@ -378,7 +378,9 @@ function get_observed_and_dependent_to_timeseries(
         timeseries = TimeseriesSetType()
         for v in varsbuf
             arrv, _ = split_indexed_var(v)
-            if (idx = get(disc_idxs, v, nothing)) !== nothing
+            if isequal(v, get_iv(sys)::SymbolicT)
+                push!(timeseries, ContinuousTimeseries())
+            elseif (idx = get(disc_idxs, v, nothing)) !== nothing
                 push!(timeseries, idx.clock_idx)
             elseif (idx = get(disc_idxs, arrv, nothing)) !== nothing
                 push!(timeseries, idx.clock_idx)
