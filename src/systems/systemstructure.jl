@@ -244,8 +244,9 @@ function _mtkcompile!(
     sys = _mtkcompile_worker!(state, sys; fully_determined, dummy_derivative, kwargs...)
     fullunknowns = [observables(sys); unknowns(sys)]
     @set! sys.observed = MTKBase.topsort_equations(sys, observed(sys), fullunknowns)
+    sys = state.sys = MTKBase.invalidate_cache!(sys)
 
-    return MTKBase.invalidate_cache!(sys)
+    return sys
 end
 
 function _mtkcompile_worker!(
