@@ -20,13 +20,37 @@ end
 Moshi.Derive.@derive StructuralHint[Show]
 
 function LinearFunction{iip}(
-        sys::System; expression = Val{false}, check_compatibility = true,
+        sys::System; u0 = nothing, p = nothing, t = nothing,
+        expression = Val{false}, check_compatibility = true,
         sparse = false, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false,
-        structural_hint::StructuralHint.Type = StructuralHint.NoHint(), kwargs...
+        checkbounds = false, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        structural_hint::StructuralHint.Type = StructuralHint.NoHint(),
+        cachesyms = (), kwargs...
     ) where {iip}
+    opts = SciMLFunctionOptions(;
+        u0, p, t, sparse, expression, check_compatibility, eval_expression, eval_module,
+        compiler_options, checkbounds, optimize, kwargs...,
+    )
+    return LinearFunction{iip}(sys, opts; structural_hint, cachesyms)
+end
+
+"""
+    LinearFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `LinearFunction` directly from a pre-assembled
+[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function LinearFunction{iip}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        structural_hint::StructuralHint.Type = StructuralHint.NoHint(),
+        cachesyms = ()
+    ) where {iip, E}
     check_complete(sys, LinearProblem)
-    check_compatibility && check_compatible_system(LinearProblem, sys)
+    opts.check_compatibility && check_compatible_system(LinearProblem, sys)
+
+    (; sparse) = opts
+    codegen_opts = opts.codegen
 
     A, b = calculate_A_b(sys; sparse)
     A = Moshi.Match.@match structural_hint begin
@@ -37,22 +61,11 @@ function LinearFunction{iip}(
             BandedMatrix{SymbolicT, Matrix{SymbolicT}}(A, (lower_band_size, upper_band_size))
         end
     end
-    # `cachesyms` is a structural kwarg of the update generators (not a codegen option);
-    # in the SCC path it arrives via `kwargs`, so extract it rather than funnelling it
-    # into the codegen options where it would be dropped.
-    cachesyms = get(kwargs, :cachesyms, ())
-    codegen_opts = GeneratedFunctionOptions(;
-        expression, wrap_gfw = Val{true}, eval_expression, eval_module,
-        compiler_options = get(kwargs, :compiler_options, CompilerOptions()),
-        codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds, kwargs...)
-    )
     update_A = generate_update_A(sys, A, codegen_opts; cachesyms)
     update_b = generate_update_b(sys, b, codegen_opts; cachesyms)
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
-    if expression == Val{true}
+    if E
         symbolic_interface = quote
             update_A = $update_A
             update_b = $update_b
