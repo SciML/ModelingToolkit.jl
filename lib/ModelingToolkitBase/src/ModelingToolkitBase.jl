@@ -401,6 +401,7 @@ const set_scalar_metadata = setmetadata
 @public collect_var_to_name!, collect_vars!, eqtype_supports_collect_vars, hasdefault
 @public getdefault, setdefault, setguess, iscomplete, isparameter, modified_unknowns!
 @public renamespace, namespace_equations
+@public varmap_to_vars
 @public check_mutable_cache, store_to_mutable_cache!, should_invalidate_mutable_cache_entry
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
