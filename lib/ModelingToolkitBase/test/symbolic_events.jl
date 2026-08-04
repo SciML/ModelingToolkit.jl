@@ -722,7 +722,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
@@ -841,7 +841,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
     @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
     @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
@@ -861,7 +861,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt2, evt1])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
     @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
     @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
