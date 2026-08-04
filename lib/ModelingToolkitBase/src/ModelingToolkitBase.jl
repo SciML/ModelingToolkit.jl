@@ -21,6 +21,10 @@ using PrecompileTools, Reexport
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
+import SciMLBase
+import SciMLBase: diagnose_symbolic_instability
+using Printf: @sprintf
+
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,

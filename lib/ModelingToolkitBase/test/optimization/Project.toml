@@ -32,7 +32,7 @@ ModelingToolkitBase = {path = "../.."}
 
 [compat]
 CasADi = "1.0.7"
-DataInterpolations = "8.8"
+DataInterpolations = "8.8, 9"
 OrdinaryDiffEqExplicitTableaus = "2"
 OrdinaryDiffEqImplicitTableaus = "2"
 SafeTestsets = "0.1, 1"
