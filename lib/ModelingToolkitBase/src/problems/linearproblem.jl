@@ -99,20 +99,42 @@ function SciMLBase.LinearProblem{iip}(
         eval_module = @__MODULE__, u0_constructor = identity, u0_eltype = nothing,
         kwargs...
     ) where {iip}
+    fn_opts = SciMLFunctionOptions(;
+        eval_expression, eval_module, check_compatibility, sparse, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = false, symbolic_u0 = true,
+        u0_constructor, u0_eltype, return_operating_point = true,
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return LinearProblem{iip}(sys, op, opts; kwargs...)
+end
+
+"""
+    SciMLBase.LinearProblem{iip}(sys::System, op, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds a `LinearProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.LinearProblem{iip}(
+        sys::System, op, opts::SciMLProblemOptions{E}; kwargs...
+    ) where {iip, E}
     check_complete(sys, LinearProblem)
-    check_compatibility && check_compatible_system(LinearProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(LinearProblem, sys)
 
     u0Type = typeof(op)
     f, u0, p, op = process_SciMLProblem(
-        LinearFunction{iip}, sys, op; check_length, expression,
-        build_initializeprob = false, symbolic_u0 = true, u0_constructor, u0_eltype,
-        return_operating_point = true, sparse, kwargs...
+        LinearFunction{iip}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
     if u0 !== nothing && any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
+    (; u0_constructor, u0_eltype) = opts
     floatT = if u0 === nothing
         calculate_float_type(op, u0Type)
     else
@@ -121,18 +143,19 @@ function SciMLBase.LinearProblem{iip}(
     u0_eltype = something(u0_eltype, floatT)
 
     u0_constructor = get_p_constructor(u0_constructor, u0Type, u0_eltype)
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
     symbolic_interface = f.interface
     A, b = get_A_b_from_LinearFunction(
-        sys, f, op; eval_expression, eval_module, expression, u0_constructor
+        sys, f, op; eval_expression, eval_module, expression = Val{E}, u0_constructor
     )
-    if expression === Val{false}
+    if !E
         symbolic_interface = wrap_symbolic_linear_interface(symbolic_interface, iip, A, b, p)
     end
 
     kwargs = (; u0, process_kwargs(sys; kwargs...)..., f = symbolic_interface)
     args = (; A, b, p)
 
-    return maybe_codegen_scimlproblem(expression, LinearProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, LinearProblem{iip}, args; kwargs...)
 end
 
 function __make_fww(@nospecialize(f), retT::DataType, argsT::DataType)

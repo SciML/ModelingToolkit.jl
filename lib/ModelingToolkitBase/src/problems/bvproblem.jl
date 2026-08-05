@@ -21,8 +21,42 @@ end
         expression = Val{false}, guesses = Dict(), callback = nothing,
         kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        checkbounds, check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, guesses, time_dependent_init = false,
+        build_initializeprob = supports_initialization(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return BVProblem{iip, spec}(sys, op, tspan, opts; guesses, callback, kwargs...)
+end
+
+"""
+    SciMLBase.BVProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; guesses = Dict(), callback = nothing, kwargs...)
+
+Public entry point that builds a `BVProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+
+`opts.fn_opts.check_compatibility` governs the `BVProblem`-level compatibility check. The
+inner `ODEFunction` build always uses `check_compatibility = false` regardless (it must
+skip its own, unrelated ODE-compatibility check) and derives `t` from `tspan[1]` when
+`opts.fn_opts.t` isn't already set — both applied via `ConstructionBase.setproperties` on
+a copy of `opts`, so a caller who builds `opts` directly (without going through the
+keyword wrapper above) gets the same defaulting. `guesses` is kept separate from
+`opts.guesses`: the latter is normalized (into a `SymmapT`) for `process_SciMLProblem`'s
+own use, while this method needs the raw, unnormalized value to merge into `_op` exactly
+as before.
+"""
+function SciMLBase.BVProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E};
+        guesses = Dict(), callback = nothing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, BVProblem)
-    check_compatibility && check_compatible_system(BVProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(BVProblem, sys)
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
     _iip = resolve_iip(iip, op)
@@ -39,12 +73,17 @@ end
     # for initialization.
     _op = is_full_ic ? op : merge(Dict(op), Dict(guesses))
 
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    checkbounds = opts.fn_opts.codegen.codegen.checkbounds
+
     if isempty(ctrls)
+        inner_opts = maybe_derive_t_from_tspan(opts, tspan)
+        inner_opts = setproperties(
+            inner_opts; fn_opts = setproperties(inner_opts.fn_opts; check_compatibility = false)
+        )
         fode, u0,
             p = process_SciMLProblem(
-            ODEFunction{_iip, spec}, sys, _op; guesses,
-            t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
-            checkbounds, time_dependent_init = false, expression, kwargs...
+            ODEFunction{_iip, spec}, sys, _op, inner_opts; options_struct = Val(true), kwargs...
         )
         f_prototype = nothing
     else
@@ -53,13 +92,12 @@ end
         # and silently generate control-free dynamics. Generate with an explicit
         # control argument instead and stack the controls onto each node's decision
         # vector; their initial values come from the processed parameter object.
-        expression == Val{false} ||
-            error("`expression = Val{true}` is not supported for BVProblems with control inputs.")
+        E && error("`expression = Val{true}` is not supported for BVProblems with control inputs.")
         fin, u0,
             p = process_SciMLProblem(
             ODEInputFunction{_iip, spec}, sys, _op; guesses, inputs = ctrls,
             t = tspan !== nothing ? tspan[1] : tspan, check_compatibility = false,
-            checkbounds, time_dependent_init = false, expression, kwargs...
+            checkbounds, time_dependent_init = false, expression = Val{E}, kwargs...
         )
         fode = BVPStackedControlRHS(fin, length(dvs))
         f_prototype = zeros(eltype(u0), length(dvs))
@@ -68,7 +106,6 @@ end
         # algebraic (lifted-output) rows keep their zero mass rows.
         mass_matrix = fin.mass_matrix
     end
-
     fcost = generate_bvp_cost(
         sys,
         GeneratedFunctionOptions(;
@@ -109,10 +146,10 @@ end
         @warn "The BVProblem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The BVP solvers will default to doing a nonlinear least-squares optimization."
     end
 
-    kwargs = process_kwargs(sys; expression, tspan, kwargs...)
+    kwargs = process_kwargs(sys; expression = Val{E}, tspan, kwargs...)
     args = (; bvpfn, u0, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, BVProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, BVProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Type{BVProblem}, sys::System)
