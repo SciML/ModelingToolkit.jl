@@ -10,7 +10,7 @@ using Ipopt
 using DataInterpolations
 using DataInterpolations: ConstantInterpolation
 using CasADi
-# using Pyomo
+using Pyomo
 using Test
 
 import DiffEqBase: solve
