@@ -431,3 +431,21 @@ end
     @named sys = System([D(x) ~ x], t)
     @test_deprecated structural_simplify(sys)
 end
+
+@testset "`DifferentiatedVariableNotUnknownError` message" begin
+    @variables q(t)
+    uq = unwrap(q)
+    err = ModelingToolkit.DifferentiatedVariableNotUnknownError(unwrap(D(q)), uq)
+    @test sprint(showerror, err) ==
+        "Variable $uq occurs differentiated as $(unwrap(D(q))) but is not an unknown of the system."
+
+    scoped = unwrap(ModelingToolkit.ParentScope(ModelingToolkit.ParentScope(q)))
+    err = ModelingToolkit.DifferentiatedVariableNotUnknownError(unwrap(D(scoped)), scoped)
+    @test occursin("expects 2 more levels in the hierarchy", sprint(showerror, err))
+
+    @test ModelingToolkit.expected_scope_depth(ModelingToolkit.LocalScope()) == 0
+    @test ModelingToolkit.expected_scope_depth(ModelingToolkit.GlobalScope()) == -1
+    @test ModelingToolkit.expected_scope_depth(
+        ModelingToolkit.ParentScope(ModelingToolkit.LocalScope())
+    ) == 1
+end

@@ -23,7 +23,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     fill!(out_vars, ModelingToolkit.COMMON_NOTHING)
     out_vars[1:length(fullvars)] .= fullvars
 
-    iv = get_iv(sys)
+    iv = get_iv(sys)::SymbolicT
     D = Differential(iv)
 
     for (varidx, diff) in edges(var_to_diff)

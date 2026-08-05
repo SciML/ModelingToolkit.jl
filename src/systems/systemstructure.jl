@@ -309,6 +309,17 @@ struct DifferentiatedVariableNotUnknownError <: Exception
     undifferentiated::Any
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return how many levels above the current system a variable with the given `scope` becomes
+an unknown. `GlobalScope` returns `-1`, matching the sentinel used by
+[`ModelingToolkitBase.check_scope_depth`](@ref).
+"""
+expected_scope_depth(::LocalScope) = 0
+expected_scope_depth(::GlobalScope) = -1
+expected_scope_depth(scope::ParentScope) = expected_scope_depth(scope.parent)::Int + 1
+
 function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
     undiff = err.undifferentiated
     diff = err.differentiated
@@ -316,7 +327,7 @@ function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
         io,
         "Variable $undiff occurs differentiated as $diff but is not an unknown of the system."
     )
-    scope = getmetadata(undiff, SymScope, LocalScope())
+    scope = getmetadata(undiff, SymScope, LocalScope())::AllScopes
     depth = expected_scope_depth(scope)
     return if depth > 0
         print(

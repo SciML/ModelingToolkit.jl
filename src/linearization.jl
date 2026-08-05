@@ -747,7 +747,7 @@ function linearize_symbolic(
     h = build_explicit_observed_function(
         sys, outputs,
         GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
-    )
+    )::GeneratedFunctionWrapper
     if split
         dx = fun(sts, p, t)
         y = h(sts, p, t)

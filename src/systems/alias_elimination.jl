@@ -706,7 +706,9 @@ function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLI
         all_int_vars, resid = StateSelection.find_eq_solvables!(state, e, to_rm, coeffs; allow_symbolic, allow_parameter)
         if all_int_vars && SU._iszero(resid)
             push!(mm.nzrows, e)
-            push!(mm.row_cols, copy(𝑠neighbors(state.structure.solvable_graph, e)))
+            # `find_eq_solvables!` writes into `solvable_graph`, so it is populated here.
+            solvable_graph = state.structure.solvable_graph::BipartiteGraph
+            push!(mm.row_cols, copy(𝑠neighbors(solvable_graph, e)))
             push!(mm.row_vals, copy(coeffs))
         end
     end
