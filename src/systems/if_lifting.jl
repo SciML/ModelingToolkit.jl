@@ -336,7 +336,9 @@ function generate_condition(cw::CondRewriter, sym)
     # the solvers don't treat the transition from a number to NaN or back as a zero-crossing,
     # so it can be used to effectively disable the affect when the condition is not meant to
     # be evaluated.
-    return ifelse(dep, zero_crossing, NaN) ~ 0
+    # `Equation` rather than `~`: the zero-crossing is always a scalar, and `~` widens to
+    # `Union{Equation, Vector{Equation}}` because of its complex-valued methods.
+    return Equation(ifelse(dep, zero_crossing, NaN), 0)
 end
 
 """

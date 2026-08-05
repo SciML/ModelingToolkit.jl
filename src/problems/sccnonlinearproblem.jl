@@ -752,10 +752,11 @@ function SciMLBase.SCCNonlinearProblem{iip}(
 
     new_dvs = dvs[reduce(vcat, decomposition.var_sccs)]
     new_eqs = eqs[reduce(vcat, decomposition.eq_sccs)]
+    ic = get_index_cache(sys)
+    new_ic = ic === nothing ? nothing :
+        subset_unknowns_observed(ic, sys, new_dvs, SymbolicT[])
     sys = ConstructionBase.setproperties(
-        sys; unknowns = new_dvs, eqs = new_eqs, index_cache = subset_unknowns_observed(
-            get_index_cache(sys), sys, new_dvs, SymbolicT[]
-        )
+        sys; unknowns = new_dvs, eqs = new_eqs, index_cache = new_ic
     )
 
     if length(subprobs) <= 5
@@ -777,7 +778,8 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
     @assert length(rps) == length(p)
 
     for (i, pvars) in enumerate(rps)
-        for (var, val) in zip(pvars, p[i])
+        # `reorder_parameters` flattens by default, so every buffer is a flat variable list.
+        for (var, val) in zip(pvars::Vector{SymbolicT}, p[i])
             write_possibly_indexed_array!(op, var, Symbolics.SConst(val), COMMON_NOTHING)
         end
     end
