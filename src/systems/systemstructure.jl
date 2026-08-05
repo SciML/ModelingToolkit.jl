@@ -207,6 +207,7 @@ function _mtkcompile!(
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         eliminate_mm_zeros = true,
+        analytic_integration = true,
         kwargs...
     )
     if fully_determined isa Bool
@@ -229,7 +230,7 @@ function _mtkcompile!(
     if eliminate_mm_zeros
         # Do this after the second `eliminate_perfect_aliases!` so if any zeros we eliminate are
         # aliases, we eliminate the "right" alias.
-        mm = eliminate_zero_variables_fixpoint!(state, mm; kwargs...)
+        mm = eliminate_zero_variables_fixpoint!(state, mm; analytic_integration, kwargs...)
     end
     state.mm = mm
     @assert mm.nparentrows == nsrcs(state.structure.graph) && mm.ncols == ndsts(state.structure.graph) lazy"""

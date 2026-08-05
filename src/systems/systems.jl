@@ -18,6 +18,7 @@ present in the equations of the system will be removed in this process.
 + `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
 + `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
 + `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
++ `analytic_integration=true` controls whether variables with trivial dynamics (e.g. `D(x) ~ 0`) are analytically integrated, i.e. eliminated as unknowns in favor of an observed polynomial in the independent variable. Individual variables can be exempted by marking them `irreducible`.
 """ mtkcompile
 
 function MTKBase.__mtkcompile(

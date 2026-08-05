@@ -547,12 +547,12 @@ If a row in `mm` only contains a single variable, that variable is identically z
 Eliminate such any such zero variables which can be identified from `mm`. Return the
 new `mm` and a boolean indicating if any variables were thus eliminated.
 """
-function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL; allow_symbolic = false, allow_parameter = true, kws...)
+function eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL; allow_symbolic = false, allow_parameter = true, analytic_integration = true, kws...)
     StateSelection.complete!(state.structure)
     (; sys, fullvars, structure, original_eqs) = state
     (; var_to_diff, graph) = structure
     diff_to_var = invview(var_to_diff)
-    zero_vars, zero_eqs, eqs_to_substitute, protected_vars, protected_eqs = __eliminate_zero_variables!(state, mm)
+    zero_vars, zero_eqs, eqs_to_substitute, protected_vars, protected_eqs = __eliminate_zero_variables!(state, mm; analytic_integration)
     isempty(zero_vars) && return mm, false
 
     # Zero variables that are actually eliminated (not protected by irreducibility).
@@ -724,14 +724,15 @@ Helper for `eliminate_zero_variables!`. Returns:
   in `zero_vars`. These equations should be substituted to remove the zero variables.
 - `protected_vars`: A `Set{Int}`, subset of `zero_vars`, whose differential chain (the
   variable together with all its derivatives and antiderivatives) contains an irreducible
-  variable. These zero variables should still be substituted into other equations, but
+  variable, or, if `analytic_integration = false`, would otherwise be analytically
+  integrated. These zero variables should still be substituted into other equations, but
   neither they nor their `var ~ 0` equations should be eliminated from the system.
 - `protected_eqs`: A `Set{Int}`, subset of `zero_eqs`, of the `var ~ 0` equations
   identifying variables in `protected_vars` to be zero. These must be retained.
 
 Also updates `mm` in-place to remove non-protected zero variables/equations.
 """
-function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL)
+function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixCLIL; analytic_integration = true)
     (; graph, var_to_diff) = state.structure
     fullvars = state.fullvars
     diff_to_var = invview(var_to_diff)
@@ -817,16 +818,21 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     end
 
 
-    # A zero variable is protected if its lowest order derivative is marked as irreducible
+    # A zero variable is protected if its lowest order derivative is marked as irreducible.
+    # If `analytic_integration = false`, it is also protected when its lowest order
+    # antiderivative is not itself zero.
     protected_vars = Set{Int}()
-    if !isempty(irreducibles)
+    if !isempty(irreducibles) || !analytic_integration
         for v in zero_vars
             # Walk down to the lowest order antiderivative.
             root::Int = v
             while (∫root = diff_to_var[root]) isa Int
                 root = ∫root
             end
-            contains_possibly_indexed_element(irreducibles, fullvars[root]) && push!(protected_vars, v)
+            if contains_possibly_indexed_element(irreducibles, fullvars[root]) ||
+                    (!analytic_integration && !(root in zero_vars))
+                push!(protected_vars, v)
+            end
         end
     end
     # `var ~ 0` equations of protected variables must be retained. Only the lowest-order

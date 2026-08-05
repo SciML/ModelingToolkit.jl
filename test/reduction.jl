@@ -881,6 +881,39 @@ end
             equations(sys)
         )
     end
+
+    @testset "`analytic_integration = false` disables only analytic integration" begin
+        # `D(x) ~ 0` would integrate `x` into a constant. With the flag off, `x` remains a
+        # numerically integrated unknown, while the genuinely zero `y` is still eliminated.
+        @variables x(t) y(t)
+        @named sys = System([D(x) ~ 0, 0 ~ 2y], t, [x, y], [])
+        ts, mm, modified = run_zero_var_pass(sys; analytic_integration = false)
+        @test modified
+        @test hasvar(ts, x) && hasvar(ts, D(x)) && !hasvar(ts, y)
+        @test issetequal(obs_lhss(ts), [unwrap(y)])
+        @test isempty(analytically_integrated(ts.sys))
+        @test isempty(new_params(ts, sys))
+    end
+
+    @testset "`analytic_integration = false` through `mtkcompile`" begin
+        # A variable modified by an `ImperativeAffect` must remain an unknown: analytically
+        # integrating it makes `ODEProblem` construction fail since the affect then refers to
+        # a variable that was reduced away.
+        @variables x(t)
+        aff = ModelingToolkit.ImperativeAffect(modified = (; x)) do m, o, i, c
+            (; x = m.x + 1)
+        end
+        @named sys = System([D(x) ~ 0], t, [x], []; discrete_events = [5.0 => aff])
+        simp = mtkcompile(sys; analytic_integration = false)
+        @test issetequal(unknowns(simp), [unwrap(x)])
+        @test isempty(analytically_integrated(simp))
+        @test isempty(parameters(simp))
+        # The trajectory is a staircase kicked by +1 at `t = 5, 10, 15`.
+        sol = solve(ODEProblem(simp, [x => 0.0], (0.0, 20.0)), Tsit5())
+        @test sol(4.0; idxs = x) ≈ 0.0
+        @test sol(7.0; idxs = x) ≈ 1.0
+        @test sol(17.0; idxs = x) ≈ 3.0
+    end
 end
 
 @testset "Issue#4776: `eliminate_perfect_aliases!` correctly handles missing higher order derivatives" begin
