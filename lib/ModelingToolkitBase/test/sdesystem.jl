@@ -1203,4 +1203,16 @@ if @isdefined(ModelingToolkit)
         ssys = mtkcompile(sys)
         @test SU.getmetadata(ssys, ModelingToolkitBase.DiffCacheParams, nothing)[dcp] == 3
     end
+
+    @testset "Issue #4875: deferred scalarization is appropriately handled in SDEs" begin
+        @variables x(t)[1:2]
+        @parameters A[1:2, 1:2] = [-1 0; 0 -2]
+        @brownians Brw1 Brw2
+
+        # array-valued differential equation + brownian term -> fails
+        eqs = [D(x) ~ A * x + [Brw1, Brw2]]
+
+        @named sys = System(eqs, t, [x], [A], [Brw1, Brw2])
+        @test_nowarn mtkcompile(sys)
+    end
 end
