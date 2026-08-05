@@ -889,6 +889,23 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Search through arbitrary symbolic expression `expr` for symbolic variables, then populate
+`unknowns` with non-parameters and `parameters` with parameters. `iv` should be the
+independent variable of the system, or `nothing` for time-independent systems.
+
+This is intended for downstream packages that need MTKBase's variable classification for
+plain symbolic expressions that are not full equations or systems.
+"""
+function collect_expression_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}; depth = 0)
+    for var in Symbolics.get_variables(expr)
+        collect_var!(unknowns, parameters, unwrap(var), iv; depth)
+    end
+    return nothing
+end
+
 function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
     for var in expr
         collect_vars!(unknowns, parameters, var, iv, op; depth)
