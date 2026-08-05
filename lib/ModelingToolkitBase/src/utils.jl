@@ -1202,13 +1202,26 @@ function is_numeric_symtype(T::Type)
 end
 
 """
+The concrete type of the graph returned by [`observed_dependency_graph`](@ref).
+"""
+const ObservedDependencyGraphT = DiCMOBiGraph{
+    false, Int, BipartiteGraph{Int, Nothing},
+    Matching{Unassigned, Vector{Union{Unassigned, Int}}},
+}
+
+"""
     $(TYPEDSIGNATURES)
 
 Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
 """
-function observed_dependency_graph(sys::AbstractSystem, eqs::Vector{Equation})
+function observed_dependency_graph(
+        sys::AbstractSystem, eqs::Vector{Equation}
+    )::ObservedDependencyGraphT
     graph, assigns = observed2graph(sys, eqs, getproperty.(eqs, (:lhs,)))
-    matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
+    # The unassigned type parameter is given explicitly instead of letting `Matching`
+    # infer it from the eltype, since that inference is not part of a stable contract
+    # and has differed between `BipartiteGraphs` versions.
+    matching = complete(Matching{Unassigned}(Vector{Union{Unassigned, Int}}(assigns)))
     return DiCMOBiGraph{false}(graph, matching)
 end
 
@@ -1219,10 +1232,7 @@ function should_invalidate_mutable_cache_entry(::Type{ObservedGraphCacheKey}, pa
 end
 
 struct ObservedGraphCache
-    graph::DiCMOBiGraph{
-        false, Int, BipartiteGraph{Int, Nothing},
-        Matching{Unassigned, Vector{Union{Unassigned, Int}}},
-    }
+    graph::ObservedDependencyGraphT
     obsvar_to_idx::Dict{Any, Int}
 end
 
