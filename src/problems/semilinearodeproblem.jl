@@ -142,7 +142,7 @@ end
             defs[par] = mat
         end
         cachelen = jac ? length(dvs) * length(eqs) : length(dvs)
-        defs[diffcache_par] = DiffCache(zeros(DiffEqBase.value(_u0_eltype), cachelen))
+        defs[diffcache_par] = DiffCache(zeros(SciMLBase.value(_u0_eltype), cachelen))
     end
     @set! sys.guesses = guess
     @set! sys.initial_conditions = defs
