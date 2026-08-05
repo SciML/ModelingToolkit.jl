@@ -137,29 +137,29 @@ function find_singular_subterms(eq, expr, sub_map, diagnosis, visited)
     !SymbolicUtils.iscall(expr) && return diagnosis
     op = SymbolicUtils.operation(expr)
     args = SymbolicUtils.arguments(expr)
-    haskey(visited, expr) && return diagnosis  
+    haskey(visited, expr) && return diagnosis
     visited[expr] = nothing
 
     if op === (/) #division, singular if we divide by small thing
         d = Symbolics.value(sub_map(args[2]))
-        if d isa Number && abs(d) < 1e-10
+        if d isa Number && abs(d) < 1.0e-10
             push!(diagnosis, "in equation $eq: division by very small value $(args[2]) ≈ $(@sprintf("%.4g", d)) leads to singularity.")
         end
     elseif op === log #singular if we log small thing
         x = Symbolics.value(sub_map(args[1]))
-        if x isa Number && x <= 1e-10
+        if x isa Number && x <= 1.0e-10
             push!(diagnosis, "in equation $eq: log of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
         end
-    elseif op === sqrt 
+    elseif op === sqrt
         x = Symbolics.value(sub_map(args[1]))
-        if x isa Number && x < 1e-10
+        if x isa Number && x < 1.0e-10
             push!(diagnosis, "in equation $eq: sqrt of $(args[1]) = $(@sprintf("%.4g", x)) near/at singularity (derivative blows up).")
         end
     elseif op === (^)
         e = Symbolics.value(sub_map(args[2]))
         b = Symbolics.value(sub_map(args[1]))
         if e isa Number && b isa Number #two cases
-            if e < 0 && abs(b) < 1e-10
+            if e < 0 && abs(b) < 1.0e-10
                 push!(diagnosis, "in equation $eq: ($(args[1])) raised to power $e with base ≈ $(@sprintf("%.4g", b)) going to 0; result diverges.")
             elseif e > 0 && abs(b) > 1
                 push!(diagnosis, "in equation $eq: ($(args[1]) ≈ $(@sprintf("%.4g", b))) raised to power $e - base magnitude is large and being amplified.")
@@ -186,20 +186,20 @@ function find_failing_subterms(cond, prev_map, curr_map, diagnosis)
         if lhs isa Number && rhs isa Number
             # small margin -> violated
             margin = (op === (<) || op === (<=)) ? rhs - lhs : lhs - rhs
-            if margin <= 1e-6
+            if margin <= 1.0e-6
                 push!(diagnosis, "   subclause `$c` violated: $(clause_values(c, curr_map))")
             end
         end
     elseif op === (!=) && length(args) == 2
         lhs = Symbolics.value(Symbolics.substitute(args[1], prev_map))
         rhs = Symbolics.value(Symbolics.substitute(args[2], prev_map))
-        if lhs isa Number && rhs isa Number && abs(lhs - rhs) <= 1e-6
+        if lhs isa Number && rhs isa Number && abs(lhs - rhs) <= 1.0e-6
             push!(diagnosis, "   subclause `$c` violated: $(clause_values(c, curr_map))")
         end
     elseif op === (==) && length(args) == 2
         lhs = Symbolics.value(Symbolics.substitute(args[1], prev_map))
         rhs = Symbolics.value(Symbolics.substitute(args[2], prev_map))
-        if lhs isa Number && rhs isa Number && abs(lhs - rhs) > 1e-6
+        if lhs isa Number && rhs isa Number && abs(lhs - rhs) > 1.0e-6
             push!(diagnosis, "   subclause `$c` violated: $(clause_values(c, curr_map))")
         end
     else #recurse
