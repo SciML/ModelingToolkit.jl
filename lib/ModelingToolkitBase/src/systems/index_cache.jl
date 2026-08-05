@@ -431,11 +431,19 @@ end
 function parse_callbacks_for_discretes!(sys::AbstractSystem, events::Vector, disc_param_callbacks::Dict{SymbolicT, BitSet}, constant_buffers::Dict{TypeT, Set{SymbolicT}}, nonnumeric_buffers::Dict{TypeT, Set{SymbolicT}}, offset::Int)
     for (i, event) in enumerate(events)
         discs = Set{SymbolicParam}()
-        affect = event.affect::Union{AffectSystem, ImperativeAffect, Nothing}
-        if affect isa AffectSystem || affect isa ImperativeAffect
-            union!(discs, discretes(affect))
-        elseif affect === nothing
-            continue
+        affects = Union{AffectSystem, ImperativeAffect, Nothing}[]
+        if event isa SymbolicContinuousCallback
+            push!(affects, event.affect)
+            push!(affects, event.affect_neg)
+        else
+            push!(affects, event.affect)
+        end
+        for affect in affects
+            if affect isa AffectSystem || affect isa ImperativeAffect
+                union!(discs, discretes(affect))
+            elseif affect === nothing
+                continue
+            end
         end
 
         for sym in discs
