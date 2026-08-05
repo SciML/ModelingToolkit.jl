@@ -1256,6 +1256,23 @@ if @isdefined(ModelingToolkit)
             @test ci.var_domain == [Clock(0.1), Clock(0.1)]
         end
     end
+
+    @testset "Issue#4838: `get_sensitivity` correctly accepts and forwards `t`" begin
+        @variables x(t) = 0.0 e(t) uc(t) [output = true] up(t) [input = true]
+        @parameters k = 2.0 r = 1.0
+        @named sys = System(
+            [
+                D(x) ~ -(2 + sin(t)) * x + up,
+                e ~ r - x,
+                uc ~ k * e,
+                connect(uc, :ap, up),
+            ], t
+        )
+        mats0, _, _ = ModelingToolkit.get_sensitivity(sys, :ap; op = Dict(x => 0.0), t = 0.0)
+        mats3, _, _ = ModelingToolkit.get_sensitivity(sys, :ap; op = Dict(x => 0.0), t = 3.0)
+        @test mats0.A[1] ≈ -4.0
+        @test mats3.A[1] ≈ -4.0 - sin(3.0)
+    end
 end
 
 using DynamicQuantities
