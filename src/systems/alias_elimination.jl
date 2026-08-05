@@ -817,25 +817,16 @@ function __eliminate_zero_variables!(state::TearingState, mm::CLIL.SparseMatrixC
     end
 
 
-    # A zero variable is protected (retained as an unknown instead of being analytically
-    # integrated) if its lowest order derivative is marked as irreducible, or if it (or any
-    # variable in its differential chain) is modified by a discrete/continuous event. A
-    # variable an event impulsively modifies is not a smooth function of time, so it must keep
-    # being numerically integrated rather than being replaced by a polynomial in the iv.
-    event_modified = MTKBase.variables_modified_by_events(state.sys)
+    # A zero variable is protected if its lowest order derivative is marked as irreducible
     protected_vars = Set{Int}()
-    if !isempty(irreducibles) || !isempty(event_modified)
+    if !isempty(irreducibles)
         for v in zero_vars
             # Walk down to the lowest order antiderivative.
             root::Int = v
             while (∫root = diff_to_var[root]) isa Int
                 root = ∫root
             end
-            if contains_possibly_indexed_element(irreducibles, fullvars[root]) ||
-                    contains_possibly_indexed_element(event_modified, fullvars[root]) ||
-                    contains_possibly_indexed_element(event_modified, fullvars[v])
-                push!(protected_vars, v)
-            end
+            contains_possibly_indexed_element(irreducibles, fullvars[root]) && push!(protected_vars, v)
         end
     end
     # `var ~ 0` equations of protected variables must be retained. Only the lowest-order
