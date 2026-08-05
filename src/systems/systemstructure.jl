@@ -218,11 +218,11 @@ function _mtkcompile!(
     validate_io!(state, orig_inputs, inputs, discrete_inputs, outputs, disturbance_inputs)
     # ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
     union!(inputs, disturbance_inputs)
-    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
-    state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
+    state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
+    state = inputs_to_parameters!(state, inputs, outputs)
     eliminate_perfect_aliases!(state)
     StateSelection.trivial_tearing!(state)
-    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+    sys, mm = alias_elimination!(state; fully_determined, kwargs...)
     old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
@@ -262,7 +262,7 @@ function _mtkcompile_worker!(
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm = alias_elimination!(state; fully_determined, kwargs...)
         state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
             sys, state; fully_determined, kwargs...

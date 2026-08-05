@@ -169,8 +169,9 @@ const REEXPORTED_API = (
     # ModelingToolkitTearing: `TearingState` is explicitly exported by
     # ModelingToolkit (see `src/ModelingToolkit.jl`).
     :TearingState,
-    # StateSelection: `find_solvables!` is an accidental leak -- it is a StateSelection
-    # internal that `StructuralTransformations` `export`s but only ever calls qualified. It is
+    # StateSelection: `find_solvables!` is an accidental leak -- a StateSelection internal
+    # that `StructuralTransformations` imports and `export`s, while every call site spells it
+    # `StateSelection.find_solvables!`, so nothing in ModelingToolkit uses the export. It is
     # listed here so the audit is exhaustive; dropping it is a breaking change and belongs in
     # the next major release, not in a QA fix.
     :find_solvables!,
@@ -193,7 +194,74 @@ const SYMBOLICS_OWNED_REEXPORTS = (
     :supremum,
 )
 
-# Names the extensions must reach for which no public spelling exists.
+# `ModelingToolkit` reaches for names that are not `public` at the module that defines
+# them. The `*_via_owners` checks pass, so every one of these is already being reached
+# through its owner: there is no other module to import it from, and the only real fixes
+# are for the owner to declare the name `public` (with a docstring and a rendered docs
+# entry) or for ModelingToolkit to stop needing it. Both lists below are exhaustive, so
+# reaching for a *new* internal fails this test rather than sliding in unnoticed.
+# Tracked in https://github.com/SciML/ModelingToolkit.jl/issues/4882.
+#
+# The groups, and why each is currently irreducible:
+#
+#   ModelingToolkitBase (and its `StructuralHint` submodule). ModelingToolkit is the upper
+#   half of one library split across a monorepo boundary; these are the pair's shared
+#   implementation seams (codegen entry points, problem-type selectors, the `COMMON_*`
+#   hashconsed sentinels, docstring templates). They are internal *to the pair*, not to
+#   ModelingToolkitBase alone, so declaring them `public` would advertise them to end
+#   users, which is the opposite of what they are.
+#
+#   ModelingToolkitTearing and StateSelection. The structural-transformation stack was
+#   split out of ModelingToolkit into these two packages; ModelingToolkit is the only
+#   consumer of the tearing/clock-inference/Pantelides entry points listed here. They are
+#   the strongest candidates for being promoted to public API upstream -- in particular
+#   `TearingState`, which ModelingToolkit `export`s (see `src/ModelingToolkit.jl`) and so
+#   already exposes as its own public API.
+#
+#   Symbolics and SymbolicUtils. The symbolic-term representation ModelingToolkit compiles
+#   against: `BasicSymbolic` constructors and shape/metadata accessors (`SSym`, `STerm`,
+#   `SArgsT`, `SConst`, `shape`, `ShapeVecT`, `hashcons`), the codegen targets
+#   (`JuliaTarget`, `CTarget`, ...), and the IR-walking helpers used by alias elimination
+#   and SCC construction. There is no public spelling for any of them.
+#
+#   SciMLBase, Moshi, OffsetArrays and Base. Eight leftovers: SciMLBase's `handle_varmap`,
+#   `Void`, `ODENLStepData` and `ParamJacobianWrapper`, Moshi's `Match` (the `@match` entry
+#   point), `OffsetArrays.Origin` (imported only to pin invalidations), `Base.RefValue`,
+#   which has no public spelling at all, and `Iterators.map`, which has one only from Julia
+#   1.12 on.
+#
+# ExplicitImports reports only the first failing module, so both lists also cover the
+# `ModelingToolkit.StructuralTransformations` submodule and the four extensions; they are
+# larger than the finding counts a single `check_*` call on `ModelingToolkit` reports.
+const NONPUBLIC_EXPLICIT_IMPORTS = (
+    # ModelingToolkitBase
+    :build_function_wrapper, :BuildFunctionWrapperOptions, :COMMON_FALSE, :COMMON_INF,
+    :COMMON_MISSING, :COMMON_NOTHING, :COMMON_SENTINEL, :COMMON_TRUE,
+    :GeneratedFunctionOptions, :DerivativeDict, :diff2term_with_unit, :distribute_shift,
+    :empty_substitutions, :ExtraEquationsSystemException, :ExtraVariablesSystemException,
+    :filter_kwargs, :get_substitutions, :has_equations, :invalidate_cache!,
+    :InvalidSystemException, :isdiffeq, :isdifferential, :lower_varname_with_unit, :Schedule,
+    :setio, :shift2term, :simplify_shifts, :VariableShift, :VariableUnshifted,
+    # ModelingToolkitTearing
+    :DefaultReassembleAlgorithm, :ReassembleAlgorithm, :SystemStructure, :TearingState,
+    # Symbolics
+    Symbol("@derivatives"), :BuildTargets, :CallAndWrap, :COMMON_ZERO, :CTarget, :degree,
+    :exprs_occur_in, :fixpoint_sub, :hasderiv, :hasnode, :hessian_sparsity, :isaffine,
+    :islinear, :jacobian_sparsity, :JuliaTarget, :lhss, :lower_varname, :MultithreadedForm,
+    :ParallelForm, :parse_vars, :recursive_hasoperator, :rename, :rhss, :SArgsT, :SerialForm,
+    :setdefaultval, :_solve, :SSym, :StanTarget, :STerm, :SymbolicT,
+    :var_from_nested_derivative, :VartypeT,
+    # SymbolicUtils
+    :BSImpl, :_isone, :_iszero, :Operator, :promote_symtype, :Term,
+    # StateSelection
+    :find_solvables!,
+    # SciMLBase, OffsetArrays, Base
+    :handle_varmap, :Origin, :RefValue,
+)
+
+# Names the extensions must reach for which no public spelling exists, plus the
+# non-public qualified accesses in ModelingToolkit itself. See the comment above
+# `NONPUBLIC_EXPLICIT_IMPORTS` for why each group is irreducible.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # ModelingToolkitBase: the FMI extension's variable metadata helpers.
     :default_toterm,
@@ -202,8 +270,41 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # ModelingToolkit's own stub that MTKFMIExt implements; it is documented API but has
     # not been declared `public`, and an extension has no way to add a method unqualified.
     :FMIComponent,
-    # Base: `Base.RefValue` has no public spelling.
-    :RefValue,
+    # Base: `Base.RefValue` has no public spelling. `Iterators.map` only became `public` in
+    # Julia 1.12, so it is still a finding on the `lts` half of the QA matrix; it is used
+    # deliberately in alias elimination because a generator would build a closure.
+    :map, :RefValue,
+    # ModelingToolkitBase. `Type` here is the Moshi ADT constructor of
+    # `ModelingToolkitBase.StructuralHint`; `Base.Type` is public and is not affected.
+    :AnalysisVariable, :check_compatible_system, :compute_array_variable_buffer_idxs,
+    :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
+    :function_docstring, :generate_homotopy_residual, :generate_ODENLStepData,
+    :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
+    :has_any_homotopy, :indp_to_system, :invalidate_cache!, :lower_homotopy, :__mtkcompile,
+    :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
+    :reverse_all_default_reversible_transformations, :simplify_sde_system, :simplify_shifts,
+    :singular_check, :topsort_equations, :torn_system_jacobian_sparsity, :Type,
+    :wrap_symbolic_linear_interface,
+    # ModelingToolkitTearing
+    :backshift_expr, :ClockInference, :DefaultReassembleAlgorithm, :get_time_domain,
+    :has_time_domain, :infer_clocks!, :Inferred, :InferredDiscrete, :input_timedomain,
+    :InputTimeDomainElT, :IOTimeDomainArgsT, :output_timedomain,
+    :scalarize_tearing_state_eqs!, :shift_discrete_system, :split_system,
+    :StateMachineOperator,
+    # StateSelection
+    :check_consistency, :complete!, :dummy_derivative_graph!, :find_solvables!,
+    :find_var_sccs, :get_new_mm, :is_only_discrete, :is_present, :isalgvar, :isdervar,
+    :pantelides!, :rm_eqs_vars!, :structural_singularity_removal!, :trivial_tearing!,
+    :var_derivative!,
+    # Symbolics
+    :COMMON_ZERO, :DEFAULT_OUTSYM, :FixpointSubstituter, :SArgsT, :SConst, :SSym, :STerm,
+    # SymbolicUtils (including its `Code` submodule)
+    :AddMulVariant, :array_literal, :ArrayMaker, :Code, :create_array, :default_is_atomic,
+    :hashcons, :IRStructureSearchBuffer, :IRSubstituter, :is_array_shape,
+    :is_function_symbolic, :_iszero, :RegionsT, :search_variables, :search_variables!, :shape,
+    :ShapeVecT, :stable_eachindex, :Unknown, :with_allocator,
+    # SciMLBase, Moshi
+    :Match, :ODENLStepData, :ParamJacobianWrapper, :Void,
 )
 
 # ModelingToolkit is the upper half of ModelingToolkitBase: the two are one library split
@@ -237,6 +338,7 @@ run_qa(
         piracies = (; treat_as_own = (MTKBASE_OWNED_TYPES..., STRUCTURAL_TYPES...)),
     ),
     ei_kwargs = (;
+        all_explicit_imports_are_public = (; ignore = NONPUBLIC_EXPLICIT_IMPORTS),
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),
     api_docs_kwargs = (; ignore = SYMBOLICS_OWNED_REEXPORTS),
