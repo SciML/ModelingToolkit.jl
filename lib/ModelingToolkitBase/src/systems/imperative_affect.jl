@@ -154,11 +154,9 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    # Mirror `unassignable_variables`: build the set of valid symbols, scalarizing any
-    # array-valued symbol into its elements (a flattened system stores arrays as their
-    # scalar elements, not the bare array symbolic). A `Set` is required so membership
-    # tests use `isequal`/hashing and return `Bool`; `x in all_symbols(sys)` would use
-    # symbolic `==` (`all_symbols` returns a `Vector`) and error in a boolean context.
+    # Mirror `unassignable_variables`: build the set of
+    #  valid symbols, scalarizing any array-valued symbol
+    #  into its elements.
     valid = Set{SymbolicT}()
     for sym in all_symbols(sys)
         if Symbolics.isarraysymbolic(sym)
