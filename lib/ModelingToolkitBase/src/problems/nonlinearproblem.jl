@@ -25,19 +25,6 @@
 
     f = generate_rhs(sys, codegen_opts)
 
-    postcondition = if getmetadata(sys, LimitedCtx, nothing) === nothing
-        nothing
-    elseif expression == Val{true}
-        throw(
-            ArgumentError(
-                "`expression = Val{true}` is not supported for systems with `limited` " *
-                    "quantities; the generated `postcondition` hook is a runtime closure."
-            )
-        )
-    else
-        generate_limited_postcondition(sys, iip; eval_expression, eval_module)
-    end
-
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
@@ -73,7 +60,6 @@
         jac_prototype,
         resid_prototype,
         initialization_data,
-        postcondition,
     )
     args = (; f)
 
@@ -143,6 +129,13 @@ end
     end
 
     kwargs = process_kwargs(sys; kwargs...)
+    # `limited` quantities lower to a `postcondition` corrector, which is a solver option
+    # rather than a property of the function: attach it to the problem's keywords so it
+    # is forwarded to `solve`/`init` like any other option (and can be overridden there).
+    kwargs = merge_limited_postcondition(
+        sys, _iip, kwargs; expression, eval_expression = get(kwargs, :eval_expression, false),
+        eval_module = get(kwargs, :eval_module, @__MODULE__)
+    )
     ptype = getmetadata(sys, ProblemTypeCtx, StandardNonlinearProblem())
     args = (; f, u0, p, ptype)
 

@@ -24,9 +24,9 @@ function pnjlim(vnew, vold, vt, vcrit)
 end
 @register_symbolic pnjlim(vnew, vold, vt, vcrit)
 
-# NonlinearSolve applies `NonlinearFunction.postcondition` only from versions carrying
-# the iterate-commit hooks; older releases silently ignore the field, so the solver
-# behavior assertions are gated (functional assertions still run everywhere).
+# NonlinearSolve applies the `postcondition` solver option only from versions carrying
+# the iterate-commit support; older releases reject the unknown keyword, so the solver
+# assertions are gated (the lowering assertions still run everywhere).
 const NLS_APPLIES_POSTCONDITION = isdefined(NonlinearSolveBase, :apply_postcondition!!)
 
 @testset "runtime numeric fallback is the actual branch" begin
@@ -91,12 +91,20 @@ end
         vcrit => 0.025 * log(0.025 / (sqrt(2) * 1.0e-14)),
     ]
     prob = NonlinearProblem(sys, [v => 0.0; pvals])
-    @test prob.f.postcondition !== nothing
+    @test haskey(prob.kwargs, :postcondition)
     sol = solve(prob, NewtonRaphson(); maxiters = 1000)
     @test SciMLBase.successful_retcode(sol)
     @test abs(sol[v] - 0.6698509496766559) < 1.0e-6
 
     if NLS_APPLIES_POSTCONDITION
+        # a corrector passed at solve time replaces the model-declared one
+        calls = Ref(0)
+        solve(
+            prob, NewtonRaphson();
+            postcondition = (up, uprev, p) -> (calls[] += 1; nothing), maxiters = 1000
+        )
+        @test calls[] > 0
+
         eqs_plain = [0 ~ (v - Vs) / R + Is * (exp(v / Vt) - 1)]
         @mtkcompile sys_plain = System(eqs_plain)
         prob_plain = NonlinearProblem(
@@ -133,7 +141,7 @@ end
     prob = NonlinearProblem(
         csys, [diode.v => 0.0, diode.i => 0.0, res.v => 0.0, res.i => 0.0]
     )
-    @test prob.f.postcondition !== nothing
+    @test haskey(prob.kwargs, :postcondition)
     sol = solve(prob, NewtonRaphson(); maxiters = 1000)
     @test SciMLBase.successful_retcode(sol)
     @test abs(sol[diode.v] - 0.6698509496766559) < 1.0e-5

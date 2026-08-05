@@ -1,7 +1,8 @@
 # The `limited(actual, limiter)` operator: symbolic declaration of SPICE-style
 # iterate limiting (the predictor/corrector Newton-Raphson (PCNR) formulation of
 # Aadithya, Keiter & Mei), lowered to an augmented nonlinear system plus a
-# `NonlinearFunction.postcondition` hook. Mirrors the architecture of the Modelica
+# `postcondition` corrector attached to the problem's solver options. Mirrors the
+# architecture of the Modelica
 # `homotopy` operator in `systems/homotopy_operator.jl`.
 @register_symbolic limited(actual, limiter)
 
@@ -19,9 +20,9 @@ Following the predictor/corrector Newton-Raphson (PCNR) method of Aadithya, Keit
 `mtkcompile` on a time-independent system lowers every `limited` node by introducing an
 auxiliary irreducible unknown `limited_k` for the quantity, replacing the node with it,
 appending the consistency equation `limited_k ~ actual`, and recording the limiter. The
-`SciMLBase.NonlinearFunction` built from the compiled system then carries a generated
-`postcondition` hook that applies each limiter to its auxiliary unknown at every iterate a
-solver accepts — the corrector phase — while the solver's ordinary Newton step on the
+problem built from the compiled system then carries a generated `postcondition` solver
+option — forwarded to `solve`/`init` like any other keyword — that applies each limiter to
+its auxiliary unknown at every iterate a solver accepts — the corrector phase — while the solver's ordinary Newton step on the
 augmented system is the predictor. Residuals and Jacobians are evaluated at the corrected
 iterates, so the PCNR consistency property holds. Solving such problems requires a solver
 that supports `postcondition` (e.g. `NewtonRaphson` and the other native NonlinearSolve.jl
@@ -372,11 +373,39 @@ function apply_limited_lowering(sys::AbstractSystem, source_info)
 end
 
 """
+    merge_limited_postcondition(sys, iip, kwargs; expression, kwargs...)
+
+Attach the corrector compiled by [`generate_limited_postcondition`](@ref) to the problem
+keywords as `postcondition`, so it is forwarded to `solve`/`init` like any other solver
+option. Returns `kwargs` unchanged when `sys` carries no `limited` quantities, and leaves
+a user-supplied `postcondition` in place (an explicitly passed corrector wins over the
+model-declared one, matching the precedence of solver options generally).
+"""
+function merge_limited_postcondition(
+        sys::AbstractSystem, iip::Bool, kwargs;
+        expression = Val{false}, eval_expression = false, eval_module = @__MODULE__
+    )
+    getmetadata(sys, LimitedCtx, nothing) === nothing && return kwargs
+    haskey(kwargs, :postcondition) && return kwargs
+    if expression == Val{true}
+        throw(
+            ArgumentError(
+                "`expression = Val{true}` is not supported for systems with `limited` " *
+                    "quantities; the generated `postcondition` corrector is a runtime " *
+                    "closure."
+            )
+        )
+    end
+    post = generate_limited_postcondition(sys, iip; eval_expression, eval_module)
+    post === nothing && return kwargs
+    return merge(NamedTuple(kwargs), (; postcondition = post))
+end
+
+"""
     generate_limited_postcondition(sys::AbstractSystem, iip::Bool; kwargs...)
 
 Compile the limiter registry recorded by [`lower_limited`](@ref) into a
-`NonlinearFunction.postcondition` hook `H(u_proposed, u_prev, p)` (mutating `u_proposed`
-when `iip`). Returns `nothing` when the system carries no limiters. Each limiter is
+`postcondition` corrector `H(u_proposed, u_prev, p)` (mutating `u_proposed` when `iip`). Returns `nothing` when the system carries no limiters. Each limiter is
 compiled with [`generate_custom_function`](@ref) as a scalar function of
 `(limitnew, limitold)` and the system's parameters; the hook applies it to the auxiliary
 limited unknowns at their indices in `unknowns(sys)`.
