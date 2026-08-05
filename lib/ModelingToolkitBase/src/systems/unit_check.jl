@@ -11,6 +11,14 @@ end
 struct PleaseImportDynamicQuantities end
 global t::Union{PleaseImportDynamicQuantities, Num} = PleaseImportDynamicQuantities()
 
+@doc """
+    t
+
+Default independent variable with units. Only usable once DynamicQuantities.jl is
+loaded; see [`t_nounits`](@ref) for the unitless default.
+"""
+t
+
 function Base.show(io::IO, ::PleaseImportDynamicQuantities)
     return __import_dynamic_quantities()
 end
@@ -23,3 +31,11 @@ function __import_dynamic_quantities(_...)
     )
 end
 global D::Union{typeof(__import_dynamic_quantities), Differential} = __import_dynamic_quantities
+
+@doc """
+    D
+
+Default differential operator with respect to [`t`](@ref). Only usable once
+DynamicQuantities.jl is loaded; see [`D_nounits`](@ref) for the unitless default.
+"""
+D
