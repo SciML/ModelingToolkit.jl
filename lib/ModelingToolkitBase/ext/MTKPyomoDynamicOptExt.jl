@@ -65,7 +65,7 @@ struct PyomoDynamicOptModel{T}
     dummy_sym::Union{Num, Symbolics.BasicSymbolic}
 
     function PyomoDynamicOptModel(model, U, V, P, tₛ, is_free_final, tsteps)
-        @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel) T_SYM DUMMY_SYM
+        @variables MODEL_SYM::SymbolicConcreteModel T_SYM DUMMY_SYM
         model.dU = dae.DerivativeVar(U, wrt = model.t, initialize = 0)
         return new{typeof(P)}(
             model, U, V, P, tₛ, is_free_final, tsteps, nothing,
@@ -93,15 +93,6 @@ struct PyomoDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
         return PyomoDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
-
-function pysym_getproperty(s::Union{Num, SymbolicT}, name::Symbol)
-    return Symbolics.wrap(
-        SymbolicUtils.term(
-            _getproperty, Symbolics.unwrap(s), Val{name}(), type = Symbolics.Struct{PyomoVar}
-        )
-    )
-end
-_getproperty(s, name::Val{fieldname}) where {fieldname} = getproperty(s, fieldname)
 
 function MTK.PyomoDynamicOptProblem(
         sys::System, op, tspan;
@@ -165,7 +156,7 @@ function MTK.add_constraint!(pmodel::PyomoDynamicOptModel, cons; n_idxs = 1)
         cons.lhs - cons.rhs ≤ 0
     end
     expr = Symbolics.substitute(
-        Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = false
+        Symbolics.unwrap(expr), SPECIAL_FUNCTIONS_DICT, fold = Val(false)
     )
 
     cons_sym = Symbol("cons", hash(cons))
@@ -192,8 +183,8 @@ function MTK.set_variable_bounds!(m::PyomoDynamicOptModel, sys, pmap, tf, tunabl
         MTK.add_constraint!(m, var ≲ hi)
     end
     for (i, (lo, hi)) in param_bounds
-        P_sym = Symbolics.value(pysym_getproperty(m.model_sym, :P))
-        p_var = P_sym[i]
+        P_sym = pysym_getproperty(m.model_sym, :P)
+        p_var = pyomo_getindex(P_sym, i)
         MTK.add_constraint!(m, p_var ≳ lo)
         MTK.add_constraint!(m, p_var ≲ hi)
     end
@@ -206,7 +197,7 @@ end
 
 function MTK.set_objective!(pmodel::PyomoDynamicOptModel, expr)
     @unpack model, model_sym, t_sym, dummy_sym = pmodel
-    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = false)
+    expr = Symbolics.substitute(expr, SPECIAL_FUNCTIONS_DICT, fold = Val(false))
     return if SU.query(isequal(Symbolics.unwrap(t_sym)), expr)
         f = eval(Symbolics.build_function(expr, model_sym, t_sym))
         model.obj = pyomo.Objective(model.t, rule = Pyomo.pyfunc(f))
@@ -243,13 +234,13 @@ function MTK.lowered_integral(m::PyomoDynamicOptModel, arg, lo, hi)
 end
 
 function MTK.lowered_derivative(m::PyomoDynamicOptModel, i)
-    mdU = Symbolics.value(pysym_getproperty(m.model_sym, :dU))
-    return Symbolics.unwrap(mdU[i, m.t_sym])
+    mdU = pysym_getproperty(m.model_sym, :dU)
+    return Symbolics.unwrap(pyomo_getindex(mdU, i, m.t_sym))
 end
 
 function MTK.lowered_var(m::PyomoDynamicOptModel, uv, i, t)
-    X = Symbolics.value(pysym_getproperty(m.model_sym, uv))
-    var = t isa Union{Num, SymbolicT} ? X[i, m.t_sym] : X[i, t]
+    X = pysym_getproperty(m.model_sym, uv)
+    var = t isa Union{Num, SymbolicT} ? pyomo_getindex(X, i, m.t_sym) : pyomo_getindex(X, i, t)
     return Symbolics.unwrap(var)
 end
 
@@ -258,9 +249,9 @@ end
 function MTK.get_param_for_pmap(m::ConcreteModel, P::PyomoVar, i)
     # Create a symbolic variable that will be used in the pmap
     # The actual PyomoVar will be accessed via the symbolic representation
-    @variables MODEL_SYM::Symbolics.symstruct(ConcreteModel)
-    P_sym = Symbolics.value(pysym_getproperty(MODEL_SYM, :P))
-    return Symbolics.unwrap(P_sym[i])
+    @variables MODEL_SYM::SymbolicConcreteModel
+    P_sym = pysym_getproperty(MODEL_SYM, :P)
+    return Symbolics.unwrap(pyomo_getindex(P_sym, i))
 end
 
 MTK.needs_individual_tunables(m::ConcreteModel) = true
