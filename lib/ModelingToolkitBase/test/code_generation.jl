@@ -158,3 +158,14 @@ end
     @mtkcomplete sys = System([D(y) ~ 2y + sum(x)], t, [y], []; observed = [x ~ [y, y + 1, y + 2]])
     @test ModelingToolkitBase.observed_equations_used_by(sys, [x[1]]) == [1]
 end
+
+@testset "`observed_dependency_graph` result is cacheable" begin
+    @variables x(t) y(t) z(t)
+    @mtkcompile sys = System([D(x) ~ z, y ~ 2x + 1, z ~ 3y], t)
+    obs = ModelingToolkitBase.observed(sys)
+    graph = ModelingToolkitBase.observed_dependency_graph(sys, obs)
+    @test graph isa fieldtype(ModelingToolkitBase.ObservedGraphCache, :graph)
+    # this populates the observed graph cache, which requires the above type to match
+    @test ModelingToolkitBase.observed_equations_used_by(sys, [equations(sys)[1].rhs]) ==
+        [1, 2]
+end
