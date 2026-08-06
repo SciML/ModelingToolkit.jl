@@ -7,6 +7,7 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     D_nounits as D,
     affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
+using Symbolics
 
 using StableRNGs
 import SciMLBase
@@ -1939,5 +1940,27 @@ if !@isdefined(ModelingToolkit)
             @test sol.discretes[1].t ≈ 0.05:0.1:1.0
             @test sol[d] ≈ 1:10
         end
+    end
+
+    vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
+    @register_symbolic vlk(v::AbstractVector, i::Real)
+
+    @testset "Issue#4870: Negative-edge affects are properly saved" begin
+        # Case 1 of the issue
+        gi = only(@discretes gi(t) = 1.0)
+        ps = @parameters begin
+            (up[1:3] = [1.0, 2.0, 1.0e6])
+            (dn[1:3] = [-1.0e6, 0.5, 1.5])
+        end
+        upv, dnv = ps
+        @variables y(t) = 0.0
+        eqs = [D(y) ~ ifelse(t < 6, 0.5, -0.5)]   # triangle: 0 -> 3 -> 0
+
+        cbu = SymbolicContinuousCallback([y ~ vlk(upv, gi)], [gi => min(gi + 1, 3)]; affect_neg = nothing)
+        cbd = SymbolicContinuousCallback([y ~ vlk(dnv, gi)], nothing; affect_neg = [gi => max(gi - 1, 1)])
+        @named sys = System(eqs, t, [y], [collect(Iterators.flatten(ps)); gi]; continuous_events = [cbu, cbd])
+        s = mtkcompile(sys)
+        sol = solve(ODEProblem(s, [], (0.0, 12.0)), Tsit5())
+        @test sol[gi] ≈ [1, 2, 3, 2, 1]
     end
 end
