@@ -155,6 +155,24 @@ end
         :InvalidSystemException, "structurally singular", nothing
     )
     @test occursin("Initialization system is structurally singular", msg)
+
+    old = ModelingToolkitBase.show_api_guidance!(false)
+    try
+        msg = ModelingToolkitBase.initialization_structure_error_message(
+            :ExtraVariablesSystemException, unbalanced, (1, 3)
+        )
+        # What went wrong is still described in full
+        @test occursin("Initialization system is underdetermined", msg)
+        @test occursin(unbalanced, msg)
+        @test occursin("2 more equations are needed", msg)
+        # Only the guidance naming ModelingToolkit functions is left out
+        @test !occursin("ODEProblem", msg)
+        @test !occursin("initialization_eqs", msg)
+        @test !occursin("fully_determined", msg)
+    finally
+        ModelingToolkitBase.show_api_guidance!(old)
+    end
+    @test ModelingToolkitBase.show_api_guidance()
     # Counts of a system whose imbalance is unknown, or does not corroborate the reported
     # one, are left out rather than guessed at.
     @test ModelingToolkitBase.initialization_deficit_message(

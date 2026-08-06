@@ -71,3 +71,21 @@ solve(dprob, Tsit5());
 ```@docs; canonical = false
 debug_system
 ```
+
+## Error message guidance
+
+Errors raised while building a problem describe what went wrong and then, where it is
+useful, how to fix it in terms of the ModelingToolkit API — which keyword argument to pass,
+or where in the system to supply a value. Front ends which present a modelling language of
+their own can leave that part out, since advice to call `ODEProblem` or to pass
+`initialization_eqs` would send their users looking for something their language does not
+have. The description of what went wrong is unaffected.
+
+```julia
+ModelingToolkit.show_api_guidance!(false)
+```
+
+```@docs
+ModelingToolkit.show_api_guidance
+ModelingToolkit.show_api_guidance!
+```

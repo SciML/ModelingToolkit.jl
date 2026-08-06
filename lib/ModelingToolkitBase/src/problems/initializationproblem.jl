@@ -247,12 +247,17 @@ const INITIALIZATION_CONTEXT_MESSAGE = """
 This is an error in the initialization system, not in the equations being integrated. \
 The initialization system solves for the value of every unknown of the model, and of \
 their derivatives, at the initial time. It needs as many equations as there are such \
-values to solve for. Initial conditions and bindings given for the model become equations \
-of this system.
+values to solve for. Initial values given for the model become equations of this system.
 """
 
 const INITIALIZATION_UNDERDETERMINED_MESSAGE = """
-Any of the following supplies one missing equation:
+Each missing equation is supplied by giving one more initial value, or one more equation \
+relating initial values. Guesses are starting values for the initialization solve rather \
+than constraints on it, so adding a guess does not supply one.
+"""
+
+const INITIALIZATION_UNDERDETERMINED_API_MESSAGE = """
+In ModelingToolkit, any of the following supplies one missing equation:
 
   * Give an initial value in the problem constructor, as in
     `ODEProblem(sys, [x => 1.0], tspan)`.
@@ -260,17 +265,22 @@ Any of the following supplies one missing equation:
   * Add an equation relating initial values, via the `initialization_eqs` keyword argument \
 of the system or of the problem constructor.
 
-`guesses` are starting values for the initialization solve rather than constraints on it, \
-so adding a guess does not add an equation. To solve an underdetermined initialization in \
-a least squares sense instead, pass `fully_determined = false` to the problem constructor; \
-the guesses then decide which of the possible initial states is found.
+To solve an underdetermined initialization in a least squares sense instead, pass \
+`fully_determined = false` to the problem constructor; the guesses then decide which of \
+the possible initial states is found.
 """
 
 const INITIALIZATION_OVERDETERMINED_MESSAGE = """
-Remove initial conditions, bindings or initialization equations until as many remain as \
-there are unknowns to solve for. To solve an overdetermined initialization in a least \
-squares sense instead, pass `fully_determined = false` to the problem constructor. That \
-only finds an initial state if the extra equations are consistent with the rest.
+Remove initial values or equations relating them until as many remain as there are \
+unknowns to solve for.
+"""
+
+const INITIALIZATION_OVERDETERMINED_API_MESSAGE = """
+In ModelingToolkit, these come from `initial_conditions`, `bindings` and \
+`initialization_eqs`, and from the operating point passed to the problem constructor. To \
+solve an overdetermined initialization in a least squares sense instead, pass \
+`fully_determined = false` to the problem constructor. That only finds an initial state \
+if the extra equations are consistent with the rest.
 """
 
 const INITIALIZATION_SINGULAR_MESSAGE = """
@@ -300,12 +310,15 @@ function initialization_structure_error_message(
     if kind === :ExtraVariablesSystemException
         headline = "Initialization system is underdetermined."
         remedy = INITIALIZATION_UNDERDETERMINED_MESSAGE
+        api_remedy = INITIALIZATION_UNDERDETERMINED_API_MESSAGE
     elseif kind === :ExtraEquationsSystemException
         headline = "Initialization system is overdetermined."
         remedy = INITIALIZATION_OVERDETERMINED_MESSAGE
+        api_remedy = INITIALIZATION_OVERDETERMINED_API_MESSAGE
     else
         headline = "Initialization system is structurally singular."
         remedy = INITIALIZATION_SINGULAR_MESSAGE
+        api_remedy = nothing
     end
     println(io, headline, '\n')
     println(io, INITIALIZATION_CONTEXT_MESSAGE)
@@ -313,7 +326,10 @@ function initialization_structure_error_message(
     deficit = initialization_deficit_message(kind, size)
     deficit === nothing || println(io, deficit)
     println(io, remedy)
-    println(io, "See $INITIALIZATION_DOCS_URL for more information.")
+    if show_api_guidance()
+        api_remedy === nothing || println(io, api_remedy)
+        println(io, "See $INITIALIZATION_DOCS_URL for more information.")
+    end
     print(io, INITIALIZATION_NOTATION_MESSAGE)
     return String(take!(io))
 end

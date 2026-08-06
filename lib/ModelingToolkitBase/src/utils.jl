@@ -1,5 +1,35 @@
 get_iv(D::Differential) = D.x
 
+const SHOW_API_GUIDANCE = Ref(true)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether error messages include guidance phrased in terms of the ModelingToolkit API. See
+[`show_api_guidance!`](@ref).
+"""
+show_api_guidance() = SHOW_API_GUIDANCE[]
+
+"""
+    $(TYPEDSIGNATURES)
+
+Set whether error messages include guidance phrased in terms of the ModelingToolkit API,
+such as which keyword argument of a problem constructor to pass, and return the previous
+setting.
+
+This is meant for front ends which present a modelling language of their own, in which
+advice to call `ODEProblem` or to pass `initialization_eqs` would send users looking for
+something their language does not have. Such a front end can call
+`show_api_guidance!(false)` once when it loads, and add guidance of its own. What went
+wrong is still described in full; only the part of the message which names ModelingToolkit
+functions and keyword arguments is left out.
+"""
+function show_api_guidance!(show::Bool)
+    old = SHOW_API_GUIDANCE[]
+    SHOW_API_GUIDANCE[] = show
+    return old
+end
+
 """
     $(TYPEDSIGNATURES)
 
