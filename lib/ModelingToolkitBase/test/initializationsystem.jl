@@ -117,6 +117,54 @@ sol = solve(prob, Rodas5P())
     fully_determined = true
 )
 
+@testset "Unbalanced initialization error names the initialization system" begin
+    err = try
+        ODEProblem(
+            pend, [x => 1, g => 1], (0.0, 1.5),
+            guesses = [x => 1, y => 0.2, λ => 0.0],
+            fully_determined = true
+        )
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraVariablesSystemException
+    msg = sprint(showerror, err)
+    @test occursin("Initialization system is underdetermined", msg)
+    @test occursin("initialization_eqs", msg)
+    # The message from structural analysis is retained
+    @test occursin("The system is unbalanced.", msg)
+end
+
+@testset "Initialization error messages" begin
+    unbalanced = "The system is unbalanced."
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraVariablesSystemException, unbalanced, (1, 3)
+    )
+    @test occursin("Initialization system is underdetermined", msg)
+    @test occursin(unbalanced, msg)
+    @test occursin("2 more equations are needed", msg)
+
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :ExtraEquationsSystemException, unbalanced, (3, 2)
+    )
+    @test occursin("Initialization system is overdetermined", msg)
+    @test occursin("There is 1 equation too many", msg)
+
+    msg = ModelingToolkitBase.initialization_structure_error_message(
+        :InvalidSystemException, "structurally singular", nothing
+    )
+    @test occursin("Initialization system is structurally singular", msg)
+    # Counts of a system whose imbalance is unknown, or does not corroborate the reported
+    # one, are left out rather than guessed at.
+    @test ModelingToolkitBase.initialization_deficit_message(
+        :ExtraVariablesSystemException, nothing
+    ) === nothing
+    @test ModelingToolkitBase.initialization_deficit_message(
+        :ExtraVariablesSystemException, (3, 3)
+    ) === nothing
+end
+
 @connector function Port(; name, p = nothing, dm = 0)
     vars = @variables begin
         p(t) = p
@@ -366,6 +414,19 @@ end
 @test_throws ERRMOD.ExtraEquationsSystemException ODEProblem(
     sys, [], (0, 0.1), fully_determined = true
 )
+
+@testset "Overdetermined initialization error names the initialization system" begin
+    err = try
+        ODEProblem(sys, [], (0, 0.1), fully_determined = true)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ERRMOD.ExtraEquationsSystemException
+    msg = sprint(showerror, err)
+    @test occursin("Initialization system is overdetermined", msg)
+    @test occursin("fully_determined = false", msg)
+end
 
 if @isdefined(ModelingToolkit)
     prob = ODEProblem(sys, [], (0, 0.1), check = false)

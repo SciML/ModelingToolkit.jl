@@ -94,7 +94,9 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
     pareqs, resteqs = find_all_parameter_equations(isys)
     @set! isys.eqs = resteqs
     if simplify_system
-        isys = mtkcompile(isys; fully_determined, split = is_split(sys), initsys_mtkcompile_kwargs...)
+        isys = mtkcompile_initialization_system(
+            isys, sys; fully_determined, initsys_mtkcompile_kwargs...
+        )
     end
     for i in eachindex(pareqs)
         eq = pareqs[i]
@@ -161,6 +163,187 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
         build_initializeprob = false, is_initializeprob = true
     )
 end
+
+"""
+    $TYPEDSIGNATURES
+
+`mtkcompile` the initialization system `isys` of `sys`, rewriting structural errors so
+they say that it is the initialization system which is unbalanced.
+
+Structural analysis has no way of knowing that the system handed to it is an
+initialization system, so on its own it reports the imbalance in terms which read as if
+the model itself were at fault. Since this is almost always hit through a problem
+constructor rather than a direct `mtkcompile` call, the message is rewritten to name the
+initialization system, count the missing equations and list the ways of supplying them.
+"""
+function mtkcompile_initialization_system(
+        isys::AbstractSystem, sys::AbstractSystem; fully_determined, kwargs...
+    )
+    try
+        return mtkcompile(isys; fully_determined, split = is_split(sys), kwargs...)
+    catch err
+        newerr = with_initialization_context(err, isys, sys; kwargs...)
+        newerr === err && rethrow()
+        rethrow(newerr)
+    end
+end
+
+"""
+Structural analysis exceptions which report an unbalanced or singular system. These are
+defined both here and in StateSelection.jl, which ModelingToolkitBase does not depend on,
+so they are identified by name to cover whichever of the two was thrown.
+"""
+const UNBALANCED_SYSTEM_EXCEPTIONS = (
+    :ExtraVariablesSystemException, :ExtraEquationsSystemException, :InvalidSystemException,
+)
+
+"""
+    $TYPEDSIGNATURES
+
+Given an error `err` thrown while compiling the initialization system `isys` of `sys`,
+return an equivalent error whose message identifies it as an initialization failure.
+Returns `err` unchanged if it is not an error about the balance of a system.
+"""
+function with_initialization_context(
+        err, isys::AbstractSystem, sys::AbstractSystem; kwargs...
+    )
+    T = typeof(err)
+    kind = nameof(T)
+    kind in UNBALANCED_SYSTEM_EXCEPTIONS || return err
+    fieldcount(T) == 1 && fieldtype(T, 1) <: AbstractString || return err
+    msg = getfield(err, 1)
+    # `InvalidSystemException` also reports problems which have nothing to do with the
+    # balance of the system, and for which the guidance below would be wrong.
+    kind === :InvalidSystemException && !occursin("singular", msg) && return err
+    return T(
+        initialization_structure_error_message(
+            kind, msg, initialization_system_size(isys, sys; kwargs...)
+        )
+    )
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return `(neqs, nunknowns)` of the compiled initialization system `isys` of `sys`, or
+`nothing` if it cannot be compiled without the balance check. Used to report how many
+equations an unbalanced initialization system is missing, in the same terms as
+`underdetermined_initialization_message`.
+"""
+function initialization_system_size(isys::AbstractSystem, sys::AbstractSystem; kwargs...)
+    return try
+        compiled = mtkcompile(
+            isys; fully_determined = false, split = is_split(sys), kwargs...
+        )
+        (length(equations(compiled)), length(unknowns(compiled)))
+    catch
+        nothing
+    end
+end
+
+const INITIALIZATION_DOCS_URL = "https://docs.sciml.ai/ModelingToolkit/stable/tutorials/initialization/"
+
+const INITIALIZATION_CONTEXT_MESSAGE = """
+This is an error in the initialization system, not in the equations being integrated. \
+The initialization system solves for the value of every unknown of the model, and of \
+their derivatives, at the initial time. It needs as many equations as there are such \
+values to solve for. Initial conditions and bindings given for the model become equations \
+of this system.
+"""
+
+const INITIALIZATION_UNDERDETERMINED_MESSAGE = """
+Any of the following supplies one missing equation:
+
+  * Give an initial value in the problem constructor, as in
+    `ODEProblem(sys, [x => 1.0], tspan)`.
+  * Give one in the model, via `initial_conditions` or `bindings`.
+  * Add an equation relating initial values, via the `initialization_eqs` keyword argument \
+of the system or of the problem constructor.
+
+`guesses` are starting values for the initialization solve rather than constraints on it, \
+so adding a guess does not add an equation. To solve an underdetermined initialization in \
+a least squares sense instead, pass `fully_determined = false` to the problem constructor; \
+the guesses then decide which of the possible initial states is found.
+"""
+
+const INITIALIZATION_OVERDETERMINED_MESSAGE = """
+Remove initial conditions, bindings or initialization equations until as many remain as \
+there are unknowns to solve for. To solve an overdetermined initialization in a least \
+squares sense instead, pass `fully_determined = false` to the problem constructor. That \
+only finds an initial state if the extra equations are consistent with the rest.
+"""
+
+const INITIALIZATION_SINGULAR_MESSAGE = """
+There are as many equations as unknowns, but they do not determine a unique initial state: \
+at least one equation is redundant given the others, leaving some unknown undetermined. \
+This usually means two of the given initial conditions are related by an equation of the \
+model, so that one of them carries no new information. Giving an initial condition for a \
+different variable, or for a derivative, in place of the redundant one resolves it.
+"""
+
+const INITIALIZATION_NOTATION_MESSAGE = """
+Note that variables named with a `ˍt` suffix are derivatives at the initial time: `xˍt` \
+is `D(x)`.
+"""
+
+"""
+    $TYPEDSIGNATURES
+
+Build the message of a structural error from the initialization system. `kind` is the name
+of the exception type thrown by structural analysis, `msg` its original message, and `size`
+the `(neqs, nunknowns)` of the initialization system, if known.
+"""
+function initialization_structure_error_message(
+        kind::Symbol, msg::AbstractString, size::Union{Nothing, Tuple{Int, Int}}
+    )
+    io = IOBuffer()
+    if kind === :ExtraVariablesSystemException
+        headline = "Initialization system is underdetermined."
+        remedy = INITIALIZATION_UNDERDETERMINED_MESSAGE
+    elseif kind === :ExtraEquationsSystemException
+        headline = "Initialization system is overdetermined."
+        remedy = INITIALIZATION_OVERDETERMINED_MESSAGE
+    else
+        headline = "Initialization system is structurally singular."
+        remedy = INITIALIZATION_SINGULAR_MESSAGE
+    end
+    println(io, headline, '\n')
+    println(io, INITIALIZATION_CONTEXT_MESSAGE)
+    println(io, msg, '\n')
+    deficit = initialization_deficit_message(kind, size)
+    deficit === nothing || println(io, deficit)
+    println(io, remedy)
+    println(io, "See $INITIALIZATION_DOCS_URL for more information.")
+    print(io, INITIALIZATION_NOTATION_MESSAGE)
+    return String(take!(io))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a sentence stating by how many equations an initialization system of size
+`size = (neqs, nunknowns)` is out of balance, or `nothing` if `size` is unknown or does
+not corroborate the imbalance that structural analysis reported.
+
+Only the difference is reported, not the counts themselves: `size` is measured on the
+system compiled without the balance check, which simplifies further than the compilation
+that failed, so its counts do not line up with the ones structural analysis reports.
+"""
+function initialization_deficit_message(kind::Symbol, size::Union{Nothing, Tuple{Int, Int}})
+    size === nothing && return nothing
+    neqs, nunknown = size
+    if kind === :ExtraVariablesSystemException && nunknown > neqs
+        n = nunknown - neqs
+        verb = n == 1 ? "is" : "are"
+        return "$n more $(pluralize(n, "equation")) $verb needed to determine the initial state.\n"
+    elseif kind === :ExtraEquationsSystemException && neqs > nunknown
+        n = neqs - nunknown
+        return "There $(n == 1 ? "is" : "are") $n $(pluralize(n, "equation")) too many.\n"
+    end
+    return nothing
+end
+
+pluralize(n::Integer, word::AbstractString) = n == 1 ? word : word * "s"
 
 function overdetermined_initialization_message(neqs::Integer, nunknown::Integer, extra::AbstractString)
     return """
