@@ -474,4 +474,24 @@ if !@isdefined(ModelingToolkit)
         sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
         @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
     end
+
+    @testset "`Real` discrete obtained via `Int` in initialization" begin
+        @variables x(t)
+        @parameters a::Int b
+        @discretes d(t)
+        # `d` must be a discrete, it should be bound to an integer, and the
+        # initialization must be non-trivial.
+        @mtkcompile sys = System(
+            [D(x) ~ d + a + b], t;
+            bindings = [d => a, b => missing],
+            continuous_events = ModelingToolkitBase.SymbolicContinuousCallback(
+                [x ~ 3], [d ~ Pre(d) + 1]; discrete_parameters = d
+            ), initialization_eqs = [b^2 ~ 2a]
+        )
+        prob = ODEProblem(sys, [x => 1, a => 1], (0.0, 3.0))
+        # This would build a `BlockedVector{Int, ...}` for the discretes, since `d`
+        # is obtained via `a`. However, `prob.p` contains a `BlockedVector{Float64, ..}`
+        # and this type mismatch causes an error.
+        @test_nowarn solve(prob, Tsit5())
+    end
 end
