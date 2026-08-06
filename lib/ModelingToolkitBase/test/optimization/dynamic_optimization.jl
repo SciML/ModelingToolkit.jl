@@ -900,26 +900,29 @@ struct UnsupportedTrajectoryBackend end
     )
 
     # Expressions are compiled to callables of the independent variable
-    pmap_test = Dict()
-    fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, pmap_test)
+    p_test = MTKParameters(block, parammap)
+    fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, p_test)
     @test fx isa Function
     @test fx(2.0) ≈ 0.5
 
     # A constant expression is still a valid trajectory
-    fc = M.build_trajectory_function(block, x(t), 3.0, pmap_test)
+    fc = M.build_trajectory_function(block, x(t), 3.0, p_test)
     @test fc isa Function
     @test fc(2.0) == 3.0
 
-    # Callables pass through unchanged, for guesses that aren't expressible symbolically
+    # Callables are rejected: trajectories are symbolic-only for now
     g = τ -> 7.0
-    @test M.build_trajectory_function(block, x(t), g, pmap_test) === g
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), g, p_test)
 
-    # Parameters are resolved from the operating point
+    # Parameters stay symbolic and are read from the parameter object when the
+    # trajectory is evaluated
     @parameters a
-    fp = M.build_trajectory_function(block, x(t), a * t, Dict(a => 4.0))
+    @named psys = System([D(x(t)) ~ a * v(t), D(v(t)) ~ 0.0], t)
+    psys = mtkcompile(psys)
+    fp = M.build_trajectory_function(psys, x(t), a * t, MTKParameters(psys, [a => 4.0]))
     @test fp(2.0) ≈ 8.0
 
-    # Anything left unresolved after substitution is reported
+    # Anything that does not reduce to time and parameters is reported
     @parameters b
-    @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, pmap_test)
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, p_test)
 end
