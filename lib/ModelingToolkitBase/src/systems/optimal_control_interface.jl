@@ -324,7 +324,9 @@ function process_DynamicOptProblem(
         steps = nothing,
         tune_parameters = false,
         guesses = Dict(), initial_trajectory = Dict(),
-        bounds = Dict(), kwargs...
+        bounds = Dict(),
+        eval_expression = false, eval_module = @__MODULE__,
+        kwargs...
     )
     warn_overdetermined(sys, op)
     ctrls = inputs(sys)
@@ -342,7 +344,7 @@ function process_DynamicOptProblem(
     f, u0,
         p = process_SciMLProblem(
         ODEInputFunction, sys, _op;
-        t = tspan !== nothing ? tspan[1] : tspan, kwargs...
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module, kwargs...
     )
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
     warn_overdetermined(sys, op)
@@ -375,7 +377,7 @@ function process_DynamicOptProblem(
     for (var, traj) in initial_trajectory
         idx = get(stidxmap, var, nothing)
         idx === nothing && continue
-        set_initial_trajectory!(model, U, idx, build_trajectory_function(sys, var, traj, pmap))
+        set_initial_trajectory!(model, U, idx, build_trajectory_function(sys, var, traj, p; eval_expression, eval_module))
     end
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     P = generate_tunable_params!(model, p0, length(tunable_params))
@@ -401,39 +403,52 @@ function process_DynamicOptProblem(
 end
 
 """
-    build_trajectory_function(sys, var, traj, pmap)
+    build_trajectory_function(sys, var, traj, p; eval_expression = false, eval_module = @__MODULE__)
 
 Compile an `initial_trajectory` entry for `var` into a callable of the independent
-variable of `sys`.
+variable of `sys`, closing over the parameter object `p`.
 
-`traj` is a symbolic expression in the independent variable; any parameters it
-references are resolved numerically from `pmap`. Expressions that reduce to a constant
-become constant functions. A `Function` is passed through unchanged, which lets guesses
-that cannot be written symbolically (an interpolation of measured data, say) still be
-used.
+`traj` is a symbolic expression in the independent variable and parameters; observed
+variables and parameter bindings it references are inlined symbolically, and parameter
+values are read from `p` when the trajectory is evaluated. A constant is a valid
+trajectory; callables are not supported and raise an `ArgumentError`.
 
 The result is a `Function`, which is what backends such as InfiniteOpt require of
 `JuMP.set_start_value`.
 """
-function build_trajectory_function(sys, var, traj, pmap)
-    traj isa Function && return traj
+function build_trajectory_function(
+        sys, var, traj, p; eval_expression = false, eval_module = @__MODULE__
+    )
+    if symbolic_type(traj) === NotSymbolic()
+        # A guess that does not vary in time is still a valid trajectory.
+        traj isa Number && return Returns(traj)
+        throw(
+            ArgumentError(
+                "Only symbolic trajectories are supported for `initial_trajectory`, " *
+                    "got a $(nameof(typeof(traj))) for $var."
+            )
+        )
+    end
 
     iv = get_iv(sys)
-    expr = SymbolicUtils.unwrap_const(unwrap(Symbolics.fixpoint_sub(unwrap(traj), pmap)))
-    # A guess that does not vary in time is still a valid trajectory.
-    symbolic_type(expr) === NotSymbolic() && return Returns(expr)
+    expr = get_ir_info(sys).obs_subber(unwrap(traj))
 
-    unresolved = setdiff(Symbolics.get_variables(expr), [unwrap(iv)])
+    unresolved = filter(
+        v -> !isequal(v, unwrap(iv)) && !is_parameter(sys, v),
+        Symbolics.get_variables(expr)
+    )
     isempty(unresolved) || throw(
         ArgumentError(
             "The `initial_trajectory` for $var may only depend on the independent " *
-                "variable $iv and on parameters, but it also depends on " *
-                "$(join(unresolved, ", ")). Parameters are resolved from the operating " *
-                "point, so anything left over cannot be evaluated."
+                "variable $iv and on parameters, but after inlining observed variables " *
+                "and parameter bindings it also depends on $(join(unresolved, ", "))."
         )
     )
 
-    return Symbolics.build_function(expr, iv; expression = Val(false))
+    opts = GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    rgf = generate_trajectory(sys, expr, opts)
+
+    return Base.Fix1(rgf, p)
 end
 
 # Set the start values of state `idx` from a trajectory callable.
