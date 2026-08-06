@@ -13,8 +13,11 @@ extras.
 The `op` keyword argument provides additional operating-point values that are merged into
 the solution-derived operating point at every time point (taking precedence). This is how
 values for variables that are not present in `sol` are supplied — in particular the
-parameters created by `loop_openings`, e.g.
-`LinearizationOpPoint(sol, t; op = Dict(opened_signal => 0))`.
+parameters created by `loop_openings`. Values may be numbers, e.g.
+`LinearizationOpPoint(sol, t; op = Dict(opened_signal => 0))`, or symbolic expressions,
+which are evaluated from the solution at each time point. Mapping an opened signal to the
+expression that drives it, e.g. `op = Dict(opened_signal => driving_signal)`, thus
+linearizes around the value the opened signal has in the loop-closed solution.
 
 # Fields
 
@@ -45,6 +48,17 @@ end
 # to transfer values from the solution to the `LinearizationProblem` without having to
 # materialize and manipulate a dictionary alongisde a corresponding list of setter functions.
 
+# Values in `LinearizationOpPoint.op` may be symbolic expressions (e.g.
+# `opened_signal => driving_signal`), which are evaluated from the solution at each time
+# point rather than passed through verbatim. Resolving them here means the downstream
+# machinery (problem construction, per-point setters) only ever sees numbers: symbolic
+# values cannot be evaluated eagerly at problem construction, and resolving them against
+# the `LinearizationProblem` inside the per-point loop would read state values that are
+# only refreshed by initialization inside `solve`, i.e. those of the previous time point.
+function _is_symbolic_op_value(v)
+    return !SU.isconst(v) && (symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v))
+end
+
 function _build_op_from_solution(op::LinearizationOpPoint)
     sol_sys = MTKBase.indp_to_system(op.sol)
     eqs = equations(sol_sys)
@@ -59,7 +73,7 @@ function _build_op_from_solution(op::LinearizationOpPoint)
         result[p] = getp(op.sol, p)(op.sol)
     end
     for (k, v) in op.op
-        result[unwrap(k)] = v
+        result[unwrap(k)] = _is_symbolic_op_value(v) ? op.sol(op.t; idxs = v) : v
     end
     return result
 end
@@ -76,15 +90,28 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
     for p in parameters(sol_sys)
         param_vals[p] = getp(op.sol, p)(op.sol)
     end
+    # Split the extra op into constant entries and symbolic entries; the latter are
+    # evaluated from the solution, once per entry for all time points.
+    extra_const = Dict{SymbolicT, SymbolicT}()
+    extra_resolved = Pair{SymbolicT, Any}[]
+    for (k, v) in op.op
+        if _is_symbolic_op_value(v)
+            push!(extra_resolved, unwrap(k) => op.sol(op.t; idxs = v))
+        else
+            extra_const[unwrap(k)] = v
+        end
+    end
     # Interpolate once per time point to build the per-point operating-point dict.
-    extra_op = Dict{SymbolicT, SymbolicT}(unwrap(k) => v for (k, v) in op.op)
-    return map(op.t) do ti
+    return map(enumerate(op.t)) do (i, ti)
         u = op.sol(ti)
         result = copy(param_vals)
-        for i in diff_idxs
-            result[sts[i]] = u[i]
+        for j in diff_idxs
+            result[sts[j]] = u[j]
         end
-        merge!(result, extra_op)
+        merge!(result, extra_const)
+        for (k, vals) in extra_resolved
+            result[k] = vals[i]
+        end
         result
     end
 end
@@ -1026,7 +1053,10 @@ function _check_loop_opening_op(loop_opening_params, op)
         parameters whose operating-point values are not implied by the rest of the \
         system, so they must be provided explicitly in `op` (e.g. set to zero). When \
         linearizing along a trajectory with `LinearizationOpPoint`, pass them via its \
-        `op` keyword argument: `LinearizationOpPoint(sol, t; op = Dict(signal => value))`.
+        `op` keyword argument: `LinearizationOpPoint(sol, t; op = Dict(signal => value))`, \
+        where the value may also be a symbolic expression evaluated from the solution at \
+        each time point, e.g. `Dict(opened_signal => driving_signal)` to linearize around \
+        the value the opened signal has in the loop-closed solution.
         """
     )
 end
@@ -1058,6 +1088,7 @@ function __linearize_multiple_op_barrier(ssys, lin_fun; ops, ts, allow_input_der
         for (setter, k) in zip(setters, op_keys)
             v = get(op, k, COMMON_NOTHING)
             isequal(v, COMMON_NOTHING) && continue
+            v === COMMON_MISSING && continue
             setter(prob, _resolve_op_value(prob, v))
         end
         prob.t = t
