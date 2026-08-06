@@ -101,7 +101,7 @@ end
         calls = Ref(0)
         solve(
             prob, NewtonRaphson();
-            postcondition = (up, uprev, p) -> (calls[] += 1; nothing), maxiters = 1000
+            postcondition = (up, uprev, p, cache) -> (calls[] += 1; nothing), maxiters = 1000
         )
         @test calls[] > 0
 
