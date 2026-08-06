@@ -54,7 +54,10 @@ function MTKBase.__mtkcompile(
         Is = Int[]
         Js = Int[]
         vals = SymbolicT[]
+        MTKTearing.scalarize_tearing_state_eqs!(state)
         make_eqs_zero_equals!(state)
+        @unpack structure, fullvars = state
+        @unpack graph, var_to_diff, var_types = structure
         new_eqs = copy(equations(state))
         dvar2eq = Dict{SymbolicT, Int}()
         eqs = equations(state)
