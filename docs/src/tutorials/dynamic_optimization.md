@@ -95,12 +95,9 @@ jprob_guess2 = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001
 jsol_guess2 = solve(jprob_guess2, JuMPCollocation(Ipopt.Optimizer));
 ```
 
-Only parameters of the compiled system can be resolved this way. Referencing something
-that `mtkcompile` has eliminated — or another state — raises an `ArgumentError` naming
-the unresolved quantity.
-
-A guess that cannot be written symbolically — an interpolation of measured data, for
-instance — can be passed as a function of time instead, and is used as-is.
+Only parameters of the compiled system can be referenced this way; anything else —
+another state, or a quantity `mtkcompile` has eliminated that does not reduce to time
+and parameters — raises an `ArgumentError` naming the unresolved quantity.
 
 `initial_trajectory` is supported by the JuMP, InfiniteOpt, and CasADi backends.
 Passing a non-empty map to Pyomo raises an `ArgumentError`.
