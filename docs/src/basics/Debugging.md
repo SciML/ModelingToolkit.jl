@@ -85,7 +85,10 @@ have. The description of what went wrong is unaffected.
 ModelingToolkit.show_api_guidance!(false)
 ```
 
-```@docs
-ModelingToolkit.show_api_guidance
-ModelingToolkit.show_api_guidance!
-```
+!!! warning "Experimental"
+
+    `show_api_guidance!` is experimental and unsupported. It may change or be removed in
+    any release, without a breaking version bump. Verbosity across the SciML ecosystem is
+    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), and this setting
+    is expected to be replaced by an option there once ModelingToolkit adopts it. That will
+    be the supported way to control this.
