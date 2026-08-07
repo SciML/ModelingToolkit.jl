@@ -74,8 +74,10 @@ import ModelingToolkitBase as MTKBase
 import SimpleNonlinearSolve
 
 import SciMLBase: @add_kwonly
-@reexport using Symbolics
-@reexport using UnPack
+using UnPack: @unpack
+# ModelingToolkitBase already `@reexport`s Symbolics and UnPack, so re-exporting them a
+# second time here would only duplicate that surface. The set of names ModelingToolkit
+# publicly re-exports is pinned by `REEXPORTED_API` in `test/qa/qa.jl`.
 @reexport using ModelingToolkitBase
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
