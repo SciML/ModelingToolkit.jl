@@ -71,3 +71,24 @@ solve(dprob, Tsit5());
 ```@docs; canonical = false
 debug_system
 ```
+
+## Error message guidance
+
+Errors raised while building a problem describe what went wrong and then, where it is
+useful, how to fix it in terms of the ModelingToolkit API — which keyword argument to pass,
+or where in the system to supply a value. Front ends which present a modelling language of
+their own can leave that part out, since advice to call `ODEProblem` or to pass
+`initialization_eqs` would send their users looking for something their language does not
+have. The description of what went wrong is unaffected.
+
+```julia
+ModelingToolkit.show_api_guidance!(false)
+```
+
+!!! warning "Experimental"
+
+    `show_api_guidance!` is experimental and unsupported. It may change or be removed in
+    any release, without a breaking version bump. Verbosity across the SciML ecosystem is
+    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), and this setting
+    is expected to be replaced by an option there once ModelingToolkit adopts it. That will
+    be the supported way to control this.
