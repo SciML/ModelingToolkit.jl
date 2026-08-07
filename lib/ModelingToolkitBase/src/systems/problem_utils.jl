@@ -1588,22 +1588,281 @@ __iip_u0_ad_wrapper(x) = x
 """
     $(TYPEDSIGNATURES)
 
+Calculate the floating point type to use from the given `varmap` by looking at variables
+with a constant value.
+"""
+function float_type_from_varmap(varmap, floatT = Bool)
+    for (k, v) in varmap
+        is_variable_floatingpoint(k) || continue
+        SU.isconst(v) || symbolic_type(v) isa NotSymbolic || continue
+        is_array_of_symbolics(v) && continue
+        v = unwrap_const(v)
+        if v isa AbstractArray
+            floatT = promote_type(floatT, typeintersect(eltype(v), Number))
+        elseif v isa Number
+            floatT = promote_type(floatT, typeof(unwrap_const(v)))
+        end
+    end
+    return float(floatT)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the floating point type to use from the given `varmap` by looking at variables
+with a constant value. `u0Type` takes priority if it is a real-valued array type.
+"""
+function calculate_float_type(varmap, u0Type::Type, floatT = Bool)
+    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
+        return float(eltype(u0Type))
+    else
+        return float_type_from_varmap(varmap, floatT)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the `resid_prototype` for a `NonlinearFunction` with `N` equations and the
+provided `u0` and `p`.
+"""
+function calculate_resid_prototype(N::Int, u0, p)
+    u0ElType = u0 === nothing ? Float64 : eltype(u0)
+    if SciMLStructures.isscimlstructure(p)
+        u0ElType = promote_type(
+            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
+            u0ElType
+        )
+    end
+    return zeros(u0ElType, N)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the user-provided value of `u0_constructor`, the container type of user-provided
+`op`, the desired floating point type and whether a symbolic `u0` is allowed, return the
+updated `u0_constructor`.
+"""
+function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic_u0::Bool)
+    u0_constructor === identity || return u0_constructor
+    u0Type <: StaticArray || return u0_constructor
+    return function (vals)
+        elT = if symbolic_u0 && any(x -> x === nothing || symbolic_type(x) != NotSymbolic(), vals)
+            nothing
+        else
+            floatT
+        end
+        return SymbolicUtils.Code.create_array(u0Type, elT, Val(1), Val(length(vals)), vals...)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the user-provided value of `p_constructor`, the container type of user-provided `op`,
+ans the desired floating point type, return the updated `p_constructor`.
+"""
+function get_p_constructor(p_constructor, pType::Type, floatT::Type)
+    p_constructor === identity || return p_constructor
+    pType <: StaticArray || return p_constructor
+    return function (vals)
+        return SymbolicUtils.Code.create_array(
+            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...
+        )
+    end
+end
+
+abstract type ProblemConstructionHook end
+
+function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_point")
+    if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
+        throw(
+            ArgumentError(
+                """
+                The $name passed to the problem constructor must be a symbolic map.
+                """
+            )
+        )
+    end
+    op = recursive_unwrap(anydict(op))
+    symbols_to_symbolics!(sys, op)
+    return op
+end
+
+function build_operating_point(sys::AbstractSystem, op; fast_path = false)
+    if !fast_path
+        op = operating_point_preprocess(sys, op)
+    end
+    # Replace `nothing`s with sentinels so that `left_merge!` thinks they're values
+    # and doesn't override them. This is because explicit `nothing` values in `op`
+    # should be considered as overrides for initial conditions in `ics`.
+    map!(x -> @something(x, CommonSentinel()), values(op))
+    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
+    ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
+    left_merge!(op, ics)
+    map!(values(op)) do v
+        v === COMMON_SENTINEL && return COMMON_NOTHING
+        Symbolics.isarraysymbolic(v) || return v
+        any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
+
+        new_v = map(SU.stable_eachindex(v)) do i
+            v[i] === COMMON_SENTINEL ? COMMON_NOTHING : v[i]
+        end
+        return SU.Const{VartypeT}(new_v)
+    end
+    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
+    return op
+end
+
+struct MissingNecessaryInitialConditionsError <: Exception
+    missing_ics::NecessaryInitialConditionsT
+end
+
+const MISSING_NECESSARY_ICS_ERR_PRELUDE = """
+Missing necessary initial conditions for some variables. The missing variables are listed \
+below, along with the reason why the initial condition is required:
+"""
+
+function Base.showerror(io::IO, err::MissingNecessaryInitialConditionsError)
+    println(io, MISSING_NECESSARY_ICS_ERR_PRELUDE)
+    for (k, v) in err.missing_ics
+        printstyled(io, k; bold = true)
+        println(io, ": ", v)
+    end
+    return
+end
+
+function check_necessary_initial_conditions(sys::AbstractSystem, op::SymmapT)
+    ics = get_necessary_initial_conditions(sys)
+    isempty(ics) && return
+    missing_ics = filter(!Base.Fix1(has_possibly_indexed_key, op) ∘ first, ics)
+    isempty(missing_ics) || throw(MissingNecessaryInitialConditionsError(missing_ics))
+    return
+end
+
+"""
+    SciMLProblemOptions(sys::AbstractSystem; kwargs...)
+
+Bundle of options for [`process_SciMLProblem`](@ref)/`__process_SciMLProblem`, which build
+the `SciMLFunction` (and its `u0`/`p`/`du0`) shared by every `SciMLBase.*Problem`
+constructor. Nests a [`SciMLFunctionOptions`](@ref) (`fn_opts`) for the options that are
+ultimately relevant to the `SciMLFunction` being constructed (`t`, `eval_expression`,
+`eval_module`, `compiler_options`, and everything else `SciMLFunctionOptions` recognizes),
+plus the fields specific to processing the operating point and building the initialization
+problem — none of which are meaningful to a `*Function` constructor on their own.
+
+`sys` is not stored on the struct; it is only used, if `guesses` is not already a `SymmapT`,
+to resolve any `Symbol` keys in `guesses` to the corresponding symbolic variable of `sys`
+(via [`symbols_to_symbolics!`](@ref)) before `guesses` is converted to a `SymmapT`.
+
+`expression` is a type parameter (matching `SciMLFunctionOptions`) so that `fn_opts` is
+concretely typed; `__process_SciMLProblem` itself never branches on it.
+
+Like `SciMLFunctionOptions`, this struct does not attempt to hold every keyword a
+`*Function` constructor might recognize (e.g. `jac`, `steady_state`, or any other
+constructor-specific extra) — `__process_SciMLProblem` still takes a trailing `kwargs...`
+for those, forwarded blindly to `constructor` exactly as before.
+"""
+struct SciMLProblemOptions{expression}
+    fn_opts::SciMLFunctionOptions{expression}
+    floatT::Any
+    u0Type::Any
+    u0_eltype::Any
+    build_initializeprob::Bool
+    implicit_dae::Bool
+    guesses::SymmapT
+    warn_initialize_determined::Bool
+    initialization_eqs::Vector{Equation}
+    fully_determined::Union{Nothing, Bool}
+    check_initialization_units::Bool
+    tofloat::Bool
+    u0_constructor::Any
+    p_constructor::Any
+    check_length::Bool
+    symbolic_u0::Bool
+    warn_cyclic_dependency::Bool
+    circular_dependency_max_cycle_length::Int
+    circular_dependency_max_cycles::Int
+    initsys_mtkcompile_kwargs::Any
+    substitution_limit::Int
+    use_scc::Bool
+    time_dependent_init::Bool
+    algebraic_only::Bool
+    missing_guess_value::MissingGuessValue.Type
+    allow_incomplete::Bool
+    is_initializeprob::Bool
+    is_steadystateprob::Bool
+    return_operating_point::Bool
+    init_compiler_options::CompilerOptions
+end
+
+function SciMLProblemOptions(
+        sys::AbstractSystem;
+        fn_opts::SciMLFunctionOptions{E},
+        # `floatT`/`u0Type`/`u0_eltype` are derived from the actual operating point passed
+        # to `process_SciMLProblem`, not free-standing options. These defaults exist so
+        # that `opts` can be constructed before `op` is known (e.g. by a caller that only
+        # has keyword arguments to go on); `process_SciMLProblem(constructor, sys, op,
+        # opts::SciMLProblemOptions)` always recomputes and overrides them from `op`.
+        floatT = Float64, u0Type = Nothing, u0_eltype = nothing,
+        build_initializeprob::Bool = false, implicit_dae::Bool = false, guesses = AnyDict(),
+        warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
+        fully_determined = nothing, check_initialization_units::Bool = false,
+        tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
+        check_length::Bool = true, symbolic_u0::Bool = false,
+        warn_cyclic_dependency::Bool = false, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
+        substitution_limit = 100, use_scc::Bool = true, time_dependent_init::Bool,
+        algebraic_only::Bool = false, missing_guess_value = default_missing_guess_value(),
+        allow_incomplete::Bool = false, is_initializeprob::Bool = false,
+        is_steadystateprob::Bool = false, return_operating_point::Bool = false,
+        init_compiler_options::CompilerOptions = CompilerOptions(),
+    ) where {E}
+    if !(guesses isa SymmapT)
+        guesses = anydict(guesses)
+        symbols_to_symbolics!(sys, guesses)
+        guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
+    end
+    return SciMLProblemOptions{E}(
+        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
-to the `SciMLFunction` constructor. Requires the system `sys`, operating point `op`, initial
-time `t`, system defaults `defs`, user-provided `guesses`, and list of unknowns which don't
-have a value in `op`. The keyword `implicit_dae` denotes whether the `SciMLProblem` being
-constructed is in implicit DAE form (`DAEProblem`). All other keyword arguments are forwarded
-to `InitializationProblem`.
+to the `SciMLFunction` constructor. Requires the system `sys`, whether the resulting
+`SciMLFunction` is in-place (`iip`), the operating point `op`, initial time `t`, and
+user-provided `guesses`. `opts.implicit_dae` denotes whether the `SciMLProblem` being
+constructed is in implicit DAE form (`DAEProblem`). `opts.check_initialization_units` and
+`opts.init_compiler_options` are forwarded to `InitializationProblem` as `check_units` and
+`compiler_options` respectively. All other keyword arguments are forwarded as-is to
+`InitializationProblem`.
 """
 function maybe_build_initialization_problem(
-        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses;
-        time_dependent_init = is_time_dependent(sys), u0_constructor = identity,
-        p_constructor = identity, floatT = Float64, initialization_eqs = [],
-        use_scc = true, eval_expression = false, eval_module = @__MODULE__,
-        missing_guess_value = default_missing_guess_value(),
+        sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
+        opts::SciMLProblemOptions;
         # Intercept `expression` because we don't support it here yet
-        implicit_dae = false, is_steadystateprob = false, expression = Val{false}, kwargs...
+        expression = Val{false}, kwargs...
     )
+    (;
+        floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
+        fully_determined, check_initialization_units, u0_constructor, p_constructor,
+        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
+        time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_steadystateprob, init_compiler_options,
+    ) = opts
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+
     guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
 
     if t === nothing && is_time_dependent(sys)
@@ -1612,9 +1871,7 @@ function maybe_build_initialization_problem(
 
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
-        sys, t, op; guesses, time_dependent_init, initialization_eqs, fast_path = true,
-        use_scc, u0_constructor, p_constructor, eval_expression, eval_module,
-        missing_guess_value, is_steadystateprob, kwargs...
+        sys, t, op, opts; guesses, fast_path = true, kwargs...
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false
@@ -1777,162 +2034,6 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Calculate the floating point type to use from the given `varmap` by looking at variables
-with a constant value.
-"""
-function float_type_from_varmap(varmap, floatT = Bool)
-    for (k, v) in varmap
-        is_variable_floatingpoint(k) || continue
-        SU.isconst(v) || symbolic_type(v) isa NotSymbolic || continue
-        is_array_of_symbolics(v) && continue
-        v = unwrap_const(v)
-        if v isa AbstractArray
-            floatT = promote_type(floatT, typeintersect(eltype(v), Number))
-        elseif v isa Number
-            floatT = promote_type(floatT, typeof(unwrap_const(v)))
-        end
-    end
-    return float(floatT)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Calculate the floating point type to use from the given `varmap` by looking at variables
-with a constant value. `u0Type` takes priority if it is a real-valued array type.
-"""
-function calculate_float_type(varmap, u0Type::Type, floatT = Bool)
-    if u0Type <: AbstractArray && eltype(u0Type) <: Real && eltype(u0Type) != Union{}
-        return float(eltype(u0Type))
-    else
-        return float_type_from_varmap(varmap, floatT)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Calculate the `resid_prototype` for a `NonlinearFunction` with `N` equations and the
-provided `u0` and `p`.
-"""
-function calculate_resid_prototype(N::Int, u0, p)
-    u0ElType = u0 === nothing ? Float64 : eltype(u0)
-    if SciMLStructures.isscimlstructure(p)
-        u0ElType = promote_type(
-            eltype(SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]),
-            u0ElType
-        )
-    end
-    return zeros(u0ElType, N)
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Given the user-provided value of `u0_constructor`, the container type of user-provided
-`op`, the desired floating point type and whether a symbolic `u0` is allowed, return the
-updated `u0_constructor`.
-"""
-function get_u0_constructor(u0_constructor, u0Type::Type, floatT::Type, symbolic_u0::Bool)
-    u0_constructor === identity || return u0_constructor
-    u0Type <: StaticArray || return u0_constructor
-    return function (vals)
-        elT = if symbolic_u0 && any(x -> x === nothing || symbolic_type(x) != NotSymbolic(), vals)
-            nothing
-        else
-            floatT
-        end
-        return SymbolicUtils.Code.create_array(u0Type, elT, Val(1), Val(length(vals)), vals...)
-    end
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Given the user-provided value of `p_constructor`, the container type of user-provided `op`,
-ans the desired floating point type, return the updated `p_constructor`.
-"""
-function get_p_constructor(p_constructor, pType::Type, floatT::Type)
-    p_constructor === identity || return p_constructor
-    pType <: StaticArray || return p_constructor
-    return function (vals)
-        return SymbolicUtils.Code.create_array(
-            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...
-        )
-    end
-end
-
-abstract type ProblemConstructionHook end
-
-function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_point")
-    if op !== nothing && !(eltype(op) <: Pair) && !isempty(op)
-        throw(
-            ArgumentError(
-                """
-                The $name passed to the problem constructor must be a symbolic map.
-                """
-            )
-        )
-    end
-    op = recursive_unwrap(anydict(op))
-    symbols_to_symbolics!(sys, op)
-    return op
-end
-
-function build_operating_point(sys::AbstractSystem, op; fast_path = false)
-    if !fast_path
-        op = operating_point_preprocess(sys, op)
-    end
-    # Replace `nothing`s with sentinels so that `left_merge!` thinks they're values
-    # and doesn't override them. This is because explicit `nothing` values in `op`
-    # should be considered as overrides for initial conditions in `ics`.
-    map!(x -> @something(x, CommonSentinel()), values(op))
-    op = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(op), COMMON_NOTHING)
-    ics = add_toterms(initial_conditions(sys); replace = is_discrete_system(sys))
-    left_merge!(op, ics)
-    map!(values(op)) do v
-        v === COMMON_SENTINEL && return COMMON_NOTHING
-        Symbolics.isarraysymbolic(v) || return v
-        any(Base.Fix2(===, COMMON_SENTINEL) ∘ Base.Fix1(getindex, v), SU.stable_eachindex(v)) || return v
-
-        new_v = map(SU.stable_eachindex(v)) do i
-            v[i] === COMMON_SENTINEL ? COMMON_NOTHING : v[i]
-        end
-        return SU.Const{VartypeT}(new_v)
-    end
-    filter!(Base.Fix2(!==, COMMON_NOTHING) ∘ last, op)
-    return op
-end
-
-struct MissingNecessaryInitialConditionsError <: Exception
-    missing_ics::NecessaryInitialConditionsT
-end
-
-const MISSING_NECESSARY_ICS_ERR_PRELUDE = """
-Missing necessary initial conditions for some variables. The missing variables are listed \
-below, along with the reason why the initial condition is required:
-"""
-
-function Base.showerror(io::IO, err::MissingNecessaryInitialConditionsError)
-    println(io, MISSING_NECESSARY_ICS_ERR_PRELUDE)
-    for (k, v) in err.missing_ics
-        printstyled(io, k; bold = true)
-        println(io, ": ", v)
-    end
-    return
-end
-
-function check_necessary_initial_conditions(sys::AbstractSystem, op::SymmapT)
-    ics = get_necessary_initial_conditions(sys)
-    isempty(ics) && return
-    missing_ics = filter(!Base.Fix1(has_possibly_indexed_key, op) ∘ first, ics)
-    isempty(missing_ics) || throw(MissingNecessaryInitialConditionsError(missing_ics))
-    return
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
 Return the SciMLFunction created via calling `constructor`, the initial conditions `u0`
 and parameter object `p` given the system `sys`, and user-provided initial values `u0map`
 and `pmap`. `u0map` and `pmap` are converted into variable maps via [`to_varmap`](@ref).
@@ -1957,28 +2058,13 @@ All other keyword arguments are passed as-is to `constructor`.
 Base.@nospecializeinfer function process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op);
         u0_eltype = nothing, u0_constructor = identity, p_constructor = identity,
-        symbolic_u0 = false, kwargs...
-    )
-    u0Type = pType = typeof(op)
-    op = operating_point_preprocess(sys, op)
-    floatT = calculate_float_type(op, u0Type)
-    u0_eltype = something(u0_eltype, floatT)
-    u0_constructor = get_u0_constructor(u0_constructor, u0Type, floatT, symbolic_u0)
-    p_constructor = get_p_constructor(p_constructor, pType, floatT)
-
-    __process_SciMLProblem(constructor, sys, op; floatT, u0Type, u0_eltype, u0_constructor, p_constructor, symbolic_u0, kwargs...)
-end
-
-function __process_SciMLProblem(
-        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict;
-        floatT, u0Type, u0_eltype,
+        symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
         warn_initialize_determined = true, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        u0_constructor = identity, p_constructor = identity,
-        check_length = true, symbolic_u0 = false, warn_cyclic_dependency = false,
+        check_length = true, warn_cyclic_dependency = false,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
@@ -1989,6 +2075,67 @@ function __process_SciMLProblem(
         init_compiler_options::CompilerOptions = CompilerOptions(),
         kwargs...
     )
+    fn_opts = SciMLFunctionOptions(; t, eval_expression, eval_module, compiler_options, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    )
+
+    process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Equivalent to the keyword-argument-based `process_SciMLProblem`, given a pre-assembled
+[`SciMLProblemOptions`](@ref). Public entry point for callers that already hold (or want to
+share/reuse) an options struct, mirroring the `(sys, opts::SciMLFunctionOptions)` methods on
+the `*Function` constructors.
+
+`opts.floatT`, `opts.u0Type`, `opts.u0_eltype`, `opts.u0_constructor`, and
+`opts.p_constructor` are derived from the actual `op` passed here — not free-standing
+options — so they are recomputed and overridden regardless of what `opts` was built with.
+`opts.u0_constructor`/`opts.p_constructor`/`opts.symbolic_u0` are used as the *requested*
+constructor/flag fed into that computation, exactly as the corresponding keyword arguments
+are in the keyword-based method.
+"""
+Base.@nospecializeinfer function process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, @nospecialize(op),
+        opts::SciMLProblemOptions; kwargs...
+    )
+    u0Type = pType = typeof(op)
+    op = operating_point_preprocess(sys, op)
+    floatT = calculate_float_type(op, u0Type)
+    u0_eltype = something(opts.u0_eltype, floatT)
+    u0_constructor = get_u0_constructor(opts.u0_constructor, u0Type, floatT, opts.symbolic_u0)
+    p_constructor = get_p_constructor(opts.p_constructor, pType, floatT)
+    opts = setproperties(opts; floatT, u0Type, u0_eltype, u0_constructor, p_constructor)
+
+    __process_SciMLProblem(constructor, sys, op, opts; kwargs...)
+end
+
+function __process_SciMLProblem(
+        @nospecialize(constructor), sys::AbstractSystem, op::AnyDict,
+        opts::SciMLProblemOptions; kwargs...
+    )
+    (;
+        fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
+        warn_initialize_determined, initialization_eqs, fully_determined,
+        check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
+        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
+        use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
+        is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
+    ) = opts
+    (; t) = fn_opts
+    (; eval_expression, eval_module, compiler_options) = fn_opts.codegen
+
     dvs = unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
@@ -2019,15 +2166,7 @@ function __process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses; initsys_mtkcompile_kwargs,
-            warn_initialize_determined, initialization_eqs,
-            eval_expression, eval_module, fully_determined,
-            warn_cyclic_dependency, check_units = check_initialization_units,
-            circular_dependency_max_cycle_length, circular_dependency_max_cycles, use_scc,
-            algebraic_only, allow_incomplete, u0_constructor, p_constructor, floatT,
-            time_dependent_init, missing_guess_value, is_steadystateprob, implicit_dae,
-            compiler_options = init_compiler_options,
-            kwargs...
+            op, t, guesses, opts; kwargs...
         )
 
         kwargs = merge(kwargs, kws)
