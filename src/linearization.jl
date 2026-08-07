@@ -93,7 +93,7 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
     # Split the extra op into constant entries and symbolic entries; the latter are
     # evaluated from the solution, once per entry for all time points.
     extra_const = Dict{SymbolicT, SymbolicT}()
-    extra_resolved = Pair{SymbolicT, Any}[]
+    extra_resolved = Pair{SymbolicT, eltype(eltype(sol.u))}[]
     for (k, v) in op.op
         if _is_symbolic_op_value(v)
             push!(extra_resolved, unwrap(k) => op.sol(op.t; idxs = v))
