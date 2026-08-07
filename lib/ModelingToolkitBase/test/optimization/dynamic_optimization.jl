@@ -852,3 +852,51 @@ end
     jsol_tf = solve(jprob_tf, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.RK4()))
     @test 2 * jsol_tf.sol[x][end] ≤ 0.8
 end
+
+@testset "Residual scaling of dynamics constraints" begin
+    # Double integrator with scales - should converge to same answer
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)]
+
+    @named block = System(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+    )
+    block = mtkcompile(block; inputs = [u(t)])
+
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u(t) => 0.0]
+
+    # With scaling
+    scales = Dict(x(t) => 10.0, v(t) => 1.0)
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        scales = scales
+    )
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Without scaling - should also work
+    iprob2 = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol2.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Scales kwarg passes through JuMP without error
+    jprob = JuMPDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        scales = scales
+    )
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()))
+    @test ≈(jsol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.01,
+            scales = scales
+        )
+        csol = solve(cprob, CasADiCollocation("ipopt", ExplicitTableaus.Verner8()))
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+    end
+end
