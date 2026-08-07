@@ -16,10 +16,11 @@ end
 
 import SymbolicUtils
 import SymbolicUtils as SU
-import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
+import SymbolicUtils: iscall, arguments, operation, promote_symtype,
     isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
-    @rule, Rewriters, substitute, metadata, BasicSymbolic,
-    symtype
+    @rule, Rewriters, substitute, BasicSymbolic,
+    symtype, _iszero, _isone
+import TermInterface: maketerm, metadata
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -31,6 +32,7 @@ using Graphs
 import OrderedCollections
 
 using SymbolicIndexingInterface
+using SymbolicIndexingInterface: getname
 using LinearAlgebra, SparseArrays
 using InteractiveUtils
 using DataStructures
@@ -56,12 +58,12 @@ using RuntimeGeneratedFunctions: drop_expr
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
     exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-    VariableSource, getname, variable, COMMON_ZERO,
+    VariableSource, variable, COMMON_ZERO,
     NAMESPACE_SEPARATOR, setdefaultval, Arr,
     hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-    jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+    jacobian_sparsity, isaffine, islinear,
     tosymbol, lower_varname, diff2term, var_from_nested_derivative,
     BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
     ParallelForm, SerialForm, MultithreadedForm, build_function,
@@ -71,7 +73,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 import ModelingToolkitBase as MTKBase
 import SimpleNonlinearSolve
 
-import DiffEqBase: @add_kwonly
+import SciMLBase: @add_kwonly
 @reexport using Symbolics
 @reexport using UnPack
 @reexport using ModelingToolkitBase

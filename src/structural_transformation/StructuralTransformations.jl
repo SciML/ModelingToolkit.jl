@@ -3,20 +3,21 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT
+using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT,
+    var_from_nested_derivative, value
 import Symbolics
 using SymbolicUtils
 using SymbolicUtils: BSImpl
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: maketerm, iscall, symtype
+using SymbolicUtils: iscall, symtype
+using TermInterface: maketerm
 import SymbolicUtils as SU
 import Moshi
 
 using ModelingToolkit
-using ModelingToolkitBase: System, AbstractSystem, var_from_nested_derivative, Differential,
+using ModelingToolkitBase: System, AbstractSystem, Differential,
     unknowns, equations, diff2term_with_unit,
-    value,
     operation, arguments, simplify, symbolic_linear_solve,
     isdiffeq, isdifferential, isirreducible,
     empty_substitutions, get_substitutions,
@@ -25,17 +26,17 @@ using ModelingToolkitBase: System, AbstractSystem, var_from_nested_derivative, D
     ExtraEquationsSystemException,
     ExtraVariablesSystemException,
     invalidate_cache!, Shift,
-    topological_sort,
     filter_kwargs, lower_varname_with_unit,
     setio,
     has_equations, observed,
-    Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
+    Schedule, iscomplete, get_schedule, VariableUnshifted,
     VariableShift, DerivativeDict, shift2term, simplify_shifts,
     distribute_shift
 
 using BipartiteGraphs
 import BipartiteGraphs: invview, complete, IncrementalCycleTracker, add_edge_checked!
 using Graphs
+using Graphs: topological_sort
 using ModelingToolkit: mtkcompile!
 using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
 

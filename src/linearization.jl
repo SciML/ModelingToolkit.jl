@@ -139,7 +139,7 @@ function linearization_function(
         initialization_abstol = 1.0e-5,
         initialization_reltol = 1.0e-3,
         op = Dict{SymbolicT, SymbolicT}(),
-        p = DiffEqBase.NullParameters(),
+        p = SciMLBase.NullParameters(),
         zero_dummy_der = false,
         initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
@@ -957,7 +957,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 function linearize(
         sys, lin_fun::LinearizationFunction; t = 0.0,
         op = Dict(), allow_input_derivatives = false,
-        p = DiffEqBase.NullParameters()
+        p = SciMLBase.NullParameters()
     )
     if op isa LinearizationOpPoint && op.t isa AbstractVector
         ops = _build_op_from_solution(op)
