@@ -117,17 +117,40 @@ end
         sys::System, op; expression = Val{false}, lb = nothing, ub = nothing,
         check_length = true, check_compatibility = true, kwargs...
     ) where {iip, spec}
+    if is_time_dependent(sys)
+        sys = NonlinearSystem(sys)
+    end
+    fn_opts = SciMLFunctionOptions(; check_compatibility, expression, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return NonlinearProblem{iip, spec}(sys, op, opts; lb, ub, kwargs...)
+end
+
+"""
+    SciMLBase.NonlinearProblem{iip, spec}(sys::System, op, opts::SciMLProblemOptions; lb = nothing, ub = nothing, kwargs...)
+
+Public entry point that builds a `NonlinearProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.NonlinearProblem{iip, spec}(
+        sys::System, op, opts::SciMLProblemOptions{E};
+        lb = nothing, ub = nothing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, NonlinearProblem)
     if is_time_dependent(sys)
         sys = NonlinearSystem(sys)
     end
-    check_compatibility && check_compatible_system(NonlinearProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(NonlinearProblem, sys)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{_iip, spec}, sys, op;
-        check_length, check_compatibility, expression, kwargs...
+        NonlinearFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
     if lb === nothing && ub === nothing
@@ -139,7 +162,7 @@ end
     args = (; f, u0, p, ptype)
 
     return maybe_codegen_scimlproblem(
-        expression, NonlinearProblem{_iip}, args; lb, ub, kwargs...
+        Val{E}, NonlinearProblem{_iip}, args; lb, ub, kwargs...
     )
 end
 
@@ -172,14 +195,39 @@ end
         sys::System, op; check_length = false, lb = nothing, ub = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(; check_compatibility, expression, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return NonlinearLeastSquaresProblem{iip, spec}(sys, op, opts; lb, ub, kwargs...)
+end
+
+"""
+    SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(sys::System, op, opts::SciMLProblemOptions; lb = nothing, ub = nothing, kwargs...)
+
+Public entry point that builds a `NonlinearLeastSquaresProblem` directly from a
+pre-assembled [`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
+        sys::System, op, opts::SciMLProblemOptions{E};
+        lb = nothing, ub = nothing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, NonlinearLeastSquaresProblem)
-    check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(NonlinearLeastSquaresProblem, sys)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{_iip}, sys, op;
-        check_length, expression, kwargs...
+        # `NonlinearFunction{_iip}` (bare, no `spec`) would otherwise resolve to `{_iip,
+        # AutoSpecialize}` via its keyword-based fallback method; the opts-accepting
+        # method has no such `{iip}`-only fallback, so `AutoSpecialize` must be named
+        # explicitly here to match.
+        NonlinearFunction{_iip, SciMLBase.AutoSpecialize}, sys, op, opts;
+        options_struct = Val(true), kwargs...
     )
 
     if lb === nothing && ub === nothing
@@ -190,7 +238,7 @@ end
     args = (; f, u0, p)
 
     return maybe_codegen_scimlproblem(
-        expression, NonlinearLeastSquaresProblem{_iip}, args; lb, ub, kwargs...
+        Val{E}, NonlinearLeastSquaresProblem{_iip}, args; lb, ub, kwargs...
     )
 end
 

@@ -47,21 +47,40 @@ function SciMLBase.IntervalNonlinearProblem(
         sys::System, uspan::NTuple{2}, parammap = SciMLBase.NullParameters();
         check_compatibility = true, expression = Val{false}, kwargs...
     )
+    fn_opts = SciMLFunctionOptions(; check_compatibility, expression, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return SciMLBase.IntervalNonlinearProblem(sys, uspan, parammap, opts; kwargs...)
+end
+
+"""
+    SciMLBase.IntervalNonlinearProblem(sys::System, uspan, parammap, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds an `IntervalNonlinearProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.IntervalNonlinearProblem(
+        sys::System, uspan::NTuple{2}, parammap, opts::SciMLProblemOptions{E}; kwargs...
+    ) where {E}
     check_complete(sys, IntervalNonlinearProblem)
-    check_compatibility && check_compatible_system(IntervalNonlinearProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(IntervalNonlinearProblem, sys)
 
     u0map = unknowns(sys) .=> uspan[1]
     op = anydict([unknowns(sys)[1] => uspan[1]])
     merge!(op, to_varmap(parammap, parameters(sys)))
     f, u0,
         p = process_SciMLProblem(
-        IntervalNonlinearFunction, sys, op;
-        check_compatibility, expression, kwargs...
+        IntervalNonlinearFunction, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, uspan, p)
-    return maybe_codegen_scimlproblem(expression, IntervalNonlinearProblem, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, IntervalNonlinearProblem, args; kwargs...)
 end
 
 function check_compatible_system(

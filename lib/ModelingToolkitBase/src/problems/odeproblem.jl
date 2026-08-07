@@ -120,33 +120,65 @@ Base.@nospecializeinfer function _ode_problem(
         ::Type{ODEProblem{iip, spec}}, sys::System, @nospecialize(op), tspan;
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
-        _skip_events = false, kwargs...
+        _skip_events = false, _skip_tstops = false, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return ODEProblem{iip, spec}(
+        sys, op, tspan, opts; callback, _skip_events, _skip_tstops, kwargs...
+    )
+end
+
+"""
+    SciMLBase.ODEProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds an `ODEProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+
+`_skip_events`/`_skip_tstops` (default `false`) are explicit keywords here — not part of
+`kwargs` — since they're relevant only to `process_kwargs` below, not the inner `ODEFunction`
+build; the opts-accepting `ODEFunction` method has no generic `kwargs...` sink to harmlessly
+absorb them the way its keyword-based wrapper does.
+"""
+Base.@nospecializeinfer function SciMLBase.ODEProblem{iip, spec}(
+        sys::System, @nospecialize(op), tspan, opts::SciMLProblemOptions{E};
+        @nospecialize(callback = nothing), _skip_events = false, _skip_tstops = false,
+        kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, ODEProblem)
-    check_compatibility && check_compatible_system(ODEProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(ODEProblem, sys)
+
+    opts = maybe_derive_t_from_tspan(opts, tspan)
 
     _iip = resolve_iip(iip, op)
     if _iip === true
         f, u0, p = process_SciMLProblem(
-            ODEFunction{true, spec}, sys, op;
-            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-            eval_module, expression, check_compatibility, kwargs...
+            ODEFunction{true, spec}, sys, op, opts; options_struct = Val(true), kwargs...
         )
     else
         f, u0, p = process_SciMLProblem(
-            ODEFunction{false, spec}, sys, op;
-            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-            eval_module, expression, check_compatibility, kwargs...
+            ODEFunction{false, spec}, sys, op, opts; options_struct = Val(true), kwargs...
         )
     end
 
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
+        sys; expression = Val{E}, callback, eval_expression, eval_module, op, _skip_events,
+        _skip_tstops, tspan, kwargs...
     )
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)
-    return maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(Val{E}, ODEProblem{_iip}, args; kwargs...)
 end
 
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
@@ -182,21 +214,45 @@ end
         sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(; check_compatibility, expression, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, is_steadystateprob = true,
+        build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return SteadyStateProblem{iip, spec}(sys, op, opts; kwargs...)
+end
+
+"""
+    DiffEqBase.SteadyStateProblem{iip, spec}(sys::System, op, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds a `SteadyStateProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function DiffEqBase.SteadyStateProblem{iip, spec}(
+        sys::System, op, opts::SciMLProblemOptions{E}; kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, SteadyStateProblem)
-    check_compatibility && check_compatible_system(SteadyStateProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        ODEFunction{_iip}, sys, op;
-        steady_state = true, check_length, check_compatibility, expression,
-        is_steadystateprob = true, kwargs...
+        # `ODEFunction{_iip}` (bare, no `spec`) would otherwise resolve to `{_iip,
+        # AutoSpecialize}` via its keyword-based fallback method; the opts-accepting
+        # method has no such `{iip}`-only fallback, so `AutoSpecialize` must be named
+        # explicitly here to match.
+        ODEFunction{_iip, SciMLBase.AutoSpecialize}, sys, op, opts;
+        options_struct = Val(true), steady_state = true, kwargs...
     )
 
-    kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
+    kwargs = process_kwargs(sys; expression = Val{E}, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
 
-    maybe_codegen_scimlproblem(expression, SteadyStateProblem{_iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(Val{E}, SteadyStateProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(
