@@ -394,12 +394,10 @@ end
     sys′ = subset_tunables(sys, [γ, α])
 
     bprob = BVProblem(sys′, u0map, tspan; tune_parameters = true)
-    if @isdefined(ModelingToolkit)
-        bsol = solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-3)
+    # `dt` here sets the collocation mesh, which drives the size of the Ipopt problem.
+    # 1e-3 gives 1001 mesh points (4004 variables) for no gain in accuracy over 1e-2.
+    bsol = solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-2)
 
-        @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
-        @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
-    else
-        @test_broken solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-3)
-    end
+    @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
+    @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
 end
