@@ -56,7 +56,7 @@ end
 # the `LinearizationProblem` inside the per-point loop would read state values that are
 # only refreshed by initialization inside `solve`, i.e. those of the previous time point.
 function _is_symbolic_op_value(v)
-    return !SU.isconst(v) && (symbolic_type(v) != NotSymbolic() || is_array_of_symbolics(v))
+    return !SU.isconst(unwrap(v))
 end
 
 function _build_op_from_solution(op::LinearizationOpPoint)
