@@ -30,7 +30,13 @@ methods).
 
 For time-dependent systems the operator is stripped to `actual` during `mtkcompile`, so
 components carrying limiters compile unchanged for transient simulation; wherever the
-operator is evaluated numerically it is simply `actual`.
+operator is evaluated numerically it is simply `actual`. The limiters are remembered
+though: an `ODEProblem` built with `nlstep = true` re-attaches them to the nonlinear system
+of implicit stage equations, so an implicit solver limits its stage Newton iterates. There
+`limitold` is the previous *Newton iterate of the stage solve*, not the previous time step
+— which is the SPICE reading of limiting, since limiting damps the iteration rather than
+the trajectory. This requires each limited quantity to be an affine function of a single
+stage unknown.
 
 # Arguments
 
@@ -98,7 +104,8 @@ const limitnew = wrap(LIMIT_NEW)
     limitold
 
 Reserved placeholder for the *previously accepted* value of a limited quantity inside the
-`limiter` argument of [`limited`](@ref).
+`limiter` argument of [`limited`](@ref) — the previous iterate of the nonlinear solve, which
+in an `nlstep` transient solve is the previous Newton iterate of the current implicit stage.
 """
 const limitold = wrap(LIMIT_OLD)
 
@@ -211,11 +218,27 @@ function _canonicalize_sentinels(ir::IRStructure, x)
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Metadata key under which [`strip_limited_system`](@ref) records the limited quantities of a
+time-dependent system: a `Vector{Pair{SymbolicT, SymbolicT}}` mapping each limited
+expression `actual` to its limiter (in terms of `LIMIT_NEW`/`LIMIT_OLD` and parameters).
+
+The nodes themselves are gone from the equations, so a transient compilation and the
+`ODEFunction` it generates are exactly what they would be without the annotation. The
+registry is what lets [`attach_stage_limiters`](@ref) put the limiting back for the
+implicit stage solves of an `nlstep` problem.
+"""
+struct StageLimitedCtx end
+
+"""
     strip_limited_system(sys::AbstractSystem)
 
 Return a copy of `sys` with every `limited(actual, limiter)` node in the equations and
-observed equations replaced by `actual`. Used for time-dependent compilation, where
-iterate limiting does not apply.
+observed equations replaced by `actual`, recording the stripped quantities in the
+[`StageLimitedCtx`](@ref) metadata. Used for time-dependent compilation, where the
+right-hand side itself carries no limiting: a transient solve limits (if at all) inside
+the nonlinear solve of an implicit step, which is a separate system built later.
 """
 function strip_limited_system(sys::AbstractSystem)
     ir = get_irstructure(sys)
@@ -229,13 +252,18 @@ function strip_limited_system(sys::AbstractSystem)
     # `limited(actual, limiter) -> actual`; the substituter applies the rules bottom-up,
     # so a (rejected elsewhere, but harmless here) nested annotation still resolves.
     rules = Dict{SymbolicT, SymbolicT}(node => unwrap(arguments(node)[1]) for node in nodes)
-    return ConstructionBase.setproperties(
+    specs = Pair{SymbolicT, SymbolicT}[
+        unwrap(arguments(node)[1]) => _canonicalize_sentinels(ir, unwrap(arguments(node)[2]))
+            for node in nodes
+    ]
+    newsys = ConstructionBase.setproperties(
         sys;
         eqs = _substitute_equations(ir, rules, eqs),
         observed = _substitute_equations(ir, rules, obs),
         unknowns = _remove_sentinels(unknowns(sys)),
         ps = _remove_sentinels(get_ps(sys))
     )
+    return setmetadata(newsys, StageLimitedCtx, specs)
 end
 
 """
@@ -370,6 +398,99 @@ function apply_limited_lowering(sys::AbstractSystem, source_info)
         end
     end
     return sys, source_info
+end
+
+"""
+    attach_stage_limiters(sys::AbstractSystem, stagesys::AbstractSystem, subrules::AbstractDict)
+
+Re-attach the limiters that [`strip_limited_system`](@ref) recorded for the time-dependent
+system `sys` to `stagesys`, the time-independent system of implicit stage equations built
+from it for `nlstep` problems (`M z = outer_tmp + γ₁ f(γ₂ z + inner_tmp, p, c)`).
+`subrules` is the substitution that took the unknowns of `sys` to the stage coordinates of
+`stagesys`, i.e. `v => γ₂ * v + inner_tmp[i]` plus `t => c`.
+
+The stage system's unknowns must stay a subset of the ODE unknowns — `SciMLBase.ODENLStepData`
+maps the two by index — so this cannot use the auxiliary-unknown augmentation
+[`lower_limited`](@ref) applies to a standalone nonlinear system. Instead, each limited
+quantity `q` must resolve to an affine function `q = a * z + b` of a *single* stage unknown
+`z` (with `a` and `b` free of unknowns), which is what makes the correction on `q` a
+correction on `z`: the recorded limiter `L` is conjugated by that affine map into
+
+    φ(znew, zold) = (L(a * znew + b, a * zold + b) - b) / a
+
+and registered against `z` in the [`LimitedCtx`](@ref) metadata, so the ordinary
+[`merge_limited_postcondition`](@ref) path compiles it into the stage `NonlinearProblem`'s
+`postcondition`. `φ` inherits the fixed-point property of `L`, and since the corrector runs
+before the residual is evaluated at each stage iterate, the converged stage solution solves
+the unmodified stage equations.
+
+Returns `stagesys` unchanged when `sys` declares no limited quantities. Throws an
+`ArgumentError` when a limited quantity does not reduce to a single stage unknown affinely.
+"""
+function attach_stage_limiters(
+        sys::AbstractSystem, stagesys::AbstractSystem, subrules::AbstractDict
+    )
+    specs = getmetadata(sys, StageLimitedCtx, nothing)
+    specs === nothing && return stagesys
+    dvset = Set{SymbolicT}(unwrap.(unknowns(stagesys)))
+    stage_specs = Pair{SymbolicT, SymbolicT}[]
+    for (actual, limiter) in specs
+        if has_limited(actual) || has_limited(limiter)
+            throw(
+                ArgumentError("`limited` operators may not be nested; found `$(actual)`.")
+            )
+        end
+        # `actual` is written in the variables the system had before simplification, so
+        # resolve it through the variables each of the two compilations eliminated, and
+        # through the stage substitution in between.
+        q = unwrap(substitute_observed(sys, unwrap(actual)))
+        q = unwrap(substitute(q, subrules))
+        q = unwrap(substitute_observed(stagesys, q))
+        zs = unique(filter(in(dvset), unwrap.(get_variables(q))))
+        # A limited quantity that no stage unknown feeds is constant throughout the stage
+        # solve — the solver never iterates on it, so there is nothing to limit.
+        isempty(zs) && continue
+        if length(zs) != 1
+            throw(
+                ArgumentError(
+                    "`nlstep = true` requires every `limited` quantity to be a function of " *
+                        "exactly one unknown of the implicit stage system, since the stage " *
+                        "unknowns are the only iterate the corrector can act on. The limited " *
+                        "quantity `$(actual)` became `$(q)`, which depends on the stage " *
+                        "unknowns $(zs). Limit a single state instead, or build the problem " *
+                        "with `nlstep = false`."
+                )
+            )
+        end
+        z = only(zs)
+        a = unwrap(Symbolics.derivative(q, z))
+        if any(isequal(z), unwrap.(get_variables(a)))
+            throw(
+                ArgumentError(
+                    "`nlstep = true` requires every `limited` quantity to be an affine " *
+                        "function of its stage unknown, so that limiting the quantity is " *
+                        "limiting the unknown. The limited quantity `$(actual)` became " *
+                        "`$(q)`, which is nonlinear in `$(z)`."
+                )
+            )
+        end
+        b = unwrap(substitute(q, Dict(z => 0)))
+        push!(stage_specs, z => _conjugate_limiter(limiter, a, b))
+    end
+    isempty(stage_specs) && return stagesys
+    return setmetadata(stagesys, LimitedCtx, stage_specs)
+end
+
+# `L` limits the physical quantity `a * z + b`; the stage solver only ever sees `z`, so the
+# corrector it needs is `L` conjugated by that affine map. `Substituter` rewrites each node
+# at most once, so the sentinels reintroduced by the replacements are not rewritten again.
+function _conjugate_limiter(limiter, a, b)
+    rules = Dict{SymbolicT, SymbolicT}(
+        LIMIT_NEW => unwrap(a * limitnew + b),
+        LIMIT_OLD => unwrap(a * limitold + b)
+    )
+    subber = SU.Substituter{false}(rules, SU.default_substitute_filter)
+    return unwrap((wrap(subber(unwrap(limiter))) - b) / a)
 end
 
 """

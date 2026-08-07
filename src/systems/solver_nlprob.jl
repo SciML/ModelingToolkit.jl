@@ -20,6 +20,15 @@ function MTKBase.generate_ODENLStepData(
     # problem also carries an analytic Jacobian. This lets NonlinearSolve.jl
     # skip the per-iteration AD/FD Jacobian computation on the inner Newton.
     nlprob = if nlstep_scc
+        if getmetadata(nlsys, MTKBase.LimitedCtx, nothing) !== nothing
+            throw(
+                ArgumentError(
+                    "`limited` quantities are not supported with `nlstep_scc = true`: the " *
+                        "stage limiters compile into the `postcondition` of a single " *
+                        "`NonlinearProblem`, which the SCC decomposition splits apart."
+                )
+            )
+        end
         SCCNonlinearProblem(nlsys, op; build_initializeprob = false, jac)
     else
         NonlinearProblem(nlsys, op; build_initializeprob = false, jac)
@@ -74,6 +83,9 @@ function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     else
         complete(nlsys; split = is_split(sys))
     end
+    # `mtkcompile` strips `limited` from a time-dependent system but records what it
+    # stripped: the stage system is where those limiters become a `postcondition`.
+    nlsys = MTKBase.attach_stage_limiters(sys, nlsys, subrules)
     return nlsys, outer_tmp, inner_tmp
 end
 
