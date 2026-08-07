@@ -567,4 +567,20 @@ end
     uprob = NonlinearProblem(sys, [x => 1.5]; lb = [-10.0], ub = [10.0])
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
+
+    # Symbolic bounds are resolved through the operating point, which must not leak the
+    # operating-point *value* of an unbounded unknown into its bounds. Doing so pins the
+    # unknown to `lb == ub == u0` and the solver's bounds transform then returns `NaN`.
+    @parameters lo = -1.0
+    @variables sc [bounds = (lo, 1.0)] sd
+    @mtkcompile ssys = System([0 ~ sc^2 + sd^2 - 1, 0 ~ sc^2 - sd^2 - 0.5])
+    sprob = NonlinearProblem(ssys, [sc => 0.8, sd => 0.4])
+    sdvs = unknowns(ssys)
+    sci = findfirst(isequal(sc), sdvs)
+    sdi = findfirst(isequal(sd), sdvs)
+    @test sprob.lb[sci] == -1.0 && sprob.ub[sci] == 1.0
+    @test sprob.lb[sdi] == -Inf && sprob.ub[sdi] == Inf
+    ssol = solve(sprob)
+    @test SciMLBase.successful_retcode(ssol)
+    @test !any(isnan, ssol.u)
 end

@@ -75,6 +75,23 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Restore the `sentinel` (`-Inf` for lower bounds, `Inf` for upper bounds) in `resolved` for
+every entry that was already `sentinel` in `metadata_bounds`.
+
+Symbolic bounds are resolved by merging the operating point into the bounds map, which also
+assigns every *unbounded* unknown its operating-point value. Those values are initial
+guesses, not bounds: left in place they pin the unknown to `lb == ub == u0`, which the
+solver's bounds transform turns into `NaN`.
+"""
+function restore_infinite_bounds(metadata_bounds, resolved, sentinel)
+    return map(zip(metadata_bounds, resolved)) do (meta, res)
+        return meta === sentinel ? sentinel : res
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Construct the `lb` and `ub` vectors of bounds for the unknowns of `sys` from their `bounds`
 metadata, aligned with the order of `unknowns(sys)`. `op` is the operating point used to
 resolve any symbolic bounds. Returns `(nothing, nothing)` if no unknown has a finite bound,
@@ -99,14 +116,14 @@ function generate_nonlinear_bounds(sys::AbstractSystem, op)
         write_possibly_indexed_array!(lbmap, var, Symbolics.SConst(b), COMMON_NOTHING)
     end
     left_merge!(lbmap, op)
-    lb = varmap_to_vars(lbmap, dvs; tofloat = false)
+    lb = restore_infinite_bounds(lb, varmap_to_vars(lbmap, dvs; tofloat = false), -Inf)
     ubmap = SymmapT()
     for (var, b) in zip(dvs, ub)
         b === Inf && continue
         write_possibly_indexed_array!(ubmap, var, Symbolics.SConst(b), COMMON_NOTHING)
     end
     left_merge!(ubmap, op)
-    ub = varmap_to_vars(ubmap, dvs; tofloat = false)
+    ub = restore_infinite_bounds(ub, varmap_to_vars(ubmap, dvs; tofloat = false), Inf)
     if all(==(-Inf), lb) && all(==(Inf), ub)
         return nothing, nothing
     end
