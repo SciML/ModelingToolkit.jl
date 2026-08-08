@@ -2834,9 +2834,9 @@ version = "1.5.2"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "LaTeXStrings", "Markdown", "PrecompileTools", "Printf", "REPL", "Reexport", "StringManipulation", "Tables"]
-git-tree-sha1 = "ca9385c2f2c93a9491c6c53d31e9c237fe21b232"
+git-tree-sha1 = "4ac881f5432bd93463a41767a814a45245be22b6"
 uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "3.4.5"
+version = "3.4.6"
 
     [deps.PrettyTables.extensions]
     PrettyTablesExcelExt = "XLSX"
