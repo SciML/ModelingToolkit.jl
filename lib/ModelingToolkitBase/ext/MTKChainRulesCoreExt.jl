@@ -9,14 +9,34 @@ import SciMLStructures
 import SymbolicIndexingInterface: remake_buffer, parameter_index
 import SciMLBase: AbstractNonlinearProblem, remake
 
+# Positional arguments of `MTKParameters` after `tunables`, in order. `setproperties`
+# (and hence every `@set!`/`SciMLStructures.replace` rebuild) lowers to this
+# constructor, so the pullback has to route each buffer's cotangent back to its own
+# argument — otherwise a rebuild silently zeroes every non-tunable portion.
+const MTP_NONTUNABLE_FIELDS = (:initials, :discrete, :constant, :nonnumeric, :caches)
+
+_mtp_tangent(::Nothing) = NoTangent()
+_mtp_tangent(x) = x
+
 function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
     function mtp_pullback(dt)
         dt = unthunk(dt)
-        dtunables = dt isa AbstractArray ? dt : dt.tunable
-        return (
-            NoTangent(), dtunables[1:length(tunables)],
-            ntuple(_ -> NoTangent(), length(args))...,
-        )
+        # A flat cotangent carries the tunable portion only.
+        if dt isa AbstractArray
+            return (
+                NoTangent(), dt[1:length(tunables)],
+                ntuple(_ -> NoTangent(), length(args))...,
+            )
+        end
+        dtunables = hasproperty(dt, :tunable) ? _mtp_tangent(dt.tunable) : NoTangent()
+        if dtunables isa AbstractArray
+            dtunables = dtunables[1:length(tunables)]
+        end
+        dargs = ntuple(length(args)) do i
+            field = MTP_NONTUNABLE_FIELDS[i]
+            hasproperty(dt, field) ? _mtp_tangent(getproperty(dt, field)) : NoTangent()
+        end
+        return (NoTangent(), dtunables, dargs...)
     end
     return MTKParameters(tunables, args...), mtp_pullback
 end
