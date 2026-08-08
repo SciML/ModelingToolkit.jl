@@ -1,6 +1,4 @@
-struct InitializationProblem{iip, specialization} end
-
-@doc """
+"""
     InitializationProblem(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip}(sys::AbstractSystem, t, op = Dict(); kwargs...)
     InitializationProblem{iip, specialize}(sys::AbstractSystem, t, op = Dict(); kwargs...)
@@ -20,7 +18,8 @@ $INITIALIZEPROB_KWARGS
 $INTERNAL_INITIALIZEPROB_KWARGS
 
 All other keyword arguments are forwarded to the wrapped problem constructor.
-""" InitializationProblem
+"""
+struct InitializationProblem{iip, specialization} end
 
 """
     $(TYPEDSIGNATURES)

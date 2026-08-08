@@ -1,3 +1,4 @@
+"""$(problem_docstring(SciMLBase.BVProblem, ODEFunction, true; init = false, extra_body = BV_EXTRA_BODY))"""
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true,

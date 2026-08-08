@@ -490,6 +490,7 @@ function handle_rational_polynomials(x, wrt; fraction_cancel_fn = simplify_fract
     return num, den
 end
 
+"""$(function_docstring(HomotopyNonlinearFunction, false, Symbol[]; extra_kwargs = "- `fraction_cancel_fn`: Function used to simplify fractions in polynomial expressions."))"""
 @fallback_iip_specialize function SciMLBase.HomotopyNonlinearFunction{iip, specialize}(
         sys::System; eval_expression = false, eval_module = @__MODULE__,
         p = nothing, fraction_cancel_fn = SymbolicUtils.simplify_fractions,
@@ -539,11 +540,23 @@ end
     )
 end
 
-struct HomotopyContinuationProblem{iip, specialization} end
+"""
+    HomotopyContinuationProblem(sys::System, args...; kwargs...)
 
-@doc problem_docstring(
-    HomotopyContinuationProblem, HomotopyNonlinearFunction, false; init = false
-) HomotopyContinuationProblem
+Construct a homotopy-continuation problem from a nonlinear `sys`. This problem type is
+intended for solvers that track solution paths from a start system to the target system.
+
+# Example
+
+```julia
+@variables x = 1.0
+@mtkcompile sys = System([x^2 - 1 ~ 0])
+prob = HomotopyContinuationProblem(sys, [])
+```
+
+See [`NonlinearProblem`](@ref) for the standard nonlinear-problem constructor.
+"""
+struct HomotopyContinuationProblem{iip, specialization} end
 
 function HomotopyContinuationProblem(sys::System, args...; kwargs...)
     return HomotopyContinuationProblem{true}(sys, args...; kwargs...)

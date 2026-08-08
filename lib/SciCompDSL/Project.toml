@@ -18,10 +18,6 @@ URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 [weakdeps]
 DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 
-[sources]
-ModelingToolkit = {path = "../.."}
-ModelingToolkitBase = {path = "../ModelingToolkitBase"}
-
 [extensions]
 SciCompDSLDynamicQuantitiesExt = "DynamicQuantities"
 

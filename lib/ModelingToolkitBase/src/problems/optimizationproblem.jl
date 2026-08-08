@@ -1,3 +1,4 @@
+"""$(function_docstring(OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j]))"""
 function SciMLBase.OptimizationFunction(sys::System, args...; kwargs...)
     return OptimizationFunction{true}(sys, args...; kwargs...)
 end
@@ -104,6 +105,7 @@ function SciMLBase.OptimizationFunction{iip}(
     return maybe_codegen_scimlfn(Val{E}, OptimizationFunction{iip}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false))"""
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
     return OptimizationProblem{true}(sys, args...; kwargs...)
 end

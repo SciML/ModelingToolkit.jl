@@ -1,3 +1,4 @@
+"""$(function_docstring(SDEFunction, true, [:jac, :tgrad]))"""
 @fallback_iip_specialize function SciMLBase.SDEFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__,
@@ -82,6 +83,7 @@ function SciMLBase.SDEFunction{iip, spec}(
     return maybe_codegen_scimlfn(Val{E}, SDEFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.SDEProblem, SDEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.SDEProblem{iip, spec}(
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,

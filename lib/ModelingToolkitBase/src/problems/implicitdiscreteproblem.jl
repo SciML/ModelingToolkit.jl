@@ -1,3 +1,4 @@
+"""$(function_docstring(ImplicitDiscreteFunction, true, Symbol[]))"""
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, eval_expression = false,
         eval_module = @__MODULE__, expression = Val{false},
@@ -63,6 +64,7 @@ function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
     )
 end
 
+"""$(problem_docstring(SciMLBase.ImplicitDiscreteProblem, ImplicitDiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true, expression = Val{false}, kwargs...

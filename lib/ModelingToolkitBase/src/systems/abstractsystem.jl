@@ -1893,9 +1893,32 @@ function state_priorities(sys::AbstractSystem)
 end
 
 """
-    $TYPEDSIGNATURES
+    irreducibles(sys::AbstractSystem)
 
-Get the irreducible variables of a system `sys` and its subsystems.
+Return the variables in `sys` and its subsystems that are marked as irreducible.
+
+Irreducible variables are preserved as unknowns during simplification instead of being
+eliminated as observed variables when possible.
+
+# Arguments
+
+- `sys`: system to inspect recursively.
+
+# Returns
+
+An atomic set of symbolic variables, with subsystem variables namespaced into `sys`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+@variables x(t) [irreducible = true]
+@named sys = System([D(x) ~ -x], t)
+
+irreducibles(sys)
+```
 """
 function irreducibles(sys::AbstractSystem)
     ircs = get_irreducibles(sys)
@@ -1909,9 +1932,20 @@ function irreducibles(sys::AbstractSystem)
 end
 
 """
-    $TYPEDSIGNATURES
+    maybe_zeros(sys::AbstractSystem)
 
-Get the variables that should be treated as possible zeros in `sys` and its subsystems.
+Return variables in `sys` and its subsystems that simplification may constrain to zero.
+
+This is primarily used by structural simplification to track variables introduced or
+retained while handling alias equations.
+
+# Arguments
+
+- `sys`: system to inspect recursively.
+
+# Returns
+
+An atomic set of symbolic variables, with subsystem variables namespaced into `sys`.
 """
 function maybe_zeros(sys::AbstractSystem)
     dds = get_maybe_zeros(sys)

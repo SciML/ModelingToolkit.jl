@@ -84,6 +84,7 @@ function LinearFunction{iip}(
     return LinearFunction{iip}(symbolic_interface, A, b)
 end
 
+"""$(problem_docstring(SciMLBase.LinearProblem, LinearFunction, false))"""
 function SciMLBase.LinearProblem(sys::System, op; kwargs...)
     return SciMLBase.LinearProblem{true}(sys, op; kwargs...)
 end

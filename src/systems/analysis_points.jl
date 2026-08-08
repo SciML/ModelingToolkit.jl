@@ -116,20 +116,93 @@ function get_looptransfer_function(sys::AbstractSystem, aps; kwargs...)
     return get_linear_analysis_function(sys, LoopTransferTransform, aps; kwargs...)
 end
 
-for f in [:get_sensitivity, :get_comp_sensitivity, :get_looptransfer]
-    utility_fun = Symbol(f, :_function)
-    @eval function $f(
-            sys, ap, args...; loop_openings = [], system_modifier = identity,
-            allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
-            kwargs...
-        )
-        lin_fun,
-            ssys = $(utility_fun)(
-            sys, ap, args...; loop_openings, system_modifier, op, kwargs...
-        )
-        mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
-        return mats, ssys, extras
-    end
+"""
+    get_sensitivity(sys, ap; loop_openings = [], system_modifier = identity, op = Dict(), kwargs...)
+
+Compute the sensitivity transfer matrices at analysis point `ap` and return
+`(matrices, simplified_system, extras)`. This introduces an infinitesimal perturbation
+at the input of `ap`, linearizes the system, and computes the transfer function from the
+perturbation to the output of `ap`.
+
+# Arguments
+
+- `sys`: system containing the analysis point.
+- `ap`: an [`AnalysisPoint`](@ref) or its symbolic name.
+
+# Keyword Arguments
+
+- `loop_openings`: connections to open before linearization.
+- `system_modifier`: transformation applied before linearization.
+- `op`: operating-point values passed to [`linearize`](@ref).
+- `allow_input_derivatives`: allow derivatives of input variables in the linearization.
+- `t`: time at which to evaluate the linearization.
+- `kwargs...`: forwarded to [`get_sensitivity_function`](@ref).
+
+See also [`get_comp_sensitivity`](@ref) and [`get_looptransfer`](@ref).
+"""
+function get_sensitivity(
+        sys, ap, args...; loop_openings = [], system_modifier = identity,
+        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
+        kwargs...
+    )
+    lin_fun, ssys = get_sensitivity_function(
+        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
+    )
+    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
+    return mats, ssys, extras
+end
+
+"""
+    get_comp_sensitivity(sys, ap; loop_openings = [], system_modifier = identity, op = Dict(), kwargs...)
+
+Compute the complementary-sensitivity transfer matrices at analysis point `ap` and return
+`(matrices, simplified_system, extras)`. This introduces an infinitesimal perturbation
+at the output of `ap`, linearizes the system, and computes the transfer function from the
+perturbation to the input of `ap`.
+
+Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
+[`get_comp_sensitivity_function`](@ref).
+
+See also [`get_sensitivity`](@ref) and [`get_looptransfer`](@ref).
+"""
+function get_comp_sensitivity(
+        sys, ap, args...; loop_openings = [], system_modifier = identity,
+        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
+        kwargs...
+    )
+    lin_fun, ssys = get_comp_sensitivity_function(
+        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
+    )
+    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
+    return mats, ssys, extras
+end
+
+"""
+    get_looptransfer(sys, ap; loop_openings = [], system_modifier = identity, op = Dict(), kwargs...)
+
+Compute the loop-transfer matrices at analysis point `ap` and return
+`(matrices, simplified_system, extras)`. The transfer is from `ap.out` to `ap.in`.
+
+Keyword arguments match [`get_sensitivity`](@ref), with `kwargs...` forwarded to
+[`get_looptransfer_function`](@ref).
+
+!!! info "Negative feedback"
+
+    The computed loop transfer includes negative feedback. Negate the result when using an
+    analysis tool that expects a loop-transfer function without the negative gain.
+
+See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), and [`open_loop`](@ref).
+"""
+function get_looptransfer(
+        sys, ap, args...; loop_openings = [], system_modifier = identity,
+        allow_input_derivatives = true, op = Dict{SymbolicT, SymbolicT}(), t = 0.0,
+        kwargs...
+    )
+    lin_fun, ssys = get_looptransfer_function(
+        sys, ap, args...; loop_openings, system_modifier, op, kwargs...
+    )
+    mats, extras = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives, t)
+    return mats, ssys, extras
 end
 
 """
@@ -476,46 +549,3 @@ function isolate_subsystem(
 
     return _reconstruct!(sys, Symbol[], all_clock_subs), input_vars, output_vars
 end
-
-@doc """
-    get_sensitivity(sys, ap::AnalysisPoint; kwargs)
-    get_sensitivity(sys, ap_name::Symbol; kwargs)
-
-Compute the sensitivity function in analysis point `ap`. The sensitivity function is obtained by introducing an infinitesimal perturbation `d` at the input of `ap`, linearizing the system and computing the transfer function between `d` and the output of `ap`.
-
-# Arguments:
-
-  - `kwargs`: Are sent to `ModelingToolkit.linearize`
-
-See also [`get_comp_sensitivity`](@ref), [`get_looptransfer`](@ref).
-""" get_sensitivity
-
-@doc """
-    get_comp_sensitivity(sys, ap::AnalysisPoint; kwargs)
-    get_comp_sensitivity(sys, ap_name::Symbol; kwargs)
-
-Compute the complementary sensitivity function in analysis point `ap`. The complementary sensitivity function is obtained by introducing an infinitesimal perturbation `d` at the output of `ap`, linearizing the system and computing the transfer function between `d` and the input of `ap`.
-
-# Arguments:
-
-  - `kwargs`: Are sent to `ModelingToolkit.linearize`
-
-See also [`get_sensitivity`](@ref), [`get_looptransfer`](@ref).
-""" get_comp_sensitivity
-
-@doc """
-    get_looptransfer(sys, ap::AnalysisPoint; kwargs)
-    get_looptransfer(sys, ap_name::Symbol; kwargs)
-
-Compute the (linearized) loop-transfer function in analysis point `ap`, from `ap.out` to `ap.in`.
-
-!!! info "Negative feedback"
-
-    Feedback loops often use negative feedback, and the computed loop-transfer function will in this case have the negative feedback included. Standard analysis tools often assume a loop-transfer function without the negative gain built in, and the result of this function may thus need negation before use.
-
-# Arguments:
-
-  - `kwargs`: Are sent to `ModelingToolkit.linearize`
-
-See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`open_loop`](@ref).
-""" get_looptransfer
