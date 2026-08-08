@@ -101,6 +101,10 @@ function MTK.generate_tunable_params!(m::InfiniteModel, p0, np)
     return @variable(m, P[i = 1:np], start = p0[i])
 end
 
+function MTK.set_initial_trajectory!(m::InfiniteModel, U, idx, traj)
+    return set_start_value(U[idx], traj)
+end
+
 function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
     @variable(m, tₛ ≥ 0, start = guess)
     if !is_free_t
@@ -146,13 +150,13 @@ function MTK.JuMPDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
         _ = MTK.process_DynamicOptProblem(
         JuMPDynamicOptProblem, InfiniteOptModel, sys,
-        op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, bounds, kwargs...
     )
     return prob
 end
@@ -162,13 +166,13 @@ function MTK.InfiniteOptDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
         pmap = MTK.process_DynamicOptProblem(
         InfiniteOptDynamicOptProblem, InfiniteOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, bounds, kwargs...
     )
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)
     return prob

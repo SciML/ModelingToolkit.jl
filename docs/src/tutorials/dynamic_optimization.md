@@ -68,6 +68,46 @@ axislegend(ax2)
 fig
 ```
 
+### Providing an initial trajectory
+
+By default every state variable is seeded with its constant value from `u0map` at
+each collocation point. When that starting point is a poor one, the solver can be
+given a guess of the whole trajectory instead. The `initial_trajectory` keyword
+takes a map from states to symbolic expressions in the independent variable:
+
+```@example dynamic_opt
+jprob_guess = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => 1 + t, v(t) => 1.0))
+jsol_guess = solve(jprob_guess, JuMPCollocation(Ipopt.Optimizer));
+```
+
+Each expression is compiled to a function and evaluated at the collocation points to
+produce the start values handed to the optimizer. Only the states listed are affected
+— the rest keep their constant seed. This changes where the solve starts from, not the
+optimum it converges to.
+
+Expressions may reference parameters, which are resolved from the operating point, so
+the guess can be written in terms of the same quantities as the model:
+
+```@example dynamic_opt
+jprob_guess2 = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => h₀ + t, v(t) => t))
+jsol_guess2 = solve(jprob_guess2, JuMPCollocation(Ipopt.Optimizer));
+```
+
+Only parameters of the compiled system can be referenced this way; anything else —
+another state, or a quantity `mtkcompile` has eliminated that does not reduce to time
+and parameters — raises an `ArgumentError` naming the unresolved quantity.
+
+`initial_trajectory` is supported by the JuMP, InfiniteOpt, and CasADi backends.
+Passing a non-empty map to Pyomo raises an `ArgumentError`.
+
+!!! note
+
+    For free final time problems (see below) the collocation grid is normalized to
+    `[0, 1]`, so the trajectory expressions are evaluated at normalized time rather
+    than physical time.
+
 ### Free final time problems
 
 There are additionally a class of dynamic optimization problems where we would like to know how to control our system to achieve something in the least time. Such problems are called free final time problems, since the final time is unknown. To model these problems in ModelingToolkit, we declare the final time as a parameter.

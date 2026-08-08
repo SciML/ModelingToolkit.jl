@@ -852,3 +852,77 @@ end
     jsol_tf = solve(jprob_tf, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.RK4()))
     @test 2 * jsol_tf.sol[x][end] ≤ 0.8
 end
+
+struct UnsupportedTrajectoryBackend end
+
+@testset "Expression-valued initial trajectories" begin
+    @variables x(..) v(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    constr = [v(1.0) ~ 0.0]
+    cost = [-x(1.0)]
+
+    @named block = System(
+        [D(x(t)) ~ v(t), D(v(t)) ~ u(t)], t; costs = cost, constraints = constr
+    )
+    block = mtkcompile(block; inputs = [u(t)])
+
+    u0map = [x(t) => 0.0, v(t) => 0.0]
+    tspan = (0.0, 1.0)
+    parammap = [u(t) => 0.0]
+
+    # Trajectories are symbolic expressions in the independent variable
+    traj = Dict(x(t) => 0.125 * t^2, v(t) => 0.25 * t)
+
+    iprob = InfiniteOptDynamicOptProblem(
+        block, [u0map; parammap], tspan; dt = 0.01,
+        initial_trajectory = traj
+    )
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    # Without trajectory should also work
+    iprob2 = InfiniteOptDynamicOptProblem(block, [u0map; parammap], tspan; dt = 0.01)
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(isol2.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+
+    if ENABLE_CASADI
+        cprob = CasADiDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.01,
+            initial_trajectory = traj
+        )
+        csol = solve(cprob, CasADiCollocation("ipopt"))
+        @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
+    end
+
+    # Backends without a `set_initial_trajectory!` method report it clearly
+    @test_throws ArgumentError M.set_initial_trajectory!(
+        UnsupportedTrajectoryBackend(), nothing, 1, identity
+    )
+
+    # Expressions are compiled to callables of the independent variable
+    p_test = MTKParameters(block, parammap)
+    fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, p_test)
+    @test fx isa Function
+    @test fx(2.0) ≈ 0.5
+
+    # A constant expression is still a valid trajectory
+    fc = M.build_trajectory_function(block, x(t), 3.0, p_test)
+    @test fc isa Function
+    @test fc(2.0) == 3.0
+
+    # Callables are rejected: trajectories are symbolic-only for now
+    g = τ -> 7.0
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), g, p_test)
+
+    # Parameters stay symbolic and are read from the parameter object when the
+    # trajectory is evaluated
+    @parameters a
+    @named psys = System([D(x(t)) ~ a * v(t), D(v(t)) ~ 0.0], t)
+    psys = mtkcompile(psys)
+    fp = M.build_trajectory_function(psys, x(t), a * t, MTKParameters(psys, [a => 4.0]))
+    @test fp(2.0) ≈ 8.0
+
+    # Anything that does not reduce to time and parameters is reported
+    @parameters b
+    @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, p_test)
+end
