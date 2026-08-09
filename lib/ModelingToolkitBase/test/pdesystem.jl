@@ -92,6 +92,59 @@ using ModelingToolkitBase: renamespace, does_namespacing
     @test pdesys2.bcs isa Vector
 end
 
+@testset "PDESystem input and output roles" begin
+    @variables state(..) ordinary(..)
+    @variables input_field(..) [input = true]
+    @variables output_field(..) [output = true]
+    @variables input_output_field(..) [input = true, output = true]
+    @variables disabled_field(..) [input = false, output = false]
+    @variables array_input(..)[1:2] [input = true]
+
+    role_eq = Dt(state(t, x)) ~ input_field(t, x)
+    role_dvs = [
+        state, output_field, ordinary, input_field, input_output_field,
+        disabled_field, array_input,
+    ]
+    @named role_sys = PDESystem(role_eq, [], domains, [t, x], role_dvs)
+
+    @test isequal(
+        ModelingToolkitBase.inputs(role_sys),
+        [input_field, input_output_field, array_input]
+    )
+    @test isequal(ModelingToolkitBase.outputs(role_sys), [output_field])
+    @test ModelingToolkitBase.has_inputs(role_sys)
+    @test ModelingToolkitBase.has_outputs(role_sys)
+    @test isequal(ModelingToolkitBase.unknowns(role_sys), role_dvs)
+
+    called_dvs = [
+        state(t, x), input_field(t, x), output_field(t, x), array_input(t, x),
+    ]
+    @named called_role_sys = PDESystem(role_eq, [], domains, [t, x], called_dvs)
+    @test isequal(
+        ModelingToolkitBase.inputs(called_role_sys), [input_field(t, x), array_input(t, x)]
+    )
+    @test isequal(ModelingToolkitBase.outputs(called_role_sys), [output_field(t, x)])
+
+    unwrapped_dvs = ModelingToolkitBase.unwrap.(
+        [
+            state, input_field, output_field, array_input,
+        ]
+    )
+    @named unwrapped_role_sys = PDESystem(role_eq, [], domains, [t, x], unwrapped_dvs)
+    @test isequal(ModelingToolkitBase.inputs(unwrapped_role_sys), unwrapped_dvs[[2, 4]])
+    @test isequal(ModelingToolkitBase.outputs(unwrapped_role_sys), unwrapped_dvs[[3]])
+    @test isequal(ModelingToolkitBase.unknowns(unwrapped_role_sys), unwrapped_dvs)
+
+    @named no_role_sys = PDESystem(
+        Dt(state(t, x)) ~ 0, [], domains, [t, x], [state, ordinary]
+    )
+    @test isempty(ModelingToolkitBase.inputs(no_role_sys))
+    @test isempty(ModelingToolkitBase.outputs(no_role_sys))
+    # `has_*` reports accessor availability, as it does for an empty `System` field.
+    @test ModelingToolkitBase.has_inputs(no_role_sys)
+    @test ModelingToolkitBase.has_outputs(no_role_sys)
+end
+
 @testset "PDESystem property accessor without parameters" begin
     @parameters z
     @variables f(..)

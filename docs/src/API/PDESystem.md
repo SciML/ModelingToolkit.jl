@@ -35,6 +35,12 @@ block symbolic functions like Jacobians.
 PDESystem
 ```
 
+Dependent variables may use the standard ModelingToolkit input and output metadata.
+The declarations are available through `inputs(sys)` and `outputs(sys)` in dependent-variable
+declaration order. If a variable is marked as both an input and an output, it is reported as an
+input. These roles describe the symbolic PDE interface; support for discretizing them depends on
+the selected PDE discretizer.
+
 ### Domains (WIP)
 
 Domains are specifying by saying `indepvar in domain`, where `indepvar` is a
