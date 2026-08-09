@@ -7,5 +7,8 @@ SciMLStructures = "53ae85a6-f571-4167-b2af-e1d143709226"
 SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[sources]
+ModelingToolkitBase = {path = "../.."}
+
 [compat]
 SciMLTesting = "2.4"

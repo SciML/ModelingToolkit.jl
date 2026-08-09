@@ -13,6 +13,10 @@ SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 StateSelection = "64909d44-ed92-46a8-bbd9-f047dfbdc84b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[sources]
+ModelingToolkit = {path = "../.."}
+ModelingToolkitBase = {path = "../../lib/ModelingToolkitBase"}
+
 [compat]
 Aqua = "0.8"
 FMIImport = "1"

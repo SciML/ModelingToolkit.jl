@@ -73,3 +73,8 @@ StochasticDiffEq = "6, 7"
 SymbolicIndexingInterface = "0.3.1"
 SymbolicUtils = "4"
 Symbolics = "7"
+
+[sources]
+ModelingToolkit = {path = ".."}
+ModelingToolkitBase = {path = "../lib/ModelingToolkitBase"}
+SciCompDSL = {path = "../lib/SciCompDSL"}
