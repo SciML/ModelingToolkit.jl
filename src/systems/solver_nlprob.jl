@@ -4,6 +4,22 @@ function MTKBase.generate_ODENLStepData(
         jac::Bool = false
     )
     nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
+    return assemble_nlstep_data(sys, nlsys, outer_tmp, inner_tmp, u0, p, nlstep_scc, jac)
+end
+
+function MTKBase.generate_DAENLStepData(
+        sys::System, u0, p, mm = calculate_massmatrix(sys),
+        nlstep_compile::Bool = true, nlstep_scc::Bool = false;
+        jac::Bool = false
+    )
+    nlsys, outer_tmp, inner_tmp = inner_dae_nlsystem(sys, mm, nlstep_compile)
+    return assemble_nlstep_data(sys, nlsys, outer_tmp, inner_tmp, u0, p, nlstep_scc, jac)
+end
+
+function assemble_nlstep_data(
+        sys::System, nlsys::System, outer_tmp, inner_tmp, u0, p,
+        nlstep_scc::Bool, jac::Bool
+    )
     state = ProblemState(; u = u0, p)
     op = Dict()
     op[ODE_GAMMA[1]] = one(eltype(u0))
@@ -16,7 +32,7 @@ function MTKBase.generate_ODENLStepData(
         haskey(op, v) && continue
         op[v] = getsym(sys, v)(state)
     end
-    # Forward the outer ODEFunction's `jac` flag so the inner teared nonlinear
+    # Forward the outer function's `jac` flag so the inner teared nonlinear
     # problem also carries an analytic Jacobian. This lets NonlinearSolve.jl
     # skip the per-iteration AD/FD Jacobian computation on the inner Newton.
     nlprob = if nlstep_scc
@@ -64,6 +80,53 @@ function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     subrules[t] = unwrap(c)
     new_rhss = map(Base.Fix2(substitute, subrules), rhss)
     new_rhss = collect(outer_tmp) .+ gamma1 .* new_rhss .- gamma3 * mm * dvs
+    new_eqs = [0 ~ rhs for rhs in new_rhss]
+
+    new_dvs = unknowns(sys)
+    new_ps = [parameters(sys); [gamma1, gamma2, gamma3, c, inner_tmp, outer_tmp]]
+    nlsys = System(new_eqs, new_dvs, new_ps; name = :nlsys)
+    nlsys = if nlstep_compile
+        mtkcompile(nlsys; split = is_split(sys))
+    else
+        complete(nlsys; split = is_split(sys))
+    end
+    return nlsys, outer_tmp, inner_tmp
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build the stage system of the fully implicit form `0 = F(du, u, p, t)`, i.e.
+`g(z, p') = F(γ₁ z + outer_tmp, γ₂ z + inner_tmp, p, c)`.
+
+`full_equations` leaves a compiled system's differential equations as `D(x) ~ rhs` and its
+algebraic ones as `0 ~ rhs`, so the residual `rhs - lhs` that `DAEFunction` generates is
+`rhs - mm * du`: row `i` of `mm` picks out the `du` component that equation differentiates,
+if any. Substituting the derivative argument is therefore subtracting `mm * (γ₁ z +
+outer_tmp)`. An algebraic component has an all-zero `mm` column, so its `outer_tmp` entry
+drops out — correct, since `F` does not depend on that component's derivative.
+
+`γ₃` scales the `M z` term of the mass-matrix stage system; the fully implicit form has no
+such term, so it is absent here and consumers must leave it at `1`. It stays in the
+parameter list only so that `set_γ_c` takes the same four values on both paths.
+"""
+function inner_dae_nlsystem(sys::System, mm, nlstep_compile::Bool)
+    dvs = unknowns(sys)
+    eqs = full_equations(sys)
+    t = get_iv(sys)
+    N = length(dvs)
+    @assert length(eqs) == N
+    @assert mm isa UniformScaling || size(mm) == (N, N)
+    rhss = [eq.rhs for eq in eqs]
+    gamma1, gamma2, gamma3 = ODE_GAMMA
+    c = ODE_C
+    outer_tmp = get_outer_tmp(N)
+    inner_tmp = get_inner_tmp(N)
+
+    subrules = Dict([v => unwrap(gamma2 * v + inner_tmp[i]) for (i, v) in enumerate(dvs)])
+    subrules[t] = unwrap(c)
+    new_rhss = map(Base.Fix2(substitute, subrules), rhss)
+    new_rhss = new_rhss .- mm * (gamma1 .* dvs .+ collect(outer_tmp))
     new_eqs = [0 ~ rhs for rhs in new_rhss]
 
     new_dvs = unknowns(sys)

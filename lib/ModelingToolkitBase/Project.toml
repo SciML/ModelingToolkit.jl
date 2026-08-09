@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.61.0"
+version = "1.62.0"
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -174,7 +174,7 @@ ReferenceTests = "0.10"
 RuntimeGeneratedFunctions = "0.5.12"
 SCCNonlinearSolve = "1.13"
 SafeTestsets = "0.1"
-SciMLBase = "3.38"
+SciMLBase = "3.44"
 SciMLPublic = "1.0.0"
 SciMLStructures = "1.7"
 Serialization = "1"
