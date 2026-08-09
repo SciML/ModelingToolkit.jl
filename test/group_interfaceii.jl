@@ -15,4 +15,5 @@ include("shared/mtktestset.jl")
     @safetestset "Linearization Tests" include("linearize.jl")
     @safetestset "Fractional Differential Equations Tests" include("fractional_to_ordinary.jl")
     @safetestset "SemilinearODEProblem tests" include("semilinearodeproblem.jl")
+    @safetestset "DAE NLStep tests" include("dae_nlstep.jl")
 end

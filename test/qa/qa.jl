@@ -278,7 +278,8 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # `ModelingToolkitBase.StructuralHint`; `Base.Type` is public and is not affected.
     :AnalysisVariable, :check_compatible_system, :compute_array_variable_buffer_idxs,
     :default_missing_guess_value, :discover_maybe_zeros, :EXPERIMENTAL_WARNING,
-    :function_docstring, :generate_homotopy_residual, :generate_ODENLStepData,
+    :function_docstring, :generate_DAENLStepData, :generate_homotopy_residual,
+    :generate_ODENLStepData,
     :GENERATE_X_KWARGS, :get_initialization_problem_type, :get_nonlinear_problem_type,
     :has_any_homotopy, :indp_to_system, :invalidate_cache!, :lower_homotopy, :__mtkcompile,
     :ParameterArrayAssignments, :problem_docstring, :ReorderedDefaultParameters,
