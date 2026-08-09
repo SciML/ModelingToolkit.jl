@@ -973,4 +973,29 @@ end
         csol = solve(cprob, CasADiCollocation("ipopt", ExplicitTableaus.Verner8()))
         @test ≈(csol.sol[x(t)][end], 0.25, rtol = 1.0e-3)
     end
+
+    # Scaling a residual does not move the optimum, so the solves above pass with or
+    # without `nominal_values` and cannot tell whether the scale was applied at all. Assert
+    # directly that it reaches the dynamics constraint.
+    function dynamics_constraint_strings(nominal_values)
+        prob = InfiniteOptDynamicOptProblem(
+            block, [u0map; parammap], tspan; dt = 0.5, nominal_values = nominal_values
+        )
+        m = prob.wrapped_model.model
+        strs = String[]
+        for (F, S) in InfiniteOpt.list_of_constraint_types(m)
+            for c in InfiniteOpt.all_constraints(m, F, S)
+                push!(strs, string(InfiniteOpt.constraint_object(c).func))
+            end
+        end
+        return strs
+    end
+
+    unscaled = dynamics_constraint_strings(Dict())
+    rescaled = dynamics_constraint_strings(Dict(x(t) => 10.0))
+    @test length(unscaled) == length(rescaled)
+    # Only the constraint for `x` changes, and it picks up the 1/10 factor.
+    changed = [(a, b) for (a, b) in zip(unscaled, rescaled) if a != b]
+    @test length(changed) == 1
+    @test occursin("0.1", last(only(changed)))
 end
