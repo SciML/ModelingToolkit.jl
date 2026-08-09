@@ -1,5 +1,5 @@
 """
-    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false)
+    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false, limit_bounds = true)
 
 Generate the NLStep data for implicit ODE solvers. This is a stub that throws an error
 if called without ModelingToolkit loaded. The actual implementation is provided by
@@ -8,8 +8,16 @@ ModelingToolkit when it is loaded.
 When `jac = true`, the analytic Jacobian of the teared inner nonlinear system is
 generated symbolically and attached to `nlprob.f.jac`, so NonlinearSolve does not
 have to recompute it via AD/FD on every Newton iteration.
+
+`limit_bounds` delivers the `bounds` metadata of the unknowns to the stage solve as a
+clamping corrector on its iterates — see [`attach_stage_limiters`](@ref). It is on by
+default and exists as an escape hatch: a clamp is a projection, so a model whose stage
+solutions legitimately leave the declared box (an advisory range rather than an invariant)
+solves the box-free stage system with `limit_bounds = false`.
 """
-function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false)
+function generate_ODENLStepData(
+        sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false, limit_bounds = true
+    )
     error(
         """
         `nlstep=true` requires ModelingToolkit.jl to be loaded.
@@ -27,7 +35,7 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         @nospecialize(analytic = nothing),
         simplify = false, @nospecialize(initialization_data = nothing), expression = Val{false},
         check_compatibility = true, nlstep = false, nlstep_compile = true,
-        nlstep_scc = false, optimize = nothing,
+        nlstep_scc = false, nlstep_limit_bounds = true, optimize = nothing,
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
     opts = SciMLFunctionOptions(;
@@ -35,7 +43,9 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         expression, check_compatibility, eval_expression, eval_module, compiler_options,
         checkbounds, optimize, kwargs...,
     )
-    return ODEFunction{iip, spec}(sys, opts; steady_state, nlstep, nlstep_compile, nlstep_scc)
+    return ODEFunction{iip, spec}(
+        sys, opts; steady_state, nlstep, nlstep_compile, nlstep_scc, nlstep_limit_bounds
+    )
 end
 
 """
@@ -49,9 +59,17 @@ wrapper — this method does not need to re-validate or re-assemble the option s
 function SciMLBase.ODEFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E};
         steady_state::Bool = false, nlstep::Bool = false, nlstep_compile::Bool = true,
-        nlstep_scc::Bool = false
+        nlstep_scc::Bool = false, nlstep_limit_bounds::Bool = true
     ) where {iip, spec, E}
     check_complete(sys, ODEFunction)
+    if has_any_limited(sys)
+        throw(
+            ArgumentError(
+                "the system contains `limited(...)` nodes that were not stripped; " *
+                    "`limited` requires the system to be compiled with `mtkcompile`."
+            )
+        )
+    end
     opts.check_compatibility && check_compatible_system(ODEFunction, sys)
 
     (; u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
@@ -86,7 +104,10 @@ function SciMLBase.ODEFunction{iip, spec}(
     _M = concrete_massmatrix(M; sparse, u0)
 
     if nlstep
-        ode_nlstep = generate_ODENLStepData(sys, u0, p, M, nlstep_compile, nlstep_scc; jac)
+        ode_nlstep = generate_ODENLStepData(
+            sys, u0, p, M, nlstep_compile, nlstep_scc; jac,
+            limit_bounds = nlstep_limit_bounds
+        )
     else
         ode_nlstep = nothing
     end

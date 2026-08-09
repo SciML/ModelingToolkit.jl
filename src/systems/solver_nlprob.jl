@@ -1,9 +1,14 @@
 function MTKBase.generate_ODENLStepData(
         sys::System, u0, p, mm = calculate_massmatrix(sys),
         nlstep_compile::Bool = true, nlstep_scc::Bool = false;
-        jac::Bool = false
+        jac::Bool = false, limit_bounds::Bool = true
     )
-    nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile)
+    # Under `nlstep_scc` the whole corrector mechanism is unavailable, and the bounds clamp
+    # is automatic rather than requested: deriving it only to reject the problem would break
+    # bounded models that decompose perfectly well. A declared `limited` quantity still
+    # errors below, since there the user did ask for limiting.
+    limit_bounds &= !nlstep_scc
+    nlsys, outer_tmp, inner_tmp = inner_nlsystem(sys, mm, nlstep_compile; limit_bounds)
     return assemble_nlstep_data(sys, nlsys, outer_tmp, inner_tmp, u0, p, nlstep_scc, jac)
 end
 
@@ -12,6 +17,10 @@ function MTKBase.generate_DAENLStepData(
         nlstep_compile::Bool = true, nlstep_scc::Bool = false;
         jac::Bool = false
     )
+    # The fully implicit stage system reuses the ODE unknowns as increment symbols just as
+    # the mass-matrix one does, so `bounds` metadata is no more applicable here. Limiting is
+    # not wired through this path yet, and `inner_dae_nlsystem` derives no box, which keeps
+    # the DAE behaviour as it was before `limited` existed.
     nlsys, outer_tmp, inner_tmp = inner_dae_nlsystem(sys, mm, nlstep_compile)
     return assemble_nlstep_data(sys, nlsys, outer_tmp, inner_tmp, u0, p, nlstep_scc, jac)
 end
@@ -36,9 +45,26 @@ function assemble_nlstep_data(
     # problem also carries an analytic Jacobian. This lets NonlinearSolve.jl
     # skip the per-iteration AD/FD Jacobian computation on the inner Newton.
     nlprob = if nlstep_scc
+        if getmetadata(nlsys, MTKBase.LimitedCtx, nothing) !== nothing
+            throw(
+                ArgumentError(
+                    "`limited` quantities are not supported with `nlstep_scc = true`: the " *
+                        "stage limiters compile into the `postcondition` of a single " *
+                        "`NonlinearProblem`, which the SCC decomposition splits apart."
+                )
+            )
+        end
         SCCNonlinearProblem(nlsys, op; build_initializeprob = false, jac)
     else
-        NonlinearProblem(nlsys, op; build_initializeprob = false, jac)
+        # The stage unknowns are the Newton increments `z`, not the states: an unknown's
+        # `bounds` metadata is a box on the physical `γ₂ z + inner_tmp`, so deriving a
+        # static `lb`/`ub` from it here would constrain the wrong variable — and would put
+        # the problem into NonlinearSolve's transformed coordinates, which the raw stage
+        # values the stepper writes into `nlprob.u0` do not live in. `limit_bounds`
+        # delivers the box to the stage solve correctly instead.
+        NonlinearProblem(
+            nlsys, op; build_initializeprob = false, jac, lb = nothing, ub = nothing
+        )
     end
 
     subsetidxs = [findfirst(isequal(y), unknowns(sys)) for y in unknowns(nlsys)]
@@ -63,7 +89,7 @@ function get_inner_tmp(n::Int)
     return only(@parameters inner_tmpₘₜₖ[1:n])
 end
 
-function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
+function inner_nlsystem(sys::System, mm, nlstep_compile::Bool; limit_bounds::Bool = true)
     dvs = unknowns(sys)
     eqs = full_equations(sys)
     t = get_iv(sys)
@@ -90,6 +116,9 @@ function inner_nlsystem(sys::System, mm, nlstep_compile::Bool)
     else
         complete(nlsys; split = is_split(sys))
     end
+    # `mtkcompile` strips `limited` from a time-dependent system but records what it
+    # stripped: the stage system is where those limiters become a `postcondition`.
+    nlsys = MTKBase.attach_stage_limiters(sys, nlsys, subrules; limit_bounds)
     return nlsys, outer_tmp, inner_tmp
 end
 
