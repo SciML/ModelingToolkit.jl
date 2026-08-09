@@ -97,7 +97,11 @@ end
         deepcopy(nd.nlprob), nd, inv(dt), 1.0, dt, -uprev ./ dt, zeros(N)
     )
 
-    sol = solve(nlp, NewtonRaphson(); abstol = 1.0e-14, reltol = 1.0e-14)
+    # `γ₁ z + outer_tmp` is `(z - uprev) / dt`, so the stage residual is a cancellation of
+    # two `O(1/dt)` quantities and cannot be resolved below an absolute `eps() / dt`
+    # (`2.2e-12` at `dt = 1e-4`). A tolerance under that floor makes Newton report
+    # `Stalled` at a fully converged iterate, so keep it above.
+    sol = solve(nlp, NewtonRaphson(); abstol = 1.0e-10, reltol = 1.0e-10)
     @test SciMLBase.successful_retcode(sol)
 
     z = nd.nlprobmap(sol)
