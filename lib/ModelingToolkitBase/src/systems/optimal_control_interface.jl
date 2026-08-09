@@ -377,7 +377,7 @@ function process_DynamicOptProblem(
         tune_parameters = false,
         guesses = Dict(), initial_trajectory = Dict(),
         nominal_values = Dict(),
-        bounds = Dict(),
+        bounds = Dict(), observed_bounds_method = :auto,
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...
     )
@@ -470,6 +470,9 @@ function process_DynamicOptProblem(
     @set! p.nonnumeric = narrow_nn
 
     set_variable_bounds!(fullmodel, sys, pmap, tspan, tunable_params, bounds)
+    add_observed_bounds!(
+        fullmodel, sys, pmap, tspan, tunable_params, bounds, observed_bounds_method
+    )
     add_cost_function!(fullmodel, sys, tspan, pmap)
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
@@ -636,6 +639,108 @@ function _extract_bounds(vars, pmap)
 end
 
 function set_variable_bounds! end
+
+"""
+    supports_bounds_lifting(model)
+
+Whether `model`'s backend can lift a bounded observed expression into an auxiliary
+bounded decision variable. Backends that can should define this to return `true` and
+implement [`lift_observed_bound!`](@ref).
+"""
+supports_bounds_lifting(model) = false
+
+"""
+    lift_observed_bound!(model, expr, lo, hi, scale, start)
+
+Introduce an auxiliary decision variable bounded by `[lo, hi]` and tie it to `expr` with
+the scaled equality `(expr - aux) / scale == 0`. `start` is the auxiliary variable's start
+value. Only called for backends where `supports_bounds_lifting` is `true`.
+"""
+function lift_observed_bound! end
+
+function resolve_observed_bounds_method(model, method)
+    return if method === :auto
+        supports_bounds_lifting(model) ? :lift : :constraint
+    elseif method === :lift
+        supports_bounds_lifting(model) || throw(
+            ArgumentError(
+                "`observed_bounds_method = :lift` is not supported by the " *
+                    "$(nameof(typeof(model))) backend. Use `:constraint`, or `:auto` to " *
+                    "pick the best available method per backend."
+            )
+        )
+        :lift
+    elseif method === :constraint
+        :constraint
+    else
+        throw(
+            ArgumentError(
+                "`observed_bounds_method` must be one of `:auto`, `:lift` or " *
+                    "`:constraint`, got $(repr(method))."
+            )
+        )
+    end
+end
+
+# Pick a start value for the auxiliary variable that at least satisfies its own bounds.
+# Defaulting to 0 (the backend default) can sit outside `[lo, hi]`, which starts the
+# lifted equality from an infeasible point and defeats the purpose of lifting.
+function aux_start_value(lo, hi)
+    isfinite(lo) && isfinite(hi) && return (lo + hi) / 2
+    isfinite(lo) && return lo
+    isfinite(hi) && return hi
+    return 0.0
+end
+
+"""
+    add_observed_bounds!(model, sys, pmap, tspan, tunable_params, user_bounds, method)
+
+Enforce bounds declared on observed variables.
+
+`method` selects how:
+
+  - `:lift` introduces an auxiliary bounded decision variable per bounded observed
+    expression, tied to it by an equality constraint. Interior-point solvers handle
+    variable bounds much better than nonlinear inequalities, but not every backend can
+    do this.
+  - `:constraint` emits the bounds directly as nonlinear inequality constraints. Works
+    on every backend.
+  - `:auto` (the default) uses `:lift` where the backend supports it and `:constraint`
+    everywhere else.
+"""
+function add_observed_bounds!(
+        model, sys, pmap, tspan, tunable_params, user_bounds, method = :auto
+    )
+    (; observed_bounds) = extract_variable_bounds(
+        sys, pmap, tspan, tunable_params, user_bounds
+    )
+    isempty(observed_bounds) && return nothing
+
+    method = resolve_observed_bounds_method(model, method)
+
+    rules = Dict{Any, Any}()
+    get_model_vars_substitution_rules!(rules, model, sys, tspan)
+    get_observed_substitution_rules!(rules, sys)
+    get_param_substitution_rules!(rules, pmap)
+
+    for (var, (lo, hi)) in observed_bounds
+        if method === :lift
+            expr = fixpoint_sub(var, rules; fold = Val(true), filterer = Returns(true))
+            lift_observed_bound!(
+                model, expr, lo, hi, getnominal(var), aux_start_value(lo, hi)
+            )
+        else
+            cons = Any[]
+            isfinite(lo) && push!(cons, var ≳ lo)
+            isfinite(hi) && push!(cons, var ≲ hi)
+            cons = fixpoint_sub(cons, rules; fold = Val(true), filterer = Returns(true))
+            for c in cons
+                add_constraint!(model, c)
+            end
+        end
+    end
+    return nothing
+end
 
 is_free_final(model) = model.is_free_final
 
