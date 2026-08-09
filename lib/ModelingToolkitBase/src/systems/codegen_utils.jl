@@ -1026,6 +1026,18 @@ end
 # function internals, which improves `juliac` trimmability.
 Base.deepcopy_internal(gfw::GeneratedFunctionWrapper, ::IdDict) = gfw
 
+Base.@noinline _invoke_with_unwrapped_parameters(f, a, b) = f(a, b)
+Base.@noinline _invoke_with_unwrapped_parameters(f, a, b, c) = f(a, b, c)
+Base.@noinline _invoke_with_unwrapped_parameters(f, a, b, c, d) = f(a, b, c, d)
+Base.@noinline _invoke_with_unwrapped_parameters(f, args...) = f(args...)
+
+Base.@inline @generated function _call_with_unwrapped_parameters(
+        f, args::Tuple{Vararg{Any, N}}, p::OpaqueMTKParameters, ::Val{PIdx}
+    ) where {N, PIdx}
+    call_args = [i == PIdx ? :(p.params) : :(args[$i]) for i in 1:N]
+    return :(_invoke_with_unwrapped_parameters(f, $(call_args...)))
+end
+
 function GeneratedFunctionWrapper{P}(::Type{Val{true}}, foop, fiip; kwargs...) where {P}
     return :($(GeneratedFunctionWrapper{_gfw_params_type(P)})($foop, $fiip))
 end
@@ -1043,6 +1055,11 @@ end
 function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg{Any, NArgs}) where {PIdx, NArgs, Split}
     # non-split systems just call it as-is
     Split || return gfw.f_oop(args...)
+    if args[PIdx] isa OpaqueMTKParameters
+        return _call_with_unwrapped_parameters(
+            gfw.f_oop, args, args[PIdx], Val(PIdx)
+        )
+    end
     if args[PIdx] isa Union{Tuple, MTKParameters} && !(args[PIdx] isa Tuple{Vararg{Number}})
         # for split systems, call it as-is if the parameter object is a tuple or MTKParameters
         # but not if it is a tuple of numbers
@@ -1060,6 +1077,11 @@ function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg
         throw(MethodError(gfw, args))
     end
     Split || return gfw.f_iip(args...)
+    if args[PIdx + 1] isa OpaqueMTKParameters
+        return _call_with_unwrapped_parameters(
+            gfw.f_iip, args, args[PIdx + 1], Val(PIdx + 1)
+        )
+    end
     if args[PIdx + 1] isa Union{Tuple, MTKParameters} && !(args[PIdx + 1] isa Tuple{Vararg{Number}})
         return gfw.f_iip(args...)
     end

@@ -41,6 +41,36 @@ struct MTKParameters{T, I, D, C, N, H}
 end
 
 """
+    OpaqueMTKParameters(params)
+
+Wrap an [`MTKParameters`](@ref) object in a stable outer type. ModelingToolkit uses this
+for `AutoSpecialize` ODE problems so that solver compilation does not specialize on the
+concrete parameter-buffer layout. Symbolic indexing and SciMLStructures operations are
+forwarded to the wrapped parameter object.
+
+The wrapped object is available through the `params` field. Construct the problem with
+`FullSpecialize` to keep the concrete `MTKParameters` type and avoid the dynamic function
+barrier when runtime performance takes priority over compilation reuse.
+"""
+struct OpaqueMTKParameters
+    params::Any
+end
+
+OpaqueMTKParameters(params::OpaqueMTKParameters) = params
+
+_unwrap_mtk_parameters(params) = params
+_unwrap_mtk_parameters(params::OpaqueMTKParameters) = params.params
+
+function Base.getproperty(params::OpaqueMTKParameters, name::Symbol)
+    name === :params && return getfield(params, :params)
+    return getproperty(getfield(params, :params), name)
+end
+
+function Base.propertynames(params::OpaqueMTKParameters, private::Bool = false)
+    return (:params, propertynames(getfield(params, :params), private)...)
+end
+
+"""
     function MTKParameters(sys::AbstractSystem, p, u0 = Dict(); t0 = nothing)
 
 Create an `MTKParameters` object for the system `sys`. `p` (`u0`) are symbolic maps from
@@ -367,7 +397,33 @@ end
 
 SciMLStructures.isscimlstructure(::MTKParameters) = true
 
+SciMLStructures.isscimlstructure(::OpaqueMTKParameters) = true
+
 SciMLStructures.ismutablescimlstructure(::MTKParameters) = true
+
+SciMLStructures.ismutablescimlstructure(::OpaqueMTKParameters) = true
+
+function SciMLStructures.canonicalize(
+        portion::SciMLStructures.AbstractPortion, p::OpaqueMTKParameters
+    )
+    values, repack, aliases = SciMLStructures.canonicalize(portion, p.params)
+    if repack === nothing
+        return values, nothing, aliases
+    end
+    return values, new_values -> OpaqueMTKParameters(repack(new_values)), aliases
+end
+
+function SciMLStructures.replace(
+        portion::SciMLStructures.AbstractPortion, p::OpaqueMTKParameters, new_values
+    )
+    return OpaqueMTKParameters(SciMLStructures.replace(portion, p.params, new_values))
+end
+
+function SciMLStructures.replace!(
+        portion::SciMLStructures.AbstractPortion, p::OpaqueMTKParameters, new_values
+    )
+    return SciMLStructures.replace!(portion, p.params, new_values)
+end
 
 function SciMLStructures.canonicalize(::SciMLStructures.Tunable, p::MTKParameters)
     arr = p.tunable
@@ -453,6 +509,10 @@ function Base.copy(p::MTKParameters)
     )
 end
 
+Base.copy(p::OpaqueMTKParameters) = OpaqueMTKParameters(copy(p.params))
+
+ArrayInterface.ismutable(::Type{OpaqueMTKParameters}) = true
+
 function ArrayInterface.ismutable(
         ::Type{
             MTKParameters{
@@ -468,6 +528,11 @@ end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
     return _ducktyped_parameter_values(p, pind)
+end
+function SymbolicIndexingInterface.parameter_values(
+        p::OpaqueMTKParameters, pind::ParameterIndex
+    )
+    return parameter_values(p.params, pind)
 end
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
@@ -538,6 +603,12 @@ function SymbolicIndexingInterface.set_parameter!(
         end
     end
     return nothing
+end
+
+function SymbolicIndexingInterface.set_parameter!(
+        p::OpaqueMTKParameters, val, pidx::ParameterIndex
+    )
+    return set_parameter!(p.params, val, pidx)
 end
 
 function narrow_buffer_type_and_fallback_undefs(
@@ -657,6 +728,12 @@ end
 
 function SymbolicIndexingInterface.remake_buffer(indp, oldbuf::MTKParameters, idxs, vals)
     return _remake_buffer(indp, oldbuf, idxs, vals)
+end
+
+function SymbolicIndexingInterface.remake_buffer(
+        indp, oldbuf::OpaqueMTKParameters, idxs, vals
+    )
+    return OpaqueMTKParameters(remake_buffer(indp, oldbuf.params, idxs, vals))
 end
 
 function _remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = true)
@@ -1011,22 +1088,25 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ::AbstractSystem, ps::MTKParameters, args::Pair{<:Any, <:NestedGetIndex}...
+        ::AbstractSystem, ps::Union{MTKParameters, OpaqueMTKParameters},
+        args::Pair{<:Any, <:NestedGetIndex}...
     )
+    unwrapped_ps = _unwrap_mtk_parameters(ps)
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
-            copyto!(view(ps.discrete[j], Block(i)), val)
+            copyto!(view(unwrapped_ps.discrete[j], Block(i)), val)
         end
     end
     return ps
 end
 
 function SciMLBase.create_parameter_timeseries_collection(
-        sys::AbstractSystem, ps::MTKParameters, tspan
+        sys::AbstractSystem, ps::Union{MTKParameters, OpaqueMTKParameters}, tspan
     )
     ic = get_index_cache(sys) # this exists because the parameters are `MTKParameters`
-    isempty(ps.discrete) && return nothing
-    num_discretes = only(blocksize(ps.discrete[1]))
+    unwrapped_ps = _unwrap_mtk_parameters(ps)
+    isempty(unwrapped_ps.discrete) && return nothing
+    num_discretes = only(blocksize(unwrapped_ps.discrete[1]))
     buffers = []
     partition_type = typeof(SciMLBase.get_saveable_values(sys, ps, 1))
     for i in 1:num_discretes
@@ -1047,8 +1127,9 @@ end
 end
 
 function SciMLBase.get_saveable_values(
-        sys::AbstractSystem, ps::MTKParameters, timeseries_idx
+        sys::AbstractSystem, ps::Union{MTKParameters, OpaqueMTKParameters}, timeseries_idx
     )
+    ps = _unwrap_mtk_parameters(ps)
     return NestedGetIndex(__get_blocks(timeseries_idx, ps.discrete...))
 end
 
@@ -1068,6 +1149,11 @@ function DiffEqBase.anyeltypedual(
         p::MTKParameters, ::Type{Val{counter}} = Val{0}
     ) where {counter}
     return DiffEqBase.anyeltypedual(p.tunable)
+end
+function DiffEqBase.anyeltypedual(
+        p::OpaqueMTKParameters, ::Type{Val{counter}} = Val{0}
+    ) where {counter}
+    return DiffEqBase.anyeltypedual(p.params, Val{counter})
 end
 function DiffEqBase.anyeltypedual(
         p::Type{<:MTKParameters{T}},
@@ -1130,9 +1216,23 @@ Base.size(ps::MTKParameters) = (length(ps),)
 
 Base.IndexStyle(::Type{T}) where {T <: MTKParameters} = IndexLinear()
 
+Base.IndexStyle(::Type{OpaqueMTKParameters}) = IndexLinear()
+
+Base.eltype(::Type{OpaqueMTKParameters}) = Any
+
 Base.getindex(p::MTKParameters, pind::ParameterIndex) = parameter_values(p, pind)
 
+Base.getindex(p::OpaqueMTKParameters, idx) = getindex(p.params, idx)
+
 Base.setindex!(p::MTKParameters, val, pind::ParameterIndex) = set_parameter!(p, val, pind)
+
+Base.setindex!(p::OpaqueMTKParameters, val, idx) = setindex!(p.params, val, idx)
+
+Base.length(p::OpaqueMTKParameters) = length(p.params)
+
+Base.size(p::OpaqueMTKParameters) = size(p.params)
+
+Base.iterate(p::OpaqueMTKParameters, state = 1) = iterate(p.params, state)
 
 function Base.iterate(buf::MTKParameters, state = 1)
     total_len = length(buf)
@@ -1152,6 +1252,8 @@ function Base.:(==)(a::MTKParameters, b::MTKParameters)
         end
     )
 end
+
+Base.:(==)(a::OpaqueMTKParameters, b::OpaqueMTKParameters) = a.params == b.params
 
 const MISSING_PARAMETERS_MESSAGE = """
 Some parameters are missing from the variable map.

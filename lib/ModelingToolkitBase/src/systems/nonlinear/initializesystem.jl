@@ -714,6 +714,9 @@ end
 function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
     return promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
 end
+function promote_type_with_nothing(::Type{T}, p::OpaqueMTKParameters) where {T}
+    return promote_type_with_nothing(T, p.params)
+end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
 promote_with_nothing(::Type, x::StaticVector{0}) = x
@@ -739,6 +742,9 @@ function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
         end
     end
     return p
+end
+function promote_with_nothing(::Type{T}, p::OpaqueMTKParameters) where {T}
+    return OpaqueMTKParameters(promote_with_nothing(T, p.params))
 end
 
 function promote_u0_p(u0, p, t0)
@@ -865,8 +871,9 @@ function DiffEqBase.get_updated_symbolic_problem(
 
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
 
-    if p isa MTKParameters
-        buffer = p.initials
+    unwrapped_p = _unwrap_mtk_parameters(p)
+    if unwrapped_p isa MTKParameters
+        buffer = unwrapped_p.initials
     else
         buffer = p
     end

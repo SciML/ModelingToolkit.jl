@@ -219,6 +219,9 @@ function define_params(p::MTKParameters, t, names = nothing)
     end
 end
 
+define_params(p::OpaqueMTKParameters, t, names = nothing) =
+    define_params(p.params, t, names)
+
 """
     $(TYPEDSIGNATURES)
 
@@ -232,6 +235,8 @@ end
 function to_paramvec(p::MTKParameters)
     return reduce(vcat, collect(p); init = [])
 end
+
+to_paramvec(p::OpaqueMTKParameters) = to_paramvec(p.params)
 
 """
     $(TYPEDSIGNATURES)
@@ -390,7 +395,8 @@ function defaults_from_u0_p(prob, vars, paramobj, paramvec)
     if !(p isa Union{SciMLBase.NullParameters, Nothing})
         if p isa Union{NamedTuple, AbstractDict}
             merge!(defaults, Dict(v => p[k] for (k, v) in pairs(paramobj)))
-        elseif p isa MTKParameters
+        elseif p isa Union{MTKParameters, OpaqueMTKParameters}
+            p = _unwrap_mtk_parameters(p)
             pvals = [
                 p.tunable; reduce(vcat, p.discrete; init = []);
                 reduce(vcat, p.constant; init = []);

@@ -1,5 +1,6 @@
 using ModelingToolkitBase, StaticArrays, LinearAlgebra
-using ModelingToolkitBase: get_metadata, MTKParameters, SymbolicDiscreteCallback,
+using ModelingToolkitBase: get_metadata, MTKParameters, OpaqueMTKParameters,
+    SymbolicDiscreteCallback,
     SymbolicContinuousCallback
 using SymbolicIndexingInterface
 using OrdinaryDiffEq, Sundials
@@ -269,7 +270,7 @@ prob12 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3.0e7, k₃ => 1.0e4]], tsp
 prob13 = ODEProblem(sys, [u0; [k₁ => 0.04, k₂ => 3.0e7, k₃ => 1.0e4]], tspan)
 prob14 = ODEProblem(sys, [u0; p2], tspan)
 for p in [prob1, prob14]
-    @test p.p isa MTKParameters
+    @test p.p isa OpaqueMTKParameters
     p.ps[k₁] ≈ 0.04
     p.ps[k₂] ≈ 3.0e7
     p.ps[k₃] ≈ 1.0e-4
@@ -285,7 +286,7 @@ u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
 prob_pmap = remake(prob14; p = p3, u0 = u01)
 prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
 for p in [prob_pmap, prob_dpmap]
-    @test p.p isa MTKParameters
+    @test p.p isa OpaqueMTKParameters
     p.ps[k₁] ≈ 0.05
     p.ps[k₂] ≈ 2.0e7
     p.ps[k₃] ≈ 1.1e-4
@@ -320,7 +321,7 @@ sol_dpmap = solve(prob_dpmap, Rodas5())
         prob, p = Dict(sys1.a => 3.0, b => 4.0),
         u0 = Dict(sys1.x => 1.0)
     )
-    @test prob_new.p isa MTKParameters
+    @test prob_new.p isa OpaqueMTKParameters
     @test prob_new.ps[b] ≈ 4.0
     @test prob_new.ps[sys1.a] ≈ 3.0
     @test prob_new.ps[sys.sys2.a] ≈ 1.0
@@ -665,7 +666,7 @@ let
     ivmap = [A => 1.0, k1 => 1.0, k2 => 1.0]
     tspan = (0.0, 1.0)
     prob = ODEProblem(sys, ivmap, tspan; tofloat = false)
-    @test prob.p isa MTKParameters
+    @test prob.p isa OpaqueMTKParameters
     @test prob.ps[k1] ≈ 1.0
     @test prob.ps[k2] == 1 && prob.ps[k2] isa Int
 end

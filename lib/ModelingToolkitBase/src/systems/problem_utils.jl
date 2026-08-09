@@ -817,7 +817,7 @@ struct FallbackSlice
 end
 
 function __apply_copy_template(valp, template)
-    p = parameter_values(valp)
+    p = _unwrap_mtk_parameters(parameter_values(valp))
     u = state_values(valp)
     if template isa ParameterIndex{SciMLStructures.Tunable, UnitRange{Int}}
         if p isa MTKParameters
@@ -1113,7 +1113,8 @@ end
 function (recon::MTKParametersReconstructor)(src, dst)
     src_ps = parameter_values(src)
     dst_ps = parameter_values(dst)
-    oldcache = dst_ps.caches
+    unwrapped_dst_ps = _unwrap_mtk_parameters(dst_ps)
+    oldcache = unwrapped_dst_ps.caches
     # I don't know why but this makes it infer properly
     if recon.tunables_fn isa ComposedFunction
         tunablevals = recon.tunables_fn.outer(recon.tunables_fn.inner(src))
@@ -1121,7 +1122,7 @@ function (recon::MTKParametersReconstructor)(src, dst)
         tunablevals = recon.tunables_fn(src)
     end
     initialvals = recon.initials_fn(src)
-    nonnumerics = recon.nonnumerics_fn(src)::typeof(dst_ps.nonnumeric)
+    nonnumerics = recon.nonnumerics_fn(src)::typeof(unwrapped_dst_ps.nonnumeric)
     (; diffcache_buffer_idx) = recon
     if !iszero(diffcache_buffer_idx)
         @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(nonnumerics[diffcache_buffer_idx])
@@ -1129,11 +1130,12 @@ function (recon::MTKParametersReconstructor)(src, dst)
     # This `convert` exists because a `Real` discrete might get its value from an
     # integer function of integer parameters/discretes. This ends up creating a
     # `BlockedArray{Int, ...}` instead of a `BlockedArray{Float64, ...}`.
-    return MTKParameters(
+    new_ps = MTKParameters(
         tunablevals, initialvals,
-        convert(typeof(parameter_values(dst).discrete), recon.discretes_fn(src)),
+        convert(typeof(unwrapped_dst_ps.discrete), recon.discretes_fn(src)),
         recon.consts_fn(src), nonnumerics, oldcache isa Tuple{} ? () : copy.(oldcache)
     )
+    return dst_ps isa OpaqueMTKParameters ? OpaqueMTKParameters(new_ps) : new_ps
 end
 
 """
@@ -1310,9 +1312,10 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     srcu0 = state_values(srcvalp)
     T = srcu0 === nothing ? Union{} : eltype(srcu0)
     # promote with the tunable eltype
-    if parameter_values(dstvalp) isa MTKParameters
-        if !isempty(newp.tunable)
-            T = promote_type(eltype(newp.tunable), T)
+    if _unwrap_mtk_parameters(parameter_values(dstvalp)) isa MTKParameters
+        unwrapped_newp = _unwrap_mtk_parameters(newp)
+        if !isempty(unwrapped_newp.tunable)
+            T = promote_type(eltype(unwrapped_newp.tunable), T)
         end
     elseif !isempty(newp)
         T = promote_type(eltype(newp), T)
@@ -1330,7 +1333,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         copyto!(newbuf, buf)
         newp = repack(newbuf)
     end
-    if newp isa MTKParameters
+    if _unwrap_mtk_parameters(newp) isa MTKParameters
         # and initials portion
         buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
         if eltype(buf) != T && !(buf isa SVector{0})
@@ -1531,6 +1534,10 @@ function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
         @set! p.initials = originalT(p.initials)
     end
     return p
+end
+
+function (siu::SetInitialUnknowns)(p::OpaqueMTKParameters, u0)
+    return OpaqueMTKParameters(siu(p.params, u0))
 end
 
 function (siu::SetInitialUnknowns)(p::AbstractVector, u0)

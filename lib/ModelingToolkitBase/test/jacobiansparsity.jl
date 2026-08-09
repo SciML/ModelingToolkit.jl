@@ -74,8 +74,11 @@ prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac 
 #@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
     findnz(prob.f.jac_prototype)[1:2]
-out = similar(prob.f.jac_prototype)
-@test (@ballocated $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), 0.0)) == 0 # should not allocate
+full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+    sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = true, jac = true
+)
+out = similar(full_prob.f.jac_prototype)
+@test (@ballocated $(full_prob.f.jac)($out, $(full_prob.u0), $(full_prob.p), 0.0)) == 0
 
 # test when not sparse
 prob = ODEProblem(sys, unknowns(sys) .=> vec(u0), (0, 11.5), sparse = false, jac = true)

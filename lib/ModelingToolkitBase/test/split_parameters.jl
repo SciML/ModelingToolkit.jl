@@ -254,15 +254,27 @@ end
 
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
-        @inferred getter(prob)
+        @test getter(prob)(1.0) == 2.0
+        full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+            sys, [x => 1.0], (0.0, 1.0)
+        )
+        @inferred getter(full_prob)
         # cannot be inferred better since `FunctionWrapper` is only known to return `Real`
-        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        @inferred Vector{<:Real} full_prob.f(
+            full_prob.u0, full_prob.p, full_prob.tspan[1]
+        )
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
         @test sol.u[end][] ≈ 2.0
 
         prob = ODEProblem(sys, [x => 1.0, fn => Foo()], (0.0, 1.0))
-        @inferred getter(prob)
-        @inferred Vector{<:Real} prob.f(prob.u0, prob.p, prob.tspan[1])
+        @test getter(prob)(1.0) == 3.0
+        full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+            sys, [x => 1.0, fn => Foo()], (0.0, 1.0)
+        )
+        @inferred getter(full_prob)
+        @inferred Vector{<:Real} full_prob.f(
+            full_prob.u0, full_prob.p, full_prob.tspan[1]
+        )
         sol = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10)
         @test sol.u[end][] ≈ 2.5
     end
@@ -278,8 +290,12 @@ end
         @test is_parameter(sys, fn)
         getter = getp(sys, fn)
         prob = ODEProblem(sys, [x => 1.0, fn => interp], (0.0, 1.0))
-        @inferred getter(prob)
-        @inferred prob.f(prob.u0, prob.p, prob.tspan[1])
+        @test getter(prob) === interp
+        full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+            sys, [x => 1.0, fn => interp], (0.0, 1.0)
+        )
+        @inferred getter(full_prob)
+        @inferred full_prob.f(full_prob.u0, full_prob.p, full_prob.tspan[1])
         @test_nowarn sol = solve(prob, Tsit5())
         @test_nowarn prob.ps[fn] = LinearInterpolation(
             ts .^ 3, ts; extrapolation = ExtrapolationType.Extension

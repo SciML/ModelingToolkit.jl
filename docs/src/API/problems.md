@@ -89,13 +89,16 @@ ModelingToolkit.get_u0
 ModelingToolkit.varmap_to_vars
 ```
 
-By default, the parameters of the system are stored in a custom data structure called
-`MTKParameters`. The internals of this data structure are undocumented, and it should
-only be interacted with through defined public API. SymbolicIndexingInterface.jl contains
-functionality useful for this purpose.
+The parameters of a split system are stored in a custom data structure called
+`MTKParameters`. `AutoSpecialize` ODE problems wrap it in `OpaqueMTKParameters` so solvers
+can reuse compiled code across parameter-buffer layouts. `FullSpecialize` problems keep the
+concrete `MTKParameters` object and avoid the wrapper's dynamic function barrier. These
+objects should only be interacted with through their defined public API.
+SymbolicIndexingInterface.jl contains functionality useful for this purpose.
 
 ```@docs
 MTKParameters
+OpaqueMTKParameters
 ModelingToolkit.get_p
 ```
 

@@ -258,7 +258,13 @@ function linearization_function(
 
     if u0 === nothing
         uf_jac = h_jac = pf_jac = nothing
-        Tp = promote_type(p isa MTKParameters ? eltype(p.tunable) : eltype(p), typeof(t0))
+        parameter_eltype = if p isa Union{MTKParameters, OpaqueMTKParameters}
+            tunables, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
+            eltype(tunables)
+        else
+            eltype(p)
+        end
+        Tp = promote_type(parameter_eltype, typeof(t0))
         hp_jac = PreparedJacobian{true}(
             hp_fun, zeros(Tp, size(outputs)), autodiff, inputvals,
             cu0T, cp, DI.Constant(t0)

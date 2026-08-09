@@ -125,7 +125,7 @@ end
 @test getp(sys, g)(newps) isa Vector{Float32}
 
 @testset "Type-stability of `remake_buffer`" begin
-    prob = ODEProblem(sys, ivs, (0.0, 1.0))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, ivs, (0.0, 1.0))
 
     idxs = (a, c, d, e, f, g, h)
     vals = (1.0, 2.0, 3, ones(3), ones(Int, 3, 3), ones(2), "a")
@@ -482,7 +482,9 @@ end
     @parameters p
     @named sys = System(D(x) ~ x * p, t)
     sys = complete(sys)
-    prob = ODEProblem(sys, SA[x => 1.0, p => 1.0], (0.0, 1.0))
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        sys, SA[x => 1.0, p => 1.0], (0.0, 1.0)
+    )
     @test isbits(prob.p)
     @test isbits(prob.f.initialization_data.initializeprob.p)
 end
