@@ -97,13 +97,13 @@ end
 function MTK.PyomoDynamicOptProblem(
         sys::System, op, tspan;
         dt = nothing, steps = nothing, tune_parameters = false,
-        guesses = Dict(),
+        guesses = Dict(), initial_trajectory = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
         pmap = MTK.process_DynamicOptProblem(
         PyomoDynamicOptProblem, PyomoDynamicOptModel,
-        sys, op, tspan; dt, steps, tune_parameters, guesses, bounds, kwargs...
+        sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, bounds, kwargs...
     )
     conc_model = prob.wrapped_model.model
     MTK.add_equational_constraints!(prob.wrapped_model, sys, pmap, tspan)

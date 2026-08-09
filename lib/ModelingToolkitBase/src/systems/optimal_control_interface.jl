@@ -323,8 +323,10 @@ function process_DynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(),
-        bounds = Dict(), kwargs...
+        guesses = Dict(), initial_trajectory = Dict(),
+        bounds = Dict(),
+        eval_expression = false, eval_module = @__MODULE__,
+        kwargs...
     )
     warn_overdetermined(sys, op)
     ctrls = inputs(sys)
@@ -333,6 +335,7 @@ function process_DynamicOptProblem(
 
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
+    initial_trajectory = Dict([default_toterm(value(k)) => v for (k, v) in initial_trajectory])
     bounds = Dict([default_toterm(value(k)) => v for (k, v) in bounds])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
         [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
@@ -341,7 +344,7 @@ function process_DynamicOptProblem(
     f, u0,
         p = process_SciMLProblem(
         ODEInputFunction, sys, _op;
-        t = tspan !== nothing ? tspan[1] : tspan, kwargs...
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module, kwargs...
     )
     model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
     warn_overdetermined(sys, op)
@@ -370,6 +373,12 @@ function process_DynamicOptProblem(
     model = generate_internal_model(model_type)
     generate_time_variable!(model, model_tspan, tsteps)
     U = generate_state_variable!(model, u0, length(states), tsteps)
+    # Apply start trajectories, compiling the symbolic expressions to callables
+    for (var, traj) in initial_trajectory
+        idx = get(stidxmap, var, nothing)
+        idx === nothing && continue
+        set_initial_trajectory!(model, U, idx, build_trajectory_function(sys, var, traj, p; eval_expression, eval_module))
+    end
     V = generate_input_variable!(model, c0, length(ctrls), tsteps)
     P = generate_tunable_params!(model, p0, length(tunable_params))
     # Add the symbolic representation of the tunable parameters to the map
@@ -393,6 +402,60 @@ function process_DynamicOptProblem(
     return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
 end
 
+"""
+    build_trajectory_function(sys, var, traj, p; eval_expression = false, eval_module = @__MODULE__)
+
+Compile an `initial_trajectory` entry for `var` into a callable of the independent
+variable of `sys`, closing over the parameter object `p`.
+
+`traj` is a symbolic expression in the independent variable and parameters; observed
+variables and parameter bindings it references are inlined symbolically, and parameter
+values are read from `p` when the trajectory is evaluated. A constant is a valid
+trajectory; callables are not supported and raise an `ArgumentError`.
+
+The result is a `Function`, which is what backends such as InfiniteOpt require of
+`JuMP.set_start_value`.
+"""
+function build_trajectory_function(
+        sys, var, traj, p; eval_expression = false, eval_module = @__MODULE__
+    )
+    if symbolic_type(traj) === NotSymbolic()
+        # A guess that does not vary in time is still a valid trajectory.
+        traj isa Number && return Returns(traj)
+        throw(
+            ArgumentError(
+                "Only symbolic trajectories are supported for `initial_trajectory`, " *
+                    "got a $(nameof(typeof(traj))) for $var."
+            )
+        )
+    end
+
+    iv = get_iv(sys)
+    expr = get_ir_info(sys).obs_subber(unwrap(traj))
+
+    unresolved = filter(
+        v -> !isequal(v, unwrap(iv)) && !is_parameter(sys, v),
+        Symbolics.get_variables(expr)
+    )
+    isempty(unresolved) || throw(
+        ArgumentError(
+            "The `initial_trajectory` for $var may only depend on the independent " *
+                "variable $iv and on parameters, but after inlining observed variables " *
+                "and parameter bindings it also depends on $(join(unresolved, ", "))."
+        )
+    )
+
+    opts = GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    rgf = generate_trajectory(sys, expr, opts)
+
+    return Base.Fix1(rgf, p)
+end
+
+# Set the start values of state `idx` from a trajectory callable.
+# Backends without a method for their model type do not support this.
+function set_initial_trajectory!(model, U, idx, traj)
+    throw(ArgumentError("The `initial_trajectory` keyword argument is not supported by the $(nameof(typeof(model))) backend."))
+end
 function generate_time_variable! end
 function generate_internal_model end
 function generate_state_variable! end

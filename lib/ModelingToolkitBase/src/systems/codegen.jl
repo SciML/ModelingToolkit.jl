@@ -500,6 +500,39 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Generate a function `f(p, t)` which evaluates the symbolic expression `expr` at time `t`
+with the parameter object `p`. `expr` may involve the independent variable, parameters,
+observed variables and bound parameters of `sys` (the latter two are inlined
+symbolically), but not its unknowns. The `f(p, t)` signature matches the initial guess
+function convention used across the SciML ecosystem, e.g. by `BVProblem`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+"""
+function generate_trajectory(sys::System, expr, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    p = reorder_parameters(sys)
+    res = build_function_wrapper(
+        sys, expr, [p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(p), wrap_delays = false,
+            codegen_function_options = opts.codegen
+        )
+    )
+    if !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
+        res = res[1]
+    end
+    return maybe_compile_function(
+        expression, wrap_gfw, (1, 2, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Calculate the mass matrix of `sys`. `simplify` controls whether `Symbolics.simplify` is
 applied to the symbolic mass matrix. Returns a `Diagonal` or `LinearAlgebra.I` wherever
 possible.
