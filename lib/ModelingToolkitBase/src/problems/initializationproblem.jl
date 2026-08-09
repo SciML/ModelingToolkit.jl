@@ -169,7 +169,7 @@ function InitializationProblem{iip, specialize}(
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    TProb{_iip}(
+    return TProb{_iip}(
         isys, op; kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
         eval_expression, eval_module, warn_cyclic_dependency,
