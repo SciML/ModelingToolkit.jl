@@ -130,6 +130,49 @@ move the optimum, only how the solver converges towards it.
 directly as derivative constraints. The JuMP and CasADi backends discretize through an
 ODE solver tableau instead and currently ignore it.
 
+### Bounds on observed variables
+
+Bounds declared on an observed variable are enforced too, not just bounds on states and
+inputs. Here the observed `power` is capped, which limits how hard the input may drive
+the state:
+
+```@example dynamic_opt
+@variables begin
+    z(..)
+    power(..), [bounds = (0.0, 1.0)]
+    w(..), [input = true, bounds = (-1.0, 1.0)]
+end
+
+@named limited = System(
+    [D(z(t)) ~ w(t), power(t) ~ 2z(t)], t; costs = [-z(1.0)])
+limited = mtkcompile(limited; inputs = [w(t)])
+
+lprob = JuMPDynamicOptProblem(
+    limited, [[z(t) => 0.0]; [w(t) => 0.0]], (0.0, 1.0); dt = 0.01)
+lsol = solve(lprob, JuMPCollocation(Ipopt.Optimizer));
+lsol.sol[z(t)][end]  # 0.5, not 1.0: power = 2z ≤ 1 binds
+```
+
+There are two ways to impose such a bound, selected with `observed_bounds_method`:
+
+  - `:lift` introduces an auxiliary decision variable bounded by `[lo, hi]` and ties it to
+    the observed expression with an equality constraint. Interior-point solvers such as
+    Ipopt handle variable bounds considerably better than the equivalent nonlinear
+    inequalities, so this is usually faster. Not every backend can do it.
+  - `:constraint` emits the bound directly as a nonlinear inequality. Every backend
+    supports this.
+  - `:auto`, the default, uses `:lift` where the backend supports it and `:constraint`
+    everywhere else.
+
+Currently only the JuMP and InfiniteOpt backends can lift; CasADi and Pyomo use
+`:constraint`. Asking a backend for `:lift` when it cannot raises an `ArgumentError`
+rather than silently doing something else.
+
+`:constraint` is worth choosing explicitly when the solver is not interior-point (active
+set and SQP methods handle inequalities natively), when there are many bounded observed
+variables and the extra equality constraints make finding an initial feasible point
+harder, or when comparing against a reference formulation.
+
 ### Free final time problems
 
 There are additionally a class of dynamic optimization problems where we would like to know how to control our system to achieve something in the least time. Such problems are called free final time problems, since the final time is unknown. To model these problems in ModelingToolkit, we declare the final time as a parameter.
