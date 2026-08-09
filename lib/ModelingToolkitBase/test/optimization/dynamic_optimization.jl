@@ -926,3 +926,39 @@ struct UnsupportedTrajectoryBackend end
     @parameters b
     @test_throws ArgumentError M.build_trajectory_function(block, x(t), b * t, p_test)
 end
+
+@testset "Callable parameter registration" begin
+    # A parameter that is called in the equations (here an interpolator) must be
+    # registered as a solver nonlinear operator; without it the collocation
+    # backends cannot trace the RHS symbolically.
+    @parameters (forcing::LinearInterpolation)(..)
+    @variables x(t)
+
+    eqs = [D(x) ~ -x + forcing(t)]
+    @named sys = System(eqs, t)
+    sys = mtkcompile(sys)
+
+    # Constant extrapolation is required for the InfiniteOpt backend: MOI builds the
+    # Lagrangian Hessian by running ForwardDiff over the operator's gradient, which
+    # perturbs `t` past the last knot at the boundary collocation point.
+    interp = LinearInterpolation(
+        [1.0, 2.0, 1.5], [0.0, 0.5, 1.0];
+        extrapolation = ExtrapolationType.Constant
+    )
+
+    u0map = [x => 0.5]
+    pmap = [forcing => interp]
+    tspan = (0.0, 1.0)
+
+    # JuMP backend: direct collocation evaluates the callable at numeric time points.
+    jprob = JuMPDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ImplicitTableaus.ImplicitEuler()))
+    @test all(isfinite, jsol.sol[x])
+    @test length(jsol.sol[x]) > 1
+
+    # InfiniteOpt backend: the callable is registered as a JuMP nonlinear operator and
+    # the equational constraints substitute it in symbolically (see register_operator!).
+    iprob = InfiniteOptDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test isol.sol[x][end] > isol.sol[x][begin]
+end
