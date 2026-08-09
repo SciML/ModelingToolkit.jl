@@ -687,9 +687,11 @@ end
 # lifted equality from an infeasible point and defeats the purpose of lifting.
 function aux_start_value(lo, hi)
     isfinite(lo) && isfinite(hi) && return (lo + hi) / 2
-    isfinite(lo) && return lo
-    isfinite(hi) && return hi
-    return 0.0
+    # One-sided (or unbounded): keep the backend's natural 0 start when it is
+    # feasible — starting exactly on the finite bound is hostile to interior-point
+    # methods — and only fall back to the bound itself when 0 is outside.
+    lo <= 0 <= hi && return 0.0
+    return isfinite(lo) ? lo : hi
 end
 
 """
