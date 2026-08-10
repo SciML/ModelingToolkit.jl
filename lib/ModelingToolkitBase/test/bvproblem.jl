@@ -198,7 +198,7 @@ end
     @mtkcompile lksys = System(eqs, t; constraints = constr)
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
-        lksys, u0map, tspan; guesses = guess, cse = false
+        lksys, u0map, tspan; guesses = guess
     )
     test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 
