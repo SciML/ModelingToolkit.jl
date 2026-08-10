@@ -133,9 +133,10 @@ function mtkcompile!(
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
             discrete_compile = additional_passes[discrete_pass_idx]
             deleteat!(additional_passes, discrete_pass_idx)
-            sys = System(
-                Equation[], get_iv(state.sys)::SymbolicT, SymbolicT[], get_ps(state.sys);
-                name = nameof(state.sys)
+            sys = copy(state.sys)
+            sys = ConstructionBase.setproperties(
+                sys; eqs = Equation[], unknowns = SymbolicT[],
+                observed = Equation[], initialization_eqs = Equation[]
             )
             return discrete_compile(sys, tss, clocked_inputs, ci, id_to_clock)
         end
