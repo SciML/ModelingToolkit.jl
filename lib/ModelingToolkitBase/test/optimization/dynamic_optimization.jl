@@ -900,7 +900,7 @@ struct UnsupportedTrajectoryBackend end
     )
 
     # Expressions are compiled to callables of the independent variable
-    p_test = MTKParameters(block, parammap)
+    p_test = iprob.p
     fx = M.build_trajectory_function(block, x(t), 0.125 * t^2, p_test)
     @test fx isa Function
     @test fx(2.0) ≈ 0.5
@@ -919,7 +919,8 @@ struct UnsupportedTrajectoryBackend end
     @parameters a
     @named psys = System([D(x(t)) ~ a * v(t), D(v(t)) ~ 0.0], t)
     psys = mtkcompile(psys)
-    fp = M.build_trajectory_function(psys, x(t), a * t, MTKParameters(psys, [a => 4.0]))
+    oprob = ODEProblem(psys, [x(t) => 0.0, v(t) => 0.0, a => 4.0], tspan)
+    fp = M.build_trajectory_function(psys, x(t), a * t, oprob.p)
     @test fp(2.0) ≈ 8.0
 
     # Anything that does not reduce to time and parameters is reported
