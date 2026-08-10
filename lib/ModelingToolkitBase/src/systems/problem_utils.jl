@@ -833,7 +833,7 @@ function __apply_copy_template(valp, template)
     elseif template isa CopyParamsByTemplate
         return template(valp)
     elseif template isa IndepVarTemplate
-        return current_time(valp)
+        return [current_time(valp)]
     elseif template isa ParameterIndex{SciMLStructures.Constants, <:Tuple{Vararg{Int}}}
         i, j, rest... = template.idx
         return p.constant[i][j][rest...]
