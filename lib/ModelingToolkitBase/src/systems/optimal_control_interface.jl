@@ -608,7 +608,7 @@ function extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds =
     end
 
     # Collect bounds on observed variables: metadata first, user overrides
-    observed_bounds = Dict{Any, Tuple{Any, Any}}()
+    observed_bounds = Dict{SymbolicT, Tuple{SymbolicT, SymbolicT}}()
     for eq in observed(unhack_system(sys))
         v = default_toterm(unwrap(eq.lhs))
         if hasbounds(v)
