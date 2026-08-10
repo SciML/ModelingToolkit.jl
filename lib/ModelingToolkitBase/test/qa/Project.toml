@@ -7,4 +7,4 @@ SciMLStructures = "53ae85a6-f571-4167-b2af-e1d143709226"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
-ModelingToolkitBase = {path = "../.."}
+ModelingToolkitBase = {path = "/home/crackauc/sandbox/tmp_20260807_022022_76077/ModelingToolkit.jl/lib/ModelingToolkitBase"}
