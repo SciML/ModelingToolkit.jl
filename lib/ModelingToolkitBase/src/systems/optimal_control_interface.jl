@@ -726,6 +726,11 @@ function add_observed_bounds!(
     get_param_substitution_rules!(rules, pmap)
 
     for (var, (lo, hi)) in observed_bounds
+        # `observed_bounds` stores its values symbolically: resolve parameter
+        # references and unwrap numeric constants so the backends receive plain
+        # numbers, as for the state and input bounds.
+        lo = value(Symbolics.fixpoint_sub(lo, pmap))
+        hi = value(Symbolics.fixpoint_sub(hi, pmap))
         if method === :lift
             expr = fixpoint_sub(var, rules; fold = Val(true), filterer = Returns(true))
             lift_observed_bound!(
