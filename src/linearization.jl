@@ -258,7 +258,7 @@ function linearization_function(
 
     if u0 === nothing
         uf_jac = h_jac = pf_jac = nothing
-        parameter_eltype = if p isa Union{MTKParameters, OpaqueMTKParameters}
+        parameter_eltype = if p isa Union{MTKParameters, SciMLBase.DespecializedParameters}
             tunables, _, _ = SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)
             eltype(tunables)
         else

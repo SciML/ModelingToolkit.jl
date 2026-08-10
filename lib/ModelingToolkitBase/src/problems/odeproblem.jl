@@ -145,10 +145,6 @@ Base.@nospecializeinfer function _ode_problem(
         sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
     )
 
-    if spec === SciMLBase.AutoSpecialize && p isa MTKParameters
-        p = OpaqueMTKParameters(p)
-    end
-
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)
     return maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)

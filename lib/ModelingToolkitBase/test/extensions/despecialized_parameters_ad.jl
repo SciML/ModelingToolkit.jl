@@ -7,10 +7,10 @@ using SciMLStructures
 using Test
 using Zygote
 
-@testset "opaque parameter sensitivities" begin
+@testset "despecialized parameter sensitivities" begin
     @parameters a = 2.0
     @variables x(t) = 1.0
-    sys = mtkcompile(System([D(x) ~ -a * x], t; name = :opaque_parameter_ad))
+    sys = mtkcompile(System([D(x) ~ -a * x], t; name = :despecialized_parameter_ad))
     prob = ODEProblem(sys, [], (0.0, 1.0))
 
     function terminal_value(a_value)

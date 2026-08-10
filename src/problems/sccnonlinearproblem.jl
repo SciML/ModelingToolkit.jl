@@ -6,7 +6,7 @@ function (cw::CacheWriter)(p::MTKParameters, sols)
     return cw.fn(p.caches, sols, p)
 end
 
-(cw::CacheWriter)(p::OpaqueMTKParameters, sols) = cw(p.params, sols)
+(cw::CacheWriter)(p::SciMLBase.DespecializedParameters, sols) = cw(p.params, sols)
 
 const SCCCacheVarsExprsElT = Dict{TypeT, Vector{SymbolicT}}
 

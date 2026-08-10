@@ -1135,7 +1135,8 @@ function (recon::MTKParametersReconstructor)(src, dst)
         convert(typeof(unwrapped_dst_ps.discrete), recon.discretes_fn(src)),
         recon.consts_fn(src), nonnumerics, oldcache isa Tuple{} ? () : copy.(oldcache)
     )
-    return dst_ps isa OpaqueMTKParameters ? OpaqueMTKParameters(new_ps) : new_ps
+    return dst_ps isa SciMLBase.DespecializedParameters ?
+        SciMLBase.DespecializedParameters(new_ps) : new_ps
 end
 
 """
@@ -1536,8 +1537,8 @@ function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
     return p
 end
 
-function (siu::SetInitialUnknowns)(p::OpaqueMTKParameters, u0)
-    return OpaqueMTKParameters(siu(p.params, u0))
+function (siu::SetInitialUnknowns)(p::SciMLBase.DespecializedParameters, u0)
+    return SciMLBase.DespecializedParameters(siu(p.params, u0))
 end
 
 function (siu::SetInitialUnknowns)(p::AbstractVector, u0)
@@ -2140,6 +2141,15 @@ Base.@nospecializeinfer function process_SciMLProblem(
     __process_SciMLProblem(constructor, sys, op, opts; kwargs...)
 end
 
+function maybe_despecialize_parameters(constructor, p)
+    return if p isa MTKParameters && constructor <: SciMLBase.AbstractSciMLFunction &&
+            SciMLBase.specialization(constructor) === SciMLBase.AutoSpecialize
+        SciMLBase.DespecializedParameters(p)
+    else
+        p
+    end
+end
+
 function __process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, op::AnyDict,
         opts::SciMLProblemOptions; kwargs...
@@ -2296,6 +2306,7 @@ function __process_SciMLProblem(
         compiler_options,
         kwargs...
     )
+    p = maybe_despecialize_parameters(constructor, p)
     if return_operating_point
         return implicit_dae ? (f, du0, u0, p, op) : (f, u0, p, op)
     else

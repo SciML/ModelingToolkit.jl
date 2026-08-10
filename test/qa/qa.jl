@@ -134,7 +134,6 @@ const REEXPORTED_API = (
     :JumpSystem, :linear_fractional_to_ordinary, :liouville_transform, :LocalScope,
     :maybe_zeros, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
-    :OpaqueMTKParameters,
     :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
     :parameters, :parameters_toplevel, :ParentScope, :PDESystem, :Pre, :ProblemTypeCtx,

@@ -3,11 +3,12 @@
 ## Why are my parameters some obscure object?
 
 In ModelingToolkit.jl version 9, the parameter vector was replaced with a custom
-`MTKParameters` object. `AutoSpecialize` ODE problems expose an `OpaqueMTKParameters`
-wrapper around that object so solver compilation can be reused across parameter layouts.
-The internals of both types are intentionally undocumented and subject to change without a
-breaking release. This representation enables us to efficiently store and generate code for
-parameters of multiple types. To obtain parameter values use
+`MTKParameters` object. `AutoSpecialize` problems expose a
+[`SciMLBase.DespecializedParameters`](@ref) wrapper around that object so solver compilation
+can be reused across parameter layouts. The internals of `MTKParameters` are intentionally
+undocumented and subject to change without a breaking release. This representation enables
+us to efficiently store and generate code for parameters of multiple types. To obtain
+parameter values use
 [SymbolicIndexingInterface.jl](https://github.com/SciML/SymbolicIndexingInterface.jl/) or
 [SciMLStructures.jl](https://github.com/SciML/SciMLStructures.jl/). For example:
 
@@ -19,8 +20,8 @@ getβ(prob)
 ```
 
 Indexes into these parameter objects take the form of `ParameterIndex` objects, which are
-similarly undocumented. The following behaviors can be relied on for both
-`MTKParameters` and `OpaqueMTKParameters`:
+similarly undocumented. The following behaviors can be relied on for both `MTKParameters`
+and `SciMLBase.DespecializedParameters`:
 
   - It implements the SciMLStructures interface.
   - It can be queried for parameters using functions returned from
@@ -30,7 +31,7 @@ similarly undocumented. The following behaviors can be relied on for both
   - `setindex!` with a `ParameterIndex` can be used to set the value of a parameter with the
     given index.
   - The wrapped `MTKParameters` object is available as the `params` field of an
-    `OpaqueMTKParameters` object.
+    `SciMLBase.DespecializedParameters` object.
   - `parameter_index(sys, sym)` will return a `ParameterIndex` object if `sys` has been
     `complete`d (through `mtkcompile`, `complete` or `@mtkcompile`).
   - `copy` duplicates the parameter object, including the memory used by the underlying
