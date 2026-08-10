@@ -102,11 +102,12 @@ function MTK.CasADiDynamicOptProblem(
         steps = nothing,
         tune_parameters = false,
         guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, bounds, kwargs...
+        _, _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
     return prob
 end

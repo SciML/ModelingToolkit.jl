@@ -108,6 +108,28 @@ Passing a non-empty map to Pyomo raises an `ArgumentError`.
     `[0, 1]`, so the trajectory expressions are evaluated at normalized time rather
     than physical time.
 
+### Scaling the dynamics constraints
+
+When the states of a system span very different magnitudes, the residuals of the
+dynamics constraints do too, which can make the optimizer favor the large states and
+converge poorly. The `nominal_values` keyword takes a map from states to their typical
+magnitudes, and each dynamics constraint is divided by the corresponding value so that
+all residuals are comparable in size:
+
+```@example dynamic_opt
+iprob_scaled = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    nominal_values = Dict(h(t) => 1.25, m(t) => 0.6))
+isol_scaled = solve(iprob_scaled, InfiniteOptCollocation(Ipopt.Optimizer));
+```
+
+States not listed default to their [`nominal` metadata](@ref getnominal) if set, and to
+`1.0` otherwise, in which case the constraint is unchanged. Scaling a residual does not
+move the optimum, only how the solver converges towards it.
+
+`nominal_values` affects the InfiniteOpt and Pyomo backends, which emit the dynamics
+directly as derivative constraints. The JuMP and CasADi backends discretize through an
+ODE solver tableau instead and currently ignore it.
+
 ### Free final time problems
 
 There are additionally a class of dynamic optimization problems where we would like to know how to control our system to achieve something in the least time. Such problems are called free final time problems, since the final time is unknown. To model these problems in ModelingToolkit, we declare the final time as a parameter.
