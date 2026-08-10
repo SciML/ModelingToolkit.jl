@@ -188,6 +188,19 @@ end
 get_unknowns(sys::PDESystem) = getfield(sys, :dvs)
 has_unknowns(::PDESystem) = true
 
+# PDESystem stores field roles as variable metadata instead of dedicated fields.
+# Return unwrapped variables to match the AbstractSystem input/output interface.
+function get_inputs(sys::PDESystem)
+    return filter(isinput, unwrap.(get_dvs(sys)))
+end
+
+function get_outputs(sys::PDESystem)
+    return filter(x -> !isinput(x) && isoutput(x), unwrap.(get_dvs(sys)))
+end
+
+has_inputs(::PDESystem) = true
+has_outputs(::PDESystem) = true
+
 function Base.propertynames(sys::PDESystem; private = false)
     if private
         return fieldnames(PDESystem)
