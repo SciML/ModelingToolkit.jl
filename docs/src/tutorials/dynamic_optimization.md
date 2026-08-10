@@ -44,7 +44,7 @@ Now we can construct a problem and solve it. Let us use JuMP as our backend here
 The collocation solver uses a default ODE tableau. A custom tableau can still be supplied when needed.
 
 ```@example dynamic_opt
-using InfiniteOpt, Ipopt
+import InfiniteOpt, Ipopt
 jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
 jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer));
 ```
