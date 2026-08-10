@@ -962,7 +962,7 @@ end
     isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
     @test isol.sol[x][end] > isol.sol[x][begin]
 end
-                                                      
+
 @testset "Residual scaling of dynamics constraints" begin
     # Double integrator with nominal_values - should converge to same answer
     @variables x(..) v(..)
@@ -1034,4 +1034,26 @@ end
     changed = [(a, b) for (a, b) in zip(unscaled, rescaled) if a != b]
     @test length(changed) == 1
     @test occursin("0.1", last(only(changed)))
+end
+
+@testset "Verbose flag propagation" begin
+    @variables x(..)
+    @variables u(..) [bounds = (-1.0, 1.0), input = true]
+    @named vsys = System([D(x(t)) ~ u(t)], t; costs = [EvalAt(1.0)(x(t))^2])
+    vsys = mtkcompile(vsys; inputs = [u(t)])
+    op = [x(t) => 1.0, u(t) => 0.0]
+
+    # The silent flag used to be applied before `set_optimizer`, which resets it:
+    # `verbose = false` solves still printed the full solver log. Assert the flag
+    # survives on the model that `optimize!` actually saw.
+    silent_flag(m) = InfiniteOpt.get_attribute(m, InfiniteOpt.MOI.Silent())
+    for (verbose, silent) in ((false, true), (true, false))
+        jprob = JuMPDynamicOptProblem(vsys, op, (0.0, 1.0); dt = 0.25)
+        solve(jprob, JuMPCollocation(Ipopt.Optimizer, ExplicitTableaus.Verner8()); verbose)
+        @test silent_flag(jprob.wrapped_model.model) == silent
+
+        iprob = InfiniteOptDynamicOptProblem(vsys, op, (0.0, 1.0); dt = 0.25)
+        solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer); verbose)
+        @test silent_flag(iprob.wrapped_model.model) == silent
+    end
 end
