@@ -1603,6 +1603,8 @@ end
 _maybe_copy(x) = applicable(copy, x) ? copy(x) : x
 
 function Base.copy(sys::System)
+    ir_tlv = __new_irstructure_tlv()
+    ir_tlv[] = copy(get_irstructure(sys))
     return System(
         __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
         copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
@@ -1619,7 +1621,7 @@ function Base.copy(sys::System)
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
         _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
         get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
-        copy(get_maybe_zeros(sys)),
+        copy(get_maybe_zeros(sys)), ir_tlv,
         copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
     )
 end
