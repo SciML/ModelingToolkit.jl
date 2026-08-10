@@ -47,6 +47,13 @@ of the interpolation arrays.
 Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 
+Each dynamics constraint is emitted as a residual scaled by the state's nominal
+value, `(∂x - tₛ*f(x)) / nominal ~ 0`, so that states of different magnitudes
+produce comparable residuals. The nominal value is taken from the variable's
+`nominal` metadata (see `getnominal`; `1.0` if unset) and can be overridden per
+state with the `nominal_values` keyword, a map from states to their typical
+magnitudes.
+
 To construct the problem, please load InfiniteOpt along with ModelingToolkitBase.
 """
 function InfiniteOptDynamicOptProblem end
@@ -68,6 +75,13 @@ Convert a System representing an optimal control system into a Pyomo model
 for solving using optimization. Must provide either `dt`, the timestep between collocation
 points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
+
+Each dynamics constraint is emitted as a residual scaled by the state's nominal
+value, `(∂x - tₛ*f(x)) / nominal ~ 0`, so that states of different magnitudes
+produce comparable residuals. The nominal value is taken from the variable's
+`nominal` metadata (see `getnominal`; `1.0` if unset) and can be overridden per
+state with the `nominal_values` keyword, a map from states to their typical
+magnitudes.
 
 To construct the problem, please load Pyomo along with ModelingToolkitBase.
 """
