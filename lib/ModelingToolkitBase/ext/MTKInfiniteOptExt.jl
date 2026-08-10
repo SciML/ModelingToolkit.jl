@@ -11,6 +11,7 @@ using UnPack
 using Symbolics: unwrap
 import SymbolicUtils
 import NaNMath
+import FunctionWrappers
 const MTK = ModelingToolkitBase
 
 function __init__()
@@ -114,6 +115,43 @@ function MTK.generate_timescale!(m::InfiniteModel, guess, is_free_t)
     return tₛ
 end
 
+# Register a callable parameter as a JuMP nonlinear operator. `val` is the callable used for
+# values; `underlying` is what we look up a symbolic first-derivative rule for — the same object
+# for a bare callable, or the wrapped function for a `FunctionWrapper`. The rule is resolved
+# through Symbolics' registry, so any derivative registered for the callable's type (e.g. by a
+# DataInterpolations→Symbolics extension) is used without MTK depending on that package. When no
+# rule exists we register value-only and JuMP differentiates numerically.
+function _register_callable_operator!(m::InfiniteOptModel, dim, underlying, val, name)
+    # InfiniteOpt wants a ::Function; wrap non-Function callables (interpolators, wrappers).
+    f = val isa Function ? val : (x_args...) -> val(x_args...)
+    syms = ntuple(i -> Symbolics.variable(Symbol(:_arg, i)), dim)
+    d1 = Symbolics._derivative_rule_proxy(underlying, syms, Val(1))
+    isnothing(d1) && return add_nonlinear_operator(m.model, dim, f; name)
+
+    d1_unwrapped = unwrap(d1)
+    op = operation(d1_unwrapped)
+    args = arguments(d1_unwrapped)
+    # Identify which args are our symbolic variables vs constants
+    sym_positions = Dict(unwrap(s) => i for (i, s) in enumerate(syms))
+    arg_specs = map(args) do a
+        a_uw = unwrap(a)
+        idx = get(sym_positions, a_uw, nothing)
+        !isnothing(idx) ? (:var, idx) : (:const, SymbolicUtils.unwrap_const(a_uw))
+    end
+    ∇f = function (x_args...)
+        realized = map(arg_specs) do (kind, v)
+            kind === :var ? x_args[v] : v
+        end
+        return op(realized...)
+    end
+    return add_nonlinear_operator(m.model, dim, f, ∇f; name)
+end
+
+MTK.register_operator!(m::InfiniteOptModel, dim, val, name) =
+    _register_callable_operator!(m, dim, val, val, name)
+MTK.register_operator!(m::InfiniteOptModel, dim, val::FunctionWrappers.FunctionWrapper, name) =
+    _register_callable_operator!(m, dim, val.obj[], val, name)
+
 function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequality})
     return if expr isa Equation
         @constraint(m.model, SymbolicUtils.unwrap_const(expr.lhs) - SymbolicUtils.unwrap_const(expr.rhs) == 0)
@@ -184,6 +222,7 @@ function MTK.lowered_integral(model::InfiniteOptModel, expr, lo, hi)
     return model.tₛ * InfiniteOpt.∫(SymbolicUtils.unwrap_const(expr), model.model[:t], lo, hi)
 end
 MTK.lowered_derivative(model::InfiniteOptModel, i) = ∂(model.U[i], model.model[:t])
+MTK.lowered_time_variable(model::InfiniteOptModel) = model.model[:t]
 
 function MTK.process_integral_bounds(model::InfiniteOptModel, integral_span, tspan)
     return if MTK.is_free_final(model) && isequal(integral_span, tspan)
