@@ -47,6 +47,13 @@ of the interpolation arrays.
 Related to `JuMPDynamicOptProblem`, but directly adds the differential equations
 of the system as derivative constraints, rather than using a solver tableau.
 
+Each dynamics constraint is emitted as a residual scaled by the state's nominal
+value, `(∂x - tₛ*f(x)) / nominal ~ 0`, so that states of different magnitudes
+produce comparable residuals. The nominal value is taken from the variable's
+`nominal` metadata (see `getnominal`; `1.0` if unset) and can be overridden per
+state with the `nominal_values` keyword, a map from states to their typical
+magnitudes.
+
 To construct the problem, please load InfiniteOpt along with ModelingToolkitBase.
 """
 function InfiniteOptDynamicOptProblem end
@@ -68,6 +75,13 @@ Convert a System representing an optimal control system into a Pyomo model
 for solving using optimization. Must provide either `dt`, the timestep between collocation
 points (which, along with the timespan, determines the number of points), or directly
 provide the number of points as `steps`.
+
+Each dynamics constraint is emitted as a residual scaled by the state's nominal
+value, `(∂x - tₛ*f(x)) / nominal ~ 0`, so that states of different magnitudes
+produce comparable residuals. The nominal value is taken from the variable's
+`nominal` metadata (see `getnominal`; `1.0` if unset) and can be overridden per
+state with the `nominal_values` keyword, a map from states to their typical
+magnitudes.
 
 To construct the problem, please load Pyomo along with ModelingToolkitBase.
 """
@@ -362,6 +376,7 @@ function process_DynamicOptProblem(
         steps = nothing,
         tune_parameters = false,
         guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
         bounds = Dict(),
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...
@@ -374,6 +389,7 @@ function process_DynamicOptProblem(
     stidxmap = Dict([v => i for (i, v) in enumerate(states)])
     op = Dict([default_toterm(value(k)) => v for (k, v) in op])
     initial_trajectory = Dict([default_toterm(value(k)) => v for (k, v) in initial_trajectory])
+    nominal_values = Dict([default_toterm(value(k)) => v for (k, v) in nominal_values])
     bounds = Dict([default_toterm(value(k)) => v for (k, v) in bounds])
     u0_idxs = has_alg_eqs(sys) ? collect(1:length(states)) :
         [stidxmap[default_toterm(k)] for (k, v) in op if haskey(stidxmap, k)]
@@ -458,7 +474,7 @@ function process_DynamicOptProblem(
     add_user_constraints!(fullmodel, sys, tspan, pmap)
     add_initial_constraints!(fullmodel, u0, u0_idxs, model_tspan[1])
 
-    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap
+    return prob_type(f, u0, tspan, p, fullmodel; kwargs...), pmap, nominal_values
 end
 
 """
@@ -764,15 +780,20 @@ function add_user_constraints!(model, sys, tspan, pmap)
     return
 end
 
-function add_equational_constraints!(model, sys, pmap, tspan)
+function add_equational_constraints!(model, sys, pmap, tspan, nominal_values = Dict())
     rules = Dict{Any, Any}()
     get_observed_substitution_rules!(rules, sys)
     get_model_vars_substitution_rules!(rules, model, sys, tspan)
     get_param_substitution_rules!(rules, pmap)
     get_differential_substitution_rules!(rules, model, sys)
+    dvs = unknowns(sys)
     diff_eqs = fixpoint_sub(diff_equations(sys), rules; fold = Val(true), filterer = Returns(true))
-    for eq in diff_eqs
-        add_constraint!(model, eq.lhs ~ unwrap_const(eq.rhs) * model.tₛ)
+    for (i, eq) in enumerate(diff_eqs)
+        # User-provided nominal values override the variable's nominal metadata.
+        # Scale the entire residual, not each side independently.
+        # (∂x - tₛ*f(x)) / scale == 0 prevents degenerate tₛ → 0 solutions.
+        s = get(nominal_values, dvs[i], getnominal(dvs[i]))
+        add_constraint!(model, (unwrap_const(eq.lhs) - unwrap_const(eq.rhs) * model.tₛ) / s ~ 0)
     end
 
     alg_eqs = fixpoint_sub(alg_equations(sys), rules; fold = Val(true), filterer = Returns(true))

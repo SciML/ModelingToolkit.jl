@@ -1668,7 +1668,7 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
     pType <: StaticArray || return p_constructor
     return function (vals)
         return SymbolicUtils.Code.create_array(
-            pType, floatT, Val(ndims(vals)), Val(size(vals)), vals...
+            pType, eltype(vals) <: AbstractFloat ? floatT : nothing, Val(ndims(vals)), Val(size(vals)), vals...
         )
     end
 end
