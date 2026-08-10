@@ -251,7 +251,7 @@ end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
-        @constraint(m.model, m.U[i](ts) == u0[i])
+        fix(m.U[i](ts), u0[i], force = true)
     end
     return
 end
