@@ -1,3 +1,4 @@
+"""$(function_docstring(DiscreteFunction, true, Symbol[]))"""
 @fallback_iip_specialize function SciMLBase.DiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         eval_expression = false, eval_module = @__MODULE__, expression = Val{false},
@@ -54,6 +55,7 @@ function SciMLBase.DiscreteFunction{iip, spec}(
     return maybe_codegen_scimlfn(Val{E}, DiscreteFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.DiscreteProblem, DiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DiscreteProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true, expression = Val{false}, kwargs...

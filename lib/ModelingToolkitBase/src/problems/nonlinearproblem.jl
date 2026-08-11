@@ -1,3 +1,4 @@
+"""$(function_docstring(NonlinearFunction, false, [:resid_prototype, :jac]))"""
 @fallback_iip_specialize function SciMLBase.NonlinearFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing, jac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
@@ -113,6 +114,7 @@ function generate_nonlinear_bounds(sys::AbstractSystem, op)
     return lb, ub
 end
 
+"""$(problem_docstring(SciMLBase.NonlinearProblem, NonlinearFunction, false))"""
 @fallback_iip_specialize function SciMLBase.NonlinearProblem{iip, spec}(
         sys::System, op; expression = Val{false}, lb = nothing, ub = nothing,
         check_length = true, check_compatibility = true, kwargs...
@@ -168,6 +170,7 @@ function SciMLBase.AbstractNonlinearProblem(sys::System, op; kwargs...)
     return get_nonlinear_problem_type(sys)(sys, op; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.NonlinearLeastSquaresProblem, NonlinearFunction, false))"""
 @fallback_iip_specialize function SciMLBase.NonlinearLeastSquaresProblem{iip, spec}(
         sys::System, op; check_length = false, lb = nothing, ub = nothing,
         check_compatibility = true, expression = Val{false}, kwargs...

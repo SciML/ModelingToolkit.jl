@@ -68,9 +68,21 @@ include("utils.jl")
 include("pantelides.jl")
 
 """
-    $TYPEDSIGNATURES
+    tearing_substitution(sys::AbstractSystem; kwargs...)
 
-Apply tearing substitutions to `sys` and clear its schedule.
+Replace the equations of `sys` with its fully substituted equations.
+
+This is a structural-transformation helper used by simplification passes. End-user code
+should usually call [`mtkcompile`](@ref).
+
+# Arguments
+
+- `sys`: system whose equations should be substituted.
+- `kwargs...`: keyword arguments forwarded to [`full_equations`](@ref).
+
+# Returns
+
+A copy of `sys` with substituted equations and no cached schedule.
 """
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)

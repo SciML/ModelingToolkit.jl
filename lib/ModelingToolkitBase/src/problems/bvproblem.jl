@@ -13,6 +13,7 @@ function (w::BVPStackedControlRHS)(du, xu, p, t)
 end
 (w::BVPStackedControlRHS)(xu, p, t) = w.f(@view(xu[1:(w.nx)]), @view(xu[(w.nx + 1):end]), p, t)
 
+"""$(problem_docstring(SciMLBase.BVProblem, ODEFunction, true; init = false, extra_body = BV_EXTRA_BODY))"""
 @fallback_iip_specialize function SciMLBase.BVProblem{iip, spec}(
         sys::System, op, tspan;
         check_compatibility = true,

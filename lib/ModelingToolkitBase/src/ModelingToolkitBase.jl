@@ -155,9 +155,13 @@ abstract type AbstractSystem end
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
 """
-    independent_variable(x)
+    independent_variable
 
-Return the independent variable associated with `x`.
+Generic function for querying the primary independent variable of a system-like object.
+
+Most users should call [`independent_variables`](@ref), which returns the independent
+variables as a vector. Packages that define custom system types may extend
+`independent_variable` when a scalar independent-variable interface is required.
 """
 function independent_variable end
 
@@ -255,42 +259,42 @@ include("inputoutput.jl")
 
 include("deprecations.jl")
 
+"""
+    t_nounits
+
+Unitless default independent variable used by ModelingToolkit examples and constructors.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+t = ModelingToolkitBase.t_nounits
+```
+"""
 const t_nounits = let
     only(@independent_variables t)
 end
-const D_nounits = Differential(t_nounits)
 
-@doc """
-    t
-
-Default independent variable with units.
 """
-t
-
-@doc """
-    D
-
-Default differential operator with respect to [`t`](@ref).
-"""
-D
-
-@doc """
-    t_nounits
-
-Default independent variable without units.
-"""
-t_nounits
-
-@doc """
     D_nounits
 
-Default differential operator with respect to [`t_nounits`](@ref).
+Default unitless differential operator `Differential(t_nounits)`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+D = ModelingToolkitBase.D_nounits
+```
 """
-D_nounits
+const D_nounits = Differential(t_nounits)
 
 export CompilerOptions
 export ODEFunction, convert_system_indepvar,
-    System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem
+    System, OptimizationSystem, JumpSystem, SDESystem, NonlinearSystem, ODESystem,
+    DiscreteSystem, ImplicitDiscreteSystem
 export SDEFunction
 export DiscreteProblem, DiscreteFunction
 export ImplicitDiscreteProblem, ImplicitDiscreteFunction

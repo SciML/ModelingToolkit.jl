@@ -18,6 +18,7 @@ function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac 
     )
 end
 
+"""$(function_docstring(ODEFunction, true, [:jac, :tgrad]))"""
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
         sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), t = nothing,
         tgrad = false, jac = false,
@@ -149,6 +150,7 @@ Base.@nospecializeinfer function _ode_problem(
     return maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.ODEProblem, ODEFunction, true))"""
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
         sys::System, @nospecialize(op), tspan;
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
@@ -178,6 +180,7 @@ Base.@nospecializeinfer function SciMLBase.ODEProblem{
     )
 end
 
+"""$(problem_docstring(DiffEqBase.SteadyStateProblem, ODEFunction, false))"""
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
         sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...

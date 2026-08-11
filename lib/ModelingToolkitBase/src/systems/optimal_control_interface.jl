@@ -1,15 +1,24 @@
 """
     AbstractCollocation
 
-Abstract supertype for dynamic optimization collocation solver descriptors.
+Abstract supertype for dynamic-optimization collocation method descriptors.
+
+Concrete collocation types are provided by backend extensions such as JuMP, InfiniteOpt,
+CasADi, and Pyomo.
 """
 abstract type AbstractCollocation end
 
 """
-    DynamicOptSolution
+    DynamicOptSolution(model, sol, input_sol)
 
-Container returned by dynamic optimization solves, holding the optimized model, state
-trajectory solution, and optional input trajectory solution.
+Solution wrapper returned by dynamic-optimization backends.
+
+# Fields
+
+- `model`: backend-specific optimization model.
+- `sol`: state trajectory as an `ODESolution`.
+- `input_sol`: controller/input trajectory as an `ODESolution`, or `nothing` when the
+  backend does not return one.
 """
 struct DynamicOptSolution
     model::Any
@@ -143,6 +152,7 @@ end
 
 is_explicit(tableau) = tableau isa DiffEqBase.ExplicitRKTableau
 
+"""$(function_docstring(ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac]))"""
 @fallback_iip_specialize function SciMLBase.ODEInputFunction{iip, specialize}(
         sys::System;
         inputs = default_codegen_inputs(sys),

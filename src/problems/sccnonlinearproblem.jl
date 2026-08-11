@@ -503,6 +503,7 @@ function SCCNonlinearFunction{iip}(
     return NonlinearFunction{iip}(f; sys = subsys)
 end
 
+"""$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
 function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
     return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
