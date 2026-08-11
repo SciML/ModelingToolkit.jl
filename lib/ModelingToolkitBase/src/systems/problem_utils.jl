@@ -1606,6 +1606,20 @@ this function in extensions.
 """
 __iip_u0_ad_wrapper(x) = x
 
+struct InitializationMap{IIP, U, F}
+    u0_constructor::U
+    map::F
+end
+
+function InitializationMap{IIP}(u0_constructor::U, map::F) where {IIP, U, F}
+    return InitializationMap{IIP, U, F}(u0_constructor, map)
+end
+
+(map::InitializationMap{false})(x) = map.u0_constructor(map.map(x))
+function (map::InitializationMap{true})(x)
+    return __iip_u0_ad_wrapper(map.u0_constructor(map.map(x)))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1871,6 +1885,7 @@ constructed is in implicit DAE form (`DAEProblem`). `opts.check_initialization_u
 function maybe_build_initialization_problem(
         sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
         opts::SciMLProblemOptions;
+        specialize = SciMLBase.AutoSpecialize,
         # Intercept `expression` because we don't support it here yet
         expression = Val{false}, kwargs...
     )
@@ -1891,7 +1906,7 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
-    initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
+    initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
         sys, t, op, opts; guesses, fast_path = true, kwargs...
     )
     initsys = initializeprob.f.sys::System
@@ -1963,10 +1978,16 @@ function maybe_build_initialization_problem(
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         else
-            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(CopyParamsByTemplate(initializeprob.f.sys, solved_unknowns; eval_expression, eval_module, kwargs...), floatT)
-            if iip
-                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
-            end
+            initializeprobmap = InitializationMap{iip}(
+                u0_constructor,
+                PromoteToTunableEltype(
+                    CopyParamsByTemplate(
+                        initializeprob.f.sys, solved_unknowns;
+                        eval_expression, eval_module, kwargs...
+                    ),
+                    floatT
+                )
+            )
         end
     else
         initializeprobmap = nothing
@@ -2196,7 +2217,8 @@ function __process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses, opts; kwargs...
+            op, t, guesses, opts;
+            specialize = SciMLBase.specialization(constructor), kwargs...
         )
 
         kwargs = merge(kwargs, kws)

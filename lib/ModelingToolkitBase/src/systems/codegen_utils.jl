@@ -1041,13 +1041,13 @@ function GeneratedFunctionWrapper{P}(
 end
 
 function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg{Any, NArgs}) where {PIdx, NArgs, Split}
-    # non-split systems just call it as-is
-    Split || return gfw.f_oop(args...)
     if args[PIdx] isa SciMLBase.DespecializedParameters
         return SciMLBase.invoke_with_despecialized_parameters(
             gfw.f_oop, args, args[PIdx], Val(PIdx)
         )
     end
+    # non-split systems just call it as-is
+    Split || return gfw.f_oop(args...)
     if args[PIdx] isa Union{Tuple, MTKParameters} && !(args[PIdx] isa Tuple{Vararg{Number}})
         # for split systems, call it as-is if the parameter object is a tuple or MTKParameters
         # but not if it is a tuple of numbers
@@ -1064,12 +1064,12 @@ function (gfw::GeneratedFunctionWrapper{Tuple{PIdx, NArgs, Split}})(args::Vararg
     if NArgs + 1 != N
         throw(MethodError(gfw, args))
     end
-    Split || return gfw.f_iip(args...)
     if args[PIdx + 1] isa SciMLBase.DespecializedParameters
         return SciMLBase.invoke_with_despecialized_parameters(
             gfw.f_iip, args, args[PIdx + 1], Val(PIdx + 1)
         )
     end
+    Split || return gfw.f_iip(args...)
     if args[PIdx + 1] isa Union{Tuple, MTKParameters} && !(args[PIdx + 1] isa Tuple{Vararg{Number}})
         return gfw.f_iip(args...)
     end

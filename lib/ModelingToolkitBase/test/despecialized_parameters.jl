@@ -17,6 +17,9 @@ using Test
     )
 
     auto_prob = ODEProblem(sys, [], (0.0, 1.0); jac = true)
+    respecialized_prob = ODEProblem{true, SciMLBase.AutoRespecialize}(
+        sys, [], (0.0, 1.0)
+    )
     full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 1.0))
     expression_prob = eval(ODEProblem(sys, [], (0.0, 1.0); expression = Val{true}))
 
@@ -26,8 +29,24 @@ using Test
     @test eltype(typeof(auto_prob.p)) === Any
     @test SciMLStructures.isscimlstructure(auto_prob.p)
     @test SciMLStructures.ismutablescimlstructure(auto_prob.p)
+    @test respecialized_prob.p isa MTKParameters
     @test full_prob.p isa MTKParameters
+    @test auto_prob.f.initialization_data.initializeprob.p isa
+        SciMLBase.DespecializedParameters
+    @test respecialized_prob.f.initialization_data.initializeprob.p isa MTKParameters
+    @test full_prob.f.initialization_data.initializeprob.p isa MTKParameters
     @test expression_prob.p isa SciMLBase.DespecializedParameters
+
+    seen_parameter_type = Ref{DataType}()
+    gfw = ModelingToolkitBase.GeneratedFunctionWrapper{Tuple{2, 3, false}}(
+        (u, p, t) -> (seen_parameter_type[] = typeof(p); u),
+        (du, u, p, t) -> (seen_parameter_type[] = typeof(p); copyto!(du, u))
+    )
+    @test gfw(auto_prob.u0, auto_prob.p, 0.0) === auto_prob.u0
+    @test seen_parameter_type[] === typeof(auto_prob.p.params)
+    du = similar(auto_prob.u0)
+    gfw(du, auto_prob.u0, auto_prob.p, 0.0)
+    @test seen_parameter_type[] === typeof(auto_prob.p.params)
 
     @parameters b = 2.0
     @variables y = 0.0

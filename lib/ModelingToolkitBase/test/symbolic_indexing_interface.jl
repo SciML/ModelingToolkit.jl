@@ -136,7 +136,7 @@ end
     @test isempty(get_all_timeseries_indexes(ns, [σ + ρ, ρ + β]))
     @test pobs(ps) == [3.0, 5.0]
 
-    prob = NonlinearProblem(
+    prob = NonlinearProblem{true, SciMLBase.FullSpecialize}(
         ns, [x => 1.0, y => 2.0, z => 3.0, σ => 1.0, ρ => 2.0, β => 3.0]
     )
     getter = getu(ns, (x + 1, x + 2))

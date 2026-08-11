@@ -699,7 +699,8 @@ function _remake_initialization_data_impl(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
     )
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts
+        sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts;
+        specialize = SciMLBase.specialization(typeof(odefn))
     )
 
     odefn = remake(odefn; kws...)
