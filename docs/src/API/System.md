@@ -241,6 +241,28 @@ get_sensitivity
 get_comp_sensitivity
 get_looptransfer
 open_loop
+isolate_subsystem
+```
+
+`isolate_subsystem` extracts the plant from an unsimplified feedback system using analysis
+points as boundaries.
+
+```@example ISOLATE_SUBSYSTEM
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkit: t_nounits as t
+
+@named plant = FirstOrder(k = 1, T = 1)
+@named controller = Gain(k = -1)
+eqs = [
+    connect(controller.output, :plant_input, plant.input)
+    connect(plant.output, :plant_output, controller.input)
+]
+@named closed_loop = System(eqs, t, systems = [plant, controller])
+
+isolated, input_vars, output_vars =
+    isolate_subsystem(closed_loop, :plant_input, :plant_output)
+isequal(only(input_vars), plant.input.u), isequal(only(output_vars), plant.output.u)
 ```
 
 ## Additional Equation Classification
