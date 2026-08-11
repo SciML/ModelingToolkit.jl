@@ -395,8 +395,7 @@ export Shift, ShiftIndex
 export Sample, Hold, SampleTime
 export Clock, SolverStepClock, TimeDomain
 
-export MTKParameters, reorder_dimension_by_tunables!,
-    reorder_dimension_by_tunables
+export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunables
 
 export HomotopyContinuationProblem
 

@@ -574,7 +574,7 @@ function HomotopyContinuationProblem(
 end
 
 function HomotopyContinuationProblem{true}(sys::System, args...; kwargs...)
-    return HomotopyContinuationProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+    return HomotopyContinuationProblem{true, SciMLBase.AutoDespecialize}(sys, args...; kwargs...)
 end
 
 function HomotopyContinuationProblem{false}(sys::System, args...; kwargs...)

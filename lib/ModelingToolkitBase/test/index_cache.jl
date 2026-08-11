@@ -168,16 +168,7 @@ end
 
     @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
     idata = prob.f.initialization_data
-    reconstructed_p = idata.metadata.oop_reconstruct_u0_p.pgetter(
-        prob, idata.initializeprob
-    )
-    @test reconstructed_p isa MTKParameters
-
-    full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [x => 1.0], (0.0, 1.0))
-    idata = full_prob.f.initialization_data
-    @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(
-        full_prob, idata.initializeprob
-    )
+    @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(prob, idata.initializeprob)
 end
 
 function costfn(theta, ps)

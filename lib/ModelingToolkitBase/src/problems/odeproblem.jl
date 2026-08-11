@@ -111,7 +111,7 @@ function SciMLBase.ODEFunction{iip, spec}(
     )
 
     odefn = maybe_codegen_scimlfn(Val{E}, ODEFunction{iip, spec}, args; kwargs...)
-    if !E && spec === SciMLBase.AutoSpecialize
+    if !E && spec in (SciMLBase.AutoSpecialize, SciMLBase.AutoDespecialize)
         odefn = SciMLBase.widen_bounded_type_params(odefn)
     end
     return odefn

@@ -40,7 +40,7 @@ as an explicit keyword.
 function InitializationProblem{iip}(
         sys::AbstractSystem, t, op, opts::SciMLProblemOptions; kwargs...
     ) where {iip}
-    return InitializationProblem{iip, SciMLBase.AutoSpecialize}(sys, t, op, opts; kwargs...)
+    return InitializationProblem{iip, SciMLBase.AutoDespecialize}(sys, t, op, opts; kwargs...)
 end
 
 function InitializationProblem{iip, specialize}(

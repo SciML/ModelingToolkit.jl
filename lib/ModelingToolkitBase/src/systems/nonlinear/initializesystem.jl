@@ -718,7 +718,7 @@ end
 function promote_type_with_nothing(
         ::Type{T}, p::SciMLBase.DespecializedParameters
     ) where {T}
-    return promote_type_with_nothing(T, p.params)
+    return promote_type_with_nothing(T, SciMLBase.unwrap_parameters(p))
 end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
@@ -747,7 +747,9 @@ function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
     return p
 end
 function promote_with_nothing(::Type{T}, p::SciMLBase.DespecializedParameters) where {T}
-    return SciMLBase.DespecializedParameters(promote_with_nothing(T, p.params))
+    return SciMLBase.DespecializedParameters(
+        promote_with_nothing(T, SciMLBase.unwrap_parameters(p))
+    )
 end
 
 function promote_u0_p(u0, p, t0)

@@ -90,5 +90,5 @@ prob = ODEProblem(model, u0, tspan; jac, sparse)
 out = similar(prob.f.jac_prototype)
 
 sparse_analytical_jacobian["ODEProblem"] = @benchmarkable ODEProblem($model, $u0, $tspan; jac, sparse)
-sparse_analytical_jacobian["f_oop"] = @benchmarkable $(prob.f.jac)($(prob.u0), $(prob.p), $(first(tspan)))
-sparse_analytical_jacobian["f_iip"] = @benchmarkable $(prob.f.jac)($out, $(prob.u0), $(prob.p), $(first(tspan)))
+sparse_analytical_jacobian["f_oop"] = @benchmarkable $(prob.f.jac.f_oop)($(prob.u0), $(prob.p), $(first(tspan)))
+sparse_analytical_jacobian["f_iip"] = @benchmarkable $(prob.f.jac.f_iip)($out, $(prob.u0), $(prob.p), $(first(tspan)))

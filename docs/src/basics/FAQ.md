@@ -3,12 +3,12 @@
 ## Why are my parameters some obscure object?
 
 In ModelingToolkit.jl version 9, the parameter vector was replaced with a custom
-`MTKParameters` object. `AutoSpecialize` problems expose a
-[`SciMLBase.DespecializedParameters`](@ref) wrapper around that object so solver compilation
-can be reused across parameter layouts. The internals of `MTKParameters` are intentionally
-undocumented and subject to change without a breaking release. This representation enables
-us to efficiently store and generate code for parameters of multiple types. To obtain
-parameter values use
+`MTKParameters` object. ModelingToolkit problems use [`SciMLBase.AutoDespecialize`](@ref)
+by default. Supporting solvers expose a [`SciMLBase.DespecializedParameters`](@ref) wrapper
+around the `MTKParameters` object while solving so compiled code can be reused across
+parameter layouts. The internals of `MTKParameters` are intentionally undocumented and
+subject to change without a breaking release. This representation enables us to efficiently
+store and generate code for parameters of multiple types. To obtain parameter values use
 [SymbolicIndexingInterface.jl](https://github.com/SciML/SymbolicIndexingInterface.jl/) or
 [SciMLStructures.jl](https://github.com/SciML/SciMLStructures.jl/). For example:
 
@@ -30,7 +30,7 @@ and `SciMLBase.DespecializedParameters`:
     the given index.
   - `setindex!` with a `ParameterIndex` can be used to set the value of a parameter with the
     given index.
-  - The wrapped `MTKParameters` object is available as the `params` field of an
+  - `SciMLBase.unwrap_parameters` recovers the wrapped `MTKParameters` object from an
     `SciMLBase.DespecializedParameters` object.
   - `parameter_index(sys, sym)` will return a `ParameterIndex` object if `sys` has been
     `complete`d (through `mtkcompile`, `complete` or `@mtkcompile`).

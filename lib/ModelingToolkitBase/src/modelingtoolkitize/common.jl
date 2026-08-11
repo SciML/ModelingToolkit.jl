@@ -220,7 +220,7 @@ function define_params(p::MTKParameters, t, names = nothing)
 end
 
 define_params(p::SciMLBase.DespecializedParameters, t, names = nothing) =
-    define_params(p.params, t, names)
+    define_params(SciMLBase.unwrap_parameters(p), t, names)
 
 """
     $(TYPEDSIGNATURES)
@@ -236,7 +236,8 @@ function to_paramvec(p::MTKParameters)
     return reduce(vcat, collect(p); init = [])
 end
 
-to_paramvec(p::SciMLBase.DespecializedParameters) = to_paramvec(p.params)
+to_paramvec(p::SciMLBase.DespecializedParameters) =
+    to_paramvec(SciMLBase.unwrap_parameters(p))
 
 """
     $(TYPEDSIGNATURES)

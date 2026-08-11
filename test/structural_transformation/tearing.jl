@@ -181,9 +181,7 @@ newdaesys = mtkcompile(daesys)
     equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 )
 @test issetequal(unknowns(newdaesys), [x, z])
-prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-    newdaesys, [x => 1.0, z => -0.5π, p => 0.2], (0, 1.0)
-)
+prob = ODEProblem(newdaesys, [x => 1.0, z => -0.5π, p => 0.2], (0, 1.0))
 du = [0.0, 0.0];
 u = [1.0, -0.5π];
 pr = prob.p;

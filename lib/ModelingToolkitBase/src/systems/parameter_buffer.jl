@@ -1013,26 +1013,23 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ::AbstractSystem, ps::Union{MTKParameters, SciMLBase.DespecializedParameters},
+        ::AbstractSystem, ps::MTKParameters,
         args::Pair{<:Any, <:NestedGetIndex}...
     )
-    unwrapped_ps = _unwrap_mtk_parameters(ps)
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
-            copyto!(view(unwrapped_ps.discrete[j], Block(i)), val)
+            copyto!(view(ps.discrete[j], Block(i)), val)
         end
     end
     return ps
 end
 
 function SciMLBase.create_parameter_timeseries_collection(
-        sys::AbstractSystem,
-        ps::Union{MTKParameters, SciMLBase.DespecializedParameters}, tspan
+        sys::AbstractSystem, ps::MTKParameters, tspan
     )
     ic = get_index_cache(sys) # this exists because the parameters are `MTKParameters`
-    unwrapped_ps = _unwrap_mtk_parameters(ps)
-    isempty(unwrapped_ps.discrete) && return nothing
-    num_discretes = only(blocksize(unwrapped_ps.discrete[1]))
+    isempty(ps.discrete) && return nothing
+    num_discretes = only(blocksize(ps.discrete[1]))
     buffers = []
     partition_type = typeof(SciMLBase.get_saveable_values(sys, ps, 1))
     for i in 1:num_discretes
@@ -1044,6 +1041,16 @@ function SciMLBase.create_parameter_timeseries_collection(
     return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
 end
 
+function SciMLBase.create_parameter_timeseries_collection(
+        sys::AbstractSystem, ps::SciMLBase.DespecializedParameters, tspan
+    )
+    collection = SciMLBase.create_parameter_timeseries_collection(
+        sys, SciMLBase.unwrap_parameters(ps), tspan
+    )
+    collection === nothing && return nothing
+    return ParameterTimeseriesCollection(parent(collection), copy(ps))
+end
+
 @inline __get_blocks(tsidx::Int) = ()
 @inline function __get_blocks(tsidx::Int, buffer::BlockedArray, buffers...)
     return (buffer[Block(tsidx)], __get_blocks(tsidx, buffers...)...)
@@ -1053,11 +1060,18 @@ end
 end
 
 function SciMLBase.get_saveable_values(
-        sys::AbstractSystem,
-        ps::Union{MTKParameters, SciMLBase.DespecializedParameters}, timeseries_idx
+        sys::AbstractSystem, ps::MTKParameters, timeseries_idx
     )
-    ps = _unwrap_mtk_parameters(ps)
     return NestedGetIndex(__get_blocks(timeseries_idx, ps.discrete...))
+end
+
+
+function SciMLBase.get_saveable_values(
+        sys::AbstractSystem, ps::SciMLBase.DespecializedParameters, timeseries_idx
+    )
+    return SciMLBase.get_saveable_values(
+        sys, SciMLBase.unwrap_parameters(ps), timeseries_idx
+    )
 end
 
 function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)

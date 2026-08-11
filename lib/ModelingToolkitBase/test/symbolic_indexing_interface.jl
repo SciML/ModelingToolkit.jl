@@ -45,9 +45,7 @@ using Test
     @test default_values(odesys)[y] == 2.0
     @test isequal(default_values(odesys)[xy], x + y)
 
-    prob = ODEProblem{true, SciMLBase.FullSpecialize}(
-        odesys, [a => 1.0, b => 2.0], (0.0, 1.0)
-    )
+    prob = ODEProblem(odesys, [a => 1.0, b => 2.0], (0.0, 1.0))
     getter = getu(odesys, (x + 1, x + 2))
     @test getter(prob) isa Tuple
     @test_nowarn @inferred getter(prob)
@@ -136,7 +134,7 @@ end
     @test isempty(get_all_timeseries_indexes(ns, [σ + ρ, ρ + β]))
     @test pobs(ps) == [3.0, 5.0]
 
-    prob = NonlinearProblem{true, SciMLBase.FullSpecialize}(
+    prob = NonlinearProblem(
         ns, [x => 1.0, y => 2.0, z => 3.0, σ => 1.0, ρ => 2.0, β => 3.0]
     )
     getter = getu(ns, (x + 1, x + 2))
