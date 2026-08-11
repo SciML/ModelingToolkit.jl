@@ -3,8 +3,10 @@
 ## Why are my parameters some obscure object?
 
 In ModelingToolkit.jl version 9, the parameter vector was replaced with a custom
-`MTKParameters` object. ModelingToolkit problems use [`SciMLBase.AutoDespecialize`](@ref)
-by default. Supporting solvers expose a [`SciMLBase.DespecializedParameters`](@ref) wrapper
+`MTKParameters` object. ModelingToolkit problems use
+[`SciMLBase.AutoDespecialize`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
+by default. Supporting solvers expose a
+[`SciMLBase.DespecializedParameters`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/) wrapper
 around the `MTKParameters` object while solving so compiled code can be reused across
 parameter layouts. The internals of `MTKParameters` are intentionally undocumented and
 subject to change without a breaking release. This representation enables us to efficiently

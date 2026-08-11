@@ -413,6 +413,7 @@ end
         [D(a) ~ b, 0 ~ b^3 + b + a - 2, 0 ~ c^3 + c - b, 0 ~ d - c * b], t
     )
     prob = ODEProblem(sys, [a => 0.5], (0.0, 1.0))
+    @test SciMLBase.specialization(prob.f) === SciMLBase.AutoDespecialize
     @test prob.f.initialization_data.initializeprob isa SCCNonlinearProblem
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
