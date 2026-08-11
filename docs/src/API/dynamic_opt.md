@@ -29,7 +29,6 @@ JuMPCollocation
 InfiniteOptCollocation
 CasADiCollocation
 PyomoCollocation
-CommonSolve.solve(::AbstractDynamicOptProblem)
 DynamicOptSolution
 ```
 
