@@ -700,7 +700,7 @@ function _remake_initialization_data_impl(
     )
     kws = maybe_build_initialization_problem(
         sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts;
-        specialize = SciMLBase.specialization(typeof(odefn))
+        specialize = initialization_specialization(SciMLBase.specialization(typeof(odefn)))
     )
 
     odefn = remake(odefn; kws...)

@@ -23,6 +23,9 @@ using Test
         sys, [], (0.0, 1.0)
     )
     full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [], (0.0, 1.0))
+    function_wrapper_prob = ODEProblem{true, SciMLBase.FunctionWrapperSpecialize}(
+        sys, [], (0.0, 1.0)
+    )
     expression_prob = eval(ODEProblem(sys, [], (0.0, 1.0); expression = Val{true}))
 
     @test SciMLBase.specialization(despecialized_prob.f) === SciMLBase.AutoDespecialize
@@ -39,8 +42,14 @@ using Test
     ) === SciMLBase.AutoDespecialize
     @test SciMLBase.specialization(auto_prob.f.initialization_data.initializeprob.f) ===
         SciMLBase.AutoSpecialize
+    @test SciMLBase.specialization(
+        respecialized_prob.f.initialization_data.initializeprob.f
+    ) === SciMLBase.AutoSpecialize
     @test SciMLBase.specialization(full_prob.f.initialization_data.initializeprob.f) ===
-        SciMLBase.FullSpecialize
+        SciMLBase.AutoSpecialize
+    @test SciMLBase.specialization(
+        function_wrapper_prob.f.initialization_data.initializeprob.f
+    ) === SciMLBase.AutoSpecialize
     @test expression_prob.p isa MTKParameters
 
     concrete_prob = DiffEqBase.get_concrete_problem(

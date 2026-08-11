@@ -2080,6 +2080,10 @@ function maybe_build_initialization_problem(
     )
 end
 
+initialization_specialization(::Type{SciMLBase.AutoDespecialize}) =
+    SciMLBase.AutoDespecialize
+initialization_specialization(::Type) = SciMLBase.AutoSpecialize
+
 """
     $(TYPEDSIGNATURES)
 
@@ -2216,7 +2220,9 @@ function __process_SciMLProblem(
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
             op, t, guesses, opts;
-            specialize = SciMLBase.specialization(constructor), kwargs...
+            specialize = initialization_specialization(
+                SciMLBase.specialization(constructor)
+            ), kwargs...
         )
 
         kwargs = merge(kwargs, kws)
