@@ -36,15 +36,7 @@ Do not use `quantities` such as  `1u"s"`, `1/u"s"` or `u"1/s"` as these will res
 
 Unit validation of equations happens automatically when creating a system. However, for debugging purposes, one may wish to validate the equations directly using `validate`.
 
-```@docs
-ModelingToolkit.validate
-```
-
 Inside, `validate` uses `get_unit`, which may be directly applied to any term. Note that `validate` will not throw an error in the event of incompatible units, but `get_unit` will. If you would rather receive a warning instead of an error, use `safe_get_unit` which will yield `nothing` in the event of an error. Unit agreement is tested with `ModelingToolkit.equivalent(u1,u2)`.
-
-```@docs
-ModelingToolkit.get_unit
-```
 
 Example usage below. Note that `ModelingToolkit` does not force unit conversions to preferred units in the event of nonstandard combinations -- it merely checks that the equations are consistent.
 
