@@ -250,30 +250,3 @@ Sample
 Hold
 SampleTime
 ```
-
-ModelingToolkit uses the clock definition in SciMLBase
-
-```@docs
-SciMLBase.TimeDomain
-SciMLBase.Clock
-SciMLBase.SolverStepClock
-SciMLBase.Continuous
-```
-
-### State machines
-
-While ModelingToolkit has the capability to represent state machines, it lacks the ability
-to compile and simulate them.
-
-!!! warn
-
-    This functionality is considered experimental API
-
-```@docs
-initial_state
-transition
-activeState
-entry
-ticksInState
-timeInState
-```
