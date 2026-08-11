@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Acausal Component-Based Modeling · ModelingToolkit.jl</title><meta name="title" content="Acausal Component-Based Modeling · ModelingToolkit.jl"/><meta property="og:title" content="Acausal Component-Based Modeling · ModelingToolkit.jl"/><meta property="twitter:title" content="Acausal Component-Based Modeling · ModelingToolkit.jl"/><meta name="description" content="Documentation for ModelingToolkit.jl."/><meta property="og:description" content="Documentation for ModelingToolkit.jl."/><meta property="twitter:description" content="Documentation for ModelingToolkit.jl."/><meta property="og:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/acausal_components/"/><meta property="twitter:url" content="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/acausal_components/"/><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/acausal_components/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li class="is-active"><a class="tocitem" href>Acausal Component-Based Modeling</a><ul class="internal"><li><a class="tocitem" href="#Copy-Paste-Example"><span>Copy-Paste Example</span></a></li><li><a class="tocitem" href="#Explanation"><span>Explanation</span></a></li><li><a class="tocitem" href="#Solving-this-System"><span>Solving this System</span></a></li></ul></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../initialization/">Initialization of ODESystems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../programmatically_generating/">Programmatically Generating and Scripting ODESystems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../discrete_system/">(Experimental) Modeling Discrete Systems</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li><li><a class="tocitem" href="../bifurcation_diagram_computation/">Bifurcation Diagrams</a></li><li><a class="tocitem" href="../SampledData/">Clocks and Sampled-Data Systems</a></li><li><a class="tocitem" href="../domain_connections/">Domains</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/parsing/">Parsing Expressions into Solvable Systems</a></li><li><a class="tocitem" href="../../examples/remake/">Optimizing through an ODE solve and re-creating MTK Problems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic Metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/InputOutput/">Input output</a></li><li><a class="tocitem" href="../../basics/MTKLanguage/">ModelingToolkit Language: Modeling with <code>@mtkmodel</code>, <code>@connectors</code> and <code>@mtkbuild</code></a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/Precompilation/">Working with Precompilation and Binary Building</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Acausal Component-Based Modeling</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Acausal Component-Based Modeling</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/acausal_components.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="acausal"><a class="docs-heading-anchor" href="#acausal">Acausal Component-Based Modeling</a><a id="acausal-1"></a><a class="docs-heading-anchor-permalink" href="#acausal" title="Permalink"></a></h1><p>In this tutorial, we will build a hierarchical acausal component-based model of the RC circuit. The RC circuit is a simple example where we connect a resistor and a capacitor. <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchhoff&#39;s laws</a> are then applied to state equalities between currents and voltages. This specifies a differential-algebraic equation (DAE) system, where the algebraic equations are given by the constraints and equalities between different component variables. We then simplify this to an ODE by eliminating the equalities before solving. Let&#39;s see this in action.</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>This tutorial teaches how to build the entire RC circuit from scratch. However, to simulate electric components with more ease, check out the <a href="https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/">ModelingToolkitStandardLibrary.jl</a> which includes a <a href="https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/tutorials/rc_circuit/">tutorial for simulating RC circuits with pre-built components</a></p></div></div><h2 id="Copy-Paste-Example"><a class="docs-heading-anchor" href="#Copy-Paste-Example">Copy-Paste Example</a><a id="Copy-Paste-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Copy-Paste-Example" title="Permalink"></a></h2><pre><code class="language-julia hljs">using ModelingToolkit, Plots, DifferentialEquations
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@connector Pin begin
+    v(t)
+    i(t), [connect = Flow]
+end
+
+@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @equations begin
+        g.v ~ 0
+    end
+end
+
+@mtkmodel OnePort begin
+    @components begin
+        p = Pin()
+        n = Pin()
+    end
+    @variables begin
+        v(t)
+        i(t)
+    end
+    @equations begin
+        v ~ p.v - n.v
+        0 ~ p.i + n.i
+        i ~ p.i
+    end
+end
+
+@mtkmodel Resistor begin
+    @extend OnePort()
+    @parameters begin
+        R = 1.0 # Sets the default resistance
+    end
+    @equations begin
+        v ~ i * R
+    end
+end
+
+@mtkmodel Capacitor begin
+    @extend OnePort()
+    @parameters begin
+        C = 1.0
+    end
+    @equations begin
+        D(v) ~ i / C
+    end
+end
+
+@mtkmodel ConstantVoltage begin
+    @extend OnePort()
+    @parameters begin
+        V = 1.0
+    end
+    @equations begin
+        V ~ v
+    end
+end
+
+@mtkmodel RCModel begin
+    @components begin
+        resistor = Resistor(R = 1.0)
+        capacitor = Capacitor(C = 1.0)
+        source = ConstantVoltage(V = 1.0)
+        ground = Ground()
+    end
+    @equations begin
+        connect(source.p, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)
+    end
+end
+
+@mtkbuild rc_model = RCModel(resistor.R = 2.0)
+u0 = [
+    rc_model.capacitor.v =&gt; 0.0
+]
+prob = ODEProblem(rc_model, u0, (0, 10.0))
+sol = solve(prob)
+plot(sol)</code></pre><img src="2fdd0ecc.svg" alt="Example block output"/><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><p>We wish to build the following RC circuit by building individual components and connecting the pins:</p><p><img src="https://user-images.githubusercontent.com/1814174/172466302-907d39f3-6d2c-4d16-84a8-6de32bca757e.png" alt/></p><h3 id="Building-the-Component-Library"><a class="docs-heading-anchor" href="#Building-the-Component-Library">Building the Component Library</a><a id="Building-the-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library" title="Permalink"></a></h3><p>For each of our components, we use ModelingToolkit <code>Model</code> that emits an <code>ODESystem</code>. At the top, we start with defining the fundamental qualities of an electric circuit component. At every input and output pin, a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component (connector) to simply be the values there. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchhoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. <code>[connect = Flow]</code> informs MTK that currents ought to sum to zero, and by default, variables are equal in a connection.</p><pre><code class="language-julia hljs">@connector Pin begin
+    v(t)
+    i(t), [connect = Flow]
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__Pin__), Dict{Symbol, Any}}(Main.__Pin__, Dict{Symbol, Any}(:variables =&gt; Dict{Symbol, Dict{Symbol, Any}}(:v =&gt; Dict(:type =&gt; Real), :i =&gt; Dict(:type =&gt; Real, :connection_type =&gt; :Flow)), :kwargs =&gt; Dict{Symbol, Dict}(:v =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real), :i =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real)), :independent_variable =&gt; t), true)</code></pre><p>Note that this is an incompletely specified ODESystem: it cannot be simulated on its own because the equations for <code>v(t)</code> and <code>i(t)</code> are unknown. Instead, this just gives a common syntax for receiving this pair with some default values. One can then construct a <code>Pin</code> using the <code>@named</code> helper macro:</p><pre><code class="language-julia hljs">@named mypin1 = Pin()</code></pre><p class="math-container">\[ \begin{align}
+\end{align}
+ \]</p><p>Next, we build our ground node. A ground node is just a pin that is connected to a constant voltage reservoir, typically taken to be <code>V = 0</code>. Thus to define this component, we generate an <code>ODESystem</code> with a <code>Pin</code> subcomponent and specify that the voltage in such a <code>Pin</code> is equal to zero. This gives:</p><pre><code class="language-julia hljs">@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @equations begin
+        g.v ~ 0
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__Ground__), Dict{Symbol, Any}}(Main.__Ground__, Dict{Symbol, Any}(:components =&gt; Any[Union{Expr, Symbol}[:g, :Pin]], :independent_variable =&gt; t, :equations =&gt; Any[&quot;g.v ~ 0&quot;]), false)</code></pre><p>Next we build a <code>OnePort</code>: an abstraction for all simple electric component with two pins. The voltage difference between the positive pin and the negative pin is the voltage of the component, the current between two pins must sum to zero, and the current of the component equals to the current of the positive pin.</p><pre><code class="language-julia hljs">@mtkmodel OnePort begin
+    @components begin
+        p = Pin()
+        n = Pin()
+    end
+    @variables begin
+        v(t)
+        i(t)
+    end
+    @equations begin
+        v ~ p.v - n.v
+        0 ~ p.i + n.i
+        i ~ p.i
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__OnePort__), Dict{Symbol, Any}}(Main.__OnePort__, Dict{Symbol, Any}(:components =&gt; Any[Union{Expr, Symbol}[:p, :Pin], Union{Expr, Symbol}[:n, :Pin]], :variables =&gt; Dict{Symbol, Dict{Symbol, Any}}(:v =&gt; Dict(:type =&gt; Real), :i =&gt; Dict(:type =&gt; Real)), :kwargs =&gt; Dict{Symbol, Dict}(:v =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real), :i =&gt; Dict{Symbol, Union{Nothing, DataType}}(:value =&gt; nothing, :type =&gt; Real)), :independent_variable =&gt; t, :equations =&gt; Any[&quot;v ~ p.v - n.v&quot;, &quot;v ~ p.v - n.v&quot;, &quot;0 ~ p.i + n.i&quot;, &quot;v ~ p.v - n.v&quot;, &quot;0 ~ p.i + n.i&quot;, &quot;i ~ p.i&quot;]), false)</code></pre><p>Next we build a resistor. A resistor is an object that has two <code>Pin</code>s, the positive and the negative pins, and follows Ohm&#39;s law: <code>v = i*r</code>. The voltage of the resistor is given as the voltage difference across the two pins, while by conservation of charge we know that the current in must equal the current out, which means (no matter the direction of the current flow) the sum of the currents must be zero. This leads to our resistor equations:</p><pre><code class="language-julia hljs">@mtkmodel Resistor begin
+    @extend OnePort()
+    @parameters begin
+        R = 1.0
+    end
+    @equations begin
+        v ~ i * R
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__Resistor__), Dict{Symbol, Any}}(Main.__Resistor__, Dict{Symbol, Any}(:equations =&gt; Any[&quot;v ~ i * R&quot;], :kwargs =&gt; Dict{Symbol, Dict}(:R =&gt; Dict{Symbol, Any}(:value =&gt; 1.0, :type =&gt; Real)), :independent_variable =&gt; t, :extend =&gt; Any[[:p, :n, :v, :i], Symbol(&quot;#mtkmodel__anonymous__OnePort&quot;), :OnePort], :parameters =&gt; Dict{Symbol, Dict{Symbol, Any}}(:R =&gt; Dict(:default =&gt; 1.0, :type =&gt; Real))), false)</code></pre><p>Notice that we have created this system with a default parameter <code>R</code> for the resistor&#39;s resistance. By doing so, if the resistance of this resistor is not overridden by a higher level default or overridden at <code>ODEProblem</code> construction time, this will be the value of the resistance. Also, note the use of <code>@extend</code>. For the <code>Resistor</code>, we want to simply inherit <code>OnePort</code>&#39;s equations and unknowns and extend them with a new equation. Note that <code>v</code>, <code>i</code> are not namespaced as <code>oneport.v</code> or <code>oneport.i</code>.</p><p>Using our knowledge of circuits, we similarly construct the <code>Capacitor</code>:</p><pre><code class="language-julia hljs">@mtkmodel Capacitor begin
+    @extend OnePort()
+    @parameters begin
+        C = 1.0
+    end
+    @equations begin
+        D(v) ~ i / C
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__Capacitor__), Dict{Symbol, Any}}(Main.__Capacitor__, Dict{Symbol, Any}(:equations =&gt; Any[&quot;D(v) ~ i / C&quot;], :kwargs =&gt; Dict{Symbol, Dict}(:C =&gt; Dict{Symbol, Any}(:value =&gt; 1.0, :type =&gt; Real)), :independent_variable =&gt; t, :extend =&gt; Any[[:p, :n, :v, :i], Symbol(&quot;#mtkmodel__anonymous__OnePort&quot;), :OnePort], :parameters =&gt; Dict{Symbol, Dict{Symbol, Any}}(:C =&gt; Dict(:default =&gt; 1.0, :type =&gt; Real))), false)</code></pre><p>Now we want to build a constant voltage electric source term. We can think of this as similarly being a two pin object, where the object itself is kept at a constant voltage, essentially generating the electric current. We would then model this as:</p><pre><code class="language-julia hljs">@mtkmodel ConstantVoltage begin
+    @extend OnePort()
+    @parameters begin
+        V = 1.0
+    end
+    @equations begin
+        V ~ v
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__ConstantVoltage__), Dict{Symbol, Any}}(Main.__ConstantVoltage__, Dict{Symbol, Any}(:equations =&gt; Any[&quot;V ~ v&quot;], :kwargs =&gt; Dict{Symbol, Dict}(:V =&gt; Dict{Symbol, Any}(:value =&gt; 1.0, :type =&gt; Real)), :independent_variable =&gt; t, :extend =&gt; Any[[:p, :n, :v, :i], Symbol(&quot;#mtkmodel__anonymous__OnePort&quot;), :OnePort], :parameters =&gt; Dict{Symbol, Dict{Symbol, Any}}(:V =&gt; Dict(:default =&gt; 1.0, :type =&gt; Real))), false)</code></pre><p>Note that as we are extending only <code>v</code> from <code>OnePort</code>, it is explicitly specified as a tuple.</p><h3 id="Connecting-and-Simulating-Our-Electric-Circuit"><a class="docs-heading-anchor" href="#Connecting-and-Simulating-Our-Electric-Circuit">Connecting and Simulating Our Electric Circuit</a><a id="Connecting-and-Simulating-Our-Electric-Circuit-1"></a><a class="docs-heading-anchor-permalink" href="#Connecting-and-Simulating-Our-Electric-Circuit" title="Permalink"></a></h3><p>Now we are ready to simulate our circuit. Let&#39;s build our four components: a <code>resistor</code>, <code>capacitor</code>, <code>source</code>, and <code>ground</code> term. For simplicity, we will make all of our parameter values 1.0. As <code>resistor</code>, <code>capacitor</code>, <code>source</code> lists <code>R</code>, <code>C</code>, <code>V</code> in their argument list, they are promoted as arguments of RCModel as <code>resistor.R</code>, <code>capacitor.C</code>, <code>source.V</code></p><pre><code class="language-julia hljs">@mtkmodel RCModel begin
+    @components begin
+        resistor = Resistor(R = 1.0)
+        capacitor = Capacitor(C = 1.0)
+        source = ConstantVoltage(V = 1.0)
+        ground = Ground()
+    end
+    @equations begin
+        connect(source.p, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)
+    end
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ModelingToolkit.Model{typeof(Main.__RCModel__), Dict{Symbol, Any}}(Main.__RCModel__, Dict{Symbol, Any}(:components =&gt; Any[Union{Expr, Symbol}[:resistor, :Resistor], Union{Expr, Symbol}[:capacitor, :Capacitor], Union{Expr, Symbol}[:source, :ConstantVoltage], Union{Expr, Symbol}[:ground, :Ground]], :independent_variable =&gt; t, :equations =&gt; Any[&quot;connect(source.p, resistor.p)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(capacitor.n, source.n)&quot;, &quot;connect(source.p, resistor.p)&quot;, &quot;connect(resistor.n, capacitor.p)&quot;, &quot;connect(capacitor.n, source.n)&quot;, &quot;connect(capacitor.n, ground.g)&quot;]), false)</code></pre><p>We can create a RCModel component with <code>@named</code>. And using <code>subcomponent_name.parameter</code> we can set the parameters or defaults values of variables of subcomponents.</p><pre><code class="language-julia hljs">@mtkbuild rc_model = RCModel(resistor.R = 2.0)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} &amp;= \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
+\end{align}
+ \]</p><p>This model is acausal because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each unknown of the system. The equations are:</p><pre><code class="language-julia hljs">equations(expand_connections(rc_model))</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} capacitor_{+}v\left( t \right)}{\mathrm{d}t} &amp;= \frac{capacitor_{+}i\left( t \right)}{capacitor_{+}C}
+\end{align}
+ \]</p><p>the unknowns are:</p><pre><code class="language-julia hljs">unknowns(rc_model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+ capacitor₊v(t)</code></pre><p>and the parameters are:</p><pre><code class="language-julia hljs">parameters(rc_model)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{SymbolicUtils.BasicSymbolic{Real}}:
+ source₊V
+ resistor₊R
+ capacitor₊C</code></pre><p>The observed equations are:</p><pre><code class="language-julia hljs">observed(rc_model)</code></pre><p class="math-container">\[ \begin{align}
+source_{+}v\left( t \right) &amp;= source_{+}V \\
+capacitor_{+}p_{+}v\left( t \right) &amp;= capacitor_{+}v\left( t \right) \\
+capacitor_{+}n_{+}v\left( t \right) &amp;= -0 \\
+ground_{+}g_{+}v\left( t \right) &amp;= 0 \\
+resistor_{+}v\left( t \right) &amp;=  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
+resistor_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}p_{+}v\left( t \right) \\
+source_{+}p_{+}v\left( t \right) &amp;= source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
+source_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}n_{+}v\left( t \right) \\
+resistor_{+}i\left( t \right) &amp;= \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
+resistor_{+}p_{+}v\left( t \right) &amp;= source_{+}p_{+}v\left( t \right) \\
+resistor_{+}p_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+capacitor_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+source_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) \\
+resistor_{+}n_{+}i\left( t \right) &amp;=  - resistor_{+}p_{+}i\left( t \right) \\
+capacitor_{+}p_{+}i\left( t \right) &amp;= capacitor_{+}i\left( t \right) \\
+ground_{+}g_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
+source_{+}p_{+}i\left( t \right) &amp;= source_{+}i\left( t \right) \\
+capacitor_{+}n_{+}i\left( t \right) &amp;=  - capacitor_{+}p_{+}i\left( t \right) \\
+source_{+}n_{+}i\left( t \right) &amp;=  - source_{+}p_{+}i\left( t \right)
+\end{align}
+ \]</p><h2 id="Solving-this-System"><a class="docs-heading-anchor" href="#Solving-this-System">Solving this System</a><a id="Solving-this-System-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-this-System" title="Permalink"></a></h2><p>We are left with a system of only two equations with two unknown variables. One of the equations is a differential equation, while the other is an algebraic equation. We can then give the values for the initial conditions of our unknowns, and solve the system by converting it to an ODEProblem in mass matrix form and solving it with an <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)">ODEProblem mass matrix DAE solver</a>. This is done as follows:</p><pre><code class="language-julia hljs">u0 = [rc_model.capacitor.v =&gt; 0.0
+      rc_model.capacitor.p.i =&gt; 0.0]
+
+prob = ODEProblem(rc_model, u0, (0, 10.0))
+sol = solve(prob)
+plot(sol)</code></pre><img src="60a05e47.svg" alt="Example block output"/><p>However, what if we wanted to plot the timeseries of a different variable? Do not worry, that information was not thrown away! Instead, transformations like <code>structural_simplify</code> simply change unknown variables into observables which are defined by <code>observed</code> equations.</p><pre><code class="language-julia hljs">observed(rc_model)</code></pre><p class="math-container">\[ \begin{align}
+source_{+}v\left( t \right) &amp;= source_{+}V \\
+capacitor_{+}p_{+}v\left( t \right) &amp;= capacitor_{+}v\left( t \right) \\
+capacitor_{+}n_{+}v\left( t \right) &amp;= -0 \\
+ground_{+}g_{+}v\left( t \right) &amp;= 0 \\
+resistor_{+}v\left( t \right) &amp;=  - capacitor_{+}v\left( t \right) + source_{+}v\left( t \right) \\
+resistor_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}p_{+}v\left( t \right) \\
+source_{+}p_{+}v\left( t \right) &amp;= source_{+}v\left( t \right) + capacitor_{+}n_{+}v\left( t \right) \\
+source_{+}n_{+}v\left( t \right) &amp;= capacitor_{+}n_{+}v\left( t \right) \\
+resistor_{+}i\left( t \right) &amp;= \frac{resistor_{+}v\left( t \right)}{resistor_{+}R} \\
+resistor_{+}p_{+}v\left( t \right) &amp;= source_{+}p_{+}v\left( t \right) \\
+resistor_{+}p_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+capacitor_{+}i\left( t \right) &amp;= resistor_{+}i\left( t \right) \\
+source_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) \\
+resistor_{+}n_{+}i\left( t \right) &amp;=  - resistor_{+}p_{+}i\left( t \right) \\
+capacitor_{+}p_{+}i\left( t \right) &amp;= capacitor_{+}i\left( t \right) \\
+ground_{+}g_{+}i\left( t \right) &amp;=  - resistor_{+}i\left( t \right) + capacitor_{+}i\left( t \right) \\
+source_{+}p_{+}i\left( t \right) &amp;= source_{+}i\left( t \right) \\
+capacitor_{+}n_{+}i\left( t \right) &amp;=  - capacitor_{+}p_{+}i\left( t \right) \\
+source_{+}n_{+}i\left( t \right) &amp;=  - source_{+}p_{+}i\left( t \right)
+\end{align}
+ \]</p><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few unknowns as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[rc_model.resistor.v]</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">1-element Vector{Float64}:
+ 1.0</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, idxs = [rc_model.resistor.v])</code></pre><img src="b0c19720.svg" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Getting Started with ModelingToolkit.jl</a><a class="docs-footer-nextpage" href="../nonlinear/">Modeling Nonlinear Systems »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Tuesday 24 September 2024 11:27">Tuesday 24 September 2024</span>. Using Julia version 1.10.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
