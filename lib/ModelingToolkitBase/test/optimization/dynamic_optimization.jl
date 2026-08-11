@@ -1058,3 +1058,111 @@ end
         @test silent_flag(iprob.wrapped_model.model) == silent
     end
 end
+
+@testset "Observed variable bounds" begin
+    # Test that bounds on observed variables are enforced via auxiliary variables
+    @variables x(t) = 1.0
+    @variables obs_val(t) [bounds = (0.0, 2.0)]  # observed variable with bounds
+    @variables u(t) [input = true, bounds = (-10.0, 10.0)]
+
+    te = 1.0
+    costs = [EvalAt(te)(x)^2]
+
+    eqs = [
+        D(x) ~ -x + u,
+        obs_val ~ 2x,  # observed: obs_val = 2x, so x should stay in [0, 1]
+    ]
+
+    @named sys = System(eqs, t; costs)
+    sys = mtkcompile(sys; inputs = [u])
+
+    u0map = [x => 1.0]
+    pmap = [u => 0.0]
+    tspan = (0.0, te)
+
+    # InfiniteOpt should lift the observed bounds into auxiliary variables
+    iprob = InfiniteOptDynamicOptProblem(sys, [u0map; pmap], tspan; dt = 0.05)
+    isol = solve(iprob, InfiniteOptCollocation(Ipopt.Optimizer))
+
+    # obs_val = 2x should respect bounds [0, 2], so x ∈ [0, 1]
+    obs_values = 2 .* isol.sol[x]
+    @test all(v -> v ≥ -0.01, obs_values)  # allow small numerical tolerance
+    @test all(v -> v ≤ 2.01, obs_values)
+
+    # Test with user-provided bounds dict for observed variables
+    @variables x2(t) = 1.0
+    @variables obs2(t)
+    @variables u2(t) [input = true, bounds = (-10.0, 10.0)]
+
+    eqs2 = [
+        D(x2) ~ -x2 + u2,
+        obs2 ~ 3x2,
+    ]
+
+    costs2 = [EvalAt(te)(x2)^2]
+    @named sys2 = System(eqs2, t; costs = costs2)
+    sys2 = mtkcompile(sys2; inputs = [u2])
+
+    u0map2 = [x2 => 1.0]
+    pmap2 = [u2 => 0.0]
+
+    # Provide bounds for observed variable via user dict
+    user_bounds = Dict(obs2 => (0.0, 3.0))
+    iprob2 = InfiniteOptDynamicOptProblem(
+        sys2, [u0map2; pmap2], tspan; dt = 0.05,
+        bounds = user_bounds
+    )
+    isol2 = solve(iprob2, InfiniteOptCollocation(Ipopt.Optimizer))
+
+    obs2_values = 3 .* isol2.sol[x2]
+    @test all(v -> v ≥ -0.01, obs2_values)
+    @test all(v -> v ≤ 3.01, obs2_values)
+
+    # The cases above stay inside their bounds on their own, so they cannot tell an
+    # enforced bound from a silently dropped one. Here the bound binds: maximizing
+    # x(1) subject to ẋ = u, u ∈ [-1, 1], x(0) = 0 gives x(1) = 1 unconstrained, but
+    # obs = 2x ≤ 1 forces x(1) = 0.5.
+    @variables xb(t) = 0.0
+    @variables obb(t) [bounds = (0.0, 1.0)]
+    @variables ub(t) [input = true, bounds = (-1.0, 1.0)]
+    @named bsys = System([D(xb) ~ ub, obb ~ 2xb], t; costs = [-EvalAt(1.0)(xb)])
+    bsys = mtkcompile(bsys; inputs = [ub])
+    bop = [[xb => 0.0]; [ub => 0.0]]
+    btspan = (0.0, 1.0)
+
+    # Reference without the bound, to confirm it is what moves the answer.
+    @variables xf(t) = 0.0
+    @variables obf(t)
+    @variables uf(t) [input = true, bounds = (-1.0, 1.0)]
+    @named fsys = System([D(xf) ~ uf, obf ~ 2xf], t; costs = [-EvalAt(1.0)(xf)])
+    fsys = mtkcompile(fsys; inputs = [uf])
+    fprob = InfiniteOptDynamicOptProblem(
+        fsys, [[xf => 0.0]; [uf => 0.0]], btspan; dt = 0.01
+    )
+    fsol = solve(fprob, InfiniteOptCollocation(Ipopt.Optimizer))
+    @test ≈(fsol.sol[xf][end], 1.0, rtol = 1.0e-4)
+
+    for meth in (:auto, :lift, :constraint)
+        prob = InfiniteOptDynamicOptProblem(
+            bsys, bop, btspan; dt = 0.01, observed_bounds_method = meth
+        )
+        sol = solve(prob, InfiniteOptCollocation(Ipopt.Optimizer))
+        @test ≈(sol.sol[xb][end], 0.5, rtol = 1.0e-4)
+    end
+
+    if ENABLE_CASADI
+        # `:auto` falls back to `:constraint`, which every backend can do. Before this
+        # was wired up, observed bounds were silently dropped outside InfiniteOpt.
+        cprob = CasADiDynamicOptProblem(bsys, bop, btspan; dt = 0.01)
+        csol = solve(cprob, CasADiCollocation("ipopt"))
+        @test ≈(csol.sol[xb][end], 0.5, rtol = 1.0e-4)
+
+        @test_throws ArgumentError CasADiDynamicOptProblem(
+            bsys, bop, btspan; dt = 0.01, observed_bounds_method = :lift
+        )
+    end
+
+    @test_throws ArgumentError InfiniteOptDynamicOptProblem(
+        bsys, bop, btspan; dt = 0.01, observed_bounds_method = :bogus
+    )
+end

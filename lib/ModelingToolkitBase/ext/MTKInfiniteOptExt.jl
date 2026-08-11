@@ -163,8 +163,8 @@ function MTK.add_constraint!(m::InfiniteOptModel, expr::Union{Equation, Inequali
 end
 MTK.set_objective!(m::InfiniteOptModel, expr) = @objective(m.model, Min, SymbolicUtils.unwrap_const(expr))
 
-function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     for (i, (lo, hi)) in state_bounds
         set_lower_bound(m.U[i], lo)
         set_upper_bound(m.U[i], hi)
@@ -181,6 +181,21 @@ function MTK.set_variable_bounds!(m::InfiniteOptModel, sys, pmap, tf, tunable_pa
         set_lower_bound(m.tₛ, tf_bounds[1])
         set_upper_bound(m.tₛ, tf_bounds[2])
     end
+end
+
+MTK.supports_bounds_lifting(::InfiniteOptModel) = true
+
+# Lift a bounded observed expression into an auxiliary bounded decision variable. Ipopt
+# handles variable bounds far more efficiently than the equivalent nonlinear inequalities.
+function MTK.lift_observed_bound!(m::InfiniteOptModel, expr, lo, hi, scale, start)
+    aux = @variable(m.model, variable_type = Infinite(m.model[:t]))
+    isfinite(lo) && set_lower_bound(aux, lo)
+    isfinite(hi) && set_upper_bound(aux, hi)
+    set_start_value_function(aux, Returns(start))
+    return @constraint(
+        m.model,
+        (SymbolicUtils.unwrap_const(Symbolics.value(expr)) - aux) / scale == 0
+    )
 end
 
 function MTK.JuMPDynamicOptProblem(
@@ -236,7 +251,7 @@ end
 
 function MTK.add_initial_constraints!(m::InfiniteOptModel, u0, u0_idxs, ts)
     for i in u0_idxs
-        fix(m.U[i](0), u0[i], force = true)
+        fix(m.U[i](ts), u0[i], force = true)
     end
     return
 end

@@ -168,8 +168,8 @@ end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
 
-function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tf, tunable_params, user_bounds = Dict())
-    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tf, tunable_params, user_bounds)
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
     for (i, (lo, hi)) in state_bounds
         subject_to!(m.model, m.U.u[i, :] >= lo)
         subject_to!(m.model, m.U.u[i, :] <= hi)
