@@ -264,12 +264,3 @@ isolated, input_vars, output_vars =
     isolate_subsystem(closed_loop, :plant_input, :plant_output)
 isequal(only(input_vars), plant.input.u), isequal(only(output_vars), plant.output.u)
 ```
-
-## Additional Equation Classification
-
-```@docs
-alg_equations
-diff_equations
-has_alg_equations
-has_diff_equations
-```
