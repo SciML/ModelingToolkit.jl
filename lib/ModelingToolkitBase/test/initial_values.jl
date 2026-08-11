@@ -494,4 +494,11 @@ if !@isdefined(ModelingToolkit)
         # and this type mismatch causes an error.
         @test_nowarn solve(prob, Tsit5())
     end
+
+    @testset "`CopyParamsByTemplate` with single `IndepVarTemplate`" begin
+        @mtkcomplete sys = System(Equation[], t)
+        fn = ModelingToolkitBase.CopyParamsByTemplate(sys, Symbolics.SymbolicT[t])
+        pbuf = ProblemState(; u = Float64[], p = nothing, t = 1.0)
+        @test fn(pbuf) == [1.0]
+    end
 end
