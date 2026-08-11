@@ -133,6 +133,20 @@ using Test
     @test sol[x][end] ≈ exp(-4)
     @test sol[z][end] ≈ 4exp(-4)
 
+    @variables event_x(t) = 0.0
+    event_sys = complete(
+        System(
+            [D(event_x) ~ 1], t; continuous_events = [event_x ~ 1],
+            name = :despecialized_nonsplit_event
+        ); split = false
+    )
+    event_prob = ODEProblem(event_sys, [], (0.0, 2.0))
+    concrete_event_prob = DiffEqBase.get_concrete_problem(event_prob, true; alg = Tsit5())
+    @test concrete_event_prob.p isa SciMLBase.DespecializedParameters
+    event_sol = solve(event_prob, Tsit5())
+    @test event_sol.prob.p isa SciMLBase.DespecializedParameters
+    @test minimum(t -> abs(t - 1), event_sol.t) < 1.0e-10
+
     @parameters drift = 0.0 rate = 1.0
     @variables population(t) = 10.0
     jump = SymbolicMassActionJump(rate, [population => 1], [population => -1])

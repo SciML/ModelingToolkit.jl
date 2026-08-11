@@ -1380,7 +1380,11 @@ function construct_initializeprobpmap(
             ), p_constructor = p_constructor
 
             function initprobpmap_nosplit(prob, initsol)
-                return p_constructor(getter(initsol))
+                p = p_constructor(getter(initsol))
+                if parameter_values(prob) isa SciMLBase.DespecializedParameters
+                    p = SciMLBase.DespecializedParameters(p)
+                end
+                return p
             end
         end
     end
