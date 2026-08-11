@@ -1,4 +1,5 @@
 struct SemilinearODEFunction{iip, spec} end
+SciMLBase.specialization(::Type{<:SemilinearODEFunction{iip, spec}}) where {iip, spec} = spec
 struct SemilinearODEProblem{iip, spec} end
 
 const SEMILINEAR_EXTRA_BODY = """
