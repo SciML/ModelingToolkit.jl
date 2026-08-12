@@ -197,7 +197,6 @@ getnominal(x[1])
 hasnominal
 getnominal
 setnominal
-ModelingToolkit.VariableNominal
 ```
 
 ## Guess
