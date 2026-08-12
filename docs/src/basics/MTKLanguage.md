@@ -4,10 +4,6 @@
 
 MTK represents components and connectors with `Model`.
 
-```@docs
-ModelingToolkit.Model
-```
-
 ## Components
 
 Components are models from various domains. These models contain unknowns and their
