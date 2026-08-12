@@ -307,6 +307,65 @@ if @isdefined(ModelingToolkit)
         @test length(mats_lo) == length(ts)
     end
 
+    @testset "Symbolic loop-opening op values resolve from the solution" begin
+        # A symbolic operating-point value (`opened_signal => driving_signal`) is
+        # evaluated from the solution at each time point, so the opened signal is
+        # linearized around the value it has in the loop-closed solution. The controller
+        # state equation is nonlinear in its input, so the linearization genuinely
+        # depends on the value used for the opened signal.
+        @component function NonlinPlant(; name)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 1.0
+                y(t), [output = true]
+            end
+            System([D(x) ~ -x^3 + u, y ~ x], t; name)
+        end
+        @component function NonlinCtrl(; name, k = -2.0)
+            @variables begin
+                u(t), [input = true]
+                x(t) = 0.0
+                y(t), [output = true]
+            end
+            @parameters k = k
+            System([D(x) ~ -(1 + u^2) * x + k * u, y ~ x], t; name)
+        end
+        @named nlP = NonlinPlant()
+        @named nlC = NonlinCtrl()
+        nleqs = [connect(nlP.y, :nly, nlC.u), connect(nlC.y, :nlu, nlP.u)]
+        @named nlsys = System(nleqs, t; systems = [nlP, nlC])
+        ncsys = complete(nlsys)
+        nlprob = ODEProblem(mtkcompile(nlsys), [], (0.0, 5.0))
+        nlsol = solve(nlprob, Rodas5())
+        nlts = collect(0.0:0.5:5.0)
+        sym_op = Dict(ncsys.nlC.u => ncsys.nlP.y)
+
+        # Trajectory path: per-point values match the loop-closed solution.
+        mats_sym, lsys_sym, _ = linearize(
+            nlsys, :nlu, :nly; loop_openings = [:nly],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = sym_op)
+        )
+        iC = findfirst(v -> occursin("nlC₊x", string(v)), unknowns(lsys_sym))
+        got = [m.A[iC, iC] for m in mats_sym]
+        truth = [-(1 + nlsol(ti, idxs = ncsys.nlP.y)^2) for ti in nlts]
+        @test got ≈ truth rtol = 1.0e-6
+        @test !allequal(round.(got; digits = 6))
+
+        # Scalar path agrees.
+        mats_1, _, _ = linearize(
+            nlsys, :nlu, :nly; loop_openings = [:nly],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, 2.5; op = sym_op)
+        )
+        @test mats_1.A[iC, iC] ≈ -(1 + nlsol(2.5, idxs = ncsys.nlP.y)^2) rtol = 1.0e-6
+
+        # `missing` passes through the trajectory path without error.
+        mats_miss, _, _ = linearize(
+            nlsys, :nlu, :nly; loop_openings = [:nly],
+            op = ModelingToolkit.LinearizationOpPoint(nlsol, nlts; op = Dict(ncsys.nlC.u => missing))
+        )
+        @test length(mats_miss) == length(nlts)
+    end
+
     @testset "Complicated model" begin
         # Parameters
         m1 = 1
