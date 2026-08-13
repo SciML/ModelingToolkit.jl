@@ -1,18 +1,26 @@
 # Dependency Graphs
 
-# Functions for calculating dependency graphs
+# Dependency Graph API
+
+The dependency graph constructors return a
+[`BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/) from
+[`BipartiteGraphs.jl`](https://github.com/SciML/BipartiteGraphs.jl). The graph type and
+its primitive operations are documented and versioned by BipartiteGraphs; use that API
+when working with the returned graph.
+
+## Constructing Dependency Graphs
 
 ```@docs
-equation_dependencies
-asgraph
-variable_dependencies
-asdigraph
-eqeq_dependencies
-varvar_dependencies
+ModelingToolkitBase.equation_dependencies
+ModelingToolkitBase.asgraph
+ModelingToolkitBase.variable_dependencies
+ModelingToolkitBase.asdigraph
+ModelingToolkitBase.eqeq_dependencies
+ModelingToolkitBase.varvar_dependencies
 ```
 
-# Miscellaneous
+## Variable-to-Equation Mapping
 
 ```@docs
-map_variables_to_equations
+ModelingToolkit.map_variables_to_equations
 ```
