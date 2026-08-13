@@ -10,6 +10,10 @@ MTKFMIExt = Base.get_extension(ModelingToolkit, :MTKFMIExt)
 ENV["GKSwstype"] = "100"
 using Plots
 
+const REPO_ROOT = abspath(joinpath(@__DIR__, ".."))
+const REPO_REMOTE = Documenter.Remotes.GitHub("SciML", "ModelingToolkit.jl")
+const REPO_COMMIT = readchomp(`git -C $REPO_ROOT rev-parse HEAD`)
+
 cp("./docs/Manifest.toml", "./docs/src/assets/Manifest.toml", force = true)
 cp("./docs/Project.toml", "./docs/src/assets/Project.toml", force = true)
 
@@ -35,6 +39,7 @@ makedocs(
     sitename = "ModelingToolkit.jl",
     authors = "Chris Rackauckas",
     modules = [ModelingToolkitBase, ModelingToolkit, MTKFMIExt],
+    remotes = Dict(REPO_ROOT => (REPO_REMOTE, REPO_COMMIT)),
     clean = true, doctest = true, checkdocs = :exports, linkcheck = true,
     linkcheck_ignore = [
         "https://epubs.siam.org/doi/10.1137/0903023",
