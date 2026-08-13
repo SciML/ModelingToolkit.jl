@@ -6,6 +6,7 @@ using Aqua
 using JET
 using SciMLTesting
 using Test
+import ModelingToolkit: t_nounits as t, D_nounits as D
 
 # ExplicitImports only sees an extension module once its trigger package is loaded, so
 # every weakdep is loaded here to bring the extensions into the checked module set.
@@ -27,6 +28,34 @@ const MTK_EXTENSIONS = (
     for ext in MTK_EXTENSIONS
         @test Base.get_extension(ModelingToolkit, ext) !== nothing
     end
+end
+
+@testset "Documented input-output API" begin
+    for (mod, name) in (
+            (ModelingToolkitBase, :generate_control_function),
+            (ModelingToolkitBase, :build_explicit_observed_function),
+            (ModelingToolkit, :generate_control_function),
+            (ModelingToolkit, :build_explicit_observed_function),
+        )
+        @test Base.isexported(mod, name)
+        @static if VERSION >= v"1.11"
+            @test Base.ispublic(mod, name)
+        end
+        @test Base.Docs.doc(getfield(mod, name)) !== nothing
+    end
+
+    @variables x(t) u(t)
+    @parameters k
+    @named sys = System([D(x) ~ -k * (x + u)], t)
+
+    (; f, dvs, ps, io_sys) = generate_control_function(sys, [u]; simplify = true)
+    p = [2.0]
+    @test isequal(dvs[], x)
+    @test isequal(ps, [k])
+    @test f[1]([1.0], [3.0], p, 0.0) ≈ [-8.0]
+
+    g = build_explicit_observed_function(io_sys, [x + u * t]; inputs = [u])
+    @test g([1.0], [2.0], p, 3.0) ≈ [7.0]
 end
 
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part
@@ -51,7 +80,8 @@ const REEXPORTED_API = (
     Symbol("@poissonians"), :AbstractCollocation, :AbstractSystem, :add_accumulations,
     :alg_equations, :AnalysisPoint, :analytically_integrated, :apply_to_variables, :asdigraph,
     :asgraph, :assertions, :AssignmentAffect, :bindings, :Both, :bound_inputs, :bound_outputs,
-    :bound_parameters, :brownians, :calculate_control_jacobian, :calculate_cost_gradient,
+    :bound_parameters, :brownians, :build_explicit_observed_function,
+    :calculate_control_jacobian, :calculate_cost_gradient,
     :calculate_cost_hessian, :calculate_hessian, :calculate_jacobian, :calculate_massmatrix,
     :calculate_tgrad, :CasADiCollocation, :CasADiDynamicOptProblem,
     :change_independent_variable, :change_of_variables, :check_mutable_cache,
@@ -64,7 +94,8 @@ const REEXPORTED_API = (
     :DynamicOptSolution, :eqeq_dependencies, :eqtype_supports_collect_vars, :Equality,
     :equation_dependencies, :equations, :equations_toplevel, :EvalAt, :expand_connections,
     :extend, :flatten, :Flow, :fractional_to_ordinary, :full_equations,
-    :generate_control_jacobian, :generate_cost, :generate_cost_gradient,
+    :generate_control_function, :generate_control_jacobian, :generate_cost,
+    :generate_cost_gradient,
     :generate_cost_hessian, :generate_custom_function, :generate_diffusion_function,
     :generate_initializesystem, :generate_jacobian, :generate_rhs, :generate_tgrad,
     :generate_W, :get_alg_eqs, :get_analytically_integrated, :get_assertions, :get_bcs,

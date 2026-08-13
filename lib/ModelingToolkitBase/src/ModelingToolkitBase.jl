@@ -346,6 +346,7 @@ export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
+export generate_control_function, build_explicit_observed_function
 export stochastic_integral_transform
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
