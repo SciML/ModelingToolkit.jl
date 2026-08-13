@@ -97,8 +97,8 @@ end
     dae_index_lowering(sys::System; kwargs...) -> System
 
 Perform the Pantelides algorithm to transform a higher index DAE to an index 1
-DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged to call [`mtkcompile`](@ref)
-instead, which calls this function internally.
+DAE. `kwargs` are forwarded to the internal Pantelides pass. End users are encouraged to
+call [`mtkcompile`](@ref) instead, which calls this function internally.
 """
 function dae_index_lowering(sys::System; kwargs...)
     state = TearingState(sys)
