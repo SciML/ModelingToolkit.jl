@@ -162,26 +162,6 @@ function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
     return res[idx]
 end
 
-"""
-    $(TYPEDEF)
-
-An `AbstractSet` of symbolic variables that treats symbolic arrays as atomic elements.
-It stores array variables but never their scalarized or indexed elements. Use
-`ModelingToolkitBase.push_as_atomic_array!` to add an indexed element while storing
-its parent array instead.
-
-# Examples
-
-```julia
-using ModelingToolkitBase
-
-@variables x[1:2]
-xs = ModelingToolkitBase.AtomicArraySet()
-ModelingToolkitBase.push_as_atomic_array!(xs, ModelingToolkitBase.unwrap(x[1]))
-
-ModelingToolkitBase.unwrap(x) in xs
-```
-"""
 struct AtomicArraySet{D <: AbstractDict{SymbolicT, Nothing}} <: AbstractSet{SymbolicT}
     dd::AtomicArrayDict{Nothing, D}
 
@@ -237,24 +217,6 @@ function as_atomic_array_set(
     return set
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Return whether `x` contains `k`, treating an indexed symbolic array element as present
-when its parent array is in `x`.
-
-# Examples
-
-```julia
-using ModelingToolkitBase
-
-@variables x[1:2]
-xs = ModelingToolkitBase.AtomicArraySet()
-push!(xs, ModelingToolkitBase.unwrap(x))
-
-ModelingToolkitBase.contains_possibly_indexed_element(xs, ModelingToolkitBase.unwrap(x[2]))
-```
-"""
 function contains_possibly_indexed_element(x::AtomicArraySet, k::SymbolicT)
     return has_possibly_indexed_key(x.dd, k)
 end
