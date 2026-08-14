@@ -64,6 +64,8 @@ ModelingToolkit.get_brownians
 brownians
 ModelingToolkit.has_iv
 ModelingToolkit.get_iv
+ModelingToolkitBase.independent_variable
+ModelingToolkitBase.independent_variables
 ModelingToolkit.has_observed
 ModelingToolkit.get_observed
 observed

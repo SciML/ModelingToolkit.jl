@@ -155,15 +155,35 @@ abstract type AbstractSystem end
 abstract type IntermediateDeprecationSystem <: AbstractSystem end
 
 """
-    independent_variable
+    independent_variable(sys)
 
-Generic function for querying the primary independent variable of a system-like object.
+Return the scalar independent variable of `sys`, or `nothing` when `sys` has no scalar
+independent variable.
 
-Most users should call [`independent_variables`](@ref), which returns the independent
-variables as a vector. Packages that define custom system types may extend
-`independent_variable` when a scalar independent-variable interface is required.
+Most users should call [`independent_variables`](@ref), which always returns a vector. This
+is the scalar extension point for packages that define custom `AbstractSystem` subtypes;
+external packages should extend `independent_variable` only. The generic
+`independent_variables` accessor wraps that scalar value and should not be extended.
+
+# Arguments
+
+- `sys`: A system-like object with a scalar independent variable.
+
+# Returns
+
+- The scalar independent variable of `sys`, or `nothing`.
+
+# Examples
+
+```julia
+struct ScalarIVSystem <: ModelingToolkitBase.AbstractSystem
+    iv
+end
+ModelingToolkitBase.independent_variable(sys::ScalarIVSystem) = getfield(sys, :iv)
+```
 """
 function independent_variable end
+independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 
 # this has to be included early to deal with dependency issues
 function complete end

@@ -283,7 +283,7 @@ function Base.showerror(io::IO, e::MissingVariablesError)
 end
 
 """
-    $TYPEDEF
+    MissingGuessValue
 
 A Moshi.jl enum to allow choosing what happens with missing guess values when building a
 numerical problem from a `System`.
@@ -296,6 +296,19 @@ numerical problem from a `System`.
 - `MissingGuessValue.HashedRandom`: Missing guesses are set to a
   deterministically determined random-like value based on the hash of the variable name
 - `MissingGuessValue.Error()`: Missing guess values cause an error.
+
+# Returns
+
+A `MissingGuessValue` variant accepted by the `missing_guess_value` keyword of numerical
+problem constructors.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+MissingGuessValue.Constant(0.0)
+```
 """
 Moshi.Data.@data MissingGuessValue begin
     Constant(Number)

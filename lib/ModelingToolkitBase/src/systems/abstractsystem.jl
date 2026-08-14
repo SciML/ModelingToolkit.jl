@@ -37,15 +37,37 @@ string otherwise.
 description(sys::AbstractSystem) = has_description(sys) ? get_description(sys) : ""
 
 """
-$(TYPEDSIGNATURES)
+    independent_variables(sys::AbstractSystem) -> Vector{SymbolicT}
 
-Get the independent variable(s) of the system `sys`.
+Return the independent variables of `sys` as a vector. This is the user-facing accessor,
+including for systems with one independent variable.
 
-See also [`@independent_variables`](@ref) and [`ModelingToolkitBase.get_iv`](@ref).
+External packages defining custom `AbstractSystem` subtypes should extend the scalar
+[`independent_variable`](@ref) interface rather than adding methods to this accessor. For
+systems with a scalar independent variable, this generic accessor wraps that value in a vector.
+
+# Arguments
+
+- `sys::AbstractSystem`: System whose independent variables are requested.
+
+# Returns
+
+- `Vector{SymbolicT}`: The independent variables, or an empty vector for a
+  time-independent system.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@independent_variables t
+@named sys = System(Equation[], t)
+independent_variables(sys)
+```
 """
 function independent_variables(sys::AbstractSystem)
-    if isdefined(sys, :iv) && getfield(sys, :iv) !== nothing
-        return SymbolicT[getfield(sys, :iv)]
+    if (iv = independent_variable(sys)) !== nothing
+        return SymbolicT[iv]
     elseif isdefined(sys, :ivs)
         return unwrap.(getfield(sys, :ivs))::Vector{SymbolicT}
     else
@@ -1165,8 +1187,23 @@ function _apply_to_variables(f::F, ex) where {F}
 end
 
 """
-Variable metadata key which contains information about scoping/namespacing of the
-variable in a hierarchical system.
+    SymScope
+
+Abstract metadata key for variable scoping and namespacing in a hierarchical system.
+
+# Developer Interface
+
+`SymScope` is a closed ModelingToolkit interface. External packages must not subtype it;
+use the documented `LocalScope`, `ParentScope`, and `GlobalScope` constructors instead.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+LocalScope(x)
+```
 """
 abstract type SymScope end
 

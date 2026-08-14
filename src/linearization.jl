@@ -1,20 +1,34 @@
 """
-    $(TYPEDEF)
+    LinearizationOpPoint(sol, t; op = Dict()) -> LinearizationOpPoint
 
-Wraps an `ODESolution` and a time point (or vector of time points) `t`. When passed as
-`op` to [`linearize`](@ref), an operating point is constructed from the values of
-differential state variables and parameters of `sol` evaluated at `t`. Algebraic
-variables are not set and will be determined by the initialization algorithm.
+Wrap an `ODESolution` and one or more time points as an operating point for
+[`linearize`](@ref). The operating point contains the values of differential state variables
+and parameters in `sol` at `t`; initialization determines any algebraic variables.
 
 When `t` is an `AbstractVector`, [`linearize`](@ref) calls [`linearization_function`](@ref)
 once and evaluates the linearization at each time point, returning vectors of matrices and
 extras.
 
-The `op` keyword argument provides additional operating-point values that are merged into
-the solution-derived operating point at every time point (taking precedence). This is how
-values for variables that are not present in `sol` are supplied — in particular the
-parameters created by `loop_openings`, e.g.
-`LinearizationOpPoint(sol, t; op = Dict(opened_signal => 0))`.
+# Arguments
+
+- `sol::SciMLBase.AbstractODESolution`: Solution supplying state and parameter values.
+- `t`: A time point or vector of time points at which to evaluate `sol`.
+
+# Keywords
+
+- `op::AbstractDict = Dict()`: Additional operating-point values that override values from
+  `sol`, such as parameters introduced by `loop_openings`.
+
+# Returns
+
+- `LinearizationOpPoint`: An operating-point specification accepted by `linearize`.
+
+# Examples
+
+```julia
+op = LinearizationOpPoint(sol, [0.0, 1.0]; op = Dict(opened_signal => 0.0))
+matrices, simplified_sys, extras = linearize(sys, inputs, outputs; op)
+```
 
 # Fields
 

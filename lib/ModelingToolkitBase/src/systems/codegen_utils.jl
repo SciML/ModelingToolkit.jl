@@ -12,12 +12,26 @@ Options controlling the Julia compiler for generated functions.
 
 Note that this feature is considered experimental.
 
-# Fields
-- `optlevel::Int`: LLVM optimization level (0-3), or -1 (default) to inherit from the module.
-- `compile::Int`: Compilation mode as an integer (0=off, 1=on, 2=all, 3=min), or -1 (default)
-  to inherit. Can also be specified as a symbol: `:off`, `:on`, `:all`, `:min`, or `:default`.
-- `infer::Int`: Type inference (0=off, 1=on), or -1 (default) to inherit. Can also be specified
-  as a Bool or `:default`.
+# Keywords
+
+- `optlevel::Int = -1`: LLVM optimization level (0-3), or -1 to inherit from the module.
+- `compile::Union{Int, Symbol} = :default`: Compilation mode as an integer (0=off, 1=on,
+  2=all, 3=min), or -1 to inherit. It also accepts `:off`, `:on`, `:all`, `:min`, and
+  `:default`.
+- `infer::Union{Int, Bool, Symbol} = :default`: Type inference mode as 0 (off), 1 (on), or
+  -1 (inherit). It also accepts `Bool` and `:default`.
+
+# Returns
+
+- `CompilerOptions`: Compiler options suitable for a generated-function constructor.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+CompilerOptions(optlevel = 3, compile = :all, infer = true)
+```
 """
 struct CompilerOptions
     optlevel::Int

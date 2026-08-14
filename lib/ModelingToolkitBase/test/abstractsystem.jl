@@ -20,6 +20,14 @@ end
 iv = independent_variables(MyTDS(t, "sys", []))
 @test all(isequal.(iv, [t]))
 
+struct ScalarIVSystem <: MT.AbstractSystem
+    time::Any
+end
+MT.independent_variable(sys::ScalarIVSystem) = getfield(sys, :time)
+scalar_iv_sys = ScalarIVSystem(t)
+@test isequal(independent_variable(scalar_iv_sys), t)
+@test isequal(independent_variables(scalar_iv_sys), [t])
+
 struct MyMVS <: MT.AbstractSystem
     ivs::Any
     name::Any
