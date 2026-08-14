@@ -132,7 +132,7 @@ const REEXPORTED_API = (
     :is_diff_equation, :iscomplete, :isdisturbance, :isinitial, :isinput, :isirreducible,
     :isoutput, :isparameter, :istunable, :JuMPCollocation, :JuMPDynamicOptProblem, :jumps,
     :JumpSystem, :linear_fractional_to_ordinary, :liouville_transform, :LocalScope,
-    :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
+    :maybe_zeros, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
     :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
@@ -359,6 +359,19 @@ const STRUCTURAL_TYPES = (
     ModelingToolkitTearing.TearingState,
     StateSelection.DiffGraph,
 )
+
+@testset "Internal bindings are not public" begin
+    for name in (:generate_trajectory, :MiscSystemData)
+        @test isdefined(ModelingToolkitBase, name)
+        @test isdefined(ModelingToolkit, name)
+        @test !Base.isexported(ModelingToolkitBase, name)
+        @test !Base.isexported(ModelingToolkit, name)
+        @static if VERSION >= v"1.11"
+            @test !Base.ispublic(ModelingToolkitBase, name)
+            @test !Base.ispublic(ModelingToolkit, name)
+        end
+    end
+end
 
 run_qa(
     ModelingToolkit;
