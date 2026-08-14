@@ -1,6 +1,8 @@
 using Documenter, ModelingToolkit
 using ModelingToolkit: SciMLBase
 using ModelingToolkitBase
+using ModelingToolkitTearing
+using StateSelection
 # To load docstring from extension
 import FMI, CommonSolve, JumpProcesses
 
@@ -34,7 +36,7 @@ mathengine = MathJax3(
 makedocs(
     sitename = "ModelingToolkit.jl",
     authors = "Chris Rackauckas",
-    modules = [ModelingToolkitBase, ModelingToolkit, MTKFMIExt],
+    modules = [ModelingToolkitBase, ModelingToolkit, ModelingToolkitTearing, StateSelection, MTKFMIExt],
     clean = true, doctest = true, checkdocs = :exports, linkcheck = true,
     linkcheck_ignore = [
         "https://epubs.siam.org/doi/10.1137/0903023",
