@@ -598,9 +598,19 @@ SciMLBase.get_tmp_cache(integ::MockIntegrator) = integ.cache
 """
     $(TYPEDEF)
 
-A struct representing a linearization operation to be performed. Can be symbolically
-indexed to efficiently update the operating point for multiple linearizations in a loop.
-The value of the independent variable can be set by mutating the `.t` field of this struct.
+A problem for repeatedly linearizing a ModelingToolkit system at changing operating points.
+
+Use [`LinearizationProblem`](@ref) with a system, inputs, and outputs to construct a
+problem. It supports symbolic indexing, allowing selected state and parameter values to be
+updated efficiently between calls to [`CommonSolve.solve`](@ref). Mutate `t` to evaluate
+the linearization at a different value of the system's independent variable.
+
+# Fields
+
+- `f::F`: The generated linearization function that evaluates the system and stores its
+  symbolic-indexing data.
+- `t::T`: The current value of the system's independent variable. This field may be mutated
+  between calls to [`CommonSolve.solve`](@ref).
 """
 mutable struct LinearizationProblem{F <: LinearizationFunction, T}
     """
@@ -619,14 +629,27 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Construct a `LinearizationProblem` for linearizing the system `sys` with the given
-`inputs` and `outputs`.
+Construct a [`LinearizationProblem`](@ref) for numerically linearizing `sys` between the
+selected inputs and outputs. Reuse the returned problem when evaluating multiple operating
+points by updating values through symbolic indexing and, when needed, its `t` field.
 
-# Keyword arguments
+# Arguments
 
-- `t`: The value of the independent variable
+- `sys::AbstractSystem`: The ModelingToolkit system to linearize.
+- `inputs`: A variable or collection of variables treated as inputs of the linearized
+  input-output model.
+- `outputs`: A variable or collection of variables treated as outputs of the linearized
+  input-output model.
 
-All other keyword arguments are forwarded to `linearization_function`.
+# Keywords
+
+- `t = 0.0`: The initial value of the system's independent variable.
+- `kwargs`: Keyword arguments forwarded to [`linearization_function`](@ref), including
+  `op` for the operating point and options controlling compilation and initialization.
+
+# Returns
+
+A [`LinearizationProblem`](@ref) that can be passed to [`CommonSolve.solve`](@ref).
 """
 function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
     linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
@@ -662,7 +685,12 @@ end
 
 Numerically linearize `prob` at its current operating point.
 
-# Keyword Arguments
+# Arguments
+
+- `prob`: A [`LinearizationProblem`](@ref) constructed from a ModelingToolkit system,
+  selected input variables, output variables, and an operating point.
+
+# Keywords
 
 - `allow_input_derivatives`: Whether to allow differentiated inputs in algebraic
   equations. When `true`, the returned `B` and `D` matrices include additional columns
@@ -674,6 +702,12 @@ A pair `(matrices, operating_point)`. `matrices` is a `NamedTuple` containing th
 state-space matrices `A`, `B`, `C`, and `D`. `operating_point` is a `NamedTuple`
 containing the state vector `x`, parameter values `p`, and independent-variable value
 `t` used for the linearization.
+
+# Throws
+
+- `ErrorException`: If the current operating point cannot be initialized, if the algebraic
+  Jacobian `g_z` is singular (indicating an index-greater-than-one DAE), or if input
+  derivatives occur while `allow_input_derivatives` is `false`.
 
 # Examples
 
