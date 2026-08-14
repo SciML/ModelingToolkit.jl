@@ -9,12 +9,12 @@ JuMPCollocation(Ipopt.Optimizer, constructRK4())
 CasADiCollocation("ipopt", constructRK4())
 ```
 
-**JuMP** and **CasADi** collocation require an ODE tableau to be passed in. These can be constructed by calling the `constructX()` functions from DiffEqDevTools. The list of tableaus can be found [here](https://docs.sciml.ai/DiffEqDevDocs/dev/internals/tableaus/). If none is passed in, both solvers will default to using Radau second-order with five collocation points.
+**JuMP** and **CasADi** collocation accept an optional ODE tableau. These can be constructed by calling the `constructX()` functions from DiffEqDevTools. The list of tableaus can be found [here](https://docs.sciml.ai/DiffEqDevDocs/dev/internals/tableaus/). If none is passed in, both solvers use the fifth-order, three-stage Radau IIA tableau.
 
 **Pyomo** and **InfiniteOpt** each have their own built-in collocation methods.
 
  1. **InfiniteOpt**: The list of InfiniteOpt collocation methods can be found [in the table on this page](https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/). If none is passed in, the solver defaults to `FiniteDifference(Backward())`, which is effectively implicit Euler.
- 2. **Pyomo**: The list of Pyomo collocation methods can be found [at the bottom of this page](https://github.com/SciML/Pyomo.jl). If none is passed in, the solver defaults to a `LagrangeRadau(3)`.
+ 2. **Pyomo**: The list of Pyomo collocation methods can be found [at the bottom of this page](https://github.com/SciML/Pyomo.jl). If none is passed in, the solver defaults to a `LagrangeRadau(5)`.
 
 Some examples of the latter two collocations:
 

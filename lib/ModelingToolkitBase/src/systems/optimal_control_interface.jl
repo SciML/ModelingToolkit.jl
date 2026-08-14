@@ -1,10 +1,34 @@
 """
     AbstractCollocation
 
-Abstract supertype for dynamic-optimization collocation method descriptors.
+Opaque common base type for supported dynamic-optimization collocation descriptors.
 
-Concrete collocation types are provided by backend extensions such as JuMP, InfiniteOpt,
-CasADi, and Pyomo.
+# Public API Boundary
+
+`AbstractCollocation` is not a third-party extension interface. It is the common base for
+the concrete descriptors supported by ModelingToolkitBase's JuMP, InfiniteOpt, CasADi, and
+Pyomo backends. `solve(::AbstractDynamicOptProblem, ::AbstractCollocation)` dispatches to
+backend hooks that are implementation details and not public API.
+
+Do not subtype `AbstractCollocation`, implement collocation-solving hooks, or otherwise
+extend collocation solving from an external package. External subtyping and extension are
+unsupported unless a public interface is defined and documented in a future release.
+
+# Usage
+
+Select one of the documented concrete descriptors for the backend used to construct the
+dynamic-optimization problem:
+
+- [`JuMPCollocation`](@ref) for the JuMP backend.
+- [`InfiniteOptCollocation`](@ref) for the InfiniteOpt backend.
+- [`CasADiCollocation`](@ref) for the CasADi backend.
+- [`PyomoCollocation`](@ref) for the Pyomo backend.
+
+Pass that descriptor to `solve(prob, solver)`. The problem constructor and descriptor must
+use the same backend.
+
+See [`Dynamic Optimization Solvers`](@ref dynamic_opt_api) for constructor arguments and
+backend-specific options.
 """
 abstract type AbstractCollocation end
 
@@ -96,29 +120,107 @@ To construct the problem, please load Pyomo along with ModelingToolkitBase.
 """
 function PyomoDynamicOptProblem end
 
-### Collocations
 """
-JuMP Collocation solver. Takes two arguments:
-- `solver`: a optimization solver such as Ipopt
-- `tableau`: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+    JuMPCollocation(solver, tableau = constructDefault()) -> AbstractCollocation
+
+Configure the collocation descriptor used to solve a [`JuMPDynamicOptProblem`](@ref).
+
+# Arguments
+
+- `solver`: a JuMP optimizer constructor, such as `Ipopt.Optimizer`.
+- `tableau`: an ODE Runge-Kutta tableau used to transcribe the dynamics. Defaults to
+  the built-in fifth-order Radau IIA tableau.
+
+# Returns
+
+- `AbstractCollocation`: a descriptor accepted by `solve` for a `JuMPDynamicOptProblem`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase, InfiniteOpt, Ipopt
+
+JuMPCollocation(Ipopt.Optimizer)
+```
 """
 function JuMPCollocation end
+
 """
-InfiniteOpt Collocation solver.
-- `solver`: an optimization solver such as Ipopt
-- `derivative_method`: the method used by InfiniteOpt to compute derivatives. The list of possible options can be found at https://infiniteopt.github.io/InfiniteOpt.jl/stable/guide/derivative/. Defaults to FiniteDifference(Backward()).
+    InfiniteOptCollocation(solver, derivative_method = ...) -> AbstractCollocation
+
+Configure the collocation descriptor used to solve an
+[`InfiniteOptDynamicOptProblem`](@ref).
+
+# Arguments
+
+- `solver`: a JuMP optimizer constructor, such as `Ipopt.Optimizer`.
+- `derivative_method`: an `InfiniteOpt.AbstractDerivativeMethod` used to discretize the
+  independent variable. Defaults to backward finite differences.
+
+# Returns
+
+- `AbstractCollocation`: a descriptor accepted by `solve` for an
+  `InfiniteOptDynamicOptProblem`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase, InfiniteOpt, Ipopt
+
+InfiniteOptCollocation(Ipopt.Optimizer)
+```
 """
 function InfiniteOptCollocation end
+
 """
-CasADi Collocation solver.
-- `solver`: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
-- `tableau`: An ODE RK tableau. Load a tableau by calling a function like `constructRK4` and may be found at https://docs.sciml.ai/DiffEqDevDocs/stable/internals/tableaus/. If this argument is not passed in, the solver will default to Radau second order.
+    CasADiCollocation(solver, tableau = constructDefault()) -> AbstractCollocation
+
+Configure the collocation descriptor used to solve a [`CasADiDynamicOptProblem`](@ref).
+
+# Arguments
+
+- `solver`: the name of a CasADi solver plugin, supplied as a `String` or `Symbol`, such
+  as `"ipopt"`.
+- `tableau`: an ODE Runge-Kutta tableau used to transcribe the dynamics. Defaults to
+  the built-in fifth-order Radau IIA tableau.
+
+# Returns
+
+- `AbstractCollocation`: a descriptor accepted by `solve` for a `CasADiDynamicOptProblem`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase, CasADi
+
+CasADiCollocation("ipopt")
+```
 """
 function CasADiCollocation end
+
 """
-Pyomo Collocation solver.
-- `solver`: an optimization solver such as Ipopt. Should be given as a string or symbol in all lowercase, e.g. "ipopt"
-- `derivative_method`: a derivative method from Pyomo. The choices here are ForwardEuler, BackwardEuler, MidpointEuler, LagrangeRadau, or LagrangeLegendre. The last two should additionally have a number indicating the number of collocation points per timestep, e.g. PyomoCollocation("ipopt", LagrangeRadau(3)). Defaults to LagrangeRadau(5).
+    PyomoCollocation(solver, derivative_method = LagrangeRadau(5)) -> AbstractCollocation
+
+Configure the collocation descriptor used to solve a [`PyomoDynamicOptProblem`](@ref).
+
+# Arguments
+
+- `solver`: the name of a Pyomo solver plugin, supplied as a `String` or `Symbol`, such
+  as `"ipopt"`.
+- `derivative_method`: a `Pyomo.DiscretizationMethod` used to transcribe the dynamics.
+  Defaults to `LagrangeRadau(5)`.
+
+# Returns
+
+- `AbstractCollocation`: a descriptor accepted by `solve` for a `PyomoDynamicOptProblem`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase, Pyomo
+
+PyomoCollocation("ipopt", Pyomo.LagrangeRadau(3))
+```
 """
 function PyomoCollocation end
 
