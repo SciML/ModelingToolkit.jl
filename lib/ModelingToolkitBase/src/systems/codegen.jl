@@ -1766,19 +1766,49 @@ function generate_update_b(
     )
 end
 """
-```julia
-generate_custom_function(sys::AbstractSystem, exprs, dvs = unknowns(sys),
-                         ps = parameters(sys); kwargs...)
-```
+    generate_custom_function(
+        sys::AbstractSystem, exprs, dvs = unknowns(sys), ps = parameters(sys); kwargs...
+    )
 
 Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
-array of symbolic expression involving symbolic variables in `sys`. The symbolic variables
-may be subsetted using `dvs` and `ps`. All `kwargs` are passed to the internal
-[`build_function`](@ref) call. The returned function can be called as `f(u, p, t)` or
-`f(du, u, p, t)` for time-dependent systems and `f(u, p)` or `f(du, u, p)` for
-time-independent systems. If `split=true` (the default) was passed to [`complete`](@ref),
-[`mtkcompile`](@ref) or [`@mtkcompile`](@ref), `p` is expected to be an `MTKParameters`
-object.
+array of symbolic expressions involving symbolic variables in `sys`. If `split = true` was
+passed to [`complete`](@ref), [`mtkcompile`](@ref), or [`@mtkcompile`](@ref), `p` is an
+`MTKParameters` object.
+
+# Arguments
+
+- `sys::AbstractSystem`: A completed system that owns the symbolic variables.
+- `exprs`: A symbolic expression or array of expressions to evaluate.
+- `dvs = unknowns(sys)`: State variables supplied as `u`.
+- `ps = parameters(sys)`: Parameters supplied as `p`.
+
+# Keywords
+
+- `expression = Val{true}`: Return generated expression(s) when `Val{true}`, or callable
+  function(s) when `Val{false}`.
+- `eval_expression = false`: Evaluate generated expressions in `eval_module` rather than
+  using `RuntimeGeneratedFunctions`.
+- `eval_module = @__MODULE__`: Module in which expressions are evaluated when
+  `eval_expression = true`.
+- `cachesyms = ()`: Symbols supplied as cache arguments to the generated function.
+- `kwargs...`: Code-generation options forwarded to `Symbolics.CodegenFunctionOptions`.
+
+# Returns
+
+- Generated expression(s) or callable function(s). Time-dependent functions accept
+  `f(u, p, t)` or `f(du, u, p, t)`; time-independent functions omit `t`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@independent_variables t
+@variables x(t)
+sys = complete(System(Equation[], t, [x], []; name = :sys))
+f = generate_custom_function(sys, x; expression = Val(false))
+f([1.0], MTKParameters(sys, []), 0.0)
+```
 """
 function generate_custom_function(
         sys::AbstractSystem, exprs, dvs, ps, opts::GeneratedFunctionOptions;

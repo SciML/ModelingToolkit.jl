@@ -105,6 +105,8 @@ reorder_dimension_by_tunables
 ```@docs
 generate_initializesystem
 InitializationProblem
+ModelingToolkit.analyze_initialization_jacobian
+ModelingToolkitBase.MissingGuessValue
 ```
 
 ## Linear analysis
@@ -112,6 +114,7 @@ InitializationProblem
 ```@docs
 linearization_function
 LinearizationProblem
+ModelingToolkit.LinearizationOpPoint
 linearize
 CommonSolve.solve(::LinearizationProblem)
 ModelingToolkit.linearize_symbolic
