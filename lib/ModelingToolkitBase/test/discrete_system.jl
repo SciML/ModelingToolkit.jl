@@ -3,7 +3,7 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkitBase, SymbolicIndexingInterface, Test
+using ModelingToolkitBase, SciMLBase, SymbolicIndexingInterface, Test
 using ModelingToolkitBase: t_nounits as t
 using Setfield: @set!
 
