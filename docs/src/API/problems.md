@@ -114,7 +114,7 @@ linearization_function
 LinearizationProblem
 linearize
 CommonSolve.solve(::LinearizationProblem)
-linearize_symbolic
+ModelingToolkit.linearize_symbolic
 ```
 
 There are also utilities for manipulating the results of these analyses in a symbolic context.

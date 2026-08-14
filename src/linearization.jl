@@ -657,6 +657,38 @@ function Base.getproperty(prob::LinearizationProblem, x::Symbol)
     return getfield(prob, x)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Numerically linearize `prob` at its current operating point.
+
+# Keyword Arguments
+
+- `allow_input_derivatives`: Whether to allow differentiated inputs in algebraic
+  equations. When `true`, the returned `B` and `D` matrices include additional columns
+  for those differentiated inputs.
+
+# Returns
+
+A pair `(matrices, operating_point)`. `matrices` is a `NamedTuple` containing the
+state-space matrices `A`, `B`, `C`, and `D`. `operating_point` is a `NamedTuple`
+containing the state vector `x`, parameter values `p`, and independent-variable value
+`t` used for the linearization.
+
+# Examples
+
+```julia
+using CommonSolve, ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0
+@named sys = System([D(x) ~ -x + u], t)
+prob = LinearizationProblem(sys, [u], [x]; op = Dict(x => 1.0, u => 0.0))
+
+matrices, operating_point = solve(prob)
+matrices.A == [-1.0;;]
+```
+"""
 function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives = false)
     u0 = state_values(prob)
     p = parameter_values(prob)
