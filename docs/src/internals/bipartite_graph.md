@@ -3,78 +3,39 @@
 !!! warning "Internal API"
     The functions documented on this page are internal implementation details of ModelingToolkit. They are not part of the public API and may change or be removed without notice in non-breaking releases. This documentation is provided to help contributors understand the codebase.
 
-ModelingToolkit uses bipartite graphs to represent relationships between equations and variables in systems. These functions provide tools for working with and analyzing these graphs.
+ModelingToolkit uses bipartite graphs to represent relationships between equations and
+variables in systems. This page documents ModelingToolkit's developer-facing dependency
+graph helpers. Extensions that need the underlying graph representation and primitive
+operations should depend on `BipartiteGraphs.jl` directly rather than on a ModelingToolkit
+reexport.
 
-## Graph Types
+## Underlying Graph API
 
-```@docs
-BipartiteGraph
-BipartiteEdge
-DiCMOBiGraph
-DiffGraph
-```
+The following primitive graph API is defined and versioned by the
+[`BipartiteGraphs.jl` API reference](https://docs.sciml.ai/BipartiteGraphs/dev/api/):
 
-## Vertex Operations
+- Types: `BipartiteGraphs.BipartiteGraph`, `BipartiteGraphs.BipartiteEdge`, and
+  `BipartiteGraphs.DiCMOBiGraph`.
+- Vertex operations: `BipartiteGraphs.𝑠vertices`, `BipartiteGraphs.𝑑vertices`,
+  `BipartiteGraphs.has_𝑠vertex`, `BipartiteGraphs.has_𝑑vertex`,
+  `BipartiteGraphs.nsrcs`, and `BipartiteGraphs.ndsts`.
+- Neighbor and edge operations: `BipartiteGraphs.𝑠neighbors`,
+  `BipartiteGraphs.𝑑neighbors`, `BipartiteGraphs.set_neighbors!`,
+  `BipartiteGraphs.𝑠edges`, and `BipartiteGraphs.𝑑edges`.
+- Views and modifications: `BipartiteGraphs.invview`,
+  `BipartiteGraphs.delete_srcs!`, and `BipartiteGraphs.delete_dsts!`.
+- Matching: `BipartiteGraphs.maximal_matching` and
+  `BipartiteGraphs.construct_augmenting_path!`.
+- Vertex kinds: `BipartiteGraphs.SRC` and `BipartiteGraphs.DST`.
 
-```@docs
-𝑠vertices
-𝑑vertices
-has_𝑠vertex
-has_𝑑vertex
-nsrcs
-ndsts
-```
-
-## Neighbor Operations
-
-```@docs
-𝑠neighbors
-𝑑neighbors
-set_neighbors!
-```
-
-## Edge Operations
+## Dependency Graph Construction
 
 ```@docs
-𝑠edges
-𝑑edges
-```
-
-## Graph Views and Modifications
-
-```@docs
-invview
-delete_srcs!
-delete_dsts!
-```
-
-## Matching Algorithms
-
-```@docs
-maximal_matching
-construct_augmenting_path!
-```
-
-## Dependency Analysis
-
-```@docs
-equation_dependencies
-variable_dependencies
-eqeq_dependencies
-varvar_dependencies
-map_variables_to_equations
-```
-
-## Graph Conversion
-
-```@docs
-asgraph
-asdigraph
-```
-
-## Constants
-
-```@docs
-SRC
-DST
+ModelingToolkitBase.equation_dependencies
+ModelingToolkitBase.variable_dependencies
+ModelingToolkitBase.eqeq_dependencies
+ModelingToolkitBase.varvar_dependencies
+ModelingToolkitBase.asgraph
+ModelingToolkitBase.asdigraph
+ModelingToolkit.map_variables_to_equations
 ```
