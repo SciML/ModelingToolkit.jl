@@ -650,6 +650,18 @@ points by updating values through symbolic indexing and, when needed, its `t` fi
 # Returns
 
 A [`LinearizationProblem`](@ref) that can be passed to [`CommonSolve.solve`](@ref).
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1.0 u(t) = 0.0
+@named sys = System([D(x) ~ -x + u], t)
+
+LinearizationProblem(sys, [u], [x]; op = Dict(x => 1.0, u => 0.0))
+```
 """
 function LinearizationProblem(sys::AbstractSystem, inputs, outputs; t = 0.0, kwargs...)
     linfun, _ = linearization_function(sys, inputs, outputs; kwargs...)
