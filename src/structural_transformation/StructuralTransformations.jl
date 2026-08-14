@@ -78,7 +78,7 @@ should usually call [`mtkcompile`](@ref).
 # Arguments
 
 - `sys`: system whose equations should be substituted.
-- `kwargs...`: keyword arguments forwarded to [`full_equations`](@ref).
+- `kwargs...`: keyword arguments forwarded to `full_equations`.
 
 # Returns
 
