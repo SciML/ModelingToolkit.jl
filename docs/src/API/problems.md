@@ -76,10 +76,6 @@ ModelingToolkit.ProblemTypeCtx
 SciMLBase.OptimizationFunction
 SciMLBase.OptimizationProblem
 SciMLBase.ODEInputFunction
-ModelingToolkit.JuMPDynamicOptProblem
-ModelingToolkit.InfiniteOptDynamicOptProblem
-ModelingToolkit.CasADiDynamicOptProblem
-ModelingToolkit.DynamicOptSolution
 ```
 
 ## The state vector and parameter object

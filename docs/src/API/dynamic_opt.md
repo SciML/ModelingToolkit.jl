@@ -23,20 +23,20 @@ PyomoCollocation("ipopt", LagrangeRadau(2))
 InfiniteOptCollocation(Ipopt.Optimizer, OrthogonalCollocation(3))
 ```
 
-```@docs; canonical = false
-AbstractCollocation
-JuMPCollocation
-InfiniteOptCollocation
-CasADiCollocation
-PyomoCollocation
-DynamicOptSolution
+```@docs
+ModelingToolkitBase.AbstractCollocation
+ModelingToolkitBase.JuMPCollocation
+ModelingToolkitBase.InfiniteOptCollocation
+ModelingToolkitBase.CasADiCollocation
+ModelingToolkitBase.PyomoCollocation
+ModelingToolkitBase.DynamicOptSolution
 ```
 
 ### Problem constructors
 
-```@docs; canonical = false
-JuMPDynamicOptProblem
-InfiniteOptDynamicOptProblem
-CasADiDynamicOptProblem
-PyomoDynamicOptProblem
+```@docs
+ModelingToolkitBase.JuMPDynamicOptProblem
+ModelingToolkitBase.InfiniteOptDynamicOptProblem
+ModelingToolkitBase.CasADiDynamicOptProblem
+ModelingToolkitBase.PyomoDynamicOptProblem
 ```

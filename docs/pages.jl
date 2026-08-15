@@ -36,6 +36,7 @@ pages = [
         ],
     ],
     "API" => Any[
+        "API/modules.md",
         "API/System.md",
         "API/abstract_system_interface.md",
         "API/variables.md",
