@@ -58,6 +58,67 @@ end
     @test g([1.0], [2.0], p, 3.0) ≈ [7.0]
 end
 
+# Names rendered by a canonical ```@docs``` block somewhere under `docs/src`, counted so a
+# name landing in two canonical blocks (which fails the Documenter build) is visible here.
+# `SciMLTesting.run_api_docs(...; rendered = true)` cannot stand in for this: it short
+# circuits to a pass as soon as any ```@autodocs``` block exists anywhere in the manual,
+# and this manual has two narrowly scoped ones.
+function canonical_docs_entries(docs_src)
+    counts = Dict{String, Int}()
+    for (root, _, files) in walkdir(docs_src), file in files
+        endswith(file, ".md") || continue
+        inblock = false
+        canonical = false
+        for line in eachline(joinpath(root, file))
+            stripped = strip(line)
+            if inblock
+                if stripped == "```"
+                    inblock = false
+                elseif canonical && !isempty(stripped)
+                    name = last(split(first(split(stripped, '(')), '.'))
+                    counts[name] = get(counts, name, 0) + 1
+                end
+            elseif startswith(stripped, "```@docs")
+                inblock = true
+                canonical = !occursin("canonical = false", stripped)
+            end
+        end
+    end
+    return counts
+end
+
+@testset "Public API is rendered in the manual" begin
+    docs_src = joinpath(dirname(dirname(@__DIR__)), "docs", "src")
+    @test isdir(docs_src)
+    entries = canonical_docs_entries(docs_src)
+    @test !isempty(entries)
+
+    # Every system field carries a `get_`/`has_` accessor pair, generated together with a
+    # docstring and declared `public`. Deriving the list from `SYS_PROPS` rather than
+    # pinning it means a newly added field fails here until it is documented too.
+    accessors = [
+        Symbol(prefix, prop)
+            for prop in [ModelingToolkitBase.SYS_PROPS; [:continuous_events, :discrete_events]]
+            for prefix in (:get_, :has_)
+    ]
+    # Public names whose only gap was rendering. `AnalysisPoint` is deliberately absent: it
+    # is rendered by #4969, and listing it in two canonical blocks is itself a build error.
+    audited = [
+        Symbol("@discretes"), Symbol("@mtkbuild"), Symbol("@poissonians"), :DiscreteSystem,
+        :ImplicitDiscreteSystem, :ODESystem, :analytically_integrated, :discrete_events,
+        :structural_simplify,
+    ]
+
+    for name in [accessors; audited]
+        @test isdefined(ModelingToolkitBase, name)
+        @static if VERSION >= v"1.11"
+            @test Base.ispublic(ModelingToolkitBase, name)
+        end
+        @test haskey(Base.Docs.meta(ModelingToolkitBase), Docs.Binding(ModelingToolkitBase, name))
+        @test get(entries, string(name), 0) == 1
+    end
+end
+
 # The exact set of externally-owned bindings ModelingToolkit deliberately exposes as part
 # of its own public API. ModelingToolkit is a facade: `@reexport using ModelingToolkitBase`
 # pulls up the modelling layer, which in turn `@reexport`s Symbolics (and, through it,

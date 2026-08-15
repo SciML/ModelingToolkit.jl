@@ -3,8 +3,8 @@
 ModelingToolkit uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) for the symbolic
 manipulation infrastructure. In fact, the `@variables` macro is defined in Symbolics.jl. In
 addition to `@variables`, ModelingToolkit defines `@parameters`, `@independent_variables`,
-`@constants` and `@brownians`. These macros function identically to `@variables` but allow
-ModelingToolkit to attach additional metadata.
+`@constants`, `@brownians`, `@poissonians` and `@discretes`. These macros function identically
+to `@variables` but allow ModelingToolkit to attach additional metadata.
 
 ```@docs
 @independent_variables
@@ -12,6 +12,8 @@ ModelingToolkit to attach additional metadata.
 @constants
 @brownians
 @brownian
+@poissonians
+@discretes
 ```
 
 Symbolic variables can have metadata attached to them. The defaults and guesses assigned

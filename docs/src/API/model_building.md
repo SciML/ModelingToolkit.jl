@@ -138,9 +138,15 @@ flatten
 and also perform other optimizations. This is done via the `mtkcompile` function. Connection expansion
 and flattening are preprocessing steps of simplification.
 
+`structural_simplify` and `@mtkbuild` are the deprecated ModelingToolkit v9 spellings. They
+forward to `mtkcompile`/`@mtkcompile` after emitting a deprecation warning, and are
+documented here so that the warning has a target to look up.
+
 ```@docs
 mtkcompile
 @mtkcompile
+structural_simplify
+@mtkbuild
 ```
 
 It is also possible (though not always advisable) to build numerical problems from systems without

@@ -13,12 +13,18 @@ ModelingToolkit.AbstractSystem
 ## Utility constructors
 
 Several utility constructors also exist to easily construct alternative system formulations.
+`NonlinearSystem`, `ODESystem`, `DiscreteSystem` and `ImplicitDiscreteSystem` are deprecated
+aliases for `System` kept for compatibility with ModelingToolkit v9; they emit a deprecation
+warning and are documented here so that the warning has a target to look up.
 
 ```@docs
 NonlinearSystem
 SDESystem
 JumpSystem
 OptimizationSystem
+ODESystem
+DiscreteSystem
+ImplicitDiscreteSystem
 ```
 
 ## Accessor functions
@@ -52,8 +58,14 @@ ModelingToolkit.has_unknowns
 ModelingToolkit.get_unknowns
 unknowns
 ModelingToolkit.unknowns_toplevel
+ModelingToolkit.has_irreducibles
+ModelingToolkit.get_irreducibles
 irreducibles
+ModelingToolkit.has_maybe_zeros
+ModelingToolkit.get_maybe_zeros
 maybe_zeros
+ModelingToolkit.has_state_priorities
+ModelingToolkit.get_state_priorities
 state_priorities
 ModelingToolkit.has_ps
 ModelingToolkit.get_ps
@@ -64,10 +76,18 @@ bound_parameters
 ModelingToolkit.has_brownians
 ModelingToolkit.get_brownians
 brownians
+ModelingToolkit.has_poissonians
+ModelingToolkit.get_poissonians
 ModelingToolkit.has_iv
 ModelingToolkit.get_iv
 ModelingToolkitBase.independent_variable
 ModelingToolkitBase.independent_variables
+ModelingToolkit.has_ivs
+ModelingToolkit.get_ivs
+ModelingToolkit.has_dvs
+ModelingToolkit.get_dvs
+ModelingToolkit.has_tspan
+ModelingToolkit.get_tspan
 ModelingToolkit.has_observed
 ModelingToolkit.get_observed
 observed
@@ -78,6 +98,8 @@ nameof
 ModelingToolkit.has_description
 ModelingToolkit.get_description
 ModelingToolkit.description
+ModelingToolkit.has_bindings
+ModelingToolkit.get_bindings
 bindings
 ModelingToolkit.has_initial_conditions
 ModelingToolkit.get_initial_conditions
@@ -85,6 +107,7 @@ initial_conditions
 ModelingToolkit.has_guesses
 ModelingToolkit.get_guesses
 guesses
+ModelingToolkit.has_systems
 ModelingToolkit.get_systems
 ModelingToolkit.has_initialization_eqs
 ModelingToolkit.get_initialization_eqs
@@ -95,6 +118,7 @@ continuous_events
 ModelingToolkit.continuous_events_toplevel
 ModelingToolkit.has_discrete_events
 ModelingToolkit.get_discrete_events
+discrete_events
 ModelingToolkit.discrete_events_toplevel
 ModelingToolkit.has_assertions
 ModelingToolkit.get_assertions
@@ -111,6 +135,16 @@ ModelingToolkit.get_tstops
 ModelingToolkit.symbolic_tstops
 ModelingToolkit.has_tearing_state
 ModelingToolkit.get_tearing_state
+ModelingToolkit.has_schedule
+ModelingToolkit.get_schedule
+ModelingToolkit.has_isscheduled
+ModelingToolkit.get_isscheduled
+ModelingToolkit.has_index_cache
+ModelingToolkit.get_index_cache
+ModelingToolkit.has_irstructure_tlv
+ModelingToolkit.get_irstructure_tlv
+ModelingToolkit.has_parameter_bindings_graph
+ModelingToolkit.get_parameter_bindings_graph
 ModelingToolkit.does_namespacing
 toggle_namespacing
 ModelingToolkit.iscomplete
@@ -121,7 +155,28 @@ ModelingToolkit.has_parent
 ModelingToolkit.get_parent
 ModelingToolkit.has_initializesystem
 ModelingToolkit.get_initializesystem
+ModelingToolkit.has_is_initializesystem
+ModelingToolkit.get_is_initializesystem
 ModelingToolkit.is_initializesystem
+ModelingToolkit.has_analytically_integrated
+ModelingToolkit.get_analytically_integrated
+analytically_integrated
+ModelingToolkit.has_connector_type
+ModelingToolkit.get_connector_type
+ModelingToolkit.has_ignored_connections
+ModelingToolkit.get_ignored_connections
+ModelingToolkit.has_is_discrete
+ModelingToolkit.get_is_discrete
+ModelingToolkit.has_bcs
+ModelingToolkit.get_bcs
+ModelingToolkit.has_domain
+ModelingToolkit.get_domain
+ModelingToolkit.has_var_to_name
+ModelingToolkit.get_var_to_name
+ModelingToolkit.has_gui_metadata
+ModelingToolkit.get_gui_metadata
+ModelingToolkit.has_tag
+ModelingToolkit.get_tag
 ```
 
 ## `getproperty` syntax
@@ -179,7 +234,11 @@ ModelingToolkit.dump_variable_metadata
 ## Inputs and outputs
 
 ```@docs
+ModelingToolkit.has_inputs
+ModelingToolkit.get_inputs
 ModelingToolkit.inputs
+ModelingToolkit.has_outputs
+ModelingToolkit.get_outputs
 ModelingToolkit.outputs
 ModelingToolkit.bound_inputs
 ModelingToolkit.unbound_inputs
