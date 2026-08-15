@@ -10,6 +10,10 @@ System
 ModelingToolkit.AbstractSystem
 ```
 
+The rules that hold for every `AbstractSystem`, and the generic functions available on any
+subtype, are stated in
+[The `AbstractSystem` Interface](@ref abstract_system_interface).
+
 ## Utility constructors
 
 Several utility constructors also exist to easily construct alternative system formulations.
@@ -93,6 +97,7 @@ continuous_events
 ModelingToolkit.continuous_events_toplevel
 ModelingToolkit.has_discrete_events
 ModelingToolkit.get_discrete_events
+discrete_events
 ModelingToolkit.discrete_events_toplevel
 ModelingToolkit.has_assertions
 ModelingToolkit.get_assertions
