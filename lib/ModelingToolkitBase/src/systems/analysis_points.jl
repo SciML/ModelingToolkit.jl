@@ -76,16 +76,17 @@ struct AnalysisPoint
     outputs::Union{Nothing, Vector{System}, Vector{SymbolicT}}
 
     function AnalysisPoint(input, name::Symbol, outputs; verbose = true)
+        verb = _process_verbose_param(verbose)
         # input to analysis point should be an output variable
-        if verbose && input !== nothing
+        if _toggle_enabled(verb, :analysis_point_causality) && input !== nothing
             var = ap_var(input)
-            isoutput(var) || ap_warning(1, name, true)
+            isoutput(var) || ap_warning(1, name, true, verb)
         end
         # outputs of analysis points should be input variables
-        if verbose && outputs !== nothing
+        if _toggle_enabled(verb, :analysis_point_causality) && outputs !== nothing
             for (i, output) in enumerate(outputs)
                 var = ap_var(output)
-                isinput(var) || ap_warning(2 + i, name, false)
+                isinput(var) || ap_warning(2 + i, name, false, verb)
             end
         end
 
@@ -93,17 +94,21 @@ struct AnalysisPoint
     end
 end
 
-function ap_warning(arg::Int, name::Symbol, should_be_output)
+function ap_warning(arg::Int, name::Symbol, should_be_output, verb::MTKVerbosity)
     causality = should_be_output ? "output" : "input"
-    return @warn """
-    The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
-    order to handle inverse models, but may not be what you intended.
+    @SciMLMessage(verb, :analysis_point_causality) do
+        """
+        The $(arg)-th argument to analysis point $(name) was not a $causality. This is supported in \
+        order to handle inverse models, but may not be what you intended.
 
-    If you are building a forward mode (causal), you may want to swap this argument with \
-    one on the opposite side of the name of the analysis point provided to `connect`. \
-    Learn more about the causality of analysis points in the docstring for `AnalysisPoint`. \
-    Silence this message using `connect(out, :name, in...; warn = false)`.
-    """
+        If you are building a forward mode (causal), you may want to swap this argument with \
+        one on the opposite side of the name of the analysis point provided to `connect`. \
+        Learn more about the causality of analysis points in the docstring for `AnalysisPoint`. \
+        Silence this message using `connect(out, :name, in...; verbose = false)` or \
+        `verbose = MTKVerbosity(analysis_point_causality = SciMLLogging.Silent)`.
+        """
+    end
+    return nothing
 end
 
 AnalysisPoint() = AnalysisPoint(nothing, Symbol(), nothing)
@@ -221,7 +226,9 @@ typically is not (unless the model is an inverse model).
 # Keyword arguments
 
 - `verbose`: Warn if an input is connected to an output (reverse causality). Silence this
-  warning if you are analyzing an inverse model.
+  warning if you are analyzing an inverse model. Accepts a `Bool`, a `SciMLLogging`
+  preset, or an [`MTKVerbosity`](@ref) (the warning is controlled by its
+  `analysis_point_causality` toggle).
 """
 function connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
     return AnalysisPoint() ~ AnalysisPoint(in, name, System[out; collect(outs)]; verbose)

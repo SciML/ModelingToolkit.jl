@@ -527,7 +527,11 @@ function SciMLBase.SCCNonlinearProblem{iip}(
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
     if sched === nothing
-        @warn "System is simplified but does not have a schedule. This should not happen."
+        verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+        @SciMLMessage(
+            "System is simplified but does not have a schedule. This should not happen.",
+            verbosity, :missing_scc_schedule
+        )
         var_eq_matching, var_sccs = StructuralTransformations.algebraic_variables_scc(ts)
         condensed_graph = MatchedCondensationGraph(
             DiCMOBiGraph{true}(
