@@ -41,6 +41,7 @@ end
     if GROUP == "All" || GROUP == "InterfaceI"
         @testset "InterfaceI" begin
             @safetestset "AbstractSystem Test" include("abstractsystem.jl")
+            @safetestset "AbstractSystem Interface Contract" include("abstractsystem_interface.jl")
             @safetestset "AbstractCollocation Public Boundary" include("abstractcollocation.jl")
             @safetestset "Variable Scope Tests" include("variable_scope.jl")
             @safetestset "Parsing Test" include("variable_parsing.jl")

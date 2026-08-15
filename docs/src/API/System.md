@@ -10,6 +10,10 @@ System
 ModelingToolkit.AbstractSystem
 ```
 
+The rules that hold for every `AbstractSystem`, and the generic functions available on any
+subtype, are stated in
+[The `AbstractSystem` Interface](@ref abstract_system_interface).
+
 ## Utility constructors
 
 Several utility constructors also exist to easily construct alternative system formulations.
