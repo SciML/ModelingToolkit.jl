@@ -72,6 +72,66 @@ solve(dprob, Tsit5());
 debug_system
 ```
 
+## Controlling verbosity
+
+Diagnostic output from ModelingToolkit — the `mtkcompile` pipeline, problem construction
+and initialization, and analysis utilities — is controlled through
+[SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl) via the `verbose` keyword
+argument, which accepts an [`MTKVerbosity`](@ref) specifier, a `SciMLLogging` preset, or
+a `Bool`:
+
+```julia
+using SciMLLogging: SciMLLogging, Silent, InfoLevel
+
+mtkcompile(sys)                                    # default (Standard) verbosity
+mtkcompile(sys; verbose = false)                   # silence everything
+mtkcompile(sys; verbose = SciMLLogging.Detailed()) # more diagnostics
+
+# fine-grained control per toggle or group
+mtkcompile(sys; verbose = MTKVerbosity(state_priority_tie = Silent))
+mtkcompile(sys; verbose = MTKVerbosity(compilation = InfoLevel))
+```
+
+The available toggles are documented on [`MTKVerbosity`](@ref):
+
+| Toggle                            | Default     | Controls                                                               |
+|:--------------------------------- |:----------- |:---------------------------------------------------------------------- |
+| `state_priority_tie`              | `WarnLevel` | Tied `state_priority` in an alias group during alias elimination        |
+| `underconstrained_variables`      | `Silent`    | Report of underconstrained variables found during alias elimination     |
+| `if_lifting_condition_grammar`    | `WarnLevel` | `IfLifting` skipping a condition outside its supported grammar          |
+| `observed_equation_cycle`         | `Silent`    | Printing the smallest cycle when sorting observed equations fails       |
+| `singular_initialization`         | `WarnLevel` | Structurally singular initialization system                             |
+| `overdetermined_initialization`   | `WarnLevel` | Overdetermined initialization system (least-squares fallback)           |
+| `underdetermined_initialization`  | `WarnLevel` | Underdetermined initialization system (least-squares fallback)          |
+| `scc_initialization_unavailable`  | `WarnLevel` | `SCCNonlinearProblem` initialization requires `split = true`            |
+| `cyclic_dependency`               | `Silent`    | Cycles among initial conditions of unknowns/parameters                  |
+| `overdetermined_constraints`      | `WarnLevel` | Overdetermined `BVProblem`/dynamic-optimization constraints             |
+| `missing_scc_schedule`            | `WarnLevel` | Simplified system unexpectedly missing a tearing schedule               |
+| `dynamic_opt_time_grid`           | `WarnLevel` | Ignored `dt`/`steps` argument in dynamic optimization                   |
+| `empty_operating_point`           | `WarnLevel` | Empty operating point passed to `linearization_function`                |
+| `initialization_analysis`         | `InfoLevel` | The report of `analyze_initialization_jacobian`                         |
+| `no_unbound_inputs`               | `WarnLevel` | `generate_control_function` found no unbound inputs                     |
+| `analysis_point_causality`        | `WarnLevel` | Reversed causality in an analysis-point `connect`                       |
+
+### Problem constructors
+
+`SciMLBase.*Problem` constructors share the `verbose` keyword with the solver, since
+problem keyword arguments are forwarded to `solve`. The value is routed by type: an
+`MTKVerbosity` is consumed by ModelingToolkit and *not* placed in `prob.kwargs`; a
+preset or `Bool` applies to ModelingToolkit *and* is forwarded to the solver; a solver
+verbosity specifier (e.g. `DEVerbosity`) is forwarded untouched. The
+`initialization_verbosity` sub-specifier of `MTKVerbosity` controls the verbosity of the
+initialization problem's solve (default `Minimal()`), and accepts a preset or a
+`NonlinearVerbosity`.
+
+The boolean keywords `warn_initialize_determined`, `warn_cyclic_dependency`, and
+`warn_empty_op` are deprecated in favor of `verbose`; when explicitly passed they
+override the corresponding toggles.
+
+```@docs; canonical = false
+MTKVerbosity
+```
+
 ## Error message guidance
 
 Errors raised while building a problem describe what went wrong and then, where it is
@@ -89,6 +149,7 @@ ModelingToolkit.show_api_guidance!(false)
 
     `show_api_guidance!` is experimental and unsupported. It may change or be removed in
     any release, without a breaking version bump. Verbosity across the SciML ecosystem is
-    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), and this setting
-    is expected to be replaced by an option there once ModelingToolkit adopts it. That will
-    be the supported way to control this.
+    moving to [SciMLLogging.jl](https://github.com/SciML/SciMLLogging.jl), which
+    ModelingToolkit has begun adopting via [`MTKVerbosity`](@ref); this setting is
+    expected to be absorbed into that mechanism. That will be the supported way to
+    control this.
