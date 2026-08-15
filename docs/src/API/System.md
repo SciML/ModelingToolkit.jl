@@ -54,11 +54,13 @@ unknowns
 ModelingToolkit.unknowns_toplevel
 irreducibles
 maybe_zeros
+state_priorities
 ModelingToolkit.has_ps
 ModelingToolkit.get_ps
 parameters
 ModelingToolkit.parameters_toplevel
 tunable_parameters
+bound_parameters
 ModelingToolkit.has_brownians
 ModelingToolkit.get_brownians
 brownians
@@ -217,6 +219,7 @@ ModelingToolkit.collect_var_to_name!
 ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
+ModelingToolkitBase.convert_bindings_for_time_independent_system
 ```
 
 ## Namespace manipulation
@@ -228,6 +231,8 @@ following functions are useful for manipulating namespacing functionality.
 ```@docs
 ModelingToolkit.renamespace
 ModelingToolkit.namespace_equations
+@nonamespace
+@namespace
 ```
 
 ## Linearization and Analysis

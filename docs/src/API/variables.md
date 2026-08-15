@@ -40,6 +40,13 @@ ModelingToolkit.getdefault
 ModelingToolkit.setdefault
 ```
 
+The defaults of a system that has already been constructed are updated with `set_defaults`,
+which applies the same binding/initial condition semantics to an existing system.
+
+```@docs
+set_defaults
+```
+
 ## Variable descriptions
 
 Descriptive strings can be attached to variables using the `[description = "descriptive string"]` syntax:
@@ -213,6 +220,7 @@ getguess(u)
 ```@docs
 hasguess
 getguess
+ModelingToolkitBase.setguess
 ```
 
 When a system is constructed, the guesses of the involved variables are stored in a `Dict`
@@ -327,6 +335,15 @@ This metadata is used by the [`System`](@ref) constructor for automatically iden
 ModelingToolkit.VariableType
 ModelingToolkit.MTKVariableTypeCtx
 ModelingToolkit.isparameter
+```
+
+The `@parameters` and `@brownians` macros set this metadata on the variables they declare.
+The same can be done to an existing symbolic variable, which is useful when generating
+variables programmatically.
+
+```@docs
+ModelingToolkitBase.toparam
+ModelingToolkitBase.tobrownian
 ```
 
 ## Miscellaneous metadata

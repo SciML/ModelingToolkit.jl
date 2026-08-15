@@ -90,6 +90,7 @@ macro.
 connect
 domain_connect
 @connector
+Connection
 ```
 
 Connections can be expanded using `expand_connections`.
@@ -150,6 +151,7 @@ calls `complete` internally.
 
 ```@docs
 complete
+@mtkcomplete
 ```
 
 ### Exploring the results of simplification
@@ -191,6 +193,18 @@ section of the documentation. User-defined functions can be used via `Imperative
 
 ```@docs
 ModelingToolkit.ImperativeAffect
+```
+
+## Jump processes
+
+Systems can contain jumps, which are handled by
+[JumpProcesses.jl](https://docs.sciml.ai/JumpProcesses/stable/). The jump types of that
+package are used directly, with the exception of mass action jumps: symbolic rate
+expressions must already carry their combinatorial scaling, so ModelingToolkit provides a
+constructor that builds a `MassActionJump` without rescaling the rate.
+
+```@docs
+SymbolicMassActionJump
 ```
 
 ## Modelingtoolkitize

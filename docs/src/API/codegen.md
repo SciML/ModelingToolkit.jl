@@ -52,6 +52,14 @@ ModelingToolkit.calculate_control_jacobian
 ModelingToolkit.calculate_A_b
 ```
 
+A system can be marked as unsupported by symbolic automatic differentiation, in which case
+the `calculate_*` functions above throw instead of producing a wrong derivative.
+
+```@docs
+ModelingToolkitBase.SymbolicADDisallowed
+ModelingToolkitBase.check_symbolic_ad_allowed
+```
+
 All code generation eventually calls `build_function_wrapper`.
 
 ```@docs
