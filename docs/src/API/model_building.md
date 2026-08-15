@@ -116,6 +116,13 @@ for more information.
 instream
 ```
 
+Connectors marked as 3D multibody frames carry a rotation matrix, from which the angular
+velocity of the frame can be computed.
+
+```@docs
+ModelingToolkit.get_w
+```
+
 ### System composition utilities
 
 ```@docs

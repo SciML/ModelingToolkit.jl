@@ -106,7 +106,7 @@ end
     audited = [
         Symbol("@discretes"), Symbol("@mtkbuild"), Symbol("@poissonians"), :DiscreteSystem,
         :ImplicitDiscreteSystem, :ODESystem, :analytically_integrated, :discrete_events,
-        :structural_simplify,
+        :get_w, :structural_simplify,
     ]
 
     for name in [accessors; audited]
