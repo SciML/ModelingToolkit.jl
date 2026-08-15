@@ -178,7 +178,7 @@ function mtkcompile!(
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(
-            tss[continuous_id]; simplify,
+            tss[continuous_id];
             inputs, outputs, disturbance_inputs,
             discrete_inputs = OrderedSet{SymbolicT}(clocked_inputs[continuous_id]),
             check_consistency, fully_determined, verbose,
