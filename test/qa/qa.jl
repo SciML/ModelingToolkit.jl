@@ -376,8 +376,14 @@ end
 run_qa(
     ModelingToolkit;
     Aqua = Aqua,
+    # JET currently exhausts tens of GB of memory on MTK and reports false
+    # positives from generated short-circuit guards. Track the fix in MTK and
+    # upstream before re-enabling this lane:
+    # https://github.com/SciML/ModelingToolkit.jl/issues/4958
+    # https://github.com/JuliaLang/julia/issues/62745
+    # https://github.com/aviatesk/JET.jl/issues/858
     JET = JET,
-    jet = true,
+    jet = false,
     aqua_kwargs = (;
         piracies = (; treat_as_own = (MTKBASE_OWNED_TYPES..., STRUCTURAL_TYPES...)),
     ),
