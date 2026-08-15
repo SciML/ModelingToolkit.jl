@@ -76,10 +76,54 @@ $(SIGNATURES)
 Compile the given system into a form that ModelingToolkitBase can generate code for. Also
 performs order reduction for ODEs and handles simple discrete/implicit-discrete systems.
 
+The returned system is a new system; `sys` is not modified. A system can only be compiled
+once — calling `mtkcompile` on an already-compiled system throws
+`RepeatedStructuralSimplificationError`.
+
+# Arguments
+
+- `sys`: The [`System`](@ref) to compile. It must not already be compiled.
+
 # Keyword Arguments
 
-+ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
-+ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
+- `inputs`: Variables to treat as inputs. They are converted to parameters and are allowed
+  to be unconnected, permitting models where `n_unknowns = n_equations - n_inputs`. Array
+  variables must have known shape and be passed either whole or fully scalarized in sorted
+  order.
+- `outputs`: Variables to treat as outputs of the compiled system.
+- `disturbance_inputs`: Inputs that represent disturbances. Like `inputs`, they are
+  converted to parameters and excluded from the equation/unknown balance check.
+- `fully_determined = true`: Whether to throw an error when the system is unbalanced, i.e.
+  when the number of equations differs from the number of unknowns after `inputs` and
+  `disturbance_inputs` have been removed. Passing `false` (or `nothing`) skips the check.
+- `additional_passes = ()`: A collection of functions applied to the system, in order,
+  after the built-in compilation passes have run. Each takes and returns a system.
+- `split = true`: Whether the compiled system uses the split parameter representation,
+  which stores parameters in type-homogeneous buffers indexed by an `IndexCache`. Pass
+  `false` to use a flat parameter vector instead.
+
+Remaining keyword arguments are forwarded to the internal compilation passes.
+
+# Returns
+
+A new, completed [`System`](@ref) suitable for code generation and problem construction.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `y` is eliminated as an observed variable of the compiled system
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :sys)
+csys = mtkcompile(sys)
+
+unknowns(csys)  # [x(t)]
+observed(csys)  # [y(t) ~ 2x(t)]
+```
 """
 function mtkcompile(
         sys::System; additional_passes = (),
