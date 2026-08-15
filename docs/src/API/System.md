@@ -305,13 +305,6 @@ Functions for linearization and analysis of systems.
 ```@docs
 AnalysisPoint
 linearization_ap_transform
-get_sensitivity_function
-get_comp_sensitivity_function
-get_looptransfer_function
-get_sensitivity
-get_comp_sensitivity
-get_looptransfer
-open_loop
 isolate_subsystem
 ```
 
