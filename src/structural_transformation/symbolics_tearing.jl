@@ -18,7 +18,11 @@ instead, which calls this function internally.
 function tearing(
         sys::AbstractSystem, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        fully_determined = true, kwargs...
+        fully_determined = true,
+        # Consumed here so it does not leak into external kwargs sinks; hand off to
+        # StateSelection/MTKTearing when those packages adopt SciMLLogging.
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
     return invalidate_cache!(reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...))
@@ -57,7 +61,11 @@ the system is balanced.
 function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        fully_determined = true, kwargs...
+        fully_determined = true,
+        # Consumed here so it does not leak into external kwargs sinks; hand off to
+        # StateSelection/MTKTearing when those packages adopt SciMLLogging.
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
+        kwargs...
     )
     jac = let state = state
         (eqs, vars) -> begin
