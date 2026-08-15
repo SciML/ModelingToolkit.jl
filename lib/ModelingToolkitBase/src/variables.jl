@@ -725,9 +725,9 @@ end
 
 ## Brownian
 """
-    tobrownian(s::Sym)
+    tobrownian(s)
 
-Maps the brownianiable to an unknown.
+Maps the variable to a Brownian variable.
 """
 tobrownian(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))

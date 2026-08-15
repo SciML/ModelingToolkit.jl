@@ -3,8 +3,8 @@
 ModelingToolkit uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) for the symbolic
 manipulation infrastructure. In fact, the `@variables` macro is defined in Symbolics.jl. In
 addition to `@variables`, ModelingToolkit defines `@parameters`, `@independent_variables`,
-`@constants` and `@brownians`. These macros function identically to `@variables` but allow
-ModelingToolkit to attach additional metadata.
+`@constants`, `@brownians`, `@poissonians` and `@discretes`. These macros function identically
+to `@variables` but allow ModelingToolkit to attach additional metadata.
 
 ```@docs
 @independent_variables
@@ -12,6 +12,8 @@ ModelingToolkit to attach additional metadata.
 @constants
 @brownians
 @brownian
+@poissonians
+@discretes
 ```
 
 Symbolic variables can have metadata attached to them. The defaults and guesses assigned
@@ -38,6 +40,13 @@ of systems, and specifically the section on [bindings and initial conditions](@r
 ModelingToolkit.hasdefault
 ModelingToolkit.getdefault
 ModelingToolkit.setdefault
+```
+
+The defaults of a system that has already been constructed are updated with `set_defaults`,
+which applies the same binding/initial condition semantics to an existing system.
+
+```@docs
+set_defaults
 ```
 
 ## Variable descriptions
@@ -213,6 +222,7 @@ getguess(u)
 ```@docs
 hasguess
 getguess
+ModelingToolkitBase.setguess
 ```
 
 When a system is constructed, the guesses of the involved variables are stored in a `Dict`
@@ -327,6 +337,15 @@ This metadata is used by the [`System`](@ref) constructor for automatically iden
 ModelingToolkit.VariableType
 ModelingToolkit.MTKVariableTypeCtx
 ModelingToolkit.isparameter
+```
+
+The `@parameters` and `@brownians` macros set this metadata on the variables they declare.
+The same can be done to an existing symbolic variable, which is useful when generating
+variables programmatically.
+
+```@docs
+ModelingToolkitBase.toparam
+ModelingToolkitBase.tobrownian
 ```
 
 ## Miscellaneous metadata
