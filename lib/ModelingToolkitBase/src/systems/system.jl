@@ -495,14 +495,53 @@ Construct a system using the given equations `eqs`, independent variable `iv` (`
 for time-independent systems, unknowns `dvs`, parameters `ps` and brownian variables
 `brownians`.
 
-## Keyword Arguments
+This is the explicit form of the constructor: every unknown and parameter of the system
+must be listed. Use the `System(eqs, iv)` method to discover them from the equations
+instead.
 
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`. A single `Equation` is also
+  accepted.
+- `iv`: The independent variable of the system, or `nothing` for a time-independent system.
+- `dvs`: The unknowns of the system. When `iv` is given, entries that are delayed or
+  evaluated-at forms of a variable (such as `x(t - 1)` or `x(0)`) rather than functions of
+  `iv` itself are filtered out.
+- `ps`: The parameters of the system.
+- `brownians`: The brownian variables appearing in `eqs`, for systems written in brownian
+  form. Defaults to no brownian variables.
+
+# Keyword Arguments
+
+- `name`: The name of the system, as a `Symbol`. This has no default and must be provided;
+  a `NoNameError` is thrown otherwise. [`@named`](@ref) supplies it automatically.
+- `systems`: The subsystems of this system. Defaults to no subsystems.
 - `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
   system to obtain bindings, initial conditions and/or guesses.
-- `checks`: Whether to perform sanity checks on the passed values.
+- `checks`: Whether to perform sanity checks on the passed values. Accepts `true`, `false`
+  or a bitmask combination of `CheckComponents` and `CheckUnits`.
 
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
+
+# Returns
+
+A [`System`](@ref) with the given equations, variables and metadata. The returned system is
+not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref) before building a
+problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+eqs = [D(x) ~ (y - x) / τ, y ~ 2x]
+sys = System(eqs, t, [x, y], [τ]; name = :explicit_sys)
+```
 """
 function System(
         eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
@@ -744,6 +783,35 @@ SymbolicIndexingInterface.getname(x::AbstractSystem) = nameof(x)
 
 Create a time-independent [`System`](@ref) with the given equations `eqs`, unknowns `dvs`
 and parameters `ps`.
+
+Equivalent to calling the explicit constructor with `iv = nothing`. Use this for
+systems that have no independent variable, such as nonlinear or optimization systems.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `dvs`: The unknowns of the system.
+- `ps`: The parameters of the system.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method. `name` is required.
+
+# Returns
+
+A time-independent [`System`](@ref). The returned system is not marked complete: call
+[`mtkcompile`](@ref) or [`complete`](@ref) before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+
+@variables x y
+@parameters a b
+
+sys = System([0 ~ a * x + y, 0 ~ x - b * y], [x, y], [a, b]; name = :steady_sys)
+```
 """
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     return System(eqs, nothing, dvs, ps; kwargs...)
@@ -755,6 +823,44 @@ end
 Create a time-dependent system with the given equations `eqs` and independent variable `iv`.
 Discover variables, parameters and brownians in the system by parsing the equations and
 other symbolic expressions passed to the system.
+
+This is the constructor most models use: only the equations and the independent variable
+have to be given, and the unknowns and parameters are inferred from them. Pass the
+unknowns and parameters explicitly when the inferred sets are not the intended ones.
+
+Note that only variables reachable from the equations and the other symbolic keyword
+arguments are discovered. A variable that appears nowhere in them is not made an unknown
+of the system.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `iv`: The independent variable of the system. Passing `nothing` forwards to the
+  time-independent method.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method, except that `dvs`,
+`ps` and `brownians` are discovered rather than passed. `name` is required.
+
+# Returns
+
+A [`System`](@ref) whose unknowns and parameters are those discovered from `eqs`. The
+returned system is not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref)
+before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `x`, `y` are discovered as unknowns and `τ` as a parameter
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :discovered_sys)
+```
 """
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
