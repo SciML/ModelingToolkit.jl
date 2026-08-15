@@ -50,7 +50,7 @@ end
     SciMLBase.DAEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `DAEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.DAEFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E};

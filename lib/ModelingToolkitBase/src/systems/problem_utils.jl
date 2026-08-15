@@ -1759,7 +1759,7 @@ end
 
 Bundle of options for [`process_SciMLProblem`](@ref)/`__process_SciMLProblem`, which build
 the `SciMLFunction` (and its `u0`/`p`/`du0`) shared by every `SciMLBase.*Problem`
-constructor. Nests a [`SciMLFunctionOptions`](@ref) (`fn_opts`) for the options that are
+constructor. Nests a `SciMLFunctionOptions` (`fn_opts`) for the options that are
 ultimately relevant to the `SciMLFunction` being constructed (`t`, `eval_expression`,
 `eval_module`, `compiler_options`, and everything else `SciMLFunctionOptions` recognizes),
 plus the fields specific to processing the operating point and building the initialization

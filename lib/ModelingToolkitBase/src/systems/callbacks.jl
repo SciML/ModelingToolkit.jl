@@ -351,7 +351,7 @@ const Affect = Union{AffectSystem, ImperativeAffect}
                                affect_neg = affect, initialize = nothing, finalize = nothing,
                                rootfind = SciMLBase.LeftRootFind, initialize_save_discretes = true)
 
-A [`ContinuousCallback`](@ref SciMLBase.ContinuousCallback) specified symbolically. Takes a vector of equations `eq`
+A [`ContinuousCallback`](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/) specified symbolically. Takes a vector of equations `eq`
 as well as the positive-edge `affect` and negative-edge `affect_neg` that apply when *any* of `eq` are satisfied.
 By default `affect_neg = affect`; to only get rising edges specify `affect_neg = nothing`.
 
@@ -366,7 +366,7 @@ sharp discontinuity between integrator steps (which in this example would not no
 guaranteed to be triggered.
 
 Once detected the integrator will "wind back" through a root-finding process to identify the point when the condition became active; the method used
-is specified by `rootfind` from [`SciMLBase.RootfindOpt`](@ref). If we denote the time when the condition becomes active as `tc`,
+is specified by `rootfind` from [`SciMLBase.RootfindOpt`](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/). If we denote the time when the condition becomes active as `tc`,
 the value in the integrator after windback will be:
 * `u[tc-epsilon], p[tc-epsilon], tc` if `LeftRootFind` is used,
 * `u[tc+epsilon], p[tc+epsilon], tc` if `RightRootFind` is used,

@@ -972,7 +972,7 @@ EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
 # Errors
 - Throws an error when applied to variables with more than one argument (e.g., `z(u, t)`)
 
-See also: [`Differential`](@ref)
+See also: [`Differential`](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
 """
 struct EvalAt <: Symbolics.Operator
     t::Union{SymbolicT, Number}

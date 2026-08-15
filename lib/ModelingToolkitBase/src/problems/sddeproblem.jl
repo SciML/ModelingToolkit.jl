@@ -19,7 +19,7 @@ end
     SciMLBase.SDDEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds an `SDDEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.SDDEFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E}

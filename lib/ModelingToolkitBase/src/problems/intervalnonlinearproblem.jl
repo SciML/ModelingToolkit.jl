@@ -18,7 +18,7 @@ end
     SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds an `IntervalNonlinearFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.IntervalNonlinearFunction(sys::System, opts::SciMLFunctionOptions{E}) where {E}
     check_complete(sys, IntervalNonlinearFunction)

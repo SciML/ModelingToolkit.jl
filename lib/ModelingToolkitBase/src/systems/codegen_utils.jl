@@ -73,7 +73,7 @@ _gfo_bool(b::Bool) = b
     GeneratedFunctionOptions{expression, wrap_gfw}(; kwargs...)
 
 Options for the code-generation entry points (`generate_rhs`, `generate_jacobian`, ...):
-the "output/compile" layer sitting one level above [`BuildFunctionWrapperOptions`](@ref).
+the "output/compile" layer sitting one level above `BuildFunctionWrapperOptions`.
 It controls how the generated code is realized (returned as an `Expr` vs compiled to a
 callable, and whether wrapped in a `GeneratedFunctionWrapper`) and holds a nested
 `Symbolics.CodegenFunctionOptions` (`codegen`) with the low-level code-generation options
@@ -750,7 +750,7 @@ end
     build_function_wrapper(sys::AbstractSystem, expr, args...; kwargs...)
 
 Backwards-compatibility keyword-argument form of `build_function_wrapper`. The keyword
-arguments (documented on [`BuildFunctionWrapperOptions`](@ref)) are bundled into a
+arguments (documented on `BuildFunctionWrapperOptions`) are bundled into a
 `BuildFunctionWrapperOptions` and forwarded to the primary method,
 [`build_function_wrapper(sys, expr, args, opts::BuildFunctionWrapperOptions)`](@ref). This
 method exists only for backwards compatibility; new code should construct a
@@ -790,7 +790,7 @@ A wrapper around `build_function` which performs the necessary transformations f
 code generation of all types of systems. `expr` is the expression returned from the
 generated functions, and `args` is the `Vector{Any}` of arguments.
 
-Options are supplied as a [`BuildFunctionWrapperOptions`](@ref); see its docstring for the
+Options are supplied as a `BuildFunctionWrapperOptions`; see its docstring for the
 available options. This is the primary method — the keyword-argument form of
 `build_function_wrapper` is a backwards-compatibility shim that bundles its keywords into a
 `BuildFunctionWrapperOptions` and calls this method.

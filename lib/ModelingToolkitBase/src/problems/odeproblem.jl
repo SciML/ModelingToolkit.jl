@@ -42,7 +42,7 @@ end
     SciMLBase.ODEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds an `ODEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above. Useful for callers
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above. Useful for callers
 that already hold (or want to share/reuse) an options struct, since — unlike the `kwargs...`
 wrapper — this method does not need to re-validate or re-assemble the option set.
 """

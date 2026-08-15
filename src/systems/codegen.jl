@@ -118,7 +118,7 @@ const LINEAR_MATRIX_PARAM_NAME = :linear_Aₘₜₖ
     $(TYPEDSIGNATURES)
 
 Return a symbolic variable representing the `A` matrix returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_linear_matrix_param(size::NTuple{2, Int})
     m, n = size
@@ -129,7 +129,7 @@ end
     $(TYPEDSIGNATURES)
 
 Return the name of the `i`th matrix in `B` returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_quadratic_form_name(i::Int)
     return Symbol(:quadratic_Bₘₜₖ_, i)
@@ -139,7 +139,7 @@ end
     $(TYPEDSIGNATURES)
 
 Return a symbolic variable representing the `i`th matrix in `B` returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_quadratic_form_param(sz::NTuple{2, Int}, i::Int)
     m, n = sz
@@ -190,8 +190,8 @@ end
 
 Generate `f1` and `f2` for [`SemilinearODEFunction`](@ref) (internally represented as a
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). This expects that the system has the necessary
-extra parameters added by [`add_semiquadratic_parameters`](@ref).
+`calculate_semiquadratic_form`. This expects that the system has the necessary
+extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 
@@ -382,9 +382,9 @@ end
 
 Generate the jacobian of `f1` for [`SemilinearODEFunction`](@ref) (internally represented as a
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
+`calculate_semiquadratic_form`. `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 
@@ -555,9 +555,9 @@ end
 
 Return the sparsity pattern of the  jacobian of `f1` for [`SemilinearODEFunction`](@ref)
 (internally represented as a `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
+`calculate_semiquadratic_form`. `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 

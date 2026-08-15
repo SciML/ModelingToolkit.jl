@@ -18,7 +18,7 @@ end
     SciMLBase.DiscreteFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds a `DiscreteFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.DiscreteFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E}

@@ -12,7 +12,9 @@ Where `out` is the output being connected to the inputs `in...`. All involved
 connectors (input and outputs) are required to either have an unknown named
 `u` or a single unknown, all of which should have the same size.
 
-See also [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref), [`get_looptransfer`](@ref), [`open_loop`](@ref)
+See also [`get_sensitivity`](@ref ModelingToolkit.get_sensitivity),
+[`get_comp_sensitivity`](@ref ModelingToolkit.get_comp_sensitivity),
+[`get_looptransfer`](@ref ModelingToolkit.get_looptransfer), and [`open_loop`](@ref).
 
 # Fields
 

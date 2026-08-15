@@ -23,7 +23,7 @@ end
     SemilinearODEFunction{iip, specialize}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `SemilinearODEFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SemilinearODEFunction{iip, specialize}(
         sys::System, opts::SciMLFunctionOptions{E};
@@ -167,7 +167,7 @@ end
     $(TYPEDSIGNATURES)
 
 Add the necessary parameters for [`SemilinearODEProblem`](@ref) given the matrices
-`A`, `B`, `C` returned from [`calculate_semiquadratic_form`](@ref).
+`A`, `B`, `C` returned from `calculate_semiquadratic_form`.
 """
 function add_semiquadratic_parameters(sys::System, A, B, C)
     eqs = equations(sys)

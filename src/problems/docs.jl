@@ -4,7 +4,7 @@ struct SemilinearODEProblem{iip, spec} end
 const SEMILINEAR_EXTRA_BODY = """
 This is a special form of an ODE which uses a `SplitFunction` internally. The equations are
 separated into linear, quadratic and general terms and phrased as matrix operations. See
-[`calculate_semiquadratic_form`](@ref) for information on how the equations are split. This
+`calculate_semiquadratic_form` for information on how the equations are split. This
 formulation allows leveraging split ODE solvers such as `KenCarp4` and is useful for systems
 where the stiff and non-stiff terms can be separated out in such a manner. Typically the linear
 part of the equations is the stiff part, but the keywords `stiff_linear`, `stiff_quadratic` and `stiff_nonlinear` can
@@ -23,6 +23,6 @@ const SEMILINEAR_A_B_C_KWARGS = """
 
 const SEMILINEAR_A_B_C_CONSTRAINT = """
 Note that all three of `stiff_linear`, `stiff_quadratic`, `stiff_nonlinear` cannot be identical, and at least
-two of `A`, `B`, `C` returned from [`calculate_semiquadratic_form`](@ref) must be
+two of `A`, `B`, `C` returned from `calculate_semiquadratic_form` must be
 non-`nothing`. In other words, both of the functions in the split form must be non-empty.
 """
