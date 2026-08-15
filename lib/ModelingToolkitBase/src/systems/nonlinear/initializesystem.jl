@@ -877,8 +877,15 @@ function DiffEqBase.get_updated_symbolic_problem(
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
 
     unwrapped_p = _unwrap_mtk_parameters(p)
-    if unwrapped_p isa MTKParameters
-        buffer = unwrapped_p.initials
+    if unwrapped_p !== p
+        updated_prob = DiffEqBase.get_updated_symbolic_problem(
+            sys, prob; u0, p = unwrapped_p, kw...
+        )
+        return @set updated_prob.p = p
+    end
+
+    if p isa MTKParameters
+        buffer = p.initials
     else
         buffer = p
     end

@@ -1,11 +1,17 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, MTKParameters
 using DiffEqBase
+using ForwardDiff
 using OrdinaryDiffEq
 using Random
+using SciMLBase
 using SciMLStructures
 using SymbolicIndexingInterface
 using Test
+
+struct _OpaqueParameterWrapper end
+const _opaque_parameters = Ref{Any}()
+SciMLBase.unwrap_parameters(::_OpaqueParameterWrapper) = _opaque_parameters[]
 
 @testset "AutoDespecialize parameters" begin
     @parameters a = 2.0
@@ -62,6 +68,20 @@ using Test
     @test eltype(typeof(concrete_prob.p)) === Any
     @test SciMLStructures.isscimlstructure(concrete_prob.p)
     @test SciMLStructures.ismutablescimlstructure(concrete_prob.p)
+
+    dual_initials = map(
+        value -> ForwardDiff.Dual{Nothing}(value, one(value)), concrete_parameters.initials
+    )
+    dual_parameters = SciMLStructures.replace(
+        SciMLStructures.Initials(), concrete_parameters, dual_initials
+    )
+    _opaque_parameters[] = SciMLBase.DespecializedParameters(dual_parameters)
+    opaque_parameters = _OpaqueParameterWrapper()
+    updated_prob = DiffEqBase.get_updated_symbolic_problem(
+        sys, concrete_prob; u0 = concrete_prob.u0, p = opaque_parameters
+    )
+    @test eltype(updated_prob.u0) <: ForwardDiff.Dual
+    @test updated_prob.p === opaque_parameters
 
     seen_parameter_type = Ref{DataType}()
     gfw = ModelingToolkitBase.GeneratedFunctionWrapper{Tuple{2, 3, false}}(
