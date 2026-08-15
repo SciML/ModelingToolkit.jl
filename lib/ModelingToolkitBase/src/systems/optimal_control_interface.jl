@@ -224,13 +224,15 @@ PyomoCollocation("ipopt", Pyomo.LagrangeRadau(3))
 """
 function PyomoCollocation end
 
-function warn_overdetermined(sys, op)
+function warn_overdetermined(sys, op, verbosity::MTKVerbosity)
     cstrs = constraints(sys)
     init_conds = filter(x -> value(x) ∈ Set(unknowns(sys)), [k for (k, v) in op])
-    return if !isempty(cstrs)
-        (length(cstrs) + length(init_conds) > length(unknowns(sys))) &&
-            @warn "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
+    if !isempty(cstrs) && length(cstrs) + length(init_conds) > length(unknowns(sys))
+        @SciMLMessage(verbosity, :overdetermined_constraints) do
+            "The control problem is overdetermined. The total number of conditions (# constraints + # fixed initial values given by op) exceeds the total number of states. The solvers will default to doing a nonlinear least-squares optimization."
+        end
     end
+    return nothing
 end
 
 """
@@ -366,7 +368,7 @@ function SciMLBase.ODEInputFunction{iip, specialize}(
 end
 
 # returns the JuMP timespan, the number of steps, and whether it is a free time problem.
-function process_tspan(tspan, dt, steps)
+function process_tspan(tspan, dt, steps, verbosity::MTKVerbosity = DEFAULT_MTK_VERBOSE)
     is_free_time = false
     symbolic_type(tspan[1]) !== NotSymbolic() &&
         error("Free initial time problems are not currently supported by the collocation solvers.")
@@ -377,13 +379,17 @@ function process_tspan(tspan, dt, steps)
             symbolic_type(tspan[2]) === ScalarSymbolic()
         isnothing(steps) &&
             error("Free final time problems require specifying the number of steps using the keyword arg `steps`, rather than dt.")
-        isnothing(dt) ||
-            @warn "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps."
+        isnothing(dt) || @SciMLMessage(
+            "Specified dt for free final time problem. This will be ignored; dt will be determined by the number of timesteps.",
+            verbosity, :dynamic_opt_time_grid
+        )
 
         return (0, 1), steps, true
     else
-        isnothing(steps) ||
-            @warn "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt."
+        isnothing(steps) || @SciMLMessage(
+            "Specified number of steps for problem with concrete tspan. This will be ignored; number of steps will be determined by dt.",
+            verbosity, :dynamic_opt_time_grid
+        )
 
         return tspan, length(tspan[1]:dt:tspan[2]), false
     end
@@ -493,7 +499,8 @@ function process_DynamicOptProblem(
         eval_expression = false, eval_module = @__MODULE__,
         kwargs...
     )
-    warn_overdetermined(sys, op)
+    verbosity = _route_problem_verbose(get(kwargs, :verbose, nothing))
+    warn_overdetermined(sys, op, verbosity)
     ctrls = inputs(sys)
     states = unknowns(sys)
     tunable_params = tune_parameters ? tunable_parameters(sys) : []
@@ -512,8 +519,7 @@ function process_DynamicOptProblem(
         ODEInputFunction, sys, _op;
         t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module, kwargs...
     )
-    model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps)
-    warn_overdetermined(sys, op)
+    model_tspan, steps, is_free_t = process_tspan(tspan, dt, steps, verbosity)
 
     # Build pmap for symbolic substitution in costs/constraints/bounds
     all_parameters = default_toterm.(parameters(sys))

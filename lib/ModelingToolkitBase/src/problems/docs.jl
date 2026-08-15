@@ -17,7 +17,11 @@ const EVAL_EXPR_MOD_KWARGS = """
 const INITIALIZEPROB_KWARGS = """
 - `guesses`: The guesses for variables in the system, used as initial values for the
   initialization problem.
-- `warn_initialize_determined`: Warn if the initialization system is under/over-determined.
+- `warn_initialize_determined`: (deprecated) Warn if the initialization system is
+  under/over-determined. Use `verbose` and the `singular_initialization`/
+  `overdetermined_initialization`/`underdetermined_initialization` toggles of
+  [`MTKVerbosity`](@ref) instead; when explicitly passed, this boolean overrides those
+  toggles.
 - `initialization_eqs`: Extra equations to use in the initialization problem.
 - `fully_determined`: Override whether the initialization system is fully determined.
 - `use_scc`: Whether to use `SCCNonlinearProblem` for initialization if the system is fully
@@ -38,12 +42,19 @@ $INITIALIZEPROB_KWARGS
   to construct the final `u0` value.
 - `p_constructor`: A function to apply to each array buffer created when constructing the
   parameter object.
-- `warn_cyclic_dependency`: Whether to emit a warning listing out cycles in initial
-  conditions provided for unknowns and parameters.
+- `verbose`: Controls diagnostic output during problem construction. Accepts an
+  [`MTKVerbosity`](@ref) specifier (consumed by ModelingToolkit and **not** placed in
+  `prob.kwargs`), a `SciMLLogging` preset or `Bool` (consumed by ModelingToolkit *and*
+  forwarded to the solver via `prob.kwargs`, as before), or a solver verbosity specifier
+  (forwarded untouched).
+- `warn_cyclic_dependency`: (deprecated) Whether to emit a warning listing out cycles in
+  initial conditions provided for unknowns and parameters. Use `verbose` and the
+  `cyclic_dependency` toggle of [`MTKVerbosity`](@ref) instead; when explicitly passed,
+  this boolean overrides that toggle.
 - `circular_dependency_max_cycle_length`: Maximum length of cycle to check for. Only
-  applicable if `warn_cyclic_dependency == true`.
+  applicable if cyclic-dependency reporting is enabled.
 - `circular_dependency_max_cycles`: Maximum number of cycles to check for. Only applicable
-  if `warn_cyclic_dependency == true`.
+  if cyclic-dependency reporting is enabled.
 - `substitution_limit`: The number times to substitute initial conditions into each other
   to attempt to arrive at a numeric value.
 - `missing_guess_value`: An instance of [`MissingGuessValue`](@ref) which indicates what
