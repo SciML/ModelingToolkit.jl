@@ -61,11 +61,13 @@ end
 
 Convenience wrapper for `find_perfect_aliases!`.
 """
-function eliminate_perfect_aliases!(state::TearingState)
+function eliminate_perfect_aliases!(
+        state::TearingState; verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
+    )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
     vars_to_rm = Int[]
-    aliases = find_perfect_aliases!(state, eqs_to_rm, vars_to_rm)
+    aliases = find_perfect_aliases!(state, eqs_to_rm, vars_to_rm, verbose)
     old_to_new_eq, old_to_new_var = StateSelection.rm_eqs_vars!(
         state, eqs_to_rm, vars_to_rm; eqs_sorted_and_uniqued = true
     )
@@ -142,7 +144,8 @@ equation, while physics variables appear in many dynamics equations); if that is
 tied, one of the tied variables is chosen arbitrarily.
 """
 function pick_alias_target(
-        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT
+        state::TearingState, group_vars::Vector{Int}, irreducibles::AtomicSetT,
+        verbose::MTKVerbosity
     )
     (; fullvars, structure) = state
     (; graph, canonical_ranks, state_priorities) = structure
@@ -155,9 +158,11 @@ function pick_alias_target(
     candidates = filter(v -> state_priorities[v] == max_priority, group_vars)
     if length(candidates) > 1 && max_priority > 0
         if max_priority >= 100
-            tied_names = getindex.(Ref(fullvars), candidates)
-            @warn "Multiple variables in an alias group share the highest state_priority \
-            ($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
+            @SciMLMessage(verbose, :state_priority_tie) do
+                tied_names = getindex.(Ref(fullvars), candidates)
+                "Multiple variables in an alias group share the highest state_priority \
+                ($max_priority); choosing alias target by equation count. Tied variables: $tied_names"
+            end
         end
         max_degree = maximum(v -> length(𝑑neighbors(graph, v)), candidates)
         filter!(v -> length(𝑑neighbors(graph, v)) == max_degree, candidates)
@@ -252,7 +257,8 @@ which variables are aliased to some other variables. Keys of `aliases` are prese
 `vars_to_rm`.
 """
 function find_perfect_aliases!(
-        state::TearingState, eqs_to_rm::Vector{Int}, vars_to_rm::Vector{Int}
+        state::TearingState, eqs_to_rm::Vector{Int}, vars_to_rm::Vector{Int},
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE
     )
     (; sys, fullvars, structure) = state
     (; graph, solvable_graph, var_to_diff, state_priorities) = structure
@@ -363,7 +369,7 @@ function find_perfect_aliases!(
         end
         # For consistent groups pick a target (survives as unknown) and rebase
         # parities relative to it via `target_p`.
-        target = pick_alias_target(state, group_vars, irreducibles)
+        target = pick_alias_target(state, group_vars, irreducibles, verbose)
         group_target[root] = target
         target_p = parity[target]
         for v in group_vars
@@ -876,7 +882,7 @@ end
 
 function alias_elimination!(
         state::TearingState;
-        print_underconstrained_variables = false, kwargs...
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE, kwargs...
     )
     StateSelection.complete!(state.structure)
     eqs_to_rm = Int[]
@@ -894,9 +900,11 @@ function alias_elimination!(
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
     mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
 
-    if print_underconstrained_variables
-        underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
-        @info "Found underconstrained variables in the system" underconstrained_vars
+    if !isempty(variable_underconstrained!.underconstrained)
+        @SciMLMessage(verbose, :underconstrained_variables) do
+            underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
+            "Found underconstrained variables in the system: $underconstrained_vars"
+        end
     end
 
     eqs = collect(equations(state))

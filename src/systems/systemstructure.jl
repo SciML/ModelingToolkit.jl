@@ -118,6 +118,8 @@ already have a `TearingState`. User code should normally call [`ModelingToolkitB
 - `inputs`: variables to treat as external inputs.
 - `outputs`: variables to treat as requested outputs.
 - `disturbance_inputs`: input variables that should be treated as disturbances.
+- `verbose`: an [`MTKVerbosity`](@ref) specifier controlling diagnostic output during
+  compilation.
 - `kwargs...`: additional simplification options forwarded to the internal compiler.
 
 # Returns
@@ -130,6 +132,7 @@ function mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )
     if !is_time_dependent(state.sys)
@@ -137,7 +140,7 @@ function mtkcompile!(
         return _mtkcompile!(
             state; check_consistency,
             inputs, outputs, disturbance_inputs,
-            fully_determined, kwargs...
+            fully_determined, verbose, kwargs...
         )
     end
     # split_system returns one or two systems and the inputs for each
@@ -178,7 +181,7 @@ function mtkcompile!(
             tss[continuous_id]; simplify,
             inputs, outputs, disturbance_inputs,
             discrete_inputs = OrderedSet{SymbolicT}(clocked_inputs[continuous_id]),
-            check_consistency, fully_determined,
+            check_consistency, fully_determined, verbose,
             kwargs...
         )
         additional_passes = get(kwargs, :additional_passes, nothing)
@@ -215,7 +218,7 @@ function mtkcompile!(
     sys = _mtkcompile!(
         state; check_consistency,
         inputs, outputs, disturbance_inputs,
-        fully_determined, kwargs...
+        fully_determined, verbose, kwargs...
     )
     return sys
 end
@@ -229,6 +232,7 @@ function _mtkcompile!(
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         eliminate_mm_zeros = true,
+        verbose::MTKVerbosity = DEFAULT_MTK_VERBOSE,
         kwargs...
     )
     if fully_determined isa Bool
@@ -242,10 +246,10 @@ function _mtkcompile!(
     union!(inputs, disturbance_inputs)
     state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
     state = inputs_to_parameters!(state, inputs, outputs)
-    eliminate_perfect_aliases!(state)
+    eliminate_perfect_aliases!(state; verbose)
     StateSelection.trivial_tearing!(state)
-    sys, mm = alias_elimination!(state; fully_determined, kwargs...)
-    old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
+    sys, mm = alias_elimination!(state; fully_determined, verbose, kwargs...)
+    old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state; verbose)
     sys = state.sys
     mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
     if eliminate_mm_zeros
@@ -263,9 +267,11 @@ function _mtkcompile!(
             state, orig_inputs; nothrow = fully_determined === nothing
         )
     end
-    sys = _mtkcompile_worker!(state, sys; fully_determined, dummy_derivative, kwargs...)
+    sys = _mtkcompile_worker!(
+        state, sys; fully_determined, dummy_derivative, verbose, kwargs...
+    )
     fullunknowns = [observables(sys); unknowns(sys)]
-    @set! sys.observed = MTKBase.topsort_equations(sys, observed(sys), fullunknowns)
+    @set! sys.observed = MTKBase.topsort_equations(sys, observed(sys), fullunknowns; verbose)
     sys = state.sys = MTKBase.invalidate_cache!(sys)
 
     return sys
@@ -274,24 +280,25 @@ end
 function _mtkcompile_worker!(
         state::TearingState, sys::System;
         fully_determined::Bool, dummy_derivative::Bool,
+        verbose::MTKVerbosity,
         kwargs...
     )
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; kwargs...
+            sys, state; verbose, kwargs...
         )
     elseif fully_determined
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm = alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm = alias_elimination!(state; fully_determined, verbose, kwargs...)
         state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; fully_determined, kwargs...
+            sys, state; fully_determined, verbose, kwargs...
         )
     else
         sys = ModelingToolkit.tearing(
-            sys, state; fully_determined, kwargs...
+            sys, state; fully_determined, verbose, kwargs...
         )
     end
     return sys
