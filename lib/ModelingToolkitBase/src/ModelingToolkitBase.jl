@@ -287,6 +287,7 @@ const COMMON_FALSE = SU.Const{VartypeT}(false)
 const COMMON_INF = SU.Const{VartypeT}(Inf)
 
 include("utils.jl")
+include("verbosity.jl")
 
 include("systems/index_cache.jl")
 include("systems/parameter_buffer.jl")
@@ -428,6 +429,7 @@ export initialization_equations, guesses, bindings, initial_conditions, hierarch
 export set_defaults
 export state_priorities, irreducibles, maybe_zeros
 export mtkcompile, expand_connections, structural_simplify
+export MTKVerbosity
 export solve
 export Pre
 
