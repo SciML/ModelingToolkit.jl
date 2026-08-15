@@ -264,9 +264,9 @@ function MTK.FMIComponent(
 
         # instance management callback which deallocates the instance when
         # necessary and notifies the FMU of completed integrator steps
-        finalize_affect = MTK.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
-        step_affect = MTK.ImperativeAffect(Returns((;)))
-        instance_management_callback = MTK.SymbolicDiscreteCallback(
+        finalize_affect = MTKBase.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
+        step_affect = MTKBase.ImperativeAffect(Returns((;)))
+        instance_management_callback = MTKBase.SymbolicDiscreteCallback(
             (t == t - 1), step_affect; finalize = finalize_affect, reinitializealg = SciMLBase.NoInit()
         )
 
@@ -306,16 +306,16 @@ function MTK.FMIComponent(
         if symbolic_type(__mtk_internal_u) != NotSymbolic()
             cb_modified = (cb_modified..., states = __mtk_internal_u)
         end
-        initialize_affect = MTK.ImperativeAffect(
+        initialize_affect = MTKBase.ImperativeAffect(
             fmiCSInitialize!; observed = cb_observed,
             modified = cb_modified, ctx = _functor
         )
-        finalize_affect = MTK.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
+        finalize_affect = MTKBase.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
         # the callback affect performs the stepping
-        step_affect = MTK.ImperativeAffect(
+        step_affect = MTKBase.ImperativeAffect(
             fmiCSStep!; observed = cb_observed, modified = cb_modified, ctx = _functor
         )
-        instance_management_callback = MTK.SymbolicDiscreteCallback(
+        instance_management_callback = MTKBase.SymbolicDiscreteCallback(
             communication_step_size, step_affect; initialize = initialize_affect,
             finalize = finalize_affect, reinitializealg
         )

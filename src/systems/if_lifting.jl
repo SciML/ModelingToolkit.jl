@@ -184,7 +184,7 @@ end
 VarsUsedInCondition() = VarsUsedInCondition(Set())
 
 function (v::VarsUsedInCondition)(expr)
-    expr = Symbolics.unwrap(expr)
+    expr = SymbolicUtils.unwrap(expr)
     if symbolic_type(expr) == NotSymbolic()
         is_array_of_symbolics(expr) || return
         foreach(v, expr)

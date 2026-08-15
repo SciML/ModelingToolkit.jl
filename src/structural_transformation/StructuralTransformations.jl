@@ -10,10 +10,11 @@ module StructuralTransformations
 using Setfield: @set!, @set
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT,
+using Symbolics: linear_expansion, VartypeT, SymbolicT,
     var_from_nested_derivative, value
 import Symbolics
 using SymbolicUtils
+using SymbolicUtils: unwrap
 using SymbolicUtils: BSImpl
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters

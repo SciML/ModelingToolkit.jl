@@ -19,7 +19,7 @@ import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation, promote_symtype,
     isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
     @rule, Rewriters, substitute, BasicSymbolic,
-    symtype, _iszero, _isone
+    symtype, _iszero, _isone, unwrap
 import TermInterface: maketerm, metadata
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
@@ -57,7 +57,7 @@ using RuntimeGeneratedFunctions: drop_expr
 
 using Symbolics: degree, VartypeT, SymbolicT
 using Symbolics: parse_vars, value, @derivatives, get_variables,
-    exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
+    exprs_occur_in, symbolic_linear_solve, wrap,
     VariableSource, variable, COMMON_ZERO,
     NAMESPACE_SEPARATOR, setdefaultval, Arr,
     hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
