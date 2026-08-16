@@ -38,6 +38,7 @@ pages = [
     "API" => Any[
         "API/modules.md",
         "API/System.md",
+        "API/System_accessors.md",
         "API/abstract_system_interface.md",
         "API/variables.md",
         "API/model_building.md",
