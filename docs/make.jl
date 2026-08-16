@@ -47,7 +47,7 @@ makedocs(
         # Coveralls denies automated requests with HTTP 403; keep the README badge.
         "https://coveralls.io/github/SciML/ModelingToolkit.jl?branch=master",
 
-   ],
+    ],
     format = Documenter.HTML(;
         assets = ["assets/favicon.ico"],
         mathengine,
