@@ -19,15 +19,17 @@ import Moshi
 
 import ModelingToolkit
 using ModelingToolkitBase: System, AbstractSystem, Differential,
-    equations, diff2term_with_unit,
-    operation, arguments,
+    Equation, equations, full_equations, diff2term_with_unit,
+    operation, arguments, expand_derivatives,
     isdiffeq, isdifferential,
     get_tearing_state, get_iv,
     invalidate_cache!,
     iscomplete, get_schedule
 
+using SymbolicUtils: substitute
+
 using BipartiteGraphs: maximal_matching, ndsts, unassigned, 𝑠neighbors
-import BipartiteGraphs: complete, IncrementalCycleTracker, add_edge_checked!
+import BipartiteGraphs: complete
 import Graphs
 using Graphs: edges, inneighbors, nv, outneighbors
 using Graphs.LinAlg: incidence_matrix

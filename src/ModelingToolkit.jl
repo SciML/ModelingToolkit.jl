@@ -20,6 +20,7 @@ import SymbolicUtils: iscall, arguments, operation,
     @rule, Rewriters, substitute, BasicSymbolic,
     symtype, _iszero, unwrap
 import TermInterface: maketerm, metadata
+import SymbolicUtils.Code
 import SymbolicUtils.Code: Assignment, AtIndex, Let, MakeArray, SetArray, toexpr
 import DocStringExtensions
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
@@ -63,7 +64,7 @@ using Symbolics: VartypeT, SymbolicT
 using Symbolics: value, @derivatives, get_variables, symbolic_linear_solve, wrap,
     COMMON_ZERO, NAMESPACE_SEPARATOR, fixpoint_sub
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
-import Symbolics: rename, islinear,
+import Symbolics: rename, derivative, islinear,
     tosymbol, build_function
 import ModelingToolkitBase as MTKBase
 import SimpleNonlinearSolve
@@ -162,6 +163,7 @@ export tearing, dae_index_lowering, dummy_derivative,
     sorted_incidence_matrix, pantelides_reassemble, find_solvables!,
     tearing_substitution, but_ordered_incidence, lowest_order_variable_mask,
     highest_order_variable_mask
+export StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
 export analyze_initialization_jacobian
