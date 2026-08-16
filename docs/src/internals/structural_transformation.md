@@ -58,6 +58,8 @@ StateSelection.TransformationState
 StateSelection.TearingAlgorithm
 StateSelection.TearingResult
 StateSelection.find_eq_solvables!
+StateSelection.bareiss.bareiss!
+StateSelection.CLIL.SparseMatrixCLIL
 ModelingToolkitTearing.InlineLinearSystem
 ModelingToolkitTearing.inline_linear_systems
 ```

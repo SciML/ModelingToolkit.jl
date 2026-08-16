@@ -36,6 +36,17 @@ ModelingToolkit.alias_elimination
 ModelingToolkitBase.SymScope
 ```
 
+## Developer hooks
+
+These lower-level hooks are used by backend implementations and code-generation
+extensions. They are versioned for developers, not intended as the default user workflow.
+
+```@docs
+ModelingToolkitBase.MiscSystemData
+ModelingToolkitBase.generate_trajectory
+CommonSolve.solve(::SciMLBase.AbstractDynamicOptProblem, ::ModelingToolkitBase.AbstractCollocation)
+```
+
 ## Contracts of the type
 
 The inner constructor for `System` takes the fields in order. While the order of fields doesn't
