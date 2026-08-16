@@ -27,15 +27,3 @@ The following primitive graph API is defined and versioned by the
 - Matching: `BipartiteGraphs.maximal_matching` and
   `BipartiteGraphs.construct_augmenting_path!`.
 - Vertex kinds: `BipartiteGraphs.SRC` and `BipartiteGraphs.DST`.
-
-## Dependency Graph Construction
-
-```@docs
-ModelingToolkitBase.equation_dependencies
-ModelingToolkitBase.variable_dependencies
-ModelingToolkitBase.eqeq_dependencies
-ModelingToolkitBase.varvar_dependencies
-ModelingToolkitBase.asgraph
-ModelingToolkitBase.asdigraph
-ModelingToolkit.map_variables_to_equations
-```
