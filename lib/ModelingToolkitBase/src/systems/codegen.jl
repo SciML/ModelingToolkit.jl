@@ -52,8 +52,10 @@ function expand_array_derivatives(ex)
     for term in terms
         op = operation(term)
         arg = unwrap(only(arguments(term)))
-        scalars = vec(collect(Symbolics.scalarize(wrap(arg))))
-        subs[term] = [unwrap(op(sc)) for sc in scalars]
+        # Preserve the shape: a derivative of a 2D slice must substitute a 2D array of
+        # scalar derivatives, or it will not broadcast against the surrounding slices.
+        scalars = collect(Symbolics.scalarize(wrap(arg)))
+        subs[term] = map(sc -> unwrap(op(sc)), scalars)
     end
     return unwrap(Symbolics.substitute(wrap(ex), subs))
 end

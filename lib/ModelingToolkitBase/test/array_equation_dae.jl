@@ -77,3 +77,40 @@ end
     # second-order spatial discretization on 21 points
     @test maximum(abs.(sol.u[end] .- exact)) < 5.0e-3
 end
+
+@testset "array equations over a 2D slice keep their shape" begin
+    # A derivative of a 2D slice must substitute a 2D array of scalar derivatives; a
+    # flattened one does not broadcast against the surrounding slices and codegen fails
+    # with a DimensionMismatch.
+    n = 6
+    @independent_variables t
+    @variables w(t)[1:n, 1:n]
+    D = Differential(t)
+    dx = 1 / (n - 1)
+    inner = 2:(n - 1)
+    lap = (
+        w[1:(n - 2), inner] .+ w[3:n, inner] .+ w[inner, 1:(n - 2)] .+
+            w[inner, 3:n] .- 4 .* w[inner, inner]
+    ) ./ dx^2
+    eqs = Equation[broadcast(-, D(w[inner, inner]), lap) ~ zeros(n - 2, n - 2)]
+    for i in 1:n
+        push!(eqs, w[i, 1] ~ 0.0)
+        push!(eqs, w[i, n] ~ 0.0)
+    end
+    for j in inner
+        push!(eqs, w[1, j] ~ 0.0)
+        push!(eqs, w[n, j] ~ 0.0)
+    end
+    @named sys2d = System(eqs, t, vec(collect(w)), [])
+    sys2d = complete(sys2d)
+
+    op = vcat(
+        [w[i, j] => 0.25 for i in 1:n, j in 1:n] |> vec,
+        [D(w[i, j]) => 0.0 for i in 1:n, j in 1:n] |> vec
+    )
+    prob = DAEProblem(sys2d, op, (0.0, 0.01); build_initializeprob = false)
+    @test length(prob.u0) == n * n
+    out = zeros(n * n)
+    prob.f(out, zeros(n * n), prob.u0, prob.p, 0.0)
+    @test all(isfinite, out)
+end
