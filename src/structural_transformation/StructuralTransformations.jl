@@ -20,7 +20,7 @@ import Moshi
 import ModelingToolkit
 using ModelingToolkitBase: System, AbstractSystem, Differential,
     Equation, equations, full_equations, diff2term_with_unit,
-    operation, arguments, expand_derivatives,
+    operation, arguments,
     isdiffeq, isdifferential,
     get_tearing_state, get_iv,
     invalidate_cache!,
