@@ -37,6 +37,74 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
+
+"""
+    $(TYPEDSIGNATURES)
+
+Rewrite a derivative of an array-valued expression, such as `D(u[2:4])`, into an array of
+the corresponding scalar derivatives. Implicit-DAE codegen binds scalar `D(uᵢ)` terms to
+elements of the `du` argument, and a derivative of a slice matches none of them.
+"""
+function expand_array_derivatives(ex)
+    terms = _array_derivative_terms!(Any[], ex)
+    isempty(terms) && return ex
+    subs = Dict()
+    for term in terms
+        op = operation(term)
+        arg = unwrap(only(arguments(term)))
+        scalars = vec(collect(Symbolics.scalarize(wrap(arg))))
+        subs[term] = [unwrap(op(sc)) for sc in scalars]
+    end
+    return unwrap(Symbolics.substitute(wrap(ex), subs))
+end
+
+function _array_derivative_terms!(acc, ex)
+    ex = unwrap(ex)
+    iscall(ex) || return acc
+    op = operation(ex)
+    if op isa Differential
+        arg = unwrap(only(arguments(ex)))
+        symtype(arg) <: AbstractArray && push!(acc, ex)
+        return acc
+    end
+    for arg in arguments(ex)
+        _array_derivative_terms!(acc, arg)
+    end
+    return acc
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Expand array-valued residual entries so each contributes one output row. The rows index
+into the same underlying expression rather than being scalarized separately, so the array
+computation is built once.
+"""
+function flatten_array_residuals(rhss)
+    any(r -> symtype(unwrap(r)) <: AbstractArray, rhss) || return rhss
+    out = Any[]
+    for r in rhss
+        ru = unwrap(r)
+        if !(symtype(ru) <: AbstractArray)
+            push!(out, ru)
+            continue
+        end
+        sz = try
+            size(wrap(ru))
+        catch
+            nothing
+        end
+        if sz === nothing
+            append!(out, vec(collect(Symbolics.scalarize(wrap(ru)))))
+        else
+            for idx in CartesianIndices(sz)
+                push!(out, unwrap(wrap(ru)[Tuple(idx)...]))
+            end
+        end
+    end
+    return out
+end
+
 function generate_rhs(
         sys::System, opts::GeneratedFunctionOptions;
         implicit_dae::Bool = false, scalar::Bool = false,
@@ -84,6 +152,11 @@ function generate_rhs(
             D = Differential(t)
             ddvs = map(D, dvs)
             rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+            # An array equation stands for one residual row per element. Rewrite its
+            # derivative term to the scalar derivatives bound to the `du` argument, then
+            # index the residual per row. Both are no-ops when no equation is array-valued.
+            rhss = map(expand_array_derivatives, rhss)
+            rhss = flatten_array_residuals(rhss)
         end
     else
         if !override_discrete && !is_discrete_system(sys)
