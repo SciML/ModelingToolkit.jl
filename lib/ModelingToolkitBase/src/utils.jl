@@ -714,7 +714,17 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
         SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             isoperator(v, op) || continue
-            push!(diffvars, arguments(v)[1])
+            arg = arguments(v)[1]
+            # An operator applied to an array variable or slice, such as `D(u[2:4])`,
+            # names the array rather than its elements. Callers test membership of the
+            # scalar unknowns, so record the elements.
+            if symtype(arg) <: AbstractArray
+                for el in vec(collect(Symbolics.scalarize(wrap(arg))))
+                    push!(diffvars, unwrap(el))
+                end
+            else
+                push!(diffvars, arg)
+            end
         end
         empty!(vars)
     end
