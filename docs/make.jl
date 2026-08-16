@@ -44,8 +44,10 @@ makedocs(
         # even in the browser it takes ages
         "http://www.scholarpedia.org/article/Differential-algebraic_equations",
         "https://link.springer.com/book/10.1007/978-3-030-91032-7",
+        # Coveralls denies automated requests with HTTP 403; keep the README badge.
+        "https://coveralls.io/github/SciML/ModelingToolkit.jl?branch=master",
 
-    ],
+   ],
     format = Documenter.HTML(;
         assets = ["assets/favicon.ico"],
         mathengine,
