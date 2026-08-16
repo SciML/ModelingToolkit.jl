@@ -64,8 +64,9 @@ using Symbolics: VartypeT, SymbolicT
 using Symbolics: value, @derivatives, get_variables, symbolic_linear_solve, wrap,
     COMMON_ZERO, NAMESPACE_SEPARATOR, fixpoint_sub
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
-import Symbolics: rename, derivative, islinear,
+import Symbolics: rename, islinear,
     tosymbol, build_function
+const derivative = Symbolics.derivative
 import ModelingToolkitBase as MTKBase
 import SimpleNonlinearSolve
 
