@@ -1,5 +1,5 @@
 using SymbolicUtils: Rewriters
-using Graphs.Experimental.Traversals
+import Graphs.Experimental.Traversals
 
 """
     alias_elimination(sys)
