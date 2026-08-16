@@ -124,7 +124,6 @@ linearization_function
 LinearizationProblem
 ModelingToolkit.LinearizationOpPoint
 linearize
-CommonSolve.solve(::LinearizationProblem)
 ModelingToolkit.linearize_symbolic
 ```
 
@@ -133,19 +132,4 @@ There are also utilities for manipulating the results of these analyses in a sym
 ```@docs
 ModelingToolkit.similarity_transform
 ModelingToolkit.reorder_unknowns
-```
-
-### Analysis point transformations
-
-Linear analysis can also be done using analysis points to perform several common
-workflows.
-
-```@docs
-get_sensitivity_function
-get_sensitivity
-get_comp_sensitivity_function
-get_comp_sensitivity
-get_looptransfer_function
-get_looptransfer
-open_loop
 ```
