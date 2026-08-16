@@ -3,4 +3,5 @@
 ```@docs
 ModelingToolkit.ModelingToolkit
 ModelingToolkitBase.ModelingToolkitBase
+ModelingToolkit.StructuralTransformations
 ```
