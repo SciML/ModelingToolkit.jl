@@ -719,8 +719,8 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
             # names the array rather than its elements. Callers test membership of the
             # scalar unknowns, so record the elements.
             if symtype(arg) <: AbstractArray
-                for el in vec(collect(Symbolics.scalarize(wrap(arg))))
-                    push!(diffvars, unwrap(el))
+                for idx in SU.stable_eachindex(arg)
+                    push!(diffvars, arg[idx])
                 end
             else
                 push!(diffvars, arg)
