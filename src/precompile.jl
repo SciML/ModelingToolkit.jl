@@ -1,8 +1,6 @@
-include(pkgdir(ModelingToolkitBase, "src", "precompile.jl"))
-
 PrecompileTools.@compile_workload begin
-    t = ModelingToolkitBase.t_nounits
-    D = ModelingToolkitBase.D_nounits
+    t = MTKBase.t_nounits
+    D = MTKBase.D_nounits
 
     function f!(du, u, p)
         du[1] = cos(u[2]) - u[1]

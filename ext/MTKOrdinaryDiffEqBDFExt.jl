@@ -1,9 +1,9 @@
 module MTKOrdinaryDiffEqBDFExt
 
 using ModelingToolkit
+using ModelingToolkitBase: t_nounits, D_nounits
 using OrdinaryDiffEqBDF: FBDF
 using PrecompileTools: @compile_workload, @setup_workload
-using ModelingToolkit: t_nounits, D_nounits
 
 @setup_workload begin
     @parameters a = 1.0 b = 1.0

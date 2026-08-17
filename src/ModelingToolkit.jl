@@ -3,82 +3,74 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 
-using PrecompileTools, Reexport
+import PrecompileTools
+using PrecompileTools: @recompile_invalidations
 @recompile_invalidations begin
-    using StaticArrays
-    using Symbolics
+    import StaticArrays
+    import Symbolics
     # ONLY here for the invalidations
     import REPL
-    using OffsetArrays: Origin
-    import BlockArrays: BlockArray, BlockVector, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-        undef_blocks, blocks, mortar
+    import BlockArrays: BlockVector, undef_blocks
 end
 
 import SymbolicUtils
 import SymbolicUtils as SU
-import SymbolicUtils: iscall, arguments, operation, promote_symtype,
-    isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
+import SymbolicUtils: iscall, arguments, operation,
+    issym, BSImpl,
     @rule, Rewriters, substitute, BasicSymbolic,
-    symtype, _iszero, _isone
+    symtype, _iszero, unwrap
 import TermInterface: maketerm, metadata
-using SymbolicUtils.Code
-import SymbolicUtils.Code: toexpr
-import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-using DocStringExtensions
+import SymbolicUtils.Code
+import SymbolicUtils.Code: Assignment, AtIndex, Let, MakeArray, SetArray, toexpr
+import DocStringExtensions
+using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 @recompile_invalidations begin
-    using DiffEqBase, SciMLBase, ForwardDiff
+    import DiffEqBase, SciMLBase, ForwardDiff
 end
-using Graphs
+import Graphs
+using Graphs: SimpleGraph, bfs_parents, rem_edge!, topological_sort_by_dfs
 import OrderedCollections
+using OrderedCollections: OrderedSet
 
-using SymbolicIndexingInterface
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: NotSymbolic, ParameterIndexingProxy, ProblemState,
+    current_time, getp, getsym, getu, hasname, is_parameter, is_time_dependent,
+    parameter_index, parameter_values, setp, setp_oop, setsym, setu, state_values,
+    symbolic_type, variable_symbols
 using SymbolicIndexingInterface: getname
-using LinearAlgebra, SparseArrays
-using InteractiveUtils
-using DataStructures
-using Base.Threads
-using Setfield, ConstructionBase
+import LinearAlgebra, SparseArrays
+using LinearAlgebra: I, UniformScaling, UpperTriangular, cond, issuccess, lu, mul!, svd
+using SparseArrays: SparseMatrixCSC, blockdiag, findnz, nnz, sparse, spzeros
+import InteractiveUtils
+import DataStructures
+using DataStructures: Queue
+import Base.Threads
+import Setfield, ConstructionBase
+using Setfield: @set!, @set
 import Libdl
-using DocStringExtensions
-using Base: RefValue
-using Combinatorics
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-    PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-    NoInit
+import Combinatorics
+using SciMLBase: TimeDomain, Clock, SolverStepClock, ContinuousClock, OverrideInit, NoInit,
+    LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
+    ODEFunction, ODEProblem, SCCNonlinearProblem, SplitFunction, SplitODEProblem, remake
 import Moshi
-using Moshi.Data: @data
 import SCCNonlinearSolve
-using Reexport
-import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
+import Graphs: add_edge!
 import CommonSolve
+using CommonSolve: solve
 
-using RuntimeGeneratedFunctions
-using RuntimeGeneratedFunctions: drop_expr
+import RuntimeGeneratedFunctions
 
-using Symbolics: degree, VartypeT, SymbolicT
-using Symbolics: parse_vars, value, @derivatives, get_variables,
-    exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-    VariableSource, variable, COMMON_ZERO,
-    NAMESPACE_SEPARATOR, setdefaultval, Arr,
-    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm
+using Symbolics: VartypeT, SymbolicT
+using Symbolics: value, @derivatives, get_variables, symbolic_linear_solve, wrap,
+    COMMON_ZERO, NAMESPACE_SEPARATOR, fixpoint_sub
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
-import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-    jacobian_sparsity, isaffine, islinear,
-    tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-    BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-    ParallelForm, SerialForm, MultithreadedForm, build_function,
-    rhss, lhss, gradient,
-    jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-    scalarize, hasderiv
+import Symbolics: rename, islinear,
+    tosymbol, build_function
+const derivative = Symbolics.derivative
 import ModelingToolkitBase as MTKBase
 import SimpleNonlinearSolve
 
-import SciMLBase: @add_kwonly
 using UnPack: @unpack
-# ModelingToolkitBase already `@reexport`s Symbolics and UnPack, so re-exporting them a
-# second time here would only duplicate that surface. The set of names ModelingToolkit
-# publicly re-exports is pinned by `REEXPORTED_API` in `test/qa/qa.jl`.
-@reexport using ModelingToolkitBase
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
@@ -87,7 +79,10 @@ import SciMLPublic: @public
 import PreallocationTools
 import PreallocationTools: DiffCache
 import FillArrays
-using BipartiteGraphs
+import BipartiteGraphs
+using BipartiteGraphs: BipartiteEdge, BipartiteGraph, DiCMOBiGraph,
+    MatchedCondensationGraph, Unassigned, invview, maximal_matching, ndsts, nsrcs,
+    𝑑neighbors, 𝑑vertices, 𝑠neighbors
 import SciMLStructures
 
 @recompile_invalidations begin
@@ -96,7 +91,7 @@ import SciMLStructures
     import ModelingToolkitTearing as MTKTearing
     using ModelingToolkitTearing: TearingState, SystemStructure
 
-    ModelingToolkitBase.complete(dg::StateSelection.DiffGraph) = BipartiteGraphs.complete(dg)
+    MTKBase.complete(dg::StateSelection.DiffGraph) = BipartiteGraphs.complete(dg)
 end
 
 macro import_mtkbase()
@@ -108,6 +103,7 @@ macro import_mtkbase()
     public_expr = :(@public)
     inner_public_expr = Expr(:tuple)
     push!(public_expr.args, inner_public_expr)
+    export_expr = Expr(:export)
 
     for name in allnames
         name in banned_names && continue
@@ -119,18 +115,19 @@ macro import_mtkbase()
                 push!(inner_public_expr.args, name)
             end
         end
+        Base.isexported(MTKBase, name) && push!(export_expr.args, name)
     end
 
     return quote
         $using_expr
+        $export_expr
         $(esc(public_expr))
     end
 end
 
 @import_mtkbase
 
-using ModelingToolkitBase: COMMON_SENTINEL, COMMON_NOTHING, COMMON_MISSING,
-    COMMON_TRUE, COMMON_FALSE, COMMON_INF
+using ModelingToolkitBase: COMMON_NOTHING, COMMON_MISSING, COMMON_TRUE
 using ModelingToolkitBase: build_function_wrapper, BuildFunctionWrapperOptions,
     GeneratedFunctionOptions
 
@@ -158,7 +155,16 @@ include("systems/substitute_component.jl")
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 
-@reexport using .StructuralTransformations
+import .StructuralTransformations
+using .StructuralTransformations: tearing, dae_index_lowering, dummy_derivative,
+    sorted_incidence_matrix, pantelides_reassemble, find_solvables!,
+    tearing_substitution, but_ordered_incidence, lowest_order_variable_mask,
+    highest_order_variable_mask
+export tearing, dae_index_lowering, dummy_derivative,
+    sorted_incidence_matrix, pantelides_reassemble, find_solvables!,
+    tearing_substitution, but_ordered_incidence, lowest_order_variable_mask,
+    highest_order_variable_mask
+export StructuralTransformations
 
 export SemilinearODEFunction, SemilinearODEProblem
 export analyze_initialization_jacobian

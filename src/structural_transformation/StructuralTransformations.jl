@@ -7,62 +7,44 @@ end-user applications should use [`mtkcompile`](@ref) instead.
 """
 module StructuralTransformations
 
-using Setfield: @set!, @set
+using Setfield: @set!
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT,
-    var_from_nested_derivative, value
+using Symbolics: SymbolicT
 import Symbolics
-using SymbolicUtils
+import SymbolicUtils
 using SymbolicUtils: BSImpl
-using SymbolicUtils.Code
-using SymbolicUtils.Rewriters
-using SymbolicUtils: iscall, symtype
-using TermInterface: maketerm
 import SymbolicUtils as SU
 import Moshi
 
-using ModelingToolkit
+import ModelingToolkit
 using ModelingToolkitBase: System, AbstractSystem, Differential,
-    unknowns, equations, diff2term_with_unit,
-    operation, arguments, simplify, symbolic_linear_solve,
-    isdiffeq, isdifferential, isirreducible,
-    empty_substitutions, get_substitutions,
-    get_tearing_state, get_iv, independent_variables,
-    has_tearing_state, InvalidSystemException,
-    ExtraEquationsSystemException,
-    ExtraVariablesSystemException,
-    invalidate_cache!, Shift,
-    filter_kwargs, lower_varname_with_unit,
-    setio,
-    has_equations, observed,
-    Schedule, iscomplete, get_schedule, VariableUnshifted,
-    VariableShift, DerivativeDict, shift2term, simplify_shifts,
-    distribute_shift
+    Equation, equations, full_equations, diff2term_with_unit,
+    operation, arguments,
+    isdiffeq, isdifferential,
+    get_tearing_state, get_iv,
+    invalidate_cache!,
+    iscomplete, get_schedule
 
-using BipartiteGraphs
-import BipartiteGraphs: invview, complete, IncrementalCycleTracker, add_edge_checked!
-using Graphs
-using Graphs: topological_sort
-using ModelingToolkit: mtkcompile!
-using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
+using SymbolicUtils: substitute
 
-using ModelingToolkit.DiffEqBase
-using ModelingToolkit.StaticArrays
-import Symbolics: Num, Arr, CallAndWrap
+using BipartiteGraphs: maximal_matching, ndsts, unassigned, 𝑠neighbors
+import BipartiteGraphs: complete
+import Graphs
+using Graphs: edges, inneighbors, nv, outneighbors
+using Graphs.LinAlg: incidence_matrix
 import CommonSolve
 
-using SparseArrays
+using SparseArrays: sparse
 
-using SimpleNonlinearSolve
-
-using DocStringExtensions
+import DocStringExtensions
+using DocStringExtensions: TYPEDSIGNATURES
 
 import ModelingToolkitBase as MTKBase
 import StateSelection
-import StateSelection: CLIL, SelectedState, find_solvables!
+import StateSelection: find_solvables!
 import ModelingToolkitTearing as MTKTearing
-using ModelingToolkitTearing: TearingState, SystemStructure, ReassembleAlgorithm,
+using ModelingToolkitTearing: TearingState, ReassembleAlgorithm,
     DefaultReassembleAlgorithm
 
 export tearing, dae_index_lowering
