@@ -148,7 +148,8 @@ end
     sts = unknowns(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
 
-    args = (; f, du0, u0, tspan, p)
+    ptype = getmetadata(sys, ProblemTypeCtx, SciMLBase.StandardDAEProblem())
+    args = (; f, du0, u0, tspan, p, ptype)
     kwargs = (; differential_vars, kwargs...)
 
     return maybe_codegen_scimlproblem(expression, DAEProblem{_iip}, args; kwargs...)

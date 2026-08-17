@@ -1701,6 +1701,13 @@ end
     )
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     @test prob.problem_type == "A"
+
+    daeprob = DAEProblem(sys, [x => 1.0, D(x) => 1.0], (0.0, 1.0))
+    @test daeprob.problem_type == "A"
+
+    @mtkcompile plain = System([D(x) ~ x], t)
+    @test DAEProblem(plain, [x => 1.0, D(x) => 1.0], (0.0, 1.0)).problem_type isa
+        SciMLBase.StandardDAEProblem
 end
 
 @testset "`substitute` retains events and metadata" begin
