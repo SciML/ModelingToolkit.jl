@@ -299,7 +299,7 @@ function isolate_subsystem(
             # Neither case needs to be propagated, and this simplifies downstream
             # implementation.
             Moshi.Match.@match var begin
-                BSImpl.Term(; f) && if f isa Operator end => continue
+                BSImpl.Term(; f) && if f isa Union{Symbolics.Differential, MTKBase.Shift, MTKBase.Sample, MTKBase.Hold, MTKBase.SampleTime} end => continue
                 _ => nothing
             end
             all_clock_subs[var] = setmetadata(var, VariableTimeDomain, clk)
