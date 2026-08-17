@@ -208,10 +208,14 @@ end
     au = value(a)
     bu = value(b)
     dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
-    ModelingToolkitBase.write_possibly_indexed_array!(dd, au[SU.StableIndex([1])],
-        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING)
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
     @test isempty(dd)
-    ModelingToolkitBase.write_possibly_indexed_array!(dd, bu[SU.StableIndex([1])],
-        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING)
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, bu[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
     @test haskey(dd, bu)
 end
