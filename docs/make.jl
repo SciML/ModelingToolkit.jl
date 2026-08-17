@@ -46,6 +46,8 @@ makedocs(
         "https://link.springer.com/book/10.1007/978-3-030-91032-7",
         # Coveralls denies automated requests with HTTP 403; keep the README badge.
         "https://coveralls.io/github/SciML/ModelingToolkit.jl?branch=master",
+        # The vendor site intermittently returns HTTP 500 to automated link checks.
+        "https://www.3ds.com/products/catia/dymola/",
 
     ],
     format = Documenter.HTML(;

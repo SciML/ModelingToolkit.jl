@@ -141,7 +141,7 @@ observed variables.
 
 # Arguments
 
-- `sys`: a system returned by [`mtkcompile`](@ref) or another simplification path that
+- `sys`: a system returned by [`ModelingToolkitBase.mtkcompile`](@ref) or another simplification path that
   records a tearing state.
 
 # Keyword Arguments

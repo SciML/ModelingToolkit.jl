@@ -129,7 +129,7 @@ y &= h(x, z, u)
 
 where `x` are differential unknown variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `unknowns(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`mtkcompile`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
+The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The unknowns of this system also indicate the order of the unknowns that holds for the linearized matrices.
 
 # Arguments:
 
@@ -814,7 +814,7 @@ matrices instead of numerical matrices evaluated at an operating point.
 
 # Arguments
 
-- `sys`: the system to linearize. This function calls [`mtkcompile`](@ref) internally.
+- `sys`: the system to linearize. This function calls [`ModelingToolkitBase.mtkcompile`](@ref) internally.
 - `inputs`: input variables used as the columns of the `B` and `D` matrices.
 - `outputs`: output variables used as the rows of the `C` and `D` matrices.
 
@@ -827,7 +827,7 @@ matrices instead of numerical matrices evaluated at an operating point.
   using runtime-generated functions.
 - `eval_module`: the module used when `eval_expression = true`.
 - `split`: whether generated functions use a tuple of parameters or splatted parameters.
-- `kwargs...`: additional keyword arguments forwarded to [`mtkcompile`](@ref).
+- `kwargs...`: additional keyword arguments forwarded to [`ModelingToolkitBase.mtkcompile`](@ref).
 
 # Returns
 
