@@ -1,7 +1,6 @@
 using Test
 using ModelingToolkit
 using ModelingToolkit: Equation, observed
-using ModelingToolkit.StructuralTransformations: SystemStructure
 using NonlinearSolve
 using LinearAlgebra
 using UnPack
