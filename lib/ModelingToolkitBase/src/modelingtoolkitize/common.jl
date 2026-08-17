@@ -390,14 +390,24 @@ Obtain default values for unknowns `vars` and parameters `paramvec`
 given the problem `prob` and symbolic parameter object `paramobj`.
 """
 function defaults_from_u0_p(prob, vars, paramobj, paramvec)
+    return defaults_from_u0_p(prob, vars, paramobj, paramvec, parameter_values(prob))
+end
+
+function defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, p::SciMLBase.DespecializedParameters
+    )
+    return defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, SciMLBase.unwrap_parameters(p)
+    )
+end
+
+function defaults_from_u0_p(prob, vars, paramobj, paramvec, p)
     u0 = state_values(prob)
-    p = parameter_values(prob)
     defaults = Dict{Any, Any}(vec(vars) .=> vec(collect(u0)))
     if !(p isa Union{SciMLBase.NullParameters, Nothing})
         if p isa Union{NamedTuple, AbstractDict}
             merge!(defaults, Dict(v => p[k] for (k, v) in pairs(paramobj)))
-        elseif p isa Union{MTKParameters, SciMLBase.DespecializedParameters}
-            p = _unwrap_mtk_parameters(p)
+        elseif p isa MTKParameters
             pvals = [
                 p.tunable; reduce(vcat, p.discrete; init = []);
                 reduce(vcat, p.constant; init = []);
