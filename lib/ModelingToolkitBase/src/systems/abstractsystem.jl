@@ -3286,17 +3286,36 @@ function check_array_equations_unknowns(eqs, dvs)
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Number of scalar residual rows the equations stand for. An array equation contributes one
+row per element, so it cannot be counted as a single equation.
+"""
+count_equation_rows(eqs) = sum(equation_row_count, eqs; init = 0)
+
+equation_row_count(eq) = 1
+
+function equation_row_count(eq::Equation)
+    # A residual may be written with the array on either side, as `D(u[2:4]) ~ rhs` or
+    # `0 ~ rhs`.
+    sh = SU.shape(eq.lhs)
+    SU.is_array_shape(sh) || (sh = SU.shape(eq.rhs))
+    return SU.is_array_shape(sh) ? prod(length, sh) : 1
+end
+
 function check_eqs_u0(eqs, dvs, u0; check_length = true, kwargs...)
+    neqs = count_equation_rows(eqs)
     if u0 !== nothing
         if check_length
-            if !(length(eqs) == length(dvs) == length(u0))
-                throw(ArgumentError("Equations ($(length(eqs))), unknowns ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+            if !(neqs == length(dvs) == length(u0))
+                throw(ArgumentError("Equations ($(neqs)), unknowns ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
             end
         elseif length(dvs) != length(u0)
             throw(ArgumentError("Unknowns ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
         end
-    elseif check_length && (length(eqs) != length(dvs))
-        throw(ArgumentError("Equations ($(length(eqs))) and Unknowns ($(length(dvs))) are of different lengths."))
+    elseif check_length && (neqs != length(dvs))
+        throw(ArgumentError("Equations ($(neqs)) and Unknowns ($(length(dvs))) are of different lengths."))
     end
     return nothing
 end

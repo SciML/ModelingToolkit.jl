@@ -2199,8 +2199,7 @@ function __process_SciMLProblem(
     eqs = equations(sys)
 
     # Implicit-DAE codegen expands an array equation into one output row per element, so
-    # array equations are usable there. Every other problem type still requires them to be
-    # scalarized by `mtkcompile`.
+    # array equations are usable there. Every other problem type still needs `mtkcompile`.
     implicit_dae || check_array_equations_unknowns(eqs, dvs)
 
     op = build_operating_point(sys, op; fast_path = true)
@@ -2285,11 +2284,7 @@ function __process_SciMLProblem(
         u0 = u0_constructor(u0)
     end
 
-    # On the implicit-DAE path an array equation stands for one row per element, so a
-    # count of equations is not comparable with a count of unknowns.
-    if !(implicit_dae && any(eq -> Symbolics.isarraysymbolic(eq.lhs), eqs))
-        check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
-    end
+    check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(

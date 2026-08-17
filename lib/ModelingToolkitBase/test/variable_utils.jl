@@ -63,6 +63,11 @@ ts = collect_ivs([eq])
     # and the elements are exactly what a `differential_vars` style membership test needs
     sts = [unwrap(el) for el in collect(w)]
     @test map(Base.Fix2(in, sliced), sts) == [false, true, true, false]
+
+    # a slice of rank 2 records every element, not just the first column
+    @variables z(t)[1:3, 1:2]
+    twod = collect_differential_variables(Dt(z[1:2, 1:2]) ~ z[1:2, 1:2])
+    @test twod == Set(Any[unwrap(z[i, j]) for i in 1:2, j in 1:2])
 end
 
 @testset "parse_variable with scalarized arrays" begin

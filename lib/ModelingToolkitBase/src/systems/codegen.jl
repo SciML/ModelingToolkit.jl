@@ -39,72 +39,80 @@ All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 
 """
+Treat a derivative of an array-valued expression as a leaf, so that
+[`expand_array_derivatives`](@ref) collects `D(u[2:4])` itself rather than descending into
+it. Scalar variables are not atomic here, so nothing else is collected.
+"""
+struct ArrayDerivativeIsAtomic end
+
+function (::ArrayDerivativeIsAtomic)(ex::SymbolicT)
+    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
+end
+
+"""
     $(TYPEDSIGNATURES)
 
-Rewrite a derivative of an array-valued expression, such as `D(u[2:4])`, into an array of
-the corresponding scalar derivatives. Implicit-DAE codegen binds scalar `D(uᵢ)` terms to
+Rewrite derivatives of array-valued expressions, such as `D(u[2:4])`, into arrays of the
+corresponding scalar derivatives. Implicit-DAE codegen binds scalar `D(uᵢ)` terms to
 elements of the `du` argument, and a derivative of a slice matches none of them.
+
+Takes every residual at once so that the search and substitution caches are shared.
 """
-function expand_array_derivatives(ex)
-    terms = _array_derivative_terms!(Any[], ex)
-    isempty(terms) && return ex
-    subs = Dict()
+function expand_array_derivatives(rhss::Vector{SymbolicT})
+    terms = Set{SymbolicT}()
+    for rhs in rhss
+        SU.search_variables!(terms, rhs; is_atomic = ArrayDerivativeIsAtomic())
+    end
+    isempty(terms) && return rhss
+
+    subs = Dict{SymbolicT, SymbolicT}()
     for term in terms
         op = operation(term)
-        arg = unwrap(only(arguments(term)))
-        # Preserve the shape: a derivative of a 2D slice must substitute a 2D array of
+        arg = only(arguments(term))
+        sh = SU.shape(arg)
+        # Preserve the shape: a derivative of a 2D slice must expand to a 2D array of
         # scalar derivatives, or it will not broadcast against the surrounding slices.
-        scalars = collect(Symbolics.scalarize(wrap(arg)))
-        subs[term] = map(sc -> unwrap(op(sc)), scalars)
+        sz = ntuple(i -> length(sh[i]), length(sh))
+        els = [op(arg[idx]) for idx in SU.stable_eachindex(arg)]
+        subs[term] = SU.Const{VartypeT}(reshape(els, sz))
     end
-    return unwrap(Symbolics.substitute(wrap(ex), subs))
-end
 
-function _array_derivative_terms!(acc, ex)
-    ex = unwrap(ex)
-    iscall(ex) || return acc
-    op = operation(ex)
-    if op isa Differential
-        arg = unwrap(only(arguments(ex)))
-        symtype(arg) <: AbstractArray && push!(acc, ex)
-        return acc
-    end
-    for arg in arguments(ex)
-        _array_derivative_terms!(acc, arg)
-    end
-    return acc
+    subber = SU.IRSubstituter{false}(IRStructure{VartypeT}(), subs)
+    return map(subber, rhss)
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Expand array-valued residual entries so each contributes one output row. The rows index
-into the same underlying expression rather than being scalarized separately, so the array
-computation is built once.
+Assemble residuals into a single array expression, where each residual writes to a
+contiguous region of the output. An array-valued residual stands for one output row per
+element, and writing it as a region keeps the array computation intact instead of
+scalarizing it into one expression per row.
+
+Returns `rhss` unchanged when every residual is scalar.
 """
-function flatten_array_residuals(rhss)
-    any(r -> symtype(unwrap(r)) <: AbstractArray, rhss) || return rhss
-    out = Any[]
-    for r in rhss
-        ru = unwrap(r)
-        if !(symtype(ru) <: AbstractArray)
-            push!(out, ru)
-            continue
-        end
-        sz = try
-            size(wrap(ru))
-        catch
-            nothing
-        end
-        if sz === nothing
-            append!(out, vec(collect(Symbolics.scalarize(wrap(ru)))))
+function array_residual_maker(rhss::Vector{SymbolicT})
+    any(rhs -> SU.is_array_shape(SU.shape(rhs)), rhss) || return rhss
+
+    regions = Vector{Vector{UnitRange{Int}}}(undef, length(rhss))
+    values = similar(rhss)
+    offset = 0
+    for (i, rhs) in enumerate(rhss)
+        sh = SU.shape(rhs)
+        if SU.is_array_shape(sh)
+            n = prod(length, sh)
+            # Elements become consecutive output rows, so a rank > 1 residual is flattened
+            # rather than given a multidimensional region. `vec` here stays symbolic.
+            values[i] = length(sh) == 1 ? rhs : vec(rhs)
         else
-            for idx in CartesianIndices(sz)
-                push!(out, unwrap(wrap(ru)[Tuple(idx)...]))
-            end
+            n = 1
+            # `ArrayMaker` regions only accept array-valued entries.
+            values[i] = SU.Const{VartypeT}([rhs])
         end
+        regions[i] = [(offset + 1):(offset + n)]
+        offset += n
     end
-    return out
+    return SU.ArrayMaker{VartypeT}(regions, values)
 end
 
 function generate_rhs(
@@ -127,6 +135,7 @@ function generate_rhs(
     t = get_iv(sys)
     ddvs = nothing
     extra_assignments = Assignment[]
+    assemble_residuals = false
 
     # used for DAEProblem and ImplicitDiscreteProblem
     if implicit_dae
@@ -153,12 +162,11 @@ function generate_rhs(
         else
             D = Differential(t)
             ddvs = map(D, dvs)
-            rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
-            # An array equation stands for one residual row per element. Rewrite its
-            # derivative term to the scalar derivatives bound to the `du` argument, then
-            # index the residual per row. Both are no-ops when no equation is array-valued.
-            rhss = map(expand_array_derivatives, rhss)
-            rhss = flatten_array_residuals(rhss)
+            rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+            # Rewrite array derivatives to the scalar ones bound to the `du` argument.
+            # Assembly into a single array happens below, after assertions.
+            rhss = expand_array_derivatives(rhss)
+            assemble_residuals = true
         end
     else
         if !override_discrete && !is_discrete_system(sys)
@@ -169,7 +177,18 @@ function generate_rhs(
     end
 
     if !isempty(assertions(sys)) && !isempty(rhss)
-        rhss[end] += unwrap(get_assertions_expr(sys))
+        assertion_expr = unwrap(get_assertions_expr(sys))
+        # An array-valued residual stands for several output rows, and `+` is not defined
+        # between a symbolic array and a scalar, so add the assertion to each of its rows.
+        rhss[end] = if SU.is_array_shape(SU.shape(rhss[end]))
+            unwrap(wrap(rhss[end]) .+ assertion_expr)
+        else
+            rhss[end] + assertion_expr
+        end
+    end
+
+    if assemble_residuals
+        rhss = array_residual_maker(rhss)
     end
 
     # TODO: add an optional check on the ordering of observed equations

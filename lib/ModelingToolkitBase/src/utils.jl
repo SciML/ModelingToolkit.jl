@@ -718,7 +718,7 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
             # An operator applied to an array variable or slice, such as `D(u[2:4])`,
             # names the array rather than its elements. Callers test membership of the
             # scalar unknowns, so record the elements.
-            if symtype(arg) <: AbstractArray
+            if SU.is_array_shape(SU.shape(arg))
                 for idx in SU.stable_eachindex(arg)
                     push!(diffvars, arg[idx])
                 end
