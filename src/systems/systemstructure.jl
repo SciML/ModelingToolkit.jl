@@ -103,7 +103,7 @@ end
 Mutating structural simplification entry point for an existing tearing state.
 
 This is developer-facing API used by ModelingToolkit internals and extension packages that
-already have a `TearingState`. User code should normally call [`mtkcompile`](@ref) on a
+already have a `TearingState`. User code should normally call [`ModelingToolkitBase.mtkcompile`](@ref) on a
 `System` instead.
 
 # Arguments

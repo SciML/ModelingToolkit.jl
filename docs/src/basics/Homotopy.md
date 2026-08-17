@@ -152,6 +152,7 @@ defaults.
 
 ```@docs
 ModelingToolkit.homotopy
+ModelingToolkitBase.NonPolynomialReason
 ```
 
 ## See Also

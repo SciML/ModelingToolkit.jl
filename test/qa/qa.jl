@@ -210,21 +210,6 @@ const REEXPORTED_API = (
     Symbol("@pack!"), Symbol("@unpack"), :UnPack,
 )
 
-# Public names that reach ModelingToolkit's API surface only through
-# `@reexport using Symbolics` in ModelingToolkitBase. They are owned (and undocumented) by
-# Symbolics/SymbolicUtils, so ModelingToolkit is not the right place to document them.
-const SYMBOLICS_OWNED_REEXPORTS = (
-    Symbol("@symbolic_wrap"),
-    Symbol("@wrapped"),
-    :RuleSet,
-    :get_canonical_expr,
-    :infimum,
-    :is_derivative,
-    :istree,
-    :solve_for,
-    :supremum,
-)
-
 # `ModelingToolkit` reaches for names that are not `public` at the module that defines
 # them. The `*_via_owners` checks pass, so every one of these is already being reached
 # through its owner: there is no other module to import it from, and the only real fixes
@@ -391,6 +376,5 @@ run_qa(
         all_explicit_imports_are_public = (; ignore = NONPUBLIC_EXPLICIT_IMPORTS),
         all_qualified_accesses_are_public = (; ignore = NONPUBLIC_QUALIFIED_ACCESSES),
     ),
-    api_docs_kwargs = (; ignore = SYMBOLICS_OWNED_REEXPORTS),
     reexports_allow = REEXPORTED_API,
 )

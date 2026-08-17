@@ -11,12 +11,6 @@ The names below are versioned developer API. `TearingState` is mutable compiler 
 its fields are intentionally opaque. `find_solvables!` is retained as a compatibility
 export; new code should call the documented transformation entry points instead.
 
-## Structural Transformation Module
-
-```@docs
-ModelingToolkit.StructuralTransformations
-```
-
 ## Tearing and Algebraic Simplification
 
 ```@docs
@@ -61,13 +55,11 @@ transformation developer API dispatches on them.
 
 ```@docs
 StateSelection.TransformationState
-StateSelection.DiffGraph
-StateSelection.DummyDerivativeTearing
-StateSelection.ModiaTearing
-StateSelection.SelectedState
 StateSelection.TearingAlgorithm
 StateSelection.TearingResult
 StateSelection.find_eq_solvables!
+StateSelection.bareiss.bareiss!
+StateSelection.CLIL.SparseMatrixCLIL
 ModelingToolkitTearing.InlineLinearSystem
 ModelingToolkitTearing.inline_linear_systems
 ```

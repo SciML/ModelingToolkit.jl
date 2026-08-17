@@ -3,7 +3,7 @@
 
 Developer-facing structural transformations used by ModelingToolkit's compiler and SciML
 extension packages. The exported transformation functions are versioned developer API;
-end-user applications should use [`mtkcompile`](@ref) instead.
+end-user applications should use [`ModelingToolkitBase.mtkcompile`](@ref) instead.
 """
 module StructuralTransformations
 
@@ -62,7 +62,7 @@ include("pantelides.jl")
 Replace the equations of `sys` with its fully substituted equations.
 
 This is a structural-transformation helper used by simplification passes. End-user code
-should usually call [`mtkcompile`](@ref).
+should usually call [`ModelingToolkitBase.mtkcompile`](@ref).
 
 # Arguments
 

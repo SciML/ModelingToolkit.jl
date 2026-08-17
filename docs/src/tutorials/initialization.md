@@ -674,9 +674,12 @@ plot(sol)
 
 ## Summary of Initialization API
 
+```@docs
+ModelingToolkitBase.isinitial
+```
+
 ```@docs; canonical=false
 Initial
-isinitial
 generate_initializesystem
 initialization_equations
 guesses

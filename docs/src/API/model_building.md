@@ -266,7 +266,7 @@ variables are only defined at points where the clock ticks.
 
 While ModelingToolkit is unable to simplify, compile and solve such systems on its own, it
 has the ability to represent them. Compilation strategies can be implemented independently
-on top of [`mtkcompile`](@ref) using the `additional_passes` functionality.
+on top of [`ModelingToolkitBase.mtkcompile`](@ref) using the `additional_passes` functionality.
 
 !!! warn
 
