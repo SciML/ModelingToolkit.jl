@@ -41,6 +41,7 @@ Setfield = "1"
 SymbolicIndexingInterface = "0.3.46"
 SymbolicUtils = "4.35.3"
 Symbolics = "7.32.1"
+SciMLTesting = "2.10"
 URIs = "1"
 julia = "1.10"
 
@@ -52,7 +53,8 @@ OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
 OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
+SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["SafeTestsets", "Test", "Pkg", "Distributions", "DynamicQuantities", "ModelingToolkit", "OrdinaryDiffEqDefault", "OrdinaryDiffEqTsit5"]
+test = ["SafeTestsets", "Test", "Pkg", "Distributions", "DynamicQuantities", "ModelingToolkit", "OrdinaryDiffEqDefault", "OrdinaryDiffEqTsit5", "SciMLTesting"]
