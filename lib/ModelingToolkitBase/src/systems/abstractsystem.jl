@@ -3297,11 +3297,7 @@ count_equation_rows(eqs) = sum(equation_row_count, eqs; init = 0)
 equation_row_count(eq) = 1
 
 function equation_row_count(eq::Equation)
-    # A residual may be written with the array on either side, as `D(u[2:4]) ~ rhs` or
-    # `0 ~ rhs`.
-    sh = SU.shape(eq.lhs)
-    SU.is_array_shape(sh) || (sh = SU.shape(eq.rhs))
-    return SU.is_array_shape(sh) ? prod(length, sh) : 1
+    return prod(length, SU.shape(eq.lhs)::SU.ShapeVecT; init = 1)
 end
 
 function check_eqs_u0(eqs, dvs, u0; check_length = true, kwargs...)
