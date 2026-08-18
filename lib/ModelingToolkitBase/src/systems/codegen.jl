@@ -16,29 +16,6 @@ const EXPERIMENTAL_WARNING = """
 """
 
 """
-    $(TYPEDSIGNATURES)
-
-Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
-
-# Keyword Arguments
-
-$GENERATE_X_KWARGS
-- `implicit_dae`: Whether the generated function should be in the implicit form. Applicable
-  only for ODEs/DAEs or discrete systems. Instead of `f(u, p, t)` (`f(du, u, p, t)` for the
-  in-place form) the function is `f(du, u, p, t)` (respectively `f(resid, du, u, p, t)`).
-- `override_discrete`: Whether to assume the system is discrete regardless of
-  `is_discrete_system(sys)`.
-- `scalar`: Whether to generate a single-out-of-place function that returns a scalar for
-  the only equation in the system.
-- `extra_args`: Extra trailing symbolic arguments appended after all standard arguments and
-  kept out of the `MTKParameters` collapse, so they stay live scalar arguments of the
-  generated function (e.g. the homotopy continuation `λ`, threaded as the "t slot"). Empty
-  by default, which leaves the standard codegen path byte-identical.
-
-All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
-"""
-
-"""
 Treat a derivative of an array-valued expression as a leaf, so that
 [`expand_array_derivatives!`](@ref) collects `D(u[2:4])` itself rather than descending into
 it. Scalar variables are not atomic here, so nothing else is collected.
@@ -123,6 +100,28 @@ function array_residual_maker(rhss::Vector{SymbolicT})
     return SU.ArrayMaker{VartypeT}(regions, values)
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `implicit_dae`: Whether the generated function should be in the implicit form. Applicable
+  only for ODEs/DAEs or discrete systems. Instead of `f(u, p, t)` (`f(du, u, p, t)` for the
+  in-place form) the function is `f(du, u, p, t)` (respectively `f(resid, du, u, p, t)`).
+- `override_discrete`: Whether to assume the system is discrete regardless of
+  `is_discrete_system(sys)`.
+- `scalar`: Whether to generate a single-out-of-place function that returns a scalar for
+  the only equation in the system.
+- `extra_args`: Extra trailing symbolic arguments appended after all standard arguments and
+  kept out of the `MTKParameters` collapse, so they stay live scalar arguments of the
+  generated function (e.g. the homotopy continuation `λ`, threaded as the "t slot"). Empty
+  by default, which leaves the standard codegen path byte-identical.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
 function generate_rhs(
         sys::System, opts::GeneratedFunctionOptions;
         implicit_dae::Bool = false, scalar::Bool = false,
