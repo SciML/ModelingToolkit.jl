@@ -20,7 +20,7 @@ end
     SciMLBase.ImplicitDiscreteFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
 
 Public entry point that builds an `ImplicitDiscreteFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.ImplicitDiscreteFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E}

@@ -25,7 +25,7 @@ end
     SciMLBase.OptimizationFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds an `OptimizationFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.OptimizationFunction{iip}(
         sys::System, opts::SciMLFunctionOptions{E};

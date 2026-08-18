@@ -410,8 +410,9 @@ ModelingToolkit.dump_parameters
 ## Symbolic operators
 
 ModelingToolkit makes heavy use of "operators". These are custom functions that are applied
-to symbolic variables. The most common operator is the Differential operator, defined in
-Symbolics.jl.
+to symbolic variables. The most common operator is the
+[Differential operator](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/), defined
+in Symbolics.jl.
 
 ModelingToolkit also defines a plethora of custom operators.
 

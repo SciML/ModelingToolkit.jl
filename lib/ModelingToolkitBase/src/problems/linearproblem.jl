@@ -39,7 +39,7 @@ end
     LinearFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `LinearFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function LinearFunction{iip}(
         sys::System, opts::SciMLFunctionOptions{E};

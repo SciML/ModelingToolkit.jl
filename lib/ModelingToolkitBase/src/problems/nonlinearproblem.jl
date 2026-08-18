@@ -20,7 +20,7 @@ end
     SciMLBase.NonlinearFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds a `NonlinearFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.NonlinearFunction{iip, spec}(
         sys::System, opts::SciMLFunctionOptions{E};

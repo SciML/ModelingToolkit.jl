@@ -291,7 +291,7 @@ end
     SciMLBase.ODEInputFunction{iip, specialize}(sys::System, opts::SciMLFunctionOptions; kwargs...)
 
 Public entry point that builds an `ODEInputFunction` directly from a pre-assembled
-[`SciMLFunctionOptions`](@ref), bypassing the `kwargs...` wrapper above.
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
 """
 function SciMLBase.ODEInputFunction{iip, specialize}(
         sys::System, opts::SciMLFunctionOptions;
