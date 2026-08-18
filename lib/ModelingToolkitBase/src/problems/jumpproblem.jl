@@ -54,7 +54,7 @@
             EmptySciMLFunction{iip}, sys, op;
             t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, kwargs...
         )
-        f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
+        f = SciMLBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(
             sys; eval_expression, eval_module, checkbounds
@@ -80,7 +80,7 @@
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substitution and empty param vecs
-    p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
+    p = (prob.p isa SciMLBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(sys, p; jseqs = js, rateconsttype = invttype)
     _majs = Vector{MassActionJump}(filter(x -> x isa MassActionJump, js))

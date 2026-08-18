@@ -292,21 +292,21 @@ const _COMPILER_OPTIONS_SUPPORTED = isdefined(Base.Experimental, :set_compile!)
 module _EvalModuleOpt0
     @static if !isdefined(Base.Experimental, :set_compile!)
         Base.Experimental.@compiler_options optimize = 0
-        using RuntimeGeneratedFunctions
+        import RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
 end
 module _EvalModuleOpt1
     @static if !isdefined(Base.Experimental, :set_compile!)
         Base.Experimental.@compiler_options optimize = 1
-        using RuntimeGeneratedFunctions
+        import RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
 end
 module _EvalModuleOpt0NoInfer
     @static if !isdefined(Base.Experimental, :set_compile!)
         Base.Experimental.@compiler_options optimize = 0 infer = false
-        using RuntimeGeneratedFunctions
+        import RuntimeGeneratedFunctions
         RuntimeGeneratedFunctions.init(@__MODULE__)
     end
 end
@@ -544,7 +544,7 @@ function isdelay(var, iv)
     end
     isvariable(var) || return false
     isparameter(var) && return false
-    if iscall(var) && !ModelingToolkitBase.isoperator(var, Symbolics.Operator)
+    if iscall(var) && !ModelingToolkitBase.isoperator(var, SU.Operator)
         args = arguments(var)
         length(args) == 1 || return false
         arg = args[1]
@@ -560,7 +560,7 @@ end
 The argument of generated functions corresponding to the history function.
 """
 const DDE_HISTORY_FUN = SSym(:___history___; type = SU.FnType{Tuple{Any, <:Real}, Vector{Real}, Nothing}, shape = SU.Unknown(1))
-const BVP_SOLUTION = SSym(:__sol__; type = Symbolics.FnType{Tuple{<:Real}, Vector{Real}, Nothing}, shape = SU.Unknown(1))
+const BVP_SOLUTION = SSym(:__sol__; type = SU.FnType{Tuple{<:Real}, Vector{Real}, Nothing}, shape = SU.Unknown(1))
 const DDE_AT_IDX_SYM = SSym(:__delayvar_idxₘₜₖ; type = Int, shape = UnitRange{Int}[])
 const DDE_DELAY_SYM = SSym(:__delayxₘₜₖ; type = Real, shape = UnitRange{Int}[])
 

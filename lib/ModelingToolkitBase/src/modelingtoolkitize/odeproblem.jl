@@ -20,13 +20,13 @@ function modelingtoolkitize(
         prob::ODEProblem; u_names = nothing, p_names = nothing,
         return_symbolic_u0_p = false, kwargs...
     )
-    if prob.f isa DiffEqBase.AbstractParameterizedFunction
+    if prob.f isa SciMLBase.AbstractParameterizedFunction
         return prob.f.sys
     end
 
     t = t_nounits
     p = prob.p
-    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    has_p = !(p isa Union{SciMLBase.NullParameters, Nothing})
 
     vars = construct_vars(prob, t, u_names)
     params = construct_params(prob, t, p_names)

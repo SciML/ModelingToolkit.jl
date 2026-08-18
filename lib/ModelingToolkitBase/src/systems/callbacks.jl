@@ -288,7 +288,7 @@ end
 The `Pre` operator. Used by the callback system to indicate the value of a parameter or variable
 before the callback is triggered.
 """
-struct Pre <: Symbolics.Operator end
+struct Pre <: SU.Operator end
 Pre(x) = Pre()(x)
 SymbolicUtils.promote_symtype(::Type{Pre}, T) = T
 SymbolicUtils.isbinop(::Pre) = false

@@ -303,7 +303,7 @@ variables.
 """
 function construct_params(prob, t, p_names = nothing)
     p = parameter_values(prob)
-    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    has_p = !(p isa Union{SciMLBase.NullParameters, Nothing})
 
     # Get names of parameters
     if has_p

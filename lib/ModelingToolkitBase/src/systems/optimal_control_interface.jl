@@ -868,7 +868,7 @@ is_free_final(model) = model.is_free_final
 
 function add_cost_function!(model, sys, tspan, pmap)
     jcosts = cost(sys)
-    if Symbolics._iszero(jcosts)
+    if SU._iszero(jcosts)
         set_objective!(model, 0)
         return
     end

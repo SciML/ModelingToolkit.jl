@@ -7,107 +7,149 @@ if isdefined(Base, :Experimental) && isdefined(Base.Experimental, Symbol("@max_m
     @eval Base.Experimental.@compiler_options max_methods = 1
 end
 
-using PrecompileTools, Reexport
+using PrecompileTools: PrecompileTools, @recompile_invalidations
+using Reexport: Reexport, @reexport
 @recompile_invalidations begin
-    using StaticArrays
-    using Symbolics
-    using ImplicitDiscreteSolve
-    using JumpProcesses
+    import StaticArrays
+    using StaticArraysCore: StaticArraysCore, MVector, SVector, StaticArray, StaticVector,
+        similar_type
+    import Symbolics
+    import ImplicitDiscreteSolve
+    using ImplicitDiscreteSolve: IDSolve
+    import JumpProcesses
+    using JumpProcesses: ConstantRateJump, JumpProblem, JumpSet, MassActionJump,
+        VariableRateJump, get_num_majumps, needs_depgraph, needs_vartojumps_map,
+        reset_aggregated_jumps!
     # ONLY here for the invalidations
     import REPL
     using OffsetArrays: Origin
-    import BlockArrays: BlockArray, BlockedArray, Block, blocksize, blocksizes, blockpush!,
-        undef_blocks, blocks
+    import BlockArrays: BlockedArray, Block, blocksize, blocksizes
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
 import SciMLBase
-import SciMLBase: diagnose_symbolic_instability
+using SciMLBase: BVPFunction, BVProblem, CallbackSet, ContinuousCallback, DAEFunction,
+    DAEProblem, DDEFunction, DDEProblem, DiscreteCallback, DiscreteFunction,
+    DiscreteProblem, HomotopyNonlinearFunction, ImplicitDiscreteFunction,
+    ImplicitDiscreteProblem, IntervalNonlinearFunction, IntervalNonlinearProblem,
+    LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
+    ODEFunction, ODEInputFunction, ODEProblem, ODESolution, OptimizationFunction,
+    OptimizationProblem, ReturnCode, SCCNonlinearProblem, SDDEFunction, SDDEProblem,
+    SDEFunction, SDEProblem, SteadyStateProblem, VectorContinuousCallback, check_error,
+    remake
 using Printf: @sprintf
 
 import SymbolicUtils
 import SymbolicUtils as SU
-import SymbolicUtils: iscall, arguments, operation, maketerm, promote_symtype,
-    isadd, ismul, ispow, issym, FnType, isconst, BSImpl,
-    @rule, Rewriters, substitute, metadata, BasicSymbolic
-using SymbolicUtils.Code
+import SymbolicUtils: iscall, arguments, operation, issym, FnType, isconst, BSImpl,
+    @rule, Rewriters, substitute, BasicSymbolic, _iszero
+using SymbolicUtils: @syms, BS, IRStructure, SymReal, expand, getmetadata, populate_ir!,
+    setmetadata, simplify, simplify_fractions, unwrap_const
+import TermInterface
+import TermInterface: maketerm, metadata
+import SymbolicUtils.Code
+using SymbolicUtils.Code: Assignment, DestructuredArgs, Func, Let, MakeTuple, cse
 import SymbolicUtils.Code: toexpr
-import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-using DocStringExtensions
-using SpecialFunctions, NaNMath
+import DocStringExtensions
+using DocStringExtensions: FIELDS, METHODLIST, SIGNATURES, TYPEDEF, TYPEDFIELDS,
+    TYPEDSIGNATURES
+using SpecialFunctions: SpecialFunctions, gamma
+import NaNMath
 @recompile_invalidations begin
-    using DiffEqCallbacks
-    using DiffEqBase, SciMLBase, ForwardDiff
+    import DiffEqCallbacks
+    using DiffEqCallbacks: PeriodicCallback, PresetTimeCallback
+    import DiffEqBase
+    import ForwardDiff
 end
-using Graphs
+import Graphs
+using Graphs: BFSIterator, dfs_parents, dst, edges, simplecycles_iter, src,
+    strongly_connected_components, topological_sort
 import ExprTools: splitdef, combinedef
 import OrderedCollections
+using OrderedCollections: OrderedDict, OrderedSet
 
-using SymbolicIndexingInterface
-using LinearAlgebra, SparseArrays
-using InteractiveUtils
-using DataStructures
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: ArraySymbolic, ContinuousTimeseries, NotSymbolic,
+    ParameterTimeseriesCollection, ParameterTimeseriesIndex, ProblemState, ScalarSymbolic,
+    all_symbols, all_variable_symbols, current_time, getname, getsym, getu, hasname,
+    independent_variable_symbols, is_independent_variable, is_markovian, is_parameter,
+    is_time_dependent, is_timeseries_parameter, is_variable, parameter_index,
+    parameter_symbols, parameter_values, set_parameter!, setp, setp_oop, setsym, setu,
+    state_values, symbolic_container, symbolic_type, timeseries_parameter_index,
+    variable_index, variable_symbols
+import LinearAlgebra
+using LinearAlgebra: Diagonal, I, UniformScaling, diag, diagm, dot, isdiag, tr
+import SparseArrays
+using SparseArrays: AbstractSparseArray, SparseMatrixCSC, findnz, nonzeros, sparse
+import InteractiveUtils
+import DataStructures
+using DataStructures: Queue, dequeue!, enqueue!
 using Base.Threads
-using ArrayInterface
-using Setfield, ConstructionBase
+import ArrayInterface
+import Setfield
+using Setfield: @set, @set!
+import ConstructionBase
+using ConstructionBase: constructorof, setproperties
 import Libdl
-using DocStringExtensions
-using Base: RefValue
-using Combinatorics
+import Combinatorics
 import FunctionWrappersWrappers
 import FunctionWrappersWrappers: FunctionWrappersWrapper
 import FunctionWrappers: FunctionWrapper
-using SciMLStructures
-using Compat
-using AbstractTrees
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, TimeDomain,
-    PeriodicClock, Clock, SolverStepClock, ContinuousClock, OverrideInit,
-    NoInit, AbstractNonlinearProblem
+import SciMLStructures
+import Compat
+import AbstractTrees
+using AbstractTrees: TreeIterator, print_tree
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, TimeDomain,
+    Clock, SolverStepClock, AbstractNonlinearProblem
 import Moshi
-using Moshi.Data: @data
-using Reexport
-using RecursiveArrayTools
-import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
+import RecursiveArrayTools
+using RecursiveArrayTools: ArrayPartition, DiffEqArray
+import Graphs: SimpleDiGraph, add_edge!
 import CommonSolve
+using CommonSolve: init, solve
 import EnumX
 import ReadOnlyDicts: ReadOnlyDict
 
-using RuntimeGeneratedFunctions
-using RuntimeGeneratedFunctions: drop_expr
+import RuntimeGeneratedFunctions
+using RuntimeGeneratedFunctions: RuntimeGeneratedFunction, drop_expr
 
-using Symbolics: degree, VartypeT, SymbolicT
-using Symbolics: parse_vars, value, @derivatives, get_variables,
-    exprs_occur_in, symbolic_linear_solve, unwrap, wrap,
-    VariableSource, getname, variable,
+using Symbolics: VartypeT, SymbolicT
+using Symbolics: value, @derivatives, get_variables,
+    symbolic_linear_solve, unwrap, wrap,
+    VariableSource, variable,
     NAMESPACE_SEPARATOR, setdefaultval, Arr,
-    hasnode, fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm, SConst
+    fixpoint_sub, CallAndWrap, SArgsT, SSym, STerm, SConst
+using Symbolics: @register_array_symbolic, @register_symbolic, @variables, Differential,
+    Equation, Inequality, Integral, expand_derivatives, ≲, ≳
 const NAMESPACE_SEPARATOR_SYMBOL = Symbol(NAMESPACE_SEPARATOR)
-import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-    jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+import Symbolics: rename, get_variables!,
+    jacobian_sparsity, isaffine, islinear,
     tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-    BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-    ParallelForm, SerialForm, MultithreadedForm, build_function,
-    rhss, lhss, gradient, linear_expansion,
-    jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+    build_function, linear_expansion, jacobian, sparsejacobian,
     scalarize, hasderiv
 
-import DiffEqBase: @add_kwonly
+import SciMLBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, bound_parameters,
     continuous_events, discrete_events, analytically_integrated
 @reexport using Symbolics
 @reexport using UnPack
+import UnPack
+using UnPack: @unpack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
-using ADTypes: AutoForwardDiff
 import SciMLPublic: @public
 import PreallocationTools
 import PreallocationTools: DiffCache, get_tmp
 import FillArrays
-using BipartiteGraphs
+import BipartiteGraphs
+using BipartiteGraphs: BipartiteGraph, DiCMOBiGraph, HyperGraph, Matching, Unassigned,
+    𝑑neighbors, 𝑠neighbors, 𝑠vertices
 import Random: AbstractRNG
 # To handle `Integral` in a type-stable manner
 import DomainSets
+# `DomainSets` re-exports IntervalSets' `endpoints`; reach it through its owner.
+import IntervalSets
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
 using TaskLocalValues: TaskLocalValue
