@@ -63,7 +63,8 @@ ps = poles(G)
 
 lin_fun, ssys = ModelingToolkit.linearization_function(
     model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
-    zero_dummy_der = false, guesses = guesses
+    zero_dummy_der = false, guesses = guesses,
+    reassemble_alg = MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
 );
 lsys, = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives = true);
 lsyss,
