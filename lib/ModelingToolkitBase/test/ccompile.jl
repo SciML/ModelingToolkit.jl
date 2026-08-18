@@ -1,4 +1,5 @@
 using ModelingToolkitBase, Test
+using Symbolics: CTarget
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 @parameters a
@@ -9,7 +10,7 @@ eqs = [
 ]
 f = build_function(
     [x.rhs for x in eqs], [x, y], [a], t, expression = Val{false},
-    target = ModelingToolkitBase.CTarget()
+    target = CTarget()
 )
 f2 = eval(build_function([x.rhs for x in eqs], [x, y], [a], t)[2])
 du = rand(2);

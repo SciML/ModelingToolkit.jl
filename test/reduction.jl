@@ -267,7 +267,7 @@ sys = mtkcompile(sys0)
 eq = equations(tearing_substitution(sys))[1]
 vv = only(unknowns(sys))
 @test isequal(eq.lhs, D(vv))
-dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
+dvv = ModelingToolkit.value(Symbolics.derivative(eq.rhs, vv))
 @test dvv ≈ -60
 
 # Don't reduce inputs
