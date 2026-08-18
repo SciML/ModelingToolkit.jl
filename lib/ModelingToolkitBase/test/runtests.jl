@@ -115,6 +115,7 @@ end
         @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
         @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
         @safetestset "MTKParameters Test" include("mtkparameters.jl")
+        @safetestset "Despecialized MTKParameters Test" include("despecialized_parameters.jl")
     end
 
     if GROUP == "All" || GROUP == "Extended"
@@ -135,6 +136,7 @@ end
         @safetestset "HomotopyContinuation Extension Test" include("extensions/homotopy_continuation.jl")
         @safetestset "LabelledArrays Test" include("extensions/labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
+        @safetestset "Despecialized MTKParameters AD Test" include("extensions/despecialized_parameters_ad.jl")
         # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 

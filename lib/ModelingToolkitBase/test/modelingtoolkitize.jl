@@ -4,7 +4,7 @@ using Optimization, RecursiveArrayTools, OptimizationOptimJL
 using SymbolicIndexingInterface
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics: value
-using SciMLBase: parameterless_type, successful_retcode
+using SciMLBase: DespecializedParameters, parameterless_type, successful_retcode
 
 N = 32
 const xyd_brusselator = range(0, stop = 1, length = N)
@@ -276,6 +276,17 @@ end
 params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
+sys = modelingtoolkitize(prob)
+@test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
+@test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]
+
+function ode_prob_namedtuple(du, u, p, t)
+    du[1] = u[1] + p.a
+    du[2] = u[2] + p.b
+    return nothing
+end
+params = DespecializedParameters((a = 10, b = 20))
+prob = ODEProblem(ode_prob_namedtuple, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]

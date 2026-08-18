@@ -189,6 +189,13 @@ function updateparams!(
 end
 
 function updateparams!(
+        ratemap::JumpSysMajParamMapper{U, V, W},
+        params::SciMLBase.DespecializedParameters
+    ) where {U <: AbstractArray, V <: AbstractArray, W}
+    return updateparams!(ratemap, SciMLBase.unwrap_parameters(params))
+end
+
+function updateparams!(
         ::JumpSysMajParamMapper{U, V, W},
         params::Nothing
     ) where {U <: AbstractArray, V <: AbstractArray, W}

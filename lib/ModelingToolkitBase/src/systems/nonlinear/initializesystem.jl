@@ -699,7 +699,8 @@ function _remake_initialization_data_impl(
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
     )
     kws = maybe_build_initialization_problem(
-        sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts
+        sys, SciMLBase.isinplace(odefn), op, t0, guesses, opts;
+        specialize = initialization_specialization(SciMLBase.specialization(typeof(odefn)))
     )
 
     odefn = remake(odefn; kws...)
@@ -713,6 +714,11 @@ function promote_type_with_nothing(::Type{T}, ::AbstractArray{T2}) where {T, T2}
 end
 function promote_type_with_nothing(::Type{T}, p::MTKParameters) where {T}
     return promote_type_with_nothing(promote_type_with_nothing(T, p.tunable), p.initials)
+end
+function promote_type_with_nothing(
+        ::Type{T}, p::SciMLBase.DespecializedParameters
+    ) where {T}
+    return promote_type_with_nothing(T, SciMLBase.unwrap_parameters(p))
 end
 
 promote_with_nothing(::Type, ::Nothing) = nothing
@@ -739,6 +745,11 @@ function promote_with_nothing(::Type{T}, p::MTKParameters) where {T}
         end
     end
     return p
+end
+function promote_with_nothing(::Type{T}, p::SciMLBase.DespecializedParameters) where {T}
+    return SciMLBase.DespecializedParameters(
+        promote_with_nothing(T, SciMLBase.unwrap_parameters(p))
+    )
 end
 
 function promote_u0_p(u0, p, t0)
@@ -865,8 +876,9 @@ function DiffEqBase.get_updated_symbolic_problem(
 
     t0 = is_time_dependent(prob) ? current_time(prob) : nothing
 
-    if p isa MTKParameters
-        buffer = p.initials
+    unwrapped_p = _unwrap_mtk_parameters(p)
+    if unwrapped_p isa MTKParameters
+        buffer = unwrapped_p.initials
     else
         buffer = p
     end

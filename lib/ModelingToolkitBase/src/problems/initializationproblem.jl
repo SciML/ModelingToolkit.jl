@@ -40,7 +40,7 @@ as an explicit keyword.
 function InitializationProblem{iip}(
         sys::AbstractSystem, t, op, opts::SciMLProblemOptions; kwargs...
     ) where {iip}
-    return InitializationProblem{iip, SciMLBase.AutoSpecialize}(sys, t, op, opts; kwargs...)
+    return InitializationProblem{iip, SciMLBase.AutoDespecialize}(sys, t, op, opts; kwargs...)
 end
 
 function InitializationProblem{iip, specialize}(
@@ -168,7 +168,13 @@ function InitializationProblem{iip, specialize}(
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    return TProb{_iip}(
+    problem_constructor = if TProb === LinearInitializationProblem ||
+            TProb === SCCNonlinearProblem
+        TProb{_iip}
+    else
+        TProb{_iip, specialize}
+    end
+    return problem_constructor(
         isys, op; kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
         eval_expression, eval_module, warn_cyclic_dependency,

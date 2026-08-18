@@ -219,6 +219,9 @@ function define_params(p::MTKParameters, t, names = nothing)
     end
 end
 
+define_params(p::SciMLBase.DespecializedParameters, t, names = nothing) =
+    define_params(SciMLBase.unwrap_parameters(p), t, names)
+
 """
     $(TYPEDSIGNATURES)
 
@@ -232,6 +235,9 @@ end
 function to_paramvec(p::MTKParameters)
     return reduce(vcat, collect(p); init = [])
 end
+
+to_paramvec(p::SciMLBase.DespecializedParameters) =
+    to_paramvec(SciMLBase.unwrap_parameters(p))
 
 """
     $(TYPEDSIGNATURES)
@@ -384,8 +390,19 @@ Obtain default values for unknowns `vars` and parameters `paramvec`
 given the problem `prob` and symbolic parameter object `paramobj`.
 """
 function defaults_from_u0_p(prob, vars, paramobj, paramvec)
+    return defaults_from_u0_p(prob, vars, paramobj, paramvec, parameter_values(prob))
+end
+
+function defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, p::SciMLBase.DespecializedParameters
+    )
+    return defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, SciMLBase.unwrap_parameters(p)
+    )
+end
+
+function defaults_from_u0_p(prob, vars, paramobj, paramvec, p)
     u0 = state_values(prob)
-    p = parameter_values(prob)
     defaults = Dict{Any, Any}(vec(vars) .=> vec(collect(u0)))
     if !(p isa Union{SciMLBase.NullParameters, Nothing})
         if p isa Union{NamedTuple, AbstractDict}

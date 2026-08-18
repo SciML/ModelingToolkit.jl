@@ -89,10 +89,16 @@ ModelingToolkit.get_u0
 ModelingToolkit.varmap_to_vars
 ```
 
-By default, the parameters of the system are stored in a custom data structure called
-`MTKParameters`. The internals of this data structure are undocumented, and it should
-only be interacted with through defined public API. SymbolicIndexingInterface.jl contains
-functionality useful for this purpose.
+The parameters of a split system are stored in a custom data structure called
+`MTKParameters`. ModelingToolkit problem constructors use
+[`SciMLBase.AutoDespecialize`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
+by default. Solvers that support this policy wrap the parameters in
+[`SciMLBase.DespecializedParameters`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
+at solve time so compiled code
+can be reused across parameter-buffer layouts. Explicit `AutoSpecialize` and
+`FullSpecialize` problems retain their existing behavior. These objects should only be
+interacted with through their defined public API.
+SymbolicIndexingInterface.jl contains functionality useful for this purpose.
 
 ```@docs
 MTKParameters

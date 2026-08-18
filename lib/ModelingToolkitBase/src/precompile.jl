@@ -111,19 +111,15 @@ PrecompileTools.@compile_workload begin
     v = [p]
     isempty(v)
     # mtkcompile(sys)
-    # This ODEProblem construction now goes through AutoSpecialize (the new default)
-    # instead of FullSpecialize via the @fallback_iip_specialize macro.
-    prob_precompile = ODEProblem(mtkcompile(System([ModelingToolkitBase.D_nounits(x) ~ 2x + 1], ModelingToolkitBase.t_nounits; name = :a)), [x => 1], (0.0, 1.0))
-
-    # Precompile the FunctionWrappersWrapper wrapping that DiffEqBase.promote_f
-    # performs at solve time for AutoSpecialize ODEProblems. This warms up the
-    # FunctionWrappersWrapper construction path so that the first `solve()` call
-    # does not pay this cost.
-    _f_unwrapped = prob_precompile.f.f
-    _u0 = prob_precompile.u0
-    _p = prob_precompile.p
-    _t = prob_precompile.tspan[1]
-    DiffEqBase.wrapfun_iip(_f_unwrapped, (_u0, _u0, _p, _t))
+    ODEProblem(
+        mtkcompile(
+            System(
+                [ModelingToolkitBase.D_nounits(x) ~ 2x + 1],
+                ModelingToolkitBase.t_nounits; name = :a
+            )
+        ),
+        [x => 1], (0.0, 1.0)
+    )
 end
 
 precompile(Tuple{typeof(SymbolicUtils.isequal_somescalar), Float64, Float64})

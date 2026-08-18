@@ -817,7 +817,7 @@ struct FallbackSlice
 end
 
 function __apply_copy_template(valp, template)
-    p = parameter_values(valp)
+    p = _unwrap_mtk_parameters(parameter_values(valp))
     u = state_values(valp)
     if template isa ParameterIndex{SciMLStructures.Tunable, UnitRange{Int}}
         if p isa MTKParameters
@@ -1111,8 +1111,18 @@ end
 
 # TODO: make this infer when the nonnumerics are non-trivial
 function (recon::MTKParametersReconstructor)(src, dst)
-    src_ps = parameter_values(src)
-    dst_ps = parameter_values(dst)
+    return recon(src, parameter_values(dst))
+end
+
+function (recon::MTKParametersReconstructor)(
+        src, dst_ps::SciMLBase.DespecializedParameters
+    )
+    return SciMLBase.DespecializedParameters(
+        recon(src, SciMLBase.unwrap_parameters(dst_ps))
+    )
+end
+
+function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     oldcache = dst_ps.caches
     # I don't know why but this makes it infer properly
     if recon.tunables_fn isa ComposedFunction
@@ -1131,7 +1141,7 @@ function (recon::MTKParametersReconstructor)(src, dst)
     # `BlockedArray{Int, ...}` instead of a `BlockedArray{Float64, ...}`.
     return MTKParameters(
         tunablevals, initialvals,
-        convert(typeof(parameter_values(dst).discrete), recon.discretes_fn(src)),
+        convert(typeof(dst_ps.discrete), recon.discretes_fn(src)),
         recon.consts_fn(src), nonnumerics, oldcache isa Tuple{} ? () : copy.(oldcache)
     )
 end
@@ -1310,9 +1320,10 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     srcu0 = state_values(srcvalp)
     T = srcu0 === nothing ? Union{} : eltype(srcu0)
     # promote with the tunable eltype
-    if parameter_values(dstvalp) isa MTKParameters
-        if !isempty(newp.tunable)
-            T = promote_type(eltype(newp.tunable), T)
+    if _unwrap_mtk_parameters(parameter_values(dstvalp)) isa MTKParameters
+        unwrapped_newp = _unwrap_mtk_parameters(newp)
+        if !isempty(unwrapped_newp.tunable)
+            T = promote_type(eltype(unwrapped_newp.tunable), T)
         end
     elseif !isempty(newp)
         T = promote_type(eltype(newp), T)
@@ -1330,7 +1341,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
         copyto!(newbuf, buf)
         newp = repack(newbuf)
     end
-    if newp isa MTKParameters
+    if _unwrap_mtk_parameters(newp) isa MTKParameters
         # and initials portion
         buf, repack, alias = SciMLStructures.canonicalize(SciMLStructures.Initials(), newp)
         if eltype(buf) != T && !(buf isa SVector{0})
@@ -1369,7 +1380,11 @@ function construct_initializeprobpmap(
             ), p_constructor = p_constructor
 
             function initprobpmap_nosplit(prob, initsol)
-                return p_constructor(getter(initsol))
+                p = p_constructor(getter(initsol))
+                if parameter_values(prob) isa SciMLBase.DespecializedParameters
+                    p = SciMLBase.DespecializedParameters(p)
+                end
+                return p
             end
         end
     end
@@ -1533,6 +1548,10 @@ function (siu::SetInitialUnknowns)(p::MTKParameters, u0)
     return p
 end
 
+function (siu::SetInitialUnknowns)(p::SciMLBase.DespecializedParameters, u0)
+    return SciMLBase.DespecializedParameters(siu(SciMLBase.unwrap_parameters(p), u0))
+end
+
 function (siu::SetInitialUnknowns)(p::AbstractVector, u0)
     if ArrayInterface.ismutable(p)
         siu.setter!(p, u0)
@@ -1597,6 +1616,20 @@ turned into an array-of-structs (`Vector{Tracker.TrackedReal{..}}`). Methods are
 this function in extensions.
 """
 __iip_u0_ad_wrapper(x) = x
+
+struct InitializationMap{IIP, U, F}
+    u0_constructor::U
+    map::F
+end
+
+function InitializationMap{IIP}(u0_constructor::U, map::F) where {IIP, U, F}
+    return InitializationMap{IIP, U, F}(u0_constructor, map)
+end
+
+(map::InitializationMap{false})(x) = map.u0_constructor(map.map(x))
+function (map::InitializationMap{true})(x)
+    return __iip_u0_ad_wrapper(map.u0_constructor(map.map(x)))
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -1863,6 +1896,7 @@ constructed is in implicit DAE form (`DAEProblem`). `opts.check_initialization_u
 function maybe_build_initialization_problem(
         sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
         opts::SciMLProblemOptions;
+        specialize = SciMLBase.AutoDespecialize,
         # Intercept `expression` because we don't support it here yet
         expression = Val{false}, kwargs...
     )
@@ -1883,7 +1917,7 @@ function maybe_build_initialization_problem(
     end
 
     orig_op = copy(op)
-    initializeprob = ModelingToolkitBase.InitializationProblem{iip}(
+    initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
         sys, t, op, opts; guesses, fast_path = true, kwargs...
     )
     initsys = initializeprob.f.sys::System
@@ -1955,10 +1989,16 @@ function maybe_build_initialization_problem(
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         else
-            initializeprobmap = u0_constructor ∘ PromoteToTunableEltype(CopyParamsByTemplate(initializeprob.f.sys, solved_unknowns; eval_expression, eval_module, kwargs...), floatT)
-            if iip
-                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
-            end
+            initializeprobmap = InitializationMap{iip}(
+                u0_constructor,
+                PromoteToTunableEltype(
+                    CopyParamsByTemplate(
+                        initializeprob.f.sys, solved_unknowns;
+                        eval_expression, eval_module, kwargs...
+                    ),
+                    floatT
+                )
+            )
         end
     else
         initializeprobmap = nothing
@@ -2043,6 +2083,10 @@ function maybe_build_initialization_problem(
         ),
     )
 end
+
+initialization_specialization(::Type{SciMLBase.AutoDespecialize}) =
+    SciMLBase.AutoDespecialize
+initialization_specialization(::Type) = SciMLBase.AutoSpecialize
 
 """
     $(TYPEDSIGNATURES)
@@ -2179,7 +2223,10 @@ function __process_SciMLProblem(
     if build_initializeprob
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
-            op, t, guesses, opts; kwargs...
+            op, t, guesses, opts;
+            specialize = initialization_specialization(
+                SciMLBase.specialization(constructor)
+            ), kwargs...
         )
 
         kwargs = merge(kwargs, kws)
@@ -2458,7 +2505,7 @@ resolve_iip(::Type{Both}, @nospecialize(op)) = !(op isa StaticArray)
 
 Macro for writing problem/function constructors. Expects a function definition with type
 parameters for `iip` and `specialize`. Generates fallbacks with
-`specialize = SciMLBase.AutoSpecialize` and `iip = Both` (resolved at construction time).
+`specialize = SciMLBase.AutoDespecialize` and `iip = Both` (resolved at construction time).
 """
 # Unwrap `@nospecialize(arg)` to get the underlying argument expression.
 # Returns the argument unchanged if not wrapped in @nospecialize.
@@ -2531,9 +2578,9 @@ macro fallback_iip_specialize(ex)
     fnname_name, curly_args... = fnname_curly.args
     @assert curly_args == where_args
 
-    # callexpr_iip is `ODEProblem{iip, AutoSpecialize}(call_args...)`
+    # callexpr_iip is `ODEProblem{iip, AutoDespecialize}(call_args...)`
     callexpr_iip = Expr(
-        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.AutoSpecialize), call_args...
+        :call, Expr(:curly, fnname_name, curly_args[1], SciMLBase.AutoDespecialize), call_args...
     )
     # `ODEProblem{iip}`
     fnname_iip = Expr(:curly, fnname_name, curly_args[1])
