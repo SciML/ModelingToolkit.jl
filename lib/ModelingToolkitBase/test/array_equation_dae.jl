@@ -141,8 +141,10 @@ end
     prob.f(out, du, prob.u0, prob.p, 0.0)
     @test maximum(abs, out) < 1.0e-1
 
-    sol = solve(prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
-        abstol = 1.0e-8, saveat = [0.1])
+    sol = solve(
+        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        abstol = 1.0e-8, saveat = [0.1]
+    )
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
