@@ -1086,16 +1086,16 @@ function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)
     return
 end
 
-function DiffEqBase.anyeltypedual(
+function SciMLBase.anyeltypedual(
         p::MTKParameters, ::Type{Val{counter}} = Val{0}
     ) where {counter}
-    return DiffEqBase.anyeltypedual(p.tunable)
+    return SciMLBase.anyeltypedual(p.tunable)
 end
-function DiffEqBase.anyeltypedual(
+function SciMLBase.anyeltypedual(
         p::Type{<:MTKParameters{T}},
         ::Type{Val{counter}} = Val{0}
     ) where {counter} where {T}
-    return DiffEqBase.anyeltypedual(T)
+    return SciMLBase.anyeltypedual(T)
 end
 
 # for compiling callbacks

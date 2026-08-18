@@ -296,7 +296,7 @@ for traitT in [
     ]
     @eval function _all_ts_idxs!(ts_idxs, ::$traitT, sys, sym)
         allsyms = Set{SymbolicT}()
-        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{Symbolics.Operator}())
+        SU.search_variables!(allsyms, sym; is_atomic = OperatorIsAtomic{SU.Operator}())
         for s in allsyms
             s = unwrap(s)
             if is_variable(sys, s) || is_independent_variable(sys, s)
@@ -486,7 +486,7 @@ end
 The `Initial` operator. Used by initialization to store constant constraints on variables
 of a system. See the documentation section on initialization for more information.
 """
-struct Initial <: Symbolics.Operator end
+struct Initial <: SU.Operator end
 Initial(x) = Initial()(x)
 SymbolicUtils.promote_symtype(::Initial, ::Type{T}) where {T} = T
 SymbolicUtils.promote_shape(::Initial, @nospecialize(x::SU.ShapeT)) = x

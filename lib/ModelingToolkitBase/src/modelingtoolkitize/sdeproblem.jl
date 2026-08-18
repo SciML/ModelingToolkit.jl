@@ -18,7 +18,7 @@ All other keyword arguments are forwarded to the created `System`.
 function modelingtoolkitize(
         prob::SDEProblem; u_names = nothing, p_names = nothing, kwargs...
     )
-    if prob.f isa DiffEqBase.AbstractParameterizedFunction
+    if prob.f isa SciMLBase.AbstractParameterizedFunction
         return prob.f.sys
     end
 

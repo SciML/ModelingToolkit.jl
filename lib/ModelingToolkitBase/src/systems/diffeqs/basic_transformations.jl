@@ -950,7 +950,7 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
             end
             ns = maketerm(
                 typeof(s), operation(s), Any[t],
-                SymbolicUtils.metadata(s)
+                TermInterface.metadata(s)
             )
             newsts[i] = ns
             varmap[s] = ns

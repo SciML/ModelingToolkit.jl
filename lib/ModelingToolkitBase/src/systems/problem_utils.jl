@@ -2413,7 +2413,7 @@ end
 function filter_kwargs(kwargs)
     kwargs = Dict(kwargs)
     for key in keys(kwargs)
-        key in DiffEqBase.allowedkeywords || delete!(kwargs, key)
+        key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
     return pairs(NamedTuple(kwargs))
 end

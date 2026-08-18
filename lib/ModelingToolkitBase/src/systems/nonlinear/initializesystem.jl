@@ -861,7 +861,7 @@ function _late_binding_update_u0_p_impl(
     return newu0, newp
 end
 
-function DiffEqBase.get_updated_symbolic_problem(
+function SciMLBase.get_updated_symbolic_problem(
         sys::AbstractSystem, prob; u0 = state_values(prob),
         p = parameter_values(prob), kw...
     )
@@ -883,7 +883,7 @@ function DiffEqBase.get_updated_symbolic_problem(
         buffer = p
     end
 
-    u0 = DiffEqBase.promote_u0(u0, buffer, t0)
+    u0 = SciMLBase.promote_u0(u0, buffer, t0)
     u0 = ArrayInterface.restructure(u0, meta.get_updated_u0(prob, initdata.initializeprob))
 
     return remake(prob; u0, p)

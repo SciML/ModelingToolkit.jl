@@ -392,7 +392,7 @@ function find_all_parameter_equations(sys::AbstractSystem)
     rest_eqs = Equation[]
     for eq in equations(sys)
         empty!(varsbuf)
-        Symbolics.search_variables!(
+        SU.search_variables!(
             varsbuf, eq; is_atomic = check_bindings_is_atomic,
             recurse = check_no_parameter_equations_recurse
         )
@@ -869,7 +869,7 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     Moshi.Match.@match expr begin
         BSImpl.Const() => return
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
@@ -878,9 +878,9 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             # This must be done here since search_variables! returns leaf variables, not the Integral term
             domain = f.domain.domain
             if domain isa AnyInterval{Num}
-                lo, hi = unwrap.(DomainSets.endpoints(domain))
+                lo, hi = unwrap.(IntervalSets.endpoints(domain))
             elseif domain isa AnyInterval{SymbolicT}
-                lo, hi = DomainSets.endpoints(domain)
+                lo, hi = IntervalSets.endpoints(domain)
             elseif domain isa AnyInterval
                 lo = hi = COMMON_NOTHING
             else
@@ -941,7 +941,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     for var in expr
         collect_vars!(unknowns, parameters, var, iv, op; depth)
     end
@@ -960,7 +960,7 @@ eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator;
         depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, eq.lhs, iv, op; depth)
@@ -969,13 +969,13 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, p[1], iv, op; depth)
     collect_vars!(unknowns, parameters, p[2], iv, op; depth)
@@ -983,7 +983,7 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return nothing
 end

@@ -204,7 +204,7 @@ function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::Symbo
             old_to_new_idxs[idx] = SU.populate_ir!(ir, new_sym)
             dirty = true
         elseif dirty
-            new_sym = maketerm(SymbolicT, op, args, SU.metadata(sym))
+            new_sym = maketerm(SymbolicT, op, args, TermInterface.metadata(sym))
             old_to_new_idxs[idx] = SU.populate_ir!(ir, new_sym)
         end
     end

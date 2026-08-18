@@ -21,7 +21,7 @@ function modelingtoolkitize(
     )
     num_cons = isnothing(prob.lcons) ? 0 : length(prob.lcons)
     p = prob.p
-    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    has_p = !(p isa Union{SciMLBase.NullParameters, Nothing})
 
     vars = construct_vars(prob, nothing, u_names)
     if prob.ub !== nothing # lb is also !== nothing

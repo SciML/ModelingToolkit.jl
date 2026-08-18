@@ -525,7 +525,7 @@ function get_buffer_sizes_and_idxs(::Type{BufT}, sys::AbstractSystem, buffers::D
             idxs[rp] = (i, j)
             idxs[rttp] = (i, j)
         end
-        if T <: Symbolics.FnType
+        if T <: SU.FnType
             T = Any
         end
         push!(buffer_sizes, BufferTemplate(T, length(buf)))

@@ -974,7 +974,7 @@ EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
 
 See also: [`Differential`](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
 """
-struct EvalAt <: Symbolics.Operator
+struct EvalAt <: SU.Operator
     t::Union{SymbolicT, Number}
 end
 

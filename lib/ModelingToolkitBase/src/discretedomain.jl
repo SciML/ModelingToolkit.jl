@@ -1,4 +1,5 @@
-using Symbolics: Operator, Num, Term, value, recursive_hasoperator
+using Symbolics: Num, value, recursive_hasoperator
+using SymbolicUtils: Operator, Term
 
 # Shift
 
