@@ -383,3 +383,119 @@ end
         ).u rtol = 1.0e-2
     end
 end
+
+@testset "FMU event metadata" begin
+    ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
+    # every parameter of `sys` carrying `FMUEventMetadata`, with its metadata
+    function event_metadata(sys)
+        return [
+            (par, MTK.getmetadata(par, ext.FMUEventMetadata))
+                for par in parameters(sys)
+                if MTK.hasmetadata(par, ext.FMUEventMetadata)
+        ]
+    end
+
+    @testset "v2, ME" begin
+        fmu = loadFMU("BouncingBall1D", "Dymola", "2023x"; type = :ME)
+        @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        par, meta = only(event_metadata(sys))
+        @test MTK.getname(par) == :ball₊wrapper
+        @test meta.fmi_version == 2
+        @test meta.interface == :ME
+        @test meta.n_event_indicators == 2
+        @test meta.can_have_time_events
+        @test !meta.cs_has_event_mode
+        @test Set(zip(meta.state_names, meta.state_vrs)) ==
+            Set([(:mass_s, 0x02000000), (:mass_v, 0x02000001)])
+        @test isempty(meta.input_names)
+        @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
+    end
+
+    @testset "v2, CS" begin
+        fmu = loadFMU("BouncingBall1D", "Dymola", "2023x"; type = :CS)
+        @named ball = MTK.FMIComponent(
+            Val(2); fmu, type = :CS, communication_step_size = 1.0e-3
+        )
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        par, meta = only(event_metadata(sys))
+        @test MTK.getname(par) == :ball₊wrapper
+        @test meta.fmi_version == 2
+        @test meta.interface == :CS
+        @test meta.n_event_indicators == 2
+        @test !meta.can_have_time_events
+        # FMI2 Co-Simulation has no event mode
+        @test !meta.cs_has_event_mode
+        @test Set(meta.state_names) == Set([:mass_s, :mass_v])
+        @test ext.resolve_relative(par, :mass_s) === :ball₊mass_s
+    end
+
+    @testset "v3, ME" begin
+        fmu = loadFMU("SpringFrictionPendulum1D", "Dymola", "2023x", "3.0"; type = :ME)
+        @named pendulum = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [pendulum])
+        par, meta = only(event_metadata(sys))
+        @test MTK.getname(par) == :pendulum₊wrapper
+        @test meta.fmi_version == 3
+        @test meta.interface == :ME
+        @test meta.n_event_indicators == 32
+        @test meta.can_have_time_events
+        @test !meta.cs_has_event_mode
+        @test Set(zip(meta.state_names, meta.state_vrs)) ==
+            Set([(:mass__s, 0x02000000), (:mass__v, 0x02000001)])
+        @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
+    end
+
+    @testset "v3, CS" begin
+        fmu = loadFMU("SpringFrictionPendulum1D", "Dymola", "2023x", "3.0"; type = :CS)
+        @named pendulum = MTK.FMIComponent(
+            Val(3); fmu, type = :CS, communication_step_size = 1.0e-3
+        )
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [pendulum])
+        par, meta = only(event_metadata(sys))
+        @test MTK.getname(par) == :pendulum₊wrapper
+        @test meta.fmi_version == 3
+        @test meta.interface == :CS
+        @test meta.n_event_indicators == 32
+        @test !meta.can_have_time_events
+        @test meta.cs_has_event_mode
+        @test Set(meta.state_names) == Set([:mass__s, :mass__v])
+        @test ext.resolve_relative(par, :mass__v) === :pendulum₊mass__v
+    end
+
+    @testset "two FMUs in one system" begin
+        fmu = loadFMU("BouncingBall1D", "Dymola", "2023x"; type = :ME)
+        @named ball1 = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @named ball2 = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball1, ball2])
+        carriers = event_metadata(sys)
+        @test length(carriers) == 2
+        @test Set(MTK.getname(par) for (par, _) in carriers) ==
+            Set([:ball1₊wrapper, :ball2₊wrapper])
+        unknown_names = MTK.getname.(unknowns(sys))
+        for (par, meta) in carriers
+            @test meta.n_event_indicators == 2
+            @test Set(meta.state_names) == Set([:mass_s, :mass_v])
+            for name in meta.state_names
+                @test ext.resolve_relative(par, name) in unknown_names
+            end
+        end
+    end
+
+    @testset "inputs, no event indicators, un-namespaced wrapper" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "StateSpace.fmu"); type = :ME)
+        @named sspace = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        par, meta = only(event_metadata(sspace))
+        @test MTK.getname(par) == :wrapper
+        @test meta.n_event_indicators == 0
+        @test meta.state_names == [:x]
+        @test meta.state_vrs == [0x0000000b]
+        @test meta.input_names == [:u]
+        @test ext.resolve_relative(par, :x) === :x
+    end
+end

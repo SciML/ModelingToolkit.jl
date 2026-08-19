@@ -78,6 +78,82 @@ end
 end
 
 """
+    $(TYPEDEF)
+
+Event-relevant facts parsed from an FMU's model description at import time. Attached to the
+FMU's instance wrapper parameter as Symbolics metadata, with this struct as the key, so that
+consumers can find it by scanning `parameters` of the compiled system.
+
+Names are component-relative because metadata is opaque to `renamespace`; use
+[`resolve_relative`](@ref) to obtain the name in the namespace of the wrapper parameter.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+Base.@kwdef struct FMUEventMetadata
+    """
+    The FMI version of the FMU, `2` or `3`.
+    """
+    fmi_version::Int
+    """
+    The FMU interface in use, `:ME` or `:CS`.
+    """
+    interface::Symbol
+    """
+    The number of event indicators the FMU declares.
+    """
+    n_event_indicators::Int
+    """
+    Whether the FMU may signal time events. `true` for Model Exchange FMUs.
+    """
+    can_have_time_events::Bool
+    """
+    Whether the FMU supports CoSimulation event mode.
+    """
+    cs_has_event_mode::Bool
+    """
+    Component-relative names of the continuous states of the FMU.
+    """
+    state_names::Vector{Symbol}
+    """
+    Component-relative names of the inputs of the FMU.
+    """
+    input_names::Vector{Symbol}
+    """
+    Value references of the continuous states of the FMU, ordered as `state_names`.
+    """
+    state_vrs::Vector
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the name of the variable `name` of the FMU component that `wrapper_param` belongs to,
+in the namespace of `wrapper_param`. `name` is a component-relative name from
+[`FMUEventMetadata`](@ref); an un-namespaced `wrapper_param` returns it unchanged.
+"""
+function resolve_relative(wrapper_param, name::Symbol)
+    wrapper_name = string(MTKBase.getname(wrapper_param))
+    separator = findlast(MTK.NAMESPACE_SEPARATOR, wrapper_name)
+    separator === nothing && return name
+    return Symbol(wrapper_name[1:last(separator)], name)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether the FMU declares support for CoSimulation event mode. FMI2 CoSimulation has no event
+mode, so this is always `false` for v2 FMUs.
+"""
+cs_event_mode_supported(::FMI.FMU2) = false
+
+function cs_event_mode_supported(fmu::FMI.FMU3)
+    coSimulation = fmu.modelDescription.coSimulation
+    return coSimulation !== nothing && coSimulation.hasEventMode === true
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 A component that wraps an FMU loaded via FMI.jl. The FMI version (2 or 3) should be
@@ -243,6 +319,23 @@ function MTK.FMIComponent(
             output_value_references, param_value_references, input_value_references
         )
     end
+
+    event_metadata = FMUEventMetadata(;
+        fmi_version = Ver, interface = type,
+        n_event_indicators = Int(something(FMI.getNumberOfEventIndicators(fmu), 0)),
+        can_have_time_events = type == :ME,
+        cs_has_event_mode = type == :CS && cs_event_mode_supported(fmu),
+        state_names = Symbol[MTKBase.getname(var) for var in diffvars],
+        input_names = Symbol[MTKBase.getname(var) for var in inputs],
+        state_vrs = state_value_references
+    )
+    # `setmetadata` returns a new symbolic and unwraps the callable parameter, so the
+    # rewrapped result is what has to be spliced into the system below.
+    wrapper = MTKBase.CallAndWrap(
+        SymbolicUtils.setmetadata(
+            SymbolicUtils.unwrap(wrapper), FMUEventMetadata, event_metadata
+        )
+    )
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
