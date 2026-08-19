@@ -198,6 +198,7 @@ in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`.
 ModelingToolkit.SymbolicContinuousCallback
 ModelingToolkit.SymbolicDiscreteCallback
 ModelingToolkit.AssignmentAffect
+ModelingToolkitBase.CallbackConstructionHook
 ```
 
 The affect functions for the above callbacks can be symbolic or user-defined functions.

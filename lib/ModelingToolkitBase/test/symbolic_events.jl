@@ -2010,22 +2010,26 @@ end
     hook_fires = Ref(0)
     function hook(sys, par)
         hook_calls[] += 1
+        @test sys isa ModelingToolkitBase.AbstractSystem
+        @test hasmetadata(par, CallbackConstructionHook)
+        @test any(isequal(par), parameters(sys))
         return [DiscreteCallback((u, t, i) -> true, i -> (hook_fires[] += 1))]
     end
     ph = setmetadata(p, CallbackConstructionHook, hook)
 
     # `x` starts at 1 and decreases, so reaching 2 requires a system event to have fired
-    function test_hook_callbacks(sys; has_events = true)
+    function test_hook_callbacks(sys; has_events = true, nhooks = 1)
         hook_calls[] = 0
         hook_fires[] = 0
         user_fired = Ref(false)
         user_cb = DiscreteCallback((u, t, i) -> true, i -> (user_fired[] = true))
         prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0); callback = user_cb)
         sol = solve(prob, Tsit5())
-        @test hook_calls[] == 1
+        @test hook_calls[] == nhooks
         @test hook_fires[] > 0
         @test user_fired[]
         has_events && @test maximum(sol[x]) ≈ 2.0
+        return sol
     end
 
     @testset "no symbolic events" begin
@@ -2039,6 +2043,20 @@ end
     @testset "discrete events" begin
         @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; discrete_events = [devt])
         test_hook_callbacks(sys)
+    end
+    @testset "one hook per hook-carrying parameter" begin
+        @parameters q = 1.0
+        qh = setmetadata(q, CallbackConstructionHook, hook)
+        @mtkcompile sys = System(D(x) ~ -ph * qh, t, [x], [ph, qh])
+        test_hook_callbacks(sys; has_events = false, nhooks = 2)
+    end
+    @testset "implicit affect" begin
+        # The affect is nonlinear in `x`, so it compiles to an inner `ImplicitDiscreteProblem`
+        # over a system whose parameters include `ph`; the hook must not run for that problem.
+        ievt = SymbolicContinuousCallback([x ~ 0.5], [x^2 ~ 2 * ph])
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; continuous_events = [ievt])
+        sol = test_hook_callbacks(sys; has_events = false)
+        @test maximum(sol[x]) ≈ sqrt(2)
     end
     @testset "hook returning no callbacks" begin
         pe = setmetadata(p, CallbackConstructionHook, (sys, par) -> SciMLBase.DECallback[])

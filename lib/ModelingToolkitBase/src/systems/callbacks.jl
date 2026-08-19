@@ -1557,10 +1557,12 @@ Base.@nospecializeinfer function compile_implicit_affect(
     u_getter = getsym(affsys, dvs_to_update)
     p_getter = getsym(affsys, ps_to_update)
 
+    # `_skip_events`: `affsys` shares the parent's parameters, so without this the parent's
+    # `CallbackConstructionHook`s would be invoked again for this inner problem.
     affprob = ImplicitDiscreteProblem(
         affsys, op, (0, 0);
         build_initializeprob = false, check_length = false, eval_expression,
-        eval_module, check_compatibility = false, kwargs...
+        eval_module, check_compatibility = false, _skip_events = true, kwargs...
     )
 
     return ImplicitAffect(
@@ -1600,7 +1602,7 @@ merge_cb(x, y) = CallbackSet(x, y)
 
 Symbolics metadata key attaching a callback-building hook to a parameter, via
 `setmetadata(param, CallbackConstructionHook, hook)`. The hook is called as
-`hook(sys, param) -> Vector{<:SciMLBase.DECallback}` during [`process_events`](@ref), once per
+`hook(sys, param) -> Vector{<:SciMLBase.DECallback}` during `process_events`, once per
 parameter carrying the key, and the returned callbacks are appended to the problem's callbacks.
 """
 struct CallbackConstructionHook end
