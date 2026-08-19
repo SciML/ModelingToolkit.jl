@@ -546,3 +546,91 @@ end
         @test sol(0.2; idxs = ball.v) ≈ analytic_v(0.2) atol = 1.0e-2
     end
 end
+
+@testset "FMU event iteration" begin
+    ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
+
+    # the instance wrapper is the default value of the callable parameter `FMIComponent`
+    # creates for it
+    function ball_wrapper(Ver)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        return MTK.getdefault(
+            only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
+        )
+    end
+
+    # an FMU enters Event Mode when it leaves initialization mode, which is where
+    # `do_fmu_event_iteration!` expects to be called. Empty `params` leaves the FMU's own
+    # start values in place.
+    function enter_initial_event_mode!(wrapper::ext.FMI2InstanceWrapper)
+        ext.get_instance_common!(wrapper, Float64[], Float64[], 0.0)
+        ext.FMI.fmi2ExitInitializationMode(wrapper.instance)
+        return wrapper
+    end
+    function enter_initial_event_mode!(wrapper::ext.FMI3InstanceWrapper)
+        wrapper.instance = ext.FMI.fmi3InstantiateModelExchange!(wrapper.fmu)
+        ext.get_instance_common!(wrapper, Float64[], Float64[], 0.0)
+        ext.FMI.fmi3ExitInitializationMode(wrapper.instance)
+        return wrapper
+    end
+
+    @testset "v$Ver, ME" for Ver in (2, 3)
+        wrapper = ball_wrapper(Ver)
+        @test wrapper.next_event_time === nothing
+        @test length(wrapper.event_states_buffer) == length(wrapper.state_value_references)
+
+        enter_initial_event_mode!(wrapper)
+        result = ext.do_fmu_event_iteration!(wrapper)
+        @test !result.terminate
+        # `BouncingBall` starts at h = 1 with no event pending
+        @test !result.values_changed
+        @test !result.nominals_changed
+        @test result.next_event_time === nothing
+        ext.reset_instance!(wrapper)
+        @test wrapper.instance === nothing
+
+        # the same iteration as part of instance initialization
+        ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+        @test wrapper.instance !== nothing
+        @test wrapper.next_event_time === nothing
+        @test ext.partiallyCompleteIntegratorStep(wrapper) ==
+            (; enter_event_mode = false, terminate = false)
+        ext.reset_instance!(wrapper)
+    end
+
+    @testset "status handling" begin
+        @test !ext.fmu_status_is_error(Val(2), nothing, :fmi2SetReal)
+        @test !ext.fmu_status_is_error(Val(2), FMI.fmi2StatusOK, :fmi2SetReal)
+        @test !ext.fmu_status_is_error(Val(3), FMI.fmi3StatusOK, :fmi3SetFloat64)
+        # a warning is logged but is not a failure
+        @test @test_logs (:warn,) !ext.fmu_status_is_error(
+            Val(2), FMI.fmi2StatusWarning, :fmi2SetReal
+        )
+        @test @test_logs (:warn,) !ext.fmu_status_is_error(
+            Val(3), FMI.fmi3StatusWarning, :fmi3SetFloat64
+        )
+        @test ext.fmu_status_is_error(Val(2), FMI.fmi2StatusError, :fmi2SetReal)
+        @test ext.fmu_status_is_error(Val(2), FMI.fmi2StatusFatal, :fmi2SetReal)
+        @test ext.fmu_status_is_error(Val(3), FMI.fmi3StatusError, :fmi3SetFloat64)
+        @test ext.fmu_status_is_error(Val(3), FMI.fmi3StatusFatal, :fmi3SetFloat64)
+
+        # the cleanup branch has to use the functions matching the FMI version of the
+        # checked call
+        leaves(e) = e isa Expr ? mapreduce(leaves, vcat, e.args; init = Any[]) : Any[e]
+        v2_expansion = leaves(
+            macroexpand(
+                ext, :(@statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance))
+            )
+        )
+        @test ext.FMI.fmi2Terminate in v2_expansion
+        @test !(ext.FMI.fmi3Terminate in v2_expansion)
+        v3_expansion = leaves(
+            macroexpand(
+                ext, :(@statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance))
+            )
+        )
+        @test ext.FMI.fmi3Terminate in v3_expansion
+        @test !(ext.FMI.fmi2Terminate in v3_expansion)
+    end
+end

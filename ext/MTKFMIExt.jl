@@ -19,45 +19,97 @@ const D = D_nounits
 """
     $(TYPEDSIGNATURES)
 
-A utility macro for FMI.jl functions that return a status. Will terminate on
-fatal statuses. Must be used as `@statuscheck FMI.fmiXFunction(...)` where
-`X` should be `2` or `3`. Has an edge case for handling tuples for
-`FMI.fmi2CompletedIntegratorStep`.
+Whether `status`, returned by the FMI version 2 function `fnname`, is a failure.
+`fmi2StatusWarning` is not a failure: the standard allows the computation to continue, so it
+is only logged.
+"""
+function fmu_status_is_error(::Val{2}, status, fnname)
+    status === nothing && return false
+    status == FMI.fmi2StatusOK && return false
+    if status == FMI.fmi2StatusWarning
+        @warn "FMU function $fnname returned `fmi2StatusWarning`." maxlog = 10
+        return false
+    end
+    return true
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `status`, returned by the FMI version 3 function `fnname`, is a failure.
+`fmi3StatusWarning` is not a failure: the standard allows the computation to continue, so it
+is only logged.
+"""
+function fmu_status_is_error(::Val{3}, status, fnname)
+    status === nothing && return false
+    status == FMI.fmi3StatusOK && return false
+    if status == FMI.fmi3StatusWarning
+        @warn "FMU function $fnname returned `fmi3StatusWarning`." maxlog = 10
+        return false
+    end
+    return true
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+A utility macro for FMI.jl functions that return a status. Frees the instance and errors on a
+failing status, terminating it first unless the status is fatal. Must be used as
+`@statuscheck FMI.fmiXFunction(...)` where `X` should be `2` or `3`. Evaluates to the value
+returned by the wrapped call, so callers can consume the extra outputs of functions such as
+`FMI.fmi2CompletedIntegratorStep`, which return their status as the first element of a tuple.
 """
 macro statuscheck(expr)
     @assert Meta.isexpr(expr, :call)
     fn = expr.args[1]
     @assert Meta.isexpr(fn, :.)
     @assert fn.args[1] == :FMI
-    fnname = fn.args[2]
+    # the qualified name is parsed as `Expr(:., :FMI, QuoteNode(:fmiXFunction))`
+    fnname = fn.args[2] isa QuoteNode ? fn.args[2].value : fn.args[2]
 
-    instance = expr.args[2]
-    is_v2 = startswith("fmi2", string(fnname))
+    is_v2 = startswith(string(fnname), "fmi2")
 
-    fmiTrue = is_v2 ? FMI.fmi2True : FMI.fmi3True
-    fmiStatusOK = is_v2 ? FMI.fmi2StatusOK : FMI.fmi3StatusOK
-    fmiStatusWarning = is_v2 ? FMI.fmi2StatusWarning : FMI.fmi3StatusWarning
+    version = Val(is_v2 ? 2 : 3)
     fmiStatusFatal = is_v2 ? FMI.fmi2StatusFatal : FMI.fmi3StatusFatal
     fmiTerminate = is_v2 ? FMI.fmi2Terminate : FMI.fmi3Terminate
     fmiFreeInstance! = is_v2 ? FMI.fmi2FreeInstance! : FMI.fmi3FreeInstance!
     return quote
-        status = $expr
-        fnname = $fnname
-        if status !== nothing && (
-                (status isa Tuple && status[1] == $fmiTrue) ||
-                    (
-                    !(status isa Tuple) && status != $fmiStatusOK &&
-                        status != $fmiStatusWarning
-                )
-            )
+        result = $expr
+        status = result isa Tuple ? result[1] : result
+        if fmu_status_is_error($version, status, $(QuoteNode(fnname)))
+            # a fatal status leaves the instance in a state where no further call is allowed
             if status != $fmiStatusFatal
                 $fmiTerminate(wrapper.instance)
             end
             $fmiFreeInstance!(wrapper.instance)
             wrapper.instance = nothing
-            error("FMU Error in $fnname: status $status")
+            error("FMU Error in $($(QuoteNode(fnname))): status $status")
         end
+        result
     end |> esc
+end
+
+"""
+The maximum number of `fmiXNewDiscreteStates`/`fmiXUpdateDiscreteStates` calls allowed in a
+single event iteration before it is considered non-convergent.
+"""
+const MAX_EVENT_ITERATIONS = 100
+
+"""
+    $(TYPEDSIGNATURES)
+
+Record the result of the event iteration performed while leaving initialization mode on
+`wrapper`, and error if the FMU requested termination.
+"""
+function handle_initial_event_iteration!(wrapper, event_result)
+    if event_result.terminate
+        error(
+            "FMU $(FMI.getModelName(wrapper.fmu)) requested termination of the simulation \
+            during the event iteration performed while leaving initialization mode."
+        )
+    end
+    wrapper.next_event_time = event_result.next_event_time
+    return event_result
 end
 
 @static if !hasmethod(FMI.getValueReferencesAndNames, Tuple{FMI.fmi3ModelDescription})
@@ -622,6 +674,11 @@ mutable struct FMI2InstanceWrapper
     """
     instance::Union{FMI.FMU2Component{FMI.FMU2}, Nothing}
     """
+    The time of the next event reported by the most recent event iteration, or `nothing` if
+    the FMU did not declare one.
+    """
+    next_event_time::Union{Nothing, Float64}
+    """
     Continuous state buffer pre-allocated to avoid simulation allocations.
     """
     const states_buffer::Vector{FMI.fmi2Real}
@@ -633,6 +690,11 @@ mutable struct FMI2InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi2Real}
+    """
+    Buffer for the FMU's continuous states, re-read from the FMU whenever an event iteration
+    reports that the values of the continuous states changed.
+    """
+    const event_states_buffer::Vector{FMI.fmi2Real}
 end
 
 """
@@ -641,7 +703,7 @@ end
 Create an `FMI2InstanceWrapper` with no instance.
 """
 function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)))
+    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, nothing, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)), zeros(FMI.fmi2Real, length(states)))
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
@@ -681,6 +743,38 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Run the FMU's event iteration to convergence. Assumes the FMU is already in Event Mode, and
+neither enters nor leaves any mode itself. `values_changed` and `nominals_changed` are
+accumulated across iterations, as the FMI event iteration requires every super-dense time
+instant to be accounted for, not only the last one. `next_event_time` keeps the value of the
+last iteration that declared one.
+"""
+function do_fmu_event_iteration!(wrapper::FMI2InstanceWrapper)
+    values_changed = false
+    nominals_changed = false
+    next_event_time = nothing
+    terminate = false
+    for _ in 1:MAX_EVENT_ITERATIONS
+        eventInfo = FMI.fmi2NewDiscreteStates(wrapper.instance)
+        values_changed |= eventInfo.valuesOfContinuousStatesChanged == FMI.fmi2True
+        nominals_changed |= eventInfo.nominalsOfContinuousStatesChanged == FMI.fmi2True
+        if eventInfo.nextEventTimeDefined == FMI.fmi2True
+            next_event_time = Float64(eventInfo.nextEventTime)
+        end
+        terminate = eventInfo.terminateSimulation == FMI.fmi2True
+        if terminate || eventInfo.newDiscreteStatesNeeded == FMI.fmi2False
+            return (; values_changed, nominals_changed, next_event_time, terminate)
+        end
+    end
+    return error(
+        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
+        event iterations."
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Create an instance of a Model Exchange FMU. Use the existing instance in `wrapper` if
 present and create a new one otherwise. Return the instance.
 
@@ -689,11 +783,18 @@ See `get_instance_common!` for a description of the arguments.
 function get_instance_ME!(wrapper::FMI2InstanceWrapper, inputs, params, t)
     if wrapper.instance === nothing
         get_instance_common!(wrapper, inputs, params, t)
+        # leaving initialization mode puts the FMU in Event Mode, so the initial event
+        # iteration has to converge before Continuous-Time Mode may be entered
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
-        eventInfo = FMI.fmi2NewDiscreteStates(wrapper.instance)
-        @assert eventInfo.newDiscreteStatesNeeded == FMI.fmi2False
-        # TODO: Support FMU events
+        event_result = do_fmu_event_iteration!(wrapper)
+        handle_initial_event_iteration!(wrapper, event_result)
         @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
+        if event_result.values_changed
+            copyto!(
+                wrapper.event_states_buffer,
+                FMI.fmi2GetContinuousStates(wrapper.instance)
+            )
+        end
     end
 
     return wrapper.instance
@@ -737,10 +838,17 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Call `fmiXCompletedIntegratorStep` with `noSetFMUStatePriorToCurrentPoint` as false.
+Call `fmiXCompletedIntegratorStep` with `noSetFMUStatePriorToCurrentPoint` as false. Returns
+the FMU's requests to enter event mode and to terminate the simulation.
 """
 function partiallyCompleteIntegratorStep(wrapper::FMI2InstanceWrapper)
-    return @statuscheck FMI.fmi2CompletedIntegratorStep(wrapper.instance, FMI.fmi2False)
+    _, enter_event_mode, terminate = @statuscheck FMI.fmi2CompletedIntegratorStep(
+        wrapper.instance, FMI.fmi2False
+    )
+    return (;
+        enter_event_mode = enter_event_mode == FMI.fmi2True,
+        terminate = terminate == FMI.fmi2True,
+    )
 end
 
 """
@@ -802,6 +910,11 @@ mutable struct FMI3InstanceWrapper
     """
     instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
     """
+    The time of the next event reported by the most recent event iteration, or `nothing` if
+    the FMU did not declare one.
+    """
+    next_event_time::Union{Nothing, Float64}
+    """
     Continuous state buffer pre-allocated to avoid simulation allocations.
     """
     const states_buffer::Vector{FMI.fmi3Float64}
@@ -813,6 +926,11 @@ mutable struct FMI3InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi3Float64}
+    """
+    Buffer for the FMU's continuous states, re-read from the FMU whenever an event iteration
+    reports that the values of the continuous states changed.
+    """
+    const event_states_buffer::Vector{FMI.fmi3Float64}
 end
 
 """
@@ -821,7 +939,7 @@ end
 Create an `FMI3InstanceWrapper` with no instance.
 """
 function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)))
+    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, nothing, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)), zeros(FMI.fmi3Float64, length(states)))
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
@@ -859,6 +977,40 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Run the FMU's event iteration to convergence. Assumes the FMU is already in Event Mode, and
+neither enters nor leaves any mode itself. `values_changed` and `nominals_changed` are
+accumulated across iterations, as the FMI event iteration requires every super-dense time
+instant to be accounted for, not only the last one. `next_event_time` keeps the value of the
+last iteration that declared one.
+"""
+function do_fmu_event_iteration!(wrapper::FMI3InstanceWrapper)
+    values_changed = false
+    nominals_changed = false
+    next_event_time = nothing
+    terminate = false
+    for _ in 1:MAX_EVENT_ITERATIONS
+        needs_update, terminate_simulation, states_nominals_changed,
+            states_values_changed, event_time_defined,
+            event_time = FMI.fmi3UpdateDiscreteStates(wrapper.instance)
+        values_changed |= states_values_changed == FMI.fmi3True
+        nominals_changed |= states_nominals_changed == FMI.fmi3True
+        if event_time_defined == FMI.fmi3True
+            next_event_time = Float64(event_time)
+        end
+        terminate = terminate_simulation == FMI.fmi3True
+        if terminate || needs_update == FMI.fmi3False
+            return (; values_changed, nominals_changed, next_event_time, terminate)
+        end
+    end
+    return error(
+        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
+        event iterations."
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Create an instance of a Model Exchange FMU. Use the existing instance in `wrapper` if
 present and create a new one otherwise. Return the instance.
 
@@ -868,11 +1020,18 @@ function get_instance_ME!(wrapper::FMI3InstanceWrapper, inputs, params, t)
     if wrapper.instance === nothing
         wrapper.instance = FMI.fmi3InstantiateModelExchange!(wrapper.fmu)::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t)
+        # leaving initialization mode puts the FMU in Event Mode, so the initial event
+        # iteration has to converge before Continuous-Time Mode may be entered
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
-        eventInfo = FMI.fmi3UpdateDiscreteStates(wrapper.instance)
-        @assert eventInfo[1] == FMI.fmi2False
-        # TODO: Support FMU events
+        event_result = do_fmu_event_iteration!(wrapper)
+        handle_initial_event_iteration!(wrapper, event_result)
         @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
+        if event_result.values_changed
+            copyto!(
+                wrapper.event_states_buffer,
+                FMI.fmi3GetContinuousStates(wrapper.instance)
+            )
+        end
     end
 
     return wrapper.instance
@@ -915,6 +1074,9 @@ end
 
 """
     $(TYPEDSIGNATURES)
+
+Call `fmiXCompletedIntegratorStep` with `noSetFMUStatePriorToCurrentPoint` as false. Returns
+the FMU's requests to enter event mode and to terminate the simulation.
 """
 function partiallyCompleteIntegratorStep(wrapper::FMI3InstanceWrapper)
     enterEventMode = Ref(FMI.fmi3False)
@@ -922,8 +1084,10 @@ function partiallyCompleteIntegratorStep(wrapper::FMI3InstanceWrapper)
     @statuscheck FMI.fmi3CompletedIntegratorStep!(
         wrapper.instance, FMI.fmi3False, enterEventMode, terminateSimulation
     )
-    @assert enterEventMode[] == FMI.fmi3False
-    return @assert terminateSimulation[] == FMI.fmi3False
+    return (;
+        enter_event_mode = enterEventMode[] == FMI.fmi3True,
+        terminate = terminateSimulation[] == FMI.fmi3True,
+    )
 end
 
 """
