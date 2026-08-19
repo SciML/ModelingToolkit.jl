@@ -16,7 +16,7 @@ end
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation,
-    issym, BSImpl,
+    issym, BSImpl, Operator,
     @rule, Rewriters, substitute, BasicSymbolic,
     symtype, _iszero, unwrap
 import TermInterface: maketerm, metadata
