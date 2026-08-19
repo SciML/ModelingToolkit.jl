@@ -501,3 +501,48 @@ end
         @test ext.resolve_relative(par, :x) === :x
     end
 end
+
+@testset "state-valued outputs" begin
+    # Reference-FMUs `BouncingBall` declares `h` and `v` both as continuous states and as
+    # outputs. The analytic solution below holds until the first bounce at ≈0.45s.
+    analytic_h(tval) = 1.0 - 9.81 / 2 * tval^2
+    analytic_v(tval) = -9.81 * tval
+
+    function build_ball_model(ball)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 0.2))
+        return sys, prob
+    end
+
+    @testset "v$Ver, ME" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        # the state variable is reused as the output, so it keeps its own causality
+        @test !MTK.isoutput(ball.h)
+        sys, prob = build_ball_model(ball)
+        unknown_names = MTK.getname.(unknowns(sys))
+        @test count(isequal(:ball₊h), unknown_names) == 1
+        @test count(isequal(:ball₊v), unknown_names) == 1
+
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        for tval in (0.05, 0.1, 0.2)
+            @test sol(tval; idxs = ball.h) ≈ analytic_h(tval) atol = 1.0e-3
+        end
+        @test sol(0.2; idxs = ball.v) ≈ analytic_v(0.2) atol = 1.0e-3
+    end
+
+    @testset "v$Ver, CS" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :CS)
+        @named ball = MTK.FMIComponent(
+            Val(Ver); fmu, type = :CS, communication_step_size = 1.0e-3
+        )
+        sys, prob = build_ball_model(ball)
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        # the FMU integrates itself with a fixed step, hence the looser tolerance
+        @test sol(0.2; idxs = ball.h) ≈ analytic_h(0.2) atol = 1.0e-2
+        @test sol(0.2; idxs = ball.v) ≈ analytic_v(0.2) atol = 1.0e-2
+    end
+end

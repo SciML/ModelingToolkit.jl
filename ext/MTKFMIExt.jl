@@ -218,6 +218,14 @@ function MTK.FMIComponent(
         fmu, FMI.getStateValueReferencesAndNames(fmu),
         value_references, diffvars, states, observed
     )
+    # evaluating an instance sets continuous states and reads their derivatives positionally
+    # (FMIBase ignores the value references given for them), so both vectors must follow the
+    # FMU's canonical state order, which the value reference dictionaries do not preserve.
+    canonical_state_index = Dict(
+        vr => i for (i, vr) in enumerate(fmu.modelDescription.stateValueReferences)
+    )
+    canonical_position = var -> canonical_state_index[value_references[var]]
+    sort!(diffvars; by = canonical_position)
     # create a symbolic variable __mtk_internal_u to pass to the relevant registered
     # functions as the state vector
     if isempty(diffvars)
@@ -253,6 +261,11 @@ function MTK.FMIComponent(
         states, der_observed; postprocess_variable = derivative_order_postprocess
     )
     @assert length(derivative_order) == length(dervars)
+    # the returned derivative vector is ordered as the continuous states, so `dervars[i]` has
+    # to be the derivative of `diffvars[i]`
+    der_permutation = sortperm(derivative_order; by = canonical_position)
+    permute!(dervars, der_permutation)
+    permute!(derivative_order, der_permutation)
 
     # parse the inputs to the FMU
     inputs = []
@@ -270,12 +283,32 @@ function MTK.FMIComponent(
 
     # parse the outputs of the FMU
     outputs = []
+    mark_output = v -> MTKBase.setoutput(v, true)
+    output_varmap = FMI.getOutputValueReferencesAndNames(fmu)
+    # An FMU may declare a continuous state as an output. The state variable is that output,
+    # so it is reused instead of being created again, which would duplicate the equation
+    # defining it. Such an output also needs no runtime fetch and stays out of `outputs`
+    # (and thus out of `output_value_references` and the wrapper buffers).
+    state_by_value_reference = Dict(value_references[var] => var for var in diffvars)
+    is_state_alias = kvp -> haskey(state_by_value_reference, kvp.first)
+    state_output_varmap = filter(is_state_alias, output_varmap)
     fmi_variables_to_mtk_variables!(
-        fmu, FMI.getOutputValueReferencesAndNames(fmu),
-        value_references, outputs, states, observed; postprocess_variable = v -> MTKBase.setoutput(
-            v, true
-        )
+        fmu, filter(!is_state_alias, output_varmap),
+        value_references, outputs, states, observed; postprocess_variable = mark_output
     )
+    # The names of a value reference do not depend on its category, so the states pass has
+    # already created and equated every name of a state-aliased value reference. Names it did
+    # not create are aliases of the state and need an equation of their own.
+    aliased_outputs = []
+    fmi_variables_to_mtk_variables!(
+        fmu, state_output_varmap, value_references, [], aliased_outputs, Equation[];
+        postprocess_variable = mark_output
+    )
+    for var in aliased_outputs
+        any(isequal(var), states) && continue
+        push!(states, var)
+        push!(observed, var ~ state_by_value_reference[value_references[var]])
+    end
     # create the output buffer. This is only required for CoSimulation to pass it to
     # the callback affect
     if type == :CS
@@ -310,15 +343,21 @@ function MTK.FMIComponent(
     # create a parameter for the instance wrapper
     # this manages the creation and deallocation of FMU instances
     buffer_length = length(diffvars) + length(outputs)
+    # FMI only allows setting a variable declared as an output while the FMU is in
+    # initialization mode, so a CoSimulation FMU whose continuous states are outputs owns them
+    # once it is initialized.
+    states_settable_after_init = isempty(state_output_varmap)
     if Ver == 2
         @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
             fmu, derivative_value_references, state_value_references, output_value_references,
-            param_value_references, input_value_references, tolerance
+            param_value_references, input_value_references, tolerance,
+            states_settable_after_init
         )
     else
         @parameters (wrapper::FMI3InstanceWrapper)(..)[1:buffer_length] = FMI3InstanceWrapper(
             fmu, derivative_value_references, state_value_references,
-            output_value_references, param_value_references, input_value_references
+            output_value_references, param_value_references, input_value_references,
+            states_settable_after_init
         )
     end
 
@@ -573,6 +612,12 @@ mutable struct FMI2InstanceWrapper
     """
     const tolerance::FMI.fmi2Real
     """
+    Whether the continuous states of the FMU may be set after it leaves initialization mode.
+    `false` if any of them is declared as an output, since FMI forbids setting an output
+    outside initialization mode.
+    """
+    const states_settable_after_init::Bool
+    """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU2Component{FMI.FMU2}, Nothing}
@@ -595,8 +640,8 @@ end
 
 Create an `FMI2InstanceWrapper` with no instance.
 """
-function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)))
+function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true)
+    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)))
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
@@ -673,7 +718,7 @@ function get_instance_CS!(wrapper::FMI2InstanceWrapper, states, inputs, params, 
         end
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
     else
-        if !isempty(states)
+        if !isempty(states) && wrapper.states_settable_after_init
             @statuscheck FMI.fmi2SetReal(
                 wrapper.instance, wrapper.state_value_references,
                 Csize_t(length(wrapper.state_value_references)), states
@@ -747,6 +792,12 @@ mutable struct FMI3InstanceWrapper
     """
     const input_value_references::Vector{FMI.fmi3ValueReference}
     """
+    Whether the continuous states of the FMU may be set after it leaves initialization mode.
+    `false` if any of them is declared as an output, since FMI forbids setting an output
+    outside initialization mode.
+    """
+    const states_settable_after_init::Bool
+    """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
@@ -769,8 +820,8 @@ end
 
 Create an `FMI3InstanceWrapper` with no instance.
 """
-function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)))
+function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true)
+    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)))
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
@@ -853,7 +904,7 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
                 wrapper.instance, wrapper.input_value_references, inputs
             )
         end
-        if !isempty(states)
+        if !isempty(states) && wrapper.states_settable_after_init
             @statuscheck FMI.fmi3SetFloat64(
                 wrapper.instance, wrapper.state_value_references, states
             )
