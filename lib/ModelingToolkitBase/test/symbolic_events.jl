@@ -1999,3 +1999,52 @@ end
         test_user_callback_fires(sys)
     end
 end
+
+@testset "`CallbackConstructionHook` parameter metadata" begin
+    @variables x(t)
+    @parameters p = 1.0
+    cevt = SymbolicContinuousCallback([x ~ 0.5], [x ~ 2.0])
+    devt = SymbolicDiscreteCallback(1.0, [x ~ 2.0])
+
+    hook_calls = Ref(0)
+    hook_fires = Ref(0)
+    function hook(sys, par)
+        hook_calls[] += 1
+        return [DiscreteCallback((u, t, i) -> true, i -> (hook_fires[] += 1))]
+    end
+    ph = setmetadata(p, CallbackConstructionHook, hook)
+
+    # `x` starts at 1 and decreases, so reaching 2 requires a system event to have fired
+    function test_hook_callbacks(sys; has_events = true)
+        hook_calls[] = 0
+        hook_fires[] = 0
+        user_fired = Ref(false)
+        user_cb = DiscreteCallback((u, t, i) -> true, i -> (user_fired[] = true))
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0); callback = user_cb)
+        sol = solve(prob, Tsit5())
+        @test hook_calls[] == 1
+        @test hook_fires[] > 0
+        @test user_fired[]
+        has_events && @test maximum(sol[x]) ≈ 2.0
+    end
+
+    @testset "no symbolic events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph])
+        test_hook_callbacks(sys; has_events = false)
+    end
+    @testset "continuous events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; continuous_events = [cevt])
+        test_hook_callbacks(sys)
+    end
+    @testset "discrete events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; discrete_events = [devt])
+        test_hook_callbacks(sys)
+    end
+    @testset "hook returning no callbacks" begin
+        pe = setmetadata(p, CallbackConstructionHook, (sys, par) -> SciMLBase.DECallback[])
+        @mtkcompile sys = System(D(x) ~ -pe, t, [x], [pe])
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0))
+        @test !haskey(prob.kwargs, :callback)
+        @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+    end
+end

@@ -454,6 +454,7 @@ export DynamicOptSolution
 export MissingGuessValue
 
 export AssignmentAffect
+export CallbackConstructionHook
 
 const set_scalar_metadata = setmetadata
 
