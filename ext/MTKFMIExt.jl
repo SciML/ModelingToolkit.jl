@@ -1,8 +1,9 @@
 module MTKFMIExt
 
 using ModelingToolkit
-using SymbolicIndexingInterface: NotSymbolic, symbolic_type
+using SymbolicIndexingInterface: NotSymbolic, symbolic_type, getname
 using ModelingToolkitBase: t_nounits, D_nounits
+using Symbolics: NAMESPACE_SEPARATOR, CallAndWrap
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
 import ModelingToolkitBase as MTKBase
@@ -109,7 +110,8 @@ Base.@kwdef struct FMUEventMetadata
     """
     can_have_time_events::Bool
     """
-    Whether the FMU supports CoSimulation event mode.
+    Whether event mode is supported by the interface in use. Always `false` for Model
+    Exchange imports and for FMI2 CoSimulation.
     """
     cs_has_event_mode::Bool
     """
@@ -134,10 +136,10 @@ in the namespace of `wrapper_param`. `name` is a component-relative name from
 [`FMUEventMetadata`](@ref); an un-namespaced `wrapper_param` returns it unchanged.
 """
 function resolve_relative(wrapper_param, name::Symbol)
-    wrapper_name = string(MTKBase.getname(wrapper_param))
-    separator = findlast(MTK.NAMESPACE_SEPARATOR, wrapper_name)
+    wrapper_name = string(getname(wrapper_param))
+    separator = findlast(NAMESPACE_SEPARATOR, wrapper_name)
     separator === nothing && return name
-    return Symbol(wrapper_name[1:last(separator)], name)
+    return Symbol(wrapper_name[1:separator], name)
 end
 
 """
@@ -325,13 +327,13 @@ function MTK.FMIComponent(
         n_event_indicators = Int(something(FMI.getNumberOfEventIndicators(fmu), 0)),
         can_have_time_events = type == :ME,
         cs_has_event_mode = type == :CS && cs_event_mode_supported(fmu),
-        state_names = Symbol[MTKBase.getname(var) for var in diffvars],
-        input_names = Symbol[MTKBase.getname(var) for var in inputs],
+        state_names = Symbol[getname(var) for var in diffvars],
+        input_names = Symbol[getname(var) for var in inputs],
         state_vrs = state_value_references
     )
     # `setmetadata` returns a new symbolic and unwraps the callable parameter, so the
     # rewrapped result is what has to be spliced into the system below.
-    wrapper = MTKBase.CallAndWrap(
+    wrapper = CallAndWrap(
         SymbolicUtils.setmetadata(
             SymbolicUtils.unwrap(wrapper), FMUEventMetadata, event_metadata
         )

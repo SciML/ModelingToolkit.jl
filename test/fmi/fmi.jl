@@ -477,6 +477,8 @@ end
         @test length(carriers) == 2
         @test Set(MTK.getname(par) for (par, _) in carriers) ==
             Set([:ball1₊wrapper, :ball2₊wrapper])
+        # one metadata object per component, not a shared one
+        @test carriers[1][2] !== carriers[2][2]
         unknown_names = MTK.getname.(unknowns(sys))
         for (par, meta) in carriers
             @test meta.n_event_indicators == 2
