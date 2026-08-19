@@ -704,14 +704,21 @@ end
 
         columns, reference = reference_output(fmu, "VanDerPol")
         @test columns == [:time, :x0, :x1]
-        # the reference output uses a 1e-2 Euler step, which stays within `atol` of the true
-        # solution only over the first period of the oscillator
-        window = reference[reference[:, 1] .<= 1.0, :]
-        prob = ODEProblem(sys, [vdp.x0 => 2.0, vdp.x1 => 0.0], (0.0, window[end, 1]))
+        prob = ODEProblem(sys, [vdp.x0 => 2.0, vdp.x1 => 0.0], (0.0, reference[end, 1]))
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
         @test SciMLBase.successful_retcode(sol)
-        @test max_error(sol(window[:, 1]; idxs = vdp.x0).u, window[:, 2]) <= 1.0e-2
-        @test max_error(sol(window[:, 1]; idxs = vdp.x1).u, window[:, 3]) <= 1.0e-2
+        x0_at_reference = sol(reference[:, 1]; idxs = vdp.x0).u
+        x1_at_reference = sol(reference[:, 1]; idxs = vdp.x1).u
+        # the reference output is a 1e-2 Euler step over 20 s, so its phase error accumulates
+        # across the oscillator's ~6.7 s periods; FMI.jl's own Model Exchange simulation of
+        # this FMU deviates from the reference by the same 0.35/0.64, so these bound the
+        # reference's error (measured 0.351 and 0.639) rather than this implementation's
+        @test max_error(x0_at_reference, reference[:, 2]) <= 0.45
+        @test max_error(x1_at_reference, reference[:, 3]) <= 0.8
+        # over the first 1 s the reference has not drifted yet
+        early = reference[:, 1] .<= 1.0
+        @test max_error(x0_at_reference[early], reference[early, 2]) <= 1.0e-2
+        @test max_error(x1_at_reference[early], reference[early, 3]) <= 1.0e-2
     end
 
     @testset "Dahlquist v3, ME" begin
@@ -762,5 +769,26 @@ end
         ) == 1
         @test wrapper.next_event_time == 1.0
         ext.reset_instance!(wrapper)
+
+        # the guard itself, driven directly: instantiating once is what makes the test above
+        # see one warning, and the affect-side call is unreachable for an FMU with no event
+        # indicators
+        wrapper.time_event_warned = false
+        logger = Test.TestLogger(; min_level = Base.CoreLogging.Warn)
+        Base.CoreLogging.with_logger(logger) do
+            ext.handle_fmu_time_event!(wrapper, 1.0)
+            ext.handle_fmu_time_event!(wrapper, 2.0)
+        end
+        @test count(
+            record -> occursin("time event", string(record.message)), logger.logs
+        ) == 1
+        @test wrapper.time_event_warned
+
+        strict_wrapper = MTK.getdefault(
+            only(p for p in parameters(stair) if MTK.getname(p) == :wrapper)
+        )
+        @test_throws "ignore_time_events" ext.handle_fmu_time_event!(strict_wrapper, 1.0)
+        # an FMU that declares no time event is left alone in either mode
+        @test ext.handle_fmu_time_event!(strict_wrapper, nothing) === nothing
     end
 end

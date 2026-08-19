@@ -299,6 +299,10 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         event_result = do_fmu_event_iteration!(wrapper)
         if event_result.terminate
             SciMLBase.terminate!(integrator)
+            # a terminating FMU is left in Event Mode, where `SetContinuousStates` and
+            # `CompletedIntegratorStep` are illegal, so the interpolant rebuild that follows
+            # an affect must not evaluate the RHS. Nothing is stepped after `terminate!`.
+            SciMLBase.derivative_discontinuity!(integrator, false)
             return nothing
         end
         states = leave_fmu_event_mode!(wrapper, event_result.values_changed)
@@ -315,8 +319,9 @@ function build_fmu_me_callbacks(sys, wrapper_param)
     return SciMLBase.DECallback[
         SciMLBase.VectorContinuousCallback(
             fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
-            # the FMU guarantees a non-zero indicator only after it has left Event Mode, so
-            # the event has to be localized on the post-crossing side
+            # FMI defines an event as a domain change, so the FMU has to be past the switch
+            # when it enters Event Mode; localizing on the pre-crossing side would have it
+            # refresh its relations to the old domain and not handle the event
             rootfind = SciMLBase.RightRootFind, interp_points = 10,
             save_positions = (true, true)
         ),
@@ -1242,9 +1247,9 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Enter Event Mode for the state event described by `idx`, which is either the index of the
-event indicator that triggered or one crossing direction per indicator, depending on the
-solver.
+Enter Event Mode for the state event described by `idx`. DiffEqBase 7.16 always passes one
+crossing direction per event indicator, which is what `rootsFound` wants; the scalar branch
+handles the index older versions pass, as FMIBase's two `setEventFlags!` methods do.
 """
 function enter_fmu_event_mode!(wrapper::FMI3InstanceWrapper, idx)
     n_event_indicators = wrapper.fmu.modelDescription.numberOfEventIndicators

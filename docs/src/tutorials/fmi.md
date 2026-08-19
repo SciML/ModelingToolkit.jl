@@ -7,8 +7,9 @@ Draft = true
 ModelingToolkit is able to import FMUs following the [FMI Standard](https://fmi-standard.org/) versions 2 and 3.
 This integration is done through [FMI.jl](https://github.com/ThummeTo/FMI.jl) and requires importing it to
 enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported.
-Events, non-floating-point variables and array variables are not supported. Additionally, calculating the
-time derivatives of FMU states/outputs is not supported.
+The state events of Model Exchange FMUs are supported. Time events, non-floating-point variables and
+array variables are not supported. Additionally, calculating the time derivatives of FMU
+states/outputs is not supported.
 
 !!! danger "Experimental"
 
