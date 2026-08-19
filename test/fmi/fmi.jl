@@ -634,3 +634,133 @@ end
         @test !(ext.FMI.fmi2Terminate in v3_expansion)
     end
 end
+
+@testset "FMU state events" begin
+    ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
+
+    # `≈` on vectors compares 2-norms, which conflates a per-point tolerance with the number
+    # of points
+    max_error(a, b) = maximum(abs, a .- b)
+
+    # a Reference-FMU ships its own reference output at this path inside the archive
+    function reference_output(fmu, model_name)
+        path = joinpath(
+            fmu.path, "extra", "org.fmi-standard.fmi-ls-ref", "$(model_name)_out.csv"
+        )
+        lines = collect(eachline(path))
+        columns = Symbol.(split(lines[1], ','))
+        rows = [parse.(Float64, split(line, ',')) for line in lines[2:end]]
+        return columns, permutedims(reduce(hcat, rows))
+    end
+
+    @testset "BouncingBall v$Ver, ME" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+
+        heights = sol[ball.h]
+        velocities = sol[ball.v]
+        # `RightRootFind` localizes the event past the crossing, so `h` may dip below zero by
+        # the root-finding tolerance, but never visibly
+        @test minimum(heights) >= -1.0e-8
+        # `save_positions = (true, true)` duplicates the time of every event
+        bounces = findall(i -> sol.t[i] == sol.t[i + 1], 1:(length(sol.t) - 1))
+        @test length(bounces) >= 2
+        for i in bounces
+            # the FMU stops the ball once a bounce would leave it slower than `v_min`, so the
+            # last bounce brings `v` to zero rather than to a positive value
+            @test velocities[i] < 0 <= velocities[i + 1]
+        end
+
+        columns, reference = reference_output(fmu, "BouncingBall")
+        @test columns == [:time, :h, :v]
+        heights_at_reference = sol(reference[:, 1]; idxs = ball.h).u
+        # the reference output is a fixed-step explicit Euler run (`FIXED_SOLVER_STEP = 1e-3`)
+        # whose bounce times drift; FMI.jl's own Model Exchange simulation of this FMU
+        # deviates from it by the same 2.4e-2, so this bounds the reference's error
+        @test max_error(heights_at_reference, reference[:, 2]) <= 3.0e-2
+        # up to the first bounce the reference is a plain free fall and is accurate
+        free_fall = reference[:, 1] .<= 0.4
+        @test max_error(heights_at_reference[free_fall], reference[free_fall, 2]) <= 1.0e-2
+    end
+
+    @testset "VanDerPol v2, ME" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "VanDerPol2.fmu"); type = :ME)
+        @named vdp = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [vdp])
+        par, meta = only(
+            (p, MTK.getmetadata(p, ext.FMUEventMetadata)) for p in parameters(sys)
+                if MTK.hasmetadata(p, ext.FMUEventMetadata)
+        )
+        @test meta.n_event_indicators == 0
+        # an FMU with no event indicators gets no callback, but the hook still runs
+        @test MTK.hasmetadata(par, CallbackConstructionHook)
+        @test isempty(MTK.getmetadata(par, CallbackConstructionHook)(sys, par))
+
+        columns, reference = reference_output(fmu, "VanDerPol")
+        @test columns == [:time, :x0, :x1]
+        # the reference output uses a 1e-2 Euler step, which stays within `atol` of the true
+        # solution only over the first period of the oscillator
+        window = reference[reference[:, 1] .<= 1.0, :]
+        prob = ODEProblem(sys, [vdp.x0 => 2.0, vdp.x1 => 0.0], (0.0, window[end, 1]))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        @test max_error(sol(window[:, 1]; idxs = vdp.x0).u, window[:, 2]) <= 1.0e-2
+        @test max_error(sol(window[:, 1]; idxs = vdp.x1).u, window[:, 3]) <= 1.0e-2
+    end
+
+    @testset "Dahlquist v3, ME" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "Dahlquist3.fmu"); type = :ME)
+        @named dahlquist = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [dahlquist])
+        columns, reference = reference_output(fmu, "Dahlquist")
+        @test columns == [:time, :x]
+        prob = ODEProblem(sys, [dahlquist.x => 1.0], (0.0, reference[end, 1]))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        got = sol(reference[:, 1]; idxs = dahlquist.x).u
+        # `Dahlquist` is `x' = -k*x` with `k = 1`
+        @test max_error(got, exp.(-reference[:, 1])) <= 1.0e-6
+        # the reference output uses a 0.1 Euler step
+        @test max_error(got, reference[:, 2]) <= 2.5e-2
+    end
+
+    @testset "Stair v2, ME: unsupported time events" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "Stair2.fmu"); type = :ME)
+        @variables x(t) = 1.0
+        # `Stair` has no continuous states, so consuming its output is what forces the FMU to
+        # be instantiated during the solve
+        @named stair = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @mtkcompile sys = System([D(x) ~ -x + stair.counter], t; systems = [stair])
+        @test_throws "ignore_time_events" solve(
+            ODEProblem(sys, [], (0.0, 3.0)), Tsit5()
+        )
+
+        # `Stair`'s only output is an FMI Integer, which the Model Exchange functor cannot
+        # read, so the ignoring path is exercised on the instance wrapper directly
+        @named lenient_stair = MTK.FMIComponent(
+            Val(2); fmu, type = :ME, ignore_time_events = true
+        )
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(lenient_stair) if MTK.getname(p) == :wrapper)
+        )
+        logger = Test.TestLogger(; min_level = Base.CoreLogging.Warn)
+        Base.CoreLogging.with_logger(logger) do
+            # only the first call instantiates and runs the initial event iteration, so only
+            # it may warn
+            ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+            ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+        end
+        @test count(
+            record -> occursin("time event", string(record.message)), logger.logs
+        ) == 1
+        @test wrapper.next_event_time == 1.0
+        ext.reset_instance!(wrapper)
+    end
+end

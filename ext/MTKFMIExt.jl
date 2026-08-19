@@ -8,6 +8,7 @@ using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
 import ModelingToolkitBase as MTKBase
 import SciMLBase
+import SymbolicIndexingInterface as SII
 import SymbolicUtils
 import FMIImport as FMI
 
@@ -99,7 +100,7 @@ const MAX_EVENT_ITERATIONS = 100
     $(TYPEDSIGNATURES)
 
 Record the result of the event iteration performed while leaving initialization mode on
-`wrapper`, and error if the FMU requested termination.
+`wrapper`, and error if the FMU requested termination or declared a time event.
 """
 function handle_initial_event_iteration!(wrapper, event_result)
     if event_result.terminate
@@ -109,7 +110,35 @@ function handle_initial_event_iteration!(wrapper, event_result)
         )
     end
     wrapper.next_event_time = event_result.next_event_time
+    # an instance is created once per solve, so this makes `ignore_time_events` warn once
+    # per solve
+    wrapper.time_event_warned = false
+    handle_fmu_time_event!(wrapper, event_result.next_event_time)
     return event_result
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Report a time event declared by the FMU at `next_event_time`, or do nothing if it declared
+none. Time events are not supported, so this errors unless `ignore_time_events` was passed to
+`FMIComponent`, in which case it warns once per FMU instance.
+"""
+function handle_fmu_time_event!(wrapper, next_event_time)
+    next_event_time === nothing && return nothing
+    name = FMI.getModelName(wrapper.fmu)
+    if !wrapper.ignore_time_events
+        error(
+            "FMU $name declared a time event at t = $next_event_time. Time events are not \
+            supported by the FMU import. Pass `ignore_time_events = true` to \
+            `FMIComponent` to ignore them and continue with a warning instead."
+        )
+    end
+    wrapper.time_event_warned && return nothing
+    wrapper.time_event_warned = true
+    @warn "FMU $name declared a time event at t = $next_event_time, which the FMU import \
+        does not support. Ignoring it, as requested by `ignore_time_events = true`."
+    return nothing
 end
 
 @static if !hasmethod(FMI.getValueReferencesAndNames, Tuple{FMI.fmi3ModelDescription})
@@ -210,11 +239,99 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Build the callbacks handling the events of the Model Exchange FMU whose instance wrapper is
+the parameter `wrapper_param` of the compiled system `sys`. Attached to `wrapper_param` as
+`ModelingToolkit.CallbackConstructionHook` metadata, which calls this during problem
+construction.
+
+The state events of the FMU become a single `VectorContinuousCallback` over all of its event
+indicators. An FMU that declares none needs no callback, since the FMI event iteration is
+only ever entered from an event the importer detects itself.
+"""
+function build_fmu_me_callbacks(sys, wrapper_param)
+    meta = SymbolicUtils.getmetadata(
+        SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
+    )
+    meta.n_event_indicators == 0 && return SciMLBase.DECallback[]
+
+    get_wrapper = SII.getp(sys, wrapper_param)
+    state_idxs = Int[]
+    for name in meta.state_names
+        resolved = resolve_relative(wrapper_param, name)
+        idx = SII.variable_index(sys, resolved)
+        if idx === nothing
+            error(
+                "The continuous state $resolved of the FMU wrapped by \
+                $(getname(wrapper_param)) is not an unknown of the simplified system, so \
+                the value it takes after an FMU event cannot be written back. Prevent it \
+                from being simplified away, for example with `irreducible = true`."
+            )
+        end
+        push!(state_idxs, idx)
+    end
+    input_names = [resolve_relative(wrapper_param, name) for name in meta.input_names]
+    # the root search evaluates the condition at interpolated states, so the inputs have to
+    # be evaluated there too rather than read off the integrator
+    get_inputs = isempty(input_names) ? nothing : SII.observed(sys, input_names)
+    state_buffer = zeros(Float64, length(state_idxs))
+    input_buffer = zeros(Float64, length(input_names))
+
+    function push_fmu_event_state!(wrapper, u, p, t)
+        for (i, idx) in enumerate(state_idxs)
+            state_buffer[i] = u[idx]
+        end
+        if get_inputs !== nothing
+            copyto!(input_buffer, get_inputs(u, p, t))
+        end
+        return force_set_fmu_state!(wrapper, state_buffer, input_buffer, t)
+    end
+
+    function fmu_event_condition!(out, u, t, integrator)
+        wrapper = get_wrapper(integrator)
+        push_fmu_event_state!(wrapper, u, integrator.p, t)
+        return get_fmu_event_indicators!(wrapper, out)
+    end
+
+    function fmu_event_affect!(integrator, idx)
+        wrapper = get_wrapper(integrator)
+        push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
+        enter_fmu_event_mode!(wrapper, idx)
+        event_result = do_fmu_event_iteration!(wrapper)
+        if event_result.terminate
+            SciMLBase.terminate!(integrator)
+            return nothing
+        end
+        states = leave_fmu_event_mode!(wrapper, event_result.values_changed)
+        if states !== nothing
+            for (i, state_idx) in enumerate(state_idxs)
+                integrator.u[state_idx] = states[i]
+            end
+        end
+        wrapper.next_event_time = event_result.next_event_time
+        handle_fmu_time_event!(wrapper, event_result.next_event_time)
+        return nothing
+    end
+
+    return SciMLBase.DECallback[
+        SciMLBase.VectorContinuousCallback(
+            fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
+            # the FMU guarantees a non-zero indicator only after it has left Event Mode, so
+            # the event has to be localized on the post-crossing side
+            rootfind = SciMLBase.RightRootFind, interp_points = 10,
+            save_positions = (true, true)
+        ),
+    ]
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 A component that wraps an FMU loaded via FMI.jl. The FMI version (2 or 3) should be
 provided as a `Val` to the function. Supports Model Exchange and CoSimulation FMUs.
 All inputs, continuous variables and outputs must be `FMI.fmi2Real` or `FMI.fmi3Float64`.
-Does not support events or discrete variables in the FMU. Does not support automatic
-differentiation. Parameters of the FMU will have defaults corresponding to their initial
+Supports the state events of Model Exchange FMUs; does not support time events or discrete
+variables in the FMU. Does not support automatic differentiation.
+Parameters of the FMU will have defaults corresponding to their initial
 values in the FMU specification. All other variables will not have a default. Hierarchical
 names in the FMU of the form `namespace.variable` are transformed into symbolic variables
 with the name `namespace__variable`.
@@ -234,12 +351,15 @@ with the name `namespace__variable`.
   be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
+- `ignore_time_events`: Time events are not supported, and by default an FMU declaring one
+  errors. If this is `true`, a declared time event is instead warned about once per solve and
+  ignored, which changes the trajectory the FMU would otherwise have taken.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(
         ::Val{Ver}; fmu = nothing, tolerance = 1.0e-6,
         communication_step_size = nothing, reinitializealg = nothing,
-        stop_time = nothing, type, name
+        stop_time = nothing, ignore_time_events = false, type, name
     ) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
@@ -403,13 +523,13 @@ function MTK.FMIComponent(
         @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
             fmu, derivative_value_references, state_value_references, output_value_references,
             param_value_references, input_value_references, tolerance,
-            states_settable_after_init
+            states_settable_after_init, ignore_time_events
         )
     else
         @parameters (wrapper::FMI3InstanceWrapper)(..)[1:buffer_length] = FMI3InstanceWrapper(
             fmu, derivative_value_references, state_value_references,
             output_value_references, param_value_references, input_value_references,
-            states_settable_after_init
+            states_settable_after_init, ignore_time_events
         )
     end
 
@@ -424,11 +544,16 @@ function MTK.FMIComponent(
     )
     # `setmetadata` returns a new symbolic and unwraps the callable parameter, so the
     # rewrapped result is what has to be spliced into the system below.
-    wrapper = CallAndWrap(
-        SymbolicUtils.setmetadata(
-            SymbolicUtils.unwrap(wrapper), FMUEventMetadata, event_metadata
-        )
+    tagged_wrapper = SymbolicUtils.setmetadata(
+        SymbolicUtils.unwrap(wrapper), FMUEventMetadata, event_metadata
     )
+    if type == :ME &&
+            (event_metadata.n_event_indicators > 0 || event_metadata.can_have_time_events)
+        tagged_wrapper = SymbolicUtils.setmetadata(
+            tagged_wrapper, MTKBase.CallbackConstructionHook, build_fmu_me_callbacks
+        )
+    end
+    wrapper = CallAndWrap(tagged_wrapper)
 
     # any additional initialization equations for the system
     initialization_eqs = Equation[]
@@ -670,6 +795,11 @@ mutable struct FMI2InstanceWrapper
     """
     const states_settable_after_init::Bool
     """
+    Whether a time event declared by the FMU should be warned about and ignored instead of
+    being an error.
+    """
+    const ignore_time_events::Bool
+    """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU2Component{FMI.FMU2}, Nothing}
@@ -678,6 +808,11 @@ mutable struct FMI2InstanceWrapper
     the FMU did not declare one.
     """
     next_event_time::Union{Nothing, Float64}
+    """
+    Whether the warning about an ignored time event has already been emitted for the current
+    instance.
+    """
+    time_event_warned::Bool
     """
     Continuous state buffer pre-allocated to avoid simulation allocations.
     """
@@ -702,8 +837,8 @@ end
 
 Create an `FMI2InstanceWrapper` with no instance.
 """
-function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, nothing, nothing, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)), zeros(FMI.fmi2Real, length(states)))
+function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true, ignore_time_events = false)
+    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, ignore_time_events, nothing, nothing, false, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)), zeros(FMI.fmi2Real, length(states)))
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
@@ -775,6 +910,67 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Push the continuous states, time and input values an event occurs at into the FMU. The v2
+setters memoize on the values the instance was last set to, which the derivative evaluations
+and the root search preceding an event leave at a different point, so they are forced.
+"""
+function force_set_fmu_state!(wrapper::FMI2InstanceWrapper, states, inputs, t)
+    if !isempty(states)
+        @statuscheck FMI.fmi2SetContinuousStates(wrapper.instance, states; force = true)
+    end
+    @statuscheck FMI.fmi2SetTime(wrapper.instance, t; force = true)
+    if !isempty(inputs)
+        @statuscheck FMI.fmi2SetReal(
+            wrapper.instance, wrapper.input_value_references,
+            Csize_t(length(inputs)), inputs
+        )
+    end
+    return wrapper.instance
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Read the FMU's event indicators into `out`, which must have one element per indicator.
+"""
+function get_fmu_event_indicators!(wrapper::FMI2InstanceWrapper, out)
+    @statuscheck FMI.fmi2GetEventIndicators!(
+        wrapper.instance, out, Csize_t(length(out))
+    )
+    return out
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Enter Event Mode for the state event detected on event indicator `idx`. The v2 function takes
+no arguments describing the cause of the event.
+"""
+function enter_fmu_event_mode!(wrapper::FMI2InstanceWrapper, idx)
+    @statuscheck FMI.fmi2EnterEventMode(wrapper.instance)
+    return wrapper.instance
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Leave Event Mode for Continuous-Time Mode. If `values_changed`, the event iteration changed
+the continuous states of the FMU, which FMI then requires to be re-read; they are returned in
+`wrapper.event_states_buffer`. Returns `nothing` otherwise.
+"""
+function leave_fmu_event_mode!(wrapper::FMI2InstanceWrapper, values_changed)
+    @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
+    values_changed || return nothing
+    buffer = wrapper.event_states_buffer
+    @statuscheck FMI.fmi2GetContinuousStates!(
+        wrapper.instance, buffer, Csize_t(length(buffer))
+    )
+    return buffer
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Create an instance of a Model Exchange FMU. Use the existing instance in `wrapper` if
 present and create a new one otherwise. Return the instance.
 
@@ -788,13 +984,7 @@ function get_instance_ME!(wrapper::FMI2InstanceWrapper, inputs, params, t)
         @statuscheck FMI.fmi2ExitInitializationMode(wrapper.instance)
         event_result = do_fmu_event_iteration!(wrapper)
         handle_initial_event_iteration!(wrapper, event_result)
-        @statuscheck FMI.fmi2EnterContinuousTimeMode(wrapper.instance)
-        if event_result.values_changed
-            copyto!(
-                wrapper.event_states_buffer,
-                FMI.fmi2GetContinuousStates(wrapper.instance)
-            )
-        end
+        leave_fmu_event_mode!(wrapper, event_result.values_changed)
     end
 
     return wrapper.instance
@@ -906,6 +1096,11 @@ mutable struct FMI3InstanceWrapper
     """
     const states_settable_after_init::Bool
     """
+    Whether a time event declared by the FMU should be warned about and ignored instead of
+    being an error.
+    """
+    const ignore_time_events::Bool
+    """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
@@ -914,6 +1109,11 @@ mutable struct FMI3InstanceWrapper
     the FMU did not declare one.
     """
     next_event_time::Union{Nothing, Float64}
+    """
+    Whether the warning about an ignored time event has already been emitted for the current
+    instance.
+    """
+    time_event_warned::Bool
     """
     Continuous state buffer pre-allocated to avoid simulation allocations.
     """
@@ -938,8 +1138,8 @@ end
 
 Create an `FMI3InstanceWrapper` with no instance.
 """
-function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, nothing, nothing, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)), zeros(FMI.fmi3Float64, length(states)))
+function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true, ignore_time_events = false)
+    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, ignore_time_events, nothing, nothing, false, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)), zeros(FMI.fmi3Float64, length(states)))
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
@@ -1011,6 +1211,77 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Push the continuous states, time and input values an event occurs at into the FMU. The v3
+setters do not memoize, so nothing has to be forced for them.
+"""
+function force_set_fmu_state!(wrapper::FMI3InstanceWrapper, states, inputs, t)
+    if !isempty(states)
+        @statuscheck FMI.fmi3SetContinuousStates(wrapper.instance, states)
+    end
+    @statuscheck FMI.fmi3SetTime(wrapper.instance, t)
+    if !isempty(inputs)
+        @statuscheck FMI.fmi3SetFloat64(
+            wrapper.instance, wrapper.input_value_references, inputs
+        )
+    end
+    return wrapper.instance
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Read the FMU's event indicators into `out`, which must have one element per indicator.
+"""
+function get_fmu_event_indicators!(wrapper::FMI3InstanceWrapper, out)
+    @statuscheck FMI.fmi3GetEventIndicators!(
+        wrapper.instance, out, Csize_t(length(out))
+    )
+    return out
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Enter Event Mode for the state event described by `idx`, which is either the index of the
+event indicator that triggered or one crossing direction per indicator, depending on the
+solver.
+"""
+function enter_fmu_event_mode!(wrapper::FMI3InstanceWrapper, idx)
+    n_event_indicators = wrapper.fmu.modelDescription.numberOfEventIndicators
+    roots_found = zeros(FMI.fmi3Int32, n_event_indicators)
+    if idx isa Integer
+        roots_found[idx] = one(FMI.fmi3Int32)
+    else
+        copyto!(roots_found, idx)
+    end
+    # FMIImport 1.3.1 wraps the pre-release `fmi3EnterEventMode` signature, which takes the
+    # cause of the event; final FMI3 takes none and the extra arguments are ignored
+    @statuscheck FMI.fmi3EnterEventMode(
+        wrapper.instance, false, true, roots_found, Csize_t(n_event_indicators), false
+    )
+    return wrapper.instance
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Leave Event Mode for Continuous-Time Mode. If `values_changed`, the event iteration changed
+the continuous states of the FMU, which FMI then requires to be re-read; they are returned in
+`wrapper.event_states_buffer`. Returns `nothing` otherwise.
+"""
+function leave_fmu_event_mode!(wrapper::FMI3InstanceWrapper, values_changed)
+    @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
+    values_changed || return nothing
+    buffer = wrapper.event_states_buffer
+    @statuscheck FMI.fmi3GetContinuousStates!(
+        wrapper.instance, buffer, Csize_t(length(buffer))
+    )
+    return buffer
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Create an instance of a Model Exchange FMU. Use the existing instance in `wrapper` if
 present and create a new one otherwise. Return the instance.
 
@@ -1025,13 +1296,7 @@ function get_instance_ME!(wrapper::FMI3InstanceWrapper, inputs, params, t)
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
         event_result = do_fmu_event_iteration!(wrapper)
         handle_initial_event_iteration!(wrapper, event_result)
-        @statuscheck FMI.fmi3EnterContinuousTimeMode(wrapper.instance)
-        if event_result.values_changed
-            copyto!(
-                wrapper.event_states_buffer,
-                FMI.fmi3GetContinuousStates(wrapper.instance)
-            )
-        end
+        leave_fmu_event_mode!(wrapper, event_result.values_changed)
     end
 
     return wrapper.instance
