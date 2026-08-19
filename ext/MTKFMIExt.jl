@@ -245,15 +245,14 @@ the parameter `wrapper_param` of the compiled system `sys`. Attached to `wrapper
 construction.
 
 The state events of the FMU become a single `VectorContinuousCallback` over all of its event
-indicators. An FMU that declares none needs no callback, since the FMI event iteration is
-only ever entered from an event the importer detects itself.
+indicators, which an FMU declaring none does not get. Every Model Exchange FMU also gets a
+`DiscreteCallback` with an always-true condition, which notifies it of each accepted
+integrator step and handles the step events it may report there.
 """
 function build_fmu_me_callbacks(sys, wrapper_param)
     meta = SymbolicUtils.getmetadata(
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
     )
-    meta.n_event_indicators == 0 && return SciMLBase.DECallback[]
-
     get_wrapper = SII.getp(sys, wrapper_param)
     state_idxs = Int[]
     for name in meta.state_names
@@ -316,16 +315,71 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         return nothing
     end
 
-    return SciMLBase.DECallback[
-        SciMLBase.VectorContinuousCallback(
-            fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
-            # FMI defines an event as a domain change, so the FMU has to be past the switch
-            # when it enters Event Mode; localizing on the pre-crossing side would have it
-            # refresh its relations to the old domain and not handle the event
-            rootfind = SciMLBase.RightRootFind, interp_points = 10,
-            save_positions = (true, true)
-        ),
-    ]
+    # notify the FMU of the step and return whether it asks for Event Mode, which is the only
+    # outcome its caller has to treat as a discontinuity
+    function fmu_step_event_occurred!(integrator)
+        # a terminating event leaves the FMU in Event Mode, where none of the calls below are
+        # legal, and SciML applies the discrete callbacks after a continuous one terminated.
+        # `check_error!` stores `Success` in the retcode of a solve that is still in flight,
+        # so those are the two codes that mean "nothing has ended this solve".
+        retcode = integrator.sol.retcode
+        in_flight = retcode === SciMLBase.ReturnCode.Default ||
+            retcode === SciMLBase.ReturnCode.Success
+        in_flight || return false
+        wrapper = get_wrapper(integrator)
+        # the instance is created by the first evaluation of the FMU, which an FMU that only
+        # feeds observed equations may not have seen by the time this initializes
+        wrapper.instance === nothing && return false
+        # error control and (for an implicit solver) the Jacobian leave the FMU at points
+        # other than the accepted one, which is the step it has to be told about
+        push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
+        step_result = partiallyCompleteIntegratorStep(wrapper)
+        if step_result.terminate
+            SciMLBase.terminate!(integrator)
+            return false
+        end
+        return step_result.enter_event_mode
+    end
+
+    function fmu_step_completed!(integrator)
+        if fmu_step_event_occurred!(integrator)
+            # a step event has no triggered event indicator
+            return fmu_event_affect!(integrator, nothing)
+        end
+        # every affect is assumed to be a discontinuity, which for a system with a singular
+        # mass matrix reinitializes and thereby overwrites `u`. A step the FMU accepts as-is
+        # changes nothing, so this must clear the assumption on every non-event path.
+        SciMLBase.derivative_discontinuity!(integrator, false)
+        return nothing
+    end
+
+    function fmu_step_initialize(cb, u, t, integrator)
+        return fmu_step_completed!(integrator)
+    end
+
+    callbacks = SciMLBase.DECallback[]
+    if meta.n_event_indicators > 0
+        push!(
+            callbacks,
+            SciMLBase.VectorContinuousCallback(
+                fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
+                # FMI defines an event as a domain change, so the FMU has to be past the
+                # switch when it enters Event Mode; localizing on the pre-crossing side would
+                # have it refresh its relations to the old domain and not handle the event
+                rootfind = SciMLBase.RightRootFind, interp_points = 10,
+                save_positions = (true, true)
+            )
+        )
+    end
+    push!(
+        callbacks,
+        SciMLBase.DiscreteCallback(
+            Returns(true), fmu_step_completed!;
+            # `initialize` gives the FMU the `t0` step FMI.jl's `func_start` does
+            initialize = fmu_step_initialize, save_positions = (false, false)
+        )
+    )
+    return callbacks
 end
 
 """
@@ -334,8 +388,8 @@ end
 A component that wraps an FMU loaded via FMI.jl. The FMI version (2 or 3) should be
 provided as a `Val` to the function. Supports Model Exchange and CoSimulation FMUs.
 All inputs, continuous variables and outputs must be `FMI.fmi2Real` or `FMI.fmi3Float64`.
-Supports the state events of Model Exchange FMUs; does not support time events or discrete
-variables in the FMU. Does not support automatic differentiation.
+Supports the state and step events of Model Exchange FMUs; does not support time events or
+discrete variables in the FMU. Does not support automatic differentiation.
 Parameters of the FMU will have defaults corresponding to their initial
 values in the FMU specification. All other variables will not have a default. Hierarchical
 names in the FMU of the form `namespace.variable` are transformed into symbolic variables
@@ -578,8 +632,8 @@ function MTK.FMIComponent(
             push!(diffeqs, D(var) ~ dervar)
         end
 
-        # instance management callback which deallocates the instance when
-        # necessary and notifies the FMU of completed integrator steps
+        # instance management callback, which deallocates the instance when necessary.
+        # Completed integrator steps are notified by `build_fmu_me_callbacks`.
         finalize_affect = MTKBase.ImperativeAffect(fmiFinalize!; observed = (; wrapper))
         step_affect = MTKBase.ImperativeAffect(Returns((;)))
         instance_management_callback = MTKBase.SymbolicDiscreteCallback(
@@ -948,8 +1002,20 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Enter Event Mode for the state event detected on event indicator `idx`. The v2 function takes
-no arguments describing the cause of the event.
+Read the FMU's outputs into `out`, which must have one element per output.
+"""
+function get_fmu_outputs!(wrapper::FMI2InstanceWrapper, out)
+    isempty(out) && return out
+    @statuscheck FMI.fmi2GetReal!(wrapper.instance, wrapper.output_value_references, out)
+    return out
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Enter Event Mode for the event described by `idx`: a step event if it is `nothing`, and the
+state event on event indicator `idx` otherwise. The v2 function takes no arguments describing
+the cause of the event.
 """
 function enter_fmu_event_mode!(wrapper::FMI2InstanceWrapper, idx)
     @statuscheck FMI.fmi2EnterEventMode(wrapper.instance)
@@ -1247,22 +1313,36 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Enter Event Mode for the state event described by `idx`. DiffEqBase 7.16 always passes one
+Read the FMU's outputs into `out`, which must have one element per output.
+"""
+function get_fmu_outputs!(wrapper::FMI3InstanceWrapper, out)
+    isempty(out) && return out
+    @statuscheck FMI.fmi3GetFloat64!(wrapper.instance, wrapper.output_value_references, out)
+    return out
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Enter Event Mode for the event described by `idx`: a step event if it is `nothing`, which has
+no triggered event indicator, and a state event otherwise. DiffEqBase 7.16 always passes one
 crossing direction per event indicator, which is what `rootsFound` wants; the scalar branch
 handles the index older versions pass, as FMIBase's two `setEventFlags!` methods do.
 """
 function enter_fmu_event_mode!(wrapper::FMI3InstanceWrapper, idx)
     n_event_indicators = wrapper.fmu.modelDescription.numberOfEventIndicators
     roots_found = zeros(FMI.fmi3Int32, n_event_indicators)
+    step_event = idx === nothing
     if idx isa Integer
         roots_found[idx] = one(FMI.fmi3Int32)
-    else
+    elseif !step_event
         copyto!(roots_found, idx)
     end
     # FMIImport 1.3.1 wraps the pre-release `fmi3EnterEventMode` signature, which takes the
     # cause of the event; final FMI3 takes none and the extra arguments are ignored
     @statuscheck FMI.fmi3EnterEventMode(
-        wrapper.instance, false, true, roots_found, Csize_t(n_event_indicators), false
+        wrapper.instance, step_event, !step_event, roots_found,
+        Csize_t(n_event_indicators), false
     )
     return wrapper.instance
 end
@@ -1410,12 +1490,14 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
         x = states, u = inputs, u_refs = wrapper.input_value_references,
         p = params, p_refs = wrapper.param_value_references, t = t
     )
-    # the spec requires completing the step before getting updated derivative/output values
-    partiallyCompleteIntegratorStep(wrapper)
-    instance(;
-        dx = states_buffer, dx_refs = wrapper.derivative_value_references,
-        y = outputs_buffer, y_refs = wrapper.output_value_references
-    )
+    # the outputs have to be read before the derivatives. An OpenModelica FMU evaluates its
+    # algebraic and output equations when a variable is read, but reading the derivatives
+    # evaluates only the ODE block and still clears the flag saying an evaluation is due
+    # (`sources/fmi-export/fmu2_model_interface.c.inc`, `updateIfNeeded` against
+    # `internalGetDerivatives`), so the other order returns the previous evaluation's value
+    # for every output that no derivative depends on.
+    get_fmu_outputs!(wrapper, outputs_buffer)
+    instance(; dx = states_buffer, dx_refs = wrapper.derivative_value_references)
     wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
     wrapper.res_buffer[(length(states_buffer) + 1):end] .= outputs_buffer
     return wrapper.res_buffer

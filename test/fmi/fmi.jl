@@ -698,9 +698,11 @@ end
                 if MTK.hasmetadata(p, ext.FMUEventMetadata)
         )
         @test meta.n_event_indicators == 0
-        # an FMU with no event indicators gets no callback, but the hook still runs
+        # an FMU with no event indicators has no state-event callback, but every Model
+        # Exchange FMU gets the per-accepted-step callback
         @test MTK.hasmetadata(par, CallbackConstructionHook)
-        @test isempty(MTK.getmetadata(par, CallbackConstructionHook)(sys, par))
+        @test only(MTK.getmetadata(par, CallbackConstructionHook)(sys, par)) isa
+            SciMLBase.DiscreteCallback
 
         columns, reference = reference_output(fmu, "VanDerPol")
         @test columns == [:time, :x0, :x1]
@@ -790,5 +792,140 @@ end
         @test_throws "ignore_time_events" ext.handle_fmu_time_event!(strict_wrapper, 1.0)
         # an FMU that declares no time event is left alone in either mode
         @test ext.handle_fmu_time_event!(strict_wrapper, nothing) === nothing
+    end
+end
+
+@testset "FMU step events" begin
+    ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
+
+    @testset "the ME functor does not complete integrator steps" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
+        )
+        method = which(
+            wrapper, Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
+        )
+        lines = split(read(String(method.file), String), '\n')
+        stop = method.line - 1 + findfirst(==("end"), @view lines[method.line:end])
+        functor_source = join(lines[method.line:stop], '\n')
+        @test occursin("get_instance_ME!", functor_source)
+        # completing a step per evaluation told the FMU that rejected steps, root-search
+        # points and interpolation points were accepted steps
+        @test !occursin(r"Complete[d]?IntegratorStep", functor_source)
+    end
+
+    @testset "the ME functor reads outputs before derivatives" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :ME)
+        @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(adder) if MTK.getname(p) == :wrapper)
+        )
+        # `SimpleAdder` is `out ~ a + b + value, D(c) ~ out, out2 ~ 2c`, and the functor
+        # returns `[D(c), out2, out]`. `out2` is an output no derivative depends on, which an
+        # OpenModelica FMU evaluates only when a variable is read and not when the derivatives
+        # are read, so reading the derivatives first would return a stale `out2` — the reason
+        # the ME functor no longer relies on `CompletedIntegratorStep` to refresh outputs.
+        @test wrapper([1.0], [2.0, 1.0], [1.0], 0.0) ≈ [4.0, 2.0, 4.0]
+        @test wrapper([5.0], [2.0, 1.0], [1.0], 0.0) ≈ [4.0, 10.0, 4.0]
+        @test wrapper([9.0], [4.0, 1.0], [1.0], 0.25) ≈ [6.0, 18.0, 6.0]
+        ext.reset_instance!(wrapper)
+    end
+
+    @testset "per-accepted-step callback, BouncingBall v$Ver, ME" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
+        callbacks = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)
+        @test length(callbacks) == 2
+        @test callbacks[1] isa SciMLBase.VectorContinuousCallback
+        step_cb = callbacks[2]
+        @test step_cb isa SciMLBase.DiscreteCallback
+        # fires after every accepted step, and saves nothing of its own since an accepted
+        # step is not a discontinuity
+        @test step_cb.condition(nothing, nothing, nothing)
+        @test step_cb.save_positions == [false, false]
+
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        integrator = init(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        wrapper = ext.SII.getp(sys, par)(integrator)
+        # the instance is created by the first RHS evaluation, which the integrator performs
+        # before it initializes the callbacks, so the step callback finds one at `t0`
+        @test wrapper.instance !== nothing
+
+        u_before = copy(integrator.u)
+        # `apply_discrete_callback!` assumes a discontinuity unless the affect clears it,
+        # which for a system with a singular mass matrix reinitializes and overwrites `u`
+        SciMLBase.derivative_discontinuity!(integrator, true)
+        step_cb.affect!(integrator)
+        @test integrator.u == u_before
+        @test !integrator.derivative_discontinuity
+        # `initialize` runs the same body, which is FMI.jl's `func_start`
+        @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT
+        @test step_cb.initialize(step_cb, integrator.u, integrator.t, integrator) === nothing
+        @test !integrator.derivative_discontinuity
+
+        # a solve in flight carries `Success` in its retcode, not `Default`: `check_error!`
+        # stores it once stepping starts. A guard that skips every code but `Default` would
+        # silently stop notifying the FMU of any step at all.
+        SciMLBase.step!(integrator)
+        @test integrator.sol.retcode == SciMLBase.ReturnCode.Success
+        # error control and an implicit solver's Jacobian leave the FMU away from the accepted
+        # step, so the callback has to push the accepted point back into it before completing
+        # the step. `instance.t` is what the FMU was last told the time is.
+        ext.force_set_fmu_state!(wrapper, Float64[], Float64[], integrator.t + 0.5)
+        @test wrapper.instance.t == integrator.t + 0.5
+        SciMLBase.derivative_discontinuity!(integrator, true)
+        step_cb.affect!(integrator)
+        @test wrapper.instance.t == integrator.t
+        @test !integrator.derivative_discontinuity
+
+        # an FMU with no instance yet has no completed step to report, and the paths that
+        # tell it nothing must not leave the assumed discontinuity behind either
+        ext.reset_instance!(wrapper)
+        SciMLBase.derivative_discontinuity!(integrator, true)
+        @test step_cb.affect!(integrator) === nothing
+        @test wrapper.instance === nothing
+        @test !integrator.derivative_discontinuity
+
+        # a terminating event leaves the FMU in Event Mode, where the calls this makes are
+        # illegal, and SciML applies discrete callbacks after a continuous one terminated
+        ext.get_instance_ME!(wrapper, Float64[], Float64[], integrator.t)
+        SciMLBase.terminate!(integrator)
+        ext.enter_fmu_event_mode!(wrapper, nothing)
+        SciMLBase.derivative_discontinuity!(integrator, true)
+        @test step_cb.affect!(integrator) === nothing
+        @test !integrator.derivative_discontinuity
+        # the FMU was left alone, so it is still in Event Mode
+        @test ext.leave_fmu_event_mode!(wrapper, false) === nothing
+        ext.reset_instance!(wrapper)
+    end
+
+    @testset "step event iteration, BouncingBall v$Ver" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
+        )
+        ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+        # the FMU keeps its own start values throughout initialization, so the event
+        # iteration performed there cannot see the state MTK integrates from
+        @test wrapper.event_states_buffer == [0.0, 0.0]
+
+        ext.force_set_fmu_state!(wrapper, [-1.0, -1.0], Float64[], 0.0)
+        # a step event has no triggered event indicator
+        ext.enter_fmu_event_mode!(wrapper, nothing)
+        result = ext.do_fmu_event_iteration!(wrapper)
+        @test result.values_changed
+        @test !result.terminate
+        states = ext.leave_fmu_event_mode!(wrapper, result.values_changed)
+        @test states === wrapper.event_states_buffer
+        # `BouncingBall` reflects the ball: `h` just above zero, `v` reversed and damped
+        @test states[1] > 0
+        @test states[2] ≈ 0.7
+        ext.reset_instance!(wrapper)
     end
 end
