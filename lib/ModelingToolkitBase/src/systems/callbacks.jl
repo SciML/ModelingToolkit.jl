@@ -1619,7 +1619,7 @@ function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
     discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
     cb = merge_cb(contin_cbs, callback)
-    return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
+    return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs..., callback)
 end
 
 """

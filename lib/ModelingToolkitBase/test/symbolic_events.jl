@@ -1964,3 +1964,38 @@ if !@isdefined(ModelingToolkit)
         @test sol[gi] ≈ [1, 2, 3, 2, 1]
     end
 end
+
+@testset "User `callback` kwarg is merged with system events" begin
+    @variables x(t)
+    cevt = SymbolicContinuousCallback([x ~ 0.5], [x ~ 2.0])
+    devt = SymbolicDiscreteCallback(1.0, [x ~ 2.0])
+
+    # `x` starts at 1 and decreases, so reaching 2 requires a system event to have fired
+    function test_user_callback_fires(sys; has_events = true)
+        fired = Ref(false)
+        user_cb = DiscreteCallback((u, t, i) -> true, i -> (fired[] = true))
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0); callback = user_cb)
+        sol = solve(prob, Tsit5())
+        @test fired[]
+        has_events && @test maximum(sol[x]) ≈ 2.0
+    end
+
+    @testset "no events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], [])
+        test_user_callback_fires(sys; has_events = false)
+    end
+    @testset "continuous events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cevt])
+        test_user_callback_fires(sys)
+    end
+    @testset "discrete events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [devt])
+        test_user_callback_fires(sys)
+    end
+    @testset "continuous and discrete events" begin
+        @mtkcompile sys = System(
+            D(x) ~ -1, t, [x], []; continuous_events = [cevt], discrete_events = [devt]
+        )
+        test_user_callback_fires(sys)
+    end
+end
