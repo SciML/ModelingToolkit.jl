@@ -736,8 +736,8 @@ end
 
     @testset "Dahlquist v3, CS: no event mode" begin
         fmu = loadFMU(joinpath(FMU_DIR, "Dahlquist3.fmu"); type = :CS)
-        # an FMU that declares no event mode is instantiated without it and goes straight to
-        # Step Mode, where the event iteration is illegal
+        # this FMU declares no event mode, so it is held out of the event-mode path and its
+        # trace is unaffected: an event iteration run on it would be rejected as illegal
         @test !ext.cs_event_mode_supported(fmu)
         columns, reference = reference_output(fmu, "Dahlquist")
         @test columns == [:time, :x]

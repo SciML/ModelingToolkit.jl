@@ -112,8 +112,9 @@ function handle_initial_event_iteration!(wrapper, event_result)
         )
     end
     wrapper.next_event_time = event_result.next_event_time
-    # an instance is created once per solve, so this makes `ignore_time_events` warn once
-    # per solve
+    # this is what makes `ignore_time_events` warn once per FMU instance. A solve creates one
+    # for a Model Exchange FMU, and at least two for a CoSimulation one: the functor
+    # instantiates during problem initialization and `fmiCSInitialize!` re-instantiates.
     wrapper.time_event_warned = false
     handle_fmu_time_event!(wrapper, event_result.next_event_time)
     return event_result
