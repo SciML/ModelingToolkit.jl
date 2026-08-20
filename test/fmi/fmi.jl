@@ -824,9 +824,8 @@ end
         )
         # `SimpleAdder` is `out ~ a + b + value, D(c) ~ out, out2 ~ 2c`, and the functor
         # returns `[D(c), out2, out]`. `out2` is an output no derivative depends on, which an
-        # OpenModelica FMU evaluates only when a variable is read and not when the derivatives
-        # are read, so reading the derivatives first would return a stale `out2` — the reason
-        # the ME functor no longer relies on `CompletedIntegratorStep` to refresh outputs.
+        # OpenModelica FMU evaluates only when a variable is read, so reading the derivatives
+        # first returns the `out2` of the previous evaluation.
         @test wrapper([1.0], [2.0, 1.0], [1.0], 0.0) ≈ [4.0, 2.0, 4.0]
         @test wrapper([5.0], [2.0, 1.0], [1.0], 0.0) ≈ [4.0, 10.0, 4.0]
         @test wrapper([9.0], [4.0, 1.0], [1.0], 0.25) ≈ [6.0, 18.0, 6.0]
@@ -869,8 +868,7 @@ end
         @test !integrator.derivative_discontinuity
 
         # a solve in flight carries `Success` in its retcode, not `Default`: `check_error!`
-        # stores it once stepping starts. A guard that skips every code but `Default` would
-        # silently stop notifying the FMU of any step at all.
+        # stores it once stepping starts
         SciMLBase.step!(integrator)
         @test integrator.sol.retcode == SciMLBase.ReturnCode.Success
         # error control and an implicit solver's Jacobian leave the FMU away from the accepted
@@ -927,5 +925,75 @@ end
         @test states[1] > 0
         @test states[2] ≈ 0.7
         ext.reset_instance!(wrapper)
+    end
+
+    @testset "event write-back survives DAE reinitialization, BouncingBall v$Ver" for Ver in
+        (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        # a cubic has no symbolic solution for `z`, so `z` survives simplification as an
+        # algebraic unknown and the compiled system gets a singular mass matrix
+        @variables z(t) [guess = 1.0]
+        @mtkcompile sys = System([z^3 + z ~ ball.h + 2.0], t; systems = [ball])
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        # the premise: an event affect only has to survive reinitialization on a system that
+        # reinitializes, so a test that silently became an ODE would prove nothing
+        mass_matrix = prob.f.mass_matrix
+        @test any(i -> iszero(mass_matrix[i, i]), axes(mass_matrix, 1))
+        alg = Rodas5P(autodiff = AutoFiniteDiff())
+        integrator = init(prob, alg; abstol = 1.0e-8, reltol = 1.0e-8)
+        @test integrator.isdae
+
+        sol = solve(prob, alg; abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        heights = sol[ball.h]
+        velocities = sol[ball.v]
+        @test minimum(heights) >= -1.0e-8
+        # `save_positions = (true, true)` duplicates the time of every event
+        bounces = findall(i -> sol.t[i] == sol.t[i + 1], 1:(length(sol.t) - 1))
+        @test length(bounces) >= 2
+        # the velocity the FMU wrote back has to survive the reinitialization that follows a
+        # discontinuity: `OverrideInit` resets `u` to `u0`, which would leave the ball falling
+        # from its initial state after every bounce instead of rebounding
+        @test count(i -> velocities[i] < 0 < velocities[i + 1], bounces) >= 2
+        # reinitialization has to keep the algebraic variable consistent with the states it
+        # kept, which is what distinguishes `BrownFullBasicInit` from `NoInit`
+        @test maximum(abs, sol[z] .^ 3 .+ sol[z] .- heights .- 2.0) <= 1.0e-6
+    end
+
+    @testset "a 0-indicator FMU whose state cannot be written back" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "VanDerPol2.fmu"); type = :ME)
+        @named vdp = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables y(t) = 1.0
+        # declaring a continuous state of the FMU an input of the compiled system takes it out
+        # of the unknowns, so a value an event produced for it would have nowhere to go
+        sys = MTK.mtkcompile(
+            System([D(y) ~ -y], t; systems = [vdp], name = :outer); inputs = [vdp.x1]
+        )
+        @test ext.SII.variable_index(sys, vdp.x1) === nothing
+        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
+        # an FMU declaring no event indicators only has to be told about completed steps, so
+        # it gets a step callback that pushes nothing rather than a construction-time error
+        step_cb = only(MTK.getmetadata(par, CallbackConstructionHook)(sys, par))
+        @test step_cb isa SciMLBase.DiscreteCallback
+        prob = ODEProblem(sys, [vdp.x0 => 2.0, vdp.x1 => 0.0], (0.0, 1.0))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[y][end] ≈ exp(-1.0)
+    end
+
+    @testset "an FMU with event indicators needs its states writable" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables y(t) = 1.0
+        sys = MTK.mtkcompile(
+            System([D(y) ~ -y], t; systems = [ball], name = :outer); inputs = [ball.v]
+        )
+        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
+        # a state event that cannot write its result back would silently do nothing, so an
+        # FMU declaring event indicators keeps failing loudly at construction
+        @test_throws "irreducible = true" MTK.getmetadata(
+            par, CallbackConstructionHook
+        )(sys, par)
     end
 end

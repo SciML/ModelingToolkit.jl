@@ -7,6 +7,8 @@ using Symbolics: NAMESPACE_SEPARATOR, CallAndWrap
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
 import ModelingToolkitBase as MTKBase
+# for `BrownFullBasicInit`, which SciMLBase 3.49 does not define
+import DiffEqBase
 import SciMLBase
 import SymbolicIndexingInterface as SII
 import SymbolicUtils
@@ -254,24 +256,51 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
     )
     get_wrapper = SII.getp(sys, wrapper_param)
+    # `nothing` while the FMU's state and inputs can be exchanged with the integrator, and the
+    # reason they cannot otherwise. Handling an event needs both: the continuous states to
+    # write the post-event values back into, and the inputs to evaluate at the event point.
+    no_event_access = nothing
     state_idxs = Int[]
     for name in meta.state_names
         resolved = resolve_relative(wrapper_param, name)
         idx = SII.variable_index(sys, resolved)
         if idx === nothing
-            error(
-                "The continuous state $resolved of the FMU wrapped by \
+            no_event_access = "The continuous state $resolved of the FMU wrapped by \
                 $(getname(wrapper_param)) is not an unknown of the simplified system, so \
                 the value it takes after an FMU event cannot be written back. Prevent it \
                 from being simplified away, for example with `irreducible = true`."
-            )
+            break
         end
         push!(state_idxs, idx)
     end
     input_names = [resolve_relative(wrapper_param, name) for name in meta.input_names]
-    # the root search evaluates the condition at interpolated states, so the inputs have to
-    # be evaluated there too rather than read off the integrator
-    get_inputs = isempty(input_names) ? nothing : SII.observed(sys, input_names)
+    get_inputs = nothing
+    if no_event_access === nothing && !isempty(input_names)
+        unresolved = findfirst(
+            name -> !(
+                SII.is_variable(sys, name) || SII.is_observed(sys, name) ||
+                    SII.is_parameter(sys, name)
+            ),
+            input_names
+        )
+        if unresolved === nothing
+            # the root search evaluates the condition at interpolated states, so the inputs
+            # have to be evaluated there too rather than read off the integrator
+            get_inputs = SII.observed(sys, input_names)
+        else
+            no_event_access = "The input $(input_names[unresolved]) of the FMU wrapped by \
+                $(getname(wrapper_param)) is neither an unknown, an observed variable nor a \
+                parameter of the simplified system, so it cannot be evaluated at an FMU \
+                event. Prevent it from being simplified away, for example with \
+                `irreducible = true`."
+        end
+    end
+    # a state event is only meaningful if its result can be written back, so an FMU that
+    # declares event indicators has to have that access; one that declares none is still told
+    # about completed steps, and only a step event it requests then needs the write-back
+    if no_event_access !== nothing && meta.n_event_indicators > 0
+        error(no_event_access)
+    end
     state_buffer = zeros(Float64, length(state_idxs))
     input_buffer = zeros(Float64, length(input_names))
 
@@ -331,8 +360,11 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         # feeds observed equations may not have seen by the time this initializes
         wrapper.instance === nothing && return false
         # error control and (for an implicit solver) the Jacobian leave the FMU at points
-        # other than the accepted one, which is the step it has to be told about
-        push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
+        # other than the accepted one, which is the step it has to be told about. Without
+        # exchangeable states there is nothing to push, which is what FMI.jl's `stepCompleted`
+        # does for every FMU.
+        no_event_access === nothing &&
+            push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
         step_result = partiallyCompleteIntegratorStep(wrapper)
         if step_result.terminate
             SciMLBase.terminate!(integrator)
@@ -343,6 +375,13 @@ function build_fmu_me_callbacks(sys, wrapper_param)
 
     function fmu_step_completed!(integrator)
         if fmu_step_event_occurred!(integrator)
+            if no_event_access !== nothing
+                error(
+                    "The FMU declares no event indicators but requested Event Mode from a \
+                    completed integrator step, which needs the same access to its states as \
+                    a state event. $no_event_access"
+                )
+            end
             # a step event has no triggered event indicator
             return fmu_event_affect!(integrator, nothing)
         end
@@ -357,6 +396,13 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         return fmu_step_completed!(integrator)
     end
 
+    # a callback that leaves a discontinuity standing has the integrator reinitialize, which
+    # for a singular mass matrix means solving for consistent initial conditions again. The
+    # problem's own algorithm is MTK's `OverrideInit`, which resets `u` to `u0` and would throw
+    # away exactly the post-event states the affect just wrote, so both callbacks name an
+    # algorithm that keeps the differential states and re-solves only the algebraic variables.
+    event_initializealg = DiffEqBase.BrownFullBasicInit()
+
     callbacks = SciMLBase.DECallback[]
     if meta.n_event_indicators > 0
         push!(
@@ -367,7 +413,7 @@ function build_fmu_me_callbacks(sys, wrapper_param)
                 # switch when it enters Event Mode; localizing on the pre-crossing side would
                 # have it refresh its relations to the old domain and not handle the event
                 rootfind = SciMLBase.RightRootFind, interp_points = 10,
-                save_positions = (true, true)
+                save_positions = (true, true), initializealg = event_initializealg
             )
         )
     end
@@ -376,7 +422,8 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         SciMLBase.DiscreteCallback(
             Returns(true), fmu_step_completed!;
             # `initialize` gives the FMU the `t0` step FMI.jl's `func_start` does
-            initialize = fmu_step_initialize, save_positions = (false, false)
+            initialize = fmu_step_initialize, save_positions = (false, false),
+            initializealg = event_initializealg
         )
     )
     return callbacks
@@ -1006,7 +1053,10 @@ Read the FMU's outputs into `out`, which must have one element per output.
 """
 function get_fmu_outputs!(wrapper::FMI2InstanceWrapper, out)
     isempty(out) && return out
-    @statuscheck FMI.fmi2GetReal!(wrapper.instance, wrapper.output_value_references, out)
+    # the count has to be passed: the method without it returns `nothing` instead of a status
+    @statuscheck FMI.fmi2GetReal!(
+        wrapper.instance, wrapper.output_value_references, Csize_t(length(out)), out
+    )
     return out
 end
 
@@ -1317,7 +1367,11 @@ Read the FMU's outputs into `out`, which must have one element per output.
 """
 function get_fmu_outputs!(wrapper::FMI3InstanceWrapper, out)
     isempty(out) && return out
-    @statuscheck FMI.fmi3GetFloat64!(wrapper.instance, wrapper.output_value_references, out)
+    # the count has to be passed: the method without it returns `nothing` instead of a status
+    count = Csize_t(length(out))
+    @statuscheck FMI.fmi3GetFloat64!(
+        wrapper.instance, wrapper.output_value_references, count, out, count
+    )
     return out
 end
 
@@ -1493,9 +1547,8 @@ function (wrapper::Union{FMI2InstanceWrapper, FMI3InstanceWrapper})(
     # the outputs have to be read before the derivatives. An OpenModelica FMU evaluates its
     # algebraic and output equations when a variable is read, but reading the derivatives
     # evaluates only the ODE block and still clears the flag saying an evaluation is due
-    # (`sources/fmi-export/fmu2_model_interface.c.inc`, `updateIfNeeded` against
-    # `internalGetDerivatives`), so the other order returns the previous evaluation's value
-    # for every output that no derivative depends on.
+    # (`sources/fmi-export/fmu2_model_interface.c.inc`: `updateIfNeeded` against
+    # `internalGetDerivatives`), which leaves a purely-output variable one evaluation stale.
     get_fmu_outputs!(wrapper, outputs_buffer)
     instance(; dx = states_buffer, dx_refs = wrapper.derivative_value_references)
     wrapper.res_buffer[1:length(states_buffer)] .= states_buffer
