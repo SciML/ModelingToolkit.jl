@@ -861,6 +861,40 @@ end
         # an FMU that declares no time event is left alone in either mode
         @test ext.handle_fmu_time_event!(strict_wrapper, nothing) === nothing
     end
+
+    @testset "Stair v3, ME: unsupported time events" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "Stair3.fmu"); type = :ME)
+        # `Stair`'s only output is an FMI Integer, which the Model Exchange functor cannot
+        # read, so both policies are exercised on the instance wrapper directly
+        @named stair = MTK.FMIComponent(Val(3); fmu, type = :ME)
+        strict_wrapper = MTK.getdefault(
+            only(p for p in parameters(stair) if MTK.getname(p) == :wrapper)
+        )
+        @test_throws "ignore_time_events" ext.get_instance_ME!(
+            strict_wrapper, Float64[], Float64[], 0.0
+        )
+
+        @named lenient_stair = MTK.FMIComponent(
+            Val(3); fmu, type = :ME, ignore_time_events = true
+        )
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(lenient_stair) if MTK.getname(p) == :wrapper)
+        )
+        logger = Test.TestLogger(; min_level = Base.CoreLogging.Warn)
+        Base.CoreLogging.with_logger(logger) do
+            # only the first call instantiates and runs the initial event iteration, so only
+            # it may warn
+            ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+            ext.get_instance_ME!(wrapper, Float64[], Float64[], 0.0)
+        end
+        @test count(
+            record -> occursin("time event", string(record.message)), logger.logs
+        ) == 1
+        # `Stair` steps its counter at every integer time, and the v3 event iteration reports
+        # the first of those through the `event_time_defined`/`event_time` pair
+        @test wrapper.next_event_time == 1.0
+        ext.reset_instance!(wrapper)
+    end
 end
 
 @testset "FMU step events" begin
