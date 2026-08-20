@@ -477,7 +477,6 @@ end
         @test length(carriers) == 2
         @test Set(MTK.getname(par) for (par, _) in carriers) ==
             Set([:ball1₊wrapper, :ball2₊wrapper])
-        # one metadata object per component, not a shared one
         @test carriers[1][2] !== carriers[2][2]
         unknown_names = MTK.getname.(unknowns(sys))
         for (par, meta) in carriers
@@ -680,8 +679,7 @@ end
         @test columns == [:time, :h, :v]
         heights_at_reference = sol(reference[:, 1]; idxs = ball.h).u
         # the reference output is a fixed-step explicit Euler run (`FIXED_SOLVER_STEP = 1e-3`)
-        # whose bounce times drift; FMI.jl's own Model Exchange simulation of this FMU
-        # deviates from it by the same 2.4e-2, so this bounds the reference's error
+        # whose bounce times drift, so the whole-trace bound absorbs the reference's own error
         @test max_error(heights_at_reference, reference[:, 2]) <= 3.0e-2
         # up to the first bounce the reference is a plain free fall and is accurate
         free_fall = reference[:, 1] .<= 0.4
@@ -723,7 +721,7 @@ end
         heights = sol(reference[:, 1]; idxs = ball.h).u
         velocities = sol(reference[:, 1]; idxs = ball.v).u
         # the reference output is this FMU's own fixed-step trace at the communication points,
-        # so it is reproduced exactly (measured error 0) rather than approximated
+        # which matching solver and communication grids reproduce to round-off
         @test max_error(heights, reference[:, 2]) <= 1.0e-6
         @test max_error(velocities, reference[:, 3]) <= 1.0e-6
         @test minimum(heights) >= 0
@@ -750,8 +748,8 @@ end
         sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
         # the communication step matches the FMU's own solver step and the reference output
-        # interval, so its trace is reproduced exactly. The final communication step of the
-        # solve is not saved, hence the last sample is excluded.
+        # interval, so the trace is reproduced to round-off. The final communication step of
+        # the solve is not saved, hence the last sample is excluded.
         got = sol(reference[1:(end - 1), 1]; idxs = dahlquist.x).u
         @test max_error(got, reference[1:(end - 1), 2]) <= 1.0e-12
     end
@@ -779,10 +777,9 @@ end
         @test SciMLBase.successful_retcode(sol)
         x0_at_reference = sol(reference[:, 1]; idxs = vdp.x0).u
         x1_at_reference = sol(reference[:, 1]; idxs = vdp.x1).u
-        # the reference output is a 1e-2 Euler step over 20 s, so its phase error accumulates
-        # across the oscillator's ~6.7 s periods; FMI.jl's own Model Exchange simulation of
-        # this FMU deviates from the reference by the same 0.35/0.64, so these bound the
-        # reference's error (measured 0.351 and 0.639) rather than this implementation's
+        # the reference output is a 1e-2 Euler step over 20 s whose phase error accumulates
+        # across the oscillator's ~6.7 s periods, so the whole-trace bounds absorb the
+        # reference's own drift
         @test max_error(x0_at_reference, reference[:, 2]) <= 0.45
         @test max_error(x1_at_reference, reference[:, 3]) <= 0.8
         # over the first 1 s the reference has not drifted yet
@@ -858,7 +855,6 @@ end
             only(p for p in parameters(stair) if MTK.getname(p) == :wrapper)
         )
         @test_throws "ignore_time_events" ext.handle_fmu_time_event!(strict_wrapper, 1.0)
-        # an FMU that declares no time event is left alone in either mode
         @test ext.handle_fmu_time_event!(strict_wrapper, nothing) === nothing
     end
 
@@ -1038,8 +1034,7 @@ end
         @variables z(t) [guess = 1.0]
         @mtkcompile sys = System([z^3 + z ~ ball.h + 2.0], t; systems = [ball])
         prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
-        # the premise: an event affect only has to survive reinitialization on a system that
-        # reinitializes, so a test that silently became an ODE would prove nothing
+        # guard that the system stays a DAE, so the callback reinitialization path is exercised
         mass_matrix = prob.f.mass_matrix
         @test any(i -> iszero(mass_matrix[i, i]), axes(mass_matrix, 1))
         alg = Rodas5P(autodiff = AutoFiniteDiff())

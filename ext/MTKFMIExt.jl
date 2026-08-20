@@ -1839,7 +1839,14 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
         instance, integrator.t - dt, dt, FMI.fmi3True, eventEncountered,
         terminateSimulation, earlyReturn, lastSuccessfulTime
     )
-    @assert earlyReturn[] == FMI.fmi3False
+    if earlyReturn[] == FMI.fmi3True
+        # `earlyReturnAllowed` is derived by FMIImport from the model description, so early
+        # return cannot be prevented from here, only rejected
+        error(
+            "FMU $(FMI.getModelName(wrapper.fmu)) returned early from `fmi3DoStep` at \
+            t = $(lastSuccessfulTime[]). Early return is not supported by the FMU import."
+        )
+    end
     if terminateSimulation[] == FMI.fmi3True
         SciMLBase.terminate!(integrator)
         return m
