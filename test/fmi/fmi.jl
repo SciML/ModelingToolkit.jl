@@ -1070,3 +1070,108 @@ end
         )(sys, par)
     end
 end
+
+@testset "FMU event composition" begin
+    # `save_positions = (true, true)` duplicates the time of every event
+    event_indices(sol) = findall(i -> sol.t[i] == sol.t[i + 1], 1:(length(sol.t) - 1))
+    # the events at which the FMU reversed this ball's velocity
+    bounces(sol, velocities) = [
+        i for i in event_indices(sol) if velocities[i] < 0 <= velocities[i + 1]
+    ]
+
+    @testset "FMU, native and user events in one solve, v$Ver, ME" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @parameters rate = 1.0
+        # an `ImperativeAffect` keeps the FMU out of the affect; see the equational-affect
+        # testset below
+        native = MTK.SymbolicContinuousCallback(
+            [x ~ 0.5],
+            MTK.ImperativeAffect(modified = (; rate)) do m, o, c, i
+                return (; rate = 2 * m.rate)
+            end
+        )
+        @mtkcompile sys = System(
+            [D(x) ~ -rate * x], t; systems = [ball], continuous_events = [native]
+        )
+        user_times = Float64[]
+        user_cb = SciMLBase.DiscreteCallback(
+            (u, t, integrator) -> t >= 1.0,
+            integrator -> (push!(user_times, integrator.t); nothing);
+            save_positions = (false, false)
+        )
+        prob = ODEProblem(
+            sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0); callback = user_cb
+        )
+        callbacks = prob.kwargs[:callback]
+        # the FMU's state events and the native event, beside the FMU's finalization and
+        # step callbacks and the user's
+        @test length(callbacks.continuous_callbacks) == 2
+        @test length(callbacks.discrete_callbacks) == 3
+        @test count(cb -> cb === user_cb, callbacks.discrete_callbacks) == 1
+
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        # the FMU's events still bounce the ball
+        @test minimum(sol[ball.h]) >= -1.0e-8
+        @test length(bounces(sol, sol[ball.v])) >= 2
+        # the native event fired: `x` decays from 1, crosses 0.5 at `log(2)` and decays
+        # twice as fast from there
+        @test sol.ps[rate] == 2.0
+        @test sol[x][end] ≈ 0.5 * exp(-2 * (3.0 - log(2))) rtol = 1.0e-5
+        # the user callback fired, and only where its own condition holds
+        @test !isempty(user_times)
+        @test minimum(user_times) >= 1.0
+    end
+
+    @testset "an equational native affect cannot differentiate the FMU, v2, ME" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @discretes k(t) = 1.0
+        native = MTK.SymbolicContinuousCallback(
+            [x ~ 0.5] => [k ~ 2 * Pre(k)]; discrete_parameters = [k], iv = t
+        )
+        @mtkcompile sys = System(
+            [D(x) ~ -k * x], t; systems = [ball], continuous_events = [native]
+        )
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        # an equational affect inherits the system's observed equations, which for a Model
+        # Exchange FMU are the FMU call, and solves them implicitly. Differentiating that
+        # solve differentiates the FMU, which is a black box without FMISensitivity.
+        @test_throws "FMISensitivity" solve(
+            prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8
+        )
+    end
+
+    @testset "two FMU instances in one system, v$Ver, ME" for Ver in (2, 3)
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        # one `FMIComponent` per instance: each builds its own wrapper, with its own buffers
+        # and its own FMU instance
+        @named ball1 = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @named ball2 = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball1, ball2])
+        prob = ODEProblem(
+            sys,
+            [ball1.h => 1.0, ball1.v => 0.0, ball2.h => 0.5, ball2.v => 0.0],
+            (0.0, 3.0)
+        )
+        callbacks = prob.kwargs[:callback]
+        # one state-event callback per FMU, and one finalization plus one step callback each
+        @test length(callbacks.continuous_callbacks) == 2
+        @test length(callbacks.discrete_callbacks) == 4
+
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        for (ball, h₀) in ((ball1, 1.0), (ball2, 0.5))
+            @test minimum(sol[ball.h]) >= -1.0e-8
+            bounced = bounces(sol, sol[ball.v])
+            @test !isempty(bounced)
+            # a ball dropped from `h₀` reaches the floor at `sqrt(2h₀/g)`, `g = 9.81`: a
+            # callback reading the other instance's states would bounce both at once
+            @test sol.t[first(bounced)] ≈ sqrt(2 * h₀ / 9.81) atol = 1.0e-6
+        end
+    end
+end

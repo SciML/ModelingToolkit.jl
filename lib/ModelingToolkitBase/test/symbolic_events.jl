@@ -2066,3 +2066,28 @@ end
         @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
     end
 end
+
+struct EventScale
+    c::Float64
+end
+
+@testset "implicit affect over a subcomponent's nonnumeric parameter" begin
+    (s::EventScale)(y) = s.c * y
+    function Inner(; name)
+        @parameters (w::EventScale)(..) = EventScale(2.0)
+        @variables u(t) = 1.0
+        return System([D(u) ~ -w(u)], t, [u], [w]; name)
+    end
+    @named inner = Inner()
+    @variables z(t) = 1.0
+    # nonlinear in `z`, so the affect compiles to an inner `ImplicitDiscreteProblem` whose
+    # parameters include `inner₊w`. A namespaced nonnumeric parameter carries no value the
+    # affect system can discover; the parent's initial conditions are the only source.
+    ievt = SymbolicContinuousCallback([z ~ 0.5], [z^2 ~ inner.w(2.0)])
+    @mtkcompile sys = System(
+        [D(z) ~ -z], t; systems = [inner], continuous_events = [ievt]
+    )
+    sol = solve(ODEProblem(sys, [], (0.0, 3.0)), Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test maximum(sol[z]) ≈ 2.0
+end
