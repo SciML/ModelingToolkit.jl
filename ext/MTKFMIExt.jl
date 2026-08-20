@@ -276,23 +276,19 @@ function build_fmu_me_callbacks(sys, wrapper_param)
     input_names = [resolve_relative(wrapper_param, name) for name in meta.input_names]
     get_inputs = nothing
     if no_event_access === nothing && !isempty(input_names)
-        unresolved = findfirst(
-            name -> !(
-                SII.is_variable(sys, name) || SII.is_observed(sys, name) ||
-                    SII.is_parameter(sys, name)
-            ),
-            input_names
-        )
-        if unresolved === nothing
+        try
             # the root search evaluates the condition at interpolated states, so the inputs
             # have to be evaluated there too rather than read off the integrator
             get_inputs = SII.observed(sys, input_names)
-        else
-            no_event_access = "The input $(input_names[unresolved]) of the FMU wrapped by \
-                $(getname(wrapper_param)) is neither an unknown, an observed variable nor a \
-                parameter of the simplified system, so it cannot be evaluated at an FMU \
-                event. Prevent it from being simplified away, for example with \
-                `irreducible = true`."
+        catch err
+            # building the getter is the only honest test of whether the inputs can be
+            # evaluated: `is_observed` is true for every symbol the system does not know as
+            # something else, including one it does not contain at all
+            no_event_access = "The inputs $input_names of the FMU wrapped by \
+                $(getname(wrapper_param)) cannot be evaluated as functions of the state of \
+                the simplified system, so the FMU cannot be moved to an event point. Prevent \
+                them from being simplified away, for example with `irreducible = true`. \
+                Building their getter failed with: $(sprint(showerror, err))"
         end
     end
     # a state event is only meaningful if its result can be written back, so an FMU that
@@ -1368,9 +1364,9 @@ Read the FMU's outputs into `out`, which must have one element per output.
 function get_fmu_outputs!(wrapper::FMI3InstanceWrapper, out)
     isempty(out) && return out
     # the count has to be passed: the method without it returns `nothing` instead of a status
-    count = Csize_t(length(out))
+    n_outputs = Csize_t(length(out))
     @statuscheck FMI.fmi3GetFloat64!(
-        wrapper.instance, wrapper.output_value_references, count, out, count
+        wrapper.instance, wrapper.output_value_references, n_outputs, out, n_outputs
     )
     return out
 end

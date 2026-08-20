@@ -956,8 +956,7 @@ end
         # discontinuity: `OverrideInit` resets `u` to `u0`, which would leave the ball falling
         # from its initial state after every bounce instead of rebounding
         @test count(i -> velocities[i] < 0 < velocities[i + 1], bounces) >= 2
-        # reinitialization has to keep the algebraic variable consistent with the states it
-        # kept, which is what distinguishes `BrownFullBasicInit` from `NoInit`
+        # the algebraic constraint holds at every saved point, events included
         @test maximum(abs, sol[z] .^ 3 .+ sol[z] .- heights .- 2.0) <= 1.0e-6
     end
 
@@ -980,6 +979,12 @@ end
         sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
         @test sol[y][end] ≈ exp(-1.0)
+
+        # whether the FMU's inputs can be evaluated is only answerable by building their
+        # getter: `is_observed` is true even for a symbol the system does not contain, so a
+        # predicate cannot tell the two apart
+        @test ext.SII.is_observed(sys, :totally_bogus)
+        @test_throws ArgumentError ext.SII.observed(sys, [:totally_bogus])
     end
 
     @testset "an FMU with event indicators needs its states writable" begin
