@@ -106,6 +106,10 @@ Record the result of the event iteration performed while leaving initialization 
 """
 function handle_initial_event_iteration!(wrapper, event_result)
     if event_result.terminate
+        # the instance is in Event Mode, where the state exchange a retried solve performs is
+        # illegal, so a caught error must not leave it reusable. Terminating from Event Mode is
+        # legal in both FMI versions.
+        reset_instance!(wrapper)
         error(
             "FMU $(FMI.getModelName(wrapper.fmu)) requested termination of the simulation \
             during the event iteration performed while leaving initialization mode."
@@ -131,6 +135,9 @@ function handle_fmu_time_event!(wrapper, next_event_time)
     next_event_time === nothing && return nothing
     name = FMI.getModelName(wrapper.fmu)
     if !wrapper.ignore_time_events
+        # a caught error must not leave a reusable instance behind, since the mode it is in is
+        # not one a retried solve can exchange state from
+        reset_instance!(wrapper)
         error(
             "FMU $name declared a time event at t = $next_event_time. Time events are not \
             supported by the FMU import. Pass `ignore_time_events = true` to \
@@ -171,6 +178,10 @@ consumers can find it by scanning `parameters` of the compiled system.
 
 Names are component-relative because metadata is opaque to `renamespace`; use
 [`resolve_relative`](@ref) to obtain the name in the namespace of the wrapper parameter.
+
+The fields this version's runtime does not consume (`fmi_version`, `interface`, `state_vrs`,
+`can_have_time_events` and `cs_has_event_mode` outside import), along with the
+`nominals_changed` result of the event iteration, are inputs for the clocks follow-up.
 
 # Fields
 
@@ -313,6 +324,15 @@ function build_fmu_me_callbacks(sys, wrapper_param)
 
     function fmu_event_condition!(out, u, t, integrator)
         wrapper = get_wrapper(integrator)
+        # the instance is created by the first evaluation of the FMU, and unlike a completed
+        # step an event indicator has no value without one
+        if wrapper.instance === nothing
+            error(
+                "The event indicators of the FMU wrapped by $(getname(wrapper_param)) cannot \
+                be evaluated before the FMU is instantiated, which the first evaluation of \
+                its dynamics does."
+            )
+        end
         push_fmu_event_state!(wrapper, u, integrator.p, t)
         return get_fmu_event_indicators!(wrapper, out)
     end
@@ -379,6 +399,10 @@ function build_fmu_me_callbacks(sys, wrapper_param)
                     a state event. $no_event_access"
                 )
             end
+            # every callback ahead of this one clears the flag during the callback-initialize
+            # phase (`SciMLBase.INITIALIZE_DEFAULT`), so the write-back has to declare itself.
+            # On the `apply_discrete_callback!` path the flag is already true.
+            SciMLBase.derivative_discontinuity!(integrator, true)
             # a step event has no triggered event indicator
             return fmu_event_affect!(integrator, nothing)
         end
@@ -456,8 +480,9 @@ with the name `namespace__variable`.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
 - `ignore_time_events`: Time events are not supported, and by default an FMU declaring one
-  errors. If this is `true`, a declared time event is instead warned about once per solve and
-  ignored, which changes the trajectory the FMU would otherwise have taken.
+  errors. If this is `true`, a declared time event is instead warned about once per FMU
+  instance and ignored, which changes the trajectory the FMU would otherwise have taken. A
+  solve creates one instance for a Model Exchange FMU and at least two for a CoSimulation one.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(
@@ -651,8 +676,9 @@ function MTK.FMIComponent(
     tagged_wrapper = SymbolicUtils.setmetadata(
         SymbolicUtils.unwrap(wrapper), FMUEventMetadata, event_metadata
     )
-    if type == :ME &&
-            (event_metadata.n_event_indicators > 0 || event_metadata.can_have_time_events)
+    # every Model Exchange FMU gets the hook: the per-accepted-step notification is
+    # unconditional, whether or not the FMU declares event indicators.
+    if type == :ME
         tagged_wrapper = SymbolicUtils.setmetadata(
             tagged_wrapper, MTKBase.CallbackConstructionHook, build_fmu_me_callbacks
         )
@@ -1005,6 +1031,9 @@ function do_fmu_event_iteration!(wrapper::FMI2InstanceWrapper)
             return (; values_changed, nominals_changed, next_event_time, terminate)
         end
     end
+    # the iteration is abandoned with the instance in Event Mode, which no retried solve can
+    # exchange state from, so a caught error must not leave it reusable
+    reset_instance!(wrapper)
     return error(
         "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
         event iterations."
@@ -1321,6 +1350,9 @@ function do_fmu_event_iteration!(wrapper::FMI3InstanceWrapper)
             return (; values_changed, nominals_changed, next_event_time, terminate)
         end
     end
+    # the iteration is abandoned with the instance in Event Mode, which no retried solve can
+    # exchange state from, so a caught error must not leave it reusable
+    reset_instance!(wrapper)
     return error(
         "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
         event iterations."

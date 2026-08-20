@@ -1557,10 +1557,8 @@ Base.@nospecializeinfer function compile_implicit_affect(
     u_getter = getsym(affsys, dvs_to_update)
     p_getter = getsym(affsys, ps_to_update)
 
-    # `affsys` only discovers the values its own symbols carry as metadata, so a nonnumeric
-    # parameter — e.g. any callable parameter of a subcomponent — whose value lives only in
-    # the parent's initial conditions has nothing to build this problem's buffers from. The
-    # values the affect uses are copied from the integrator on every invocation.
+    # `affsys` only discovers values its own symbols carry as metadata, so a nonnumeric
+    # parameter whose value lives only in the parent's initial conditions needs them merged in.
     # `_skip_events`: `affsys` shares the parent's parameters, so without this the parent's
     # `CallbackConstructionHook`s would be invoked again for this inner problem.
     affprob = ImplicitDiscreteProblem(
