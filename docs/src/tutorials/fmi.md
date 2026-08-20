@@ -7,10 +7,10 @@ Draft = true
 ModelingToolkit is able to import FMUs following the [FMI Standard](https://fmi-standard.org/) versions 2 and 3.
 This integration is done through [FMI.jl](https://github.com/ThummeTo/FMI.jl) and requires importing it to
 enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported.
-The state events of Model Exchange FMUs are supported, as is the event mode of version 3 CoSimulation
-FMUs that declare `hasEventMode`. Time events, non-floating-point variables and array variables are not
-supported: an FMU declaring an internal time event errors by default, and `ignore_time_events = true`
-warns once and ignores it instead. Additionally, calculating the time derivatives of FMU
+The state and step events of Model Exchange FMUs are supported, as is the event mode of version 3
+CoSimulation FMUs that declare `hasEventMode`. Time events, non-floating-point variables and array
+variables are not supported: an FMU declaring an internal time event errors by default, and
+`ignore_time_events = true` warns once per FMU instance and ignores it instead. Additionally, calculating the time derivatives of FMU
 states/outputs is not supported. Native symbolic events on a system containing a Model Exchange FMU
 must use `ImperativeAffect`; equation-based affects inherit the FMU call and fail when the event fires.
 

@@ -135,8 +135,8 @@ function handle_fmu_time_event!(wrapper, next_event_time)
     next_event_time === nothing && return nothing
     name = FMI.getModelName(wrapper.fmu)
     if !wrapper.ignore_time_events
-        # a caught error must not leave a reusable instance behind, since the mode it is in is
-        # not one a retried solve can exchange state from
+        # a caught error must not leave the instance behind: the instance getters would hand
+        # it, mid-solve state and all, to a retried solve
         reset_instance!(wrapper)
         error(
             "FMU $name declared a time event at t = $next_event_time. Time events are not \
