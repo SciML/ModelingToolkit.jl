@@ -9,7 +9,8 @@ This integration is done through [FMI.jl](https://github.com/ThummeTo/FMI.jl) an
 enable the relevant functionality. Currently Model Exchange (ME) and CoSimulation (CS) FMUs are supported.
 The state events of Model Exchange FMUs are supported. Time events, non-floating-point variables and
 array variables are not supported. Additionally, calculating the time derivatives of FMU
-states/outputs is not supported.
+states/outputs is not supported. Native symbolic events on a system containing a Model Exchange FMU
+must use `ImperativeAffect`; equation-based affects inherit the FMU call and fail when the event fires.
 
 !!! danger "Experimental"
 

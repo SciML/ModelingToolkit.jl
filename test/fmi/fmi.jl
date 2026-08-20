@@ -1125,7 +1125,7 @@ end
         @test minimum(user_times) >= 1.0
     end
 
-    @testset "an equational native affect cannot differentiate the FMU, v2, ME" begin
+    @testset "an equational native affect cannot differentiate the FMU without FMISensitivity, v2, ME" begin
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
         @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @variables x(t) = 1.0
