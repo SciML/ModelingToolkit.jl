@@ -6,8 +6,21 @@ using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, Ab
 import ModelingToolkitBase
 import ModelingToolkitBase as MTK
 import SciMLStructures
+import SciMLBase
 import SymbolicIndexingInterface: remake_buffer, parameter_index
 import SciMLBase: AbstractNonlinearProblem, remake
+
+function MTK.promote_type_with_nothing(
+        ::Type{T}, p::Tangent{SciMLBase.DespecializedParameters}
+    ) where {T}
+    return MTK.promote_type_with_nothing(T, unthunk(p.params))
+end
+
+function MTK.promote_with_nothing(
+        ::Type{T}, p::Tangent{SciMLBase.DespecializedParameters}
+    ) where {T}
+    return MTK.promote_with_nothing(T, unthunk(p.params))
+end
 
 # Positional arguments of `MTKParameters` after `tunables`, in order. `setproperties`
 # (and hence every `@set!`/`SciMLStructures.replace` rebuild) lowers to this
