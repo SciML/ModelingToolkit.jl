@@ -688,6 +688,74 @@ end
         @test max_error(heights_at_reference[free_fall], reference[free_fall, 2]) <= 1.0e-2
     end
 
+    @testset "BouncingBall v3, CS: event mode" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall3.fmu"); type = :CS)
+        @test ext.cs_event_mode_supported(fmu)
+        # the FMU's own fixed solver step, so every one of its internal steps ends at a
+        # communication point and every state event is reported to the importer
+        @named ball = MTK.FMIComponent(
+            Val(3); fmu, type = :CS, communication_step_size = 1.0e-3
+        )
+        wrapper = MTK.getdefault(
+            only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
+        )
+        # an instance using event mode leaves initialization mode in Event Mode; the initial
+        # event iteration and `fmi3EnterStepMode` are what put it in Step Mode
+        ext.get_instance_CS!(wrapper, Float64[], Float64[], Float64[], 0.0, 3.0)
+        @test wrapper.instance.state == ext.FMI.fmi3InstanceStateStepMode
+        @test wrapper.next_event_time === nothing
+        ext.reset_instance!(wrapper)
+
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
+        @test MTK.getmetadata(par, ext.FMUEventMetadata).cs_has_event_mode
+        # event mode lives in the periodic communication callback, so a CoSimulation FMU
+        # needs no callback construction hook
+        @test !MTK.hasmetadata(par, CallbackConstructionHook)
+
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+
+        columns, reference = reference_output(fmu, "BouncingBall")
+        @test columns == [:time, :h, :v]
+        heights = sol(reference[:, 1]; idxs = ball.h).u
+        velocities = sol(reference[:, 1]; idxs = ball.v).u
+        # the reference output is this FMU's own fixed-step trace at the communication points,
+        # so it is reproduced exactly (measured error 0) rather than approximated
+        @test max_error(heights, reference[:, 2]) <= 1.0e-6
+        @test max_error(velocities, reference[:, 3]) <= 1.0e-6
+        @test minimum(heights) >= 0
+        # every event the FMU reports has to be handled for the ball to bounce at all: an
+        # event left unhandled is lost, and the ball falls through the floor
+        bounces(vs) = count(i -> vs[i] < 0 <= vs[i + 1], 1:(length(vs) - 1))
+        @test bounces(reference[:, 3]) >= 4
+        @test bounces(velocities) == bounces(reference[:, 3])
+    end
+
+    @testset "Dahlquist v3, CS: no event mode" begin
+        fmu = loadFMU(joinpath(FMU_DIR, "Dahlquist3.fmu"); type = :CS)
+        # an FMU that declares no event mode is instantiated without it and goes straight to
+        # Step Mode, where the event iteration is illegal
+        @test !ext.cs_event_mode_supported(fmu)
+        columns, reference = reference_output(fmu, "Dahlquist")
+        @test columns == [:time, :x]
+        @named dahlquist = MTK.FMIComponent(
+            Val(3); fmu, type = :CS, communication_step_size = 1.0e-1
+        )
+        @variables y(t) = 1.0
+        @mtkcompile sys = System([D(y) ~ -y], t; systems = [dahlquist])
+        prob = ODEProblem(sys, [dahlquist.x => 1.0], (0.0, reference[end, 1]))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        # the communication step matches the FMU's own solver step and the reference output
+        # interval, so its trace is reproduced exactly. The final communication step of the
+        # solve is not saved, hence the last sample is excluded.
+        got = sol(reference[1:(end - 1), 1]; idxs = dahlquist.x).u
+        @test max_error(got, reference[1:(end - 1), 2]) <= 1.0e-12
+    end
+
     @testset "VanDerPol v2, ME" begin
         fmu = loadFMU(joinpath(FMU_DIR, "VanDerPol2.fmu"); type = :ME)
         @named vdp = MTK.FMIComponent(Val(2); fmu, type = :ME)

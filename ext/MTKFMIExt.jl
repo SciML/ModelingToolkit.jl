@@ -431,8 +431,9 @@ end
 A component that wraps an FMU loaded via FMI.jl. The FMI version (2 or 3) should be
 provided as a `Val` to the function. Supports Model Exchange and CoSimulation FMUs.
 All inputs, continuous variables and outputs must be `FMI.fmi2Real` or `FMI.fmi3Float64`.
-Supports the state and step events of Model Exchange FMUs; does not support time events or
-discrete variables in the FMU. Does not support automatic differentiation.
+Supports the state and step events of Model Exchange FMUs, and the event mode of FMI3
+CoSimulation FMUs that declare `hasEventMode`; does not support time events or discrete
+variables in the FMU. Does not support automatic differentiation.
 Parameters of the FMU will have defaults corresponding to their initial
 values in the FMU specification. All other variables will not have a default. Hierarchical
 names in the FMU of the form `namespace.variable` are transformed into symbolic variables
@@ -1400,6 +1401,20 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Enter Event Mode from Step Mode, to handle the event a CoSimulation `fmi3DoStep` reported.
+Such an event has no cause the importer could report, so the arguments of the pre-release
+`fmi3EnterEventMode` signature FMIImport 1.3.1 wraps are all empty; final FMI3 has none.
+"""
+function enter_fmu_cs_event_mode!(wrapper::FMI3InstanceWrapper)
+    @statuscheck FMI.fmi3EnterEventMode(
+        wrapper.instance, false, false, FMI.fmi3Int32[], Csize_t(0), false
+    )
+    return wrapper.instance
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Leave Event Mode for Continuous-Time Mode. If `values_changed`, the event iteration changed
 the continuous states of the FMU, which FMI then requires to be re-read; they are returned in
 `wrapper.event_states_buffer`. Returns `nothing` otherwise.
@@ -1447,8 +1462,12 @@ See `get_instance_common!` for a description of the arguments.
 """
 function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, t, t_end)
     if wrapper.instance === nothing
+        # `earlyReturnAllowed` is not ours to choose: FMIImport derives it from the model
+        # description, where it is only ever true for an FMU declaring
+        # `canReturnEarlyAfterIntermediateUpdate` — which FMIImport 1.3.1 never parses.
+        event_mode = cs_event_mode_supported(wrapper.fmu)
         wrapper.instance = FMI.fmi3InstantiateCoSimulation!(
-            wrapper.fmu; eventModeUsed = false
+            wrapper.fmu; eventModeUsed = event_mode
         )::FMI.FMU3Instance
         get_instance_common!(wrapper, inputs, params, t, t_end)
         if !isempty(states)
@@ -1457,6 +1476,13 @@ function get_instance_CS!(wrapper::FMI3InstanceWrapper, states, inputs, params, 
             )
         end
         @statuscheck FMI.fmi3ExitInitializationMode(wrapper.instance)
+        if event_mode
+            # an instance using event mode leaves initialization mode in Event Mode, so the
+            # initial event iteration has to converge before Step Mode may be entered
+            event_result = do_fmu_event_iteration!(wrapper)
+            handle_initial_event_iteration!(wrapper, event_result)
+            @statuscheck FMI.fmi3EnterStepMode(wrapper.instance)
+        end
     else
         if !isempty(inputs)
             @statuscheck FMI.fmi3SetFloat64(
@@ -1756,6 +1782,9 @@ end
 
 """
     $(TYPEDSIGNATURES)
+
+An FMU instantiated with event mode reports the events it encounters during a communication
+step, which the importer has to handle for the FMU to apply them.
 """
 function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
     wrapper = o.wrapper
@@ -1777,10 +1806,25 @@ function fmiCSStep!(m, o, ctx::FMI3CSFunctor, integrator)
         instance, integrator.t - dt, dt, FMI.fmi3True, eventEncountered,
         terminateSimulation, earlyReturn, lastSuccessfulTime
     )
-    @assert eventEncountered[] == FMI.fmi3False
-    @assert terminateSimulation[] == FMI.fmi3False
     @assert earlyReturn[] == FMI.fmi3False
+    if terminateSimulation[] == FMI.fmi3True
+        SciMLBase.terminate!(integrator)
+        return m
+    end
+    if eventEncountered[] == FMI.fmi3True
+        enter_fmu_cs_event_mode!(wrapper)
+        event_result = do_fmu_event_iteration!(wrapper)
+        if event_result.terminate
+            # the instance stays in Event Mode: nothing is stepped after `terminate!`
+            SciMLBase.terminate!(integrator)
+            return m
+        end
+        @statuscheck FMI.fmi3EnterStepMode(instance)
+        wrapper.next_event_time = event_result.next_event_time
+        handle_fmu_time_event!(wrapper, event_result.next_event_time)
+    end
 
+    # read after the event iteration, so the outputs carry the post-event values
     if isdefined(m, :states)
         @statuscheck FMI.fmi3GetFloat64!(instance, ctx.state_value_references, m.states)
     end
