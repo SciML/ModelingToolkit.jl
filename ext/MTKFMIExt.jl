@@ -16,46 +16,71 @@ const t = t_nounits
 const D = D_nounits
 
 """
-    $(TYPEDSIGNATURES)
+    fmu_status_is_error(::Val{fmi_version}, status, fnname)
 
-A utility macro for FMI.jl functions that return a status. Will terminate on
-fatal statuses. Must be used as `@statuscheck FMI.fmiXFunction(...)` where
-`X` should be `2` or `3`. Has an edge case for handling tuples for
-`FMI.fmi2CompletedIntegratorStep`.
+Whether `status`, returned by the FMI function `fnname`, is a failure. `Val{2}` and `Val{3}`
+select the status constants of the FMI version in use. A warning status is not a failure: the
+standard allows the computation to continue, so it is only logged.
+"""
+function fmu_status_is_error end
+
+function fmu_status_is_error(::Val{2}, status, fnname)
+    status === nothing && return false
+    status == FMI.fmi2StatusOK && return false
+    if status == FMI.fmi2StatusWarning
+        @warn "FMU function $fnname returned `fmi2StatusWarning`." maxlog = 10
+        return false
+    end
+    return true
+end
+
+function fmu_status_is_error(::Val{3}, status, fnname)
+    status === nothing && return false
+    status == FMI.fmi3StatusOK && return false
+    if status == FMI.fmi3StatusWarning
+        @warn "FMU function $fnname returned `fmi3StatusWarning`." maxlog = 10
+        return false
+    end
+    return true
+end
+
+"""
+    @statuscheck FMI.fmiXFunction(...)
+
+Check the status an FMI.jl function returned, where `X` is `2` or `3`. On a failing status this
+frees the instance and errors, terminating it first unless the status is fatal.
+
+Evaluates to whatever the wrapped call returned, so callers keep the extra outputs of functions
+like `FMI.fmi2CompletedIntegratorStep`. Those return their status as the first element of a
+tuple, which is where this looks for it.
 """
 macro statuscheck(expr)
     @assert Meta.isexpr(expr, :call)
     fn = expr.args[1]
     @assert Meta.isexpr(fn, :.)
     @assert fn.args[1] == :FMI
-    fnname = fn.args[2]
+    # the qualified name is parsed as `Expr(:., :FMI, QuoteNode(:fmiXFunction))`
+    fnname = fn.args[2] isa QuoteNode ? fn.args[2].value : fn.args[2]
 
-    instance = expr.args[2]
-    is_v2 = startswith("fmi2", string(fnname))
+    is_v2 = startswith(string(fnname), "fmi2")
 
-    fmiTrue = is_v2 ? FMI.fmi2True : FMI.fmi3True
-    fmiStatusOK = is_v2 ? FMI.fmi2StatusOK : FMI.fmi3StatusOK
-    fmiStatusWarning = is_v2 ? FMI.fmi2StatusWarning : FMI.fmi3StatusWarning
+    version = Val(is_v2 ? 2 : 3)
     fmiStatusFatal = is_v2 ? FMI.fmi2StatusFatal : FMI.fmi3StatusFatal
     fmiTerminate = is_v2 ? FMI.fmi2Terminate : FMI.fmi3Terminate
     fmiFreeInstance! = is_v2 ? FMI.fmi2FreeInstance! : FMI.fmi3FreeInstance!
     return quote
-        status = $expr
-        fnname = $fnname
-        if status !== nothing && (
-                (status isa Tuple && status[1] == $fmiTrue) ||
-                    (
-                    !(status isa Tuple) && status != $fmiStatusOK &&
-                        status != $fmiStatusWarning
-                )
-            )
+        result = $expr
+        status = result isa Tuple ? result[1] : result
+        if fmu_status_is_error($version, status, $(QuoteNode(fnname)))
+            # a fatal status leaves the instance in a state where no further call is allowed
             if status != $fmiStatusFatal
                 $fmiTerminate(wrapper.instance)
             end
             $fmiFreeInstance!(wrapper.instance)
             wrapper.instance = nothing
-            error("FMU Error in $fnname: status $status")
+            error("FMU Error in $($(QuoteNode(fnname))): status $status")
         end
+        result
     end |> esc
 end
 
