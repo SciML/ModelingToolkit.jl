@@ -1736,10 +1736,54 @@ function operating_point_preprocess(sys::AbstractSystem, op; name = "operating_p
     return op
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Value of the leaf projection `leaf` of the struct variable `root`, given a concrete `value`
+for `root`.
+"""
+function record_leaf_value(leaf::SymbolicT, root::SymbolicT, value)
+    isequal(leaf, root) && return value
+    return Moshi.Match.@match leaf begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => getproperty(
+            record_leaf_value(args[1], root, value), Symbolics.field_name(f)
+        )
+        BSImpl.Term(; f, args) && if f === getindex end => record_leaf_value(
+            args[1], root, value
+        )[unwrap_const.(args[2:end])...]
+        _ => error(lazy"Cannot resolve $leaf as a field of $root.")
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Split entries of `op` that map a struct variable to a concrete record value into one entry
+per leaf, e.g. `b => Bar(1, Foo(2, 3))` becomes `b.x => 1, b.f.x => 2, b.f.y => 3`. This is
+the struct counterpart of scalarizing an array-valued entry. Existing leaf entries win.
+"""
+function split_record_entries!(op::AbstractDict)
+    for k in collect(keys(op))
+        ku = unwrap(k)
+        ku isa SymbolicT && Symbolics.issymstruct(ku) || continue
+        T = SU.symtype(ku)
+        v = op[k]
+        v isa SymbolicT && SU.isconst(v) && (v = unwrap_const(v))
+        v isa T || continue
+        for leaf in collect(Symbolics.SymStruct{T}(ku))
+            haskey(op, leaf) && continue
+            op[leaf] = record_leaf_value(leaf, ku, v)
+        end
+        delete!(op, k)
+    end
+    return op
+end
+
 function build_operating_point(sys::AbstractSystem, op; fast_path = false)
     if !fast_path
         op = operating_point_preprocess(sys, op)
     end
+    split_record_entries!(op)
     # Replace `nothing`s with sentinels so that `left_merge!` thinks they're values
     # and doesn't override them. This is because explicit `nothing` values in `op`
     # should be considered as overrides for initial conditions in `ics`.

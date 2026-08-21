@@ -1352,10 +1352,10 @@ function renamespace(sys, x::SymbolicT)
             error()
         end
         BSImpl.Term(; f, args, shape, type, metadata) => begin
-            if f === getindex
+            if f === getindex || f isa Symbolics.SymbolicGetproperty
                 newargs = copy(parent(args))
                 newargs[1] = renamespace(sys, args[1])
-                return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
+                return BSImpl.Term{VartypeT}(f, newargs; type, shape, metadata)
             elseif f isa SymbolicT
                 let scope = getmetadata(x, SymScope, LocalScope())::Union{LocalScope, ParentScope, GlobalScope}
                     if scope isa LocalScope

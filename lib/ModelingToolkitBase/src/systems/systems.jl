@@ -158,6 +158,11 @@ end
 function scalarized_vars(vars)
     scal = SymbolicT[]
     for var in vars
+        # A struct variable looks scalar by shape, so expand it into its leaves here.
+        if Symbolics.issymstruct(var)
+            append!(scal, collect(Symbolics.SymStruct{SU.symtype(var)}(var)))
+            continue
+        end
         if !SU.is_array_shape(SU.shape(var))
             push!(scal, var)
             continue
