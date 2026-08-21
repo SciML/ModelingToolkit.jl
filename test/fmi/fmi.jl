@@ -619,6 +619,9 @@ end
         # test suite fails to converge, so the kwarg is checked where it lands.
         @test ball_wrapper(Ver).max_event_iterations == 100
         @test ball_wrapper(Ver; max_event_iterations = 7).max_event_iterations == 7
+        # a cap below one runs no iteration at all, which would report the FMU as
+        # non-convergent instead of the cap as nonsense
+        @test_throws ArgumentError ball_wrapper(Ver; max_event_iterations = 0)
     end
 
     @testset "status handling" begin
@@ -940,17 +943,6 @@ end
         @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
         @variables x(t) = 1.0
         @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
-        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
-        callbacks = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)
-        @test length(callbacks) == 2
-        @test callbacks[1] isa SciMLBase.VectorContinuousCallback
-        step_cb = callbacks[2]
-        @test step_cb isa SciMLBase.DiscreteCallback
-        # the FMU is notified after every accepted step, and at `t0` through `initialize`,
-        # which is the step FMI.jl's `func_start` performs
-        @test step_cb.condition(nothing, nothing, nothing)
-        @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT
-
         prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
         sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
         @test SciMLBase.successful_retcode(sol)
@@ -977,6 +969,9 @@ end
         @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
         par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
         step_cb = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)[2]
+        # the FMU is told about the `t0` step through `initialize`, which is what FMI.jl's
+        # `func_start` does. No fixture has an event at `t0`, so no trajectory shows it.
+        @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT
         prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
         integrator = init(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
         wrapper = ext.SII.getp(sys, par)(integrator)

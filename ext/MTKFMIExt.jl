@@ -96,9 +96,9 @@ Record the result of the event iteration performed while leaving initialization 
 """
 function handle_initial_event_iteration!(wrapper, event_result)
     if event_result.terminate
-        # we tear the instance down before erroring because it is in Event Mode, where the
-        # state exchange a retried solve performs is illegal. Terminating from Event Mode is
-        # legal in both FMI versions.
+        # we tear the instance down before erroring because a retried solve would set states
+        # on it, which Event Mode forbids. Terminating from Event Mode is legal in both FMI
+        # versions.
         reset_instance!(wrapper)
         error(
             "FMU $(FMI.getModelName(wrapper.fmu)) requested termination of the simulation \
@@ -187,7 +187,8 @@ Base.@kwdef struct FMUEventMetadata
     n_event_indicators::Int
     "Whether the FMU may signal time events. `true` for Model Exchange FMUs."
     can_have_time_events::Bool
-    "Whether the interface in use has event mode. Model Exchange and FMI2 CoSimulation do not."
+    "Whether a CoSimulation import supports Event Mode. `false` for Model Exchange imports, \
+    which enter it for every event, and for FMI2 CoSimulation, which has no Event Mode."
     cs_has_event_mode::Bool
     "Component-relative names of the continuous states of the FMU."
     state_names::Vector{Symbol}
@@ -255,10 +256,10 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         if idx === nothing
             no_event_access = "The continuous state $resolved of the FMU wrapped by \
                 $(getname(wrapper_param)) is not an unknown of the simplified system, so \
-                the value it takes after an FMU event cannot be written back. It has to \
-                stay an unknown: mark it `irreducible = true` if simplification removes \
-                it, and do not declare it an input of the compiled system, which takes it \
-                out of the unknowns as well."
+                the value it takes after an FMU event cannot be written back. Declaring a \
+                state an input of the compiled system is what takes it out of the unknowns. \
+                An FMU declaring no event indicators does not have its states marked \
+                `irreducible = true` at import, so simplification can remove them too."
             break
         end
         push!(state_idxs, idx)
@@ -472,6 +473,9 @@ function MTK.FMIComponent(
     end
     if type == :CS && communication_step_size === nothing
         throw(ArgumentError("`communication_step_size` must be specified for Co-Simulation FMUs."))
+    end
+    if max_event_iterations < 1
+        throw(ArgumentError("`max_event_iterations` must be at least `1`."))
     end
     # mapping from MTK variable to value reference
     value_references = Dict()
