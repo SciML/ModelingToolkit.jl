@@ -192,8 +192,7 @@ ModelingToolkit.IfLifting
 ## Event handling
 
 Time-dependent systems may have several events. These are used to trigger discontinuities
-in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`, as do any
-callbacks contributed by a `CallbackConstructionHook` attached to a parameter of the system.
+in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`.
 
 ```@docs
 ModelingToolkit.SymbolicContinuousCallback

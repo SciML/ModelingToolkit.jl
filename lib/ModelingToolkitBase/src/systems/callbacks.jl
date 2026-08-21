@@ -1602,10 +1602,12 @@ merge_cb(x, y) = CallbackSet(x, y)
 """
     struct CallbackConstructionHook end
 
-Symbolics metadata key attaching a callback-building hook to a parameter, via
-`setmetadata(param, CallbackConstructionHook, hook)`. The hook is called as
-`hook(sys, param) -> Vector{<:SciMLBase.DECallback}` during `process_events`, once per
-parameter carrying the key, and the returned callbacks are appended to the problem's callbacks.
+Symbolics metadata key for attaching a callback-building hook to a parameter, via
+`setmetadata(param, CallbackConstructionHook, hook)`.
+
+The hook must be callable as `hook(sys, param) -> Vector{<:SciMLBase.DECallback}`. It runs once
+per parameter carrying this key during problem construction, and the callbacks it returns are
+added to the problem's callbacks.
 """
 struct CallbackConstructionHook end
 
