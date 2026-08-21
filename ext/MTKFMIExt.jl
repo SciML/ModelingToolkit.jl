@@ -20,12 +20,14 @@ const t = t_nounits
 const D = D_nounits
 
 """
-    $(TYPEDSIGNATURES)
+    fmu_status_is_error(::Val{fmi_version}, status, fnname)
 
-Whether `status`, returned by the FMI version 2 function `fnname`, is a failure.
-`fmi2StatusWarning` is not a failure: the standard allows the computation to continue, so it
-is only logged.
+Whether `status`, returned by the FMI function `fnname`, is a failure. `Val{2}` and `Val{3}`
+select the status constants of the FMI version in use. A warning status is not a failure: the
+standard allows the computation to continue, so it is only logged.
 """
+function fmu_status_is_error end
+
 function fmu_status_is_error(::Val{2}, status, fnname)
     status === nothing && return false
     status == FMI.fmi2StatusOK && return false
@@ -36,13 +38,6 @@ function fmu_status_is_error(::Val{2}, status, fnname)
     return true
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Whether `status`, returned by the FMI version 3 function `fnname`, is a failure.
-`fmi3StatusWarning` is not a failure: the standard allows the computation to continue, so it
-is only logged.
-"""
 function fmu_status_is_error(::Val{3}, status, fnname)
     status === nothing && return false
     status == FMI.fmi3StatusOK && return false
@@ -54,13 +49,14 @@ function fmu_status_is_error(::Val{3}, status, fnname)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    @statuscheck FMI.fmiXFunction(...)
 
-A utility macro for FMI.jl functions that return a status. Frees the instance and errors on a
-failing status, terminating it first unless the status is fatal. Must be used as
-`@statuscheck FMI.fmiXFunction(...)` where `X` should be `2` or `3`. Evaluates to the value
-returned by the wrapped call, so callers can consume the extra outputs of functions such as
-`FMI.fmi2CompletedIntegratorStep`, which return their status as the first element of a tuple.
+Check the status an FMI.jl function returned, where `X` is `2` or `3`. On a failing status this
+frees the instance and errors, terminating it first unless the status is fatal.
+
+Evaluates to whatever the wrapped call returned, so callers keep the extra outputs of functions
+like `FMI.fmi2CompletedIntegratorStep`. Those return their status as the first element of a
+tuple, which is where this looks for it.
 """
 macro statuscheck(expr)
     @assert Meta.isexpr(expr, :call)
@@ -106,8 +102,8 @@ Record the result of the event iteration performed while leaving initialization 
 """
 function handle_initial_event_iteration!(wrapper, event_result)
     if event_result.terminate
-        # the instance is in Event Mode, where the state exchange a retried solve performs is
-        # illegal, so a caught error must not leave it reusable. Terminating from Event Mode is
+        # we tear the instance down before erroring because it is in Event Mode, where the
+        # state exchange a retried solve performs is illegal. Terminating from Event Mode is
         # legal in both FMI versions.
         reset_instance!(wrapper)
         error(
@@ -179,48 +175,32 @@ consumers can find it by scanning `parameters` of the compiled system.
 Names are component-relative because metadata is opaque to `renamespace`; use
 [`resolve_relative`](@ref) to obtain the name in the namespace of the wrapper parameter.
 
-The fields this version's runtime does not consume (`fmi_version`, `interface`, `state_vrs`,
-`can_have_time_events` and `cs_has_event_mode` outside import), along with the
-`nominals_changed` result of the event iteration, are inputs for the clocks follow-up.
+The fields this version's runtime does not consume (`fmi_version`, `interface`,
+`state_value_references`, `can_have_time_events` and `cs_has_event_mode` outside import),
+along with the `nominals_changed` result of the event iteration, are inputs for the clocks
+follow-up.
 
 # Fields
 
 $(TYPEDFIELDS)
 """
 Base.@kwdef struct FMUEventMetadata
-    """
-    The FMI version of the FMU, `2` or `3`.
-    """
+    "The FMI version of the FMU, `2` or `3`."
     fmi_version::Int
-    """
-    The FMU interface in use, `:ME` or `:CS`.
-    """
+    "The FMU interface in use, `:ME` or `:CS`."
     interface::Symbol
-    """
-    The number of event indicators the FMU declares.
-    """
+    "The number of event indicators the FMU declares."
     n_event_indicators::Int
-    """
-    Whether the FMU may signal time events. `true` for Model Exchange FMUs.
-    """
+    "Whether the FMU may signal time events. `true` for Model Exchange FMUs."
     can_have_time_events::Bool
-    """
-    Whether event mode is supported by the interface in use. Always `false` for Model
-    Exchange imports and for FMI2 CoSimulation.
-    """
+    "Whether the interface in use has event mode. Model Exchange and FMI2 CoSimulation do not."
     cs_has_event_mode::Bool
-    """
-    Component-relative names of the continuous states of the FMU.
-    """
+    "Component-relative names of the continuous states of the FMU."
     state_names::Vector{Symbol}
-    """
-    Component-relative names of the inputs of the FMU.
-    """
+    "Component-relative names of the inputs of the FMU."
     input_names::Vector{Symbol}
-    """
-    Value references of the continuous states of the FMU, ordered as `state_names`.
-    """
-    state_vrs::Vector
+    "Value references of the continuous states of the FMU, ordered as `state_names`."
+    state_value_references::Vector
 end
 
 """
@@ -247,30 +227,29 @@ cs_event_mode_supported(::FMI.FMU2) = false
 
 function cs_event_mode_supported(fmu::FMI.FMU3)
     coSimulation = fmu.modelDescription.coSimulation
-    return coSimulation !== nothing && coSimulation.hasEventMode === true
+    return !isnothing(coSimulation) && coSimulation.hasEventMode === true
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Build the callbacks handling the events of the Model Exchange FMU whose instance wrapper is
-the parameter `wrapper_param` of the compiled system `sys`. Attached to `wrapper_param` as
-`ModelingToolkit.CallbackConstructionHook` metadata, which calls this during problem
-construction.
+Build the event callbacks for the Model Exchange FMU wrapped by the parameter `wrapper_param`
+of the compiled system `sys`. This is the `ModelingToolkit.CallbackConstructionHook` attached
+to `wrapper_param`, so it runs during problem construction.
 
-The state events of the FMU become a single `VectorContinuousCallback` over all of its event
-indicators, which an FMU declaring none does not get. Every Model Exchange FMU also gets a
-`DiscreteCallback` with an always-true condition, which notifies it of each accepted
-integrator step and handles the step events it may report there.
+Every Model Exchange FMU gets a `DiscreteCallback` with an always-true condition, which
+notifies it of each accepted integrator step and handles the step events it reports there. An
+FMU that declares event indicators also gets one `VectorContinuousCallback` covering all of
+them; one that declares none does not.
 """
 function build_fmu_me_callbacks(sys, wrapper_param)
     meta = SymbolicUtils.getmetadata(
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
     )
     get_wrapper = SII.getp(sys, wrapper_param)
-    # `nothing` while the FMU's state and inputs can be exchanged with the integrator, and the
-    # reason they cannot otherwise. Handling an event needs both: the continuous states to
-    # write the post-event values back into, and the inputs to evaluate at the event point.
+    # `nothing` if the integrator can exchange state and inputs with the FMU, else the reason
+    # it cannot. An event needs both: states to write the post-event values back into, and
+    # inputs to evaluate at the event point.
     no_event_access = nothing
     state_idxs = Int[]
     for name in meta.state_names
@@ -293,9 +272,8 @@ function build_fmu_me_callbacks(sys, wrapper_param)
             # have to be evaluated there too rather than read off the integrator
             get_inputs = SII.observed(sys, input_names)
         catch err
-            # building the getter is the only honest test of whether the inputs can be
-            # evaluated: `is_observed` is true for every symbol the system does not know as
-            # something else, including one it does not contain at all
+            # we build the getter to test the inputs because `is_observed` is true for any
+            # symbol the system does not know as something else, even one it lacks entirely
             no_event_access = "The inputs $input_names of the FMU wrapped by \
                 $(getname(wrapper_param)) cannot be evaluated as functions of the state of \
                 the simplified system, so the FMU cannot be moved to an event point. Prevent \
@@ -303,9 +281,9 @@ function build_fmu_me_callbacks(sys, wrapper_param)
                 Building their getter failed with: $(sprint(showerror, err))"
         end
     end
-    # a state event is only meaningful if its result can be written back, so an FMU that
-    # declares event indicators has to have that access; one that declares none is still told
-    # about completed steps, and only a step event it requests then needs the write-back
+    # an FMU with event indicators needs that access up front, because a state event is
+    # pointless if its result cannot be written back. An FMU with none is still told about
+    # completed steps, and needs the access only if it requests a step event.
     if no_event_access !== nothing && meta.n_event_indicators > 0
         error(no_event_access)
     end
@@ -344,9 +322,9 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         event_result = do_fmu_event_iteration!(wrapper)
         if event_result.terminate
             SciMLBase.terminate!(integrator)
-            # a terminating FMU is left in Event Mode, where `SetContinuousStates` and
-            # `CompletedIntegratorStep` are illegal, so the interpolant rebuild that follows
-            # an affect must not evaluate the RHS. Nothing is stepped after `terminate!`.
+            # we suppress the discontinuity because a terminating FMU stays in Event Mode,
+            # where the calls the interpolant rebuild makes are illegal. Nothing is stepped
+            # after `terminate!`, so nothing needs that rebuild.
             SciMLBase.derivative_discontinuity!(integrator, false)
             return nothing
         end
@@ -364,11 +342,11 @@ function build_fmu_me_callbacks(sys, wrapper_param)
     # notify the FMU of the step and return whether it asks for Event Mode, which is the only
     # outcome its caller has to treat as a discontinuity
     function fmu_step_event_occurred!(integrator)
-        # a terminating event leaves the FMU in Event Mode, where none of the calls below are
-        # legal, and SciML applies the discrete callbacks after a continuous one terminated.
-        # `check_error!` stores `Success` in the retcode of a solve that is still in flight,
-        # so those are the two codes that mean "nothing has ended this solve".
+        # we bail unless the solve is in flight, because SciML still applies discrete callbacks
+        # after a continuous one terminated, and a terminated FMU is in Event Mode where none
+        # of the calls below are legal.
         retcode = integrator.sol.retcode
+        # `check_error!` stores `Success` mid-solve, so these are the two in-flight codes
         in_flight = retcode === SciMLBase.ReturnCode.Default ||
             retcode === SciMLBase.ReturnCode.Success
         in_flight || return false
@@ -376,10 +354,9 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         # the instance is created by the first evaluation of the FMU, which an FMU that only
         # feeds observed equations may not have seen by the time this initializes
         wrapper.instance === nothing && return false
-        # error control and (for an implicit solver) the Jacobian leave the FMU at points
-        # other than the accepted one, which is the step it has to be told about. Without
-        # exchangeable states there is nothing to push, which is what FMI.jl's `stepCompleted`
-        # does for every FMU.
+        # we push the accepted state because error control and (for an implicit solver) the
+        # Jacobian leave the FMU at other points. Without exchangeable states there is nothing
+        # to push, which is what FMI.jl's `stepCompleted` does for every FMU.
         no_event_access === nothing &&
             push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
         step_result = partiallyCompleteIntegratorStep(wrapper)
@@ -399,16 +376,16 @@ function build_fmu_me_callbacks(sys, wrapper_param)
                     a state event. $no_event_access"
                 )
             end
-            # every callback ahead of this one clears the flag during the callback-initialize
-            # phase (`SciMLBase.INITIALIZE_DEFAULT`), so the write-back has to declare itself.
-            # On the `apply_discrete_callback!` path the flag is already true.
+            # we set the flag ourselves because every callback ahead of this one clears it
+            # during the callback-initialize phase (`SciMLBase.INITIALIZE_DEFAULT`). On the
+            # `apply_discrete_callback!` path it is already true.
             SciMLBase.derivative_discontinuity!(integrator, true)
             # a step event has no triggered event indicator
             return fmu_event_affect!(integrator, nothing)
         end
-        # every affect is assumed to be a discontinuity, which for a system with a singular
-        # mass matrix reinitializes and thereby overwrites `u`. A step the FMU accepts as-is
-        # changes nothing, so this must clear the assumption on every non-event path.
+        # we clear the flag on every non-event path because the assumed discontinuity
+        # reinitializes a singular-mass-matrix system and overwrites `u`, while a step the FMU
+        # accepts as-is changed nothing.
         SciMLBase.derivative_discontinuity!(integrator, false)
         return nothing
     end
@@ -417,11 +394,10 @@ function build_fmu_me_callbacks(sys, wrapper_param)
         return fmu_step_completed!(integrator)
     end
 
-    # a callback that leaves a discontinuity standing has the integrator reinitialize, which
-    # for a singular mass matrix means solving for consistent initial conditions again. The
-    # problem's own algorithm is MTK's `OverrideInit`, which resets `u` to `u0` and would throw
-    # away exactly the post-event states the affect just wrote, so both callbacks name an
-    # algorithm that keeps the differential states and re-solves only the algebraic variables.
+    # we name an algorithm on both callbacks because a standing discontinuity reinitializes the
+    # integrator, and the problem's own `OverrideInit` would reset `u` to `u0` and throw away
+    # the post-event states the affect just wrote. This one keeps the differential states and
+    # re-solves only the algebraic variables.
     event_initializealg = DiffEqBase.BrownFullBasicInit()
 
     callbacks = SciMLBase.DECallback[]
@@ -430,9 +406,8 @@ function build_fmu_me_callbacks(sys, wrapper_param)
             callbacks,
             SciMLBase.VectorContinuousCallback(
                 fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
-                # FMI defines an event as a domain change, so the FMU has to be past the
-                # switch when it enters Event Mode; localizing on the pre-crossing side would
-                # have it refresh its relations to the old domain and not handle the event
+                # we need RightRootFind because the FMU has to be past the switch when it
+                # enters Event Mode: https://fmi-standard.org/docs/3.0.2/#state-event
                 rootfind = SciMLBase.RightRootFind, interp_points = 10,
                 save_positions = (true, true), initializealg = event_initializealg
             )
@@ -479,10 +454,9 @@ with the name `namespace__variable`.
   be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
   CoSimulation FMU respectively.
-- `ignore_time_events`: Time events are not supported, and by default an FMU declaring one
-  errors. If this is `true`, a declared time event is instead warned about once per FMU
-  instance and ignored, which changes the trajectory the FMU would otherwise have taken. A
-  solve creates one instance for a Model Exchange FMU and at least two for a CoSimulation one.
+- `ignore_time_events`: Time events are not supported, so by default an FMU declaring one
+  errors. Set this to `true` to warn once per FMU instance and ignore the event instead, which
+  changes the trajectory the FMU would otherwise have taken.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(
@@ -669,7 +643,7 @@ function MTK.FMIComponent(
         cs_has_event_mode = type == :CS && cs_event_mode_supported(fmu),
         state_names = Symbol[getname(var) for var in diffvars],
         input_names = Symbol[getname(var) for var in inputs],
-        state_vrs = state_value_references
+        state_value_references
     )
     # `setmetadata` returns a new symbolic and unwraps the callable parameter, so the
     # rewrapped result is what has to be spliced into the system below.
@@ -918,30 +892,18 @@ mutable struct FMI2InstanceWrapper
     The tolerance with which to setup the FMU instance.
     """
     const tolerance::FMI.fmi2Real
-    """
-    Whether the continuous states of the FMU may be set after it leaves initialization mode.
-    `false` if any of them is declared as an output, since FMI forbids setting an output
-    outside initialization mode.
-    """
+    "Whether the continuous states of the FMU may be set after it leaves initialization mode. \
+    `false` if any is an output, which FMI forbids setting outside initialization mode."
     const states_settable_after_init::Bool
-    """
-    Whether a time event declared by the FMU should be warned about and ignored instead of
-    being an error.
-    """
+    "Whether a time event the FMU declares is warned about and ignored instead of erroring."
     const ignore_time_events::Bool
     """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU2Component{FMI.FMU2}, Nothing}
-    """
-    The time of the next event reported by the most recent event iteration, or `nothing` if
-    the FMU did not declare one.
-    """
+    "The next event time from the most recent event iteration, or `nothing` if there is none."
     next_event_time::Union{Nothing, Float64}
-    """
-    Whether the warning about an ignored time event has already been emitted for the current
-    instance.
-    """
+    "Whether the ignored-time-event warning has already been emitted for this instance."
     time_event_warned::Bool
     """
     Continuous state buffer pre-allocated to avoid simulation allocations.
@@ -955,10 +917,7 @@ mutable struct FMI2InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi2Real}
-    """
-    Buffer for the FMU's continuous states, re-read from the FMU whenever an event iteration
-    reports that the values of the continuous states changed.
-    """
+    "Buffer for the continuous states, re-read when an event iteration reports them changed."
     const event_states_buffer::Vector{FMI.fmi2Real}
 end
 
@@ -1237,30 +1196,18 @@ mutable struct FMI3InstanceWrapper
     to functions involving this wrapper.
     """
     const input_value_references::Vector{FMI.fmi3ValueReference}
-    """
-    Whether the continuous states of the FMU may be set after it leaves initialization mode.
-    `false` if any of them is declared as an output, since FMI forbids setting an output
-    outside initialization mode.
-    """
+    "Whether the continuous states of the FMU may be set after it leaves initialization mode. \
+    `false` if any is an output, which FMI forbids setting outside initialization mode."
     const states_settable_after_init::Bool
-    """
-    Whether a time event declared by the FMU should be warned about and ignored instead of
-    being an error.
-    """
+    "Whether a time event the FMU declares is warned about and ignored instead of erroring."
     const ignore_time_events::Bool
     """
     The FMU instance, if present, and `nothing` otherwise.
     """
     instance::Union{FMI.FMU3Instance{FMI.FMU3}, Nothing}
-    """
-    The time of the next event reported by the most recent event iteration, or `nothing` if
-    the FMU did not declare one.
-    """
+    "The next event time from the most recent event iteration, or `nothing` if there is none."
     next_event_time::Union{Nothing, Float64}
-    """
-    Whether the warning about an ignored time event has already been emitted for the current
-    instance.
-    """
+    "Whether the ignored-time-event warning has already been emitted for this instance."
     time_event_warned::Bool
     """
     Continuous state buffer pre-allocated to avoid simulation allocations.
@@ -1274,10 +1221,7 @@ mutable struct FMI3InstanceWrapper
     Return buffer caching state and output arrays to eliminate return vcat allocations.
     """
     const res_buffer::Vector{FMI.fmi3Float64}
-    """
-    Buffer for the FMU's continuous states, re-read from the FMU whenever an event iteration
-    reports that the values of the continuous states changed.
-    """
+    "Buffer for the continuous states, re-read when an event iteration reports them changed."
     const event_states_buffer::Vector{FMI.fmi3Float64}
 end
 

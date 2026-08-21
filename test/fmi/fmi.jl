@@ -407,7 +407,7 @@ end
         @test meta.n_event_indicators == 2
         @test meta.can_have_time_events
         @test !meta.cs_has_event_mode
-        @test Set(zip(meta.state_names, meta.state_vrs)) ==
+        @test Set(zip(meta.state_names, meta.state_value_references)) ==
             Set([(:mass_s, 0x02000000), (:mass_v, 0x02000001)])
         @test isempty(meta.input_names)
         @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
@@ -444,7 +444,7 @@ end
         @test meta.n_event_indicators == 32
         @test meta.can_have_time_events
         @test !meta.cs_has_event_mode
-        @test Set(zip(meta.state_names, meta.state_vrs)) ==
+        @test Set(zip(meta.state_names, meta.state_value_references)) ==
             Set([(:mass__s, 0x02000000), (:mass__v, 0x02000001)])
         @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
     end
@@ -495,7 +495,7 @@ end
         @test MTK.getname(par) == :wrapper
         @test meta.n_event_indicators == 0
         @test meta.state_names == [:x]
-        @test meta.state_vrs == [0x0000000b]
+        @test meta.state_value_references == [0x0000000b]
         @test meta.input_names == [:u]
         @test ext.resolve_relative(par, :x) === :x
     end
