@@ -141,7 +141,8 @@ end
 
 @testset "Equation classification" begin
     algebraic = ComponentSystem(
-        [0 ~ p - x], [x], [p], t, :algebraic, MT.AbstractSystem[])
+        [0 ~ p - x], [x], [p], t, :algebraic, MT.AbstractSystem[]
+    )
 
     @test has_diff_equations(leaf)
     @test !has_alg_equations(leaf)
