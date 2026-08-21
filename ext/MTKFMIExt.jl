@@ -240,7 +240,7 @@ them; one that declares none does not.
 function build_fmu_me_callbacks(sys, wrapper_param)
     meta = SymbolicUtils.getmetadata(
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
-    )
+    )::FMUEventMetadata
     get_wrapper = SII.getp(sys, wrapper_param)
     # `nothing` if the integrator can exchange state and inputs with the FMU, else the reason
     # it cannot. An event needs both: states to write the post-event values back into, and
@@ -290,139 +290,146 @@ function build_fmu_me_callbacks(sys, wrapper_param)
     state_buffer = zeros(Float64, length(state_idxs))
     input_buffer = zeros(Float64, length(input_names))
 
-    function push_fmu_event_state!(wrapper, u, p, t)
-        for (i, idx) in enumerate(state_idxs)
-            state_buffer[i] = u[idx]
+    # the closures below are the callbacks. They capture with an explicit `let` because
+    # `no_event_access` and `get_inputs` are assigned above after their initialization, which
+    # would otherwise box them in the capture.
+    return let get_wrapper = get_wrapper, wrapper_param = wrapper_param,
+            no_event_access = no_event_access, get_inputs = get_inputs,
+            state_idxs = state_idxs, state_buffer = state_buffer, input_buffer = input_buffer
+        function push_fmu_event_state!(wrapper, u, p, t)
+            for (i, idx) in enumerate(state_idxs)
+                state_buffer[i] = u[idx]
+            end
+            if get_inputs !== nothing
+                copyto!(input_buffer, get_inputs(u, p, t))
+            end
+            return force_set_fmu_state!(wrapper, state_buffer, input_buffer, t)
         end
-        if get_inputs !== nothing
-            copyto!(input_buffer, get_inputs(u, p, t))
-        end
-        return force_set_fmu_state!(wrapper, state_buffer, input_buffer, t)
-    end
 
-    function fmu_event_condition!(out, u, t, integrator)
-        wrapper = get_wrapper(integrator)
-        # the instance is created by the first evaluation of the FMU, and unlike a completed
-        # step an event indicator has no value without one
-        if wrapper.instance === nothing
-            error(
-                "The event indicators of the FMU wrapped by $(getname(wrapper_param)) cannot \
-                be evaluated before the FMU is instantiated, which the first evaluation of \
-                its dynamics does."
-            )
+        function fmu_event_condition!(out, u, t, integrator)
+            wrapper = get_wrapper(integrator)
+            # the instance is created by the first evaluation of the FMU, and unlike a completed
+            # step an event indicator has no value without one
+            if wrapper.instance === nothing
+                error(
+                    "The event indicators of the FMU wrapped by $(getname(wrapper_param)) cannot \
+                    be evaluated before the FMU is instantiated, which the first evaluation of \
+                    its dynamics does."
+                )
+            end
+            push_fmu_event_state!(wrapper, u, integrator.p, t)
+            return get_fmu_event_indicators!(wrapper, out)
         end
-        push_fmu_event_state!(wrapper, u, integrator.p, t)
-        return get_fmu_event_indicators!(wrapper, out)
-    end
 
-    function fmu_event_affect!(integrator, idx)
-        wrapper = get_wrapper(integrator)
-        push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
-        enter_fmu_event_mode!(wrapper, idx)
-        event_result = do_fmu_event_iteration!(wrapper)
-        if event_result.terminate
-            SciMLBase.terminate!(integrator)
-            # we suppress the discontinuity because a terminating FMU stays in Event Mode,
-            # where the calls the interpolant rebuild makes are illegal. Nothing is stepped
-            # after `terminate!`, so nothing needs that rebuild.
+        function fmu_event_affect!(integrator, idx)
+            wrapper = get_wrapper(integrator)
+            push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
+            enter_fmu_event_mode!(wrapper, idx)
+            event_result = do_fmu_event_iteration!(wrapper)
+            if event_result.terminate
+                SciMLBase.terminate!(integrator)
+                # we suppress the discontinuity because a terminating FMU stays in Event Mode,
+                # where the calls the interpolant rebuild makes are illegal. Nothing is stepped
+                # after `terminate!`, so nothing needs that rebuild.
+                SciMLBase.derivative_discontinuity!(integrator, false)
+                return nothing
+            end
+            states = leave_fmu_event_mode!(wrapper, event_result.values_changed)
+            if states !== nothing
+                for (i, state_idx) in enumerate(state_idxs)
+                    integrator.u[state_idx] = states[i]
+                end
+            end
+            wrapper.next_event_time = event_result.next_event_time
+            handle_fmu_time_event!(wrapper, event_result.next_event_time)
+            return nothing
+        end
+
+        # notify the FMU of the step and return whether it asks for Event Mode, which is the only
+        # outcome its caller has to treat as a discontinuity
+        function fmu_step_event_occurred!(integrator)
+            # we bail unless the solve is in flight, because SciML still applies discrete callbacks
+            # after a continuous one terminated, and a terminated FMU is in Event Mode where none
+            # of the calls below are legal.
+            retcode = integrator.sol.retcode
+            # `check_error!` stores `Success` mid-solve, so these are the two in-flight codes
+            in_flight = retcode === SciMLBase.ReturnCode.Default ||
+                retcode === SciMLBase.ReturnCode.Success
+            in_flight || return false
+            wrapper = get_wrapper(integrator)
+            # the instance is created by the first evaluation of the FMU, which an FMU that only
+            # feeds observed equations may not have seen by the time this initializes
+            wrapper.instance === nothing && return false
+            # we push the accepted state because error control and (for an implicit solver) the
+            # Jacobian leave the FMU at other points. Without exchangeable states there is nothing
+            # to push, which is what FMI.jl's `stepCompleted` does for every FMU.
+            no_event_access === nothing &&
+                push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
+            step_result = partiallyCompleteIntegratorStep(wrapper)
+            if step_result.terminate
+                SciMLBase.terminate!(integrator)
+                return false
+            end
+            return step_result.enter_event_mode
+        end
+
+        function fmu_step_completed!(integrator)
+            if fmu_step_event_occurred!(integrator)
+                if no_event_access !== nothing
+                    error(
+                        "The FMU declares no event indicators but requested Event Mode from a \
+                        completed integrator step, which needs the same access to its states as \
+                        a state event. $no_event_access"
+                    )
+                end
+                # we set the flag ourselves because every callback ahead of this one clears it
+                # during the callback-initialize phase (`SciMLBase.INITIALIZE_DEFAULT`). On the
+                # `apply_discrete_callback!` path it is already true.
+                SciMLBase.derivative_discontinuity!(integrator, true)
+                # a step event has no triggered event indicator
+                return fmu_event_affect!(integrator, nothing)
+            end
+            # we clear the flag on every non-event path because the assumed discontinuity
+            # reinitializes a singular-mass-matrix system and overwrites `u`, while a step the FMU
+            # accepts as-is changed nothing.
             SciMLBase.derivative_discontinuity!(integrator, false)
             return nothing
         end
-        states = leave_fmu_event_mode!(wrapper, event_result.values_changed)
-        if states !== nothing
-            for (i, state_idx) in enumerate(state_idxs)
-                integrator.u[state_idx] = states[i]
-            end
-        end
-        wrapper.next_event_time = event_result.next_event_time
-        handle_fmu_time_event!(wrapper, event_result.next_event_time)
-        return nothing
-    end
 
-    # notify the FMU of the step and return whether it asks for Event Mode, which is the only
-    # outcome its caller has to treat as a discontinuity
-    function fmu_step_event_occurred!(integrator)
-        # we bail unless the solve is in flight, because SciML still applies discrete callbacks
-        # after a continuous one terminated, and a terminated FMU is in Event Mode where none
-        # of the calls below are legal.
-        retcode = integrator.sol.retcode
-        # `check_error!` stores `Success` mid-solve, so these are the two in-flight codes
-        in_flight = retcode === SciMLBase.ReturnCode.Default ||
-            retcode === SciMLBase.ReturnCode.Success
-        in_flight || return false
-        wrapper = get_wrapper(integrator)
-        # the instance is created by the first evaluation of the FMU, which an FMU that only
-        # feeds observed equations may not have seen by the time this initializes
-        wrapper.instance === nothing && return false
-        # we push the accepted state because error control and (for an implicit solver) the
-        # Jacobian leave the FMU at other points. Without exchangeable states there is nothing
-        # to push, which is what FMI.jl's `stepCompleted` does for every FMU.
-        no_event_access === nothing &&
-            push_fmu_event_state!(wrapper, integrator.u, integrator.p, integrator.t)
-        step_result = partiallyCompleteIntegratorStep(wrapper)
-        if step_result.terminate
-            SciMLBase.terminate!(integrator)
-            return false
+        function fmu_step_initialize(cb, u, t, integrator)
+            return fmu_step_completed!(integrator)
         end
-        return step_result.enter_event_mode
-    end
 
-    function fmu_step_completed!(integrator)
-        if fmu_step_event_occurred!(integrator)
-            if no_event_access !== nothing
-                error(
-                    "The FMU declares no event indicators but requested Event Mode from a \
-                    completed integrator step, which needs the same access to its states as \
-                    a state event. $no_event_access"
+        # we name an algorithm on both callbacks because a standing discontinuity reinitializes the
+        # integrator, and the problem's own `OverrideInit` would reset `u` to `u0` and throw away
+        # the post-event states the affect just wrote. This one keeps the differential states and
+        # re-solves only the algebraic variables.
+        event_initializealg = DiffEqBase.BrownFullBasicInit()
+
+        callbacks = SciMLBase.DECallback[]
+        if meta.n_event_indicators > 0
+            push!(
+                callbacks,
+                SciMLBase.VectorContinuousCallback(
+                    fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
+                    # we need RightRootFind because the FMU has to be past the switch when it
+                    # enters Event Mode: https://fmi-standard.org/docs/3.0.2/#state-event
+                    rootfind = SciMLBase.RightRootFind, interp_points = 10,
+                    save_positions = (true, true), initializealg = event_initializealg
                 )
-            end
-            # we set the flag ourselves because every callback ahead of this one clears it
-            # during the callback-initialize phase (`SciMLBase.INITIALIZE_DEFAULT`). On the
-            # `apply_discrete_callback!` path it is already true.
-            SciMLBase.derivative_discontinuity!(integrator, true)
-            # a step event has no triggered event indicator
-            return fmu_event_affect!(integrator, nothing)
+            )
         end
-        # we clear the flag on every non-event path because the assumed discontinuity
-        # reinitializes a singular-mass-matrix system and overwrites `u`, while a step the FMU
-        # accepts as-is changed nothing.
-        SciMLBase.derivative_discontinuity!(integrator, false)
-        return nothing
-    end
-
-    function fmu_step_initialize(cb, u, t, integrator)
-        return fmu_step_completed!(integrator)
-    end
-
-    # we name an algorithm on both callbacks because a standing discontinuity reinitializes the
-    # integrator, and the problem's own `OverrideInit` would reset `u` to `u0` and throw away
-    # the post-event states the affect just wrote. This one keeps the differential states and
-    # re-solves only the algebraic variables.
-    event_initializealg = DiffEqBase.BrownFullBasicInit()
-
-    callbacks = SciMLBase.DECallback[]
-    if meta.n_event_indicators > 0
         push!(
             callbacks,
-            SciMLBase.VectorContinuousCallback(
-                fmu_event_condition!, fmu_event_affect!, meta.n_event_indicators;
-                # we need RightRootFind because the FMU has to be past the switch when it
-                # enters Event Mode: https://fmi-standard.org/docs/3.0.2/#state-event
-                rootfind = SciMLBase.RightRootFind, interp_points = 10,
-                save_positions = (true, true), initializealg = event_initializealg
+            SciMLBase.DiscreteCallback(
+                Returns(true), fmu_step_completed!;
+                # `initialize` gives the FMU the `t0` step FMI.jl's `func_start` does
+                initialize = fmu_step_initialize, save_positions = (false, false),
+                initializealg = event_initializealg
             )
         )
+        callbacks
     end
-    push!(
-        callbacks,
-        SciMLBase.DiscreteCallback(
-            Returns(true), fmu_step_completed!;
-            # `initialize` gives the FMU the `t0` step FMI.jl's `func_start` does
-            initialize = fmu_step_initialize, save_positions = (false, false),
-            initializealg = event_initializealg
-        )
-    )
-    return callbacks
 end
 
 """
