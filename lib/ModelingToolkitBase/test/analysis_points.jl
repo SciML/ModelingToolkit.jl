@@ -1212,7 +1212,7 @@ if @isdefined(ModelingToolkit)
         import ModelingToolkitTearing as MTKTearing
         @testset "Clock information inferred from removed sections is retained" begin
             # The model is such that the clocks of variables in `Middle` and `End` are
-            # only inferrable from the `Sample`s in `Provider`. Since `Provider` and `End`
+            # only inferable from the `Sample`s in `Provider`. Since `Provider` and `End`
             # are removed by `isolate_subsystem`, ordinarily this would infer `Provider`'s
             # variables as continuous. This is incorrect, and clock information from
             # the full system should be used to ensure correct clock propagation in the
