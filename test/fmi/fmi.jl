@@ -386,6 +386,12 @@ end
 
 @testset "FMU event metadata" begin
     ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
+    # the variables of `component` that are continuous states of its FMU
+    function state_variables(component, meta)
+        vars = [var for var in unknowns(component) if MTK.getname(var) in meta.state_names]
+        @test length(vars) == length(meta.state_names)
+        return vars
+    end
     # every parameter of `sys` carrying `FMUEventMetadata`, with its metadata
     function event_metadata(sys)
         return [
@@ -411,6 +417,10 @@ end
             Set([(:mass_s, 0x02000000), (:mass_v, 0x02000001)])
         @test isempty(meta.input_names)
         @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
+        # a Model Exchange FMU that declares event indicators can have events, and an event
+        # writes the values it produces for the continuous states into the integrator's `u`,
+        # so the import keeps them out of simplification
+        @test all(MTK.isirreducible, state_variables(ball, meta))
     end
 
     @testset "v2, CS" begin
@@ -430,6 +440,9 @@ end
         @test !meta.cs_has_event_mode
         @test Set(meta.state_names) == Set([:mass_s, :mass_v])
         @test ext.resolve_relative(par, :mass_s) === :ball₊mass_s
+        # a CoSimulation FMU integrates its own states, which never enter the integrator's
+        # `u`, so nothing keeps them out of simplification
+        @test !any(MTK.isirreducible, state_variables(ball, meta))
     end
 
     @testset "v3, ME" begin
@@ -498,6 +511,9 @@ end
         @test meta.state_value_references == [0x0000000b]
         @test meta.input_names == [:u]
         @test ext.resolve_relative(par, :x) === :x
+        # an FMU with no event indicators has no state event to write back, so its states are
+        # left to simplification and it falls back to being notified of completed steps
+        @test !any(MTK.isirreducible, state_variables(sspace, meta))
     end
 end
 
@@ -551,9 +567,9 @@ end
 
     # the instance wrapper is the default value of the callable parameter `FMIComponent`
     # creates for it
-    function ball_wrapper(Ver)
+    function ball_wrapper(Ver; kwargs...)
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
-        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME, kwargs...)
         return MTK.getdefault(
             only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
         )
@@ -596,6 +612,13 @@ end
         @test ext.partiallyCompleteIntegratorStep(wrapper) ==
             (; enter_event_mode = false, terminate = false)
         ext.reset_instance!(wrapper)
+    end
+
+    @testset "the iteration cap is per FMU, v$Ver" for Ver in (2, 3)
+        # the cap lives on the instance wrapper, so every FMU carries its own. No FMU in the
+        # test suite fails to converge, so the kwarg is checked where it lands.
+        @test ball_wrapper(Ver).max_event_iterations == 100
+        @test ball_wrapper(Ver; max_event_iterations = 7).max_event_iterations == 7
     end
 
     @testset "status handling" begin
@@ -896,24 +919,6 @@ end
 @testset "FMU step events" begin
     ext = Base.get_extension(ModelingToolkit, :MTKFMIExt)
 
-    @testset "the ME functor does not complete integrator steps" begin
-        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
-        @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
-        wrapper = MTK.getdefault(
-            only(p for p in parameters(ball) if MTK.getname(p) == :wrapper)
-        )
-        method = which(
-            wrapper, Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}, Float64}
-        )
-        lines = split(read(String(method.file), String), '\n')
-        stop = method.line - 1 + findfirst(==("end"), @view lines[method.line:end])
-        functor_source = join(lines[method.line:stop], '\n')
-        @test occursin("get_instance_ME!", functor_source)
-        # completing a step per evaluation told the FMU that rejected steps, root-search
-        # points and interpolation points were accepted steps
-        @test !occursin(r"Complete[d]?IntegratorStep", functor_source)
-    end
-
     @testset "the ME functor reads outputs before derivatives" begin
         fmu = loadFMU(joinpath(FMU_DIR, "SimpleAdder.fmu"); type = :ME)
         @named adder = MTK.FMIComponent(Val(2); fmu, type = :ME)
@@ -930,7 +935,7 @@ end
         ext.reset_instance!(wrapper)
     end
 
-    @testset "per-accepted-step callback, BouncingBall v$Ver, ME" for Ver in (2, 3)
+    @testset "per-accepted-step notification, BouncingBall v$Ver, ME" for Ver in (2, 3)
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
         @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
         @variables x(t) = 1.0
@@ -941,60 +946,53 @@ end
         @test callbacks[1] isa SciMLBase.VectorContinuousCallback
         step_cb = callbacks[2]
         @test step_cb isa SciMLBase.DiscreteCallback
-        # fires after every accepted step, and saves nothing of its own since an accepted
-        # step is not a discontinuity
+        # the FMU is notified after every accepted step, and at `t0` through `initialize`,
+        # which is the step FMI.jl's `func_start` performs
         @test step_cb.condition(nothing, nothing, nothing)
-        @test step_cb.save_positions == [false, false]
+        @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT
 
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        velocities = sol[ball.v]
+        duplicated_times = findall(i -> sol.t[i] == sol.t[i + 1], 1:(length(sol.t) - 1))
+        # an accepted step is not a discontinuity, so the notification saves nothing of its
+        # own: every duplicated time in the solution is an event, and the FMU bounced the
+        # ball at each of them
+        @test length(duplicated_times) >= 2
+        @test all(i -> velocities[i] < 0 <= velocities[i + 1], duplicated_times)
+        @test minimum(sol[ball.h]) >= -1.0e-8
+        # the rest of the system is untouched by the notification: `x` decays from 1 for the
+        # whole solve
+        @test sol[x][end] ≈ exp(-3.0) rtol = 1.0e-5
+    end
+
+    @testset "the notification stays out of the FMU where FMI forbids it, v$Ver" for Ver in
+        (2, 3)
+        # no FMU in the suite requests termination, and an illegal call is refused by the FMU
+        # rather than observable in a trajectory, so these two paths are driven directly
+        fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
+        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @variables x(t) = 1.0
+        @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
+        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
+        step_cb = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)[2]
         prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
         integrator = init(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
         wrapper = ext.SII.getp(sys, par)(integrator)
-        # the instance is created by the first RHS evaluation, which the integrator performs
-        # before it initializes the callbacks, so the step callback finds one at `t0`
-        @test wrapper.instance !== nothing
 
-        u_before = copy(integrator.u)
-        # `apply_discrete_callback!` assumes a discontinuity unless the affect clears it,
-        # which for a system with a singular mass matrix reinitializes and overwrites `u`
-        SciMLBase.derivative_discontinuity!(integrator, true)
-        step_cb.affect!(integrator)
-        @test integrator.u == u_before
-        @test !integrator.derivative_discontinuity
-        # `initialize` runs the same body, which is FMI.jl's `func_start`
-        @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT
-        @test step_cb.initialize(step_cb, integrator.u, integrator.t, integrator) === nothing
-        @test !integrator.derivative_discontinuity
-
-        # a solve in flight carries `Success` in its retcode, not `Default`: `check_error!`
-        # stores it once stepping starts
-        SciMLBase.step!(integrator)
-        @test integrator.sol.retcode == SciMLBase.ReturnCode.Success
-        # error control and an implicit solver's Jacobian leave the FMU away from the accepted
-        # step, so the callback has to push the accepted point back into it before completing
-        # the step. `instance.t` is what the FMU was last told the time is.
-        ext.force_set_fmu_state!(wrapper, Float64[], Float64[], integrator.t + 0.5)
-        @test wrapper.instance.t == integrator.t + 0.5
-        SciMLBase.derivative_discontinuity!(integrator, true)
-        step_cb.affect!(integrator)
-        @test wrapper.instance.t == integrator.t
-        @test !integrator.derivative_discontinuity
-
-        # an FMU with no instance yet has no completed step to report, and the paths that
-        # tell it nothing must not leave the assumed discontinuity behind either
+        # an FMU with no instance has no completed step to report
         ext.reset_instance!(wrapper)
-        SciMLBase.derivative_discontinuity!(integrator, true)
         @test step_cb.affect!(integrator) === nothing
         @test wrapper.instance === nothing
-        @test !integrator.derivative_discontinuity
 
-        # a terminating event leaves the FMU in Event Mode, where the calls this makes are
-        # illegal, and SciML applies discrete callbacks after a continuous one terminated
+        # a terminating event leaves the FMU in Event Mode, where the calls the notification
+        # makes are illegal, and SciML applies discrete callbacks after a continuous one
+        # terminated the solve
         ext.get_instance_ME!(wrapper, Float64[], Float64[], integrator.t)
         SciMLBase.terminate!(integrator)
         ext.enter_fmu_event_mode!(wrapper, nothing)
-        SciMLBase.derivative_discontinuity!(integrator, true)
         @test step_cb.affect!(integrator) === nothing
-        @test !integrator.derivative_discontinuity
         # the FMU was left alone, so it is still in Event Mode
         @test ext.leave_fmu_event_mode!(wrapper, false) === nothing
         ext.reset_instance!(wrapper)
@@ -1084,19 +1082,36 @@ end
         @test_throws ArgumentError ext.SII.observed(sys, [:totally_bogus])
     end
 
-    @testset "an FMU with event indicators needs its states writable" begin
+    @testset "an FMU with event indicators keeps its states writable" begin
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
         @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @variables y(t) = 1.0
-        sys = MTK.mtkcompile(
+        # the import marks the states of an FMU with event indicators irreducible, so
+        # simplification keeps them as unknowns and the events have somewhere to write to
+        @mtkcompile sys = System([D(y) ~ -y], t; systems = [ball])
+        @test ext.SII.variable_index(sys, ball.h) !== nothing
+        @test ext.SII.variable_index(sys, ball.v) !== nothing
+        prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        velocities = sol[ball.v]
+        bounces = findall(i -> sol.t[i] == sol.t[i + 1], 1:(length(sol.t) - 1))
+        @test length(bounces) >= 2
+        @test all(i -> velocities[i] < 0 <= velocities[i + 1], bounces)
+
+        # declaring a state an input of the compiled system takes it out of the unknowns
+        # regardless, and a state event that cannot write its result back would silently do
+        # nothing, so an FMU declaring event indicators still fails loudly at construction
+        sys_input = MTK.mtkcompile(
             System([D(y) ~ -y], t; systems = [ball], name = :outer); inputs = [ball.v]
         )
-        par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
-        # a state event that cannot write its result back would silently do nothing, so an
-        # FMU declaring event indicators keeps failing loudly at construction
-        @test_throws "irreducible = true" MTK.getmetadata(
+        @test ext.SII.variable_index(sys_input, ball.v) === nothing
+        par = only(
+            p for p in parameters(sys_input) if MTK.hasmetadata(p, ext.FMUEventMetadata)
+        )
+        @test_throws "cannot be written back" MTK.getmetadata(
             par, CallbackConstructionHook
-        )(sys, par)
+        )(sys_input, par)
     end
 end
 
