@@ -34,9 +34,44 @@ be wrong mid-sweep.
         expression = Val{false}, λspan = (0.0, 1.0),
         check_length = true, check_compatibility = true,
         eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true, kwargs...
+        checkbounds = false, kwargs...
     ) where {iip, spec}
     if expression !== Val{false}
+        throw(
+            ArgumentError(
+                "`HomotopyProblem(sys, op)` does not yet support " *
+                    "`expression = Val{true}`; build the problem directly " *
+                    "(the default `expression = Val{false}`)."
+            )
+        )
+    end
+    if is_time_dependent(sys)
+        sys = NonlinearSystem(sys)
+    end
+    fn_opts = SciMLFunctionOptions(;
+        eval_expression, eval_module, checkbounds, check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return HomotopyProblem{iip, spec}(sys, op, opts; λspan, kwargs...)
+end
+
+"""
+    SciMLBase.HomotopyProblem{iip, spec}(sys::System, op, opts::SciMLProblemOptions; λspan = (0.0, 1.0), kwargs...)
+
+Public entry point that builds a `HomotopyProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.HomotopyProblem{iip, spec}(
+        sys::System, op, opts::SciMLProblemOptions{E};
+        λspan = (0.0, 1.0), kwargs...
+    ) where {iip, spec, E}
+    if E
         throw(
             ArgumentError(
                 "`HomotopyProblem(sys, op)` does not yet support " *
@@ -49,7 +84,7 @@ be wrong mid-sweep.
     if is_time_dependent(sys)
         sys = NonlinearSystem(sys)
     end
-    check_compatibility && check_compatible_system(SciMLBase.NonlinearProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(SciMLBase.NonlinearProblem, sys)
     if !has_any_homotopy(sys)
         throw(
             ArgumentError(
@@ -63,18 +98,19 @@ be wrong mid-sweep.
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SciMLBase.NonlinearFunction{_iip, spec}, sys, op;
-        check_length, check_compatibility, expression,
-        eval_expression, eval_module, checkbounds, cse, kwargs...
+        SciMLBase.NonlinearFunction{_iip, spec}, sys, op, opts; options_struct = Val(true),
+        kwargs...
     )
 
     # Swap the opaque-`actual` residual for the homotopy-swept `f(u, p, λ)`. The
     # observed function and residual prototype carry over; `initialization_data`,
     # jacobian, and sparsity are deliberately not carried (the latter two encode
     # the `λ = 1` system and would be wrong mid-sweep).
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    checkbounds = opts.fn_opts.codegen.codegen.checkbounds
     shadow, λ = lower_homotopy(sys)
     hf = generate_homotopy_residual(
-        shadow, λ; eval_expression, eval_module, checkbounds, cse
+        shadow, λ; eval_expression, eval_module, checkbounds
     )
     swept_f = SciMLBase.NonlinearFunction{_iip}(
         hf; sys = f.sys, observed = f.observed, resid_prototype = f.resid_prototype
@@ -83,6 +119,6 @@ be wrong mid-sweep.
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f = swept_f, u0, p)
     return maybe_codegen_scimlproblem(
-        expression, SciMLBase.HomotopyProblem{_iip}, args; λspan, kwargs...
+        Val{E}, SciMLBase.HomotopyProblem{_iip}, args; λspan, kwargs...
     )
 end

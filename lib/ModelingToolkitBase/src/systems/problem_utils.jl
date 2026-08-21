@@ -1809,6 +1809,11 @@ Like `SciMLFunctionOptions`, this struct does not attempt to hold every keyword 
 `*Function` constructor might recognize (e.g. `jac`, `steady_state`, or any other
 constructor-specific extra) — `__process_SciMLProblem` still takes a trailing `kwargs...`
 for those, forwarded blindly to `constructor` exactly as before.
+
+The keyword constructor takes (and drops) a trailing `kwargs...`, matching
+`SciMLFunctionOptions`: this lets a `*Problem` constructor's own kwargs wrapper splat its
+full keyword bag in here to pick up any recognized override, without erroring on the
+constructor-specific extras that live outside this struct.
 """
 struct SciMLProblemOptions{expression}
     fn_opts::SciMLFunctionOptions{expression}
@@ -1843,6 +1848,25 @@ struct SciMLProblemOptions{expression}
     init_compiler_options::CompilerOptions
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Every field name of [`SciMLProblemOptions`](@ref)/[`SciMLFunctionOptions`](@ref)/
+`GeneratedFunctionOptions`/`Symbolics.CodegenFunctionOptions`, plus `:ddvs`. Used by
+`__process_SciMLProblem` to strip redundant option-struct keywords out of a `*Problem`
+constructor's residual `kwargs` before calling a `*Function`'s opts-accepting method
+directly (which, unlike its keyword-based wrapper, has no generic `kwargs...` sink to
+silently absorb them). This situation arises because `*Problem` constructors reachable as
+`InitializationProblem`'s `TProb` (e.g. `NonlinearProblem`) receive a `kwargs` bag that
+legitimately carries these names for their own opts construction, which then becomes
+redundant baggage once `opts` itself is built and passed along.
+"""
+const SCIML_FN_OPTS_KWARG_NAMES = (
+    fieldnames(SciMLProblemOptions)..., fieldnames(SciMLFunctionOptions)...,
+    fieldnames(GeneratedFunctionOptions)..., fieldnames(Symbolics.CodegenFunctionOptions)...,
+    :ddvs,
+)
+
 function SciMLProblemOptions(
         sys::AbstractSystem;
         fn_opts::SciMLFunctionOptions{E},
@@ -1864,6 +1888,7 @@ function SciMLProblemOptions(
         allow_incomplete::Bool = false, is_initializeprob::Bool = false,
         is_steadystateprob::Bool = false, return_operating_point::Bool = false,
         init_compiler_options::CompilerOptions = CompilerOptions(),
+        kwargs...
     ) where {E}
     if !(guesses isa SymmapT)
         guesses = anydict(guesses)
@@ -1884,6 +1909,39 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Return `opts` with `opts.fn_opts.t` derived from `tspan[1]` (or `tspan` itself, when it is
+`nothing`) if it isn't already set. The keyword-based `*Problem` constructors always set
+`t` explicitly when building `opts` from `tspan`, so this only matters for a caller that
+builds `opts` directly and calls the `(sys, op, tspan, opts::SciMLProblemOptions)` method;
+it lets that caller skip `t` and still get the same defaulting.
+"""
+function maybe_derive_t_from_tspan(opts::SciMLProblemOptions, tspan)
+    opts.fn_opts.t === nothing || return opts
+    t = tspan !== nothing ? tspan[1] : tspan
+    return setproperties(opts; fn_opts = setproperties(opts.fn_opts; t))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return `constant_lags` with every symbolic entry (e.g. a reference to a parameter of `sys`,
+such as `sys.osc1.τ`) replaced by its concrete value as given by `p`. Non-symbolic entries
+(plain numbers baked in by the caller) are returned unchanged. Returns `missing` as-is.
+Used by `DDEProblem`/`SDDEProblem`, which accept `constant_lags` as a bespoke keyword that
+bypasses `process_SciMLProblem`'s `op`-based substitution entirely (it is never part of the
+system's unknowns or the operating point), so it must be resolved separately here using the
+already-built `p`.
+"""
+function resolve_constant_lags(sys::AbstractSystem, constant_lags, p)
+    constant_lags === missing && return constant_lags
+    return map(constant_lags) do cl
+        symbolic_type(cl) == NotSymbolic() ? cl : getp(sys, cl)(p)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
 to the `SciMLFunction` constructor. Requires the system `sys`, whether the resulting
 `SciMLFunction` is in-place (`iip`), the operating point `op`, initial time `t`, and
@@ -1898,7 +1956,7 @@ function maybe_build_initialization_problem(
         opts::SciMLProblemOptions;
         specialize = SciMLBase.AutoDespecialize,
         # Intercept `expression` because we don't support it here yet
-        expression = Val{false}, kwargs...
+        expression = Val{false},
     )
     (;
         floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
@@ -1918,7 +1976,7 @@ function maybe_build_initialization_problem(
 
     orig_op = copy(op)
     initializeprob = ModelingToolkitBase.InitializationProblem{iip, specialize}(
-        sys, t, op, opts; guesses, fast_path = true, kwargs...
+        sys, t, op, opts; guesses, fast_path = true
     )
     initsys = initializeprob.f.sys::System
     needs_remake = false
@@ -1967,7 +2025,7 @@ function maybe_build_initialization_problem(
     end
 
     get_initial_unknowns = if time_dependent_init
-        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
+        GetUpdatedU0(sys, initsys, op; eval_expression, eval_module)
     else
         nothing
     end
@@ -1978,7 +2036,7 @@ function maybe_build_initialization_problem(
         use_scc, time_dependent_init,
         ReconstructInitializeprob(
             sys, initsys; u0_constructor,
-            p_constructor, eval_expression, eval_module, is_steadystateprob, kwargs...
+            p_constructor, eval_expression, eval_module, is_steadystateprob
         ),
         get_initial_unknowns, SetInitialUnknowns(sys), missing_guess_value
     )
@@ -1994,11 +2052,14 @@ function maybe_build_initialization_problem(
                 PromoteToTunableEltype(
                     CopyParamsByTemplate(
                         initializeprob.f.sys, solved_unknowns;
-                        eval_expression, eval_module, kwargs...
+                        eval_expression, eval_module
                     ),
                     floatT
                 )
             )
+            if iip
+                initializeprobmap = __iip_u0_ad_wrapper ∘ initializeprobmap
+            end
         end
     else
         initializeprobmap = nothing
@@ -2013,7 +2074,7 @@ function maybe_build_initialization_problem(
         initializeprobpmap = nothing
     else
         initializeprobpmap = construct_initializeprobpmap(
-            sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
+            sys, initsys; p_constructor, eval_expression, eval_module
         )
     end
 
@@ -2179,7 +2240,7 @@ end
 
 function __process_SciMLProblem(
         @nospecialize(constructor), sys::AbstractSystem, op::AnyDict,
-        opts::SciMLProblemOptions; kwargs...
+        opts::SciMLProblemOptions; options_struct = Val(false), kwargs...
     )
     (;
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
@@ -2223,12 +2284,18 @@ function __process_SciMLProblem(
     end
 
     if build_initializeprob
+        # `kwargs` here is never anything but bespoke, `constructor`-specific extras (e.g.
+        # `steady_state`, `resid_prototype`) — everything `maybe_build_initialization_problem`
+        # and the `InitializationProblem`/`TProb` machinery it drives actually need is already
+        # captured by `opts`. Forwarding it further only serves to leak those extras deep
+        # into the (possibly quite different) `*Function` built for the initialization
+        # sub-problem, where they're meaningless at best and a hard error at worst.
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
             op, t, guesses, opts;
             specialize = initialization_specialization(
                 SciMLBase.specialization(constructor)
-            ), kwargs...
+            )
         )
 
         kwargs = merge(kwargs, kws)
@@ -2331,13 +2398,40 @@ function __process_SciMLProblem(
         )
     end
 
-    f = constructor(
-        sys; u0 = u0, p = p, t = t,
-        eval_expression = eval_expression,
-        eval_module = eval_module,
-        compiler_options,
-        kwargs...
-    )
+    if options_struct === Val(true)
+        # Call the `*Function`'s own opts-accepting method directly with `fn_opts`, rather
+        # than its keyword-based wrapper: `fn_opts` already holds every `SciMLFunctionOptions`
+        # field correctly, sidestepping the fragile "re-derive and re-forward each field by
+        # keyword" approach entirely. `u0`/`p`/`t` must be refreshed since `fn_opts.u0` etc.
+        # still hold the original, pre-processing request values; `initialization_data`
+        # (freshly computed by `maybe_build_initialization_problem` above, if it ran) must be
+        # injected the same way, since — unlike the keyword-based wrappers — the
+        # opts-accepting methods have no generic `kwargs...` sink to catch it as a loose
+        # keyword. The rest of `kwargs` is stripped of anything matching a known
+        # option-struct field name (see `SCIML_FN_OPTS_KWARG_NAMES`) — `*Problem`
+        # constructors reachable as `InitializationProblem`'s `TProb` receive a `kwargs`
+        # bag that redundantly carries these (legitimate for their own opts construction,
+        # meaningless here now that `opts`/`fn_opts` already reflect them) — keeping only
+        # genuinely bespoke extras (`resid_prototype`, `steady_state`, `nlstep`, ...). It is
+        # also stripped of `SciMLBase.allowedkeywords` — solve-time keywords like `abstol`/
+        # `reltol` that a `*Problem` constructor's caller is entitled to pass through to be
+        # stored in `prob.kwargs` for `solve`, but which the `*Function` opts-accepting
+        # method (with no `kwargs...` sink) would otherwise reject outright.
+        initialization_data = get(kwargs, :initialization_data, fn_opts.initialization_data)
+        fn_opts = setproperties(fn_opts; u0, p, t, initialization_data)
+        kwargs = Base.structdiff(
+            kwargs, NamedTuple{(SCIML_FN_OPTS_KWARG_NAMES..., SciMLBase.allowedkeywords...)}
+        )
+        f = constructor(sys, fn_opts; kwargs...)
+    else
+        f = constructor(
+            sys; u0 = u0, p = p, t = t,
+            eval_expression = eval_expression,
+            eval_module = eval_module,
+            compiler_options,
+            kwargs...
+        )
+    end
     if return_operating_point
         return implicit_dae ? (f, du0, u0, p, op) : (f, u0, p, op)
     else

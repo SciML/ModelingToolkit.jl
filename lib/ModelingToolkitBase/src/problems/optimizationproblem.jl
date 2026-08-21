@@ -115,13 +115,34 @@ function SciMLBase.OptimizationProblem{iip}(
         ub = nothing, check_compatibility = true, expression = Val{false},
         kwargs...
     ) where {iip}
+    fn_opts = SciMLFunctionOptions(; check_compatibility, expression, kwargs...)
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, tofloat = false, check_length = false,
+        build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return OptimizationProblem{iip}(sys, op, opts; lb, ub, kwargs...)
+end
+
+"""
+    SciMLBase.OptimizationProblem{iip}(sys::System, op, opts::SciMLProblemOptions; lb = nothing, ub = nothing, kwargs...)
+
+Public entry point that builds an `OptimizationProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.OptimizationProblem{iip}(
+        sys::System, op, opts::SciMLProblemOptions{E};
+        lb = nothing, ub = nothing, kwargs...
+    ) where {iip, E}
     check_complete(sys, OptimizationProblem)
-    check_compatibility && check_compatible_system(OptimizationProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(OptimizationProblem, sys)
 
     f, u0,
         p = process_SciMLProblem(
-        OptimizationFunction{iip}, sys, op;
-        check_compatibility, tofloat = false, check_length = false, expression, kwargs...
+        OptimizationFunction{iip}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
     dvs = unknowns(sys)
@@ -166,7 +187,7 @@ function SciMLBase.OptimizationProblem{iip}(
     kwargs = process_kwargs(sys; kwargs...)
     kwargs = (; lb, ub, int, lcons, ucons, kwargs...)
     args = (; f, u0, p)
-    return maybe_codegen_scimlproblem(expression, OptimizationProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, OptimizationProblem{iip}, args; kwargs...)
 end
 
 function check_compatible_system(

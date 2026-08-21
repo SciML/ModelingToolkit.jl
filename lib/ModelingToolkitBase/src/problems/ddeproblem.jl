@@ -64,29 +64,63 @@ end
         sys::System, op, tspan;
         callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
-        u0_constructor = identity, expression = Val{false}, kwargs...
+        u0_constructor = identity, expression = Val{false}, constant_lags = missing,
+        kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        checkbounds, check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, symbolic_u0 = true, u0_constructor,
+        build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return DDEProblem{iip, spec}(sys, op, tspan, opts; callback, constant_lags, kwargs...)
+end
+
+"""
+    SciMLBase.DDEProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; callback = nothing, kwargs...)
+
+Public entry point that builds a `DDEProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+
+`constant_lags` (default `missing`, meaning "not explicitly provided by the caller") is an
+explicit keyword here — not part of `kwargs` — since it's relevant only to the final
+`SciMLBase.DDEProblem` construction, not the inner `DDEFunction` build; the opts-accepting
+`DDEFunction` method has no generic `kwargs...` sink to harmlessly absorb it the way its
+keyword-based wrapper does.
+"""
+function SciMLBase.DDEProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E};
+        callback = nothing, constant_lags = missing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, DDEProblem)
-    check_compatibility && check_compatible_system(DDEProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(DDEProblem, sys)
+
+    opts = maybe_derive_t_from_tspan(opts, tspan)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        DDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, checkbounds,
-        eval_expression, eval_module, check_compatibility, symbolic_u0 = true,
-        expression, u0_constructor, kwargs...
+        DDEFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
+    (; u0_constructor) = opts
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    checkbounds = opts.fn_opts.codegen.codegen.checkbounds
     h = generate_history(
         sys, u0,
         GeneratedFunctionOptions(;
-            expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+            expression = Val{E}, wrap_gfw = Val{true}, eval_expression, eval_module,
             codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
         )
     )
 
-    if expression == Val{true}
+    if E
         if u0 !== nothing
             u0 = :($u0_constructor($map($float, h(p, tspan[1]))))
         end
@@ -97,11 +131,14 @@ end
     end
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, tspan, kwargs...
+        sys; expression = Val{E}, callback, eval_expression, eval_module, op, tspan, kwargs...
     )
     args = (; f, u0, h, tspan, p)
+    constant_lags = resolve_constant_lags(sys, constant_lags, p)
+    constant_lags_kw = constant_lags === missing ? (;) : (; constant_lags)
+    kwargs = (; constant_lags_kw..., kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, DDEProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, DDEProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Union{Type{DDEFunction}, Type{DDEProblem}}, sys::System)

@@ -60,8 +60,30 @@ end
         sys::System, op, tspan;
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return DiscreteProblem{iip, spec}(sys, op, tspan, opts; kwargs...)
+end
+
+"""
+    SciMLBase.DiscreteProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds a `DiscreteProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.DiscreteProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E}; kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, DiscreteProblem)
-    check_compatibility && check_compatible_system(DiscreteProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
     _iip = resolve_iip(iip, op)
     dvs = unknowns(sys)
@@ -69,12 +91,10 @@ end
     add_toterms!(op; replace = true)
     f, u0,
         p = process_SciMLProblem(
-        DiscreteFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
-        kwargs...
+        DiscreteFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
-    if expression == Val{true}
+    if E
         u0 = :(f($u0, p, tspan[1]))
     else
         u0 = f(u0, p, tspan[1])
@@ -83,7 +103,7 @@ end
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, DiscreteProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, DiscreteProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(
