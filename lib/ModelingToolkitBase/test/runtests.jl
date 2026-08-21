@@ -108,6 +108,9 @@ end
         @safetestset "Debugging Test" include("debugging.jl")
         @safetestset "Namespacing test" include("namespacing.jl")
         @safetestset "LinearProblem Tests" include("linearproblem.jl")
+    end
+
+    if GROUP == "All" || GROUP == "BVP"
         @safetestset "Optimal Control + Constraints Tests" include("bvproblem.jl")
     end
 
