@@ -36,10 +36,8 @@ are `calculate_*` equivalents to obtain the symbolic result without building a f
 ```@docs
 ModelingToolkit.calculate_tgrad
 ModelingToolkit.calculate_jacobian
-ModelingToolkitBase.jacobian_sparsity
 ModelingToolkit.jacobian_dae_sparsity
 ModelingToolkit.calculate_hessian
-ModelingToolkitBase.hessian_sparsity
 ModelingToolkit.calculate_massmatrix
 ModelingToolkit.W_sparsity
 ModelingToolkit.calculate_W_prototype

@@ -51,7 +51,7 @@ Clock inference happens via the `ClockInference` data structure. This and most o
 the passes are now implemented in StateSelection.jl and ModelingToolkitTearing.jl. Refer to the
 clock inference section for details on how it works.
 
-Discrete partitions are handled via the `additional_passes` machanism. The first pass implementing
+Discrete partitions are handled via the `additional_passes` mechanism. The first pass implementing
 the `discrete_compile_pass` trait is used as the discrete compiler. It is called here and provided
 the results of clock inference along with the simplified continuous subsystem. This pass should
 then compile the discrete partitions and return a modified version of the system it is passed in.
@@ -89,7 +89,7 @@ applied to this matrix. In doing so, the equations are written down in a simpler
 useful for the later tearing pass. The Bareiss implementation uses a custom pivot selection
 algorithm. Variables present only in such integer-linear-coefficient equations are preferred
 as pivots, since they must be solved by one of these equations. The next preference is
-for highest order derivative variables, and then any remaning variables.
+for highest order derivative variables, and then any remaining variables.
 
 This pass often rewrites more equations into perfect alias form. Thus, we rerun
 `eliminate_perfect_aliases!` after it.
@@ -410,7 +410,7 @@ added to `parent_hyperedge`. If `InferVariableClosure` gets an operator call, it
 do the same but also process each argument _if_ the operator satisfies the
 `is_timevarying_operator` trait. Operators satisfying this trait implement `input_timedomain`
 and `output_timedomain`. The former returns an array of clock domains for each of the
-arguments, and the latter a single time domain for its output. They are not expeceted to
+arguments, and the latter a single time domain for its output. They are not expected to
 return concrete domains, but rather to use `InferredDiscrete`. `InferredDiscrete` takes
 an integer index. For a given operator call, multiple `InferredDiscrete`s in `input_timedomain`
 or `output_timedomain` with the same index have the same unknown clock. For example:
