@@ -84,9 +84,9 @@ end
     @test isequal(MT.get_iv(leaf), t)
 
     # `get_x` on absent storage throws, so generic code has to guard it with `has_x`.
-    @test_throws ErrorException MT.get_eqs(minimal)
-    @test_throws ErrorException MT.get_unknowns(minimal)
-    @test_throws ErrorException MT.get_ps(minimal)
+    @test_throws FieldError MT.get_eqs(minimal)
+    @test_throws FieldError MT.get_unknowns(minimal)
+    @test_throws FieldError MT.get_ps(minimal)
 
     # The event accessors are the documented exceptions: they default to empty.
     @test MT.has_continuous_events(minimal) == false
