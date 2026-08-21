@@ -89,12 +89,6 @@ macro statuscheck(expr)
 end
 
 """
-The maximum number of `fmiXNewDiscreteStates`/`fmiXUpdateDiscreteStates` calls allowed in a
-single event iteration before it is considered non-convergent.
-"""
-const MAX_EVENT_ITERATIONS = 100
-
-"""
     $(TYPEDSIGNATURES)
 
 Record the result of the event iteration performed while leaving initialization mode on
@@ -252,14 +246,19 @@ function build_fmu_me_callbacks(sys, wrapper_param)
     # inputs to evaluate at the event point.
     no_event_access = nothing
     state_idxs = Int[]
+    # the import marks the states of an FMU with event indicators irreducible, so simplification
+    # keeps them. They can still be missing here, because declaring one an input of the compiled
+    # system takes it out of the unknowns regardless.
     for name in meta.state_names
         resolved = resolve_relative(wrapper_param, name)
         idx = SII.variable_index(sys, resolved)
         if idx === nothing
             no_event_access = "The continuous state $resolved of the FMU wrapped by \
                 $(getname(wrapper_param)) is not an unknown of the simplified system, so \
-                the value it takes after an FMU event cannot be written back. Prevent it \
-                from being simplified away, for example with `irreducible = true`."
+                the value it takes after an FMU event cannot be written back. It has to \
+                stay an unknown: mark it `irreducible = true` if simplification removes \
+                it, and do not declare it an input of the compiled system, which takes it \
+                out of the unknowns as well."
             break
         end
         push!(state_idxs, idx)
@@ -457,12 +456,16 @@ with the name `namespace__variable`.
 - `ignore_time_events`: Time events are not supported, so by default an FMU declaring one
   errors. Set this to `true` to warn once per FMU instance and ignore the event instead, which
   changes the trajectory the FMU would otherwise have taken.
+- `max_event_iterations`: How many rounds one event iteration of this FMU may take before it
+  errors as non-convergent. The default is 100; an FMU with many interdependent discrete
+  relations may need more.
 - `name`: The name of the system.
 """
 function MTK.FMIComponent(
         ::Val{Ver}; fmu = nothing, tolerance = 1.0e-6,
         communication_step_size = nothing, reinitializealg = nothing,
-        stop_time = nothing, ignore_time_events = false, type, name
+        stop_time = nothing, ignore_time_events = false, max_event_iterations = 100,
+        type, name
     ) where {Ver}
     if Ver != 2 && Ver != 3
         throw(ArgumentError("FMI Version must be `2` or `3`"))
@@ -488,6 +491,8 @@ function MTK.FMIComponent(
     # since they aren't included in CS FMUs
     der_observed = Equation[]
 
+    n_event_indicators = Int(something(FMI.getNumberOfEventIndicators(fmu), 0))
+
     # parse states
     fmi_variables_to_mtk_variables!(
         fmu, FMI.getStateValueReferencesAndNames(fmu),
@@ -501,6 +506,20 @@ function MTK.FMIComponent(
     )
     canonical_position = var -> canonical_state_index[value_references[var]]
     sort!(diffvars; by = canonical_position)
+    # a Model Exchange FMU that declares event indicators can have events, and an event writes
+    # the values it produces for the continuous states back into the integrator's `u`. We keep
+    # the states out of simplification so that they are there to write into. Only the true
+    # state variables are marked: an extra name for one of them stays an alias.
+    if type == :ME && n_event_indicators > 0
+        for (i, var) in enumerate(diffvars)
+            # this is what `@variables x [irreducible = true]` sets
+            irreducible_var = SymbolicUtils.setmetadata(
+                var, MTKBase.VariableIrreducible, true
+            )
+            states[findfirst(isequal(var), states)] = irreducible_var
+            diffvars[i] = irreducible_var
+        end
+    end
     # create a symbolic variable __mtk_internal_u to pass to the relevant registered
     # functions as the state vector
     if isempty(diffvars)
@@ -626,19 +645,18 @@ function MTK.FMIComponent(
         @parameters (wrapper::FMI2InstanceWrapper)(..)[1:buffer_length] = FMI2InstanceWrapper(
             fmu, derivative_value_references, state_value_references, output_value_references,
             param_value_references, input_value_references, tolerance,
-            states_settable_after_init, ignore_time_events
+            states_settable_after_init, ignore_time_events, max_event_iterations
         )
     else
         @parameters (wrapper::FMI3InstanceWrapper)(..)[1:buffer_length] = FMI3InstanceWrapper(
             fmu, derivative_value_references, state_value_references,
             output_value_references, param_value_references, input_value_references,
-            states_settable_after_init, ignore_time_events
+            states_settable_after_init, ignore_time_events, max_event_iterations
         )
     end
 
     event_metadata = FMUEventMetadata(;
-        fmi_version = Ver, interface = type,
-        n_event_indicators = Int(something(FMI.getNumberOfEventIndicators(fmu), 0)),
+        fmi_version = Ver, interface = type, n_event_indicators,
         can_have_time_events = type == :ME,
         cs_has_event_mode = type == :CS && cs_event_mode_supported(fmu),
         state_names = Symbol[getname(var) for var in diffvars],
@@ -897,6 +915,9 @@ mutable struct FMI2InstanceWrapper
     const states_settable_after_init::Bool
     "Whether a time event the FMU declares is warned about and ignored instead of erroring."
     const ignore_time_events::Bool
+    "How many `fmi2NewDiscreteStates` calls one event iteration may make before it is \
+    considered non-convergent."
+    const max_event_iterations::Int
     """
     The FMU instance, if present, and `nothing` otherwise.
     """
@@ -926,8 +947,8 @@ end
 
 Create an `FMI2InstanceWrapper` with no instance.
 """
-function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true, ignore_time_events = false)
-    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, ignore_time_events, nothing, nothing, false, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)), zeros(FMI.fmi2Real, length(states)))
+function FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init = true, ignore_time_events = false, max_event_iterations = 100)
+    return FMI2InstanceWrapper(fmu, ders, states, outputs, params, inputs, tolerance, states_settable_after_init, ignore_time_events, max_event_iterations, nothing, nothing, false, zeros(FMI.fmi2Real, length(states)), zeros(FMI.fmi2Real, length(outputs)), zeros(FMI.fmi2Real, length(states) + length(outputs)), zeros(FMI.fmi2Real, length(states)))
 end
 
 Base.nameof(::FMI2InstanceWrapper) = :FMI2InstanceWrapper
@@ -978,7 +999,7 @@ function do_fmu_event_iteration!(wrapper::FMI2InstanceWrapper)
     nominals_changed = false
     next_event_time = nothing
     terminate = false
-    for _ in 1:MAX_EVENT_ITERATIONS
+    for _ in 1:(wrapper.max_event_iterations)
         eventInfo = FMI.fmi2NewDiscreteStates(wrapper.instance)
         values_changed |= eventInfo.valuesOfContinuousStatesChanged == FMI.fmi2True
         nominals_changed |= eventInfo.nominalsOfContinuousStatesChanged == FMI.fmi2True
@@ -994,8 +1015,8 @@ function do_fmu_event_iteration!(wrapper::FMI2InstanceWrapper)
     # exchange state from, so a caught error must not leave it reusable
     reset_instance!(wrapper)
     return error(
-        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
-        event iterations."
+        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in \
+        $(wrapper.max_event_iterations) event iterations."
     )
 end
 
@@ -1201,6 +1222,9 @@ mutable struct FMI3InstanceWrapper
     const states_settable_after_init::Bool
     "Whether a time event the FMU declares is warned about and ignored instead of erroring."
     const ignore_time_events::Bool
+    "How many `fmi3UpdateDiscreteStates` calls one event iteration may make before it is \
+    considered non-convergent."
+    const max_event_iterations::Int
     """
     The FMU instance, if present, and `nothing` otherwise.
     """
@@ -1230,8 +1254,8 @@ end
 
 Create an `FMI3InstanceWrapper` with no instance.
 """
-function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true, ignore_time_events = false)
-    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, ignore_time_events, nothing, nothing, false, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)), zeros(FMI.fmi3Float64, length(states)))
+function FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init = true, ignore_time_events = false, max_event_iterations = 100)
+    return FMI3InstanceWrapper(fmu, ders, states, outputs, params, inputs, states_settable_after_init, ignore_time_events, max_event_iterations, nothing, nothing, false, zeros(FMI.fmi3Float64, length(states)), zeros(FMI.fmi3Float64, length(outputs)), zeros(FMI.fmi3Float64, length(states) + length(outputs)), zeros(FMI.fmi3Float64, length(states)))
 end
 
 Base.nameof(::FMI3InstanceWrapper) = :FMI3InstanceWrapper
@@ -1280,7 +1304,7 @@ function do_fmu_event_iteration!(wrapper::FMI3InstanceWrapper)
     nominals_changed = false
     next_event_time = nothing
     terminate = false
-    for _ in 1:MAX_EVENT_ITERATIONS
+    for _ in 1:(wrapper.max_event_iterations)
         needs_update, terminate_simulation, states_nominals_changed,
             states_values_changed, event_time_defined,
             event_time = FMI.fmi3UpdateDiscreteStates(wrapper.instance)
@@ -1298,8 +1322,8 @@ function do_fmu_event_iteration!(wrapper::FMI3InstanceWrapper)
     # exchange state from, so a caught error must not leave it reusable
     reset_instance!(wrapper)
     return error(
-        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in $MAX_EVENT_ITERATIONS \
-        event iterations."
+        "FMU $(FMI.getModelName(wrapper.fmu)) did not converge in \
+        $(wrapper.max_event_iterations) event iterations."
     )
 end
 
