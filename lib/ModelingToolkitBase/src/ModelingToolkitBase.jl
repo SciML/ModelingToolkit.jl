@@ -405,6 +405,7 @@ export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_func
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
+export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
 export generate_control_function, build_explicit_observed_function
@@ -452,6 +453,7 @@ export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
     CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
 export MissingGuessValue
+export MiscSystemData
 
 export AssignmentAffect
 

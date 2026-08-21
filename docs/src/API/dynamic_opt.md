@@ -30,6 +30,7 @@ ModelingToolkitBase.InfiniteOptCollocation
 ModelingToolkitBase.CasADiCollocation
 ModelingToolkitBase.PyomoCollocation
 ModelingToolkitBase.DynamicOptSolution
+CommonSolve.solve(::SciMLBase.AbstractDynamicOptProblem, ::ModelingToolkitBase.AbstractCollocation)
 ```
 
 ### Problem constructors

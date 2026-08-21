@@ -12,6 +12,7 @@ ModelingToolkit.generate_W
 ModelingToolkit.generate_dae_jacobian
 ModelingToolkit.generate_history
 ModelingToolkit.generate_boundary_conditions
+ModelingToolkitBase.generate_trajectory
 ModelingToolkit.generate_cost
 ModelingToolkit.generate_cost_gradient
 ModelingToolkit.generate_cost_hessian
