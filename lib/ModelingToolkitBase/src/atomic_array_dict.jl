@@ -195,7 +195,7 @@ end
 Add `item` to `x`. If `item` is an indexed array, add the array instead.
 """
 function push_as_atomic_array!(x::AtomicArraySet, item::SymbolicT)
-    return push!(x, split_indexed_var(item)[1])
+    return push!(x, split_field_var(split_indexed_var(item)[1]))
 end
 
 """

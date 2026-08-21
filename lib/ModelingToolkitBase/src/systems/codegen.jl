@@ -1327,7 +1327,7 @@ struct CheckInvalidAndTrackNamespaced
 end
 
 function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
-    isatomic1 = SU.default_is_atomic(x)
+    isatomic1 = SU.default_is_atomic(x) || is_symstruct_field(x)
     isatomic1 || return false
 
     newx = get(pred.ns_map, x, nothing)
@@ -1346,6 +1346,8 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
         end
     end
     arrx in pred.simplevars && return true
+    # `simplevars` keys struct variables on the whole record, so also try the record.
+    split_field_var(arrx) in pred.simplevars && return true
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true

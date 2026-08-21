@@ -52,7 +52,7 @@ function detime_dvs(op)
     return if !iscall(op)
         op
     elseif issym(operation(op))
-        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
+        SSym(nameof(operation(op)); type = symtype(op), shape = SU.shape(op))
     else
         maketerm(
             typeof(op), operation(op), detime_dvs.(arguments(op)),
@@ -67,7 +67,7 @@ end
 Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
-    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
+    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, symtype(op)}, shape = SU.ShapeVecT())(iv)
     return iscall(op) ?
         maketerm(
             typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
@@ -856,8 +856,23 @@ end
 
 struct OperatorIsAtomic{O} end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `ex` names a leaf of a symbolic struct, i.e. a field access or an indexed element
+of one. The array counterpart is the `getindex` case of `SymbolicUtils.default_is_atomic`.
+"""
+function is_symstruct_field(ex::SymbolicT)
+    return Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Symbolics.SymbolicGetproperty end => true
+        BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_field(args[1])
+        _ => false
+    end
+end
+
 function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
-    return SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+    return (SU.default_is_atomic(ex) || is_symstruct_field(ex)) &&
+           Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => f isa O
         _ => true
     end
@@ -1613,6 +1628,10 @@ end
 function underscore_to_D(v, iv, inv_map)
     return if haskey(inv_map, v)
         only(get(inv_map, v, [v]))
+    elseif iscall(v) && operation(v) isa Symbolics.SymbolicGetproperty
+        # The name lives on the record, so rewrite the base and re-apply the field access.
+        f = operation(v)
+        unwrap(f(underscore_to_D(only(arguments(v)), iv, inv_map)))
     else
         v = ModelingToolkitBase.detime_dvs(v)
         s = split(string(getname(v)), 'ˍ')
@@ -1623,7 +1642,7 @@ function underscore_to_D(v, iv, inv_map)
         end
         repeats = length(suffix) ÷ length(string(iv))
         D = Differential(iv)
-        v = SSym(Symbol(n); type = FnType{Tuple, Real, Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
+        v = SSym(Symbol(n); type = FnType{Tuple, symtype(v), Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
         wrap_with_D(v, D, repeats)
     end
 end
@@ -1637,6 +1656,23 @@ function wrap_with_D(n, D, repeats)
 end
 
 const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
+
+"""
+    $TYPEDSIGNATURES
+
+Collapse a field access of a struct symbolic to the struct itself, so a whole record is the
+atomic unit the way a whole array is. Commutes with operators, as `split_indexed_var` does.
+"""
+function split_field_var(x::SymbolicT)::SymbolicT
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => split_field_var(args[1])
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            inner = split_field_var(args[1])
+            isequal(inner, args[1]) ? x : f(inner)::SymbolicT
+        end
+        _ => x
+    end
+end
 
 """
     $TYPEDSIGNATURES
