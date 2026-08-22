@@ -15,7 +15,7 @@ D = Differential(t)
 "A subtype carrying only the two required fields."
 struct MinimalSystem <: MT.AbstractSystem
     name::Symbol
-    systems::Vector
+    systems::Vector{MT.AbstractSystem}
 end
 
 "A subtype carrying the optional fields backing the equation/unknown/parameter accessors."
@@ -25,32 +25,32 @@ struct ComponentSystem <: MT.AbstractSystem
     ps::Vector
     iv::Any
     name::Symbol
-    systems::Vector
+    systems::Vector{MT.AbstractSystem}
 end
 
 "A subtype which supplies its independent variable through the scalar extension point."
 struct RenamedIVSystem <: MT.AbstractSystem
     time::Any
     name::Symbol
-    systems::Vector
+    systems::Vector{MT.AbstractSystem}
 end
 MT.independent_variable(sys::RenamedIVSystem) = getfield(sys, :time)
 
-leaf = ComponentSystem([D(x) ~ p * x], [x], [p], t, :leaf, [])
-branch = ComponentSystem([D(y) ~ q * y], [y], [q], t, :branch, [leaf])
-root = ComponentSystem(Equation[], [], [], t, :root, [branch])
+leaf = ComponentSystem([D(x) ~ p * x], [x], [p], t, :leaf, MT.AbstractSystem[])
+branch = ComponentSystem([D(y) ~ q * y], [y], [q], t, :branch, MT.AbstractSystem[leaf])
+root = ComponentSystem(Equation[], [], [], t, :root, MT.AbstractSystem[branch])
 
 @testset "Required surface" begin
-    sys = MinimalSystem(:sys, [])
+    sys = MinimalSystem(:sys, MT.AbstractSystem[])
     @test nameof(sys) === :sys
     @test isempty(MT.get_systems(sys))
 
-    parent = MinimalSystem(:parent, [sys])
+    parent = MinimalSystem(:parent, MT.AbstractSystem[sys])
     @test map(nameof, MT.get_systems(parent)) == [:sys]
 end
 
 @testset "Accessors defaulted for absent optional fields" begin
-    sys = MinimalSystem(:sys, [])
+    sys = MinimalSystem(:sys, MT.AbstractSystem[])
     @test MT.independent_variable(sys) === nothing
     @test isempty(independent_variables(sys))
     @test MT.description(sys) == ""
@@ -64,7 +64,7 @@ end
 end
 
 @testset "`has_x` reports optional field availability" begin
-    minimal = MinimalSystem(:sys, [])
+    minimal = MinimalSystem(:sys, MT.AbstractSystem[])
 
     @test MT.has_name(minimal)
     @test MT.has_name(leaf)
@@ -84,9 +84,9 @@ end
     @test isequal(MT.get_iv(leaf), t)
 
     # `get_x` on absent storage throws, so generic code has to guard it with `has_x`.
-    @test_throws ErrorException MT.get_eqs(minimal)
-    @test_throws ErrorException MT.get_unknowns(minimal)
-    @test_throws ErrorException MT.get_ps(minimal)
+    @test_throws FieldError MT.get_eqs(minimal)
+    @test_throws FieldError MT.get_unknowns(minimal)
+    @test_throws FieldError MT.get_ps(minimal)
 
     # The event accessors are the documented exceptions: they default to empty.
     @test MT.has_continuous_events(minimal) == false
@@ -96,7 +96,7 @@ end
 end
 
 @testset "Scalar independent variable extension point" begin
-    sys = RenamedIVSystem(t, :sys, [])
+    sys = RenamedIVSystem(t, :sys, MT.AbstractSystem[])
     @test isequal(MT.independent_variable(sys), t)
     @test isequal(independent_variables(sys), [t])
     @test isequal(SII.independent_variable_symbols(sys), [t])
@@ -140,7 +140,9 @@ end
 end
 
 @testset "Equation classification" begin
-    algebraic = ComponentSystem([0 ~ p - x], [x], [p], t, :algebraic, [])
+    algebraic = ComponentSystem(
+        [0 ~ p - x], [x], [p], t, :algebraic, MT.AbstractSystem[]
+    )
 
     @test has_diff_equations(leaf)
     @test !has_alg_equations(leaf)
