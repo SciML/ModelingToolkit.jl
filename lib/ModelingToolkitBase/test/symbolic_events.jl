@@ -1964,3 +1964,130 @@ if !@isdefined(ModelingToolkit)
         @test sol[gi] ≈ [1, 2, 3, 2, 1]
     end
 end
+
+@testset "User `callback` kwarg is merged with system events" begin
+    @variables x(t)
+    cevt = SymbolicContinuousCallback([x ~ 0.5], [x ~ 2.0])
+    devt = SymbolicDiscreteCallback(1.0, [x ~ 2.0])
+
+    # `x` starts at 1 and decreases, so reaching 2 requires a system event to have fired
+    function test_user_callback_fires(sys; has_events = true)
+        fired = Ref(false)
+        user_cb = DiscreteCallback((u, t, i) -> true, i -> (fired[] = true))
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0); callback = user_cb)
+        sol = solve(prob, Tsit5())
+        @test fired[]
+        has_events && @test maximum(sol[x]) ≈ 2.0
+    end
+
+    @testset "no events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], [])
+        test_user_callback_fires(sys; has_events = false)
+    end
+    @testset "continuous events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], []; continuous_events = [cevt])
+        test_user_callback_fires(sys)
+    end
+    @testset "discrete events" begin
+        @mtkcompile sys = System(D(x) ~ -1, t, [x], []; discrete_events = [devt])
+        test_user_callback_fires(sys)
+    end
+    @testset "continuous and discrete events" begin
+        @mtkcompile sys = System(
+            D(x) ~ -1, t, [x], []; continuous_events = [cevt], discrete_events = [devt]
+        )
+        test_user_callback_fires(sys)
+    end
+end
+
+@testset "`CallbackConstructionHook` parameter metadata" begin
+    @variables x(t)
+    @parameters p = 1.0
+    cevt = SymbolicContinuousCallback([x ~ 0.5], [x ~ 2.0])
+    devt = SymbolicDiscreteCallback(1.0, [x ~ 2.0])
+
+    hook_calls = Ref(0)
+    hook_fires = Ref(0)
+    function hook(sys, par)
+        hook_calls[] += 1
+        @test sys isa ModelingToolkitBase.AbstractSystem
+        @test hasmetadata(par, CallbackConstructionHook)
+        @test any(isequal(par), parameters(sys))
+        return [DiscreteCallback((u, t, i) -> true, i -> (hook_fires[] += 1))]
+    end
+    ph = setmetadata(p, CallbackConstructionHook, hook)
+
+    # `x` starts at 1 and decreases, so reaching 2 requires a system event to have fired
+    function test_hook_callbacks(sys; has_events = true, nhooks = 1)
+        hook_calls[] = 0
+        hook_fires[] = 0
+        user_fired = Ref(false)
+        user_cb = DiscreteCallback((u, t, i) -> true, i -> (user_fired[] = true))
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0); callback = user_cb)
+        sol = solve(prob, Tsit5())
+        @test hook_calls[] == nhooks
+        @test hook_fires[] > 0
+        @test user_fired[]
+        has_events && @test maximum(sol[x]) ≈ 2.0
+        return sol
+    end
+
+    @testset "no symbolic events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph])
+        test_hook_callbacks(sys; has_events = false)
+    end
+    @testset "continuous events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; continuous_events = [cevt])
+        test_hook_callbacks(sys)
+    end
+    @testset "discrete events" begin
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; discrete_events = [devt])
+        test_hook_callbacks(sys)
+    end
+    @testset "one hook per hook-carrying parameter" begin
+        @parameters q = 1.0
+        qh = setmetadata(q, CallbackConstructionHook, hook)
+        @mtkcompile sys = System(D(x) ~ -ph * qh, t, [x], [ph, qh])
+        test_hook_callbacks(sys; has_events = false, nhooks = 2)
+    end
+    @testset "implicit affect" begin
+        # The affect is nonlinear in `x`, so it compiles to an inner `ImplicitDiscreteProblem`
+        # over a system whose parameters include `ph`; the hook must not run for that problem.
+        ievt = SymbolicContinuousCallback([x ~ 0.5], [x^2 ~ 2 * ph])
+        @mtkcompile sys = System(D(x) ~ -ph, t, [x], [ph]; continuous_events = [ievt])
+        sol = test_hook_callbacks(sys; has_events = false)
+        @test maximum(sol[x]) ≈ sqrt(2)
+    end
+    @testset "hook returning no callbacks" begin
+        pe = setmetadata(p, CallbackConstructionHook, (sys, par) -> SciMLBase.DECallback[])
+        @mtkcompile sys = System(D(x) ~ -pe, t, [x], [pe])
+        prob = ODEProblem(sys, [x => 1.0], (0.0, 2.0))
+        @test !haskey(prob.kwargs, :callback)
+        @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+    end
+end
+
+struct EventScale
+    c::Float64
+end
+
+@testset "implicit affect over a subcomponent's nonnumeric parameter" begin
+    (s::EventScale)(y) = s.c * y
+    function Inner(; name)
+        @parameters (w::EventScale)(..) = EventScale(2.0)
+        @variables u(t) = 1.0
+        return System([D(u) ~ -w(u)], t, [u], [w]; name)
+    end
+    @named inner = Inner()
+    @variables z(t) = 1.0
+    # nonlinear in `z`, so the affect compiles to an inner `ImplicitDiscreteProblem` whose
+    # parameters include `inner₊w`. A namespaced nonnumeric parameter carries no value the
+    # affect system can discover; the parent's initial conditions are the only source.
+    ievt = SymbolicContinuousCallback([z ~ 0.5], [z^2 ~ inner.w(2.0)])
+    @mtkcompile sys = System(
+        [D(z) ~ -z], t; systems = [inner], continuous_events = [ievt]
+    )
+    sol = solve(ODEProblem(sys, [], (0.0, 3.0)), Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test maximum(sol[z]) ≈ 2.0
+end

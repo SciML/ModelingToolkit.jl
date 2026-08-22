@@ -487,6 +487,7 @@ export MissingGuessValue
 export MiscSystemData
 
 export AssignmentAffect
+export CallbackConstructionHook
 
 const set_scalar_metadata = setmetadata
 

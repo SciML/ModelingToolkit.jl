@@ -1557,10 +1557,14 @@ Base.@nospecializeinfer function compile_implicit_affect(
     u_getter = getsym(affsys, dvs_to_update)
     p_getter = getsym(affsys, ps_to_update)
 
+    # `affsys` only discovers values its own symbols carry as metadata, so a nonnumeric
+    # parameter whose value lives only in the parent's initial conditions needs them merged in.
+    # `_skip_events`: `affsys` shares the parent's parameters, so without this the parent's
+    # `CallbackConstructionHook`s would be invoked again for this inner problem.
     affprob = ImplicitDiscreteProblem(
-        affsys, op, (0, 0);
+        affsys, merge(anydict(initial_conditions(sys)), anydict(op)), (0, 0);
         build_initializeprob = false, check_length = false, eval_expression,
-        eval_module, check_compatibility = false, kwargs...
+        eval_module, check_compatibility = false, _skip_events = true, kwargs...
     )
 
     return ImplicitAffect(
@@ -1596,14 +1600,42 @@ merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 
 """
+    struct CallbackConstructionHook end
+
+Symbolics metadata key for attaching a callback-building hook to a parameter, via
+`setmetadata(param, CallbackConstructionHook, hook)`.
+
+The hook must be callable as `hook(sys, param) -> Vector{<:SciMLBase.DECallback}`. It runs once
+per parameter carrying this key during problem construction, and the callbacks it returns are
+added to the problem's callbacks.
+"""
+struct CallbackConstructionHook end
+
+"""
+    generate_hook_callbacks(sys) -> Vector{SciMLBase.DECallback}
+
+Collect the callbacks returned by the [`CallbackConstructionHook`](@ref) of every parameter of
+`sys` carrying that metadata key.
+"""
+function generate_hook_callbacks(sys::AbstractSystem)
+    cbs = SciMLBase.DECallback[]
+    for par in parameters(sys)
+        hasmetadata(par, CallbackConstructionHook) || continue
+        append!(cbs, getmetadata(par, CallbackConstructionHook)(sys, par))
+    end
+    return cbs
+end
+
+"""
     process_events(sys; callback, tspan, kwargs...) -> Union{Nothing, AbstractCallback, CallbackSet}
 
 Entry point for callback code generation when building an `ODEProblem` or `SDEProblem`
 (called from `process_kwargs` in `problem_utils.jl`). Compiles all continuous and discrete
-symbolic events attached to `sys` into concrete SciMLBase callbacks, then merges them with
-any user-supplied `callback`.
+symbolic events attached to `sys` into concrete SciMLBase callbacks, appends the callbacks built
+by the [`CallbackConstructionHook`](@ref) of any parameter carrying that metadata, then merges
+them with any user-supplied `callback`.
 
-Returns `nothing` if `sys` has no events and `callback` is `nothing`.
+Returns `nothing` if `sys` has no events, no hook callbacks and `callback` is `nothing`.
 
 # Arguments
 - `sys`: a compiled `AbstractSystem` with attached symbolic events
@@ -1618,8 +1650,13 @@ Returns `nothing` if `sys` has no events and `callback` is `nothing`.
 function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     contin_cbs = generate_continuous_callbacks(sys; kwargs...)
     discrete_cbs = generate_discrete_callbacks(sys; tspan, kwargs...)
-    cb = merge_cb(contin_cbs, callback)
-    return (discrete_cbs === nothing) ? cb : CallbackSet(contin_cbs, discrete_cbs...)
+    hook_cbs = generate_hook_callbacks(sys)
+    if discrete_cbs === nothing && isempty(hook_cbs)
+        return merge_cb(contin_cbs, callback)
+    end
+    return CallbackSet(
+        contin_cbs, something(discrete_cbs, ())..., hook_cbs..., callback
+    )
 end
 
 """
