@@ -98,9 +98,10 @@ const REEXPORTED_API = (
     :generate_cost_gradient,
     :generate_cost_hessian, :generate_custom_function, :generate_diffusion_function,
     :generate_initializesystem, :generate_jacobian, :generate_rhs, :generate_tgrad,
-    :generate_W, :get_alg_eqs, :get_analytically_integrated, :get_assertions, :get_bcs,
-    :get_bindings, :get_brownians, :get_connector_type, :get_consolidate, :get_constraints,
-    :get_continuous_events, :get_costs, :get_description, :get_diff_eqs, :get_discrete_events,
+    :generate_trajectory, :generate_W, :get_alg_eqs, :get_analytically_integrated,
+    :get_assertions, :get_bcs, :get_bindings, :get_brownians, :get_connector_type,
+    :get_consolidate, :get_constraints, :get_continuous_events, :get_costs,
+    :get_description, :get_diff_eqs, :get_discrete_events,
     :get_domain, :get_dvs, :get_eqs, :get_guesses, :get_gui_metadata,
     :get_ignored_connections, :get_index_cache, :get_initial_conditions,
     :get_initialization_eqs, :get_initializesystem, :get_inputs, :get_irreducibles,
@@ -132,7 +133,7 @@ const REEXPORTED_API = (
     :is_diff_equation, :iscomplete, :isdisturbance, :isinitial, :isinput, :isirreducible,
     :isoutput, :isparameter, :istunable, :JuMPCollocation, :JuMPDynamicOptProblem, :jumps,
     :JumpSystem, :linear_fractional_to_ordinary, :liouville_transform, :LocalScope,
-    :maybe_zeros, :MissingGuessValue, :ModelingToolkitBase,
+    :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
     :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
@@ -344,19 +345,6 @@ const STRUCTURAL_TYPES = (
     ModelingToolkitTearing.TearingState,
     StateSelection.DiffGraph,
 )
-
-@testset "Internal bindings are not public" begin
-    for name in (:generate_trajectory, :MiscSystemData)
-        @test isdefined(ModelingToolkitBase, name)
-        @test isdefined(ModelingToolkit, name)
-        @test !Base.isexported(ModelingToolkitBase, name)
-        @test !Base.isexported(ModelingToolkit, name)
-        @static if VERSION >= v"1.11"
-            @test !Base.ispublic(ModelingToolkitBase, name)
-            @test !Base.ispublic(ModelingToolkit, name)
-        end
-    end
-end
 
 run_qa(
     ModelingToolkit;

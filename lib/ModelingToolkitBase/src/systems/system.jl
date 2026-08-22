@@ -20,6 +20,11 @@ const MutableCacheT = Dict{DataType, Any}
     $TYPEDEF
 
 Utility metadata key for adding miscellaneous/one-off metadata to systems.
+
+```julia
+sys = setmetadata(sys, MiscSystemData, mydata)
+getmetadata(sys, MiscSystemData, nothing)
+```
 """
 abstract type MiscSystemData end
 
