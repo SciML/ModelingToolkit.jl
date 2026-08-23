@@ -968,7 +968,23 @@ end
         @variables x(t) = 1.0
         @mtkcompile sys = System([D(x) ~ -x], t; systems = [ball])
         par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
-        step_cb = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)[2]
+        callbacks = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)
+        # a reinitialization algorithm leaves no trace in the trajectory of an FMU whose
+        # compiled system is a plain ODE, so the component kwarg is checked where it lands
+        @test all(cb -> cb.initializealg isa BrownFullBasicInit, callbacks)
+        @named noinit_ball = MTK.FMIComponent(
+            Val(Ver); fmu, type = :ME, reinitializealg = SciMLBase.NoInit()
+        )
+        @mtkcompile noinit_sys = System([D(x) ~ -x], t; systems = [noinit_ball])
+        noinit_par = only(
+            p for p in parameters(noinit_sys) if MTK.hasmetadata(p, ext.FMUEventMetadata)
+        )
+        @test all(
+            cb -> cb.initializealg isa SciMLBase.NoInit,
+            MTK.getmetadata(noinit_par, CallbackConstructionHook)(noinit_sys, noinit_par)
+        )
+
+        step_cb = callbacks[2]
         # the FMU is told about the `t0` step through `initialize`, which is what FMI.jl's
         # `func_start` does. No fixture has an event at `t0`, so no trajectory shows it.
         @test step_cb.initialize !== SciMLBase.INITIALIZE_DEFAULT

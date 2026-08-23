@@ -236,8 +236,12 @@ Every Model Exchange FMU gets a `DiscreteCallback` with an always-true condition
 notifies it of each accepted integrator step and handles the step events it reports there. An
 FMU that declares event indicators also gets one `VectorContinuousCallback` covering all of
 them; one that declares none does not.
+
+`reinitializealg` is the initialization algorithm both callbacks name.
 """
-function build_fmu_me_callbacks(sys, wrapper_param)
+function build_fmu_me_callbacks(
+        sys, wrapper_param; reinitializealg = DiffEqBase.BrownFullBasicInit()
+    )
     meta = SymbolicUtils.getmetadata(
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
     )::FMUEventMetadata
@@ -402,9 +406,9 @@ function build_fmu_me_callbacks(sys, wrapper_param)
 
         # we name an algorithm on both callbacks because a standing discontinuity reinitializes the
         # integrator, and the problem's own `OverrideInit` would reset `u` to `u0` and throw away
-        # the post-event states the affect just wrote. This one keeps the differential states and
-        # re-solves only the algebraic variables.
-        event_initializealg = DiffEqBase.BrownFullBasicInit()
+        # the post-event states the affect just wrote. The default keeps the differential states
+        # and re-solves only the algebraic variables.
+        event_initializealg = reinitializealg
 
         callbacks = SciMLBase.DECallback[]
         if meta.n_event_indicators > 0
@@ -456,7 +460,11 @@ with the name `namespace__variable`.
 - `reinitializealg`: The DAE initialization algorithm to use for the callback managing the
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
-  For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`.
+  For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`. For Model Exchange FMUs it is also
+  the initialization algorithm of the event callbacks. The default there is
+  `DiffEqBase.BrownFullBasicInit()`, which holds the differential variables fixed — among them
+  the states the FMU wrote at the event — and re-solves the algebraic variables, valid for the
+  index-1 systems `mtkcompile` produces.
 - `stop_time`: The `stopTime` for the FMU, as defined in the FMI spec. By default, this will
   be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
@@ -682,8 +690,16 @@ function MTK.FMIComponent(
     # every Model Exchange FMU gets the hook: the per-accepted-step notification is
     # unconditional, whether or not the FMU declares event indicators.
     if type == :ME
+        # `nothing` means MTK's auto-selection for the CoSimulation callback below, but the
+        # event callbacks need an algorithm that keeps the states the FMU just wrote back
+        me_reinitializealg = something(reinitializealg, DiffEqBase.BrownFullBasicInit())
         tagged_wrapper = SymbolicUtils.setmetadata(
-            tagged_wrapper, MTKBase.CallbackConstructionHook, build_fmu_me_callbacks
+            tagged_wrapper, MTKBase.CallbackConstructionHook,
+            let alg = me_reinitializealg
+                (sys, wrapper_param) -> build_fmu_me_callbacks(
+                    sys, wrapper_param; reinitializealg = alg
+                )
+            end
         )
     end
     wrapper = CallAndWrap(tagged_wrapper)
