@@ -40,9 +40,8 @@ The following rules apply to every subtype:
     is itself an `AbstractSystem`. It never returns transitive descendants.
   - The hierarchy reachable through [`ModelingToolkit.get_systems`](@ref) must be finite and
     acyclic. Every generic accessor below recurses through it without cycle detection.
-  - Systems are treated as immutable values. A generic function may retain, compare, or hash
-    a system, and may assume that a system it received earlier still describes the same
-    model.
+  - Generic accessors do not mutate a system. Treat the system and the collections returned
+    by its accessors as read-only unless a function explicitly documents a mutating operation.
 
 ## Optional Storage and the `has_x`/`get_x` Protocol
 

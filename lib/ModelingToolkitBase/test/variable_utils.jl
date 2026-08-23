@@ -227,3 +227,21 @@ end
     @test value(only(arguments(EvalAt(1)(_x)))) == 1
     @test EvalAt(1)(D(x)) isa Num
 end
+
+@testset "write_possibly_indexed_array! ignores elements of zero-length parents" begin
+    t = ModelingToolkitBase.t_nounits
+    @variables a(t)[1:0] b(t)[1:2]
+    au = value(a)
+    bu = value(b)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test isempty(dd)
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, bu[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test haskey(dd, bu)
+end

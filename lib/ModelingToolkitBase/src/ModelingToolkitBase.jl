@@ -189,7 +189,38 @@ in a non-breaking release. Usage of these arguments is not advised.
 """
 $(TYPEDEF)
 
-Abstract supertype of all system types. Any custom system types must subtype this.
+Abstract supertype of all system types.
+
+Custom system types must subtype `AbstractSystem` and implement the required structural
+interface:
+
+- `nameof(sys)::Symbol` must identify the system within its parent's subsystem list.
+- `get_systems(sys)::Vector{<:AbstractSystem}` must return the direct, finite, acyclic
+  subsystem hierarchy.
+
+Both requirements default to fields named `name` and `systems`, respectively. Additional
+system data is optional. Generic code must use the public `has_x`/`get_x` accessors described
+in the [AbstractSystem interface](@ref abstract_system_interface), rather than depending on
+the fields of `System` or another concrete subtype. A custom type may extend the documented
+generic accessors, including `independent_variable`, when its storage does not match those
+defaults; it should not extend internal compilation or problem-construction functions.
+
+# Examples
+
+A minimal custom system can participate in generic hierarchy traversal without implementing
+any methods:
+
+```julia
+struct CustomSystem <: AbstractSystem
+    name::Symbol
+    systems::Vector{AbstractSystem}
+end
+
+leaf = CustomSystem(:leaf, AbstractSystem[])
+root = CustomSystem(:root, AbstractSystem[leaf])
+nameof(root)
+get_systems(root)
+```
 """
 abstract type AbstractSystem end
 # Solely so that `ODESystem` can be deprecated and still act as a valid type.
@@ -405,6 +436,7 @@ export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_func
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
+export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
 export calculate_massmatrix, generate_diffusion_function
 export generate_control_function, build_explicit_observed_function
@@ -452,6 +484,7 @@ export AbstractCollocation, JuMPCollocation, InfiniteOptCollocation,
     CasADiCollocation, PyomoCollocation
 export DynamicOptSolution
 export MissingGuessValue
+export MiscSystemData
 
 export AssignmentAffect
 export CallbackConstructionHook

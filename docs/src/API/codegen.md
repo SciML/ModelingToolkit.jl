@@ -12,6 +12,7 @@ ModelingToolkit.generate_W
 ModelingToolkit.generate_dae_jacobian
 ModelingToolkit.generate_history
 ModelingToolkit.generate_boundary_conditions
+ModelingToolkitBase.generate_trajectory
 ModelingToolkit.generate_cost
 ModelingToolkit.generate_cost_gradient
 ModelingToolkit.generate_cost_hessian
@@ -36,10 +37,8 @@ are `calculate_*` equivalents to obtain the symbolic result without building a f
 ```@docs
 ModelingToolkit.calculate_tgrad
 ModelingToolkit.calculate_jacobian
-ModelingToolkitBase.jacobian_sparsity
 ModelingToolkit.jacobian_dae_sparsity
 ModelingToolkit.calculate_hessian
-ModelingToolkitBase.hessian_sparsity
 ModelingToolkit.calculate_massmatrix
 ModelingToolkit.W_sparsity
 ModelingToolkit.calculate_W_prototype

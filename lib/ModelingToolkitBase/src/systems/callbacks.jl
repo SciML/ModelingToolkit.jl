@@ -1659,6 +1659,10 @@ function process_events(sys; callback = nothing, tspan = nothing, kwargs...)
     )
 end
 
+Base.@nospecializeinfer function _has_symbolic_events(sys)
+    return !isempty(continuous_events(sys)) || !isempty(discrete_events(sys))
+end
+
 """
     discrete_events(sys::AbstractSystem) :: Vector{SymbolicDiscreteCallback}
 

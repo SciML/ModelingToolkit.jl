@@ -26,6 +26,15 @@ eqs = [D(x) ~ 1]
 affect = [x ~ 0]
 affect_neg = [x ~ 1]
 
+@testset "Symbolic event detection" begin
+    @named no_events = System([D(x) ~ 1], t)
+    @test !ModelingToolkitBase._has_symbolic_events(no_events)
+
+    @named child = System([D(x) ~ 1], t; continuous_events = [x ~ 1])
+    @named parent = System(Equation[], t; systems = [child])
+    @test ModelingToolkitBase._has_symbolic_events(parent)
+end
+
 @testset "SymbolicContinuousCallback constructors" begin
     e = SymbolicContinuousCallback(eqs[])
     @test e isa SymbolicContinuousCallback

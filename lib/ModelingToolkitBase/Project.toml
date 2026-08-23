@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.67.0"
+version = "1.68.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -113,7 +113,7 @@ ConstructionBase = "1"
 ControlSystemsBase = "1"
 DataInterpolations = "9"
 DataStructures = "0.18, 0.19"
-DelayDiffEq = "6"
+DelayDiffEq = "6.1.2"
 DiffEqBase = "7.14"
 DiffEqCallbacks = "4"
 DiffEqNoiseProcess = "5"
