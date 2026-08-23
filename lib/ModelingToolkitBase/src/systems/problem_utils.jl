@@ -2391,9 +2391,13 @@ function process_kwargs(
 
     if is_time_dependent(sys)
         if expression == Val{false} && !_skip_events
-            cbs = process_events(
-                sys; callback, eval_expression, eval_module, tspan, kwargs...
-            )
+            cbs = if _has_symbolic_events(sys)
+                @invokelatest process_events(
+                    sys; callback, eval_expression, eval_module, tspan, kwargs...
+                )
+            else
+                callback
+            end
             if cbs !== nothing
                 kwargs1 = merge(kwargs1, (callback = cbs,))
             end
