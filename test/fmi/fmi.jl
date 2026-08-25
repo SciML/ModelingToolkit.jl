@@ -970,19 +970,8 @@ end
         par = only(p for p in parameters(sys) if MTK.hasmetadata(p, ext.FMUEventMetadata))
         callbacks = MTK.getmetadata(par, CallbackConstructionHook)(sys, par)
         # a reinitialization algorithm leaves no trace in the trajectory of an FMU whose
-        # compiled system is a plain ODE, so the component kwarg is checked where it lands
-        @test all(cb -> cb.initializealg isa BrownFullBasicInit, callbacks)
-        @named noinit_ball = MTK.FMIComponent(
-            Val(Ver); fmu, type = :ME, reinitializealg = SciMLBase.NoInit()
-        )
-        @mtkcompile noinit_sys = System([D(x) ~ -x], t; systems = [noinit_ball])
-        noinit_par = only(
-            p for p in parameters(noinit_sys) if MTK.hasmetadata(p, ext.FMUEventMetadata)
-        )
-        @test all(
-            cb -> cb.initializealg isa SciMLBase.NoInit,
-            MTK.getmetadata(noinit_par, CallbackConstructionHook)(noinit_sys, noinit_par)
-        )
+        # compiled system is a plain ODE, so the resolved default is checked where it lands
+        @test all(cb -> cb.initializealg isa SciMLBase.CheckInit, callbacks)
 
         step_cb = callbacks[2]
         # the FMU is told about the `t0` step through `initialize`, which is what FMI.jl's
@@ -1034,14 +1023,19 @@ end
         ext.reset_instance!(wrapper)
     end
 
-    @testset "event write-back survives DAE reinitialization, BouncingBall v$Ver" for Ver in
+    @testset "event reinitialization on a DAE coupling, BouncingBall v$Ver" for Ver in
         (2, 3)
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall$Ver.fmu"); type = :ME)
-        @named ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        # `v` enters the algebraic equation below, so the reversal the FMU writes back at a
+        # bounce leaves that equation unsatisfied: the default `CheckInit` errors at the first
+        # bounce, while `BrownFullBasicInit` re-solves `z` and the solve runs through
+        @named ball = MTK.FMIComponent(
+            Val(Ver); fmu, type = :ME, reinitializealg = BrownFullBasicInit()
+        )
         # a cubic has no symbolic solution for `z`, so `z` survives simplification as an
         # algebraic unknown and the compiled system gets a singular mass matrix
         @variables z(t) [guess = 1.0]
-        @mtkcompile sys = System([z^3 + z ~ ball.h + 2.0], t; systems = [ball])
+        @mtkcompile sys = System([z^3 + z ~ ball.v + 2.0], t; systems = [ball])
         prob = ODEProblem(sys, [ball.h => 1.0, ball.v => 0.0], (0.0, 3.0))
         # guard that the system stays a DAE, so the callback reinitialization path is exercised
         mass_matrix = prob.f.mass_matrix
@@ -1063,7 +1057,24 @@ end
         # from its initial state after every bounce instead of rebounding
         @test count(i -> velocities[i] < 0 < velocities[i + 1], bounces) >= 2
         # the algebraic constraint holds at every saved point, events included
-        @test maximum(abs, sol[z] .^ 3 .+ sol[z] .- heights .- 2.0) <= 1.0e-6
+        @test maximum(abs, sol[z] .^ 3 .+ sol[z] .- velocities .- 2.0) <= 1.0e-6
+
+        # the same coupling on the default algorithm, which only checks the constraint
+        @named default_ball = MTK.FMIComponent(Val(Ver); fmu, type = :ME)
+        @mtkcompile default_sys = System(
+            [z^3 + z ~ default_ball.v + 2.0], t; systems = [default_ball]
+        )
+        default_prob = ODEProblem(
+            default_sys, [default_ball.h => 1.0, default_ball.v => 0.0], (0.0, 3.0)
+        )
+        err = try
+            solve(default_prob, alg; abstol = 1.0e-8, reltol = 1.0e-8)
+        catch e
+            e
+        end
+        @test err isa SciMLBase.CheckInitFailureError
+        # the residual is the velocity reversal itself, not interpolation error at the root
+        @test err.normresid > 1.0
     end
 
     @testset "a 0-indicator FMU whose state cannot be written back" begin

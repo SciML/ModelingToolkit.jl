@@ -7,8 +7,6 @@ using Symbolics: NAMESPACE_SEPARATOR, CallAndWrap
 using DocStringExtensions: TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 import ModelingToolkit as MTK
 import ModelingToolkitBase as MTKBase
-# for `BrownFullBasicInit`, which SciMLBase 3.49 does not define
-import DiffEqBase
 import SciMLBase
 import SymbolicIndexingInterface as SII
 import SymbolicUtils
@@ -240,7 +238,7 @@ them; one that declares none does not.
 `reinitializealg` is the initialization algorithm both callbacks name.
 """
 function build_fmu_me_callbacks(
-        sys, wrapper_param; reinitializealg = DiffEqBase.BrownFullBasicInit()
+        sys, wrapper_param; reinitializealg = SciMLBase.CheckInit()
     )
     meta = SymbolicUtils.getmetadata(
         SymbolicUtils.unwrap(wrapper_param), FMUEventMetadata
@@ -406,8 +404,10 @@ function build_fmu_me_callbacks(
 
         # we name an algorithm on both callbacks because a standing discontinuity reinitializes the
         # integrator, and the problem's own `OverrideInit` would reset `u` to `u0` and throw away
-        # the post-event states the affect just wrote. The default keeps the differential states
-        # and re-solves only the algebraic variables.
+        # the post-event states the affect just wrote. The default `CheckInit` verifies that the
+        # algebraic equations still hold after the event and errors otherwise, so a coupling whose
+        # algebraic variables depend on the FMU's states needs `BrownFullBasicInit` from
+        # `FMIComponent`.
         event_initializealg = reinitializealg
 
         callbacks = SciMLBase.DECallback[]
@@ -461,10 +461,10 @@ with the name `namespace__variable`.
   FMU. For CoSimulation FMUs whose states/outputs are used in algebraic equations of the
   system, this needs to be an algorithm that will solve for the new algebraic variables.
   For example, `OrdinaryDiffEqCore.BrownFullBasicInit()`. For Model Exchange FMUs it is also
-  the initialization algorithm of the event callbacks. The default there is
-  `DiffEqBase.BrownFullBasicInit()`, which holds the differential variables fixed — among them
-  the states the FMU wrote at the event — and re-solves the algebraic variables, valid for the
-  index-1 systems `mtkcompile` produces.
+  the initialization algorithm of the event callbacks, defaulting to `SciMLBase.CheckInit()`
+  like MTK's imperative affects. An FMU whose states enter the algebraic equations of the
+  system needs an algorithm like `BrownFullBasicInit()` here too, otherwise the check fails at
+  the first event.
 - `stop_time`: The `stopTime` for the FMU, as defined in the FMI spec. By default, this will
   be set to `tspan[2]` when the `ODEProblem` is solved. An explicit value will overwrite this.
 - `type`: Either `:ME` or `:CS` depending on whether `fmu` is a Model Exchange or
@@ -690,9 +690,9 @@ function MTK.FMIComponent(
     # every Model Exchange FMU gets the hook: the per-accepted-step notification is
     # unconditional, whether or not the FMU declares event indicators.
     if type == :ME
-        # `nothing` means MTK's auto-selection for the CoSimulation callback below, but the
-        # event callbacks need an algorithm that keeps the states the FMU just wrote back
-        me_reinitializealg = something(reinitializealg, DiffEqBase.BrownFullBasicInit())
+        # `nothing` resolves to `CheckInit`, the default MTK gives imperative affects; the
+        # CoSimulation callback below gets the same from MTK's own constructor
+        me_reinitializealg = something(reinitializealg, SciMLBase.CheckInit())
         tagged_wrapper = SymbolicUtils.setmetadata(
             tagged_wrapper, MTKBase.CallbackConstructionHook,
             let alg = me_reinitializealg
