@@ -417,9 +417,8 @@ end
             Set([(:mass_s, 0x02000000), (:mass_v, 0x02000001)])
         @test isempty(meta.input_names)
         @test ext.resolve_relative(par, meta.state_names[1]) in MTK.getname.(unknowns(sys))
-        # a Model Exchange FMU that declares event indicators can have events, and an event
-        # writes the values it produces for the continuous states into the integrator's `u`,
-        # so the import keeps them out of simplification
+        # an event of a Model Exchange FMU writes the values it produces for the continuous
+        # states into the integrator's `u`, so the import keeps them out of simplification
         @test all(MTK.isirreducible, state_variables(ball, meta))
     end
 
@@ -511,9 +510,9 @@ end
         @test meta.state_value_references == [0x0000000b]
         @test meta.input_names == [:u]
         @test ext.resolve_relative(par, :x) === :x
-        # an FMU with no event indicators has no state event to write back, so its states are
-        # left to simplification and it falls back to being notified of completed steps
-        @test !any(MTK.isirreducible, state_variables(sspace, meta))
+        # declaring no event indicators only rules out state events: a step or time event of
+        # this FMU still writes back, so its states are kept out of simplification too
+        @test all(MTK.isirreducible, state_variables(sspace, meta))
     end
 end
 
@@ -1108,7 +1107,7 @@ end
         fmu = loadFMU(joinpath(FMU_DIR, "BouncingBall2.fmu"); type = :ME)
         @named ball = MTK.FMIComponent(Val(2); fmu, type = :ME)
         @variables y(t) = 1.0
-        # the import marks the states of an FMU with event indicators irreducible, so
+        # the import marks the continuous states of every Model Exchange FMU irreducible, so
         # simplification keeps them as unknowns and the events have somewhere to write to
         @mtkcompile sys = System([D(y) ~ -y], t; systems = [ball])
         @test ext.SII.variable_index(sys, ball.h) !== nothing

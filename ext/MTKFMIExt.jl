@@ -249,9 +249,9 @@ function build_fmu_me_callbacks(
     # inputs to evaluate at the event point.
     no_event_access = nothing
     state_idxs = Int[]
-    # the import marks the states of an FMU with event indicators irreducible, so simplification
-    # keeps them. They can still be missing here, because declaring one an input of the compiled
-    # system takes it out of the unknowns regardless.
+    # the import marks the continuous states of every Model Exchange FMU irreducible, so
+    # simplification keeps them. They can still be missing here, because declaring one an input
+    # of the compiled system takes it out of the unknowns regardless.
     for name in meta.state_names
         resolved = resolve_relative(wrapper_param, name)
         idx = SII.variable_index(sys, resolved)
@@ -259,9 +259,9 @@ function build_fmu_me_callbacks(
             no_event_access = "The continuous state $resolved of the FMU wrapped by \
                 $(getname(wrapper_param)) is not an unknown of the simplified system, so \
                 the value it takes after an FMU event cannot be written back. Declaring a \
-                state an input of the compiled system is what takes it out of the unknowns. \
-                An FMU declaring no event indicators does not have its states marked \
-                `irreducible = true` at import, so simplification can remove them too."
+                state an input of the compiled system is what takes it out of the unknowns: \
+                the import marks the continuous states of a Model Exchange FMU \
+                `irreducible = true`."
             break
         end
         push!(state_idxs, idx)
@@ -525,11 +525,10 @@ function MTK.FMIComponent(
     )
     canonical_position = var -> canonical_state_index[value_references[var]]
     sort!(diffvars; by = canonical_position)
-    # a Model Exchange FMU that declares event indicators can have events, and an event writes
-    # the values it produces for the continuous states back into the integrator's `u`. We keep
-    # the states out of simplification so that they are there to write into. Only the true
-    # state variables are marked: an extra name for one of them stays an alias.
-    if type == :ME && n_event_indicators > 0
+    # an event of a Model Exchange FMU — state, step or time — writes the values it produces
+    # for the continuous states into the integrator's `u`, so we keep them out of simplification
+    # to have somewhere to write into. An extra name for one of them stays an alias.
+    if type == :ME
         for (i, var) in enumerate(diffvars)
             # this is what `@variables x [irreducible = true]` sets
             irreducible_var = SymbolicUtils.setmetadata(
