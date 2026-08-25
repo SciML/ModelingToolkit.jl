@@ -284,8 +284,10 @@ end
 
 Calculate the gradient of the equations of `sys` with respect to the independent variable.
 `simplify` is forwarded to `Symbolics.expand_derivatives`.
+If `throw_no_derivative` is `false`, terms with no derivative rule are returned as
+unexpanded `Differential`s instead of throwing.
 """
-function calculate_tgrad(sys::System; simplify = false)
+function calculate_tgrad(sys::System; simplify = false, throw_no_derivative = true)
     check_symbolic_ad_allowed(sys)
     # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
@@ -295,10 +297,59 @@ function calculate_tgrad(sys::System; simplify = false)
     xs = unknowns(sys)
     rule = Dict(map((x, xt) -> xt => x, detime_dvs.(xs), xs))
     rhs = substitute.(rhs, Ref(rule))
-    tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
+    tgrad = [
+        expand_derivatives(Differential(iv)(r), simplify; throw_no_derivative)
+            for r in rhs
+    ]
     reverse_rule = Dict(map((x, xt) -> x => xt, detime_dvs.(xs), xs))
     tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
+    throw_no_derivative && check_tgrad_expanded(sys, tgrad)
     return tgrad
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The first subterm of `ex` whose operation is a `Differential`, or `nothing` if there is
+none.
+"""
+function unexpanded_derivative(ex)
+    ex = unwrap(ex)
+    iscall(ex) || return nothing
+    operation(ex) isa Differential && return ex
+    for arg in arguments(ex)
+        res = unexpanded_derivative(arg)
+        res === nothing || return res
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Error if any entry of `tgrad` still contains a `Differential`. `Symbolics` leaves the
+derivative of a call to a callable parameter unexpanded, since derivative rules are
+defined per operation and a `Sym` operation has none; a function generated from such a
+gradient errors when called.
+"""
+function check_tgrad_expanded(sys::System, tgrad)
+    for (i, gr) in enumerate(tgrad)
+        term = unexpanded_derivative(gr)
+        term === nothing && continue
+        msg = """
+        Cannot differentiate equation $i of system $(nameof(sys)) with respect to \
+        $(get_iv(sys)): `$term` has no derivative rule. Calls to callable parameters \
+        have none, since the function is not known symbolically.
+        """
+        if show_api_guidance()
+            msg *= """
+            Leave `tgrad = false` (the default); the solver then computes the time \
+            gradient numerically.
+            """
+        end
+        throw(ArgumentError(msg))
+    end
+    return
 end
 
 """
@@ -753,7 +804,8 @@ function calculate_W_prototype(W_sparsity; u0 = nothing, sparse = false)
 end
 
 function isautonomous(sys::System)
-    tgrad = calculate_tgrad(sys; simplify = true)
+    # A gradient which cannot be expanded is not identically zero either.
+    tgrad = calculate_tgrad(sys; simplify = true, throw_no_derivative = false)
     return all(iszero, tgrad)
 end
 
