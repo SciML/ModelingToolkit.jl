@@ -2,8 +2,14 @@ MTKBase.singular_check(ts::TearingState) = StateSelection.singular_check(ts)
 
 function MTKBase.get_initialization_problem_type(
         sys::System, isys::System;
-        warn_initialize_determined = true,
+        verbose = DEFAULT_MTK_VERBOSE,
+        warn_initialize_determined = nothing,
         use_scc = true, kwargs...
+    )
+    verbosity = _override_toggle(
+        _route_problem_verbose(verbose), warn_initialize_determined,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
     )
     neqs = length(equations(isys))
     nunknown = length(unknowns(isys))
@@ -18,11 +24,15 @@ function MTKBase.get_initialization_problem_type(
         scc_message = ""
     end
 
-    if warn_initialize_determined && neqs > nunknown
-        @warn overdetermined_initialization_message(neqs, nunknown, scc_message)
+    if neqs > nunknown
+        @SciMLMessage(verbosity, :overdetermined_initialization) do
+            overdetermined_initialization_message(neqs, nunknown, scc_message)
+        end
     end
-    if warn_initialize_determined && neqs < nunknown
-        @warn underdetermined_initialization_message(neqs, nunknown, scc_message)
+    if neqs < nunknown
+        @SciMLMessage(verbosity, :underdetermined_initialization) do
+            underdetermined_initialization_message(neqs, nunknown, scc_message)
+        end
     end
 
     unassigned_vars = MTKBase.singular_check(ts)
@@ -37,11 +47,13 @@ function MTKBase.get_initialization_problem_type(
                 # remaining blocks keep their plain Newton solves.
                 SCCNonlinearProblem
             else
-                @warn """
-                `SCCNonlinearProblem` can only be used with `split = true` systems. \
-                Simplify your `System` with `split = true` or pass `use_scc = false` to \
-                disable this warning
-                """
+                @SciMLMessage(verbosity, :scc_initialization_unavailable) do
+                    """
+                    `SCCNonlinearProblem` can only be used with `split = true` systems. \
+                    Simplify your `System` with `split = true` or pass `use_scc = false` to \
+                    disable this warning
+                    """
+                end
                 MTKBase.get_nonlinear_problem_type(isys)
             end
         else
@@ -97,7 +109,9 @@ data (e.g. an `ODEProblem`/`DAEProblem` built from a `System`), or an initializa
   - `atol`: absolute singular-value threshold (see `rtol`).
   - `threshold`: only unknowns/equations whose participation exceeds this value are
     reported.
-  - `verbose`: print a human-readable report.
+  - `verbose`: print a human-readable report. Accepts a `Bool`, a `SciMLLogging` preset,
+    or an [`MTKVerbosity`](@ref); the report is controlled by its
+    `initialization_analysis` toggle.
   - `autodiff`: `nothing` (default) computes the Jacobian by central finite differences
     with step `cbrt(eps)`, whose truncation error is far below the default rank tolerance
     and whose first call avoids recompiling the generated residual (the dominant cost of
@@ -135,6 +149,7 @@ analysis.nullity, analysis.redundancy
 function analyze_initialization_jacobian(
         prob; rtol = 1.0e-8, atol = 0.0, threshold = 1.0e-3, verbose = true, autodiff = nothing
     )
+    verbose = _process_verbose_param(verbose)
     empty_result = (;
         jacobian = nothing, singular_values = Float64[], rank = 0,
         nullity = 0, redundancy = 0, underdetermined_unknowns = Pair[],
@@ -142,13 +157,18 @@ function analyze_initialization_jacobian(
     )
     iprob = _initialization_problem(prob)
     if iprob === nothing
-        verbose &&
-            @info "No initialization problem to analyze: the system is fully determined by its initial conditions."
+        @SciMLMessage(
+            "No initialization problem to analyze: the system is fully determined by its initial conditions.",
+            verbose, :initialization_analysis
+        )
         return empty_result
     end
     u0 = state_values(iprob)
     if u0 === nothing || isempty(u0)
-        verbose && @info "The initialization problem has no unknowns to solve for."
+        @SciMLMessage(
+            "The initialization problem has no unknowns to solve for.",
+            verbose, :initialization_analysis
+        )
         return empty_result
     end
     u0 = collect(float.(u0))
@@ -192,7 +212,7 @@ function analyze_initialization_jacobian(
         [(eqs === nothing ? i : eqs[i]) => row_w[i] for i in 1:nrows if row_w[i] > threshold];
         by = last, rev = true
     )
-    if verbose
+    if _toggle_enabled(verbose, :initialization_analysis)
         println("Initialization Jacobian rank analysis")
         println("  residual Jacobian: $(nrows)×$(ncols), rank ≈ $rank, nullity ≈ $nullity, redundancy ≈ $redundancy")
         if !isempty(S)

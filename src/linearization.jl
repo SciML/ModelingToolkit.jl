@@ -141,6 +141,10 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
+  - `verbose`: An [`MTKVerbosity`](@ref), a `SciMLLogging` preset, or a `Bool` controlling
+    diagnostic output (the `empty_operating_point` toggle and the initialization toggles).
+    The deprecated boolean keywords `warn_empty_op` and `warn_initialize_determined`
+    remain accepted and override the corresponding toggles when explicitly passed.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -158,22 +162,36 @@ function linearization_function(
         initialization_solver_alg = nothing,
         autodiff = AutoForwardDiff(),
         eval_expression = false, eval_module = @__MODULE__,
-        warn_initialize_determined = true,
+        verbose = nothing,
+        warn_initialize_determined = nothing,
         guesses = Dict{SymbolicT, SymbolicT}(),
-        warn_empty_op = true,
+        warn_empty_op = nothing,
         missing_guess_value = MTKBase.default_missing_guess_value(),
         t = 0.0,
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
         kwargs...
     )
+    verbosity = _route_problem_verbose(verbose)
+    verbosity = _override_toggle(
+        verbosity, warn_empty_op, :empty_operating_point => WarnLevel
+    )
+    verbosity = _override_toggle(
+        verbosity, warn_initialize_determined,
+        :singular_initialization => WarnLevel,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
+    )
     op = Dict(op)
-    if isempty(op) && warn_empty_op
-        @warn "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `warn_empty_op = false`."
+    if isempty(op)
+        @SciMLMessage(
+            "An empty operating point was passed to `linearization_function`. An operating point containing the variables that will be changed in `linearize` should be provided. Disable this warning by passing `verbose = MTKVerbosity(empty_operating_point = Silent)` (the deprecated `warn_empty_op = false` also works).",
+            verbosity, :empty_operating_point
+        )
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
-    ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    ssys = mtkcompile(sys; inputs, outputs, simplify, verbose = verbosity, kwargs...)
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
@@ -214,7 +232,7 @@ function linearization_function(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value
+        algebraic_only = true, guesses, missing_guess_value, verbose = verbosity
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)

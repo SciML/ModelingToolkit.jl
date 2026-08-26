@@ -50,6 +50,7 @@ end
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "System Building Tests" include("system_building.jl")
             @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
+            @safetestset "SciMLLogging verbosity" include("verbosity.jl")
             @safetestset "`@mtkcomplete`" include("mtkcomplete.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")

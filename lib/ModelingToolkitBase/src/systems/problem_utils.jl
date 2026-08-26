@@ -233,9 +233,10 @@ function Base.showerror(io::IO, err::UnexpectedSymbolicValueInVarmap)
         `symbolic_u0 = true`. In case the initial conditions are not cyclic but \
         require more substitutions to resolve, increase `substitution_limit`. To report \
         cycles in initial conditions of unknowns/parameters, pass \
-        `warn_cyclic_dependency = true`. If the cycles are still not reported, you \
-        may need to pass a larger value for `circular_dependency_max_cycle_length` \
-        or `circular_dependency_max_cycles`.
+        `verbose = MTKVerbosity(cyclic_dependency = SciMLLogging.WarnLevel)` (the \
+        deprecated `warn_cyclic_dependency = true` also works). If the cycles are still \
+        not reported, you may need to pass a larger value for \
+        `circular_dependency_max_cycle_length` or `circular_dependency_max_cycles`.
         """
     )
 end
@@ -1802,6 +1803,12 @@ problem — none of which are meaningful to a `*Function` constructor on their o
 to resolve any `Symbol` keys in `guesses` to the corresponding symbolic variable of `sys`
 (via [`symbols_to_symbolics!`](@ref)) before `guesses` is converted to a `SymmapT`.
 
+The `verbosity::MTKVerbosity` field carries the diagnostic settings for problem
+construction. The keyword constructor assembles it from the `verbose` keyword (an
+`MTKVerbosity`, a `SciMLLogging` preset, or a `Bool`); the deprecated boolean keywords
+`warn_initialize_determined` and `warn_cyclic_dependency` remain accepted and, when
+explicitly passed, override the corresponding toggles.
+
 `expression` is a type parameter (matching `SciMLFunctionOptions`) so that `fn_opts` is
 concretely typed; `__process_SciMLProblem` itself never branches on it.
 
@@ -1818,7 +1825,7 @@ struct SciMLProblemOptions{expression}
     build_initializeprob::Bool
     implicit_dae::Bool
     guesses::SymmapT
-    warn_initialize_determined::Bool
+    verbosity::MTKVerbosity
     initialization_eqs::Vector{Equation}
     fully_determined::Union{Nothing, Bool}
     check_initialization_units::Bool
@@ -1827,7 +1834,6 @@ struct SciMLProblemOptions{expression}
     p_constructor::Any
     check_length::Bool
     symbolic_u0::Bool
-    warn_cyclic_dependency::Bool
     circular_dependency_max_cycle_length::Int
     circular_dependency_max_cycles::Int
     initsys_mtkcompile_kwargs::Any
@@ -1853,11 +1859,12 @@ function SciMLProblemOptions(
         # opts::SciMLProblemOptions)` always recomputes and overrides them from `op`.
         floatT = Float64, u0Type = Nothing, u0_eltype = nothing,
         build_initializeprob::Bool = false, implicit_dae::Bool = false, guesses = AnyDict(),
-        warn_initialize_determined::Bool = true, initialization_eqs = Equation[],
+        verbose = nothing, warn_initialize_determined = nothing,
+        initialization_eqs = Equation[],
         fully_determined = nothing, check_initialization_units::Bool = false,
         tofloat::Bool = true, u0_constructor = identity, p_constructor = identity,
         check_length::Bool = true, symbolic_u0::Bool = false,
-        warn_cyclic_dependency::Bool = false, circular_dependency_max_cycle_length,
+        warn_cyclic_dependency = nothing, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc::Bool = true, time_dependent_init::Bool,
         algebraic_only::Bool = false, missing_guess_value = default_missing_guess_value(),
@@ -1870,11 +1877,23 @@ function SciMLProblemOptions(
         symbols_to_symbolics!(sys, guesses)
         guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     end
+    verbosity = _route_problem_verbose(verbose)
+    # Deprecated boolean keywords override the corresponding toggles when explicitly
+    # passed (`nothing` = not passed).
+    verbosity = _override_toggle(
+        verbosity, warn_initialize_determined,
+        :singular_initialization => WarnLevel,
+        :overdetermined_initialization => WarnLevel,
+        :underdetermined_initialization => WarnLevel,
+    )
+    verbosity = _override_toggle(
+        verbosity, warn_cyclic_dependency, :cyclic_dependency => WarnLevel
+    )
     return SciMLProblemOptions{E}(
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -1901,9 +1920,9 @@ function maybe_build_initialization_problem(
         expression = Val{false}, kwargs...
     )
     (;
-        floatT, implicit_dae, warn_initialize_determined, initialization_eqs,
+        floatT, implicit_dae, initialization_eqs,
         fully_determined, check_initialization_units, u0_constructor, p_constructor,
-        warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
         time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_steadystateprob, init_compiler_options,
@@ -2118,10 +2137,10 @@ Base.@nospecializeinfer function process_SciMLProblem(
         symbolic_u0 = false,
         build_initializeprob = supports_initialization(sys),
         implicit_dae = false, t = nothing, guesses = AnyDict(),
-        warn_initialize_determined = true, initialization_eqs = [],
+        verbose = nothing, warn_initialize_determined = nothing, initialization_eqs = [],
         eval_expression = false, eval_module = @__MODULE__, fully_determined = nothing,
         check_initialization_units = false, tofloat = true,
-        check_length = true, warn_cyclic_dependency = false,
+        check_length = true, warn_cyclic_dependency = nothing,
         circular_dependency_max_cycle_length = length(all_symbols(sys)),
         circular_dependency_max_cycles = 10, initsys_mtkcompile_kwargs = (;),
         substitution_limit = 100, use_scc = true, time_dependent_init = is_time_dependent(sys),
@@ -2136,7 +2155,7 @@ Base.@nospecializeinfer function process_SciMLProblem(
     opts = SciMLProblemOptions(
         sys;
         fn_opts, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbose, warn_initialize_determined, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
         symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
@@ -2183,9 +2202,9 @@ function __process_SciMLProblem(
     )
     (;
         fn_opts, floatT, u0Type, u0_eltype, build_initializeprob, implicit_dae, guesses,
-        warn_initialize_determined, initialization_eqs, fully_determined,
+        verbosity, initialization_eqs, fully_determined,
         check_initialization_units, tofloat, u0_constructor, p_constructor, check_length,
-        symbolic_u0, warn_cyclic_dependency, circular_dependency_max_cycle_length,
+        symbolic_u0, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, substitution_limit,
         use_scc, time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
         is_initializeprob, is_steadystateprob, return_operating_point, init_compiler_options,
@@ -2252,18 +2271,19 @@ function __process_SciMLProblem(
     end
     add_observed_equations!(op, obs)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in unknowns:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in unknowns:\n$msg"
         end
     end
 
@@ -2286,18 +2306,19 @@ function __process_SciMLProblem(
 
     check_eqs_u0(eqs, dvs, u0; check_length, kwargs...)
 
-    if warn_cyclic_dependency
+    if _toggle_enabled(verbosity, :cyclic_dependency)
         cycles = check_substitution_cycles(
             op, ps; max_cycle_length = circular_dependency_max_cycle_length,
             max_cycles = circular_dependency_max_cycles
         )
         if !isempty(cycles)
-            buffer = IOBuffer()
-            for cycle in cycles
-                println(buffer, cycle)
+            @SciMLMessage(verbosity, :cyclic_dependency) do
+                buffer = IOBuffer()
+                for cycle in cycles
+                    println(buffer, cycle)
+                end
+                "Cycles in parameters:\n$(String(take!(buffer)))"
             end
-            msg = String(take!(buffer))
-            @warn "Cycles in parameters:\n$msg"
         end
     end
 
@@ -2421,6 +2442,10 @@ function filter_kwargs(kwargs)
     for key in keys(kwargs)
         key in SciMLBase.allowedkeywords || delete!(kwargs, key)
     end
+    # An `MTKVerbosity` is consumed by problem construction; it is not a solver
+    # verbosity and must not end up in `prob.kwargs`. Presets, `Bool`s, and solver
+    # specifiers pass through to `solve` as before.
+    get(kwargs, :verbose, nothing) isa MTKVerbosity && delete!(kwargs, :verbose)
     return pairs(NamedTuple(kwargs))
 end
 
