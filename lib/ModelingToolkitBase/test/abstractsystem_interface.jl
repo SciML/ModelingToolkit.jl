@@ -2,6 +2,7 @@ using ModelingToolkitBase
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using Test
 MT = ModelingToolkitBase
+const MissingFieldError = isdefined(Base, :FieldError) ? getfield(Base, :FieldError) : ErrorException
 
 # Every call below is part of the documented `AbstractSystem` interface (see
 # `docs/src/API/abstract_system_interface.md`). Nothing here reads a field of a system
@@ -84,9 +85,9 @@ end
     @test isequal(MT.get_iv(leaf), t)
 
     # `get_x` on absent storage throws, so generic code has to guard it with `has_x`.
-    @test_throws FieldError MT.get_eqs(minimal)
-    @test_throws FieldError MT.get_unknowns(minimal)
-    @test_throws FieldError MT.get_ps(minimal)
+    @test_throws MissingFieldError MT.get_eqs(minimal)
+    @test_throws MissingFieldError MT.get_unknowns(minimal)
+    @test_throws MissingFieldError MT.get_ps(minimal)
 
     # The event accessors are the documented exceptions: they default to empty.
     @test MT.has_continuous_events(minimal) == false
