@@ -17,7 +17,8 @@ The package can also build optimization systems.
 Let's optimize the classical _Rosenbrock function_ in two dimensions.
 
 ```@example optimization
-using ModelingToolkit, Optimization, OptimizationOptimJL
+using ModelingToolkit, Optimization
+using OptimizationOptimJL: Optim
 @variables begin
     x = 1.0, [bounds = (-2.0, 2.0)]
     y = 3.0, [bounds = (-1.0, 3.0)]
@@ -53,7 +54,7 @@ u0 = [y => 2.0]
 p = [b => 100.0]
 
 prob = OptimizationProblem(sys, vcat(u0, p), grad = true, hess = true)
-u_opt = solve(prob, GradientDescent())
+u_opt = solve(prob, Optim.GradientDescent())
 ```
 
 A visualization of the Rosenbrock function is depicted below.
@@ -75,7 +76,8 @@ Non-linear equality and inequality constraints can be added to the `Optimization
 Let's add an inequality constraint to the previous example:
 
 ```@example optimization_constrained
-using ModelingToolkit, Optimization, OptimizationOptimJL
+using ModelingToolkit, Optimization
+using OptimizationOptimJL: Optim
 
 @variables begin
     x = 0.14, [bounds = (-2.0, 2.0)]
@@ -88,7 +90,7 @@ cons = [
 ]
 @mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
 prob = OptimizationProblem(sys, [], grad = true, hess = true, cons_j = true, cons_h = true)
-u_opt = solve(prob, IPNewton())
+u_opt = solve(prob, Optim.IPNewton())
 ```
 
 Inequality constraints are constructed via a `≲` (or `≳`).
