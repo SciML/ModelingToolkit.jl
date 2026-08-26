@@ -100,6 +100,8 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :similar_type,
     # UnPack
     :unpack,
+    # Base.Iterators (documented APIs not declared public until Julia 1.12)
+    :filter, :map, :reverse,
     # Base
     Symbol("@__doc__"), :Callable, :Cartesian, :deepcopy_internal, :Experimental,
     :HasEltype, :JLOptions, :literal_pow, Symbol("@nospecializeinfer"), Symbol("@ntuple"),
