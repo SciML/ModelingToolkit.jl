@@ -42,7 +42,6 @@ jobs:
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: ModelOrderReduction.jl, group: Core, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface1, subpkg: ""}
-          - {user: SciML, repo: MethodOfLines.jl, group: MOL_Interface2, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion, subpkg: ""}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE, subpkg: ""}
           - {user: SciML, repo: ModelingToolkitNeuralNets.jl, group: Core, subpkg: ""}
@@ -64,8 +63,12 @@ jobs:
         shell: julia --color=yes --project=downstream {0}
         run: |
           using Pkg
-          Pkg.develop(PackageSpec(path="./lib/ModelingToolkitBase"))
           Pkg.develop(PackageSpec(path="."))
+          if isdir("lib")
+              Pkg.develop(map(name -> PackageSpec(; path = joinpath("lib", name)),
+                              filter(name -> isfile(joinpath("lib", name, "Project.toml")),
+                                     readdir("lib"))))
+          end
           subpkg = "${{ matrix.package.subpkg }}"
           if subpkg != ""
             Pkg.develop(PackageSpec(path=joinpath("./downstream/lib", subpkg)))
