@@ -124,7 +124,8 @@ struct PDESystem <: AbstractSystem
             if isnothing(analytic_func)
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : ps
+                    p = ps isa SciMLBase.NullParameters ? [] :
+                        map(p -> p isa Pair ? first(p) : p, ps)
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => drop_expr(
