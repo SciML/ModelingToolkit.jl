@@ -1529,6 +1529,16 @@ end
     @test prob.kwargs[:tstops](prob.p, prob.tspan) ≈ [0.15]
 end
 
+@testset "System tspan default" begin
+    @variables x(t) = 1.0
+    @mtkcompile sys = System([D(x) ~ -x], t; tspan = (0.0, 5.0))
+    prob = ODEProblem(sys, [])
+    @test prob.tspan == (0.0, 5.0)
+
+    prob2 = ODEProblem(sys, [], (0.0, 2.0))
+    @test prob2.tspan == (0.0, 2.0)
+end
+
 @testset "Validate input types" begin
     @parameters p d
     @variables X(t)::Int64

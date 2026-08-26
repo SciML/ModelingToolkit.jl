@@ -152,7 +152,7 @@ end
 
 """$(problem_docstring(SciMLBase.ODEProblem, ODEFunction, true))"""
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
-        sys::System, @nospecialize(op), tspan;
+        sys::System, @nospecialize(op), tspan = get_tspan(sys);
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...
@@ -168,7 +168,7 @@ end
 Base.@nospecializeinfer function SciMLBase.ODEProblem{
         iip, SciMLBase.FunctionWrapperSpecialize,
     }(
-        sys::System, @nospecialize(op), tspan;
+        sys::System, @nospecialize(op), tspan = get_tspan(sys);
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...
