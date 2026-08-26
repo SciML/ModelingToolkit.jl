@@ -1,6 +1,7 @@
-using ModelingToolkitBase, SparseArrays, Test, Optimization, OptimizationOptimJL,
-    OptimizationMOI, Ipopt, AmplNLWriter, SymbolicIndexingInterface,
+using ModelingToolkitBase, SparseArrays, Test, Optimization, OptimizationMOI,
+    Ipopt, AmplNLWriter, SymbolicIndexingInterface,
     LinearAlgebra
+using OptimizationOptimJL: Optim
 using Ipopt: Ipopt_jll
 using Symbolics: value
 
@@ -82,7 +83,7 @@ end
     @test prob.f.cons_expr isa Vector{Expr}
     @test prob.f.expr isa Expr
     @test prob.f.sys === sys
-    sol = solve(prob, IPNewton())
+    sol = solve(prob, Optim.IPNewton())
     @test sol.objective < 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.objective < 1.0
@@ -110,7 +111,7 @@ end
         sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true
     )
-    sol = solve(prob, IPNewton())
+    sol = solve(prob, Optim.IPNewton())
     @test sol.objective < 1.0
     @test sol[[x, z]] ≈ [0.808, -0.064] atol = 1.0e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
@@ -135,7 +136,7 @@ end
     p = [1.0, 100.0]
     f = OptimizationFunction(rosenbrock, Optimization.AutoSymbolics())
     prob = OptimizationProblem(f, x0, p)
-    sol = solve(prob, Newton())
+    sol = solve(prob, Optim.Newton())
     @test sol.u ≈ [1.0, 1.0]
 end
 
@@ -263,7 +264,7 @@ end
      prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
          grad = true, hess = true, cons_j = true, cons_h = true)
      @test prob.f.sys === sys2
-     sol = solve(prob, IPNewton())
+     sol = solve(prob, Optim.IPNewton())
      @test sol.objective < 1.0
      sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
      @test sol.objective < 1.0
@@ -384,7 +385,7 @@ end
     @variables x = 1.0
     @mtkcompile sys = OptimizationSystem((x - 3)^2, [x], [])
     prob = @test_nowarn OptimizationProblem(sys, nothing)
-    @test_nowarn solve(prob, NelderMead())
+    @test_nowarn solve(prob, Optim.NelderMead())
 end
 
 if @isdefined(ModelingToolkit)
