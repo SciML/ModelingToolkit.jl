@@ -2386,6 +2386,15 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Get the `tspan` of `sys`.
+"""
+function symbolic_tspan(sys::AbstractSystem)
+    return get_tspan(sys)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Obtain the preface associated with `sys` and all of its subsystems, appropriately
 namespaced.
 """

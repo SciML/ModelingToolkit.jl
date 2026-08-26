@@ -252,6 +252,13 @@ struct System <: IntermediateDeprecationSystem
     or expressions of parameters and time.
     """
     tstops::Vector{Any}
+
+    """
+    The `(t0, t1)` start and stop time endpoints, used as the default `tspan` when
+    constructing a problem from `sys` if none is given explicitly. `nothing` if unset.
+    """
+    tspan::Union{Nothing, Tuple}
+
     """
     $INTERNAL_FIELD_WARNING
     The list of input variables of the system.
@@ -364,7 +371,7 @@ struct System <: IntermediateDeprecationSystem
             brownians, poissonians, iv, observed, var_to_name, name, description, bindings,
             initial_conditions, guesses, systems, initialization_eqs, continuous_events,
             discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
-            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
+            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [], tspan = nothing,
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
@@ -432,7 +439,7 @@ struct System <: IntermediateDeprecationSystem
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, inputs, outputs, tearing_state, namespacing,
+            tstops, tspan, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
             state_priorities, irreducibles, maybe_zeros, irstructure_tlv,
@@ -554,7 +561,7 @@ function System(
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
-        @nospecialize(preface = nothing), @nospecialize(tstops = []),
+        @nospecialize(preface = nothing), @nospecialize(tstops = []), @nospecialize(tspan = nothing),
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
@@ -749,7 +756,7 @@ function System(
         costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, inputs, outputs, tearing_state, true, false,
+        tstops, tspan, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
         initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
         maybe_zeros, irstructure_tlv; checks
@@ -1230,7 +1237,7 @@ function flatten(sys::System, noeqs = false)
         guesses = guesses(sys),
         continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
-        is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
+        is_dde = is_dde(sys), tstops = symbolic_tstops(sys), tspan = symbolic_tspan(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
@@ -1700,6 +1707,7 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_metadata(sysa), get_metadata(sysb)) &&
         isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
         issetequal(get_tstops(sysa), get_tstops(sysb)) &&
+        isequal(get_tspan(sysa), get_tspan(sysb)) &&
         issetequal(get_inputs(sysa), get_inputs(sysb)) &&
         issetequal(get_outputs(sysa), get_outputs(sysb)) &&
         safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
@@ -1726,7 +1734,7 @@ function Base.copy(sys::System)
         map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
         copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
         copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
-        get_is_dde(sys), copy(get_tstops(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_is_dde(sys), copy(get_tstops(sys)), copy(get_tspan(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
         get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
         get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
