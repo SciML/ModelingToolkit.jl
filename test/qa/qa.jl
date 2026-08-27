@@ -178,9 +178,9 @@ const REEXPORTED_API = (
     Symbol("@acrule"), Symbol("@arrayop"), Symbol("@makearray"), Symbol("@rule"),
     Symbol("@syms"), :BS, :expand, :flatten_fractions, :get_canonical_expr, :get_reachability,
     :getmetadata, :hasmetadata, :ifelse_branching, :ifelse_eager, :IRStructure, :istree,
-    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :setmetadata,
-    :simplify, :simplify_fractions, :substitute, :SymbolicUtils, :SymReal, :Term, :term,
-    :toexpr, :TreeReal, :unwrap_const, :vartype,
+    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :scalarize,
+    :setmetadata, :shape, :simplify, :simplify_fractions, :substitute, :SymbolicUtils,
+    :SymReal, :Term, :term, :toexpr, :TreeReal, :Unknown, :unwrap, :unwrap_const, :vartype,
     # TermInterface: the term-manipulation interface, re-exported transitively by
     # SymbolicUtils.
     :arguments, :iscall, :operation, :sorted_arguments,
