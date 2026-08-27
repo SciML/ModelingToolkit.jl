@@ -245,3 +245,14 @@ end
     )
     @test haskey(dd, bu)
 end
+
+@testset "`shift2term` on an already-shifted array variable" begin
+    @independent_variables tt
+    @variables arr(tt)[1:2]
+    Sh = ModelingToolkitBase.Shift
+    # the first lowering attaches `VariableUnshifted`, so the second one takes the
+    # branch that merges a new key into the existing metadata
+    once = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(arr[1])))
+    twice = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(once)))
+    @test isequal(twice, ModelingToolkitBase.shift2term(unwrap(Sh(tt, -2)(arr[1]))))
+end

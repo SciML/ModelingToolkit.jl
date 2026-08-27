@@ -300,7 +300,7 @@ function shift2term(var::SymbolicT)
                     if metadata === nothing
                         metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
                     elseif metadata isa Base.ImmutableDict{DataType, Any}
-                        metadata = Base.ImmutableDict(metadata, VariableUnshifted, unshifted)
+                        metadata = Base.ImmutableDict{DataType, Any}(metadata, VariableUnshifted, unshifted)
                     end
                     return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
                 end
