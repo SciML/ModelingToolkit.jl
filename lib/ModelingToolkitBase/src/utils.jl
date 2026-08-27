@@ -1650,23 +1650,6 @@ const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
 """
     $TYPEDSIGNATURES
 
-Collapse a field access of a struct symbolic to the struct itself, so a whole record is the
-atomic unit the way a whole array is. Commutes with operators, as `split_indexed_var` does.
-"""
-function split_field_var(x::SymbolicT)::SymbolicT
-    return Moshi.Match.@match x begin
-        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => split_field_var(args[1])
-        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
-            inner = split_field_var(args[1])
-            isequal(inner, args[1]) ? x : f(inner)::SymbolicT
-        end
-        _ => x
-    end
-end
-
-"""
-    $TYPEDSIGNATURES
-
 Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
 return the array and `true`. Otherwise, return `x, false`.
 """
@@ -1707,6 +1690,75 @@ function _get_stable_index(x::SymbolicT)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
         _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
     end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+One step of an access path into a composite symbolic: a field name, or the index of an
+element. See [`get_struct_access`](@ref).
+"""
+const StructAccessStepT = Union{Symbol, SU.StableIndex{Int}}
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, check whether it projects a leaf out of a struct symbolic,
+through any interleaving of field accesses and indices (`foo.x.y[i]`, `foo.x[i].y`). If it
+does, return the struct being projected from and `true`. Otherwise, return `x, false`.
+
+This is the struct counterpart of `split_indexed_var`, and like it, commutes with
+operators. Unlike `split_indexed_var` it peels the whole chain, so a plain array element
+`a[i]` also resolves to `a`.
+"""
+SU.@cache limit = 500_000 function split_field_access(x::SymbolicT)::Tuple{SymbolicT, Bool}
+    return _split_field_access(x)
+end
+
+function _split_field_access(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+            root, _ = split_field_access(args[1])
+            return root, true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            root, isacc = split_field_access(args[1])
+            isacc || return x, false
+            return f(root)::SymbolicT, isacc
+        end
+        _ => return x, false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, assume `split_field_access(x)[2]` is `true`. Return the
+access path from the struct to `x`, outermost last, e.g. `[:x, :y, StableIndex([1])]` for
+`foo.x.y[1]` and `[:x, StableIndex([1]), :y]` for `foo.x[1].y`.
+"""
+function get_struct_access(x::SymbolicT)::Vector{StructAccessStepT}
+    path = StructAccessStepT[]
+    _get_struct_access!(path, x)
+    return path
+end
+
+function _get_struct_access!(path::Vector{StructAccessStepT}, x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, Symbolics.field_name(f)::Symbol)
+        end
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, SU.StableIndex{Int}(x))
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            _get_struct_access!(path, args[1])
+        end
+        _ => nothing
+    end
+    return path
 end
 
 """

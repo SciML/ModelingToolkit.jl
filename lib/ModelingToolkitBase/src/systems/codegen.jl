@@ -1246,7 +1246,7 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
     end
     arrx in pred.simplevars && return true
     # `simplevars` keys struct variables on the whole record, so also try the record.
-    split_field_var(arrx) in pred.simplevars && return true
+    split_field_access(arrx)[1] in pred.simplevars && return true
     if x in pred.dervars
         push!(pred.present_dervars, x)
         return true

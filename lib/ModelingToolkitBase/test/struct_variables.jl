@@ -134,6 +134,76 @@ end
     @test occursin("inner", string(Symbolics.unwrap(outer.inner.s.x)))
 end
 
+# A record holding an array of records, so an access path interleaves fields and indices
+# (`h.x[1].y`) rather than grouping them.
+struct Leaf
+    y::Real
+    z::Real
+end
+struct Holder
+    x::Vector{Leaf}
+end
+@symstruct Leaf
+@symstruct Holder begin
+    shape(:x) = [1:2]
+end
+
+@testset "access paths interleave fields and indices" begin
+    @variables h(t)::Holder n(t)::Nested u(t)[1:2] w(t)
+    SI = Symbolics.SymbolicUtils.StableIndex
+
+    # The whole chain resolves to the record, in either order.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(n.f.x)),
+        (Symbolics.unwrap(n), true))
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(h.x[1].y)),
+        (Symbolics.unwrap(h), true))
+
+    # Paths are recorded outermost last, so the index sits where it was written.
+    @test isequal(ModelingToolkitBase.get_struct_access(Symbolics.unwrap(n.f.x)), [:f, :x])
+    @test isequal(
+        ModelingToolkitBase.get_struct_access(Symbolics.unwrap(h.x[1].y)),
+        [:x, SI([1]), :y])
+
+    # Commutes with operators, as `split_indexed_var` does.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(D(h.x[2].z)))[1],
+        D(Symbolics.unwrap(h)))
+    @test isequal(
+        ModelingToolkitBase.get_struct_access(Symbolics.unwrap(D(h.x[2].z))),
+        [:x, SI([2]), :z])
+
+    # Plain arrays still resolve to the array; plain scalars are not access paths.
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(u[1])),
+        (Symbolics.unwrap(u), true))
+    @test isequal(
+        ModelingToolkitBase.split_field_access(Symbolics.unwrap(w)),
+        (Symbolics.unwrap(w), false))
+end
+
+@testset "record of records-array integrates" begin
+    @variables h(t)::Holder
+    eqs = [D(h.x[1].y) ~ -h.x[1].y, D(h.x[1].z) ~ h.x[1].y,
+           D(h.x[2].y) ~ -h.x[2].y, D(h.x[2].z) ~ h.x[2].y]
+    sys = mtkcompile(System(eqs, t, [h], []; name = :holder))
+    @test issetequal(
+        unknowns(sys),
+        Symbolics.unwrap.([h.x[1].y, h.x[1].z, h.x[2].y, h.x[2].z])
+    )
+
+    prob = ODEProblem(
+        sys,
+        [h.x[1].y => 1.0, h.x[1].z => 0.0, h.x[2].y => 2.0, h.x[2].z => 0.0],
+        (0.0, 1.0)
+    )
+    sol = solve(prob, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[h.x[1].y][end]≈exp(-1) rtol=1e-5
+    @test sol[h.x[2].y][end]≈2exp(-1) rtol=1e-5
+end
+
 @testset "array variables are unaffected" begin
     @variables u(t)[1:2]
     @parameters q[1:2]

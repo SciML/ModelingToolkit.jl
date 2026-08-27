@@ -1770,7 +1770,7 @@ function split_record_entries!(op::AbstractDict)
         v = op[k]
         v isa SymbolicT && SU.isconst(v) && (v = unwrap_const(v))
         v isa T || continue
-        for leaf in collect(Symbolics.SymStruct{T}(ku))
+        for leaf in collect(Symbolics.SymStruct{T}(ku))::Vector{SymbolicT}
             haskey(op, leaf) && continue
             op[leaf] = record_leaf_value(leaf, ku, v)
         end
