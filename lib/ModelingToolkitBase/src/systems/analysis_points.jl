@@ -156,11 +156,11 @@ function to_connection(ap::AnalysisPoint)
     if ap.input isa System
         vs = System[ap.input]
         append!(vs, ap.outputs::Vector{System})
-        return Connection() ~ Connection(vs)
+        return Equation(Connection(), Connection(vs))
     elseif ap.input isa SymbolicT
         vs = SymbolicT[ap.input]
         append!(vs, ap.outputs::Vector{SymbolicT})
-        return Connection() ~ Connection(vs)
+        return Equation(Connection(), Connection(vs))
     else
         error("Unreachable!")
     end
@@ -183,7 +183,9 @@ renamespace(names::AbstractVector, ap::AnalysisPoint) = _renamespace(names, ap)
 
 # create analysis points via `connect`
 function connect(in, ap::AnalysisPoint, outs...; verbose = true)
-    return AnalysisPoint() ~ AnalysisPoint(unwrap(in), ap.name, collect(unwrap.(outs)); verbose)
+    return Equation(
+        AnalysisPoint(), AnalysisPoint(unwrap(in), ap.name, collect(unwrap.(outs)); verbose)
+    )
 end
 
 """
@@ -224,7 +226,9 @@ typically is not (unless the model is an inverse model).
   warning if you are analyzing an inverse model.
 """
 function connect(in::AbstractSystem, name::Symbol, out, outs...; verbose = true)
-    return AnalysisPoint() ~ AnalysisPoint(in, name, System[out; collect(outs)]; verbose)
+    return Equation(
+        AnalysisPoint(), AnalysisPoint(in, name, System[out; collect(outs)]; verbose)
+    )
 end
 
 function connect(
@@ -238,8 +242,9 @@ function connect(
         push!(allvars, unwrap(var))
     end
     validate_causal_variables_connection(allvars)
-    return AnalysisPoint() ~ AnalysisPoint(
-        allvars[1], name, allvars[2:end]; verbose
+    return Equation(
+        AnalysisPoint(),
+        AnalysisPoint(allvars[1], name, allvars[2:end]; verbose)
     )
 end
 

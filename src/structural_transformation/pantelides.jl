@@ -2,7 +2,7 @@
 ### Reassemble: structural information -> system
 ###
 
-const NOTHING_EQ = nothing ~ nothing
+const NOTHING_EQ = Equation(nothing, nothing)
 
 """
     pantelides_reassemble(state::TearingState, var_eq_matching)

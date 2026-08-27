@@ -133,9 +133,11 @@ function recreate_connections(sys::AbstractSystem)
             return newarg
         end
         if eq.lhs isa Connection
-            return eq.lhs ~ Connection(newargs)
+            return Equation(eq.lhs, Connection(newargs))
         else
-            return eq.lhs ~ AnalysisPoint(newargs[1], eq.rhs.name, newargs[2:end])
+            return Equation(
+                eq.lhs, AnalysisPoint(newargs[1], eq.rhs.name, newargs[2:end])
+            )
         end
     end
     @set! sys.eqs = eqs

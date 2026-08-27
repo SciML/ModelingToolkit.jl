@@ -32,7 +32,7 @@ end
 @test has_var(x ~ 1, x)
 @test has_var(1 ~ x, x)
 @test has_var(x + x, x)
-@test !has_var(2 ~ 1, x)
+@test !has_var(Equation(2, 1), x)
 
 @test get_namespace(x) == ""
 @test get_namespace(sys.x) == "sys"

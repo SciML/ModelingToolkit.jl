@@ -7,6 +7,11 @@ using OrdinaryDiffEq
 using LinearAlgebra
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
+@test isequal(
+    ModelingToolkit.StructuralTransformations.NOTHING_EQ,
+    ModelingToolkit.Equation(nothing, nothing)
+)
+
 # Define some variables
 @parameters L g
 @variables x(t) y(t) z(t) w(t) T(t)
