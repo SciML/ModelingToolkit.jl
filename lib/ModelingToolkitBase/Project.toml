@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.68.1"
+version = "1.68.2"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -119,7 +119,7 @@ DiffEqBase = "7.14"
 DiffEqCallbacks = "4"
 DiffEqNoiseProcess = "5"
 DiffRules = "1"
-DifferentiationInterface = "0.6.47, 0.7"
+DifferentiationInterface = "0.7.19"
 Distributed = "1"
 DocStringExtensions = "0.9"
 DomainSets = "0.7, 0.8"
