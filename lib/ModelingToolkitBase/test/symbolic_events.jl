@@ -11,6 +11,7 @@ using Symbolics
 
 using StableRNGs
 import SciMLBase
+import ForwardDiff
 using SymbolicIndexingInterface
 using Setfield
 using LinearAlgebra
@@ -257,13 +258,10 @@ end
     @test get_callback(prob) isa ModelingToolkitBase.DiffEqCallbacks.ContinuousCallback
     cb = ModelingToolkitBase.generate_continuous_callbacks(sys)
     cond = cb.condition
-    out = [0.0]
-    cond.f(out, [0], p0, t0)
-    @test out[] ≈ -1 # signature is u,p,t
-    cond.f(out, [1], p0, t0)
-    @test out[] ≈ 0  # signature is u,p,t
-    cond.f(out, [2], p0, t0)
-    @test out[] ≈ 1  # signature is u,p,t
+    # a single-equation continuous callback compiles to a scalar out-of-place condition
+    @test cond.f([0], p0, t0) ≈ -1 # signature is u,p,t
+    @test cond.f([1], p0, t0) ≈ 0  # signature is u,p,t
+    @test cond.f([2], p0, t0) ≈ 1  # signature is u,p,t
 
     prob = ODEProblem(sys, Pair[], (0.0, 2.0))
     prob_nosplit = ODEProblem(sys_nosplit, Pair[], (0.0, 2.0))
@@ -421,6 +419,84 @@ end
     @test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
     @test 0 <= minimum(sol_nosplit[x]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test -minimum(sol_nosplit[y]) ≈ maximum(sol_nosplit[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
+end
+
+# Minimal stand-in for an integrator: implements only the `SymbolicIndexingInterface`
+# methods a compiled continuous condition is allowed to use. It is not a `DEIntegrator`, so
+# a condition reaching for solver internals (the solution object, the temporary cache, ...)
+# errors instead of silently working.
+struct ConditionIntegratorStub{U, P, T}
+    u::U
+    p::P
+    t::T
+end
+SymbolicIndexingInterface.parameter_values(integ::ConditionIntegratorStub) = integ.p
+SymbolicIndexingInterface.state_values(integ::ConditionIntegratorStub) = integ.u
+SymbolicIndexingInterface.current_time(integ::ConditionIntegratorStub) = integ.t
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/5018
+@testset "Scalar continuous conditions" begin
+    @variables x(t) = 1.0 v(t) = 0.0
+    eqs = [D(x) ~ v, D(v) ~ -9.8]
+
+    @named ball = System(eqs, t; continuous_events = [[x ~ 0] => [v ~ -Pre(v)]])
+    ball = mtkcompile(ball)
+    prob = ODEProblem(ball, Pair[], (0.0, 5.0))
+    cb = get_callback(prob)
+    @test cb isa ModelingToolkitBase.DiffEqCallbacks.ContinuousCallback
+
+    integ = ConditionIntegratorStub(prob.u0, prob.p, 0.0)
+    xidx = variable_index(ball, x)
+    u = copy(prob.u0)
+    u[xidx] = 0.25
+    val = cb.condition(u, 0.0, integ)
+    @test val isa Number
+    @test val ≈ 0.25
+
+    # the condition must be differentiable w.r.t. `u` through `ForwardDiff`
+    dval = cb.condition(ForwardDiff.Dual.(u, 1.0), 0.0, integ)
+    @test dval isa ForwardDiff.Dual
+    @test ForwardDiff.value(dval) ≈ 0.25
+    @test ForwardDiff.partials(dval, 1) ≈ 1.0
+    grad = ForwardDiff.gradient(uu -> cb.condition(uu, 0.0, integ), u)
+    @test grad[xidx] ≈ 1.0
+    @test grad[variable_index(ball, v)] ≈ 0.0
+
+    sol = solve(prob, Tsit5())
+    @test 0 <= minimum(sol[x]) <= 1.0e-10
+
+    # ... and w.r.t. `t`, for a time-dependent condition
+    @named tsys = System(eqs, t; continuous_events = [[x ~ t] => [v ~ -Pre(v)]])
+    tsys = mtkcompile(tsys)
+    tprob = ODEProblem(tsys, Pair[], (0.0, 5.0))
+    tcb = get_callback(tprob)
+    @test tcb isa ModelingToolkitBase.DiffEqCallbacks.ContinuousCallback
+    tinteg = ConditionIntegratorStub(tprob.u0, tprob.p, 0.0)
+    tu = copy(tprob.u0)
+    tu[variable_index(tsys, x)] = 0.25
+    @test tcb.condition(tu, 0.1, tinteg) ≈ 0.15
+    tdval = tcb.condition(tu, ForwardDiff.Dual(0.1, 1.0), tinteg)
+    @test tdval isa ForwardDiff.Dual
+    @test ForwardDiff.value(tdval) ≈ 0.15
+    @test ForwardDiff.partials(tdval, 1) ≈ -1.0
+    @test solve(tprob, Tsit5()).retcode == SciMLBase.ReturnCode.Success
+
+    # a multi-equation event still compiles to an in-place `VectorContinuousCallback`
+    @variables y(t) = 0.0
+    @named vsys = System(
+        [eqs; D(y) ~ 1], t;
+        continuous_events = [[x ~ 0] => [v ~ -Pre(v)], [y ~ 1] => [y ~ 0]]
+    )
+    vsys = mtkcompile(vsys)
+    vprob = ODEProblem(vsys, Pair[], (0.0, 5.0))
+    vcb = get_callback(vprob)
+    @test vcb isa ModelingToolkitBase.DiffEqCallbacks.VectorContinuousCallback
+    vout = zeros(2)
+    vcb.condition(vout, vprob.u0, 0.0, ConditionIntegratorStub(vprob.u0, vprob.p, 0.0))
+    @test vout ≈ [1.0, -1.0]
+    vsol = solve(vprob, Tsit5())
+    @test 0 <= minimum(vsol[x]) <= 1.0e-10
+    @test maximum(vsol[y]) ≈ 1.0
 end
 
 # issue https://github.com/SciML/ModelingToolkitBase.jl/issues/1386
