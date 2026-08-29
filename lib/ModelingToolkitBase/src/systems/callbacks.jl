@@ -219,7 +219,11 @@ function AffectSystem(
     # This `@invokelatest` should not be necessary, but it works around the inference bug
     # in https://github.com/JuliaLang/julia/issues/59943. Remove it at your own risk, the
     # bug took weeks to reduce to an MWE.
-    affectsys = (@invokelatest mtkcompile(affectsys; fully_determined = nothing))::System
+    affectsys = (
+        @invokelatest mtkcompile(
+            affectsys; fully_determined = nothing, homotopy = homotopy_enabled(parent_sys)
+        )
+    )::System
     # get accessed parameters p from Pre(p) in the callback parameters
     accessed_params = Vector{SymbolicT}(filter(isparameter, map(unPre, collect(pre_params))))
     union!(accessed_params, sys_params)
