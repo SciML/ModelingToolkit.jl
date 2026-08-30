@@ -174,6 +174,7 @@ defaults.
 ModelingToolkit.homotopy
 ModelingToolkitBase.strip_homotopy
 ModelingToolkitBase.homotopy_enabled
+ModelingToolkitBase.HomotopyCtx
 ModelingToolkitBase.NonPolynomialReason
 ```
 
