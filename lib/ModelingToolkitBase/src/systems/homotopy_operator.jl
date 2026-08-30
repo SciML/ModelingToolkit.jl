@@ -38,7 +38,10 @@ node independently, and all of them share the single continuation parameter `λ`
 `homotopy(actual, simplified)` stays an opaque symbolic operator through `System`
 construction, `mtkcompile`, and runtime code generation — no continuation
 parameter is injected into the system, and systems that do not use the operator
-go through a byte-identical pipeline. Symbolic differentiation works through the
+go through a byte-identical pipeline. Targets that cannot lower to a continuation
+solver can opt out entirely with `mtkcompile(sys; homotopy = false)`, which
+replaces every node by its `actual` branch before compilation (see
+[`strip_homotopy`](@ref)). Symbolic differentiation works through the
 operator: nodewise derivative rules keep symbolic jacobians, `tgrad`, and index
 reduction consistent — at runtime differentiated equations reproduce `actual`'s
 derivative, and along the continuation they follow the blended expression below.
@@ -166,20 +169,17 @@ function has_any_homotopy(sys::AbstractSystem)
 end
 
 """
-    _rewrite_with_lambda(ir, x, λ)
+    _rewrite_homotopy_nodes(ir, x, replace)
 
 Recursively replace every `homotopy(a, s)` node in the unwrapped expression `x`
-with `(1 - λ)*s + λ*a`, where `λ` is supplied by the caller. At λ=1 the lowered
-expression reduces numerically to `actual` (trivial form); at λ=0 it reduces to
-`simplified`.
+with `replace(a, s)`, walking the dependency graph of `ir` bottom-up so that
+parents of rewritten nodes are rebuilt with the new arguments.
 
 Hand-written TermInterface walk rather than a SymbolicUtils `@rule` — keeps the
 recursion explicit and avoids the rule-rewriter overhead for a single-node rewrite.
 """
-function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::SymbolicT)
+function _rewrite_homotopy_nodes(ir::IRStructure{VartypeT}, x::SymbolicT, replace::F) where {F}
     xidx = SU.populate_ir!(ir, x)
-    SU.populate_ir!(ir, λ)
-    oneminus = 1 - λ
     reachability = SU.get_reachability(ir, xidx)
     push!(reachability, xidx)
     old_to_new_idxs = Dict{Int32, Int32}()
@@ -200,7 +200,7 @@ function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::Symbo
             args = parent(arguments(sym))
         end
         if op === homotopy
-            new_sym = λ * args[1] + oneminus * args[2]
+            new_sym = replace(args[1], args[2])
             old_to_new_idxs[idx] = SU.populate_ir!(ir, new_sym)
             dirty = true
         elseif dirty
@@ -211,6 +211,99 @@ function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::Symbo
 
     return ir[get(old_to_new_idxs, xidx, xidx)]
 end
+
+"""
+    _rewrite_with_lambda(ir, x, λ)
+
+Recursively replace every `homotopy(a, s)` node in the unwrapped expression `x`
+with `(1 - λ)*s + λ*a`, where `λ` is supplied by the caller. At λ=1 the lowered
+expression reduces numerically to `actual` (trivial form); at λ=0 it reduces to
+`simplified`.
+"""
+function _rewrite_with_lambda(ir::IRStructure{VartypeT}, x::SymbolicT, λ::SymbolicT)
+    SU.populate_ir!(ir, λ)
+    oneminus = 1 - λ
+    return _rewrite_homotopy_nodes(ir, x, (a, s) -> λ * a + oneminus * s)
+end
+
+"""
+    _strip_homotopy(ir, x)
+
+Recursively replace every `homotopy(actual, simplified)` node in the unwrapped
+expression `x` with `actual`, discarding the `simplified` branch. Returns `x`
+itself when it contains no `homotopy` node.
+"""
+function _strip_homotopy(ir::IRStructure{VartypeT}, x::SymbolicT)
+    SU.populate_ir!(ir, x)
+    has_homotopy(ir, x) || return x
+    return _rewrite_homotopy_nodes(ir, x, (a, s) -> a)
+end
+
+"""
+    strip_homotopy(sys::System)
+
+Return a copy of `sys` in which every Modelica `homotopy(actual, simplified)` node
+has been replaced by its `actual` branch, recursively through subsystems. This is
+what `mtkcompile(sys; homotopy = false)` applies before compilation: the returned
+system contains no `homotopy` nodes, so generated code evaluates `actual` directly
+(the `simplified` expression is neither emitted nor evaluated) and problem
+construction never selects a [`SciMLBase.HomotopyProblem`](@ref).
+
+The rewrite covers the equations, observed equations, initialization equations,
+noise equations, costs, constraints and the values of bindings, initial conditions
+and guesses. Symbolic events and jumps are left as-is; a `homotopy` node inside
+them evaluates as `actual` through the numeric fallback.
+"""
+function strip_homotopy(sys::System)
+    ir = get_irstructure(sys)
+    rew(x::SymbolicT) = _strip_homotopy(ir, x)
+    rew(x) = rew(unwrap(x))
+    rew(eq::Equation) = Equation(rew(eq.lhs), rew(eq.rhs))
+    rew(x::Union{Vector, Matrix}) = map(rew, x)
+    rew(x::Nothing) = nothing
+    function rew_map(d::SymmapT)
+        newd = copy(d)
+        for (k, v) in d
+            newv = rew(v)
+            newv === v || (newd.dict[k] = newv)
+        end
+        return newd
+    end
+    @set! sys.eqs = rew(get_eqs(sys))
+    @set! sys.observed = rew(get_observed(sys))
+    @set! sys.initialization_eqs = rew(get_initialization_eqs(sys))
+    @set! sys.noise_eqs = rew(get_noise_eqs(sys))
+    @set! sys.costs = rew(get_costs(sys))
+    @set! sys.constraints = map(get_constraints(sys)) do c
+        c isa Equation ? rew(c) : c
+    end
+    @set! sys.bindings = rew_map(parent(get_bindings(sys)))
+    @set! sys.initial_conditions = rew_map(get_initial_conditions(sys))
+    @set! sys.guesses = rew_map(get_guesses(sys))
+    @set! sys.systems = map(strip_homotopy, get_systems(sys))
+    return sys
+end
+
+"""
+    HomotopyCtx
+
+System metadata key recording the `homotopy` keyword argument that
+[`mtkcompile`](@ref) was called with. `mtkcompile(sys; homotopy = false)` strips
+every `homotopy(actual, simplified)` node down to `actual` and stores `false` under
+this key so that systems derived from the compiled one (the initialization system,
+event affect systems) are compiled the same way. Query it with
+[`homotopy_enabled`](@ref).
+"""
+struct HomotopyCtx end
+
+"""
+    homotopy_enabled(sys::AbstractSystem)
+
+Whether `homotopy(actual, simplified)` nodes in `sys` are lowered to a continuation
+solve. Returns `false` iff `sys` was compiled with `mtkcompile(sys; homotopy = false)`
+(see [`HomotopyCtx`](@ref)).
+"""
+homotopy_enabled(sys::AbstractSystem) = getmetadata(sys, HomotopyCtx, true)::Bool
 
 # The continuation parameter is a fixed sentinel symbol, NOT `gensym`. A
 # `gensym` name embeds a process-global counter, so the same system would lower

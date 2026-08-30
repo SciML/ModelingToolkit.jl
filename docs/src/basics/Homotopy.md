@@ -59,6 +59,26 @@ keep symbolic jacobians, `tgrad`, and index reduction consistent. At runtime,
 differentiated equations reproduce `actual`'s derivative; along the continuation
 they follow the derivative of the blended expression above.
 
+## Opting Out of the Lowering
+
+Some targets cannot lower to a continuation solver — for example a GPU ensemble
+kernel with a fixed set of solvers. For those, pass `homotopy = false` to
+`mtkcompile`:
+
+```julia
+sys = mtkcompile(sys; homotopy = false)
+```
+
+Every `homotopy(actual, simplified)` node is then replaced by `actual` before
+compilation. The compiled system contains no `homotopy` nodes, so the generated
+code evaluates `actual` directly (the `simplified` expression is never emitted),
+`AbstractNonlinearProblem(sys, op)` and the initialization problem are plain
+nonlinear problems rather than a `HomotopyProblem`, and the initialization and
+event affect systems derived from the compiled system are compiled the same way.
+Only the `simplified` starting heuristic is discarded; the solved system is
+unchanged. `ModelingToolkitBase.homotopy_enabled(sys)` reports the setting a
+compiled system was built with.
+
 ## Building a `HomotopyProblem`
 
 A system whose equations contain `homotopy` nodes is built into a
@@ -152,6 +172,9 @@ defaults.
 
 ```@docs
 ModelingToolkit.homotopy
+ModelingToolkitBase.strip_homotopy
+ModelingToolkitBase.homotopy_enabled
+ModelingToolkitBase.HomotopyCtx
 ModelingToolkitBase.NonPolynomialReason
 ```
 
