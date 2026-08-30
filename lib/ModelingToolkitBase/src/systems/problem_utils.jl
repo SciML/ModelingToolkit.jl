@@ -1718,13 +1718,6 @@ function _construct_fullspecialize_initializeprobpmap(
     for group in grouped[3:5], buffer in group
         append!(flat_syms, buffer)
     end
-    for sym in flat_syms
-        symbolic_type(sym) == ArraySymbolic() && throw(
-            ArgumentError(
-                "FullSpecialize initialization maps do not yet support array-valued parameter storage slots."
-            )
-        )
-    end
     expr = build_explicit_observed_function(
         initsys, Tuple(flat_syms);
         expression = Val(true), compiler_options, kwargs...
