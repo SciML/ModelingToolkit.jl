@@ -1882,6 +1882,31 @@ end
     @test full_p.discrete == auto_p.discrete
     @test full_p.constant == auto_p.constant
     @test full_p.nonnumeric == auto_p.nonnumeric
+
+    array_parameter(x) = SVector(x, 2x)
+    @parameters (array_fn::typeof(array_parameter))(..)[1:2] = array_parameter [tunable = false]
+    @variables array_input(t) array_output(t) array_x(t) = 1.0
+    array_block = System(
+        [array_output ~ array_fn(array_input)[1]], t,
+        [array_input, array_output], [array_fn]; name = :array_block
+    )
+    @mtkcompile array_sys = System(
+        [D(array_x) ~ array_block.array_output, array_block.array_input ~ array_x], t;
+        systems = [array_block]
+    )
+    array_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        array_sys, [], (0.0, 1.0)
+    )
+    array_data = array_prob.f.initialization_data
+    array_p = array_data.initializeprobpmap(array_prob, array_data.initializeprob)
+    array_groups = ModelingToolkitBase.reorder_parameters(
+        array_sys, parameters(array_sys; initial_parameters = true); flatten = false
+    )
+
+    @test ModelingToolkitBase.symbolic_type(only(only(array_groups[5]))) ==
+        ModelingToolkitBase.ArraySymbolic()
+    @test array_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test only(only(array_p.nonnumeric)) === array_parameter
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
