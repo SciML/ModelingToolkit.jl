@@ -1725,12 +1725,6 @@ function _construct_fullspecialize_initializeprobpmap(
             )
         )
     end
-    isempty(SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())) || throw(
-        ArgumentError(
-            "FullSpecialize initialization maps do not yet support DiffCache parameters."
-        )
-    )
-
     expr = build_explicit_observed_function(
         initsys, Tuple(flat_syms);
         expression = Val(true), compiler_options, kwargs...
