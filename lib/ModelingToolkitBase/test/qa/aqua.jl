@@ -148,9 +148,9 @@ const REEXPORTED_API = (
     Symbol("@acrule"), Symbol("@arrayop"), :BS, :expand, :flatten_fractions,
     :get_reachability, :getmetadata, :hasmetadata, :ifelse_branching, :ifelse_eager,
     :IRStructure, :istree, Symbol("@makearray"), :populate_ir!, :print_ir, :quick_cancel,
-    :Rewriters, Symbol("@rule"), :RuleSet, :SafeReal, :setmetadata, :simplify,
-    :simplify_fractions, :substitute, :SymbolicUtils, :SymReal, Symbol("@syms"), :Term,
-    :term, :TreeReal, :unwrap_const, :vartype,
+    :Rewriters, Symbol("@rule"), :RuleSet, :SafeReal, :scalarize, :setmetadata, :shape,
+    :simplify, :simplify_fractions, :substitute, :SymbolicUtils, :SymReal, Symbol("@syms"),
+    :Term, :term, :TreeReal, :Unknown, :unwrap, :unwrap_const, :vartype,
     # SymbolicUtils.Code
     :toexpr,
     # TermInterface
