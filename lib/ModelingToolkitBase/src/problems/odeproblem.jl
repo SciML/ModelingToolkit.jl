@@ -191,7 +191,7 @@ end
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        ODEFunction{_iip}, sys, op;
+        ODEFunction{_iip, spec}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
         is_steadystateprob = true, kwargs...
     )

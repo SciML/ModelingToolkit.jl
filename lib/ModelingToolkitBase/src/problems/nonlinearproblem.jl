@@ -181,7 +181,7 @@ end
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        NonlinearFunction{_iip}, sys, op;
+        NonlinearFunction{_iip, spec}, sys, op;
         check_length, expression, kwargs...
     )
 

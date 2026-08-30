@@ -2,6 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
 using ForwardDiff, StaticArrays
+using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, observed
@@ -1840,6 +1841,47 @@ end
         @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
         @inferred solve(prob)
     end
+end
+
+@testset "FullSpecialize initialization maps are generated functions" begin
+    @variables map_x(t) map_y(t)
+    @mtkcompile map_sys = System(
+        [D(map_x) ~ -map_x, D(map_y) ~ -map_y], t;
+        initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+    )
+    guesses = [map_x => 1.0, map_y => 1.0]
+    auto_prob = ODEProblem{true, SciMLBase.AutoSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    auto_data = auto_prob.f.initialization_data
+    full_data = full_prob.f.initialization_data
+
+    @test auto_data.initializeprobmap isa ModelingToolkitBase.InitializationMap
+    @test !(auto_data.initializeprobmap isa RuntimeGeneratedFunction)
+    @test full_data.initializeprobmap isa RuntimeGeneratedFunction
+    @test full_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test isbitstype(typeof(full_data.initializeprobmap))
+    @test isbitstype(typeof(full_data.initializeprobpmap))
+    @test getfield(full_data.initializeprobmap, :body) === nothing
+    @test getfield(full_data.initializeprobpmap, :body) === nothing
+
+    auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
+    full_u = full_data.initializeprobmap(full_data.initializeprob)
+    @test full_u isa StaticVector
+    @test full_u == auto_u
+
+    auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)
+    full_p = full_data.initializeprobpmap(full_prob, full_data.initializeprob)
+    @test full_p.tunable isa StaticVector
+    @test full_p.initials isa StaticVector
+    @test full_p.tunable == auto_p.tunable
+    @test full_p.initials == auto_p.initials
+    @test full_p.discrete == auto_p.discrete
+    @test full_p.constant == auto_p.constant
+    @test full_p.nonnumeric == auto_p.nonnumeric
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
