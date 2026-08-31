@@ -1882,6 +1882,9 @@ end
     @test full_p.discrete == auto_p.discrete
     @test full_p.constant == auto_p.constant
     @test full_p.nonnumeric == auto_p.nonnumeric
+    replacement = fill(3.0, length(full_p.tunable))
+    SciMLStructures.replace!(Tunable(), full_p, replacement)
+    @test full_p.tunable == replacement
 
     array_parameter(x) = SVector(x, 2x)
     @parameters (array_fn::typeof(array_parameter))(..)[1:2] = array_parameter [tunable = false]
