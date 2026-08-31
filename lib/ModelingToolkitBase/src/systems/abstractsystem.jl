@@ -3281,10 +3281,19 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
     return ModelingToolkitBase.AbstractSystem
 end
 
+function has_array_equations(eqs)
+    return any(eq -> eq isa Equation && SU.is_array_shape(SU.shape(eq.lhs)), eqs)
+end
+
 function check_array_equations(eqs)
-    return if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
-        throw(ArgumentError("The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."))
+    if has_array_equations(eqs)
+        throw(
+            ArgumentError(
+                "The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."
+            )
+        )
     end
+    return nothing
 end
 
 """

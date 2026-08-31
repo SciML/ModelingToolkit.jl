@@ -40,16 +40,26 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     (; u0, p, jac, sparse, analytic, simplify, initialization_data) = opts
     codegen_opts = opts.codegen
 
+    if (jac || sparse) && has_array_equations(equations(sys))
+        throw(
+            ArgumentError(
+                "Array residuals do not support `jac = true` or `sparse = true`. " *
+                    "Call `mtkcompile` first."
+            )
+        )
+    end
+
     f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
+        resid = resid_prototype === nothing ? u0 : resid_prototype
         if E
-            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+            f = :($(SciMLBase.wrapfun_iip)($f, ($resid, $u0, $p)))
         else
-            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+            f = SciMLBase.wrapfun_iip(f, (resid, u0, p))
         end
     end
 
@@ -221,7 +231,7 @@ end
     f, u0,
         p = process_SciMLProblem(
         NonlinearFunction{_iip, spec}, sys, op;
-        check_length, expression, kwargs...
+        check_length, check_compatibility, expression, kwargs...
     )
 
     lb, ub = resolve_nonlinear_bounds(sys, op, lb, ub)

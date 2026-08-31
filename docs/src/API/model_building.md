@@ -160,7 +160,11 @@ It is also possible (though not always advisable) to build numerical problems fr
 passing them through `mtkcompile`. To do this, the system must first be marked as "complete" via
 the `complete` function. This process is used to indicate that a system will not be modified
 further and allows ModelingToolkit to perform any necessary preprocessing to it. `mtkcompile`
-calls `complete` internally.
+calls `complete` internally. `NonlinearProblem` and `NonlinearLeastSquaresProblem`
+accept unscalarized array equations with scalar unknowns (`collect(u)`). Each
+array equation contributes one residual row per element and may be mixed with
+scalar equations. Use `mtkcompile` before requesting `jac = true` or
+`sparse = true`.
 
 ```@docs
 complete
