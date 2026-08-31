@@ -3277,13 +3277,30 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
     return ModelingToolkitBase.AbstractSystem
 end
 
+function has_array_equations(eqs)
+    return any(eq -> eq isa Equation && SU.is_array_shape(SU.shape(eq.lhs)), eqs)
+end
+
+const ARRAY_EQUATIONS_ERROR = "The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."
+const ARRAY_UNKNOWNS_ERROR = "The system has array unknowns. Call `mtkcompile` to handle this or scalarize them manually with `collect(u)`."
+
+function check_array_equations(eqs)
+    if has_array_equations(eqs)
+        throw(ArgumentError(ARRAY_EQUATIONS_ERROR))
+    end
+    return nothing
+end
+
+function check_array_unknowns(dvs)
+    if any(Symbolics.isarraysymbolic, dvs)
+        throw(ArgumentError(ARRAY_UNKNOWNS_ERROR))
+    end
+    return nothing
+end
+
 function check_array_equations_unknowns(eqs, dvs)
-    if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
-        throw(ArgumentError("The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."))
-    end
-    return if any(x -> Symbolics.isarraysymbolic(x), dvs)
-        throw(ArgumentError("The system has array unknowns. Call `mtkcompile` to handle this or scalarize them manually."))
-    end
+    check_array_equations(eqs)
+    return check_array_unknowns(dvs)
 end
 
 """

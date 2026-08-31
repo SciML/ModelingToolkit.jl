@@ -688,6 +688,44 @@ isoperator(::Type{op}) where {op <: SU.Operator} = Base.Fix2(isoperator, op)
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
 
+function array_derivative_is_atomic(ex::SymbolicT)
+    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
+end
+
+function array_derivative_expansion(term::SymbolicT)
+    op = operation(term)
+    arg = only(arguments(term))
+    sh = SU.shape(arg)::SU.ShapeVecT
+    # Preserve rank for broadcasts against surrounding slices.
+    arrargs = Symbolics.SArgsT()
+    sizehint!(arrargs, prod(length, sh; init = 1) + 1)
+    push!(arrargs, SU.Const{VartypeT}(size(arg)))
+    for idx in SU.stable_eachindex(arg)
+        push!(arrargs, op(arg[idx]))
+    end
+    return Symbolics.STerm(
+        SU.array_literal, arrargs; type = symtype(arg), shape = sh
+    )
+end
+
+function array_derivative_expansion_map(terms)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for term in terms
+        subs[term] = array_derivative_expansion(term)
+    end
+    return subs
+end
+
+function expand_array_derivatives(eqs::Vector{Equation})
+    terms = Set{SymbolicT}()
+    for eq in eqs
+        SU.search_variables!(terms, eq; is_atomic = array_derivative_is_atomic)
+    end
+    isempty(terms) && return eqs
+    subs = array_derivative_expansion_map(terms)
+    return map(eq -> substitute(eq, subs), eqs)
+end
+
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
     x isa SymbolicT || return false

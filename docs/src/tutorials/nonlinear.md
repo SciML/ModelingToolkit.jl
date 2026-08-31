@@ -41,3 +41,10 @@ Jacobian function:
 prob = NonlinearProblem(ns, vcat(guesses, ps), jac = true)
 sol = solve(prob, NewtonRaphson())
 ```
+
+!!! note "Array residuals"
+
+    `NonlinearProblem` and `NonlinearLeastSquaresProblem` accept unscalarized
+    array equations after [`complete`](@ref) when unknowns are scalar
+    (`collect(u)`). Use [`mtkcompile`](@ref) before requesting `jac = true` or
+    `sparse = true`. Time-dependent systems are converted to steady state.
