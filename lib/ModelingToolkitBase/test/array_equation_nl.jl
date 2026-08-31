@@ -6,6 +6,7 @@ using ModelingToolkitBase: _iszero, SymbolicT
 using ModelingToolkitBase: array_derivative_is_atomic, array_derivative_expansion,
     collect_applied_operators, has_array_equations
 using Symbolics
+using Symbolics: unwrap
 using SciMLBase
 using SciMLStructures: replace, Tunable
 using NonlinearSolve
