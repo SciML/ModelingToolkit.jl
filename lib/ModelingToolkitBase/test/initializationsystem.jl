@@ -1910,7 +1910,7 @@ end
         array_sys, parameters(array_sys; initial_parameters = true); flatten = false
     )
 
-    @test ModelingToolkitBase.shape(only(only(array_groups[5]))) == [1:2]
+    @test SU.shape(only(only(array_groups[5]))) == [1:2]
     @test array_data.initializeprobpmap isa RuntimeGeneratedFunction
     @test only(only(array_p.nonnumeric)) === array_parameter
 end
