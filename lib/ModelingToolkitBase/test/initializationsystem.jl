@@ -1885,6 +1885,10 @@ end
     replacement = fill(3.0, length(full_p.tunable))
     SciMLStructures.replace!(Tunable(), full_p, replacement)
     @test full_p.tunable == replacement
+    nonbits = ModelingToolkitBase._static_parameter_buffer(Any[Ref(1)], (Ref(2),))
+    @test nonbits isa SizedVector
+    nonbits[1] = Ref(3)
+    @test only(nonbits)[] == 3
 
     array_parameter(x) = SVector(x, 2x)
     @parameters (array_fn::typeof(array_parameter))(..)[1:2] = array_parameter [tunable = false]

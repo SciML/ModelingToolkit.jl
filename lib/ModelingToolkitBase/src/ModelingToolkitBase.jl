@@ -11,8 +11,8 @@ using PrecompileTools: PrecompileTools, @recompile_invalidations
 using Reexport: Reexport, @reexport
 @recompile_invalidations begin
     import StaticArrays
-    using StaticArraysCore: StaticArraysCore, MVector, SVector, StaticArray, StaticVector,
-        similar_type
+    using StaticArraysCore: StaticArraysCore, MVector, SVector, SizedVector, StaticArray,
+        StaticVector, similar_type
     import Symbolics
     import ImplicitDiscreteSolve
     using ImplicitDiscreteSolve: IDSolve
