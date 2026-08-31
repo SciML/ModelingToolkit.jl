@@ -132,9 +132,9 @@ import SciMLBase: @add_kwonly
 export independent_variables, unknowns, observables, parameters, bound_parameters,
     continuous_events, discrete_events, analytically_integrated
 @reexport using Symbolics
-@reexport using UnPack
 import UnPack
-using UnPack: @unpack
+@reexport using UnPack
+import UnPack: @unpack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 import DifferentiationInterface as DI
