@@ -88,42 +88,78 @@ end
         sys::System, op, tspan;
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true, sparse = false,
-        sparsenoise = sparse, expression = Val{false}, _skip_events = false, kwargs...
+        sparsenoise = sparse, expression = Val{false}, _skip_events = false,
+        _skip_tstops = false,
+        noise = missing, noise_rate_prototype = missing, seed = missing, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        check_compatibility, sparse, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return SDEProblem{iip, spec}(
+        sys, op, tspan, opts; callback, sparsenoise, _skip_events, _skip_tstops, noise,
+        noise_rate_prototype, seed, kwargs...
+    )
+end
+
+"""
+    SciMLBase.SDEProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; kwargs...)
+
+Public entry point that builds an `SDEProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+
+`noise`/`noise_rate_prototype`/`seed` (default `missing`, meaning "not explicitly provided
+by the caller") are explicit keywords here — not part of `kwargs` — since they're relevant
+only to this outer `SDEProblem` construction (`seed` reaches the final
+`SciMLBase.SDEProblem` call only), not the inner `SDEFunction` build; the opts-accepting
+`SDEFunction` method has no generic `kwargs...` sink to harmlessly absorb them the way its
+keyword-based wrapper does. `_skip_events`/`_skip_tstops` are likewise explicit since they're
+relevant only to `process_kwargs` below.
+"""
+function SciMLBase.SDEProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E};
+        callback = nothing, sparsenoise = opts.fn_opts.sparse, _skip_events = false,
+        _skip_tstops = false,
+        noise = missing, noise_rate_prototype = missing, seed = missing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, SDEProblem)
-    check_compatibility && check_compatible_system(SDEProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(SDEProblem, sys)
+
+    opts = maybe_derive_t_from_tspan(opts, tspan)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, sparse, expression, kwargs...
+        SDEFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
     # Only calculate noise and noise_rate_prototype if not provided by user
-    if !haskey(kwargs, :noise) && !haskey(kwargs, :noise_rate_prototype)
+    if noise === missing && noise_rate_prototype === missing
         noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
-    elseif !haskey(kwargs, :noise)
+    elseif noise === missing
         noise, _ = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
-        noise_rate_prototype = kwargs[:noise_rate_prototype]
-    elseif !haskey(kwargs, :noise_rate_prototype)
+    elseif noise_rate_prototype === missing
         _, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
-        noise = kwargs[:noise]
-    else
-        noise = kwargs[:noise]
-        noise_rate_prototype = kwargs[:noise_rate_prototype]
     end
 
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module,
-        op, _skip_events, tspan, kwargs...
+        sys; expression = Val{E}, callback, eval_expression, eval_module,
+        op, _skip_events, _skip_tstops, tspan, kwargs...
     )
 
     args = (; f, u0, tspan, p)
-    kwargs = (; noise, noise_rate_prototype, kwargs...)
+    seed_kw = seed === missing ? (;) : (; seed)
+    kwargs = (; noise, noise_rate_prototype, seed_kw..., kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, SDEProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, SDEProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(T::Union{Type{SDEFunction}, Type{SDEProblem}}, sys::System)

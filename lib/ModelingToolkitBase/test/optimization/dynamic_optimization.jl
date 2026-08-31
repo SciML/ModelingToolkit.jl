@@ -349,13 +349,13 @@ end
         g₀ => 1, m₀ => 1.0, h_c => 500, c => 0.5 * √(g₀ * h₀), D_c => 0.5 * 620 * m₀ / g₀,
         Tₘ => 3.5 * g₀ * m₀, T => 0.0, h₀ => 1, m_c => 0.6,
     ]
-    jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
+    jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
     jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, ImplicitTableaus.RadauIIA5()))
     @test jsol.sol[h][end] > 1.012
 
     if ENABLE_CASADI
         cprob = CasADiDynamicOptProblem(
-            rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false
+            rocket, [u0map; pmap], (ts, te); dt = 0.001
         )
         csol = solve(cprob, CasADiCollocation("ipopt"))
         @test csol.sol[h][end] > 1.012
@@ -366,7 +366,7 @@ end
     @test isol.sol[h][end] > 1.012
 
     if @isdefined(Pyomo)
-        pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001, cse = false)
+        pprob = PyomoDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
         psol = solve(pprob, PyomoCollocation("ipopt", LagrangeRadau(4)))
         @test psol.sol[h][end] > 1.012
     end

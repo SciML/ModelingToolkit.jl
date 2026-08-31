@@ -1543,7 +1543,11 @@ Called from [`compile_equational_affect`](@ref) when `!isempty(equations(system(
 Base.@nospecializeinfer function compile_implicit_affect(
         @nospecialize(aff::AffectSystem), sys;
         reset_jumps = false, eval_expression = false, eval_module = @__MODULE__,
-        @nospecialize(op = nothing), kwargs...
+        @nospecialize(op = nothing),
+        # `checkvars` is only meaningful for `compile_explicit_affect`'s
+        # `Symbolics.CodegenFunctionOptions`; intercept and discard it here so it isn't
+        # forwarded to `ImplicitDiscreteProblem` below, which has no keyword of that name.
+        checkvars = false, kwargs...
     )
     affsys = system(aff)
     ps_to_update = discretes(aff)
