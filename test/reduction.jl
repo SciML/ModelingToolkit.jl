@@ -298,6 +298,20 @@ Js = ModelingToolkitBase.jacobian_sparsity(sys)
 @test size(Js) == (3, 3)
 @test Js == Diagonal([0, 1, 1])
 
+@variables input_x(t)[1:4] output_x(t)[1:4] n(t)[1:4] algebraic(t)
+eqs = [
+    sum(input_x) ~ 1.0
+    sum(output_x) ~ 1.0
+    [output_x[i] ~ input_x[i] for i in 1:3]...
+    [D(n[i]) ~ output_x[i] for i in 1:4]...
+    0 ~ algebraic^2 - n[1]
+]
+@named model = System(eqs, t)
+sys = mtkcompile(model; inputs = collect(input_x))
+@test length(unknowns(sys)) == length(equations(sys)) == 5
+@test size(ModelingToolkitBase.jacobian_sparsity(sys)) == (5, 5)
+@test size(ModelingToolkitBase.W_sparsity(sys)) == (5, 5)
+
 # MWE for #1722
 vars = @variables a(t) w(t) phi(t)
 eqs = [
