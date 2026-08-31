@@ -124,10 +124,9 @@ function (xn::Num)(k::ShiftIndex)
     if length(vars) != 1
         error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
-    var = only(vars)
-    if operation(var) === getindex
-        var = arguments(var)[1]
-    end
+    # The independent variable lives on the root, so peel any projection off `var`:
+    # `u[1]` and `rec.x` are both shifted at their parent's `t`.
+    var = split_field_access(only(vars))[1]
     if !iscall(var)
         throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end
@@ -157,7 +156,7 @@ function (xn::Symbolics.Arr)(k::ShiftIndex)
     if length(vars) != 1
         error(lazy"Cannot shift a multivariate expression $x. Either create a new unknown and shift this, or shift the individual variables in the expression.")
     end
-    var = only(vars)
+    var = split_field_access(only(vars))[1]
     if !iscall(var)
         throw(ArgumentError(lazy"Cannot shift time-independent variable $var"))
     end

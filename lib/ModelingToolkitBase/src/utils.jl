@@ -397,7 +397,9 @@ function find_all_parameter_equations(sys::AbstractSystem)
             recurse = check_no_parameter_equations_recurse
         )
         isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
-        intersect!(varsbuf, allowed_vars)
+        # `allowed_vars` is keyed on whole arrays/records, so a projection has to be
+        # matched through its parent rather than by exact identity.
+        filter!(Base.Fix1(contains_possibly_indexed_element, allowed_vars), varsbuf)
         push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
     end
 
@@ -596,7 +598,9 @@ Populate `vars` with mappings from symbolic variable names to variables.
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue
-        x = split_indexed_var(x)[1]
+        # Projections are named through their parent, so collapse to it: `x[1]` and `x[2]`
+        # are both `x`, and `q.x` and `q.y` are both `q`.
+        x = split_field_access(x)[1]
         hasname(x) || continue
         nm = getname(x)
         if !isequal(get(vars, nm, x), x)
@@ -1759,6 +1763,117 @@ function _get_struct_access!(path::Vector{StructAccessStepT}, x::SymbolicT)
         _ => nothing
     end
     return path
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Value of the projection `leaf` of `node`, given that `node` has the value `value`.
+`value` may be a `Const` wrapping a concrete record, in which case the result is a `Const`
+wrapping the corresponding field, or a symbolic expression, in which case the projection is
+applied symbolically.
+"""
+function record_leaf_entry(leaf::SymbolicT, node::SymbolicT, value::SymbolicT)::SymbolicT
+    isequal(leaf, node) && return value
+    iscall(leaf) || error(lazy"Cannot resolve $leaf as a projection of $node.")
+    f = operation(leaf)
+    args = arguments(leaf)
+    base = record_leaf_entry(args[1]::SymbolicT, node, value)
+    isconst = SU.isconst(base)
+    if f isa Symbolics.SymbolicGetproperty
+        isconst || return f(base)::SymbolicT
+        return BSImpl.Const{VartypeT}(getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol))
+    elseif f === getindex
+        idxs = unwrap_const.(@view args[2:end])
+        isconst || return base[idxs...]::SymbolicT
+        return BSImpl.Const{VartypeT}(unwrap_const(base)[idxs...])
+    end
+    return error(lazy"Cannot resolve $leaf as a projection of $node.")
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The leaves of the struct symbolic `root`, in canonical linear order. This is the order
+used to lay out a record's value in [`AtomicArrayDict`](@ref).
+"""
+SU.@cache limit = 500_000 function record_leaves(root::SymbolicT)::Vector{SymbolicT}
+    return collect(Symbolics.SymStruct{SU.symtype(root)}(root))::Vector{SymbolicT}
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Map from each leaf of the struct symbolic `root` to its index in [`record_leaves`](@ref).
+"""
+SU.@cache limit = 500_000 function record_leaf_indexmap(root::SymbolicT)::Dict{SymbolicT, Int}
+    leaves = record_leaves(root)
+    idxmap = Dict{SymbolicT, Int}()
+    sizehint!(idxmap, length(leaves))
+    for (i, leaf) in enumerate(leaves)
+        idxmap[leaf] = i
+    end
+    return idxmap
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check whether `x` is `node`, or projects out of it by a chain of field accesses and
+indices.
+"""
+function is_record_descendant(x::SymbolicT, node::SymbolicT)
+    while true
+        isequal(x, node) && return true
+        iscall(x) || return false
+        f = operation(x)
+        f isa Symbolics.SymbolicGetproperty || f === getindex || return false
+        x = arguments(x)[1]::SymbolicT
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Indices into [`record_leaves`](@ref) of `root` covered by `node`, which must be `root` or
+a projection of it. A leaf covers one index, an intermediate node covers all the leaves
+below it.
+"""
+function record_node_indices(root::SymbolicT, node::SymbolicT)::Vector{Int}
+    leaves = record_leaves(root)
+    isequal(root, node) && return collect(eachindex(leaves))
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return [i]
+    return findall(Base.Fix2(is_record_descendant, node), leaves)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Assemble the value of `node` from `buffer`, the values of the leaves of `root` in
+[`record_leaves`](@ref) order. The inverse of [`record_leaf_entry`](@ref).
+"""
+function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVector)
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return buffer[i]
+    if SU.is_array_shape(SU.shape(node))
+        # `stable_eachindex` walks in linear order, which is the order the leaves are laid
+        # out in, so the values come back flat and have to be reshaped.
+        vals = map(SU.stable_eachindex(node)) do idx
+            record_node_value(root, node[idx]::SymbolicT, buffer)
+        end
+        return reshape(vec(vals), size(node))
+    end
+    T = SU.symtype(node)::DataType
+    Symbolics.issymstruct(node) || error(
+        lazy"Cannot assemble a value for $node of type $T from the leaves of $root."
+    )
+    return T(
+        map(fieldnames(T)) do fname
+            field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+            record_node_value(root, field, buffer)
+        end...
+    )
 end
 
 """

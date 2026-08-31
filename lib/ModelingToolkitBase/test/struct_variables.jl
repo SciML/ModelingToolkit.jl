@@ -17,8 +17,22 @@ struct Nested
     x::Real
     f::Pair2
 end
+struct ArrField
+    v::Vector{Float64}
+    w::Float64
+end
 @symstruct Pair2
 @symstruct Nested
+@symstruct ArrField begin
+    shape(:v) = [1:2]
+end
+struct MatField
+    m::Matrix{Float64}
+    w::Float64
+end
+@symstruct MatField begin
+    shape(:m) = [1:2, 1:2]
+end
 
 @testset "declaration and field access" begin
     @variables s(t)::Pair2 n(t)::Nested
@@ -107,6 +121,59 @@ end
         sys, [n => Nested(1, Pair2(2, 3)), n.f.y => 99.0], (0.0, 1.0))
     @test override.u0[idx(n.f.y)] == 99
     @test override.u0[idx(n.x)] == 1
+end
+
+@testset "initial conditions for a numeric-array field" begin
+    # A record whose field is a numeric array. Its leaves are `av.v[1]`, `av.v[2]`, but a
+    # numeric array is already atomic on its own, so the operating point stops at `av.v`
+    # — the same granularity `Initial` uses.
+    @variables av(t)::ArrField
+    eqs = [D(av.v[1]) ~ -av.v[1], D(av.v[2]) ~ -2av.v[2], D(av.w) ~ -av.w]
+    sys = mtkcompile(System(eqs, t, [av], []; name = :arrfield))
+    idx = Base.Fix1(variable_index, sys)
+
+    @test issetequal(unknowns(sys), Symbolics.unwrap.([av.v[1], av.v[2], av.w]))
+
+    # Every way of naming the same initial condition agrees: whole record, whole field,
+    # and individual elements.
+    whole = ODEProblem(sys, [av => ArrField([1.0, 2.0], 3.0)], (0.0, 1.0))
+    fieldwise = ODEProblem(sys, [av.v => [1.0, 2.0], av.w => 3.0], (0.0, 1.0))
+    elementwise = ODEProblem(
+        sys, [av.v[1] => 1.0, av.v[2] => 2.0, av.w => 3.0], (0.0, 1.0))
+    @test whole.u0 == fieldwise.u0 == elementwise.u0
+    @test whole.u0[idx(av.v[1])] == 1.0
+    @test whole.u0[idx(av.v[2])] == 2.0
+    @test whole.u0[idx(av.w)] == 3.0
+
+    # Precedence is by specificity, not by the order entries happen to be iterated in:
+    # an element beats the field it belongs to, which beats the whole record.
+    override = ODEProblem(
+        sys, [av => ArrField([1.0, 2.0], 3.0), av.v[2] => 99.0], (0.0, 1.0))
+    @test override.u0[idx(av.v[1])] == 1.0
+    @test override.u0[idx(av.v[2])] == 99.0
+    @test override.u0[idx(av.w)] == 3.0
+
+    sol = solve(whole, Tsit5())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[av.v[1]][end]≈exp(-1) rtol=1e-5
+    @test sol[av.v[2]][end]≈2exp(-2) rtol=1e-5
+    @test sol[av.w][end]≈3exp(-1) rtol=1e-5
+end
+
+@testset "matrix-valued field keeps its shape" begin
+    # Leaves are laid out in linear order, so reassembling a multidimensional field has to
+    # restore its shape rather than hand back a flat vector.
+    @variables q(t)::MatField
+    eqs = vcat([D(q.m[i, j]) ~ -q.m[i, j] for i in 1:2, j in 1:2]..., D(q.w) ~ -q.w)
+    sys = mtkcompile(System(eqs, t, [q], []; name = :matfield))
+    idx = Base.Fix1(variable_index, sys)
+
+    m0 = [1.0 3.0; 2.0 4.0]
+    prob = ODEProblem(sys, [q => MatField(m0, 5.0)], (0.0, 1.0))
+    for i in 1:2, j in 1:2
+        @test prob.u0[idx(q.m[i, j])] == m0[i, j]
+    end
+    @test prob.u0[idx(q.w)] == 5.0
 end
 
 @testset "symbolic indexing" begin
