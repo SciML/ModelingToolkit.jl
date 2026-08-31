@@ -2381,10 +2381,62 @@ function SciMLBase.detect_cycles(sys::AbstractSystem, varmap::Dict{Any, Any}, va
     return !isempty(cycles)
 end
 
+"""
+    build_bounds_isoutofdomain(sys)
+
+Compile the `bounds` metadata of `sys`'s unknowns into an `isoutofdomain`-style
+predicate `(u, p, t) -> Bool` that returns `true` when any bounded unknown leaves
+its `[lo, hi]` range in the proposed state `u`. Returns `nothing` if no enforceable
+bounds are found.
+
+A variable's bound is enforceable here only if the variable is an actual unknown in
+the state vector (so it has an index in `u`) and its bounds are concrete numbers.
+Bounds on eliminated (observed) variables, and symbolic bounds that reference
+parameters, are skipped with a warning.
+
+This is used to enforce `@variables x [bounds = (lo, hi)]` during ODE integration by
+injecting the predicate as the problem's `isoutofdomain`; see `process_kwargs`.
+"""
+function build_bounds_isoutofdomain(sys)
+    idxs = Int[]
+    los = Any[]
+    his = Any[]
+    for v in unknowns(sys)
+        hasbounds(v) || continue
+        idx = variable_index(sys, v)
+        if idx === nothing
+            @warn "Variable $v declares `bounds` but was eliminated (observed) during simplification, so it is not in the state vector and its bounds cannot be enforced via isoutofdomain. Skipping."
+            continue
+        end
+        lo, hi = getbounds(v)
+        lo_v, hi_v = unwrap(lo), unwrap(hi)
+        if !(lo_v isa Number && hi_v isa Number)
+            @warn "Variable $v has symbolic bounds ($lo, $hi); enforcing symbolic bounds directly in integration is not yet supported. Skipping."
+            continue
+        end
+        push!(idxs, idx)
+        push!(los, lo_v)
+        push!(his, hi_v)
+    end
+    isempty(idxs) && return nothing
+    # freeze into tuples so the returned closure is type-stable.
+    idxs_t = Tuple(idxs)
+    los_t = Tuple(los)
+    his_t = Tuple(his)
+    return function (u, p, t)
+        for k in eachindex(idxs_t)
+            i = idxs_t[k]
+            (u[i] < los_t[k] || u[i] > his_t[k]) && return true
+        end
+        return false
+    end
+end
+
 function process_kwargs(
         sys::System; expression = Val{false}, callback = nothing,
         eval_expression = false, eval_module = @__MODULE__,
-        _skip_events = false, _skip_tstops = false, tspan = nothing, kwargs...
+        _skip_events = false, _skip_tstops = false, tspan = nothing,
+        enforce_bounds = false, kwargs...
     )
     kwargs = filter_kwargs(kwargs)
     kwargs1 = (;)
@@ -2409,6 +2461,14 @@ function process_kwargs(
             )
             if tstops !== nothing
                 kwargs1 = merge(kwargs1, (; tstops))
+            end
+        end
+
+        # opt-in: compile variable `bounds` metadata into an isoutofdomain predicate.
+        if enforce_bounds && expression == Val{false}
+            iood = build_bounds_isoutofdomain(sys)
+            if iood !== nothing
+                kwargs1 = merge(kwargs1, (isoutofdomain = iood,))
             end
         end
     end
