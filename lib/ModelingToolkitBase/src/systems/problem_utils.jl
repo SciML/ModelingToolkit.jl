@@ -1692,7 +1692,8 @@ end
 function _static_parameter_buffer(prototype, values::Tuple)
     T = isempty(values) ? eltype(prototype) :
         promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
-    return SVector{length(values), T}(values)
+    static_type = ArrayInterface.ismutable(prototype) ? MVector : SVector
+    return static_type{length(values), T}(values)
 end
 
 function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
