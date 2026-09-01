@@ -50,7 +50,7 @@ not to divide one continuous run into display intervals.
 
 ## Parameters and time-varying inputs
 
-An ordinary `@parameter` is treated as time-invariant when a saved solution evaluates
+A value declared with `@parameters` is treated as time-invariant when a saved solution evaluates
 parameter-dependent observables. Mutating one during an interactive run updates future
 dynamics, but it does not create a history of its previous values. Record the input in the
 application, as the example does for display values, when only the live interface needs that
