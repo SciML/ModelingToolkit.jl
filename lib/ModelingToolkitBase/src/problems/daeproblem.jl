@@ -25,13 +25,14 @@ function generate_DAENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac 
 end
 
 """$(function_docstring(DAEFunction, true, [:jac, :tgrad]))"""
-@fallback_iip_specialize function SciMLBase.DAEFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
+Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.DAEFunction{iip, spec}(
+        sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing),
+        tgrad = false, jac = false,
         t = nothing, eval_expression = false, eval_module = @__MODULE__,
         sparse = false,
         steady_state = false, checkbounds = false, sparsity = false,
-        analytic = nothing,
-        simplify = false, initialization_data = nothing,
+        @nospecialize(analytic = nothing),
+        simplify = false, @nospecialize(initialization_data = nothing),
         expression = Val{false}, check_compatibility = true, nlstep = false,
         nlstep_compile = true, nlstep_scc = false, optimize = nothing,
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
