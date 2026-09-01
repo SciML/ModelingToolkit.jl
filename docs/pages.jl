@@ -27,6 +27,7 @@ pages = [
             "examples/higher_order.md",
             "examples/spring_mass.md",
             "examples/modelingtoolkitize_index_reduction.md",
+            "examples/interactive_simulation.md",
             "examples/remake.md",
         ],
         "Advanced Examples" => Any[
