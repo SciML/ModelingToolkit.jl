@@ -148,7 +148,7 @@ algebraic relationships.
 However, requiring the user to sit there and work through this process on
 potentially millions of equations is an unfathomable mental overhead. But,
 we can avoid this by using methods like
-[the Pantelides algorithm](https://ptolemy.berkeley.edu/projects/embedded/eecsx44/lectures/Spring2013/modelica-dae-part-2.pdf)
+[the Pantelides algorithm](https://specification.modelica.org/maint/3.6/modelica-dae-representation.html)
 for automatically performing this reduction to index 1. While this requires the
 ModelingToolkit symbolic form, we use `modelingtoolkitize` to transform
 the numerical code into symbolic code, run `dae_index_lowering` lowering,
