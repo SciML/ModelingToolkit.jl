@@ -151,6 +151,7 @@ import Random: AbstractRNG
 import DomainSets
 # `DomainSets` re-exports IntervalSets' `endpoints`; reach it through its owner.
 import IntervalSets
+import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
 using TaskLocalValues: TaskLocalValue

@@ -467,7 +467,8 @@ end
 struct SCCNonlinearFunction{iip} end
 
 function SCCNonlinearFunction{iip}(
-        decomposition::SCCDecomposition, i::Int, cachesyms, op; eval_expression = false,
+        decomposition::SCCDecomposition, i::Int, cachesyms, op;
+        specialize = SciMLBase.AutoSpecialize, eval_expression = false,
         eval_module = @__MODULE__, kwargs...
     ) where {iip}
     subsys = decomposition.subsystems[i]
@@ -492,7 +493,7 @@ function SCCNonlinearFunction{iip}(
             shadow, λ; expression = Val{false}, wrap_gfw = Val{true},
             eval_expression, eval_module, cachesyms
         )
-        return NonlinearFunction{iip}(hf; sys = subsys)
+        return NonlinearFunction{iip, specialize}(hf; sys = subsys)
     end
 
     f = generate_rhs(
@@ -503,7 +504,7 @@ function SCCNonlinearFunction{iip}(
         cachesyms
     )
 
-    return NonlinearFunction{iip}(f; sys = subsys)
+    return NonlinearFunction{iip, specialize}(f; sys = subsys)
 end
 
 """$(MTKBase.problem_docstring(SciMLBase.SCCNonlinearProblem, NonlinearFunction, false; init = false))"""
@@ -511,11 +512,15 @@ function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
     return SCCNonlinearProblem{true}(sys, op; kwargs...)
 end
 
-function SciMLBase.SCCNonlinearProblem{iip}(
+function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; kwargs...) where {iip}
+    return SCCNonlinearProblem{iip, SciMLBase.AutoSpecialize}(sys, op; kwargs...)
+end
+
+function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys::System, op; eval_expression = false,
         eval_module = @__MODULE__, u0_constructor = identity,
         missing_guess_value = default_missing_guess_value(), combine_sccs = true, kwargs...
-    ) where {iip}
+    ) where {iip, specialize}
     if !iscomplete(sys) || get_tearing_state(sys) === nothing
         error("A simplified `System` is required. Call `mtkcompile` on the system before creating an `SCCNonlinearProblem`.")
     end
@@ -571,7 +576,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
             # (the multi-block path below already builds `HomotopyProblem` blocks); a plain
             # `NonlinearProblem` would drop the λ-sweep and Newton-solve the target directly.
             TProb = MTKBase.get_nonlinear_problem_type(sys)
-            return TProb{iip}(
+            return TProb{iip, specialize}(
                 sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
             )
         end
@@ -648,7 +653,7 @@ function SciMLBase.SCCNonlinearProblem{iip}(
         end
         f = SCCNonlinearFunction{iip}(
             decomposition, i, cachebufsyms, op;
-            eval_expression, eval_module, kwargs...
+            specialize, eval_expression, eval_module, kwargs...
         )
         push!(nlfuns, f)
     end
