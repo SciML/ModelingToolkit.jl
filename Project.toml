@@ -50,7 +50,9 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 FMIImport = "9fcbc62e-52a0-44e9-a616-1359a0008194"
 OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
 OrdinaryDiffEqDefault = "50262376-6c5a-4cf5-baba-aaf4f84d72d7"
+OrdinaryDiffEqNonlinearSolve = "127b3ac7-2247-4354-8eb6-78cf4e7c58e8"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
+OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 
 [sources]
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
@@ -61,6 +63,8 @@ MTKFMIExt = "FMIImport"
 MTKOrdinaryDiffEqBDFExt = "OrdinaryDiffEqBDF"
 MTKOrdinaryDiffEqDefaultExt = "OrdinaryDiffEqDefault"
 MTKOrdinaryDiffEqRosenbrockExt = "OrdinaryDiffEqRosenbrock"
+MTKOrdinaryDiffEqRosenbrockNonlinearSolveExt = ["OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqNonlinearSolve"]
+MTKOrdinaryDiffEqTsit5Ext = "OrdinaryDiffEqTsit5"
 
 [compat]
 ADTypes = "1.14.0"
@@ -106,6 +110,7 @@ OrdinaryDiffEqFunctionMap = "2"
 OrdinaryDiffEqNonlinearSolve = "2"
 OrdinaryDiffEqRosenbrock = "2"
 OrdinaryDiffEqSDIRK = "2"
+OrdinaryDiffEqTsit5 = "2"
 PreallocationTools = "1.2.0"
 PrecompileTools = "1.2.1"
 REPL = "1"
