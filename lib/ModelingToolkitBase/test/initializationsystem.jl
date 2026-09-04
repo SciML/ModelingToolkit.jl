@@ -1567,6 +1567,19 @@ end
     @test SciMLBase.successful_retcode(solve(newprob))
 end
 
+@testset "Remake with a parameter vector preserves structured parameters" begin
+    @variables remake_x(t) = 1.0
+    @parameters remake_a = 1.0
+    @named remake_sys = System([D(remake_x) ~ remake_a * remake_x], t)
+    remake_sys = complete(remake_sys)
+
+    prob = ODEProblem(remake_sys, [], (0.0, 1.0))
+    remade = remake(prob; p = [2.0])
+
+    @test remade.ps[remake_a] == 2.0
+    @test remade.ps[Initial(remake_x)] == 1.0
+end
+
 @testset "Issue#3295: Incomplete initialization of pure-ODE systems" begin
     @variables X(t) Y(t)
     @parameters p d
