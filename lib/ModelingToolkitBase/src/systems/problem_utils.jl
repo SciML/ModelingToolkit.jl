@@ -1965,6 +1965,9 @@ function maybe_build_initialization_problem(
     if needs_remake
         initializeprob = remake(initializeprob; u0 = _u0, p = initp)
     end
+    if specialize === SciMLBase.AutoDespecialize
+        initializeprob = concretize_initializeprob(initializeprob)
+    end
 
     get_initial_unknowns = if time_dependent_init
         GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
@@ -2087,6 +2090,32 @@ end
 initialization_specialization(::Type{SciMLBase.AutoDespecialize}) =
     SciMLBase.AutoDespecialize
 initialization_specialization(::Type) = SciMLBase.AutoSpecialize
+
+"""
+    $(TYPEDSIGNATURES)
+
+Run `NonlinearSolveBase.get_concrete_problem` over the nonlinear (sub)problems of an
+initialization problem once, at construction time. The wrapped residuals share one Julia
+type across models, so the initialization solve inside `init` compiles once per session
+instead of once per model. Linear and homotopy problems, and problems whose state is not
+a mutable non-Dual array (nothing to wrap), are returned unchanged.
+"""
+concretize_initializeprob(prob) = prob
+function concretize_initializeprob(
+        prob::Union{NonlinearProblem, NonlinearLeastSquaresProblem}
+    )
+    u0 = state_values(prob)
+    u0 isa AbstractArray && ArrayInterface.ismutable(u0) &&
+        !(eltype(u0) <: ForwardDiff.Dual) || return prob
+    return NonlinearSolveBase.get_concrete_problem(prob)
+end
+function concretize_initializeprob(prob::SCCNonlinearProblem)
+    probs = map(concretize_initializeprob, prob.probs)
+    if probs isa AbstractVector
+        probs = convert(typeof(prob.probs), probs)
+    end
+    return remake(prob; probs)
+end
 
 """
     $(TYPEDSIGNATURES)

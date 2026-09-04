@@ -2239,6 +2239,51 @@ end
     @test integ.ps[T] ≈ 3.0
 end
 
+function chain_dae_problem(n, c; use_scc)
+    @variables x(t)[1:n] y(t)[1:n]
+    @parameters a[1:n]
+    eqs = Equation[]
+    for i in 1:n
+        prev = i == 1 ? 0 : y[i - 1]
+        push!(eqs, D(x[i]) ~ -a[i] * x[i] + y[i])
+        push!(eqs, 0 ~ y[i]^3 + c * y[i] - x[i] - prev)
+    end
+    sys = mtkcompile(System(eqs, t; name = :sys))
+    op = [[sys.x[i] => 1.0 / i for i in 1:n]; [sys.a[i] => 0.5 + i for i in 1:n]]
+    return ODEProblem(
+        sys, op, (0.0, 1.0); guesses = [sys.y[i] => 0.5 for i in 1:n], use_scc
+    )
+end
+
+@testset "Initialization problem type is shared across models, use_scc = $use_scc" for use_scc in (false, true)
+    # An `SCCNonlinearProblem` holds one block per SCC in a tuple, so its type is only
+    # shared between models with the same number of blocks.
+    specs = use_scc ? ((4, 1.0), (4, 2.0)) : ((3, 1.0), (4, 2.0))
+    probs = [chain_dae_problem(n, c; use_scc) for (n, c) in specs]
+    initprobs = [prob.f.initialization_data.initializeprob for prob in probs]
+    @test typeof(initprobs[1]) === typeof(initprobs[2])
+    for (prob, (n, c)) in zip(probs, specs)
+        sys = prob.f.sys
+        integ = init(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        for i in 1:n
+            prev = i == 1 ? 0.0 : integ[sys.y[i - 1]]
+            @test integ[sys.y[i]]^3 + c * integ[sys.y[i]] - integ[sys.x[i]] - prev ≈ 0 atol = 1.0e-8
+        end
+        @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+    end
+
+    # `remake` with Dual tunables promotes the (pre-wrapped) initialization problem
+    prob = probs[1]
+    setter = setp_oop(prob, [prob.f.sys.a[1]])
+    function loss(theta)
+        newprob = remake(prob; p = setter(prob, theta))
+        sol = solve(newprob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        return sum(sol.u[end])
+    end
+    fd = (loss([1.5 + 1.0e-5]) - loss([1.5 - 1.0e-5])) / 2.0e-5
+    @test ForwardDiff.gradient(loss, [1.5])[1] ≈ fd rtol = 1.0e-4
+end
+
 cube_plus(v) = v^3 + v
 @register_symbolic cube_plus(v)
 if @isdefined(ModelingToolkit)

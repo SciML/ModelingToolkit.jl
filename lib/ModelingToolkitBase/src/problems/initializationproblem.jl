@@ -168,8 +168,7 @@ function InitializationProblem{iip, specialize}(
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    problem_constructor = if TProb === LinearInitializationProblem ||
-            TProb === SCCNonlinearProblem
+    problem_constructor = if TProb === LinearInitializationProblem
         TProb{_iip}
     else
         TProb{_iip, specialize}
