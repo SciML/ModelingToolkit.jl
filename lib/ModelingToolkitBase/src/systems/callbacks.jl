@@ -805,29 +805,40 @@ Base.isempty(cb::AbstractCallback) = isempty(cb.conditions)
 ####### Compilation functions ######
 ####################################
 
-struct CompiledCondition{IsDiscrete, F}
+"""
+    CompiledCondition{IsDiscrete, IsScalar, F}
+
+Callable struct wrapping the compiled trigger condition `f` of a callback. It adapts the
+generated function's `(u, p, t)` (or `(out, u, p, t)`) signature to the
+`(u, t, integrator)` (or `(out, u, t, integrator)`) protocol SciMLBase expects, obtaining
+the parameter object via `SymbolicIndexingInterface.parameter_values`. The integrator is
+only used for that lookup, so any value implementing `parameter_values` works as one.
+
+The type parameters gate how the condition is called:
+
+- `IsDiscrete`: whether this is the condition of a `SymbolicDiscreteCallback`.
+- `IsScalar`: whether the compiled condition returns its value (called as
+  `(u, t, integrator)`) instead of writing it into an output buffer (called as
+  `(out, u, t, integrator)`). This is `true` for discrete conditions and for the
+  single-equation continuous conditions of a `ContinuousCallback`, and `false` for the
+  multi-equation continuous conditions of a `VectorContinuousCallback`.
+
+# Fields
+- `f`: the generated function wrapping the condition expression
+"""
+struct CompiledCondition{IsDiscrete, IsScalar, F}
     f::F
 end
 
-function CompiledCondition{ID}(f::F) where {ID, F}
-    return CompiledCondition{ID, F}(f)
+function CompiledCondition{ID, IS}(f::F) where {ID, IS, F}
+    return CompiledCondition{ID, IS, F}(f)
 end
 
-function (cc::CompiledCondition)(out, u, t, integ)
+function (cc::CompiledCondition{false, false})(out, u, t, integ)
     return cc.f(out, u, parameter_values(integ), t)
 end
 
-function (cc::CompiledCondition{false})(u, t, integ)
-    return if DiffEqBase.isinplace(SciMLBase.get_sol(integ).prob)
-        tmp, = DiffEqBase.get_tmp_cache(integ)
-        cc.f(tmp, u, parameter_values(integ), t)
-        tmp[1]
-    else
-        cc.f(u, parameter_values(integ), t)
-    end
-end
-
-function (cc::CompiledCondition{true})(u, t, integ)
+function (cc::CompiledCondition{ID, true})(u, t, integ) where {ID}
     return cc.f(u, parameter_values(integ), t)
 end
 
@@ -1020,9 +1031,14 @@ end
 (ifw::InitFinalizeWrapper)(c, u, t, integ) = ifw.f(integ)
 
 """
-    compile_condition(cb::AbstractCallback, sys, dvs, ps; expression, kwargs...)
+    compile_condition(cb::AbstractCallback, sys, dvs, ps, opts::GeneratedFunctionOptions)
 
-Returns a function `condition(u,t,integrator)`, condition(out,u,t,integrator)` returning the `condition(cb)`.
+Compile `conditions(cb)` into a [`CompiledCondition`](@ref).
+
+Discrete conditions and single-equation continuous conditions (the ones attached to a
+`ContinuousCallback`) compile to a scalar out-of-place `condition(u, t, integrator)`.
+Multi-equation continuous conditions (the ones attached to a `VectorContinuousCallback`)
+compile to an in-place `condition(out, u, t, integrator)`.
 """
 Base.@nospecializeinfer function compile_condition(
         @nospecialize(cbs::Union{AbstractCallback, Vector{<:AbstractCallback}}),
@@ -1038,7 +1054,19 @@ Base.@nospecializeinfer function compile_condition(
         condit = reduce(vcat, flatten_equations(Vector{Equation}(condit)))
         condit = condit isa AbstractVector ? [c.lhs - c.rhs for c in condit] :
             [condit.lhs - condit.rhs]
+        # A single-equation continuous callback is attached as a `ContinuousCallback`, whose
+        # condition must return a scalar. Generating the scalar expression rather than a
+        # length-1 vector keeps the condition allocation-free and lets it be evaluated with
+        # nothing but `parameter_values(integrator)` (relevant for sensitivity analysis,
+        # which differentiates the condition through a stand-in integrator).
+        # See SciML/ModelingToolkit.jl#5018.
+        if length(condit) == 1
+            condit = only(condit)
+        end
     end
+    # Discrete conditions are scalar (boolean) expressions and are always called
+    # out-of-place, as are single-equation continuous conditions.
+    is_scalar = is_discrete(cbs) || !(condit isa AbstractVector)
 
     fs = build_function_wrapper(
         sys, condit, [Any[u]; p; Any[t]], BuildFunctionWrapperOptions(;
@@ -1046,10 +1074,16 @@ Base.@nospecializeinfer function compile_condition(
             codegen_function_options = opts.codegen
         )
     )
-    fs = GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
-        Val{false}, fs...; eval_expression, eval_module
-    )
-    return CompiledCondition{is_discrete(cbs)}(fs)
+    fs = if is_scalar
+        GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
+            Val{false}, fs[1], nothing; eval_expression, eval_module
+        )
+    else
+        GeneratedFunctionWrapper{(2, 3, is_split(sys))}(
+            Val{false}, fs...; eval_expression, eval_module
+        )
+    end
+    return CompiledCondition{is_discrete(cbs), is_scalar}(fs)
 end
 
 is_discrete(cb::AbstractCallback) = cb isa SymbolicDiscreteCallback
