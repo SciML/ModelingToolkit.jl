@@ -513,3 +513,9 @@ sys = modelingtoolkitize(prob)
     sprob2.f(mtkvals, sprob2.u0, sprob2.p, tspan[1])
     @test mtkvals ≈ truevals
 end
+
+@testset "unsupported parameter containers" begin
+    err = ModelingToolkitBase.ModelingtoolkitizeParametersNotSupportedError
+    @test_throws err ModelingToolkitBase.define_params(:p, t)
+    @test occursin("Symbol", sprint(showerror, err(Symbol)))
+end

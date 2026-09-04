@@ -47,6 +47,7 @@ end
             checkbounds, time_dependent_init = false, expression, kwargs...
         )
         f_prototype = nothing
+        mass_matrix = nothing
     else
         # Like `process_DynamicOptProblem`: a plain `ODEFunction` on a compiled
         # system would freeze the inputs at their operating-point parameter values

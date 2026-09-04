@@ -618,9 +618,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Differential
-        optext = "derivative"
-    end
+    optext = op === Differential ? "derivative" : "difference"
     msg = "The $optext variable must be isolated to the left-hand " *
         "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))

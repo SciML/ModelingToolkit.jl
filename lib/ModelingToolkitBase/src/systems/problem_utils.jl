@@ -998,12 +998,11 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
         portion = symidx.portion
         _bufidx = symidx.idx
+        subidx = nothing
         bufidx::UnitRange{Int} = if _bufidx isa AbstractVector{Int}
             @assert isequal(vec(_bufidx), first(_bufidx):last(_bufidx))
-            subidx = nothing
             first(_bufidx):last(_bufidx)
         elseif _bufidx isa Int
-            subidx = nothing
             _bufidx:_bufidx
         elseif _bufidx isa NTuple{2, Int}
             subidx = _bufidx[1]

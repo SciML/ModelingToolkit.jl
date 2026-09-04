@@ -841,9 +841,8 @@ function reorder_dimension_by_tunables!(
             throw(ArgumentError("`syms` must be a permutation of `tunable_parameters(sys)`. Found $sym which is not a tunable parameter."))
         end
 
-        dstidx = ntuple(
-            i -> i == dim ? (dsti:(dsti + length(sym) - 1)) : (:), Val(ndims(arr))
-        )
+        dstrange = dsti:(dsti + length(sym) - 1)
+        dstidx = ntuple(i -> i == dim ? dstrange : (:), Val(ndims(arr)))
         destv = @view dest[dstidx...]
         dsti += length(sym)
         arridx = ntuple(i -> i == dim ? (idx.idx) : (:), Val(ndims(arr)))

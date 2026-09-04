@@ -252,13 +252,17 @@ end
 
 function SymbolicIndexingInterface.is_timeseries_parameter(sys::AbstractSystem, sym)
     is_time_dependent(sys) || return false
-    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return false
+    has_index_cache(sys) || return false
+    ic = get_index_cache(sys)
+    ic === nothing && return false
     return is_timeseries_parameter(ic, sym)
 end
 
 function SymbolicIndexingInterface.timeseries_parameter_index(sys::AbstractSystem, sym)
     is_time_dependent(sys) || return nothing
-    has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing || return nothing
+    has_index_cache(sys) || return nothing
+    ic = get_index_cache(sys)
+    ic === nothing && return nothing
     return timeseries_parameter_index(ic, sym)
 end
 
@@ -333,7 +337,7 @@ function _all_ts_idxs!(ts_idxs, ::ScalarSymbolic, sys, sym::Symbol)
             any(isequal(sym), getname.(observables(sys)))
         push!(ts_idxs, ContinuousTimeseries())
     elseif is_timeseries_parameter(sys, sym)
-        push!(ts_idxs, timeseries_parameter_index(sys, s).timeseries_idx)
+        push!(ts_idxs, timeseries_parameter_index(sys, sym).timeseries_idx)
     end
 end
 function _all_ts_idxs!(ts_idxs, ::NotSymbolic, sys, sym::AbstractArray)
@@ -3340,13 +3344,11 @@ function extend(
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
-        if length(ivs) == 0
-            sys = convert_system(T, sys)
-        elseif length(ivs) == 1
-            sys = convert_system(T, sys, ivs[1])
-        else
-            throw("Extending multivariate systems is not supported")
-        end
+        throw(
+            ArgumentError(
+                "Cannot extend a `$(typeof(basesys))` with a `$(typeof(sys))`; both systems must have the same type."
+            )
+        )
     end
 
     # collect fields common to all system types
