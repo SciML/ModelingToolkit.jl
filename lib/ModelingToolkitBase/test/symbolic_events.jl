@@ -8,6 +8,7 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
 using Symbolics
+using Symbolics: unwrap
 
 using StableRNGs
 import SciMLBase
