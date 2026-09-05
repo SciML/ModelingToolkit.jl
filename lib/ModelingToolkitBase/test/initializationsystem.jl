@@ -11,6 +11,22 @@ import DiffEqNoiseProcess
 using Setfield: @set!
 import SymbolicUtils as SU
 
+@testset "Remake with copied missing parameter bindings" begin
+    @variables x(t) = 1.0
+    @parameters k = 1.0 N
+    @named raw = System(
+        [D(x) ~ -k * x / N], t;
+        bindings = [N => missing], initial_conditions = [N => 10.0]
+    )
+    sys = complete(raw)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    for original in (prob, deepcopy(prob))
+        remade = remake(original; p = [k => 2.0])
+        @test remade.ps[k] == 2.0
+        @test remade.ps[N] == 10.0
+    end
+end
+
 struct FwdDiffTag end
 const DualT{T} = ForwardDiff.Dual{ForwardDiff.Tag{FwdDiffTag, T}, T, 1}
 const ERRMOD = @isdefined(ModelingToolkit) ? ModelingToolkit.StateSelection : ModelingToolkitBase

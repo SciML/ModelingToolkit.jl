@@ -578,7 +578,7 @@ function add_initialization_parameters(sys::AbstractSystem; split = true, _unhac
     end
 
     for (k, v) in bindings(sys)
-        v === COMMON_MISSING || continue
+        isequal(v, COMMON_MISSING) || continue
         if split
             push!(all_initialvars, k)
         else
@@ -1889,7 +1889,7 @@ function set_defaults(sys::AbstractSystem, pairs)
         u = unwrap(val)
         if u === nothing || u === COMMON_NOTHING
             continue
-        elseif u === missing || u === COMMON_MISSING
+        elseif u === missing || isequal(u, COMMON_MISSING)
             binds[var] = COMMON_MISSING
         elseif u isa SymbolicT && !SU.isconst(u)
             binds[var] = u
