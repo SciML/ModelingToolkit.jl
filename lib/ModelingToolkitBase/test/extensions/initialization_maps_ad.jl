@@ -1,6 +1,7 @@
 using ForwardDiff, ModelingToolkitBase, Test, Zygote
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SciMLBase
 using SymbolicIndexingInterface: ProblemState
+using SciMLStructures: Tunable, replace
 
 @testset "FullSpecialize parameter buffer gradients" begin
     for prototype in ([0.0], ModelingToolkitBase.SVector(0.0), Any[0.0])
@@ -15,10 +16,11 @@ using SymbolicIndexingInterface: ProblemState
     @test only(Zygote.gradient(tagged_loss, 2.0)) == 4.0
 end
 
-@testset "FullSpecialize state map gradients" begin
+@testset "FullSpecialize initialization map gradients" begin
     @variables x(t) y(t)
+    @parameters a = 1.0
     @mtkcompile sys = System(
-        [D(x) ~ -x, D(y) ~ -y], t;
+        [D(x) ~ -a * x, D(y) ~ -y], t;
         initialization_eqs = [x^3 + x ~ 2, y ~ 2x + 1]
     )
     prob = ODEProblem{true, SciMLBase.FullSpecialize}(
@@ -28,4 +30,13 @@ end
     initprob = data.initializeprob
     loss(u) = sum(abs2, data.initializeprobmap(ProblemState(; u, p = initprob.p, t = 0.0)))
     @test only(Zygote.gradient(loss, initprob.u0)) ≈ ForwardDiff.gradient(loss, initprob.u0)
+
+    function parameter_loss(p)
+        state = ProblemState(; u = initprob.u0, p = replace(Tunable(), initprob.p, p), t = 0.0)
+        return sum(abs2, data.initializeprobpmap(prob, state).tunable)
+    end
+    p = initprob.p.tunable
+    expected = ForwardDiff.gradient(parameter_loss, p)
+    @test expected == 2p
+    @test only(Zygote.gradient(parameter_loss, p)) ≈ expected
 end
