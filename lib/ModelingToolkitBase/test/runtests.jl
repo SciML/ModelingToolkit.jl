@@ -57,6 +57,7 @@ end
             @safetestset "Split Parameters Test" include("split_parameters.jl")
             @safetestset "StaticArrays Test" include("static_arrays.jl")
             @safetestset "Components Test" include("components.jl")
+            @safetestset "Struct Variables Test" include("struct_variables.jl")
             @safetestset "Error Handling" include("error_handling.jl")
             @safetestset "Basic transformations" include("basic_transformations.jl")
             @safetestset "Change of variables" include("changeofvariables.jl")

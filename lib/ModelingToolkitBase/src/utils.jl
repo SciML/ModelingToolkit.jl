@@ -52,7 +52,7 @@ function detime_dvs(op)
     return if !iscall(op)
         op
     elseif issym(operation(op))
-        SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
+        SSym(nameof(operation(op)); type = symtype(op), shape = SU.shape(op))
     else
         maketerm(
             typeof(op), operation(op), detime_dvs.(arguments(op)),
@@ -67,7 +67,7 @@ end
 Reverse `detime_dvs` for the given `dvs` using independent variable `iv`.
 """
 function retime_dvs(op, dvs, iv)
-    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, Real}, shape = SU.ShapeVecT())(iv)
+    issym(op) && return SSym(nameof(op); type = FnType{Tuple{symtype(iv)}, symtype(op)}, shape = SU.ShapeVecT())(iv)
     return iscall(op) ?
         maketerm(
             typeof(op), operation(op), retime_dvs.(arguments(op), (dvs,), (iv,)),
@@ -397,7 +397,9 @@ function find_all_parameter_equations(sys::AbstractSystem)
             recurse = check_no_parameter_equations_recurse
         )
         isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
-        intersect!(varsbuf, allowed_vars)
+        # `allowed_vars` is keyed on whole arrays/records, so a projection has to be
+        # matched through its parent rather than by exact identity.
+        filter!(Base.Fix1(contains_possibly_indexed_element, allowed_vars), varsbuf)
         push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
     end
 
@@ -596,7 +598,9 @@ Populate `vars` with mappings from symbolic variable names to variables.
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue
-        x = split_indexed_var(x)[1]
+        # Projections are named through their parent, so collapse to it: `x[1]` and `x[2]`
+        # are both `x`, and `q.x` and `q.y` are both `q`.
+        x = split_field_access(x)[1]
         hasname(x) || continue
         nm = getname(x)
         if !isequal(get(vars, nm, x), x)
@@ -854,8 +858,23 @@ end
 
 struct OperatorIsAtomic{O} end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `ex` names a leaf of a symbolic struct, i.e. a field access or an indexed element
+of one. The array counterpart is the `getindex` case of `SymbolicUtils.default_is_atomic`.
+"""
+function is_symstruct_field(ex::SymbolicT)
+    return Moshi.Match.@match ex begin
+        BSImpl.Term(; f) && if f isa Symbolics.SymbolicGetproperty end => true
+        BSImpl.Term(; f, args) && if f === getindex end => is_symstruct_field(args[1])
+        _ => false
+    end
+end
+
 function (::OperatorIsAtomic{O})(ex::SymbolicT) where {O}
-    return SU.default_is_atomic(ex) && Moshi.Match.@match ex begin
+    return (SU.default_is_atomic(ex) || is_symstruct_field(ex)) &&
+           Moshi.Match.@match ex begin
         BSImpl.Term(; f) && if f isa Operator end => f isa O
         _ => true
     end
@@ -1611,6 +1630,10 @@ end
 function underscore_to_D(v, iv, inv_map)
     return if haskey(inv_map, v)
         only(get(inv_map, v, [v]))
+    elseif iscall(v) && operation(v) isa Symbolics.SymbolicGetproperty
+        # The name lives on the record, so rewrite the base and re-apply the field access.
+        f = operation(v)
+        unwrap(f(underscore_to_D(only(arguments(v)), iv, inv_map)))
     else
         v = ModelingToolkitBase.detime_dvs(v)
         s = split(string(getname(v)), 'ˍ')
@@ -1621,7 +1644,7 @@ function underscore_to_D(v, iv, inv_map)
         end
         repeats = length(suffix) ÷ length(string(iv))
         D = Differential(iv)
-        v = SSym(Symbol(n); type = FnType{Tuple, Real, Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
+        v = SSym(Symbol(n); type = FnType{Tuple, symtype(v), Nothing}, shape = SymbolicUtils.ShapeVecT())(iv)
         wrap_with_D(v, D, repeats)
     end
 end
@@ -1679,6 +1702,186 @@ function _get_stable_index(x::SymbolicT)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
         _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
     end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+One step of an access path into a composite symbolic: a field name, or the index of an
+element. See [`get_struct_access`](@ref).
+"""
+const StructAccessStepT = Union{Symbol, SU.StableIndex{Int}}
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, check whether it projects a leaf out of a struct symbolic,
+through any interleaving of field accesses and indices (`foo.x.y[i]`, `foo.x[i].y`). If it
+does, return the struct being projected from and `true`. Otherwise, return `x, false`.
+
+This is the struct counterpart of `split_indexed_var`, and like it, commutes with
+operators. Unlike `split_indexed_var` it peels the whole chain, so a plain array element
+`a[i]` also resolves to `a`.
+"""
+SU.@cache limit = 500_000 function split_field_access(x::SymbolicT)::Tuple{SymbolicT, Bool}
+    return _split_field_access(x)
+end
+
+function _split_field_access(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
+            root, _ = split_field_access(args[1])
+            return root, true
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            root, isacc = split_field_access(args[1])
+            isacc || return x, false
+            return f(root)::SymbolicT, isacc
+        end
+        _ => return x, false
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a symbolic variable `x`, assume `split_field_access(x)[2]` is `true`. Return the
+access path from the struct to `x`, outermost last, e.g. `[:x, :y, StableIndex([1])]` for
+`foo.x.y[1]` and `[:x, StableIndex([1]), :y]` for `foo.x[1].y`.
+"""
+function get_struct_access(x::SymbolicT)::Vector{StructAccessStepT}
+    path = StructAccessStepT[]
+    _get_struct_access!(path, x)
+    return path
+end
+
+function _get_struct_access!(path::Vector{StructAccessStepT}, x::SymbolicT)
+    Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, Symbolics.field_name(f)::Symbol)
+        end
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            _get_struct_access!(path, args[1])
+            push!(path, SU.StableIndex{Int}(x))
+        end
+        BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
+            _get_struct_access!(path, args[1])
+        end
+        _ => nothing
+    end
+    return path
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Value of the projection `leaf` of `node`, given that `node` has the value `value`.
+`value` may be a `Const` wrapping a concrete record, in which case the result is a `Const`
+wrapping the corresponding field, or a symbolic expression, in which case the projection is
+applied symbolically.
+"""
+function record_leaf_entry(leaf::SymbolicT, node::SymbolicT, value::SymbolicT)::SymbolicT
+    isequal(leaf, node) && return value
+    iscall(leaf) || error(lazy"Cannot resolve $leaf as a projection of $node.")
+    f = operation(leaf)
+    args = arguments(leaf)
+    base = record_leaf_entry(args[1]::SymbolicT, node, value)
+    isconst = SU.isconst(base)
+    if f isa Symbolics.SymbolicGetproperty
+        isconst || return f(base)::SymbolicT
+        return BSImpl.Const{VartypeT}(getproperty(unwrap_const(base), Symbolics.field_name(f)::Symbol))
+    elseif f === getindex
+        idxs = unwrap_const.(@view args[2:end])
+        isconst || return base[idxs...]::SymbolicT
+        return BSImpl.Const{VartypeT}(unwrap_const(base)[idxs...])
+    end
+    return error(lazy"Cannot resolve $leaf as a projection of $node.")
+end
+
+"""
+    $TYPEDSIGNATURES
+
+The leaves of the struct symbolic `root`, in canonical linear order. This is the order
+used to lay out a record's value in [`AtomicArrayDict`](@ref).
+"""
+SU.@cache limit = 500_000 function record_leaves(root::SymbolicT)::Vector{SymbolicT}
+    return collect(Symbolics.SymStruct{SU.symtype(root)}(root))::Vector{SymbolicT}
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Map from each leaf of the struct symbolic `root` to its index in [`record_leaves`](@ref).
+"""
+SU.@cache limit = 500_000 function record_leaf_indexmap(root::SymbolicT)::Dict{SymbolicT, Int}
+    leaves = record_leaves(root)
+    idxmap = Dict{SymbolicT, Int}()
+    sizehint!(idxmap, length(leaves))
+    for (i, leaf) in enumerate(leaves)
+        idxmap[leaf] = i
+    end
+    return idxmap
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check whether `x` is `node`, or projects out of it by a chain of field accesses and
+indices.
+"""
+function is_record_descendant(x::SymbolicT, node::SymbolicT)
+    while true
+        isequal(x, node) && return true
+        iscall(x) || return false
+        f = operation(x)
+        f isa Symbolics.SymbolicGetproperty || f === getindex || return false
+        x = arguments(x)[1]::SymbolicT
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Indices into [`record_leaves`](@ref) of `root` covered by `node`, which must be `root` or
+a projection of it. A leaf covers one index, an intermediate node covers all the leaves
+below it.
+"""
+function record_node_indices(root::SymbolicT, node::SymbolicT)::Vector{Int}
+    leaves = record_leaves(root)
+    isequal(root, node) && return collect(eachindex(leaves))
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return [i]
+    return findall(Base.Fix2(is_record_descendant, node), leaves)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Assemble the value of `node` from `buffer`, the values of the leaves of `root` in
+[`record_leaves`](@ref) order. The inverse of [`record_leaf_entry`](@ref).
+"""
+function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVector)
+    i = get(record_leaf_indexmap(root), node, 0)
+    i == 0 || return buffer[i]
+    if SU.is_array_shape(SU.shape(node))
+        # `stable_eachindex` walks in linear order, which is the order the leaves are laid
+        # out in, so the values come back flat and have to be reshaped.
+        vals = map(SU.stable_eachindex(node)) do idx
+            record_node_value(root, node[idx]::SymbolicT, buffer)
+        end
+        return reshape(vec(vals), size(node))
+    end
+    T = SU.symtype(node)::DataType
+    Symbolics.issymstruct(node) || error(
+        lazy"Cannot assemble a value for $node of type $T from the leaves of $root."
+    )
+    return T(
+        map(fieldnames(T)) do fname
+            field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+            record_node_value(root, field, buffer)
+        end...
+    )
 end
 
 """
