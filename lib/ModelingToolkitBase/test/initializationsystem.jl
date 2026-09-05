@@ -2,6 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
 using ForwardDiff, StaticArrays
+using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, observed
@@ -1839,6 +1840,109 @@ end
     if VERSION < v"1.13-" || VERSION >= v"1.13.0"
         @inferred remake(prob; u0 = 2 .* prob.u0, p = prob.p)
         @inferred solve(prob)
+    end
+end
+
+@testset "FullSpecialize initialization maps are generated functions" begin
+    @variables map_x(t) map_y(t)
+    @parameters map_rate = 1.0 map_scale::Int = 2 [tunable = false]
+    @mtkcompile map_sys = System(
+        [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t;
+        initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+    )
+    guesses = [map_x => 1.0, map_y => 1.0]
+    auto_prob = ODEProblem{true, SciMLBase.AutoSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    auto_data = auto_prob.f.initialization_data
+    full_data = full_prob.f.initialization_data
+
+    @test auto_data.initializeprobmap isa ModelingToolkitBase.InitializationMap
+    @test full_data.initializeprobmap isa RuntimeGeneratedFunction
+    @test full_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test isbitstype(typeof(full_data.initializeprobmap))
+    @test isbitstype(typeof(full_data.initializeprobpmap))
+
+    auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
+    full_u = full_data.initializeprobmap(full_data.initializeprob)
+    @test full_u isa StaticVector
+    @test full_u == auto_u
+
+    auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)
+    full_p = full_data.initializeprobpmap(full_prob, full_data.initializeprob)
+    @test full_p.tunable isa StaticVector
+    @test full_p.initials isa StaticVector
+    @test full_p.tunable == auto_p.tunable
+    @test full_p.initials == auto_p.initials
+    @test full_p.discrete == auto_p.discrete
+    @test full_p.constant == auto_p.constant
+    @test full_p.nonnumeric == auto_p.nonnumeric
+    cached_p = ModelingToolkitBase.MTKParameters(
+        full_p.tunable, full_p.initials, full_p.discrete, full_p.constant,
+        full_p.nonnumeric, ([1.0, 2.0],)
+    )
+    mapped_p = full_data.initializeprobpmap(
+        ProblemState(; u = full_prob.u0, p = cached_p, t = 0.0), full_data.initializeprob
+    )
+    @test mapped_p.caches == cached_p.caches
+    @test only(mapped_p.caches) !== only(cached_p.caches)
+    for portion in (Tunable(), SciMLStructures.Constants())
+        values = SciMLStructures.canonicalize(portion, full_p)[1]
+        @test !isempty(values)
+        replacement = fill(3, length(values))
+        SciMLStructures.replace!(portion, full_p, replacement)
+        @test SciMLStructures.canonicalize(portion, full_p)[1] == replacement
+    end
+    nonbits = ModelingToolkitBase._static_initialization_buffer(Any[Ref(1)], (Ref(2),))
+    @test nonbits isa SizedVector
+    nonbits[1] = Ref(3)
+    @test only(nonbits)[] == 3
+
+    array_parameter(x) = SVector(x, 2x)
+    @parameters (array_fn::typeof(array_parameter))(..)[1:2] = array_parameter [tunable = false]
+    @variables array_input(t) array_output(t) array_x(t) = 1.0
+    array_block = System(
+        [array_output ~ array_fn(array_input)[1]], t,
+        [array_input, array_output], [array_fn]; name = :array_block
+    )
+    @mtkcompile array_sys = System(
+        [D(array_x) ~ array_block.array_output, array_block.array_input ~ array_x], t;
+        systems = [array_block]
+    )
+    array_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        array_sys, [], (0.0, 1.0)
+    )
+    array_data = array_prob.f.initialization_data
+    array_p = array_data.initializeprobpmap(array_prob, array_data.initializeprob)
+    @test array_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test only(only(array_p.nonnumeric)) === array_parameter
+
+    static_constructor(values) = SVector{length(values)}(values)
+    for split in (true, false)
+        sys = mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t; name = :static_map,
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            ); split
+        )
+        auto = ODEProblem{false, SciMLBase.AutoSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        full = ODEProblem{false, SciMLBase.FullSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        adata, fdata = auto.f.initialization_data, full.f.initialization_data
+        u = fdata.initializeprobmap(fdata.initializeprob)
+        p = fdata.initializeprobpmap(full, fdata.initializeprob)
+        @test isbits(u)
+        @test isbits(p)
+        @test u == adata.initializeprobmap(adata.initializeprob)
+        @test p == adata.initializeprobpmap(auto, adata.initializeprob)
     end
 end
 

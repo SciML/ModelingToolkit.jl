@@ -1108,6 +1108,24 @@ struct MTKParametersReconstructor{T, I, D, C, N}
     diffcache_buffer_idx::Int
 end
 
+function _unwrap_initial_symbols!(initsyms, srcsys)
+    allsyms = Set{SymbolicT}(variable_symbols(srcsys))
+    for i in eachindex(initsyms)
+        sym = initsyms[i]
+        arr, isarr = split_indexed_var(sym)
+        innersym = if isarr
+            sidx = get_stable_index(sym)
+            first(arguments(arr))[sidx]
+        else
+            first(arguments(arr))
+        end
+        if innersym in allsyms
+            initsyms[i] = innersym
+        end
+    end
+    return initsyms
+end
+
 # TODO: make this infer when the nonnumerics are non-trivial
 function (recon::MTKParametersReconstructor)(src, dst)
     return recon(src, parameter_values(dst))
@@ -1185,22 +1203,7 @@ function MTKParametersReconstructor(
     end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = syms[2]::Vector{SymbolicT}
-        allsyms = Set{SymbolicT}(variable_symbols(srcsys))
-        if unwrap_initials
-            for i in eachindex(initsyms)
-                sym = initsyms[i]
-                arr, isarr = split_indexed_var(sym)
-                innersym = if isarr
-                    sidx = get_stable_index(sym)
-                    first(arguments(arr))[sidx]
-                else
-                    first(arguments(arr))
-                end
-                if innersym in allsyms
-                    initsyms[i] = innersym
-                end
-            end
-        end
+        unwrap_initials && _unwrap_initial_symbols!(initsyms, srcsys)
         p_constructor ∘ CopyParamsByTemplate(srcsys, initsyms; kwargs...)
     else
         Returns(SVector{0, Float64}())
@@ -1630,6 +1633,155 @@ function (map::InitializationMap{true})(x)
     return __iip_u0_ad_wrapper(map.u0_constructor(map.map(x)))
 end
 
+function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr})
+    @assert expr.head === :function
+    signature = expr.args[1]
+    @assert signature isa Expr && signature.head === :tuple
+    generated_args = signature.args
+    @assert length(generated_args) == length(sources)
+
+    body = Expr(:block)
+    for (arg, source) in zip(generated_args, sources)
+        push!(body.args, :(local $arg = $source))
+    end
+    raw = gensym(:initialization_map_values)
+    push!(body.args, :(local $raw = $(expr.args[2])))
+    push!(body.args, finish(raw))
+    return Expr(:function, Expr(:tuple, map_args...), body)
+end
+
+function _generated_map_sources(valp::Symbol, time_dependent::Bool)
+    sources = Expr[
+        Expr(:call, GlobalRef(SymbolicIndexingInterface, :state_values), valp),
+        Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), valp),
+    ]
+    if time_dependent
+        push!(sources, Expr(:call, GlobalRef(SymbolicIndexingInterface, :current_time), valp))
+    end
+    return sources
+end
+
+function _construct_fullspecialize_initializeprobmap(
+        initsys::AbstractSystem, solved_unknowns;
+        iip::Bool, u0_constructor, floatT, eval_module,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+    )
+    expr = build_explicit_observed_function(
+        initsys, solved_unknowns;
+        expression = Val(true), output_type = SVector, compiler_options, kwargs...
+    )
+    sol = gensym(:initialization_solution)
+    sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    n = length(solved_unknowns)
+    static_type = iip ? MVector : SVector
+    map_expr = _generated_map_expr(expr, [sol], sources) do raw
+        T = gensym(:initialization_map_eltype)
+        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
+        tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
+        promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
+        static_values = Expr(
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer),
+            Expr(:curly, static_type, n, T), raw
+        )
+        result = Expr(:call, QuoteNode(u0_constructor), static_values)
+        if iip
+            result = Expr(:call, GlobalRef(@__MODULE__, :__iip_u0_ad_wrapper), result)
+        end
+        return Expr(:block, :(local $T = $promoted), result)
+    end
+    return eval_or_rgf(map_expr; eval_module, compiler_options)
+end
+
+function _static_initialization_buffer(prototype, values)
+    T = isempty(values) ? eltype(prototype) :
+        promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
+    if !ArrayInterface.ismutable(prototype)
+        return SVector{length(values), T}(values)
+    elseif isbitstype(T)
+        return MVector{length(values), T}(values)
+    else
+        return SizedVector{length(values), T}(T[values...])
+    end
+end
+
+function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
+    values = Expr(:tuple, [Expr(:ref, raw, i) for i in idxs]...)
+    buffer = Expr(
+        :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), prototype, values
+    )
+    p_constructor === identity && return buffer
+    return Expr(:call, QuoteNode(p_constructor), buffer)
+end
+
+function _construct_fullspecialize_initializeprobpmap(
+        sys::AbstractSystem, initsys::AbstractSystem;
+        p_constructor, eval_module,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+    )
+    ps = parameters(sys; initial_parameters = true)
+    groups = if is_split(sys)
+        grouped = reorder_parameters(sys, ps; flatten = false)
+        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]), initsys)
+        ((grouped[1],), (initial_syms,), grouped[3:5]...)
+    else
+        ((ps,),)
+    end
+    flat_syms = SymbolicT[]
+    for group in groups, buffer in group
+        append!(flat_syms, buffer)
+    end
+    expr = build_explicit_observed_function(
+        initsys, Tuple(flat_syms);
+        expression = Val(true), compiler_options, kwargs...
+    )
+    prob = gensym(:problem)
+    sol = gensym(:initialization_solution)
+    sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
+        outer_p = gensym(:outer_parameters)
+        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
+        if !is_split(sys)
+            result = _parameter_buffer_expr(outer_p, raw, eachindex(flat_syms), p_constructor)
+            return Expr(:block, :(local $outer_p = $p), result)
+        end
+
+        offset = 0
+        portions = Expr[]
+        for (field, group) in zip((:tunable, :initials, :discrete, :constant, :nonnumeric), groups)
+            buffers = Expr[]
+            for (buffer_idx, syms) in enumerate(group)
+                idxs = (offset + 1):(offset + length(syms))
+                offset += length(syms)
+                prototype = Expr(:., outer_p, QuoteNode(field))
+                if field !== :tunable && field !== :initials
+                    prototype = Expr(:ref, prototype, buffer_idx)
+                end
+                buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
+                if field === :discrete
+                    sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
+                    block_sizes = Expr(
+                        :call, Expr(:curly, SVector, length(sizes), Int),
+                        map(size -> size.length, sizes)...
+                    )
+                    p_constructor === identity ||
+                        (block_sizes = Expr(:call, QuoteNode(p_constructor), block_sizes))
+                    buffer = Expr(:call, BlockedArray, buffer, block_sizes)
+                end
+                push!(buffers, buffer)
+            end
+            portion = field === :tunable || field === :initials ? only(buffers) :
+                Expr(:tuple, buffers...)
+            push!(portions, portion)
+        end
+        result = Expr(
+            :call, MTKParameters, portions...,
+            :($map($copy, $outer_p.caches))
+        )
+        return Expr(:block, :(local $outer_p = $p), result)
+    end
+    return eval_or_rgf(map_expr; eval_module, compiler_options)
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1896,6 +2048,7 @@ function maybe_build_initialization_problem(
         sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
         opts::SciMLProblemOptions;
         specialize = SciMLBase.AutoDespecialize,
+        map_specialize = specialize,
         # Intercept `expression` because we don't support it here yet
         expression = Val{false}, kwargs...
     )
@@ -1987,6 +2140,13 @@ function maybe_build_initialization_problem(
         solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
         if isempty(solved_unknowns)
             initializeprobmap = nothing
+        elseif map_specialize === SciMLBase.FullSpecialize
+            initializeprobmap = _construct_fullspecialize_initializeprobmap(
+                initializeprob.f.sys, solved_unknowns;
+                iip, u0_constructor, floatT, eval_module,
+                compiler_options = init_compiler_options,
+                kwargs...
+            )
         else
             initializeprobmap = InitializationMap{iip}(
                 u0_constructor,
@@ -2010,6 +2170,12 @@ function maybe_build_initialization_problem(
     ]
     if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
+    elseif map_specialize === SciMLBase.FullSpecialize
+        initializeprobpmap = _construct_fullspecialize_initializeprobpmap(
+            sys, initsys;
+            p_constructor, eval_module, compiler_options = init_compiler_options,
+            kwargs...
+        )
     else
         initializeprobpmap = construct_initializeprobpmap(
             sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
@@ -2222,12 +2388,12 @@ function __process_SciMLProblem(
     end
 
     if build_initializeprob
+        problem_specialize = SciMLBase.specialization(constructor)
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
             op, t, guesses, opts;
-            specialize = initialization_specialization(
-                SciMLBase.specialization(constructor)
-            ), kwargs...
+            specialize = initialization_specialization(problem_specialize),
+            map_specialize = problem_specialize, kwargs...
         )
 
         kwargs = merge(kwargs, kws)
