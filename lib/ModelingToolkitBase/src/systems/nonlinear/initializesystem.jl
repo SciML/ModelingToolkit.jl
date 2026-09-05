@@ -824,7 +824,20 @@ function _late_binding_update_u0_p_impl(
     else
         allsyms = nothing
         # if `p` is not provided or is symbolic
-        p === missing || eltype(p) <: Pair || return newu0, newp
+        if p !== missing && !(eltype(p) <: Pair)
+            _unwrap_mtk_parameters(p) isa MTKParameters && return newu0, newp
+            oldp = parameter_values(prob)
+            unwrapped_oldp = _unwrap_mtk_parameters(oldp)
+            if unwrapped_oldp isa MTKParameters
+                newp = SciMLStructures.replace(
+                    SciMLStructures.Tunable(), copy(unwrapped_oldp), newp
+                )
+                if oldp isa SciMLBase.DespecializedParameters
+                    newp = SciMLBase.DespecializedParameters(newp)
+                end
+            end
+            return newu0, newp
+        end
         (newu0 === nothing || isempty(newu0)) && return newu0, newp
         initdata === nothing && return newu0, newp
         meta = initdata.metadata
