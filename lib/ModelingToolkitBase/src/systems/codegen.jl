@@ -1783,7 +1783,7 @@ struct BandedAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
 end
 
 function BandedAMatrixWrapper(f::Expr, nr::Int, bands::NTuple{2, Int})
-    return Expr(:call, BandedAMatrixWrapper, f, sz, bands)
+    return Expr(:call, BandedAMatrixWrapper, f, nr, bands)
 end
 
 function (f::BandedAMatrixWrapper{OOPArgs})(out::BandedMatrix, args::Vararg{Any, OOPArgs}) where {OOPArgs}

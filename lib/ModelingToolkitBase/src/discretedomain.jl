@@ -26,7 +26,7 @@ struct Shift <: Operator
     steps::Int
     Shift(t, steps = 1) = new(unwrap(t), steps)
 end
-Shift(steps::Int) = new(nothing, steps)
+Shift(steps::Int) = Shift(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false

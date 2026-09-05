@@ -113,13 +113,15 @@ end
 function (s::SymbolicUtils.Substituter)(aff::AffectSystem)
     sys = aff.system
     @set! sys.eqs = s(get_eqs(sys))
-    @set! sys.parameter_dependencies = (get_parameter_dependencies(sys))
-    @set! sys.defaults = Dict([k => s(v) for (k, v) in defaults(sys)])
-    @set! sys.guesses = Dict([k => s(v) for (k, v) in guesses(sys)])
+    @set! sys.observed = s(get_observed(sys))
+    @set! sys.bindings = Dict(s(k) => s(v) for (k, v) in get_bindings(sys))
+    @set! sys.initial_conditions = Dict(
+        s(k) => s(v) for (k, v) in get_initial_conditions(sys)
+    )
+    @set! sys.guesses = Dict(s(k) => s(v) for (k, v) in get_guesses(sys))
     @set! sys.unknowns = s(get_unknowns(sys))
     @set! sys.ps = s(get_ps(sys))
     return AffectSystem(sys, s(aff.unknowns), s(aff.parameters), s(aff.discretes))
-
 end
 
 function AffectSystem(spec::SymbolicAffect; iv = nothing, alg_eqs = Equation[], kwargs...)

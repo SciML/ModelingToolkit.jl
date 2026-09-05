@@ -279,16 +279,18 @@ function narrow_buffer_type(
 end
 
 function narrow_buffer_type(buffer::BlockedArray; p_constructor = identity)
-    if eltype(buffer) <: AbstractArray
-        buffer = narrow_buffer_type.(buffer; p_constructor)
+    narrowed = if eltype(buffer) <: AbstractArray
+        narrow_buffer_type.(buffer; p_constructor)
+    else
+        buffer
     end
     type = Union{}
-    for x in buffer
+    for x in narrowed
         type = promote_type(type, typeof(x))
     end
-    tmp = p_constructor(type.(buffer))
-    blocks = ntuple(Val(ndims(buffer))) do i
-        bsizes = blocksizes(buffer, i)
+    tmp = p_constructor(type.(narrowed))
+    blocks = ntuple(Val(ndims(narrowed))) do i
+        bsizes = blocksizes(narrowed, i)
         p_constructor(Int.(bsizes))
     end
     return BlockedArray(tmp, blocks...)
@@ -542,6 +544,12 @@ function SymbolicIndexingInterface.set_parameter!(
     return nothing
 end
 
+function restore_static_buffers(oldbufs::Tuple, newbufs::Tuple)
+    return ntuple(Val(length(newbufs))) do i
+        similar_type.(oldbufs[i], eltype(newbufs[i]))(newbufs[i])
+    end
+end
+
 function narrow_buffer_type_and_fallback_undefs(
         oldbuf::AbstractVector, newbuf::AbstractVector
     )
@@ -769,15 +777,9 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     if !ArrayInterface.ismutable(oldbuf)
         @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
         @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
-        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
-            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
-        end
-        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
-            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
-        end
-        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
-            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
-        end
+        @set! newbuf.discrete = restore_static_buffers(oldbuf.discrete, newbuf.discrete)
+        @set! newbuf.constant = restore_static_buffers(oldbuf.constant, newbuf.constant)
+        @set! newbuf.nonnumeric = restore_static_buffers(oldbuf.nonnumeric, newbuf.nonnumeric)
     end
     return newbuf
 end

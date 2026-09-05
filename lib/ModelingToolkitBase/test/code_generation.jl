@@ -169,3 +169,8 @@ end
     @test ModelingToolkitBase.observed_equations_used_by(sys, [equations(sys)[1].rhs]) ==
         [1, 2]
 end
+
+@testset "`BandedAMatrixWrapper` on an `Expr`" begin
+    ex = ModelingToolkitBase.BandedAMatrixWrapper(:(f()), 3, (1, 1))
+    @test ex == Expr(:call, ModelingToolkitBase.BandedAMatrixWrapper, :(f()), 3, (1, 1))
+end

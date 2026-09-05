@@ -8,6 +8,7 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
 using Symbolics
+using Symbolics: unwrap
 
 using StableRNGs
 import SciMLBase
@@ -1971,5 +1972,44 @@ if !@isdefined(ModelingToolkit)
         s = mtkcompile(sys)
         sol = solve(ODEProblem(s, [], (0.0, 12.0)), Tsit5())
         @test sol[gi] ≈ [1, 2, 3, 2, 1]
+    end
+end
+
+@testset "`ImperativeAffect` internals" begin
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System([D(x) ~ p * x, D(y) ~ x], t)
+    sys = complete(sys)
+
+    @testset "`search_variables!` descends into non-symbolic entries" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m; observed = (; xy = [x, y])
+        )
+        vars = Set{ModelingToolkitBase.SymbolicT}()
+        SymbolicUtils.search_variables!(vars, aff)
+        @test isequal(vars, Set(unwrap.([x, y])))
+    end
+
+    @testset "duplicate observed aliases warn" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m, [x, y], [:a, :a], [], Symbol[], nothing, false
+        )
+        @test_logs (:warn, r"is aliased as a") match_mode = :any ModelingToolkitBase.compile_functional_affect(
+            aff, sys
+        )
+    end
+
+    @testset "`Substituter` on an `AffectSystem`" begin
+        @parameters q
+        aff = ModelingToolkitBase.AffectSystem(
+            ModelingToolkitBase.SymbolicAffect([x ~ p]); iv = t, parent_sys = sys
+        )
+        subs = SymbolicUtils.Substituter{false}(
+            Dict(unwrap(p) => unwrap(q)), SymbolicUtils.default_substitute_filter
+        )
+        newaff = subs(aff)
+        @test isequal(only(observed(newaff.system)).rhs, unwrap(q))
+        @test isequal(parameters(newaff.system), [unwrap(q)])
+        @test isequal(newaff.parameters, [unwrap(q)])
     end
 end
