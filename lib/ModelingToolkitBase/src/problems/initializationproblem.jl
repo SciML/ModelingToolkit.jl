@@ -21,6 +21,16 @@ All other keyword arguments are forwarded to the wrapped problem constructor.
 """
 struct InitializationProblem{iip, specialization} end
 
+function _initialization_problem_constructor(TProb, iip, specialize)
+    if TProb === LinearInitializationProblem
+        return TProb{iip}, (;)
+    elseif TProb === SCCNonlinearProblem
+        return TProb{iip}, (; specialize)
+    else
+        return TProb{iip, specialize}, (;)
+    end
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -168,13 +178,10 @@ function InitializationProblem{iip, specialize}(
     # Only forward `check_length` when the caller explicitly set it; otherwise let the
     # underlying problem type apply its own default (see the keyword's definition above).
     check_length_kw = check_length === nothing ? (;) : (; check_length)
-    problem_constructor = if TProb === LinearInitializationProblem
-        TProb{_iip}
-    else
-        TProb{_iip, specialize}
-    end
+    problem_constructor, problem_kwargs =
+        _initialization_problem_constructor(TProb, _iip, specialize)
     return problem_constructor(
-        isys, op; kwargs..., check_length_kw...,
+        isys, op; kwargs..., problem_kwargs..., check_length_kw...,
         u0_constructor, p_constructor, missing_guess_value,
         eval_expression, eval_module, warn_cyclic_dependency,
         circular_dependency_max_cycle_length, circular_dependency_max_cycles,
