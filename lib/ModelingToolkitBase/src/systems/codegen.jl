@@ -16,15 +16,6 @@ const EXPERIMENTAL_WARNING = """
 """
 
 """
-Treat a derivative of an array-valued expression as a leaf, so that
-[`expand_array_derivatives!`](@ref) collects `D(u[2:4])` itself rather than descending into
-it. Scalar variables are not atomic here, so nothing else is collected.
-"""
-function array_derivative_is_atomic(ex::SymbolicT)
-    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
-end
-
-"""
     $(TYPEDSIGNATURES)
 
 Rewrite derivatives of array-valued expressions, such as `D(u[2:4])`, into arrays of the
@@ -43,25 +34,7 @@ function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{Vart
     end
     isempty(terms) && return rhss
 
-    subs = Dict{SymbolicT, SymbolicT}()
-    for term in terms
-        op = operation(term)
-        arg = only(arguments(term))
-        sh = SU.shape(arg)::SU.ShapeVecT
-        # Preserve the shape: a derivative of a 2D slice must expand to a 2D array of
-        # scalar derivatives, or it will not broadcast against the surrounding slices.
-        arrargs = Symbolics.SArgsT()
-        sizehint!(arrargs, prod(length, sh; init = 1) + 1)
-        push!(arrargs, SU.Const{VartypeT}(size(arg)))
-        for idx in SU.stable_eachindex(arg)
-            push!(arrargs, op(arg[idx]))
-        end
-        subs[term] = Symbolics.STerm(
-            SU.array_literal, arrargs; type = symtype(arg), shape = sh
-        )
-    end
-
-    subber = SU.IRSubstituter{false}(ir, subs)
+    subber = SU.IRSubstituter{false}(ir, array_derivative_expansion_map(terms))
     map!(subber, rhss, rhss)
     return rhss
 end
@@ -101,6 +74,88 @@ function array_residual_maker(rhss::Vector{SymbolicT})
 end
 
 """
+    residual_eltype(x)
+
+Return the numeric element type contributed by `x`, or `Union{}`.
+"""
+function residual_eltype(x)
+    x = SciMLBase.unwrap_parameters(x)
+    if x isa Number
+        return typeof(x)
+    elseif x isa AbstractArray
+        T = eltype(x)
+        return T === Any ? Union{} : T
+    elseif SciMLStructures.isscimlstructure(x)
+        tun = first(SciMLStructures.canonicalize(SciMLStructures.Tunable(), x))
+        return residual_eltype(tun)
+    else
+        return Union{}
+    end
+end
+
+"""
+    similar_for_residual(prototype, extras...)
+
+Return an allocator using `prototype` and the promoted runtime element type.
+"""
+function similar_for_residual(prototype, extras...)
+    T = residual_eltype(prototype)
+    T === Union{} && (T = Float64)
+    for x in extras
+        T = promote_type(T, residual_eltype(x))
+    end
+    return sz -> similar(prototype, T, sz)
+end
+
+function residual_allocator_arg(arg)
+    name = arg isa DestructuredArgs ? arg.name : arg
+    name isa SymbolicT && return name
+    name isa Symbol || throw(
+        ArgumentError(
+            "Cannot form a residual allocator argument from $(typeof(arg))."
+        )
+    )
+    return SSym(name; type = Any, shape = SU.ShapeVecT())
+end
+
+function residual_allocator_term(args)
+    return STerm(
+        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        type = SU.FnType{Tuple, Any, Any},
+        shape = SU.ShapeVecT(),
+    )
+end
+
+function inject_similar_for_residual(body, alloc_term)
+    if body isa Let
+        return Let(
+            body.pairs, inject_similar_for_residual(body.body, alloc_term),
+            body.let_block
+        )
+    elseif body isa SymbolicT && Code.supports_with_allocator(body)
+        # The public helper would wrap the symbolic allocator in `Const`.
+        return STerm(
+            Code.with_allocator,
+            SArgsT((alloc_term, body));
+            type = SU.symtype(body),
+            shape = SU.shape(body),
+        )
+    else
+        return body
+    end
+end
+
+function wrap_oop_similar_for_residual(fn)
+    fn isa Func || return fn
+    isempty(fn.args) && return fn
+    alloc_term = residual_allocator_term(fn.args)
+    return Func(
+        fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
+        fn.pre
+    )
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
@@ -121,6 +176,10 @@ $GENERATE_X_KWARGS
   by default, which leaves the standard codegen path byte-identical.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+
+Time-independent systems use `_iszero(lhs) ? rhs : rhs - lhs` and
+`array_residual_maker`. No `du`. Out-of-place ArrayMaker residuals promote
+their element type from the function arguments.
 """
 function generate_rhs(
         sys::System, opts::GeneratedFunctionOptions;
@@ -175,6 +234,9 @@ function generate_rhs(
             expand_array_derivatives!(rhss, get_irstructure(sys))
             assemble_residuals = true
         end
+    elseif !is_time_dependent(sys)
+        rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+        assemble_residuals = true
     else
         if !override_discrete && !is_discrete_system(sys)
             check_operator_variables(eqs, Differential)
@@ -223,10 +285,20 @@ function generate_rhs(
         (; p_end = (t === nothing ? length(args) : length(args) - 1) - length(extra_args))
 
     u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
+    codegen_opts = opts.codegen
+    if !implicit_dae && assemble_residuals && rhss isa SymbolicT &&
+            Code.supports_with_allocator(rhss)
+        # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
+        oop_wrap, iip_wrap = codegen_opts.wrap_code
+        codegen_opts = setproperties(
+            codegen_opts,
+            (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
+        )
+    end
     res = build_function_wrapper(
         sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
             p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
-            codegen_function_options = opts.codegen
+            codegen_function_options = codegen_opts
         )
     )
     nargs = length(args) - length(p) + 1

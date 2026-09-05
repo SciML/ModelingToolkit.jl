@@ -1345,11 +1345,11 @@ end
 
 Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
-replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
-does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as initial conditions, bindings, guesses, observed and
-initialization equations are retained. The independent variable of `sys` becomes a
-parameter of the returned system.
+replacing every derivative `D(x)` of an unknown `x` with zero. Array derivatives are
+expanded first. Note that this process does not retain noise equations, brownian terms,
+jumps or costs associated with `sys`. All other information such as initial conditions,
+bindings, guesses, observed and initialization equations are retained. The independent
+variable of `sys` becomes a parameter of the returned system.
 
 If `sys` is hierarchical (it contains subsystems) this transformation will be applied
 recursively to all subsystems. The output system will be marked as `complete` if and only
@@ -1362,7 +1362,7 @@ function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
+    eqs = expand_array_derivatives(equations(sys))
     obs = observed(sys)
     D = Differential(get_iv(sys))
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])

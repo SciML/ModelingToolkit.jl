@@ -2198,9 +2198,13 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    # Implicit-DAE codegen expands an array equation into one output row per element, so
-    # array equations are usable there. Every other problem type still needs `mtkcompile`.
-    implicit_dae || check_array_equations_unknowns(eqs, dvs)
+    if !implicit_dae
+        if constructor <: NonlinearFunction
+            check_array_unknowns(dvs)
+        else
+            check_array_equations_unknowns(eqs, dvs)
+        end
+    end
 
     op = build_operating_point(sys, op; fast_path = true)
 
@@ -2318,17 +2322,20 @@ function __process_SciMLProblem(
         du0 = nothing
     end
 
-    if constructor <: NonlinearFunction && length(dvs) != length(eqs)
-        kwargs = merge(
-            kwargs,
-            (;
-                resid_prototype = u0_constructor(
-                    calculate_resid_prototype(
-                        length(eqs), u0, p
-                    )
-                ),
+    if constructor <: NonlinearFunction
+        nrows = count_equation_rows(eqs)
+        if length(dvs) != nrows
+            kwargs = merge(
+                kwargs,
+                (;
+                    resid_prototype = u0_constructor(
+                        calculate_resid_prototype(
+                            nrows, u0, p
+                        )
+                    ),
+                )
             )
-        )
+        end
     end
 
     f = constructor(
