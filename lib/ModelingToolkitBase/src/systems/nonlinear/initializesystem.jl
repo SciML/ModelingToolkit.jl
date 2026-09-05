@@ -285,7 +285,7 @@ function generate_initializesystem_timeindependent(
     end
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
-        if v === COMMON_MISSING
+        if isequal(v, COMMON_MISSING)
             push!(init_vars_set, k)
             delete!(init_ps, k)
             continue
@@ -319,7 +319,7 @@ function generate_initializesystem_timeindependent(
             continue
         end
 
-        if v === COMMON_MISSING
+        if isequal(v, COMMON_MISSING)
             push!(init_vars_set, k)
             delete!(init_ps, k)
             continue
@@ -409,7 +409,7 @@ function initsys_sort_system_bindings!(
     )
     # Anything with a binding of `missing` is solvable.
     for (k, v) in binds
-        if v === COMMON_MISSING
+        if isequal(v, COMMON_MISSING)
             push!(init_vars_set, k)
             delete!(init_ps, k)
             @assert Initial(k) in init_ps
@@ -448,7 +448,7 @@ function timevaring_initsys_process_op!(
     )
     for (k, v) in op
         # Late binding `missing` also makes the key solvable
-        if v === COMMON_MISSING
+        if isequal(v, COMMON_MISSING)
             push!(init_vars_set, k)
             delete!(init_ps, k)
             continue

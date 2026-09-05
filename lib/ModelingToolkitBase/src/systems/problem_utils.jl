@@ -2026,7 +2026,7 @@ function maybe_build_initialization_problem(
     missingvars = Set{SymbolicT}()
     temp_op = copy(op)
     for (k, v) in op
-        v === COMMON_MISSING || continue
+        isequal(v, COMMON_MISSING) || continue
         push!(missingvars, k)
         delete!(temp_op, k)
     end
@@ -2057,7 +2057,7 @@ function maybe_build_initialization_problem(
         has_possibly_indexed_key(op, v) || push!(missingvars, v)
     end
     for (k, v) in binds
-        v === COMMON_MISSING && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
+        isequal(v, COMMON_MISSING) && !has_possibly_indexed_key(op, k) && push!(missingvars, k)
     end
     for p in as_atomic_array_set(parameters(sys))
         haskey(binds, p) && continue
