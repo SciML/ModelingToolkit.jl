@@ -731,7 +731,7 @@ function W_sparsity(sys::System)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) :
-        SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+        SparseMatrixCSC{Bool, Int}((!iszero).(M))
     return jac_sparsity .| M_sparsity
 end
 
