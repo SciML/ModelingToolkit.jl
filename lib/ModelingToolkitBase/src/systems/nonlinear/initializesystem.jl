@@ -498,6 +498,7 @@ function timevaring_initsys_process_op!(
             for i in SU.stable_eachindex(k)
                 v[i] === COMMON_NOTHING && continue
                 push!(eqs_ics, subk[i] ~ ik[i])
+                write_possibly_indexed_array!(op, ik[i], v[i], COMMON_FALSE)
             end
             continue
         end

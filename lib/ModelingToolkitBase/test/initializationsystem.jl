@@ -1976,6 +1976,22 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
+@testset "Scalarized array initial conditions" begin
+    @independent_variables indexed_t
+    @variables indexed_y(indexed_t)[1:10]
+    indexed_D = Differential(indexed_t)
+
+    @mtkcompile indexed_system = System(
+        [indexed_D(indexed_y[1]) ~ -indexed_y[1]], indexed_t
+    )
+    indexed_state = only(unknowns(indexed_system))
+    indexed_problem = ODEProblem(
+        indexed_system, [indexed_state => 1.0], (0.0, 1.0)
+    )
+
+    @test indexed_problem.u0 == [1.0]
+end
+
 @testset "Initial conditions removed with ` => nothing` aren't retained" begin
     @variables x(t)[1:2]
     @mtkcompile sys = System([D(x[1]) ~ -x[1], x[1] + x[2] ~ 3], t; initial_conditions = [x => ones(2)])
