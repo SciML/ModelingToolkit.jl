@@ -513,7 +513,11 @@ function SciMLBase.SCCNonlinearProblem(sys::System, op; kwargs...)
 end
 
 function SciMLBase.SCCNonlinearProblem{iip}(sys::System, op; kwargs...) where {iip}
-    return SCCNonlinearProblem{iip, SciMLBase.AutoSpecialize}(sys, op; kwargs...)
+    specialize = get(kwargs, :specialize, SciMLBase.AutoSpecialize)
+    forwarded_kwargs = (;
+        (key => value for (key, value) in kwargs if key !== :specialize)...,
+    )
+    return SCCNonlinearProblem{iip, specialize}(sys, op; forwarded_kwargs...)
 end
 
 function SciMLBase.SCCNonlinearProblem{iip, specialize}(

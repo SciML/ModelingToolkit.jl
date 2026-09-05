@@ -407,6 +407,18 @@ end
     @variables x y z
     @mtkcompile sys = System([0 ~ x^3 + x - 1, 0 ~ y^3 + y - x, 0 ~ z^3 + z - y])
     op = [x => 1.0, y => 1.0, z => 1.0]
+    constructor, constructor_kwargs = ModelingToolkitBase._initialization_problem_constructor(
+        SCCNonlinearProblem, true, SciMLBase.AutoDespecialize
+    )
+    @test constructor === SCCNonlinearProblem{true}
+    @test constructor_kwargs === (; specialize = SciMLBase.AutoDespecialize)
+    keyword_prob = SCCNonlinearProblem{true}(
+        sys, op; specialize = SciMLBase.AutoDespecialize
+    )
+    @test all(
+        sp -> SciMLBase.specialization(sp.f) === SciMLBase.AutoDespecialize,
+        keyword_prob.probs
+    )
     for (ctor, spec) in (
             (SCCNonlinearProblem, SciMLBase.AutoSpecialize),
             (SCCNonlinearProblem{true, SciMLBase.AutoDespecialize}, SciMLBase.AutoDespecialize),
