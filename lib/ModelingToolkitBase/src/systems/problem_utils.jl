@@ -1679,7 +1679,10 @@ function _construct_fullspecialize_initializeprobmap(
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
         promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
-        static_values = Expr(:call, Expr(:curly, static_type, n, T), raw)
+        static_values = Expr(
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer),
+            Expr(:curly, static_type, n, T), raw
+        )
         result = Expr(:call, QuoteNode(u0_constructor), static_values)
         if iip
             result = Expr(:call, GlobalRef(@__MODULE__, :__iip_u0_ad_wrapper), result)
@@ -1689,7 +1692,7 @@ function _construct_fullspecialize_initializeprobmap(
     return eval_or_rgf(map_expr; eval_module, compiler_options)
 end
 
-function _static_parameter_buffer(prototype, values::Tuple)
+function _static_initialization_buffer(prototype, values)
     T = isempty(values) ? eltype(prototype) :
         promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
     if !ArrayInterface.ismutable(prototype)
@@ -1704,7 +1707,7 @@ end
 function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
     values = Expr(:tuple, [Expr(:ref, raw, i) for i in idxs]...)
     buffer = Expr(
-        :call, GlobalRef(@__MODULE__, :_static_parameter_buffer), prototype, values
+        :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), prototype, values
     )
     p_constructor === identity && return buffer
     return Expr(:call, QuoteNode(p_constructor), buffer)
@@ -1715,13 +1718,16 @@ function _construct_fullspecialize_initializeprobpmap(
         p_constructor, eval_module,
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
-    grouped = reorder_parameters(
-        sys, parameters(sys; initial_parameters = true); flatten = false
-    )
-    initial_syms = _unwrap_initial_symbols!(copy(grouped[2]), initsys)
+    ps = parameters(sys; initial_parameters = true)
+    groups = if is_split(sys)
+        grouped = reorder_parameters(sys, ps; flatten = false)
+        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]), initsys)
+        ((grouped[1],), (initial_syms,), grouped[3:5]...)
+    else
+        ((ps,),)
+    end
     flat_syms = SymbolicT[]
-    append!(flat_syms, grouped[1], initial_syms)
-    for group in grouped[3:5], buffer in group
+    for group in groups, buffer in group
         append!(flat_syms, buffer)
     end
     expr = build_explicit_observed_function(
@@ -1740,23 +1746,18 @@ function _construct_fullspecialize_initializeprobpmap(
         end
 
         offset = 0
-        tunable_idxs = (offset + 1):(offset + length(grouped[1]))
-        offset += length(grouped[1])
-        initial_idxs = (offset + 1):(offset + length(grouped[2]))
-        offset += length(grouped[2])
-        tunable = _parameter_buffer_expr(Expr(:., outer_p, QuoteNode(:tunable)), raw, tunable_idxs, p_constructor)
-        initials = _parameter_buffer_expr(Expr(:., outer_p, QuoteNode(:initials)), raw, initial_idxs, p_constructor)
-
         portions = Expr[]
-        for (portion_idx, group) in enumerate(grouped[3:5])
+        for (field, group) in zip((:tunable, :initials, :discrete, :constant, :nonnumeric), groups)
             buffers = Expr[]
-            field = (:discrete, :constant, :nonnumeric)[portion_idx]
             for (buffer_idx, syms) in enumerate(group)
                 idxs = (offset + 1):(offset + length(syms))
                 offset += length(syms)
-                prototype = Expr(:ref, Expr(:., outer_p, QuoteNode(field)), buffer_idx)
+                prototype = Expr(:., outer_p, QuoteNode(field))
+                if field !== :tunable && field !== :initials
+                    prototype = Expr(:ref, prototype, buffer_idx)
+                end
                 buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
-                if portion_idx == 1
+                if field === :discrete
                     sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
                     block_sizes = Expr(
                         :call, Expr(:curly, SVector, length(sizes), Int),
@@ -1768,11 +1769,13 @@ function _construct_fullspecialize_initializeprobpmap(
                 end
                 push!(buffers, buffer)
             end
-            push!(portions, Expr(:tuple, buffers...))
+            portion = field === :tunable || field === :initials ? only(buffers) :
+                Expr(:tuple, buffers...)
+            push!(portions, portion)
         end
         result = Expr(
-            :call, MTKParameters, tunable, initials, portions...,
-            Expr(:., outer_p, QuoteNode(:caches))
+            :call, MTKParameters, portions...,
+            :($map($copy, $outer_p.caches))
         )
         return Expr(:block, :(local $outer_p = $p), result)
     end
