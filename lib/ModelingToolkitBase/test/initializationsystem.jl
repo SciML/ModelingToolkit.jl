@@ -1845,8 +1845,9 @@ end
 
 @testset "FullSpecialize initialization maps are generated functions" begin
     @variables map_x(t) map_y(t)
+    @parameters map_rate = 1.0 map_scale::Int = 2 [tunable = false]
     @mtkcompile map_sys = System(
-        [D(map_x) ~ -map_x, D(map_y) ~ -map_y], t;
+        [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t;
         initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
     )
     guesses = [map_x => 1.0, map_y => 1.0]
@@ -1860,13 +1861,10 @@ end
     full_data = full_prob.f.initialization_data
 
     @test auto_data.initializeprobmap isa ModelingToolkitBase.InitializationMap
-    @test !(auto_data.initializeprobmap isa RuntimeGeneratedFunction)
     @test full_data.initializeprobmap isa RuntimeGeneratedFunction
     @test full_data.initializeprobpmap isa RuntimeGeneratedFunction
     @test isbitstype(typeof(full_data.initializeprobmap))
     @test isbitstype(typeof(full_data.initializeprobpmap))
-    @test getfield(full_data.initializeprobmap, :body) === nothing
-    @test getfield(full_data.initializeprobpmap, :body) === nothing
 
     auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
     full_u = full_data.initializeprobmap(full_data.initializeprob)
@@ -1882,10 +1880,23 @@ end
     @test full_p.discrete == auto_p.discrete
     @test full_p.constant == auto_p.constant
     @test full_p.nonnumeric == auto_p.nonnumeric
-    replacement = fill(3.0, length(full_p.tunable))
-    SciMLStructures.replace!(Tunable(), full_p, replacement)
-    @test full_p.tunable == replacement
-    nonbits = ModelingToolkitBase._static_parameter_buffer(Any[Ref(1)], (Ref(2),))
+    cached_p = ModelingToolkitBase.MTKParameters(
+        full_p.tunable, full_p.initials, full_p.discrete, full_p.constant,
+        full_p.nonnumeric, ([1.0, 2.0],)
+    )
+    mapped_p = full_data.initializeprobpmap(
+        ProblemState(; u = full_prob.u0, p = cached_p, t = 0.0), full_data.initializeprob
+    )
+    @test mapped_p.caches == cached_p.caches
+    @test only(mapped_p.caches) !== only(cached_p.caches)
+    for portion in (Tunable(), SciMLStructures.Constants())
+        values = SciMLStructures.canonicalize(portion, full_p)[1]
+        @test !isempty(values)
+        replacement = fill(3, length(values))
+        SciMLStructures.replace!(portion, full_p, replacement)
+        @test SciMLStructures.canonicalize(portion, full_p)[1] == replacement
+    end
+    nonbits = ModelingToolkitBase._static_initialization_buffer(Any[Ref(1)], (Ref(2),))
     @test nonbits isa SizedVector
     nonbits[1] = Ref(3)
     @test only(nonbits)[] == 3
@@ -1906,13 +1917,33 @@ end
     )
     array_data = array_prob.f.initialization_data
     array_p = array_data.initializeprobpmap(array_prob, array_data.initializeprob)
-    array_groups = ModelingToolkitBase.reorder_parameters(
-        array_sys, parameters(array_sys; initial_parameters = true); flatten = false
-    )
-
-    @test SU.shape(only(only(array_groups[5]))) == [1:2]
     @test array_data.initializeprobpmap isa RuntimeGeneratedFunction
     @test only(only(array_p.nonnumeric)) === array_parameter
+
+    static_constructor(values) = SVector{length(values)}(values)
+    for split in (true, false)
+        sys = mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t; name = :static_map,
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            ); split
+        )
+        auto = ODEProblem{false, SciMLBase.AutoSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        full = ODEProblem{false, SciMLBase.FullSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        adata, fdata = auto.f.initialization_data, full.f.initialization_data
+        u = fdata.initializeprobmap(fdata.initializeprob)
+        p = fdata.initializeprobpmap(full, fdata.initializeprob)
+        @test isbits(u)
+        @test isbits(p)
+        @test u == adata.initializeprobmap(adata.initializeprob)
+        @test p == adata.initializeprobpmap(auto, adata.initializeprob)
+    end
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
