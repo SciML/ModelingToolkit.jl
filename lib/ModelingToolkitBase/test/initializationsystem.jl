@@ -2239,7 +2239,7 @@ end
     @test integ.ps[T] ≈ 3.0
 end
 
-function chain_dae_problem(n, c; use_scc)
+function chain_dae_problem(n, c; use_scc, jac = false)
     @variables x(t)[1:n] y(t)[1:n]
     @parameters a[1:n]
     eqs = Equation[]
@@ -2251,7 +2251,7 @@ function chain_dae_problem(n, c; use_scc)
     sys = mtkcompile(System(eqs, t; name = :sys))
     op = [[sys.x[i] => 1.0 / i for i in 1:n]; [sys.a[i] => 0.5 + i for i in 1:n]]
     return ODEProblem(
-        sys, op, (0.0, 1.0); guesses = [sys.y[i] => 0.5 for i in 1:n], use_scc
+        sys, op, (0.0, 1.0); guesses = [sys.y[i] => 0.5 for i in 1:n], use_scc, jac
     )
 end
 
@@ -2282,6 +2282,16 @@ end
     end
     fd = (loss([1.5 + 1.0e-5]) - loss([1.5 - 1.0e-5])) / 2.0e-5
     @test ForwardDiff.gradient(loss, [1.5])[1] ≈ fd rtol = 1.0e-4
+end
+
+@testset "Concretized initialization callbacks keep the generated arity" begin
+    # `remake` of the stored initialization problem re-derives `isinplace` for every
+    # callback from `SciMLBase.numargs`. The wrappers must report the generated function's
+    # arity so that check never falls back to method-table introspection (which reverse-mode
+    # AD through `remake` cannot handle).
+    initf = chain_dae_problem(3, 1.0; use_scc = false, jac = true).f.initialization_data.initializeprob.f
+    @test 3 in SciMLBase.numargs(initf.f)
+    @test 3 in SciMLBase.numargs(initf.jac)
 end
 
 cube_plus(v) = v^3 + v
