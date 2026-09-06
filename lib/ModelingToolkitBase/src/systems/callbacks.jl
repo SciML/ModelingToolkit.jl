@@ -910,12 +910,40 @@ struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, 
     affprob::PROB
 end
 
+"""
+    affect_tolerance(integ, name::Symbol)
+
+The `abstol` or `reltol` an implicit affect's nonlinear solve should be run at, read off the
+integrator that triggered the callback. `nothing` (the nonlinear solver's own default) if the
+integrator does not expose that tolerance.
+
+The affect equations are the parent system's algebraic and observed equations, so their
+residuals floor at the same roundoff level the ODE solver already lives with; holding the
+affect solve to a tighter tolerance than the integration itself makes a solvable callback
+report as unsolvable. A per-component tolerance array is reduced to its tightest entry: it
+is sized for the parent system's unknowns, not the affect's.
+"""
+function affect_tolerance(integ, name::Symbol)
+    hasproperty(integ, :opts) || return nothing
+    opts = integ.opts
+    hasproperty(opts, name) || return nothing
+    tol = getproperty(opts, name)
+    # `false` is OrdinaryDiffEqCore's "no tolerance supplied".
+    tol isa Bool && return nothing
+    tol isa Number && return tol
+    tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
+    return nothing
+end
+
 function (ia::ImplicitAffect)(integ)
     ia.affu_setter!(ia.affprob, ia.affu_getter(integ))
     ia.affp_setter!(ia.affprob, ia.affp_getter(integ))
     # remake only updates tspan; result is a transient local, not stored back to struct
     affprob = remake(ia.affprob, tspan = (integ.t, integ.t))
-    affsol = init(affprob, IDSolve())
+    affsol = init(
+        affprob, IDSolve(); abstol = affect_tolerance(integ, :abstol),
+        reltol = affect_tolerance(integ, :reltol)
+    )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
     ia.u_setter!(integ, ia.u_getter(affsol))

@@ -1,7 +1,7 @@
 name = "ModelingToolkitBase"
 uuid = "7771a370-6774-4173-bd38-47e70ca0b839"
 authors = ["Yingbo Ma <mayingbo5@gmail.com>", "Chris Rackauckas <accounts@chrisrackauckas.com> and contributors"]
-version = "1.68.2"
+version = "1.68.3"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -132,7 +132,7 @@ ForwardDiff = "1"
 FunctionWrappers = "1.1.2"
 FunctionWrappersWrappers = "1"
 Graphs = "1.5.2"
-ImplicitDiscreteSolve = "2.1.2"
+ImplicitDiscreteSolve = "2.3"
 InfiniteOpt = "0.6"
 InteractiveUtils = "1"
 IntervalSets = "0.7"
