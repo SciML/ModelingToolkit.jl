@@ -1237,6 +1237,133 @@ function generate_control_jacobian(
     )
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+The parameters with respect to which [`calculate_paramjac`](@ref) differentiates, in the
+order they index the columns of the result.
+
+For a split system this is the tunable portion of `MTKParameters`, scalarized. For a
+non-split system it is every parameter of `sys`, since the parameter object is then a flat
+vector containing all of them.
+"""
+function paramjac_parameters(sys::AbstractSystem)
+    ps = parameters(sys; initial_parameters = true)
+    # `flatten = false` keeps the tunable buffer in slot 1 even when it is empty. With the
+    # default `flatten = true` an empty tunable buffer is dropped and slot 1 would silently
+    # be the initials buffer instead. `reorder_parameters` returns no buffers at all for an
+    # empty `ps`, so that case is guarded rather than indexed.
+    cols = isempty(ps) ? SymbolicT[] : reorder_parameters(sys, ps; flatten = false)[1]
+    pvars = SymbolicT[]
+    for p in cols
+        if symbolic_type(p) == ArraySymbolic()
+            append!(pvars, vec(collect(Symbolics.scalarize(p))))
+        else
+            push!(pvars, p)
+        end
+    end
+    return pvars
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the jacobian of the equations of `sys` with respect to its parameters, `df/dp`.
+
+`pJ[i, j]` is the derivative of equation `i` of `full_equations(sys)` with respect to entry
+`j` of `SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]`, where `p` is the
+parameter object of a problem built from `sys`. For `split = true` (the default) that array
+is the tunable portion of `MTKParameters`, already flattened, so parameters outside the
+tunable portion (`tunable = false`, integer-valued, nonnumeric, discrete and `Initial(...)`
+parameters) have no column, and array parameters occupy consecutive column-major columns.
+For `split = false` there is no index cache and `p` is a plain vector, so the columns are
+every parameter in `parameters(sys; initial_parameters = true)` order, including
+non-tunable and `Initial(...)` parameters. Array parameters are scalarized into one column
+each, so that correspondence is exact only for a system whose parameters are all scalars;
+a non-split system with array parameters cannot currently be turned into a problem anyway.
+
+The column order is the parameter-buffer order, which is not the order in which the
+parameters were declared. Use [`reorder_dimension_by_tunables`](@ref) with `dim = 2` to
+permute the columns into a chosen order, e.g.
+`reorder_dimension_by_tunables(sys, pJ, [a, b, c]; dim = 2)`.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`/`Symbolics.sparsejacobian`.
+- `ps`: The parameters with respect to which the jacobian should be computed.
+"""
+function calculate_paramjac(
+        sys::AbstractSystem;
+        sparse = false, simplify = false, ps = paramjac_parameters(sys)
+    )
+    check_symbolic_ad_allowed(sys)
+    rhs = SymbolicT[eq.rhs for eq in full_equations(sys)]
+
+    if sparse
+        return sparsejacobian(rhs, ps; simplify)
+    else
+        return jacobian(rhs, ps; simplify)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the parameter-jacobian function for the equations of `sys`. The generated function
+has the signature `pJ = f(u, p, t)` (out-of-place) and `f(pJ, u, p, t)` (in-place),
+matching the `paramjac` field of a `SciMLBase.ODEFunction`. For a time-independent system
+the `t` argument is omitted.
+
+See [`calculate_paramjac`](@ref) for the meaning of the columns of `pJ`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_paramjac`](@ref). A `sparse` in-place
+  function writes into the `nzval` of its output and therefore requires a
+  `SparseMatrixCSC` buffer with exactly the generated sparsity pattern.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_paramjac(
+        sys::AbstractSystem, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    pvars = paramjac_parameters(sys)
+    if isempty(pvars)
+        throw(
+            ArgumentError(
+                "Cannot generate a parameter jacobian for a system with no tunable \
+                parameters. `calculate_paramjac` returns an empty matrix for such a \
+                system, which cannot be compiled into an out-of-place function."
+            )
+        )
+    end
+    dvs = unknowns(sys)
+    pjac = calculate_paramjac(sys; simplify, sparse, ps = pvars)
+    p = reorder_parameters(sys)
+    args = Any[dvs]
+    append!(args, p)
+    nargs = 2
+    if is_time_dependent(sys)
+        push!(args, get_iv(sys))
+        nargs = 3
+    end
+    res = build_function_wrapper(
+        sys, pjac, args, BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = opts.codegen
+        )
+    )
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
+    )
+end
+
 function generate_rate_function(js::System, rate)
     p = reorder_parameters(js)
     return build_function_wrapper(

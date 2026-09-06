@@ -434,6 +434,7 @@ export Pre
 export calculate_jacobian, generate_jacobian, generate_rhs, generate_custom_function,
     generate_W, calculate_hessian
 export calculate_control_jacobian, generate_control_jacobian
+export calculate_paramjac, generate_paramjac
 export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export generate_trajectory
