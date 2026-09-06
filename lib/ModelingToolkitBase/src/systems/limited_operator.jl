@@ -435,11 +435,11 @@ end
 # and an infinite side contributes nothing to the corrector at all.
 function _clamp_limiter(lo, hi)
     lo, hi = unwrap(lo), unwrap(hi)
-    haslo, hashi = _is_active_bound(lo), _is_active_bound(hi)
-    haslo || hashi || return nothing
+    has_lo, has_hi = _is_active_bound(lo), _is_active_bound(hi)
+    has_lo || has_hi || return nothing
     expr = limitnew
-    hashi && (expr = min(expr, wrap(hi)))
-    haslo && (expr = max(expr, wrap(lo)))
+    has_hi && (expr = min(expr, wrap(hi)))
+    has_lo && (expr = max(expr, wrap(lo)))
     return unwrap(expr)
 end
 
