@@ -48,6 +48,42 @@ times.
 Use `reinit!` when the simulation really is restarting from a new initial condition or time,
 not to divide one continuous run into display intervals.
 
+## Reading observed quantities from the integrator
+
+A live display usually needs quantities that structural simplification eliminated from the
+state vector. Those are available from the integrator through the same symbolic indexing
+that a solution supports, so the display code does not have to reconstruct them:
+
+```julia
+@variables pos(t) vel(t) energy(t)
+@parameters input
+@mtkcompile osc = System(
+    [D(pos) ~ vel, D(vel) ~ -pos + input, energy ~ (pos^2 + vel^2) / 2], t
+)
+
+oscprob = ODEProblem(osc, [pos => 1.0, vel => 0.0, input => 0.0], (0.0, 10.0))
+integrator = init(oscprob, Tsit5())
+step!(integrator, 1.0, true)
+
+integrator[energy]                       # current value of an observed equation
+integrator(integrator.t; idxs = energy)  # the same quantity from the step's interpolant
+integrator([integrator.tprev, integrator.t]; idxs = [pos, energy])
+```
+
+`plot(integrator)` accepts the same `idxs` specifications as `plot(sol)`, including observed
+equations, lists, phase-plane tuples and a plot function:
+
+```julia
+using Plots
+
+plot(integrator; idxs = energy)
+plot(integrator; idxs = [pos, energy])
+plot(integrator; idxs = (pos, vel))
+```
+
+`plot(integrator)` draws only the step the integrator is currently on, which is what an
+animation loop wants. Plot `integrator.sol` instead to draw the whole accumulated history.
+
 ## Parameters and time-varying inputs
 
 A value declared with `@parameters` is treated as time-invariant when a saved solution evaluates
