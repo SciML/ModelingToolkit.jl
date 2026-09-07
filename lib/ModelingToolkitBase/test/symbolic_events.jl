@@ -1530,6 +1530,45 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, FBDF())
         @test prob.ps[g] == sol.ps[g]
     end
+
+    @testset "Implicit affect solves at the ODE solver's tolerance" begin
+        # Terms of magnitude 1e7 floor the algebraic equation's residual at 1.2e-9 in
+        # Float64: above NonlinearSolve's default `abstol` of 3e-13 and below any
+        # tolerance an ODE solve would be run at. Solving the affect at the nonlinear
+        # default made this perfectly solvable callback throw.
+        @variables x(t) = 1.0 y(t) = 1.0 w(t) = 0.0
+        @discretes g(t) = 0.4785
+        eqs = [D(x) ~ 1.0, D(w) ~ 1.0, 0 ~ 1.0e7 * (y^2 - x) - g]
+        c_evt = SymbolicContinuousCallback(
+            [w ~ 0.5], [g ~ Pre(g) + 0.1, x ~ Pre(x), w ~ Pre(w)];
+            discrete_parameters = [g], iv = t
+        )
+        @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
+        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+
+        sol = solve(prob, FBDF())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.ps[g] ≈ [0.4785, 0.5785]
+        # The state saved right after the affect is the affect's own solution, so it
+        # satisfies the algebraic equation to the tolerance the ODE is solved at.
+        i = findlast(tᵢ -> abs(tᵢ - 0.5) < 1.0e-9, sol.t)
+        @test abs(1.0e7 * (sol[y][i]^2 - sol[x][i]) - 0.5785) < 1.0e-6
+    end
+
+    @testset "`affect_tolerance` translates the integrator's tolerance values" begin
+        using ModelingToolkitBase: affect_tolerance
+        # `false` is what OrdinaryDiffEqCore stores for a tolerance that was not supplied
+        # under a discrete problem. `Bool <: Number`, so forwarding it would reach the
+        # nonlinear solve as a *zero* tolerance, which nothing can meet.
+        discrete_opts = (; opts = (; abstol = false, reltol = false))
+        @test affect_tolerance(discrete_opts, :abstol) === nothing
+        @test affect_tolerance(discrete_opts, :reltol) === nothing
+        # A scalar is used as given; a per-component array is reduced to its tightest
+        # entry, since the nonlinear solve compares a scalar norm against the tolerance.
+        @test affect_tolerance((; opts = (; abstol = 1.0e-8)), :abstol) == 1.0e-8
+        @test affect_tolerance((; opts = (; abstol = [1.0e-6, 1.0e-9])), :abstol) == 1.0e-9
+        @test affect_tolerance((; opts = (; abstol = Float64[])), :abstol) === nothing
+    end
 end
 
 @testset "Array parameter updates of parent components in ImperativeEffect" begin

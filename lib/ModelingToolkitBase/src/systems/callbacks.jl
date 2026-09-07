@@ -910,12 +910,48 @@ struct ImplicitAffect{DVS, PS, AFFSYS, AFF, UG, AG, AUS, APS, US, PST, UGT, PG, 
     affprob::PROB
 end
 
+"""
+    affect_tolerance(integ, name::Symbol)
+
+The `abstol` or `reltol` an implicit affect's nonlinear solve should be run at, read off the
+integrator that triggered the callback.
+
+The affect equations are the parent system's algebraic and observed equations, so their
+residuals floor at the same roundoff level the ODE solver already lives with; holding the
+affect solve to a tighter tolerance than the integration itself makes a solvable callback
+report as unsolvable.
+
+Two values need translating before the nonlinear solver can be given them:
+
+  - `false` is what `OrdinaryDiffEqCore` stores for a tolerance that was not supplied under a
+    discrete problem (`OrdinaryDiffEqCore/src/solve.jl:377-378` and `:389-390` as of 4.16.0). It
+    is not a tolerance, but `Bool <: Number`, so forwarding it reaches
+    `NonlinearSolveBase.get_tolerance` as a *zero* tolerance, which no solve can meet. `nothing`
+    keeps the nonlinear solver's own default instead. (`IDSolve` maps `false` back to the default
+    as well, so this is the outer of two guards.)
+  - A per-component tolerance array is not something the nonlinear solve can take: it compares a
+    scalar norm against the tolerance
+    (`NonlinearSolveBase/src/termination_conditions.jl:246-248`), and the array is sized for the
+    parent system's unknowns rather than the affect's. `minimum` is a deliberate choice of
+    reduction - the tightest component, so the affect is never solved looser than any part of the
+    integration.
+"""
+function affect_tolerance(integ, name::Symbol)
+    tol = getproperty(integ.opts, name)
+    tol isa Bool && return nothing
+    tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
+    return tol
+end
+
 function (ia::ImplicitAffect)(integ)
     ia.affu_setter!(ia.affprob, ia.affu_getter(integ))
     ia.affp_setter!(ia.affprob, ia.affp_getter(integ))
     # remake only updates tspan; result is a transient local, not stored back to struct
     affprob = remake(ia.affprob, tspan = (integ.t, integ.t))
-    affsol = init(affprob, IDSolve())
+    affsol = init(
+        affprob, IDSolve(); abstol = affect_tolerance(integ, :abstol),
+        reltol = affect_tolerance(integ, :reltol)
+    )
     (check_error(affsol) === ReturnCode.InitialFailure) &&
         throw(UnsolvableCallbackError(all_equations(ia.aff)))
     ia.u_setter!(integ, ia.u_getter(affsol))
