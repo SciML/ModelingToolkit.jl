@@ -52,6 +52,13 @@ $INITIALIZEPROB_KWARGS
   when it is called on the initialization system.
 """
 
+const TSPAN_DEFAULT_DOCS = """
+`tspan` is optional. When omitted, the timespan stored in `sys` is used - the one given by
+the `tspan` keyword argument of [`System`](@ref) and returned by
+[`ModelingToolkitBase.get_tspan`](@ref). Omitting it for a system that has no timespan throws
+an error.
+"""
+
 const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `callback`: An extra callback or `CallbackSet` to add to the problem, in addition to the
   ones defined symbolically in the system.
@@ -81,12 +88,13 @@ const PROBLEM_INTERNAL_KWARGS = """
 $INTERNAL_INITIALIZEPROB_KWARGS
 """
 
-function problem_ctors(prob, istd)
+function problem_ctors(prob, istd, tspan_default = istd)
     return if istd
+        tsp = tspan_default ? "[tspan::NTuple{2}]" : "tspan::NTuple{2}"
         """
-            SciMLBase.$prob(sys::System, op, tspan::NTuple{2}; kwargs...)
-            SciMLBase.$prob{iip}(sys::System, op, tspan::NTuple{2}; kwargs...)
-            SciMLBase.$prob{iip, specialize}(sys::System, op, tspan::NTuple{2}; kwargs...)
+            SciMLBase.$prob(sys::System, op, $tsp; kwargs...)
+            SciMLBase.$prob{iip}(sys::System, op, $tsp; kwargs...)
+            SciMLBase.$prob{iip, specialize}(sys::System, op, $tsp; kwargs...)
         """
     else
         """
@@ -110,13 +118,13 @@ end
 
 function problem_docstring(
         prob, func, istd; init = true, extra_body = "",
-        extra_kwargs = "", extra_kwargs_desc = ""
+        extra_kwargs = "", extra_kwargs_desc = "", tspan_default = istd
     )
     if func isa DataType
         func = "`$func`"
     end
     return """
-    $(problem_ctors(prob, istd))
+    $(problem_ctors(prob, istd, tspan_default))
 
     Build a `$prob` given a system `sys` and operating point `op`
     $(istd ? " and timespan `tspan`" : ""). `iip` is a boolean indicating whether the
@@ -125,6 +133,8 @@ function problem_docstring(
     iterable collection of key-value pairs mapping variables/parameters in the system to the
     (initial) values they should take in `$prob`. Any values not provided will fallback to
     the corresponding default (if present).
+
+    $(tspan_default ? TSPAN_DEFAULT_DOCS : "")
 
     $(init ? istd ? TIME_DEPENDENT_INIT : TIME_INDEPENDENT_INIT : "")
 
@@ -295,6 +305,13 @@ const CONTROLJAC_KWARGS = """
   the ODE with respect to the inputs.
 """
 
+const PARAMJAC_KWARGS = """
+- `paramjac`: Whether to symbolically compute and generate code for the jacobian of the
+  ODE right-hand side with respect to the parameters. Column `j` of the result is the
+  derivative with respect to entry `j` of
+  `SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]`.
+"""
+
 const OPTIONAL_FN_KWARGS_DICT = Dict(
     :jac => JAC_KWARGS,
     :tgrad => TGRAD_KWARGS,
@@ -306,7 +323,8 @@ const OPTIONAL_FN_KWARGS_DICT = Dict(
     :cons_j => CONSJ_KWARGS,
     :cons_sparse => CONSSPARSE_KWARGS,
     :inputfn => INPUTFN_KWARGS,
-    :controljac => CONTROLJAC_KWARGS
+    :controljac => CONTROLJAC_KWARGS,
+    :paramjac => PARAMJAC_KWARGS
 )
 
 const SPARSITY_OPTIONALS = Set([:jac, :hess, :cons_h, :cons_j, :controljac])

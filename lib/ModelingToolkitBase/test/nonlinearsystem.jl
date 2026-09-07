@@ -1,4 +1,5 @@
 using ModelingToolkitBase, StaticArrays, LinearAlgebra
+using Symbolics: hessian_sparsity
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
@@ -92,9 +93,9 @@ jac = calculate_jacobian(ns)
 jac = generate_jacobian(ns)
 
 sH = calculate_hessian(ns)
-@test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :colptr) ==
+@test getfield.(hessian_sparsity(ns), :colptr) ==
     getfield.(sparse.(sH), :colptr)
-@test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :rowval) ==
+@test getfield.(hessian_sparsity(ns), :rowval) ==
     getfield.(sparse.(sH), :rowval)
 
 prob = NonlinearProblem(ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0])

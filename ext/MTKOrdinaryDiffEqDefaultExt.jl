@@ -3,22 +3,13 @@ module MTKOrdinaryDiffEqDefaultExt
 using ModelingToolkit
 using OrdinaryDiffEqDefault: OrdinaryDiffEqDefault
 using PrecompileTools: @compile_workload, @setup_workload
-using ModelingToolkitBase: t_nounits, D_nounits
 
 @setup_workload begin
-    @parameters a = 1.0 b = 1.0
-    @variables x(t_nounits) y(t_nounits)
-    prob = ODEProblem(
-        mtkcompile(
-            System(
-                [D_nounits(x) ~ a * y, D_nounits(y) ~ -b * x],
-                t_nounits; name = :precompile_default
-            )
-        ),
-        [x => 1.0, y => 0.0], (0.0, 1.0)
-    )
+    odeprob = ModelingToolkit.precompile_ode_problem()
+    daeprob = ModelingToolkit.precompile_dae_problem()
     @compile_workload begin
-        solve(prob)
+        solve(odeprob)
+        solve(daeprob)
     end
 end
 

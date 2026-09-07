@@ -16,7 +16,7 @@ end
 import SymbolicUtils
 import SymbolicUtils as SU
 import SymbolicUtils: iscall, arguments, operation,
-    issym, BSImpl,
+    issym, BSImpl, Operator,
     @rule, Rewriters, substitute, BasicSymbolic,
     symtype, _iszero, unwrap
 import TermInterface: maketerm, metadata
@@ -217,6 +217,7 @@ function FMIComponent end
 
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
+@public precompile_ode_problem, precompile_dae_problem
 
 include("precompile.jl")
 

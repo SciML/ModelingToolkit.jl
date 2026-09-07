@@ -998,12 +998,11 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
         end
         portion = symidx.portion
         _bufidx = symidx.idx
+        subidx = nothing
         bufidx::UnitRange{Int} = if _bufidx isa AbstractVector{Int}
             @assert isequal(vec(_bufidx), first(_bufidx):last(_bufidx))
-            subidx = nothing
             first(_bufidx):last(_bufidx)
         elseif _bufidx isa Int
-            subidx = nothing
             _bufidx:_bufidx
         elseif _bufidx isa NTuple{2, Int}
             subidx = _bufidx[1]
@@ -2198,7 +2197,9 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    check_array_equations_unknowns(eqs, dvs)
+    # Implicit-DAE codegen expands an array equation into one output row per element, so
+    # array equations are usable there. Every other problem type still needs `mtkcompile`.
+    implicit_dae || check_array_equations_unknowns(eqs, dvs)
 
     op = build_operating_point(sys, op; fast_path = true)
 
@@ -2389,9 +2390,13 @@ function process_kwargs(
 
     if is_time_dependent(sys)
         if expression == Val{false} && !_skip_events
-            cbs = process_events(
-                sys; callback, eval_expression, eval_module, tspan, kwargs...
-            )
+            cbs = if _has_symbolic_events(sys)
+                @invokelatest process_events(
+                    sys; callback, eval_expression, eval_module, tspan, kwargs...
+                )
+            else
+                callback
+            end
             if cbs !== nothing
                 kwargs1 = merge(kwargs1, (callback = cbs,))
             end

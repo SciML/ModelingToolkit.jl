@@ -26,7 +26,7 @@ struct Shift <: Operator
     steps::Int
     Shift(t, steps = 1) = new(unwrap(t), steps)
 end
-Shift(steps::Int) = new(nothing, steps)
+Shift(steps::Int) = Shift(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 Base.nameof(::Shift) = :Shift
 SymbolicUtils.isbinop(::Shift) = false
@@ -59,7 +59,7 @@ SymbolicUtils.promote_shape(::Shift, @nospecialize(x::SU.ShapeT)) = x
 Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, ")")
 
 Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.steps, D2.steps)
-Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101)))
+Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101 % UInt)))
 
 Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps * n)
 Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.steps * n)
@@ -244,7 +244,7 @@ SymbolicUtils.isbinop(::Sample) = false
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
 Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
-Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
+Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101 % UInt))
 
 function validate_operator(op::Sample, args, iv; context = nothing)
     arg = unwrap(only(args))

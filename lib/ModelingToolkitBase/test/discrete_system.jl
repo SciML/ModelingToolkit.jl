@@ -335,3 +335,20 @@ end
     sol = solve(discprob, FunctionMap())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "`Shift(steps)` constructor" begin
+    s = Shift(2)
+    @test s.t === nothing
+    @test s.steps == 2
+end
+
+@testset "`throw_invalid_operator` names non-derivative operators" begin
+    @variables x(t)
+    err = try
+        ModelingToolkitBase.throw_invalid_operator(Shift(t)(x), x ~ Shift(t)(x), Shift)
+    catch e
+        e
+    end
+    @test err isa ModelingToolkitBase.InvalidSystemException
+    @test occursin("difference variable", sprint(showerror, err))
+end

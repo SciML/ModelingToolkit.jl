@@ -255,3 +255,38 @@ function check_affine(sys::System, T)
         )
     end
 end
+
+"""
+    $(TYPEDEF)
+
+Error thrown when a time-dependent problem is constructed without a timespan from a system
+that does not have one either.
+"""
+struct MissingTspanError <: Exception
+    "The name of the system the problem was being constructed from."
+    name::Symbol
+end
+
+function Base.showerror(io::IO, err::MissingTspanError)
+    return print(
+        io,
+        """
+        No timespan was given, and the system `$(err.name)` does not have one. Either pass \
+        the timespan to the problem constructor, or give the system a default timespan by \
+        constructing it with the `tspan` keyword argument, e.g. \
+        `System(eqs, t; tspan = (0.0, 1.0), name = :$(err.name))`.
+        """
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The timespan to use when a time-dependent problem is constructed from `sys` without an
+explicit one. Throws a `MissingTspanError` if `sys` does not have a timespan.
+"""
+function default_tspan(sys::AbstractSystem)
+    tspan = get_tspan(sys)
+    tspan === nothing && throw(MissingTspanError(nameof(sys)))
+    return tspan
+end

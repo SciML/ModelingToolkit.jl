@@ -59,3 +59,15 @@ ivs = independent_variables(MyMVS([t, x], "sys", []))
     @test any(isequal(csys.p2), csyms)
     @test any(isequal(csys.p2), collect(MT.bound_parameters(csys)))
 end
+
+using ModelingToolkitBase: t_nounits as t, D_nounits as D
+
+struct NotASystem <: ModelingToolkitBase.AbstractSystem end
+
+@testset "`extend` rejects systems of different types" begin
+    @variables x(t)
+    @named sys = System([D(x) ~ x], t)
+    @test_throws ArgumentError extend(
+        NotASystem(), sys; name = :ext, description = "", gui_metadata = nothing
+    )
+end

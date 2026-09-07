@@ -29,6 +29,12 @@ versions = ["lts", "1", "pre"]
 
 [Optimization]
 versions = ["lts", "1", "pre"]
+# Slow group (the Pyomo cart-pole solve in dynamic_optimization.jl alone needs ~1900
+# Ipopt iterations, see #5076): 60-70 min on an idle self-hosted runner and past the
+# 120 min timeout whenever the shared pool is busy, but 15-41 min on a dedicated
+# GitHub-hosted runner. `ubuntu-24.04` forces GitHub-hosted since the self-hosted pool
+# only carries the `ubuntu-latest` label.
+runner = "ubuntu-24.04"
 
 [QA]
 versions = ["lts", "1"]

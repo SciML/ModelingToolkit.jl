@@ -200,7 +200,10 @@ function mtkcompile_initialization_system(
         isys::AbstractSystem, sys::AbstractSystem; fully_determined, kwargs...
     )
     try
-        return mtkcompile(isys; fully_determined, split = is_split(sys), kwargs...)
+        return mtkcompile(
+            isys; fully_determined, split = is_split(sys),
+            homotopy = homotopy_enabled(sys), kwargs...
+        )
     catch err
         newerr = with_initialization_context(err, isys, sys; kwargs...)
         newerr === err && rethrow()
@@ -253,7 +256,8 @@ equations an unbalanced initialization system is missing, in the same terms as
 function initialization_system_size(isys::AbstractSystem, sys::AbstractSystem; kwargs...)
     return try
         compiled = mtkcompile(
-            isys; fully_determined = false, split = is_split(sys), kwargs...
+            isys; fully_determined = false, split = is_split(sys),
+            homotopy = homotopy_enabled(sys), kwargs...
         )
         (length(equations(compiled)), length(unknowns(compiled)))
     catch

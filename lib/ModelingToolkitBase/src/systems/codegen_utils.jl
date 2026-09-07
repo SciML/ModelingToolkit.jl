@@ -202,6 +202,8 @@ don't consume it.
   `iip`/`spec` specialization.
 - `jac`, `tgrad`, `sparsity`: whether to generate a Jacobian / time-gradient, and
   whether to report Jacobian sparsity.
+- `paramjac`: whether to generate the jacobian of the right-hand side with respect
+  to the parameters.
 - `sparse`: whether generated Jacobians/mass matrices should be sparse.
 - `analytic`: an optional analytic solution function.
 - `simplify`: whether to run `SymbolicUtils.simplify` on the symbolic
@@ -232,6 +234,7 @@ struct SciMLFunctionOptions{expression}
     t::Any
     jac::Bool
     tgrad::Bool
+    paramjac::Bool
     sparse::Bool
     sparsity::Bool
     analytic::Any
@@ -242,7 +245,8 @@ end
 
 function SciMLFunctionOptions(;
         u0 = nothing, p = nothing, t = nothing,
-        jac::Bool = false, tgrad::Bool = false, sparse::Bool = false,
+        jac::Bool = false, tgrad::Bool = false, paramjac::Bool = false,
+        sparse::Bool = false,
         sparsity::Bool = false, analytic = nothing, simplify::Bool = false,
         initialization_data = nothing, expression = Val{false},
         check_compatibility::Bool = true,
@@ -271,7 +275,7 @@ function SciMLFunctionOptions(;
         )
     )
     return SciMLFunctionOptions{E}(
-        codegen, u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify,
+        codegen, u0, p, t, jac, tgrad, paramjac, sparse, sparsity, analytic, simplify,
         initialization_data, check_compatibility,
     )
 end

@@ -622,9 +622,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Differential
-        optext = "derivative"
-    end
+    optext = op === Differential ? "derivative" : "difference"
     msg = "The $optext variable must be isolated to the left-hand " *
         "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
@@ -718,7 +716,17 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
         SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             isoperator(v, op) || continue
-            push!(diffvars, arguments(v)[1])
+            arg = arguments(v)[1]
+            # An operator applied to an array variable or slice, such as `D(u[2:4])`,
+            # names the array rather than its elements. Callers test membership of the
+            # scalar unknowns, so record the elements.
+            if SU.is_array_shape(SU.shape(arg))
+                for idx in SU.stable_eachindex(arg)
+                    push!(diffvars, arg[idx])
+                end
+            else
+                push!(diffvars, arg)
+            end
         end
         empty!(vars)
     end

@@ -18,10 +18,10 @@ function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac 
     )
 end
 
-"""$(function_docstring(ODEFunction, true, [:jac, :tgrad]))"""
+"""$(function_docstring(ODEFunction, true, [:jac, :tgrad, :paramjac]))"""
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
         sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), t = nothing,
-        tgrad = false, jac = false,
+        tgrad = false, jac = false, paramjac = false,
         eval_expression = false, eval_module = @__MODULE__, sparse = false,
         steady_state = false, checkbounds = false, sparsity = false,
         @nospecialize(analytic = nothing),
@@ -31,7 +31,8 @@ Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
     opts = SciMLFunctionOptions(;
-        u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data,
+        u0, p, t, jac, tgrad, paramjac, sparse, sparsity, analytic, simplify,
+        initialization_data,
         expression, check_compatibility, eval_expression, eval_module, compiler_options,
         checkbounds, optimize, kwargs...,
     )
@@ -54,7 +55,10 @@ function SciMLBase.ODEFunction{iip, spec}(
     check_complete(sys, ODEFunction)
     opts.check_compatibility && check_compatible_system(ODEFunction, sys)
 
-    (; u0, p, t, jac, tgrad, sparse, sparsity, analytic, simplify, initialization_data) = opts
+    (;
+        u0, p, t, jac, tgrad, paramjac, sparse, sparsity, analytic, simplify,
+        initialization_data,
+    ) = opts
     codegen_opts = opts.codegen
 
     f = generate_rhs(sys, codegen_opts)
@@ -82,6 +86,15 @@ function SciMLBase.ODEFunction{iip, spec}(
         _jac = nothing
     end
 
+    # `sparse` is deliberately not forwarded: `SciMLBase` has no `paramjac_prototype`, so
+    # no consumer can learn the pattern, and a sparse in-place function writes into the
+    # `nzval` of its output and would reject the dense buffer a caller would hand it.
+    if paramjac
+        _paramjac = generate_paramjac(sys, codegen_opts; simplify)
+    else
+        _paramjac = nothing
+    end
+
     M = calculate_massmatrix(sys)
     _M = concrete_massmatrix(M; sparse, u0)
 
@@ -101,6 +114,7 @@ function SciMLBase.ODEFunction{iip, spec}(
         sys = sys,
         jac = _jac,
         tgrad = _tgrad,
+        paramjac = _paramjac,
         mass_matrix = _M,
         jac_prototype = W_prototype,
         observed = observedfun,
@@ -152,7 +166,7 @@ end
 
 """$(problem_docstring(SciMLBase.ODEProblem, ODEFunction, true))"""
 Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
-        sys::System, @nospecialize(op), tspan;
+        sys::System, @nospecialize(op), tspan = default_tspan(sys);
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...
@@ -168,7 +182,7 @@ end
 Base.@nospecializeinfer function SciMLBase.ODEProblem{
         iip, SciMLBase.FunctionWrapperSpecialize,
     }(
-        sys::System, @nospecialize(op), tspan;
+        sys::System, @nospecialize(op), tspan = default_tspan(sys);
         @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...

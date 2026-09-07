@@ -101,6 +101,13 @@ once — calling `mtkcompile` on an already-compiled system throws
 - `split = true`: Whether the compiled system uses the split parameter representation,
   which stores parameters in type-homogeneous buffers indexed by an `IndexCache`. Pass
   `false` to use a flat parameter vector instead.
+- `homotopy = true`: Whether Modelica [`homotopy`](@ref)`(actual, simplified)` operators
+  are kept for lowering to a continuation solve. Pass `false` to replace every such node
+  by its `actual` branch before compilation: the generated code then contains only
+  `actual` (the `simplified` expression is never emitted), problem construction never
+  selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
+  derived from the compiled system are compiled the same way. Use this for targets that
+  cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
@@ -129,9 +136,12 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, kwargs...
+        split = true, homotopy = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    if !homotopy
+        sys = strip_homotopy(sys)
+    end
 
     # For backward compatibility with old ModelingToolkit which does not
     # integrate with the reversible transformation API.
@@ -150,6 +160,11 @@ function mtkcompile(
         newsys = pass(newsys)
     end
     @set! newsys.parent = toggle_namespacing(sys, false)
+    # Record the choice so systems derived from `newsys` (initialization system, event
+    # affect systems) are compiled with the same `homotopy` setting.
+    if !homotopy
+        newsys = setmetadata(newsys, HomotopyCtx, false)
+    end
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys

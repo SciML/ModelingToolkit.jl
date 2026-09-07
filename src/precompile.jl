@@ -1,3 +1,37 @@
+"""
+    precompile_ode_problem()
+
+Small ODE used by the precompile workloads here and in the OrdinaryDiffEq extensions:
+tunable parameters, an observed variable eliminated by `mtkcompile`, and a trivial
+initialization problem, so the generated problem has the same types as a typical model.
+"""
+function precompile_ode_problem()
+    t = MTKBase.t_nounits
+    D = MTKBase.D_nounits
+    @parameters a = 1.0 b = 1.0
+    @variables x(t) y(t) z(t)
+    sys = mtkcompile(
+        System([D(x) ~ a * y, D(y) ~ -b * x + z, z ~ x + y], t; name = :precompile_ode)
+    )
+    return ODEProblem(sys, [x => 1.0, y => 0.0], (0.0, 1.0))
+end
+
+"""
+    precompile_dae_problem()
+
+Small mass-matrix DAE used by the precompile workloads: one algebraic unknown fixed by a
+nonlinear constraint, so `ODEProblem` builds a non-trivial (SCC) initialization problem
+and `solve` runs `OverrideInit`.
+"""
+function precompile_dae_problem()
+    t = MTKBase.t_nounits
+    D = MTKBase.D_nounits
+    @parameters k = 1.0
+    @variables x(t) y(t)
+    sys = mtkcompile(System([D(x) ~ -k * x + y, 0 ~ y^3 + y - x], t; name = :precompile_dae))
+    return ODEProblem(sys, [x => 1.0], (0.0, 1.0); guesses = [y => 0.5])
+end
+
 PrecompileTools.@compile_workload begin
     t = MTKBase.t_nounits
     D = MTKBase.D_nounits
@@ -35,4 +69,7 @@ PrecompileTools.@compile_workload begin
     @mtkcompile model = System(eqs)
     sccprob = SCCNonlinearProblem(model, nothing)
     solve(sccprob, SimpleNonlinearSolve.SimpleNewtonRaphson())
+
+    precompile_ode_problem()
+    precompile_dae_problem()
 end

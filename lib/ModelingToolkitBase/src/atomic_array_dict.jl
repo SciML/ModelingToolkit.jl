@@ -194,6 +194,7 @@ function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::Symbol
         else
             fill(default, size(root))
         end
+        isempty(buffer) && return dd
         idx = get_stable_index(k)
         buffer[idx] = v
         if all(SU.isconst, buffer)

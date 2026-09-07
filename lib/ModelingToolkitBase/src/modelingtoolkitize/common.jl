@@ -103,6 +103,19 @@ names, or `nothing` to automatically generate names.
 The returned value has the same structure as `p`, but symbolic variables instead of
 values.
 """
+struct ModelingtoolkitizeParametersNotSupportedError <: Exception
+    type::Type
+end
+
+function Base.showerror(io::IO, err::ModelingtoolkitizeParametersNotSupportedError)
+    return print(
+        io,
+        "`modelingtoolkitize` does not support parameters of type `$(err.type)`. Supported \
+        parameter containers are numbers, arrays, tuples, named tuples, dictionaries and \
+        `MTKParameters`."
+    )
+end
+
 function define_params(p, t, _ = nothing)
     throw(ModelingtoolkitizeParametersNotSupportedError(typeof(p)))
 end

@@ -83,7 +83,7 @@ const REEXPORTED_API = (
     :bound_parameters, :brownians, :build_explicit_observed_function,
     :calculate_control_jacobian, :calculate_cost_gradient,
     :calculate_cost_hessian, :calculate_hessian, :calculate_jacobian, :calculate_massmatrix,
-    :calculate_tgrad, :CasADiCollocation, :CasADiDynamicOptProblem,
+    :calculate_paramjac, :calculate_tgrad, :CasADiCollocation, :CasADiDynamicOptProblem,
     :change_independent_variable, :change_of_variables, :check_mutable_cache,
     :check_symbolic_ad_allowed, :CheckAll, :CheckComponents, :CheckNone, :CheckUnits,
     :collect_scoped_vars!, :collect_var_to_name!, :collect_vars!, :CompilerOptions, :complete,
@@ -97,10 +97,12 @@ const REEXPORTED_API = (
     :generate_control_function, :generate_control_jacobian, :generate_cost,
     :generate_cost_gradient,
     :generate_cost_hessian, :generate_custom_function, :generate_diffusion_function,
-    :generate_initializesystem, :generate_jacobian, :generate_rhs, :generate_tgrad,
-    :generate_W, :get_alg_eqs, :get_analytically_integrated, :get_assertions, :get_bcs,
-    :get_bindings, :get_brownians, :get_connector_type, :get_consolidate, :get_constraints,
-    :get_continuous_events, :get_costs, :get_description, :get_diff_eqs, :get_discrete_events,
+    :generate_initializesystem, :generate_jacobian, :generate_paramjac, :generate_rhs,
+    :generate_tgrad,
+    :generate_trajectory, :generate_W, :get_alg_eqs, :get_analytically_integrated,
+    :get_assertions, :get_bcs, :get_bindings, :get_brownians, :get_connector_type,
+    :get_consolidate, :get_constraints, :get_continuous_events, :get_costs,
+    :get_description, :get_diff_eqs, :get_discrete_events,
     :get_domain, :get_dvs, :get_eqs, :get_guesses, :get_gui_metadata,
     :get_ignored_connections, :get_index_cache, :get_initial_conditions,
     :get_initialization_eqs, :get_initializesystem, :get_inputs, :get_irreducibles,
@@ -125,14 +127,15 @@ const REEXPORTED_API = (
     :has_state_priorities, :has_systems, :has_tag, :has_tearing_state, :has_tspan,
     :has_tstops, :has_unknowns, :has_var_to_name, :hasbounds, :hasconnect, :hasdefault,
     :hasdescription, :hasdist, :hasguess, :hasmisc, :hasnominal, :hasunit, :hierarchy, :Hold,
-    :homotopy, :HomotopyContinuationProblem, :ImperativeAffect, :ImplicitDiscreteSystem,
+    :homotopy, :homotopy_enabled, :HomotopyContinuationProblem, :HomotopyCtx,
+    :ImperativeAffect, :ImplicitDiscreteSystem,
     :independent_variable, :independent_variables, :InfiniteOptCollocation,
     :InfiniteOptDynamicOptProblem, :Initial, :initial_conditions, :initialization_equations,
     :InitializationProblem, :inputs, :instream, :irreducibles, :is_alg_equation, :is_bound,
     :is_diff_equation, :iscomplete, :isdisturbance, :isinitial, :isinput, :isirreducible,
     :isoutput, :isparameter, :istunable, :JuMPCollocation, :JuMPDynamicOptProblem, :jumps,
     :JumpSystem, :linear_fractional_to_ordinary, :liouville_transform, :LocalScope,
-    :maybe_zeros, :MissingGuessValue, :ModelingToolkitBase,
+    :maybe_zeros, :MiscSystemData, :MissingGuessValue, :ModelingToolkitBase,
     :modelingtoolkitize, :modified_unknowns!, :mtkcompile, :MTKParameters,
     :MTKVariableTypeCtx, :namespace_equations, :noise_to_brownians, :NonlinearSystem,
     :observables, :observed, :ODESystem, :open_loop, :OptimizationSystem, :outputs,
@@ -141,7 +144,8 @@ const REEXPORTED_API = (
     :reorder_dimension_by_tunables!, :respecialize, :Sample, :SampleTime, :SDESystem,
     :set_defaults, :setdefault, :setguess, :setnominal, :Shift, :ShiftIndex,
     :should_invalidate_mutable_cache_entry, :state_priorities, :state_priority,
-    :stochastic_integral_transform, :store_to_mutable_cache!, :Stream, :structural_simplify,
+    :stochastic_integral_transform, :store_to_mutable_cache!, :Stream, :strip_homotopy,
+    :structural_simplify,
     :subset_tunables, :SymbolicADDisallowed, :SymbolicContinuousCallback,
     :SymbolicDiscreteCallback, :SymbolicMassActionJump, :SymScope, :System, :t, :t_nounits,
     :tobrownian, :toggle_namespacing, :toparam, :tunable_parameters, :unbound_inputs,
@@ -177,9 +181,9 @@ const REEXPORTED_API = (
     Symbol("@acrule"), Symbol("@arrayop"), Symbol("@makearray"), Symbol("@rule"),
     Symbol("@syms"), :BS, :expand, :flatten_fractions, :get_canonical_expr, :get_reachability,
     :getmetadata, :hasmetadata, :ifelse_branching, :ifelse_eager, :IRStructure, :istree,
-    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :setmetadata,
-    :simplify, :simplify_fractions, :substitute, :SymbolicUtils, :SymReal, :Term, :term,
-    :toexpr, :TreeReal, :unwrap_const, :vartype,
+    :populate_ir!, :print_ir, :quick_cancel, :Rewriters, :RuleSet, :SafeReal, :scalarize,
+    :setmetadata, :shape, :simplify, :simplify_fractions, :substitute, :SymbolicUtils,
+    :SymReal, :Term, :term, :toexpr, :TreeReal, :Unknown, :unwrap, :unwrap_const, :vartype,
     # TermInterface: the term-manipulation interface, re-exported transitively by
     # SymbolicUtils.
     :arguments, :iscall, :operation, :sorted_arguments,
@@ -344,19 +348,6 @@ const STRUCTURAL_TYPES = (
     ModelingToolkitTearing.TearingState,
     StateSelection.DiffGraph,
 )
-
-@testset "Internal bindings are not public" begin
-    for name in (:generate_trajectory, :MiscSystemData)
-        @test isdefined(ModelingToolkitBase, name)
-        @test isdefined(ModelingToolkit, name)
-        @test !Base.isexported(ModelingToolkitBase, name)
-        @test !Base.isexported(ModelingToolkit, name)
-        @static if VERSION >= v"1.11"
-            @test !Base.ispublic(ModelingToolkitBase, name)
-            @test !Base.ispublic(ModelingToolkit, name)
-        end
-    end
-end
 
 run_qa(
     ModelingToolkit;

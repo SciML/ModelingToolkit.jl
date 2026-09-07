@@ -1,6 +1,6 @@
 using OrdinaryDiffEq, ModelingToolkitBase, DataStructures, Test
 using OrdinaryDiffEqRosenbrock
-using Optimization, RecursiveArrayTools, OptimizationOptimJL
+using Optimization, RecursiveArrayTools, OptimizationOptimJL, OptimizationOptimJL.Optim
 using SymbolicIndexingInterface
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics: value
@@ -512,4 +512,10 @@ sys = modelingtoolkitize(prob)
     mtkvals = similar(u0)
     sprob2.f(mtkvals, sprob2.u0, sprob2.p, tspan[1])
     @test mtkvals ≈ truevals
+end
+
+@testset "unsupported parameter containers" begin
+    err = ModelingToolkitBase.ModelingtoolkitizeParametersNotSupportedError
+    @test_throws err ModelingToolkitBase.define_params(:p, t)
+    @test occursin("Symbol", sprint(showerror, err(Symbol)))
 end

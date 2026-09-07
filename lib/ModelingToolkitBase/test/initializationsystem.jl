@@ -1567,6 +1567,19 @@ end
     @test SciMLBase.successful_retcode(solve(newprob))
 end
 
+@testset "Remake with a parameter vector preserves structured parameters" begin
+    @variables remake_x(t) = 1.0
+    @parameters remake_a = 1.0
+    @named remake_sys = System([D(remake_x) ~ remake_a * remake_x], t)
+    remake_sys = complete(remake_sys)
+
+    prob = ODEProblem(remake_sys, [], (0.0, 1.0))
+    remade = remake(prob; p = [2.0])
+
+    @test remade.ps[remake_a] == 2.0
+    @test remade.ps[Initial(remake_x)] == 1.0
+end
+
 @testset "Issue#3295: Incomplete initialization of pure-ODE systems" begin
     @variables X(t) Y(t)
     @parameters p d
@@ -1974,6 +1987,22 @@ end
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Scalarized array initial conditions" begin
+    @independent_variables indexed_t
+    @variables indexed_y(indexed_t)[1:10]
+    indexed_D = Differential(indexed_t)
+
+    @mtkcompile indexed_system = System(
+        [indexed_D(indexed_y[1]) ~ -indexed_y[1]], indexed_t
+    )
+    indexed_state = only(unknowns(indexed_system))
+    indexed_problem = ODEProblem(
+        indexed_system, [indexed_state => 1.0], (0.0, 1.0)
+    )
+
+    @test indexed_problem.u0 == [1.0]
 end
 
 @testset "Initial conditions removed with ` => nothing` aren't retained" begin

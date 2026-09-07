@@ -57,7 +57,7 @@ end
 
 """$(problem_docstring(SciMLBase.DiscreteProblem, DiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DiscreteProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, DiscreteProblem)

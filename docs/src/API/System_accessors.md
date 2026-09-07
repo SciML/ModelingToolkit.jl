@@ -95,6 +95,7 @@ ModelingToolkit.has_metadata
 ModelingToolkit.get_metadata
 SymbolicUtils.getmetadata(::ModelingToolkit.AbstractSystem, ::DataType, ::Any)
 SymbolicUtils.setmetadata(::ModelingToolkit.AbstractSystem, ::DataType, ::Any)
+ModelingToolkitBase.MiscSystemData
 ModelingToolkit.has_is_dde
 ModelingToolkit.get_is_dde
 ModelingToolkit.is_dde

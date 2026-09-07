@@ -1,5 +1,5 @@
 using ModelingToolkitBase, Test
-using ModelingToolkitBase: value, parse_variable
+using ModelingToolkitBase: value, parse_variable, unwrap
 using SymbolicUtils: <ₑ
 import SymbolicUtils as SU
 
@@ -43,6 +43,32 @@ aov = ModelingToolkitBase.collect_applied_operators(eq, Differential)
 
 ts = collect_ivs([eq])
 @test ts == Set([t])
+
+@testset "collect_differential_variables with array variables" begin
+    # A derivative of an array variable or of a slice names the array, not its elements.
+    # Callers such as `DAEProblem`'s `differential_vars` test membership of the scalar
+    # unknowns, so the elements have to be recorded.
+    @variables w(t)[1:4]
+    Dt = Differential(t)
+
+    whole = collect_differential_variables(Dt(w) ~ w)
+    @test whole == Set(Any[unwrap(el) for el in collect(w)])
+
+    sliced = collect_differential_variables(Dt(w[2:3]) ~ w[1:2])
+    @test sliced == Set(Any[unwrap(w[2]), unwrap(w[3])])
+
+    # scalar derivatives are unaffected
+    @test collect_differential_variables(Dt(w[1]) ~ w[2]) == Set(Any[unwrap(w[1])])
+
+    # and the elements are exactly what a `differential_vars` style membership test needs
+    sts = [unwrap(el) for el in collect(w)]
+    @test map(Base.Fix2(in, sliced), sts) == [false, true, true, false]
+
+    # a slice of rank 2 records every element, not just the first column
+    @variables z(t)[1:3, 1:2]
+    twod = collect_differential_variables(Dt(z[1:2, 1:2]) ~ z[1:2, 1:2])
+    @test twod == Set(Any[unwrap(z[i, j]) for i in 1:2, j in 1:2])
+end
 
 @testset "parse_variable with scalarized arrays" begin
     @variables scalarized_x(t)[1:2]
@@ -200,4 +226,33 @@ end
     @test EvalAt(1)(_x) isa Symbolics.BasicSymbolic
     @test value(only(arguments(EvalAt(1)(_x)))) == 1
     @test EvalAt(1)(D(x)) isa Num
+end
+
+@testset "write_possibly_indexed_array! ignores elements of zero-length parents" begin
+    t = ModelingToolkitBase.t_nounits
+    @variables a(t)[1:0] b(t)[1:2]
+    au = value(a)
+    bu = value(b)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test isempty(dd)
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, bu[SU.StableIndex([1])],
+        ModelingToolkitBase.COMMON_NOTHING, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test haskey(dd, bu)
+end
+
+@testset "`shift2term` on an already-shifted array variable" begin
+    @independent_variables tt
+    @variables arr(tt)[1:2]
+    Sh = ModelingToolkitBase.Shift
+    # the first lowering attaches `VariableUnshifted`, so the second one takes the
+    # branch that merges a new key into the existing metadata
+    once = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(arr[1])))
+    twice = ModelingToolkitBase.shift2term(unwrap(Sh(tt, -1)(once)))
+    @test isequal(twice, ModelingToolkitBase.shift2term(unwrap(Sh(tt, -2)(arr[1]))))
 end

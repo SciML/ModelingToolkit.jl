@@ -218,7 +218,9 @@ function fractional_to_ordinary(
 
     function fto_helper(sub_eq, sub_var, α; initial = 0)
         alpha_0 = α
+        α == 1 && throw(ArgumentError("`fractional_to_ordinary` requires non-integer orders, got α = 1"))
 
+        coeff = 1.0
         if (α > 1)
             coeff = 1 / (α - 1)
             m = 2
