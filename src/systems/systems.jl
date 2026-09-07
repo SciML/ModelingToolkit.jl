@@ -111,7 +111,7 @@ function MTKBase.__mtkcompile(
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
             gui_metadata = get_gui_metadata(sys),
-            tstops = symbolic_tstops(sys)
+            tstops = symbolic_tstops(sys), tspan = get_tspan(sys)
         )
         diffcache_params = SU.getmetadata(
             ode_sys, DiffCacheParams, Dict{SymbolicT, Int}()
