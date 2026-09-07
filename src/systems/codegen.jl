@@ -592,6 +592,6 @@ function get_semiquadratic_W_sparsity(
         jac .+= Cjac
     end
     M_sparsity = mm isa UniformScaling ? sparse(I, M, N) :
-        SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
+        SparseMatrixCSC{Bool, Int}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end

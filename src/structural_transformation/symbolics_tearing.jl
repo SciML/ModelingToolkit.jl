@@ -26,7 +26,7 @@ end
 
 function safe_isinteger(@nospecialize(x::Number))
     if x isa Int64
-        return true
+        return typemin(Int) <= x <= typemax(Int)
     elseif x isa Int32
         return true
     elseif x isa BigInt
