@@ -90,7 +90,7 @@ components. Leave the driving component's input connector unconnected and name i
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq
-using ModelingToolkit: t_nounits as t
+using ModelingToolkit: t_nounits as t, unbound_inputs
 using ModelingToolkitStandardLibrary.Mechanical.Translational: Mass, Spring, Damper, Fixed, Force
 
 @named mass = Mass(m = 1)
@@ -119,6 +119,20 @@ for level in (0.0, 10.0, -10.0, 0.0)
     current_velocity = integrator[mass.v]
 end
 ```
+
+When you do not already know which variable carries the external signal — a model built by
+someone else, or one assembled programmatically — [`unbound_inputs`](@ref) reports the input
+variables that the connection structure leaves external, and its result can be passed
+straight to `mtkcompile`:
+
+```julia
+unbound_inputs(model)                              # [force₊f₊u(t)]
+sys = mtkcompile(model; inputs = unbound_inputs(model))
+```
+
+This inspects the connection graph of the uncompiled hierarchy, so call it before
+`mtkcompile`. It is a heuristic rather than a guarantee: check what it returns, and name the
+input explicitly when you already know it.
 
 ## Reading observed quantities from the integrator
 
