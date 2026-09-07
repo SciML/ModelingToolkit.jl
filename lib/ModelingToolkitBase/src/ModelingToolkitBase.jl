@@ -535,6 +535,18 @@ end
 # (which transitively carries the symbolic `System`) trips a
 # `MethodError MixedDuplicated(::System, ::System)` in `create_activity_wrapper`.
 EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
+# `InitializationMetadata` is rebuild-only data: the operating point, guesses and
+# extra initialization equations captured at problem construction, plus the
+# index-template reconstructors `remake` uses to rebuild the initialization
+# problem. Nothing in it is read by the generated RHS and none of it carries
+# derivative information (derivatives w.r.t. `u0`/`p`/`Initial`s flow through the
+# reconstructors' arguments, not their fields). Enzyme cannot prove that on its
+# own because of the `Dict{SymbolicT, SymbolicT}` maps, so without this rule every
+# `Duplicated` use of an `ODEFunction` (e.g. SciMLSensitivity's `EnzymeVJP`,
+# once per adjoint RHS evaluation) allocates and re-zeroes a shadow of the whole
+# metadata: ~100 µs per call against a ~5 ns RHS for a 32-state linear ODE,
+# an 8x slowdown of `GaussAdjoint(EnzymeVJP)` gradients.
+EnzymeCore.EnzymeRules.inactive_type(::Type{<:InitializationMetadata}) = true
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)

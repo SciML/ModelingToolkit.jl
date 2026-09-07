@@ -2288,3 +2288,17 @@ if @isdefined(ModelingToolkit)
         @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     end
 end
+
+@testset "InitializationMetadata is inactive for Enzyme" begin
+    # `EnzymeVJP` differentiates the whole `ODEFunction` as `Duplicated`; the
+    # rebuild-only initialization metadata must not get a shadow that is
+    # re-zeroed on every adjoint RHS evaluation.
+    @variables x(t) = 1.0
+    @parameters k = 2.0
+    @mtkcompile sys = System([D(x) ~ -k * x], t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    meta = prob.f.initialization_data.metadata
+    @test meta isa ModelingToolkitBase.InitializationMetadata
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
+end
