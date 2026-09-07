@@ -1714,12 +1714,11 @@ does, return the struct being projected from and `true`. Otherwise, return `x, f
 This is the struct counterpart of `split_indexed_var`, and like it, commutes with
 operators. Unlike `split_indexed_var` it peels the whole chain, so a plain array element
 `a[i]` also resolves to `a`.
-"""
-SU.@cache limit = 500_000 function split_field_access(x::SymbolicT)::Tuple{SymbolicT, Bool}
-    return _split_field_access(x)
-end
 
-function _split_field_access(x::SymbolicT)
+Deliberately not `SymbolicUtils.@cache`d, unlike `split_indexed_var`, since keys here
+are fully projected leaves, which are typically visited once, hence the hit rate is poor.
+"""
+function split_field_access(x::SymbolicT)::Tuple{SymbolicT, Bool}
     return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f isa Symbolics.SymbolicGetproperty || f === getindex end => begin
             root, _ = split_field_access(args[1])
