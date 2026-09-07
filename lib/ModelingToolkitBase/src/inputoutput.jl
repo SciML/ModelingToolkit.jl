@@ -153,11 +153,24 @@ end
 Determine whether `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
 Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namespaced signal `sys.inner.u` lives in a namespace internal to `sys`.
 """
+"""
+    is_inner_namespace_string(nu, nv)
+
+Return whether namespace `nv` is nested inside namespace `nu`.
+
+The test is on separator-delimited segments rather than raw characters: `"a₊bc"` is not
+inside `"a₊b"` even though one string is a prefix of the other.
+"""
+function is_inner_namespace_string(nu, nv)
+    isempty(nu) && return !isempty(nv)
+    return startswith(nv, nu * NAMESPACE_SEPARATOR)
+end
+
 function same_or_inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     return nu == nv ||           # namespaces are the same
-        startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
+        is_inner_namespace_string(nu, nv) || # or nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
         !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end
@@ -166,7 +179,7 @@ function inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv && return false
-    return startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
+    return is_inner_namespace_string(nu, nv) || # or nv is an inner namespace to nu
         occursin(NAMESPACE_SEPARATOR, string(getname(var))) &&
         !occursin(NAMESPACE_SEPARATOR, string(getname(u))) # or u is top level but var is internal
 end

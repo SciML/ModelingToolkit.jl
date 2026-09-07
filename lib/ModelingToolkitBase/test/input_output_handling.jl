@@ -572,3 +572,39 @@ if !@isdefined(ModelingToolkit)
         @test out in Set(unknowns(reduced_alg)) || out in Set(observables(reduced_alg))
     end
 end
+
+@testset "unbound_inputs does not depend on sibling name spelling" begin
+    # Two systems with identical structure. They differ only in the names given to the
+    # input connector and its sibling: in the first pair the sibling's name has the
+    # input's name as a string prefix ("flange" / "f"), in the second it does not
+    # ("port" / "V"). Namespace nesting is a property of the separator-delimited
+    # segments, so neither pair may be treated as nested and the two systems must be
+    # classified the same way.
+    @independent_variables tv
+    @variables f_u(tv) [input = true] flange_u(tv) V_u(tv) [input = true] port_u(tv)
+
+    inner_f = System(Equation[], tv, [f_u], []; name = :f)
+    inner_flange = System(Equation[], tv, [flange_u], []; name = :flange)
+    prefixed = System(
+        [inner_flange.flange_u ~ -inner_f.f_u], tv;
+        systems = [inner_f, inner_flange], name = :prefixed
+    )
+
+    inner_V = System(Equation[], tv, [V_u], []; name = :V)
+    inner_port = System(Equation[], tv, [port_u], []; name = :port)
+    unprefixed = System(
+        [inner_port.port_u ~ -inner_V.V_u], tv;
+        systems = [inner_V, inner_port], name = :unprefixed
+    )
+
+    @test length(unbound_inputs(prefixed)) == length(unbound_inputs(unprefixed))
+    @test is_bound(prefixed, inner_f.f_u) == is_bound(unprefixed, inner_V.V_u)
+end
+
+@testset "namespace nesting is tested on separator-delimited segments" begin
+    @test ModelingToolkitBase.is_inner_namespace_string("a", "a₊b")
+    @test !ModelingToolkitBase.is_inner_namespace_string("a₊b", "a₊bc")
+    @test !ModelingToolkitBase.is_inner_namespace_string("a₊b", "a₊b")
+    @test ModelingToolkitBase.is_inner_namespace_string("", "a")
+    @test !ModelingToolkitBase.is_inner_namespace_string("", "")
+end
