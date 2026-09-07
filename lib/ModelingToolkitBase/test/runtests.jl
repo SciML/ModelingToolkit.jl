@@ -52,6 +52,7 @@ end
             @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
             @safetestset "`@mtkcomplete`" include("mtkcomplete.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
+            @safetestset "System `tspan`" include("system_tspan.jl")
             @safetestset "Dynamic Quantities Test" include("dq_units.jl")
             @safetestset "Mass Matrix Test" include("mass_matrix.jl")
             @safetestset "Split Parameters Test" include("split_parameters.jl")

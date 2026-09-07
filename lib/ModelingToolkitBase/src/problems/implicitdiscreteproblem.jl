@@ -66,7 +66,7 @@ end
 
 """$(problem_docstring(SciMLBase.ImplicitDiscreteProblem, ImplicitDiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.ImplicitDiscreteProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, ImplicitDiscreteProblem)
