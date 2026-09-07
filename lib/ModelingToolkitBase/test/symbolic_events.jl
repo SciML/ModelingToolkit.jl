@@ -1554,6 +1554,21 @@ if @isdefined(ModelingToolkit)
         i = findlast(tᵢ -> abs(tᵢ - 0.5) < 1.0e-9, sol.t)
         @test abs(1.0e7 * (sol[y][i]^2 - sol[x][i]) - 0.5785) < 1.0e-6
     end
+
+    @testset "`affect_tolerance` translates the integrator's tolerance values" begin
+        using ModelingToolkitBase: affect_tolerance
+        # `false` is what OrdinaryDiffEqCore stores for a tolerance that was not supplied
+        # under a discrete problem. `Bool <: Number`, so forwarding it would reach the
+        # nonlinear solve as a *zero* tolerance, which nothing can meet.
+        discrete_opts = (; opts = (; abstol = false, reltol = false))
+        @test affect_tolerance(discrete_opts, :abstol) === nothing
+        @test affect_tolerance(discrete_opts, :reltol) === nothing
+        # A scalar is used as given; a per-component array is reduced to its tightest
+        # entry, since the nonlinear solve compares a scalar norm against the tolerance.
+        @test affect_tolerance((; opts = (; abstol = 1.0e-8)), :abstol) == 1.0e-8
+        @test affect_tolerance((; opts = (; abstol = [1.0e-6, 1.0e-9])), :abstol) == 1.0e-9
+        @test affect_tolerance((; opts = (; abstol = Float64[])), :abstol) === nothing
+    end
 end
 
 @testset "Array parameter updates of parent components in ImperativeEffect" begin

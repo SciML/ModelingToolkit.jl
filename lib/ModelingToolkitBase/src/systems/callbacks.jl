@@ -914,25 +914,33 @@ end
     affect_tolerance(integ, name::Symbol)
 
 The `abstol` or `reltol` an implicit affect's nonlinear solve should be run at, read off the
-integrator that triggered the callback. `nothing` (the nonlinear solver's own default) if the
-integrator does not expose that tolerance.
+integrator that triggered the callback.
 
 The affect equations are the parent system's algebraic and observed equations, so their
 residuals floor at the same roundoff level the ODE solver already lives with; holding the
 affect solve to a tighter tolerance than the integration itself makes a solvable callback
-report as unsolvable. A per-component tolerance array is reduced to its tightest entry: it
-is sized for the parent system's unknowns, not the affect's.
+report as unsolvable.
+
+Two values need translating before the nonlinear solver can be given them:
+
+  - `false` is what `OrdinaryDiffEqCore` stores for a tolerance that was not supplied under a
+    discrete problem (`OrdinaryDiffEqCore/src/solve.jl:377-378` and `:389-390` as of 4.16.0). It
+    is not a tolerance, but `Bool <: Number`, so forwarding it reaches
+    `NonlinearSolveBase.get_tolerance` as a *zero* tolerance, which no solve can meet. `nothing`
+    keeps the nonlinear solver's own default instead. (`IDSolve` maps `false` back to the default
+    as well, so this is the outer of two guards.)
+  - A per-component tolerance array is not something the nonlinear solve can take: it compares a
+    scalar norm against the tolerance
+    (`NonlinearSolveBase/src/termination_conditions.jl:246-248`), and the array is sized for the
+    parent system's unknowns rather than the affect's. `minimum` is a deliberate choice of
+    reduction - the tightest component, so the affect is never solved looser than any part of the
+    integration.
 """
 function affect_tolerance(integ, name::Symbol)
-    hasproperty(integ, :opts) || return nothing
-    opts = integ.opts
-    hasproperty(opts, name) || return nothing
-    tol = getproperty(opts, name)
-    # `false` is OrdinaryDiffEqCore's "no tolerance supplied".
+    tol = getproperty(integ.opts, name)
     tol isa Bool && return nothing
-    tol isa Number && return tol
     tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
-    return nothing
+    return tol
 end
 
 function (ia::ImplicitAffect)(integ)
