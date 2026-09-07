@@ -154,7 +154,35 @@ function namespace_affect(affect::ImperativeAffect, s)
 end
 
 function invalid_variables(sys, expr)
-    return setdiff!(SU.search_variables(expr), all_symbols(sys))
+    # Mirror `unassignable_variables`: build the set of
+    #  valid symbols, scalarizing any array-valued symbol
+    #  into its elements.
+    valid = Set{SymbolicT}()
+    for sym in all_symbols(sys)
+        if Symbolics.isarraysymbolic(sym)
+            for idx in SU.stable_eachindex(sym)
+                push!(valid, sym[idx])
+            end
+        else
+            push!(valid, sym)
+        end
+    end
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr)
+    invalid = SymbolicT[]
+    for var in vars
+        if Symbolics.isarraysymbolic(var)
+            for idx in SU.stable_eachindex(var)
+                sym = var[idx]
+                sym in valid && continue
+                push!(invalid, sym)
+            end
+        else
+            var in valid && continue
+            push!(invalid, var)
+        end
+    end
+    return invalid
 end
 
 function unassignable_variables(sys, expr)
