@@ -122,7 +122,7 @@ end
 
 """$(problem_docstring(SciMLBase.DAEProblem, DAEFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DAEProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         callback = nothing, check_length = true, eval_expression = false,
         eval_module = @__MODULE__, check_compatibility = true,
         expression = Val{false}, kwargs...

@@ -252,10 +252,10 @@ struct System <: IntermediateDeprecationSystem
     or expressions of parameters and time.
     """
     tstops::Vector{Any}
-
     """
-    The `(t0, t1)` start and stop time endpoints, used as the default `tspan` when
-    constructing a problem from `sys` if none is given explicitly. `nothing` if unset.
+    The `(t0, t1)` timespan of the system, or `nothing` if it does not have one. Time-dependent
+    problem constructors use it as the `tspan` when the caller does not pass one. Only the
+    timespan of the top-level system is used; those of subsystems are ignored.
     """
     tspan::Union{Nothing, Tuple}
 
@@ -1237,7 +1237,7 @@ function flatten(sys::System, noeqs = false)
         guesses = guesses(sys),
         continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
-        is_dde = is_dde(sys), tstops = symbolic_tstops(sys), tspan = symbolic_tspan(sys),
+        is_dde = is_dde(sys), tstops = symbolic_tstops(sys), tspan = get_tspan(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
@@ -1734,7 +1734,7 @@ function Base.copy(sys::System)
         map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
         copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
         copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
-        get_is_dde(sys), copy(get_tstops(sys)), copy(get_tspan(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_is_dde(sys), copy(get_tstops(sys)), get_tspan(sys), copy(get_inputs(sys)), copy(get_outputs(sys)),
         get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
         get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),

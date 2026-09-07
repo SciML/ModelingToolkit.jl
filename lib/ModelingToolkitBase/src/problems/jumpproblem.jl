@@ -1,4 +1,7 @@
-"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false))"""
+# `tspan` has no default here, unlike every other time-dependent problem constructor:
+# `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
+# with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
