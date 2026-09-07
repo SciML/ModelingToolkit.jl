@@ -50,7 +50,7 @@ sol_ = solve(prob_, ImplicitEuler())
 
 # build the observable function expression
 # ODEProblemExpr with observedfun_exp included
-probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true}, missing_guess_value);
+probexpr = ODEProblem{true}(ss, unknowns(ss) .=> sol.u[1], (0, 0.1); expression = Val{true}, missing_guess_value);
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
 @test sol_obs[all_obs] == sol[all_obs]

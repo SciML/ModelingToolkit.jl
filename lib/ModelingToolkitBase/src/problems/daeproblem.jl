@@ -127,20 +127,46 @@ end
         eval_module = @__MODULE__, check_compatibility = true,
         expression = Val{false}, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        check_compatibility, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, implicit_dae = true,
+        build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return DAEProblem{iip, spec}(sys, op, tspan, opts; callback, kwargs...)
+end
+
+"""
+    SciMLBase.DAEProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; callback = nothing, kwargs...)
+
+Public entry point that builds a `DAEProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.DAEProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E};
+        callback = nothing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, DAEProblem)
-    check_compatibility && check_compatible_system(DAEProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(DAEProblem, sys)
+
+    opts = maybe_derive_t_from_tspan(opts, tspan)
 
     _iip = resolve_iip(iip, op)
     f, du0,
         u0,
         p = process_SciMLProblem(
-        DAEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, check_compatibility, implicit_dae = true, expression, kwargs...
+        DAEFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module,
+        sys; expression = Val{E}, callback, eval_expression, eval_module,
         op, tspan, kwargs...
     )
 
@@ -152,5 +178,5 @@ end
     args = (; f, du0, u0, tspan, p, ptype)
     kwargs = (; differential_vars, kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, DAEProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, DAEProblem{_iip}, args; kwargs...)
 end

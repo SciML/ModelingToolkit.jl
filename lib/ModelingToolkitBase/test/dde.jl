@@ -151,7 +151,7 @@ if @isdefined(ModelingToolkit)
     end
 end
 sys = mtkcompile(coupledOsc)
-prob = DDEProblem(sys, [], (0.0, 10.0); constant_lags = [sys.osc1.τ, sys.osc2.τ])
+prob = DDEProblem(sys, [], (0.0, 10.0))
 sol = solve(prob, MethodOfSteps(@isdefined(ModelingToolkit) ? Tsit5() : Rodas5P()))
 obsfn = ModelingToolkitBase.build_explicit_observed_function(
     sys, [sys.osc1.delx, sys.osc2.delx]

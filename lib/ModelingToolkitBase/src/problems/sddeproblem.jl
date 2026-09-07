@@ -67,29 +67,65 @@ end
         callback = nothing, check_length = true, checkbounds = false,
         eval_expression = false, eval_module = @__MODULE__, check_compatibility = true,
         u0_constructor = identity, sparse = false, sparsenoise = sparse,
-        expression = Val{false}, kwargs...
+        expression = Val{false}, seed = missing, constant_lags = missing, kwargs...
     ) where {iip, spec}
+    fn_opts = SciMLFunctionOptions(;
+        t = tspan !== nothing ? tspan[1] : tspan, eval_expression, eval_module,
+        checkbounds, check_compatibility, sparse, expression, kwargs...
+    )
+    opts = SciMLProblemOptions(
+        sys;
+        fn_opts, check_length, symbolic_u0 = true, u0_constructor,
+        build_initializeprob = supports_initialization(sys),
+        time_dependent_init = is_time_dependent(sys),
+        circular_dependency_max_cycle_length = length(all_symbols(sys)),
+        kwargs...
+    )
+    return SDDEProblem{iip, spec}(
+        sys, op, tspan, opts; callback, sparsenoise, seed, constant_lags, kwargs...
+    )
+end
+
+"""
+    SciMLBase.SDDEProblem{iip, spec}(sys::System, op, tspan, opts::SciMLProblemOptions; callback = nothing, sparsenoise = opts.fn_opts.sparse, kwargs...)
+
+Public entry point that builds an `SDDEProblem` directly from a pre-assembled
+[`SciMLProblemOptions`](@ref), bypassing the `kwargs...` wrapper above.
+
+`seed`/`constant_lags` (default `missing`, meaning "not explicitly provided by the caller")
+are explicit keywords here — not part of `kwargs` — since they're relevant only to the final
+`SciMLBase.SDDEProblem` construction, not the inner `SDDEFunction` build; the opts-accepting
+`SDDEFunction` method has no generic `kwargs...` sink to harmlessly absorb them the way its
+keyword-based wrapper does.
+"""
+function SciMLBase.SDDEProblem{iip, spec}(
+        sys::System, op, tspan, opts::SciMLProblemOptions{E};
+        callback = nothing, sparsenoise = opts.fn_opts.sparse, seed = missing,
+        constant_lags = missing, kwargs...
+    ) where {iip, spec, E}
     check_complete(sys, SDDEProblem)
-    check_compatibility && check_compatible_system(SDDEProblem, sys)
+    opts.fn_opts.check_compatibility && check_compatible_system(SDDEProblem, sys)
+
+    opts = maybe_derive_t_from_tspan(opts, tspan)
 
     _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SDDEFunction{_iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, checkbounds,
-        eval_expression, eval_module, check_compatibility, sparse, symbolic_u0 = true,
-        expression, u0_constructor, kwargs...
+        SDDEFunction{_iip, spec}, sys, op, opts; options_struct = Val(true), kwargs...
     )
 
+    (; u0_constructor) = opts
+    (; eval_expression, eval_module) = opts.fn_opts.codegen
+    checkbounds = opts.fn_opts.codegen.codegen.checkbounds
     h = generate_history(
         sys, u0,
         GeneratedFunctionOptions(;
-            expression, wrap_gfw = Val{true}, eval_expression, eval_module,
+            expression = Val{E}, wrap_gfw = Val{true}, eval_expression, eval_module,
             codegen_function_options = Symbolics.CodegenFunctionOptions(; checkbounds)
         )
     )
 
-    if expression == Val{true}
+    if E
         if u0 !== nothing
             u0 = :($u0_constructor($map($float, h(p, tspan[1]))))
         end
@@ -102,15 +138,18 @@ end
     noise, noise_rate_prototype = calculate_noise_and_rate_prototype(sys, u0; sparsenoise)
     kwargs = process_kwargs(sys; callback, eval_expression, eval_module, op, tspan, kwargs...)
 
-    if expression == Val{true}
+    if E
         g = :(f.g)
     else
         g = f.g
     end
     args = (; f, g, u0, h, tspan, p)
-    kwargs = (; noise, noise_rate_prototype, kwargs...)
+    seed_kw = seed === missing ? (;) : (; seed)
+    constant_lags = resolve_constant_lags(sys, constant_lags, p)
+    constant_lags_kw = constant_lags === missing ? (;) : (; constant_lags)
+    kwargs = (; noise, noise_rate_prototype, seed_kw..., constant_lags_kw..., kwargs...)
 
-    return maybe_codegen_scimlproblem(expression, SDDEProblem{_iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(Val{E}, SDDEProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(

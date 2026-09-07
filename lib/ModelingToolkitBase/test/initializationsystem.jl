@@ -447,7 +447,7 @@ end
 end
 
 if @isdefined(ModelingToolkit)
-    prob = ODEProblem(sys, [], (0, 0.1), check = false)
+    prob = ODEProblem(sys, [], (0, 0.1))
     sol = solve(prob, Rodas5P())
     # If initialized incorrectly, then it would be InitialFailure
     @test sol.retcode == SciMLBase.ReturnCode.Unstable
