@@ -205,7 +205,7 @@ end
     @test size(pjac) == (length(unknowns(sys)), length(tunable))
 
     fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
-    u0 = [1.0, 2.0]
+    u0 = prob.u0
     oop = fn(u0, p, 0.0)
     @test size(oop) == size(pjac)
 
@@ -260,7 +260,7 @@ end
     @test all(
         isequal.(cols[vec(idx)], unwrap.([MM[1, 1], MM[2, 1], MM[1, 2], MM[2, 2]]))
     )
-    @test size(calculate_paramjac(sys)) == (2, length(cols))
+    @test size(calculate_paramjac(sys)) == (length(unknowns(sys)), length(cols))
 end
 
 @testset "`generate_paramjac` on a time-independent system" begin
@@ -268,20 +268,22 @@ end
     @parameters aa bb
     @mtkcompile sys = System([0 ~ xx^2 - aa, 0 ~ yy - bb * xx])
     fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
-    p = NonlinearProblem(sys, [xx => 6.0, yy => 2.0, aa => 4.0, bb => 3.0]).p
-    u0 = [6.0, 2.0]
-    oop = fn(u0, p)
+    prob = NonlinearProblem(sys, [xx => 6.0, yy => 2.0, aa => 4.0, bb => 3.0])
+    oop = fn(prob.u0, prob.p)
     iip = zeros(size(oop))
-    fn(iip, u0, p)
+    fn(iip, prob.u0, prob.p)
     @test oop == iip
-    @test size(oop) == (2, 2)
+    # how far `mtkcompile` tears this system depends on whether the tearing
+    # implementation is loaded, so derive the expected shape instead of fixing it
+    @test size(oop) ==
+        (length(unknowns(sys)), length(ModelingToolkitBase.paramjac_parameters(sys)))
 end
 
 @testset "`generate_paramjac` with no tunable parameters" begin
     @variables z(t)
     @parameters q [tunable = false]
     @mtkcompile sys = System([D(z) ~ -q * z], t)
-    @test size(calculate_paramjac(sys)) == (1, 0)
+    @test size(calculate_paramjac(sys)) == (length(unknowns(sys)), 0)
     @test_throws ArgumentError generate_paramjac(
         sys; expression = Val{false}, wrap_gfw = Val{true}
     )
@@ -312,7 +314,7 @@ end
 
     fn = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})
     rhs = generate_rhs(sys; expression = Val{false}, wrap_gfw = Val{true})
-    u0 = [1.0, 2.0]
+    u0 = prob.u0
     oop = fn(u0, prob.p, 0.0)
     iip = zeros(size(oop))
     fn(iip, u0, prob.p, 0.0)
@@ -342,11 +344,12 @@ end
         @test fn.paramjac !== nothing
     end
 
-    p = ODEProblem(sys, opmap, (0.0, 1.0)).p
+    ref = ODEProblem(sys, opmap, (0.0, 1.0))
+    u0, p = ref.u0, ref.p
     expected = generate_paramjac(sys; expression = Val{false}, wrap_gfw = Val{true})(
-        [1.0, 2.0], p, 0.0
+        u0, p, 0.0
     )
-    @test ODEFunction(sys; paramjac = true).paramjac([1.0, 2.0], p, 0.0) == expected
+    @test ODEFunction(sys; paramjac = true).paramjac(u0, p, 0.0) == expected
 
     prob = ODEProblem(sys, opmap, (0.0, 1.0); paramjac = true)
     @test prob.f.paramjac !== nothing
