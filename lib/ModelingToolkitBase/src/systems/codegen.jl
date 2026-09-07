@@ -1238,6 +1238,18 @@ function generate_control_jacobian(
 end
 
 """
+Assert that the buffer handed to a sparse in-place parameter jacobian has exactly the
+sparsity pattern the function was generated for, mirroring [`assert_jac_length_header`](@ref).
+"""
+function assert_paramjac_length_header(pjac::AbstractSparseArray)
+    return identity,
+        function add_header(expr)
+            body = Let([Assignment(:_, term(assert_jac_length, expr.args[1], findnz(pjac)[1:2]...))], expr.body, true)
+            return Func(expr.args, [], body)
+    end
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 The parameters with respect to which [`calculate_paramjac`](@ref) differentiates, in the
@@ -1291,12 +1303,28 @@ permute the columns into a chosen order, e.g.
 
 - `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`/`Symbolics.sparsejacobian`.
 - `ps`: The parameters with respect to which the jacobian should be computed.
+
+A parameter that is only reached through a registered function with no derivative rule
+leaves an unexpanded `Differential` in the result, which generates a function returning
+`Num` rather than a number. `calculate_jacobian` has the same limitation for a registered
+function of an unknown.
 """
 function calculate_paramjac(
         sys::AbstractSystem;
         sparse = false, simplify = false, ps = paramjac_parameters(sys)
     )
     check_symbolic_ad_allowed(sys)
+    # `Symbolics.jacobian` treats a delayed unknown `x(t - τ)` as opaque, so the column of
+    # a delay parameter would come out zero instead of `∂f/∂τ`. That is the right answer
+    # for `calculate_jacobian`, which holds the history fixed, but not here.
+    if is_dde(sys)
+        throw(
+            ArgumentError(
+                "`calculate_paramjac` does not support systems with delays, since the \
+                column of a delay parameter would silently be zero."
+            )
+        )
+    end
     rhs = SymbolicT[eq.rhs for eq in full_equations(sys)]
 
     if sparse
@@ -1321,7 +1349,10 @@ See [`calculate_paramjac`](@ref) for the meaning of the columns of `pJ`.
 $GENERATE_X_KWARGS
 - `simplify`, `sparse`: Forwarded to [`calculate_paramjac`](@ref). A `sparse` in-place
   function writes into the `nzval` of its output and therefore requires a
-  `SparseMatrixCSC` buffer with exactly the generated sparsity pattern.
+  `SparseMatrixCSC` buffer with exactly the generated sparsity pattern. Pass
+  `checkbounds = true` to assert that at runtime.
+- `checkbounds`: Whether to check the sparsity pattern of the output buffer at runtime if
+  `sparse`. Also forwarded to `build_function_wrapper`.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
@@ -1345,6 +1376,13 @@ function generate_paramjac(
     dvs = unknowns(sys)
     pjac = calculate_paramjac(sys; simplify, sparse, ps = pvars)
     p = reorder_parameters(sys)
+    if sparse && opts.codegen.checkbounds
+        # the in-place function writes into `nzval` positionally, so a buffer with a
+        # different pattern is filled with values in the wrong cells
+        wrap_code = assert_paramjac_length_header(pjac)
+    else
+        wrap_code = (identity, identity)
+    end
     args = Any[dvs]
     append!(args, p)
     nargs = 2
@@ -1355,7 +1393,7 @@ function generate_paramjac(
     res = build_function_wrapper(
         sys, pjac, args, BuildFunctionWrapperOptions(;
             u_arg = 1,
-            codegen_function_options = opts.codegen
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
         )
     )
     return maybe_compile_function(

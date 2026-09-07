@@ -1,6 +1,7 @@
 using ModelingToolkitBase, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLBase
 using SciMLStructures
+using SparseArrays
 using SymbolicUtils: unwrap, iscall, operation
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Test
@@ -354,6 +355,40 @@ end
     prob = ODEProblem(sys, opmap, (0.0, 1.0); paramjac = true)
     @test prob.f.paramjac !== nothing
     @test !haskey(prob.kwargs, :paramjac)
+end
+
+@testset "`calculate_paramjac` rejects systems with delays" begin
+    # `Symbolics.jacobian` treats `xv(t - tau)` as opaque, so the `tau` column would come
+    # out zero rather than `∂f/∂tau`
+    @variables xv(..)
+    @parameters aa tau
+    @mtkcompile sys = System([D(xv(t)) ~ -aa * xv(t - tau)], t)
+    @test ModelingToolkitBase.is_dde(sys)
+    @test_throws ArgumentError calculate_paramjac(sys)
+    @test_throws ArgumentError generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+end
+
+@testset "sparse in-place `paramjac` checks the buffer pattern" begin
+    @variables x(t) y(t)
+    @parameters a b c
+    @mtkcompile sys = System([D(x) ~ b * y + c * x, D(y) ~ a * x], t)
+    prob = ODEProblem(sys, [x => 1.0, y => 2.0, a => 1.0, b => 1.0, c => 2.0], (0.0, 1.0))
+    pattern = calculate_paramjac(sys; sparse = true)
+    fn = generate_paramjac(
+        sys; sparse = true, expression = Val{false}, wrap_gfw = Val{true},
+        checkbounds = true
+    )
+    buffer = similar(pattern, Float64)
+    fn(buffer, prob.u0, prob.p, 0.0)
+    @test Array(buffer) == generate_paramjac(
+        sys; expression = Val{false}, wrap_gfw = Val{true}
+    )(prob.u0, prob.p, 0.0)
+    # a buffer with a different pattern would otherwise be filled in the wrong cells
+    @test_throws AssertionError fn(
+        SparseArrays.sparse(ones(size(pattern))), prob.u0, prob.p, 0.0
+    )
 end
 
 @testset "`calculate_paramjac` respects `SymbolicADDisallowed`" begin
