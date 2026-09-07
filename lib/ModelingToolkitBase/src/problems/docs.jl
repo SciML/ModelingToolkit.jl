@@ -295,6 +295,13 @@ const CONTROLJAC_KWARGS = """
   the ODE with respect to the inputs.
 """
 
+const PARAMJAC_KWARGS = """
+- `paramjac`: Whether to symbolically compute and generate code for the jacobian of the
+  ODE right-hand side with respect to the parameters. Column `j` of the result is the
+  derivative with respect to entry `j` of
+  `SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]`.
+"""
+
 const OPTIONAL_FN_KWARGS_DICT = Dict(
     :jac => JAC_KWARGS,
     :tgrad => TGRAD_KWARGS,
@@ -306,7 +313,8 @@ const OPTIONAL_FN_KWARGS_DICT = Dict(
     :cons_j => CONSJ_KWARGS,
     :cons_sparse => CONSSPARSE_KWARGS,
     :inputfn => INPUTFN_KWARGS,
-    :controljac => CONTROLJAC_KWARGS
+    :controljac => CONTROLJAC_KWARGS,
+    :paramjac => PARAMJAC_KWARGS
 )
 
 const SPARSITY_OPTIONALS = Set([:jac, :hess, :cons_h, :cons_j, :controljac])

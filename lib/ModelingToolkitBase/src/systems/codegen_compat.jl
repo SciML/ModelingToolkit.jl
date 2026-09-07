@@ -218,6 +218,23 @@ function generate_control_jacobian(
     )
 end
 
+function generate_paramjac(
+        sys::AbstractSystem; expression = Val{true}, wrap_gfw = Val{false},
+        eval_expression = false, eval_module = @__MODULE__,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        simplify = false, sparse = false, kwargs...
+    )
+    return generate_paramjac(
+        sys,
+        GeneratedFunctionOptions(;
+            expression, wrap_gfw, eval_expression, eval_module,
+            compiler_options,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(; kwargs...)
+        );
+        simplify, sparse
+    )
+end
+
 function generate_history(
         sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
         eval_expression = false, eval_module = @__MODULE__, kwargs...
