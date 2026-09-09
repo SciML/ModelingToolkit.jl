@@ -78,6 +78,34 @@ end
     @test maximum(abs.(sol.u[end] .- exact)) < 5.0e-3
 end
 
+@testset "initialization of an array-equation DAE" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5093: the default derivative
+    # guess is a scalar written to the array derivative variable.
+    @independent_variables t
+    @variables u(t)[1:3]
+    D = Differential(t)
+    sys = complete(
+        System(
+            [D(u) ~ -u], t, collect(u), [];
+            initial_conditions = Dict(u => [1.0, 2.0, 3.0]), name = :m
+        )
+    )
+    prob = DAEProblem(sys, Dict(), (0.0, 1.0))
+    @test prob.f.initialization_data !== nothing
+    @test prob.du0 ≈ [-1.0, -2.0, -3.0]
+    sol = solve(prob, DFBDF(); reltol = 1.0e-8, abstol = 1.0e-8, saveat = [1.0])
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[u][end] ≈ [1.0, 2.0, 3.0] .* exp(-1.0) rtol = 1.0e-6
+
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5097: the derivative of the array
+    # is read from `du` as a whole, not element by element
+    oop, iip = ModelingToolkitBase.generate_rhs(
+        sys, ModelingToolkitBase.GeneratedFunctionOptions(; expression = Val{true});
+        implicit_dae = true
+    )
+    @test !occursin("array_literal", string(iip))
+end
+
 @testset "array equations over a 2D slice keep their shape" begin
     # A derivative of a 2D slice must substitute a 2D array of scalar derivatives; a
     # flattened one does not broadcast against the surrounding slices and codegen fails
