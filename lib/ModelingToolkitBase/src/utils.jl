@@ -748,7 +748,7 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
             # `D(u[2:4])` stands for the derivatives of its elements, which must not be
             # differentiated again by another equation, as a slice or as a scalar.
             if isdifferential(v) && SU.is_array_shape(SU.shape(only(arguments(v))))
-                dop = operation(v)
+                dop = operation(v)::Differential
                 x = only(arguments(v))
                 for idx in SU.stable_eachindex(x)
                     el = dop(x[idx])
