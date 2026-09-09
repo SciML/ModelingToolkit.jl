@@ -27,15 +27,26 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Rewrite derivatives of array-valued expressions, such as `D(u[2:4])`, into arrays of the
-corresponding scalar derivatives, in place. Implicit-DAE codegen binds scalar `D(uᵢ)` terms
-to elements of the `du` argument, and a derivative of a slice matches none of them.
+Rewrite derivatives of array-valued expressions, such as `D(u[2:4])`, in place so that they
+read from the `du` argument of the generated implicit-DAE function. Implicit-DAE codegen
+binds scalar `D(uᵢ)` terms to elements of the `du` argument, and a derivative of a slice
+matches none of them.
+
+`ddvs` are the scalar derivatives making up the `du` argument, in order, and `du_argname`
+is the name of that argument in the generated function. When the scalar derivatives of the
+slice occupy consecutive positions of `du` (as they do for a system compiled with
+`mtkcompile(sys; scalarize_arrays = false)`), the derivative becomes a `view` of `du`, so
+the generated code does not grow with the length of the slice. Otherwise it becomes an
+array of the scalar derivatives.
 
 Takes every residual at once, and works in the system's `ir`, so the search and
 substitution caches are shared and the rewritten residuals are already populated for
 codegen.
 """
-function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+function expand_array_derivatives!(
+        rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT}, ddvs::Vector{SymbolicT},
+        du_argname::Symbol
+    )
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for rhs in rhss
@@ -43,17 +54,46 @@ function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{Vart
     end
     isempty(terms) && return rhss
 
+    ddv_positions = Dict{SymbolicT, Int}()
+    for (i, ddv) in enumerate(ddvs)
+        ddv_positions[ddv] = i
+    end
+    du_buffer = argument_buffer_symbolic(du_argname)
+
     subs = Dict{SymbolicT, SymbolicT}()
     for term in terms
         op = operation(term)
         arg = only(arguments(term))
         sh = SU.shape(arg)::SU.ShapeVecT
+        stable_idxs = SU.stable_eachindex(arg)
+        positions = Int[]
+        sizehint!(positions, length(stable_idxs))
+        for idx in stable_idxs
+            pos = get(ddv_positions, op(arg[idx]), nothing)
+            pos === nothing && break
+            push!(positions, pos)
+        end
+        if length(positions) == length(stable_idxs) && !isempty(positions) &&
+                positions == first(positions):last(positions) && all(isone ∘ first, sh)
+            vw = buffer_view_symbolic(du_buffer, first(positions):last(positions))
+            subs[term] = if length(sh) == 1
+                vw
+            else
+                # Preserve the shape: a derivative of a 2D slice must read as a 2D array,
+                # or it will not broadcast against the surrounding slices.
+                Symbolics.STerm(
+                    reshape, Symbolics.SArgsT((vw, SU.Const{VartypeT}(size(arg))));
+                    type = symtype(arg), shape = sh
+                )
+            end
+            continue
+        end
         # Preserve the shape: a derivative of a 2D slice must expand to a 2D array of
         # scalar derivatives, or it will not broadcast against the surrounding slices.
         arrargs = Symbolics.SArgsT()
         sizehint!(arrargs, prod(length, sh; init = 1) + 1)
         push!(arrargs, SU.Const{VartypeT}(size(arg)))
-        for idx in SU.stable_eachindex(arg)
+        for idx in stable_idxs
             push!(arrargs, op(arg[idx]))
         end
         subs[term] = Symbolics.STerm(
@@ -64,6 +104,20 @@ function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{Vart
     subber = SU.IRSubstituter{false}(ir, subs)
     map!(subber, rhss, rhss)
     return rhss
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `rhs - lhs` of `eq`, as `rhs` when `lhs` is zero, and broadcast when the
+equation is array-valued (`-` is not defined between symbolic arrays).
+"""
+function residual_expression(eq::Equation)
+    _iszero(eq.lhs) && return eq.rhs
+    if SU.is_array_shape(SU.shape(eq.lhs))
+        return unwrap(wrap(eq.rhs) .- wrap(eq.lhs))
+    end
+    return eq.rhs - eq.lhs
 end
 
 """
@@ -169,10 +223,13 @@ function generate_rhs(
         else
             D = Differential(t)
             ddvs = map(D, dvs)
-            rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
-            # Rewrite array derivatives to the scalar ones bound to the `du` argument.
-            # Assembly into a single array happens below, after assertions.
-            expand_array_derivatives!(rhss, get_irstructure(sys))
+            rhss = SymbolicT[residual_expression(eq) for eq in eqs]
+            # Rewrite array derivatives to read from the `du` argument, which is the first
+            # argument of the generated function. Assembly into a single array happens
+            # below, after assertions.
+            expand_array_derivatives!(
+                rhss, get_irstructure(sys), ddvs, generated_argument_name(1)
+            )
             assemble_residuals = true
         end
     else
@@ -1664,15 +1721,17 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
     union!(allsyms, independent_variables(sys))
     dervars = Set{SymbolicT}()
+    # The `toterm` of a derivative of an array slice is a slice; its elements are the
+    # derivative variables.
     if isscheduled(sys)
         sched::Schedule = get_schedule(sys)
         for (k, _) in sched.dummy_sub
-            push!(dervars, default_toterm(k))
+            push_scalarized!(dervars, default_toterm(k))
         end
     else
         for eq in equations(sys)
             isdiffeq(eq) || continue
-            push!(dervars, default_toterm(eq.lhs))
+            push_scalarized!(dervars, default_toterm(eq.lhs))
         end
     end
     pred = CheckInvalidAndTrackNamespaced(
@@ -1770,7 +1829,7 @@ end
 function Base.showerror(io::IO, err::NotAffineError)
     return print(
         io, """
-        System is not linear. Equation $(0 ~ err.rhs) is not linear in unknown \
+        System is not linear. Equation $(Equation(0, err.rhs)) is not linear in unknown \
         $(err.var).
         """
     )
@@ -1796,6 +1855,15 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         Base.throw(cached_ab)
     end
     fulleqs = full_equations(sys)
+    # Array equations (from `mtkcompile(sys; scalarize_arrays = false)`) stand for several
+    # rows each, which the expansion below does not handle.
+    for eq in fulleqs
+        SU.is_array_shape(SU.shape(eq.lhs)) || continue
+        err = NotAffineError(eq.rhs, eq.lhs)
+        store_to_mutable_cache!(sys, CachedLinearAb, err)
+        throw || return nothing
+        Base.throw(err)
+    end
     rhss = SymbolicT[]
     sizehint!(rhss, length(fulleqs))
     for eq in fulleqs

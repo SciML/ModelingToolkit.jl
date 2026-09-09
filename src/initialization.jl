@@ -5,9 +5,12 @@ function MTKBase.get_initialization_problem_type(
         warn_initialize_determined = true,
         use_scc = true, kwargs...
     )
-    neqs = length(equations(isys))
+    neqs = MTKBase.count_equation_rows(equations(isys))
     nunknown = length(unknowns(isys))
-    ts = get_tearing_state(isys)::TearingState
+    # `nothing` for systems compiled with `scalarize_arrays = false`, which skip tearing
+    # and so have no SCC decomposition to build an `SCCNonlinearProblem` from.
+    ts = get_tearing_state(isys)::Union{TearingState, Nothing}
+    use_scc = use_scc && ts !== nothing
 
     if use_scc
         scc_message = """

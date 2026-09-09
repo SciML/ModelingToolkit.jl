@@ -108,6 +108,15 @@ once — calling `mtkcompile` on an already-compiled system throws
   selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
   derived from the compiled system are compiled the same way. Use this for targets that
   cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+- `scalarize_arrays = true`: Whether array equations are scalarized into one equation per
+  element before simplification. Pass `false` to keep array differential equations such as
+  `D(u[2:(n - 1)]) ~ f(u[1:(n - 2)], u[2:(n - 1)], u[3:n])` intact, so that the number of
+  equations and the size of the generated code are independent of the array length. This
+  path does not perform tearing or index reduction: differential equations must be in the
+  explicit form `D(x) ~ rhs` (with `x` an unknown, an array of unknowns, or a slice of one)
+  or the residual form `D(x) .- rhs ~ 0`, algebraic equations (array ones are scalarized)
+  are moved to the observed equations when they trivially define an unknown and are
+  otherwise kept as algebraic equations. See [`arrays_scalarized`](@ref).
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
@@ -136,11 +145,21 @@ function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, homotopy = true, kwargs...
+        split = true, homotopy = true, scalarize_arrays::Bool = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
     if !homotopy
         sys = strip_homotopy(sys)
+    end
+    if !scalarize_arrays && (
+            !isempty(brownians(sys)) || !isempty(jumps(sys)) || !isempty(poissonians(sys)) ||
+                has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
+        )
+        throw(
+            ArgumentError(
+                "`scalarize_arrays = false` is not supported for systems with noise, jumps or poissonians."
+            )
+        )
     end
 
     # For backward compatibility with old ModelingToolkit which does not
@@ -153,7 +172,7 @@ function mtkcompile(
     disturbance_inputs = canonicalize_io(unwrap_vars(disturbance_inputs), "disturbance input")
     newsys = _mtkcompile(
         sys;
-        inputs, outputs, disturbance_inputs, additional_passes,
+        inputs, outputs, disturbance_inputs, additional_passes, scalarize_arrays,
         kwargs...
     )
     for pass in additional_passes
@@ -164,6 +183,11 @@ function mtkcompile(
     # affect systems) are compiled with the same `homotopy` setting.
     if !homotopy
         newsys = setmetadata(newsys, HomotopyCtx, false)
+    end
+    # Likewise for `scalarize_arrays`, so the initialization system keeps array equations
+    # (and its size independent of the array length) when the compiled system does.
+    if !scalarize_arrays
+        newsys = setmetadata(newsys, ScalarizeArraysCtx, false)
     end
     # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
     newsys = complete(newsys; split, allow_parameter_eqs = true)
@@ -184,7 +208,69 @@ function scalarized_vars(vars)
     return scal
 end
 
-function _mtkcompile(sys::AbstractSystem; kwargs...)
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `x` is a first-order `Differential` of an array variable or a slice of one.
+"""
+function is_array_differential(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Term(; f, args) && if f isa Differential end => begin
+            var = args[1]
+            base, _ = split_indexed_var(var)
+            # `default_is_atomic` also accepts operator terms such as `D(x)`
+            isone(f.order) && SU.is_array_shape(SU.shape(var)) &&
+                SU.default_is_atomic(base) && !(iscall(base) && operation(base) isa Operator)
+        end
+        _ => false
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Rewrite an array equation in residual form, such as `D(u[2:4]) .- f ~ 0` as a
+finite-difference discretization emits it, into the explicit form `D(u[2:4]) ~ f` that
+[`__mtkcompile_no_tearing`](@ref) requires of differential equations. The derivative must be
+a top-level term of a broadcast `+` or `-` on one side of the equation, and must not appear
+anywhere else in it. Any other equation is returned as-is.
+"""
+function explicit_array_differential_equation(eq::Equation)
+    SU.is_array_shape(SU.shape(eq.lhs)) || return eq
+    (is_array_differential(eq.lhs) || is_array_differential(eq.rhs)) && return eq
+    for (side, other) in ((eq.lhs, eq.rhs), (eq.rhs, eq.lhs))
+        # a broadcast is an `ArrayOp`, so go through the generic call interface
+        iscall(side) && operation(side) === broadcast || continue
+        args = arguments(side)
+        length(args) == 3 && SU.isconst(args[1]) || continue
+        op = unwrap_const(args[1])
+        op in ((+), (-)) || continue
+        a, b = args[2], args[3]
+        der, rest, swapped = if is_array_differential(a)
+            (a, b, false)
+        elseif is_array_differential(b)
+            (b, a, true)
+        else
+            continue
+        end
+        (hasderiv(rest) || hasderiv(other)) && continue
+        other_iszero = SU.isconst(other) && all(_iszero, unwrap_const(other))
+        rhs = if op === (+)
+            # der + rest ~ other  =>  der ~ other - rest
+            other_iszero ? unwrap(-1 .* wrap(rest)) : unwrap(wrap(other) .- wrap(rest))
+        elseif !swapped
+            # der - rest ~ other  =>  der ~ other + rest
+            other_iszero ? rest : unwrap(wrap(other) .+ wrap(rest))
+        else
+            # rest - der ~ other  =>  der ~ rest - other
+            other_iszero ? rest : unwrap(wrap(rest) .- wrap(other))
+        end
+        return der ~ rhs
+    end
+    return eq
+end
+
+function _mtkcompile(sys::AbstractSystem; scalarize_arrays::Bool = true, kwargs...)
     # Extract poissonians to jumps first (before checking for existing jumps)
     if !isempty(poissonians(sys))
         sys = extract_poissonians_to_jumps(sys; kwargs...)
@@ -211,15 +297,39 @@ function _mtkcompile(sys::AbstractSystem; kwargs...)
     if !isempty(brownians(sys))
         return simplify_sde_system(sys; kwargs...)
     end
-    return __mtkcompile(sys; kwargs...)
+    return __mtkcompile(sys; scalarize_arrays, kwargs...)
 end
 
-function __mtkcompile(
+"""
+    $(TYPEDSIGNATURES)
+
+The compilation entry point that [`mtkcompile`](@ref) dispatches to for systems of
+equations. ModelingToolkitBase.jl only provides [`__mtkcompile_no_tearing`](@ref);
+ModelingToolkit.jl overrides this method with the full structural simplification.
+"""
+function __mtkcompile(sys::AbstractSystem; kwargs...)
+    return __mtkcompile_no_tearing(sys; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Compile `sys` without tearing or index reduction. Differential equations must be in the
+explicit form `D(x) ~ rhs`; higher-order derivatives are reduced to first order; algebraic
+equations that trivially define an unknown in terms of differential variables and other
+observed variables become observed equations, and the remaining algebraic equations are
+kept. With `scalarize_arrays = false`, array differential equations are preserved as-is,
+where the differentiated variable may be an array of unknowns or a slice of one. Array
+differential equations in residual form (`D(x) .- f ~ 0`) are rewritten to the explicit
+form first, see [`explicit_array_differential_equation`](@ref). Array algebraic equations
+are scalarized, so that the elements they define can be eliminated as observed.
+"""
+function __mtkcompile_no_tearing(
         sys::AbstractSystem;
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        fully_determined = true,
+        fully_determined = true, scalarize_arrays::Bool = true,
         kwargs...
     )
     sys = expand_connections(sys)
@@ -227,7 +337,23 @@ function __mtkcompile(
     sys = discover_globalscoped(sys)
     flat_dvs = scalarized_vars(unknowns(sys))
     original_vars = Set{SymbolicT}(flat_dvs)
-    eqs = flatten_equations(equations(sys))
+    eqs = if scalarize_arrays
+        flatten_equations(equations(sys))
+    else
+        # Only array differential equations are preserved. Array algebraic equations are
+        # scalarized so that the elements they trivially define (boundary conditions of a
+        # discretized PDE, typically) can become observed like their scalar counterparts.
+        _eqs = Equation[]
+        for eq in equations(sys)
+            eq = explicit_array_differential_equation(eq)
+            if SU.is_array_shape(SU.shape(eq.lhs)) && !is_array_differential(eq.lhs)
+                append!(_eqs, flatten_equations([eq]))
+            else
+                push!(_eqs, eq)
+            end
+        end
+        _eqs
+    end
     all_dvs = Set{SymbolicT}()
     for eq in eqs
         SU.search_variables!(all_dvs, eq; is_atomic = OperatorIsAtomic{Union{Initial, Pre}}())
@@ -269,20 +395,22 @@ function __mtkcompile(
     if fully_determined === nothing
         fully_determined = false
     end
-    if fully_determined && length(eqs) > length(all_dvs)
+    # An array equation stands for one row per element.
+    neqs = count_equation_rows(eqs)
+    if fully_determined && neqs > length(all_dvs)
         throw(
             ExtraEquationsSystemException(
                 """
-                The system is unbalanced. There are $(length(eqs)) equations and \
+                The system is unbalanced. There are $(neqs) equations and \
                 $(length(all_dvs)) unknowns.
                 """
             )
         )
-    elseif fully_determined && length(eqs) < length(all_dvs)
+    elseif fully_determined && neqs < length(all_dvs)
         throw(
             ExtraVariablesSystemException(
                 """
-                The system is unbalanced. There are $(length(eqs)) equations and \
+                The system is unbalanced. There are $(neqs) equations and \
                 $(length(all_dvs)) unknowns. This may also be a high-index DAE, which \
                 ModelingToolkitBase.jl cannot handle. Consider using ModelingToolkit.jl to \
                 simplify this system.
@@ -430,7 +558,10 @@ function __mtkcompile(
     # Store fixpoint subbed mapping
     for eq in diffeqs
         total_sub[eq.lhs] = eq.rhs
-        push!(
+        # The differentiated variable of an array equation is an array (or a slice of one);
+        # its scalar elements are the unknowns, in order, so that the rows of the equation
+        # line up with a contiguous block of the unknowns.
+        push_scalarized!(
             diffvars, Moshi.Match.@match eq.lhs begin
                 BSImpl.Term(; args) => args[1]
             end
@@ -452,8 +583,14 @@ function __mtkcompile(
     new_ps = [get_ps(sys); collect(inputs)]
 
     sys = remove_unhack_system_transformation(sys)
-    tf = add_array_observed!(obseqs, new_dvs)
-    sys = with_reversible_transformation(sys, tf)
+    if scalarize_arrays
+        # With array equations preserved, a partially observed array is reconstructed
+        # during code generation from the block of unknowns and the observed elements
+        # instead of through an observed equation listing every element, which would grow
+        # the generated code with the array length.
+        tf = add_array_observed!(obseqs, new_dvs)
+        sys = with_reversible_transformation(sys, tf)
+    end
     obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
 
     for eq in new_eqs
@@ -518,12 +655,14 @@ function get_trivial_observed_equations!(
         push!(current_observed, eq.lhs)
     end
     diffvars = Set{SymbolicT}()
+    scalbuf = SymbolicT[]
     for eq in diffeqs
-        push!(
-            diffvars, Moshi.Match.@match eq.lhs begin
-                BSImpl.Term(; f, args) && if f isa Union{Shift, Differential} end => args[1]
-            end
-        )
+        var = Moshi.Match.@match eq.lhs begin
+            BSImpl.Term(; f, args) && if f isa Union{Shift, Differential} end => args[1]
+        end
+        # `var` is an array (or a slice of one) for a preserved array equation
+        empty!(scalbuf)
+        union!(diffvars, push_scalarized!(scalbuf, var))
     end
     # Incidence information
     vars_in_each_algeq = Set{SymbolicT}[]
@@ -531,6 +670,13 @@ function get_trivial_observed_equations!(
     for eq in algeqs
         buffer = Set{SymbolicT}()
         SU.search_variables!(buffer, eq.rhs)
+        # `all_dvs` holds scalar elements, so expand any whole array (or slice) found.
+        for v in collect(buffer)
+            SU.is_array_shape(SU.shape(v)) || continue
+            delete!(buffer, v)
+            empty!(scalbuf)
+            union!(buffer, push_scalarized!(scalbuf, v))
+        end
         # We only care for variables
         intersect!(buffer, all_dvs)
         # If `eq.lhs` is only dependent on differential or other observed variables,

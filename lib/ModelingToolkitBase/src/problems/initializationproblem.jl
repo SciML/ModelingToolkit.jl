@@ -202,7 +202,8 @@ function mtkcompile_initialization_system(
     try
         return mtkcompile(
             isys; fully_determined, split = is_split(sys),
-            homotopy = homotopy_enabled(sys), kwargs...
+            homotopy = homotopy_enabled(sys), scalarize_arrays = arrays_scalarized(sys),
+            kwargs...
         )
     catch err
         newerr = with_initialization_context(err, isys, sys; kwargs...)
@@ -257,7 +258,8 @@ function initialization_system_size(isys::AbstractSystem, sys::AbstractSystem; k
     return try
         compiled = mtkcompile(
             isys; fully_determined = false, split = is_split(sys),
-            homotopy = homotopy_enabled(sys), kwargs...
+            homotopy = homotopy_enabled(sys), scalarize_arrays = arrays_scalarized(sys),
+            kwargs...
         )
         (length(equations(compiled)), length(unknowns(compiled)))
     catch
@@ -471,7 +473,7 @@ function get_initialization_problem_type(
         sys::AbstractSystem, isys::AbstractSystem;
         warn_initialize_determined = true, kwargs...
     )
-    neqs = length(equations(isys))
+    neqs = count_equation_rows(equations(isys))
     nunknown = length(unknowns(isys))
 
     if warn_initialize_determined && neqs > nunknown

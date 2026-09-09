@@ -92,8 +92,15 @@ function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, 
         arr, isarr = split_indexed_var(k)
         if isarr
             buffer = get!(() -> fill(default, size(arr)), indexed_array_vals, arr)
-            si = get_stable_index(k)
-            buffer[si] = v
+            if SU.is_array_shape(SU.shape(k))
+                # `k` is a slice of `arr`, and `v` has the same shape.
+                vscalar = !SU.is_array_shape(SU.shape(v))
+                for i in SU.stable_eachindex(k)
+                    buffer[get_stable_index(k[i])] = vscalar ? v : v[i]
+                end
+            else
+                buffer[get_stable_index(k)] = v
+            end
         else
             dd[k] = v
         end
@@ -113,10 +120,30 @@ end
 
 Modify an atomic array mapping `dd` to map `k` to `v`. If `k` is an indexed array symbolic,
 update the array to have value `v` at the corresponding index. If the array is not a key,
-create the key and set all other entries to `default`.
+create the key and set all other entries to `default`. If `k` is an array (or a slice of
+one) and `v` is a scalar, `v` is written to every element of `k`.
 """
 function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::SymbolicT, v::SymbolicT, default::SymbolicT)
     arr, isarr = split_indexed_var(k)
+    if SU.is_array_shape(SU.shape(k))
+        vscalar = !SU.is_array_shape(SU.shape(v))
+        if isarr
+            # A slice: write its elements one at a time.
+            for i in SU.stable_eachindex(k)
+                write_possibly_indexed_array!(dd, k[i], vscalar ? v : v[i], default)
+            end
+        elseif vscalar
+            buffer = fill(v, size(k))
+            dd[k] = if SU.isconst(v)
+                BSImpl.Const{VartypeT}(unwrap_const.(buffer))
+            else
+                BSImpl.Const{VartypeT}(buffer)
+            end
+        else
+            dd[k] = v
+        end
+        return dd
+    end
     if isarr
         buffer::Array{SymbolicT} = if haskey(dd, arr)
             collect(dd[arr])

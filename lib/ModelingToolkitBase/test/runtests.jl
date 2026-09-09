@@ -50,6 +50,8 @@ end
             @safetestset "Input Output Test" include("input_output_handling.jl")
             @safetestset "System Building Tests" include("system_building.jl")
             @safetestset "Simple `mtkcompile`" include("simple_mtkcompile.jl")
+            @safetestset "Array equations in `DAEProblem`" include("array_equation_dae.jl")
+            @safetestset "Preserved array equations" include("array_equations_preserved.jl")
             @safetestset "`@mtkcomplete`" include("mtkcomplete.jl")
             @safetestset "ODESystem Test" include("odesystem.jl")
             @safetestset "System `tspan`" include("system_tspan.jl")

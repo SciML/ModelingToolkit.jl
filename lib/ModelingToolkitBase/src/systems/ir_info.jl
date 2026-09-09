@@ -78,6 +78,13 @@ function get_ir_info(sys::System)
             newsym = subber(v)
             push!(dervals_idxs, ir[newsym])
             subrules[ttk] = newsym
+            # For an array equation (`scalarize_arrays = false`), `ttk` is a slice of the
+            # derivative variables; each of them is the matching element of the RHS.
+            if SU.is_array_shape(SU.shape(ttk))
+                for i in SU.stable_eachindex(ttk)
+                    subrules[ttk[i]] = subber(v[i])
+                end
+            end
         end
     elseif is_time_dependent(sys)
         for (i, eq) in enumerate(eqs)

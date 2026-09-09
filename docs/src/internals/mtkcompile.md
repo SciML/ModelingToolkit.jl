@@ -19,7 +19,21 @@ ones with poissonians, jumps, brownians, or noise, etc. This then calls the spec
 `__mtkcompile`. ModelingToolkitBase defines a very barebones version of this function, which
 aims to implement the essentials. It handles `inputs`, `outputs` and `disturbance_inputs`. It
 supports explicit differential equations of the form `D(x) ~ ...` and performs a very basic
-version of tearing to eliminate observed equations.
+version of tearing to eliminate observed equations. In ModelingToolkitBase.jl this function is
+called `__mtkcompile_no_tearing`, and `__mtkcompile` simply calls it.
+
+The basic version is also what `mtkcompile(sys; scalarize_arrays = false)` uses, regardless of
+whether ModelingToolkit.jl is loaded. Structural simplification works on scalar equations, so
+keeping an array differential equation such as `D(u[2:(n - 1)]) ~ f(u[1:(n - 2)], u[2:(n - 1)], u[3:n])`
+intact means skipping it. `__mtkcompile_no_tearing` then keeps array differential equations
+(rewriting the residual form `D(x) .- f ~ 0` to `D(x) ~ f` first), orders the unknowns so that
+the elements of each differentiated slice form a contiguous block matching the rows of its
+equation, and scalarizes array algebraic equations so that trivially defined elements (boundary
+conditions of a discretized PDE, typically) become observed. The compiled system records this
+under the `ScalarizeArraysCtx` metadata key (see `arrays_scalarized`), which code generation and
+the initialization system consult: a partially observed array is then reconstructed from the
+block of unknowns and the observed elements instead of an observed equation listing every
+element, so the generated code does not grow with the array length.
 
 ## The complex version
 

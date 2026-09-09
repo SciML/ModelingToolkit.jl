@@ -454,17 +454,256 @@ function _compute_array_variable_buffer_idxs(args::Vector, ignore_vars, ignore_a
     return var_to_arridxs
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Symbolic array argument of the generated function named `name`. Code generation emits a
+bare `Sym` as its name, so this refers to the (destructured) argument itself. Used to build
+`view`s into the argument buffers symbolically.
+"""
+function argument_buffer_symbolic(name::Symbol)
+    return SSym(name; type = Vector{Real}, shape = SU.Unknown(1))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Symbolic `view(buffer, range)` of the argument buffer `buffer`, of length `length(range)`.
+"""
+function buffer_view_symbolic(buffer::SymbolicT, range::UnitRange{Int})
+    return Symbolics.STerm(
+        view, Symbolics.SArgsT((buffer, SU.Const{VartypeT}(range)));
+        type = Vector{Real}, shape = SU.ShapeVecT((1:length(range),))
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Assignments reconstructing the array `arrvar` when only some of its elements are present in
+the argument buffers, so that the generated code for a system compiled with
+`mtkcompile(sys; scalarize_arrays = false)` can read whole arrays and slices of them.
+`idxs[i]` is the `(buffer index, index in buffer)` of the `i`th element of `arrvar` (in
+`SU.stable_eachindex` order) or `(0, 0)` if it is not in any buffer, in which case
+`element_fallback(arrvar, i)` returns the expression for the element (e.g. from an observed
+equation) or `nothing` if it has none.
+
+Elements present in the same buffer at consecutive positions are copied from a single
+`view`, so for an array whose interior is a block of unknowns and whose boundary is
+observed, the size of the reconstruction is independent of the array length. For
+multi-dimensional arrays this applies when the present elements form a rectangular block
+laid out in column-major order in the buffer; otherwise they are read one at a time. The
+array is allocated with the `eltype` promoted from the buffers and the fallback elements, so
+that differentiating through the generated function with dual numbers works.
+
+Returns `nothing` if the array cannot be reconstructed: some element is neither in a buffer
+nor has a fallback, or the array is not indexed from one.
+"""
+function partial_array_reconstruction(
+        arrvar::SymbolicT, idxs::Vector{Tuple{Int, Int}}, argument_name, buffer_offset::Int,
+        element_fallback
+    )
+    sh = SU.shape(arrvar)::SU.ShapeVecT
+    all(isone ∘ first, sh) || return nothing
+    N = length(sh)
+    sz = ntuple(i -> length(sh[i]), N)
+    stable_idxs = SU.stable_eachindex(arrvar)
+    carts = CartesianIndices(sz)
+
+    # Fallback elements are bound to temporaries by preceding assignments, since the
+    # reconstruction itself is a plain `Expr`.
+    assignments = Assignment[]
+    fallback_names = Dict{Int, Symbol}()
+    for (i, (buf, _)) in enumerate(idxs)
+        iszero(buf) || continue
+        val = element_fallback(arrvar, stable_idxs[i])
+        val === nothing && return nothing
+        name = gensym(:arrelem)
+        push!(assignments, Assignment(SSym(name; type = Real), unwrap(val)))
+        fallback_names[i] = name
+    end
+
+    buffer_name(buf) = argument_name(buf + buffer_offset)
+    used_buffers = Symbol[]
+    element_exprs = Any[]
+    # `buf[i...] = value` writes, deferred so that the buffer allocation comes first.
+    writes = Expr[]
+    result = gensym(:arr)
+    function write_single!(i)
+        name = get(fallback_names, i, nothing)
+        value = if name === nothing
+            buf, pos = idxs[i]
+            push!(used_buffers, buffer_name(buf))
+            Expr(:ref, buffer_name(buf), pos)
+        else
+            push!(element_exprs, name)
+            name
+        end
+        push!(writes, Expr(:(=), Expr(:ref, result, Tuple(carts[i])...), value))
+        return nothing
+    end
+    function write_block!(region, buf, pos, len)
+        name = buffer_name(buf)
+        push!(used_buffers, name)
+        src = Expr(:call, view, name, pos:(pos + len - 1))
+        if N > 1
+            src = Expr(:call, reshape, src, map(length, region)...)
+        end
+        dest = Expr(:call, view, result, region...)
+        push!(writes, Expr(:call, copyto!, dest, src))
+        return nothing
+    end
+
+    if N == 1
+        # Maximal runs of elements consecutive in the same buffer become views.
+        i = 1
+        while i <= length(idxs)
+            buf, pos = idxs[i]
+            j = i
+            while !iszero(buf) && j < length(idxs) && idxs[j + 1] == (buf, pos + (j + 1 - i))
+                j += 1
+            end
+            if j > i
+                write_block!((i:j,), buf, pos, j - i + 1)
+            else
+                write_single!(i)
+            end
+            i = j + 1
+        end
+    else
+        present = findall(!iszero ∘ first, idxs)
+        blockset = Set{Int}()
+        if !isempty(present)
+            lo = Tuple(carts[first(present)])
+            hi = lo
+            for i in present
+                c = Tuple(carts[i])
+                lo = min.(lo, c)
+                hi = max.(hi, c)
+            end
+            region = ntuple(d -> lo[d]:hi[d], N)
+            lin = LinearIndices(sz)
+            block = [lin[c] for c in CartesianIndices(region)]
+            buf, pos = idxs[first(block)]
+            contiguous = length(block) == length(present) && !iszero(buf) && all(
+                enumerate(block)
+            ) do (k, i)
+                idxs[i] == (buf, pos + k - 1)
+            end
+            if contiguous && length(block) > 1
+                write_block!(region, buf, pos, length(block))
+                union!(blockset, block)
+            end
+        end
+        for i in eachindex(idxs)
+            i in blockset && continue
+            write_single!(i)
+        end
+    end
+
+    unique!(used_buffers)
+    eltype_expr = Expr(:call, promote_type)
+    for name in used_buffers
+        push!(eltype_expr.args, Expr(:call, eltype, name))
+    end
+    for name in unique!(element_exprs)
+        push!(eltype_expr.args, Expr(:call, typeof, name))
+    end
+    alloc = if isempty(used_buffers)
+        Expr(:call, Expr(:curly, Array, eltype_expr, N), :undef, sz...)
+    else
+        Expr(:call, similar, first(used_buffers), eltype_expr, sz...)
+    end
+    body = Expr(:block, Expr(:(=), result, alloc))
+    append!(body.args, writes)
+    push!(body.args, result)
+    push!(assignments, Assignment(arrvar, body))
+    return assignments
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Assignments binding the slices `slices` of the array variable `arrvar` to `view`s of the
+argument buffers, for when `arrvar` itself cannot be reconstructed because elements outside
+the slices are not variables of the system (e.g. the interior of a discretized field whose
+boundary is observed). `idxs` is as in [`partial_array_reconstruction`](@ref). A slice
+whose elements are consecutive in one buffer is a `view` (reshaped for a multi-dimensional
+slice); any other slice is read one element at a time. Slices with an element in no buffer
+are skipped.
+"""
+function array_slice_assignments(
+        arrvar::SymbolicT, slices, idxs::Vector{Tuple{Int, Int}}, argument_name,
+        buffer_offset::Int
+    )
+    stable_idxs = SU.stable_eachindex(arrvar)
+    positions = Dict{SU.StableIndex{Int}, Tuple{Int, Int}}()
+    for (k, si) in enumerate(stable_idxs)
+        positions[si] = idxs[k]
+    end
+    assignments = Assignment[]
+    for slice in slices
+        elems = Tuple{Int, Int}[]
+        for i in SU.stable_eachindex(slice)
+            pos = get(positions, get_stable_index(slice[i]), (0, 0))
+            iszero(first(pos)) && break
+            push!(elems, pos)
+        end
+        length(elems) == length(SU.stable_eachindex(slice)) || continue
+        isempty(elems) && continue
+        sh = SU.shape(slice)::SU.ShapeVecT
+        sz = Expr(:tuple, map(length, sh)...)
+        buf, pos = first(elems)
+        if all(k -> elems[k] == (buf, pos + k - 1), eachindex(elems))
+            expr = Expr(
+                :call, view, argument_name(buf + buffer_offset), pos:(pos + length(elems) - 1)
+            )
+        else
+            expr = length(elems) <= 16 ? Expr(:call, SVector) : Expr(:vect)
+            for (b, p) in elems
+                push!(expr.args, Expr(:ref, argument_name(b + buffer_offset), p))
+            end
+        end
+        if length(sh) > 1
+            expr = Expr(:call, reshape, expr, sz)
+        end
+        push!(assignments, Assignment(slice, expr))
+    end
+    return assignments
+end
+
 function array_variable_buffer_idxs_to_assignments(
         var_to_arridxs::Dict{SymbolicT, Vector{Tuple{Int, Int}}};
         argument_name = generated_argument_name, buffer_offset = 0,
-        filter_vars = nothing,
+        filter_vars = nothing, element_fallback = nothing, slices = nothing
     )
     assignments = Assignment[]
     for (arrvar, idxs) in var_to_arridxs
         filter_vars === nothing || arrvar in filter_vars || continue
         # all elements of the array need to be present in `args` to form the
         # reconstructing assignment
-        any(iszero ∘ first, idxs) && continue
+        if any(iszero ∘ first, idxs)
+            partial = if element_fallback === nothing
+                nothing
+            else
+                partial_array_reconstruction(
+                    arrvar, idxs, argument_name, buffer_offset, element_fallback
+                )
+            end
+            if partial === nothing
+                slices === nothing && continue
+                arrslices = get(slices, arrvar, nothing)
+                arrslices === nothing && continue
+                append!(
+                    assignments, array_slice_assignments(
+                        arrvar, arrslices, idxs, argument_name, buffer_offset
+                    )
+                )
+                continue
+            end
+            append!(assignments, partial)
+            continue
+        end
 
         var_size_expr = Expr(:tuple)
         sharrvar = SU.shape(arrvar)
@@ -526,13 +765,48 @@ reconstruct array variables if they are present scalarized in `args`.
 - `argument_name` a function of the form `(::Int) -> Symbol` which takes the index of
   an argument to the generated function and returns the name of the argument in the
   generated function.
+- `element_fallback`: a function `(arrvar, idx) -> Union{Nothing, SymbolicT}` giving the
+  expression for element `idx` of the array variable `arrvar` when it is not present in
+  `args`, or `nothing`. If provided, arrays that are only partially present in `args` are
+  reconstructed as well, see [`partial_array_reconstruction`](@ref).
+- `slices`: a mapping from array variables to the slices of them used in the generated
+  expression. Slices of arrays that cannot be reconstructed are bound directly, see
+  [`array_slice_assignments`](@ref).
 """
 function array_variable_assignments(
         @nospecialize(args...); ignore_vars = Set{SymbolicT}(), filter_vars = nothing,
-        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing
+        argument_name = generated_argument_name, buffer_offset = 0, ignore_arg_idxs = nothing,
+        element_fallback = nothing, slices = nothing
     )
     var_to_arridxs = compute_array_variable_buffer_idxs(args; ignore_vars, ignore_arg_idxs)
-    return array_variable_buffer_idxs_to_assignments(var_to_arridxs; argument_name, buffer_offset, filter_vars)
+    assignments = array_variable_buffer_idxs_to_assignments(
+        var_to_arridxs; argument_name, buffer_offset, filter_vars, element_fallback, slices
+    )
+    # Arrays with no element in `args` at all, but whose elements are all observed.
+    if element_fallback !== nothing && filter_vars !== nothing
+        for arrvar in filter_vars
+            (haskey(var_to_arridxs, arrvar) || arrvar in ignore_vars) && continue
+            SU.shape(arrvar) isa SU.ShapeVecT || continue
+            idxs = fill((0, 0), length(SU.stable_eachindex(arrvar)))
+            partial = partial_array_reconstruction(
+                arrvar, idxs, argument_name, buffer_offset, element_fallback
+            )
+            partial === nothing && continue
+            append!(assignments, partial)
+        end
+    end
+    return assignments
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `ex` is a slice of an array variable, such as `u[2:4]` or `D(u[2:4])`.
+"""
+function find_array_slices_is_atomic(ex::SymbolicT)
+    SU.is_array_shape(SU.shape(ex)) || return false
+    arr, isarr = split_indexed_var(ex)
+    return isarr && SU.default_is_atomic(arr)
 end
 
 """
@@ -891,9 +1165,37 @@ Base.@nospecializeinfer function build_function_wrapper(
     search_buffer = SU.IRStructureSearchBuffer(ir, required_arrvars)
     SU.search_variables!(search_buffer, expr; is_atomic = find_arrvars_is_atomic, recurse = !SU.default_is_atomic)
 
+    # An array whose elements are partly unknowns and partly observed (from a system compiled
+    # with `scalarize_arrays = false`) is reconstructed from the argument buffers and the
+    # observed expressions.
+    element_fallback = nothing
+    # Slices of such arrays used in the expression, in case the array cannot be
+    # reconstructed (elements outside the slices being no variables of the system).
+    slices = nothing
+    if !arrays_scalarized(sys)
+        obs_rules = ir_info.obs_subber.rules
+        element_fallback = let obs_rules = obs_rules
+            (arrvar, idx) -> get(obs_rules, arrvar[idx], nothing)
+        end
+        slices = Dict{SymbolicT, Vector{SymbolicT}}()
+        found_slices = Set{SymbolicT}()
+        SU.search_variables!(
+            SU.IRStructureSearchBuffer(ir, found_slices), expr;
+            is_atomic = find_array_slices_is_atomic, recurse = !SU.default_is_atomic
+        )
+        for slice in found_slices
+            push!(get!(() -> SymbolicT[], slices, split_indexed_var(slice)[1]), slice)
+        end
+    end
+
     # assignments for reconstructing scalarized array symbolics
     if non_standard_param_layout
-        append!(assignments, array_variable_assignments(args...; filter_vars = required_arrvars, argument_name = u_argument_name))
+        append!(
+            assignments, array_variable_assignments(
+                args...; filter_vars = required_arrvars, argument_name = u_argument_name,
+                element_fallback, slices
+            )
+        )
     else
         # `n_param_buffers` marks the boundary between the `reorder_parameters` buffers and
         # any `cachesyms` the caller appended to the parameter slice (cachesyms are always a
@@ -928,7 +1230,11 @@ Base.@nospecializeinfer function build_function_wrapper(
                 param_var_to_arridxs; buffer_offset = p_start - 1, filter_vars = required_arrvars
             )
         )
-        other_assigns = array_variable_assignments(args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars, argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end)
+        other_assigns = array_variable_assignments(
+            args...; ignore_vars = keys(param_var_to_arridxs), filter_vars = required_arrvars,
+            argument_name = u_argument_name, ignore_arg_idxs = p_start:p_end, element_fallback,
+            slices
+        )
         append!(assignments, other_assigns)
     end
     append!(assignments, extra_assignments)

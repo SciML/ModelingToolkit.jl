@@ -263,6 +263,23 @@ function normalize_to_differential(@nospecialize(op))
     end
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Push `var` to `buffer` if it is a scalar, or all of its scalar elements (in order) if it is
+an array or a slice of one.
+"""
+function push_scalarized!(buffer, var::SymbolicT)
+    if !SU.is_array_shape(SU.shape(var))
+        push!(buffer, var)
+        return buffer
+    end
+    for i in SU.stable_eachindex(var)
+        push!(buffer, var[i])
+    end
+    return buffer
+end
+
 default_toterm(x) = x
 function default_toterm(x::SymbolicT)
     return Moshi.Match.@match x begin
@@ -270,15 +287,41 @@ function default_toterm(x::SymbolicT)
             if f isa Shift && f.steps < 0
                 return shift2term(x)
             elseif f isa Differential
-                return Symbolics.diff2term(x)
+                return array_slice_diff2term(x)
             else
                 newf = normalize_to_differential(f)
                 f === newf && return x
                 x = BSImpl.Term{VartypeT}(newf, args; type, shape, metadata)
-                return Symbolics.diff2term(x)
+                return array_slice_diff2term(x)
             end
         end
         _ => return x
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+`Symbolics.diff2term`, extended to derivatives of array slices. `D(u[2:4])` has no scalar
+index to name, so it becomes the corresponding slice of the `toterm` of the derivative of
+the whole array, `uˍt(t)[2:4]`.
+"""
+function array_slice_diff2term(x::SymbolicT)
+    SU.is_array_shape(SU.shape(x)) || return Symbolics.diff2term(x)
+    arg = only(arguments(x))
+    op = operation(x)
+    # A slice `u[2:4]` is an `ArrayOp` wrapping the `getindex` term.
+    term = Moshi.Match.@match arg begin
+        BSImpl.ArrayOp(; term) && if term isa SymbolicT end => term
+        _ => arg
+    end
+    return Moshi.Match.@match term begin
+        BSImpl.Term(; f, args) && if f === getindex end => begin
+            base = Symbolics.diff2term(op(args[1]))
+            idxs = map(unwrap_const, Iterators.drop(args, 1))
+            return unwrap(getindex(base, idxs...))
+        end
+        _ => return Symbolics.diff2term(x)
     end
 end
 

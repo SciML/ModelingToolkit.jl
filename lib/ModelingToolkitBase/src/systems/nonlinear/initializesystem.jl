@@ -140,6 +140,14 @@ function generate_initializesystem_timevarying(
             # avoid that.
             isequal(ttk, v) || push!(eqs_ics, ttk ~ subber(v))
             derivative_rules[k] = ttk
+            # For a preserved array equation `k` is `D(u[2:4])`, and `full_equations`
+            # below scalarizes it: register the rows so they are not added a second time.
+            if SU.is_array_shape(SU.shape(ttk))
+                var = only(arguments(k))
+                for i in SU.stable_eachindex(var)
+                    derivative_rules[operation(k)(var[i])] = ttk[i]
+                end
+            end
         end
         merge!(derivative_rules, as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(derivative_rules), COMMON_NOTHING))
     end
@@ -497,7 +505,12 @@ function timevaring_initsys_process_op!(
             end
             for i in SU.stable_eachindex(k)
                 v[i] === COMMON_NOTHING && continue
-                push!(eqs_ics, subk[i] ~ ik[i])
+                subki = subk[i]
+                # Elements of `D(x)` for which `x[i]` is observed (or algebraic) have no
+                # derivative rule, so as with scalar `D(y)` above, ignore their initial
+                # conditions.
+                (subki === COMMON_NOTHING || isdifferential(subki)) && continue
+                push!(eqs_ics, subki ~ ik[i])
                 write_possibly_indexed_array!(op, ik[i], v[i], COMMON_FALSE)
             end
             continue

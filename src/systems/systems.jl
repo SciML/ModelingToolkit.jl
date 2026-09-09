@@ -3,9 +3,17 @@ function MTKBase.__mtkcompile(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
-        sort_eqs = true,
+        sort_eqs = true, scalarize_arrays::Bool = true,
         kwargs...
     )
+    # Structural simplification works on scalar equations: the tearing state scalarizes
+    # every equation before matching. Preserving array equations means skipping it, which
+    # is what the tearing-free compiler in ModelingToolkitBase does.
+    if !scalarize_arrays
+        return MTKBase.__mtkcompile_no_tearing(
+            sys; inputs, outputs, disturbance_inputs, scalarize_arrays, kwargs...
+        )
+    end
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
     sys = MTKBase.discover_maybe_zeros(sys)

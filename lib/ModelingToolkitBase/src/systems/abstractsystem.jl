@@ -2194,10 +2194,22 @@ $(TYPEDSIGNATURES)
 Like `equations(sys)`, but also substitutes the observed equations eliminated from the
 equations during `mtkcompile`. These equations matches generated numerical code.
 
+Array equations preserved by `mtkcompile(sys; scalarize_arrays = false)` are scalarized
+first, so that the result has one equation per row like the jacobian, mass matrix and
+sparsity patterns computed from it.
+
 See also [`equations`](@ref) and [`ModelingToolkitBase.get_eqs`](@ref).
 """
 function full_equations(sys::AbstractSystem; simplify = false)
     subsys = get_systems(sys)
+    if !arrays_scalarized(sys)
+        eqs = flatten_equations(equations(sys))
+        empty_substitutions(sys) && return eqs
+        subs = get_substitutions(sys)
+        return map(eqs) do eq
+            eq.lhs ~ substitute_and_simplify(eq.rhs, subs, simplify)
+        end
+    end
     # Fast path using `IRInfo`
     if isempty(subsys)
         new_eqs = Equation[]

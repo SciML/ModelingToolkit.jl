@@ -305,6 +305,26 @@ solve. Returns `false` iff `sys` was compiled with `mtkcompile(sys; homotopy = f
 """
 homotopy_enabled(sys::AbstractSystem) = getmetadata(sys, HomotopyCtx, true)::Bool
 
+"""
+    ScalarizeArraysCtx
+
+System metadata key recording the `scalarize_arrays` keyword argument that
+[`mtkcompile`](@ref) was called with. `mtkcompile(sys; scalarize_arrays = false)` keeps
+array equations intact and stores `false` under this key so that systems derived from the
+compiled one (the initialization system) are compiled the same way. Query it with
+[`arrays_scalarized`](@ref).
+"""
+struct ScalarizeArraysCtx end
+
+"""
+    arrays_scalarized(sys::AbstractSystem)
+
+Whether array equations in `sys` are scalarized during compilation. Returns `false` iff
+`sys` was compiled with `mtkcompile(sys; scalarize_arrays = false)` (see
+[`ScalarizeArraysCtx`](@ref)).
+"""
+arrays_scalarized(sys::AbstractSystem) = getmetadata(sys, ScalarizeArraysCtx, true)::Bool
+
 # The continuation parameter is a fixed sentinel symbol, NOT `gensym`. A
 # `gensym` name embeds a process-global counter, so the same system would lower
 # to a different name (and thus a different generated `Expr`) in the precompile
