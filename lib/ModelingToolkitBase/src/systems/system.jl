@@ -1354,21 +1354,30 @@ Given a time-dependent system `sys` of ODEs, convert it to a time-independent sy
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
 replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
 does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as initial conditions, bindings, guesses and observed equations
-are retained. The independent variable of `sys` becomes a parameter of the returned system.
+All other information such as initial conditions, bindings and guesses is retained. The
+independent variable of `sys` becomes a parameter of the returned system.
 
-Initialization equations of `sys` describe the state at `t = 0`, which has no counterpart
-in the returned system, whose unknowns are fully determined by its equations. Derivatives
-in them are replaced by zero like in the equations. An initialization equation of the form
-`x ~ expr`, where `x` is an unknown and `expr` does not involve unknowns, observed
-variables or the independent variable, then becomes the initial condition (the starting
-point of the nonlinear solve) of `x`, overriding any existing initial condition.
-Initialization equations involving only parameters are retained. All other initialization
-equations, including those left without any variables, are dropped.
+If `sys` has been compiled with [`mtkcompile`](@ref), its observed equations were chosen
+for the ODE. Zeroing the derivatives gives the equations more algebraic freedom, so the
+observed equations are folded back into the equations (and their variables into the
+unknowns) and the result is compiled afresh, which typically eliminates many more
+unknowns than the ODE allowed.
 
-If `sys` is hierarchical (it contains subsystems) this transformation will be applied
-recursively to all subsystems. The output system will be marked as `complete` if and only
-if the input system is also `complete`. This also retains the `split` flag passed to
+Initial conditions and initialization equations of `sys` describe the state at `t = 0`,
+which has no counterpart in the returned system, whose unknowns are fully determined by its
+equations. Derivatives in them are replaced by zero like in the equations. What remains of
+the form `x = expr` for an unknown `x` (its initial condition, or an initialization
+equation `x ~ expr`) becomes the starting point of `x` for the nonlinear solve: the initial
+condition of `x` if `expr` involves only parameters, and otherwise its guess, to be resolved
+from the starting points of the other variables. Expressions involving the independent
+variable are dropped, as are initialization equations of any other form that involve
+variables. Initialization equations involving only parameters are retained. Unknowns
+without an initial condition start the nonlinear solve from their guess, and observed
+variables of a compiled `sys` from their observed equation.
+
+If `sys` is hierarchical (it contains subsystems) its connections are expanded and it is
+flattened before the transformation. The output system will be marked as `complete` if and
+only if the input system is also `complete`. This also retains the `split` flag passed to
 `complete`.
 
 See also: [`complete`](@ref).
@@ -1377,29 +1386,65 @@ function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
-    obs = observed(sys)
-    D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    # A compiled `sys` was torn for the ODE. Zeroing the derivatives invalidates that
+    # tearing, so observed equations are folded back into the equations and the result
+    # is `mtkcompile`d afresh.
+    compiled = isscheduled(sys)
+    # Convert the flat model once: the independent variable is global, so it can only
+    # become a parameter at a single level.
+    if !isempty(get_systems(sys))
+        sys = flatten(expand_connections(sys))
+    end
+    sys = reverse_all_default_reversible_transformations(sys)
+    obs = get_observed(sys)
+    eqs = [get_eqs(sys); obs]
+    # flattening may list a variable both where it is declared and where it is referenced
+    dvs = unique!([get_unknowns(sys); map(eq -> eq.lhs, obs)])
+    # every derivative term of any order is zero at steady state
+    derivs = Set{SymbolicT}()
+    for eq in Iterators.flatten((eqs, get_initialization_eqs(sys)))
+        SU.search_variables!(derivs, eq; is_atomic = OnlyOperatorIsAtomic{Differential}())
+    end
+    subrules = Dict{SymbolicT, Float64}()
+    for dx in derivs
+        isoperator(dx, Differential) && (subrules[dx] = 0.0)
+    end
     for var in brownians(sys)
         subrules[var] = 0.0
     end
     eqs = map(eqs) do eq
         substitute(eq, subrules)
     end
-    new_ps = [parameters(sys); get_iv(sys)]
+    new_ics, new_guesses, init_eqs = nonlinear_initialization_equations(sys, subrules)
+    # An observed variable of the ODE is computed from the other variables, so (as in
+    # initialization) its equation is the natural guess for it in the nonlinear solve.
+    for eq in @view eqs[(end - length(obs) + 1):end]
+        has_possibly_indexed_key(new_guesses, eq.lhs) && continue
+        write_possibly_indexed_array!(new_guesses, eq.lhs, eq.rhs, COMMON_NOTHING)
+    end
+    # Dummy derivatives introduced by index reduction are derivatives too. Stating this
+    # as equations lets the zero-alias pass of `mtkcompile` eliminate them along with the
+    # differentiated constraints they appear in.
+    if compiled && (sched = get_schedule(sys); sched isa Schedule)
+        dvset = Set{SymbolicT}(dvs)
+        # values are the dummy variables (or, for analytically integrated ones, expressions)
+        for v in values(sched.dummy_sub)
+            v in dvset && push!(eqs, 0 ~ v)
+        end
+    end
+    new_ps = [get_ps(sys); get_iv(sys)]
     if iscomplete(sys)
         append!(new_ps, collect(bound_parameters(sys)))
     end
-    new_ics, init_eqs = nonlinear_initialization_equations(sys, subrules)
     nsys = System(
-        eqs, unknowns(sys), new_ps;
-        bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
-        initial_conditions = new_ics, guesses = guesses(sys),
-        initialization_eqs = init_eqs, name = nameof(sys),
-        observed = obs, systems = map(NonlinearSystem, get_systems(sys))
+        eqs, dvs, new_ps;
+        bindings = merge(get_bindings(sys), Dict(get_iv(sys) => Inf)),
+        initial_conditions = new_ics, guesses = new_guesses,
+        initialization_eqs = init_eqs, name = nameof(sys)
     )
-    if iscomplete(sys)
+    if compiled
+        nsys = mtkcompile(nsys; split = is_split(sys), homotopy = homotopy_enabled(sys))
+    elseif iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
     return nsys
@@ -1408,37 +1453,61 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Translate the initialization equations of time-dependent `sys` for the time-independent
-system built by [`NonlinearSystem`](@ref), after applying the substitution rules
-`subrules` used to zero the derivatives in its equations. Returns the updated initial
-conditions and the retained initialization equations. See the docstring of
-`NonlinearSystem` for the semantics.
+Translate the initial conditions and initialization equations of time-dependent `sys` for
+the time-independent system built by [`NonlinearSystem`](@ref), after applying the
+substitution rules `subrules` used to zero the derivatives in its equations. Returns the
+initial conditions, guesses and initialization equations of the new system. See the
+docstring of `NonlinearSystem` for the semantics.
 """
 function nonlinear_initialization_equations(sys::System, subrules)
-    new_ics = copy(initial_conditions(sys))
-    init_eqs = Equation[]
     dvs = as_atomic_array_set(unknowns(sys))
+    iv = get_iv(sys)
     # Everything whose value is only meaningful at a point in time
     tvars = as_atomic_array_set(observables(sys))
     union!(tvars, dvs)
-    push!(tvars, get_iv(sys))
     is_tvar = Base.Fix1(contains_possibly_indexed_element, tvars)
     vs = Set{SymbolicT}()
-    for eq in initialization_equations(sys)
+    # `:static` involves parameters only, `:dynamic` also variables, `:temporal` the
+    # independent variable (which has no value in the steady-state system)
+    function kind(ex)
+        empty!(vs)
+        SU.search_variables!(vs, ex; is_atomic = OperatorIsAtomic{Initial}())
+        iv in vs && return :temporal
+        return any(is_tvar, vs) ? :dynamic : :static
+    end
+    # `x = expr` at `t = 0` gives the starting point of `x` for the nonlinear solve: an
+    # initial condition if `expr` is known outright, else a guess to be resolved from the
+    # starting points of the other variables.
+    function add_start!(ics, guesses, x, expr)
+        k = kind(expr)
+        k === :temporal && return
+        target = k === :static ? ics : guesses
+        write_possibly_indexed_array!(target, x, expr, COMMON_NOTHING)
+        return
+    end
+
+    new_ics = SymmapT()
+    new_guesses = copy(get_guesses(sys))
+    for (k, v) in get_initial_conditions(sys)
+        if kind(k) === :static
+            # parameters keep their values
+            new_ics[k] = v
+        elseif contains_possibly_indexed_element(dvs, k)
+            add_start!(new_ics, new_guesses, k, substitute(v, subrules))
+        end
+    end
+    init_eqs = Equation[]
+    for eq in get_initialization_eqs(sys)
         eq = substitute(eq, subrules)
         # e.g. `D(x) ~ 0` says nothing once derivatives are zero
         SU.isconst(eq.lhs) && SU.isconst(eq.rhs) && continue
-        empty!(vs)
-        SU.search_variables!(vs, eq.rhs; is_atomic = OperatorIsAtomic{Initial}())
-        rhs_is_static = !any(is_tvar, vs)
-        if rhs_is_static && contains_possibly_indexed_element(dvs, eq.lhs)
-            write_possibly_indexed_array!(new_ics, eq.lhs, eq.rhs, COMMON_NOTHING)
-            continue
+        if contains_possibly_indexed_element(dvs, eq.lhs)
+            add_start!(new_ics, new_guesses, eq.lhs, eq.rhs)
+        elseif kind(eq) === :static
+            push!(init_eqs, eq)
         end
-        SU.search_variables!(vs, eq.lhs; is_atomic = OperatorIsAtomic{Initial}())
-        any(is_tvar, vs) || push!(init_eqs, eq)
     end
-    return new_ics, init_eqs
+    return new_ics, new_guesses, init_eqs
 end
 
 ########

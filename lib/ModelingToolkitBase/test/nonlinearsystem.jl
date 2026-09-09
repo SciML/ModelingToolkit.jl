@@ -471,8 +471,11 @@ end
     @test ModelingToolkitBase.is_split(nlsys)
 
     sys3 = mtkcompile(sys)
+    # a compiled system is torn afresh for the steady state
     nlsys = NonlinearSystem(sys3)
+    @test ModelingToolkitBase.iscomplete(nlsys)
     if @isdefined(ModelingToolkit)
+        @test ModelingToolkitBase.isscheduled(nlsys)
         @test length(equations(nlsys)) == length(ModelingToolkitBase.observed(nlsys)) == 1
     end
 
@@ -490,26 +493,47 @@ end
         @test !in(D(y), vs)
     end
 
+    @testset "Hierarchical systems are flattened" begin
+        @named sub = System([D(x) ~ p - x], t)
+        @named sys = System([D(y) ~ sub.x - y^3], t; systems = [sub])
+        nlsys = NonlinearSystem(sys)
+        @test isempty(ModelingToolkitBase.get_systems(nlsys))
+        @test length(equations(nlsys)) == 2
+        @test length(unknowns(nlsys)) == 2
+        @test isinf(value(bindings(nlsys)[t]))
+        @test count(isequal(t), parameters(nlsys)) == 1
+    end
+
+    @testset "Higher order derivatives also substituted" begin
+        @named sys = System([D(D(x)) ~ p - x + D(y), 0 ~ y^3 + y - x], t)
+        nlsys = NonlinearSystem(sys)
+        @test isequal(equations(nlsys), [0 ~ p - x, 0 ~ y^3 + y - x])
+    end
+
     @testset "Initialization equations containing unknowns" begin
         @variables x(t) y(t)
         @parameters p q r s
         @named sys = System(
             [D(x) ~ p - x, 0 ~ y^3 + y - q * x], t;
-            initial_conditions = [y => 0.5], guesses = [x => 0.5, r => 1.0, s => 1.0],
+            initial_conditions = [y => 2x, D(x) => 0.0, p => 1.0],
+            guesses = [x => 0.5, y => 0.5, r => 1.0, s => 1.0],
             bindings = [r => missing, s => missing],
             initialization_eqs = [x ~ 2p, x + y ~ q, D(x) ~ 0, r ~ 3q, s ~ 2 + D(x)]
         )
         nlsys = NonlinearSystem(sys)
-        # `x ~ 2p` becomes the starting point of `x`; derivatives are zeroed; other
-        # equations involving unknowns have no meaning for the nonlinear system
+        # `x ~ 2p` becomes the starting point of `x`, `y => 2x` a guess resolved from it;
+        # derivatives are zeroed; other equations involving unknowns are dropped
         @test isequal(initial_conditions(nlsys)[x], 2p)
-        @test value(initial_conditions(nlsys)[y]) == 0.5
+        @test value(initial_conditions(nlsys)[p]) == 1.0
+        @test !haskey(initial_conditions(nlsys), y)
+        @test !haskey(initial_conditions(nlsys), D(x))
         @test value(guesses(nlsys)[x]) == 0.5
+        @test isequal(guesses(nlsys)[y], 2x)
         @test isequal(initialization_equations(nlsys), [r ~ 3q, s ~ 2.0])
 
-        prob = NonlinearProblem(NonlinearSystem(mtkcompile(sys)), [p => 1.0, q => 2.0])
+        prob = NonlinearProblem(NonlinearSystem(mtkcompile(sys)), [q => 2.0])
         @test prob[x] ≈ 2.0
-        @test prob[y] ≈ 0.5
+        @test prob[y] ≈ 4.0
         @test prob.ps[r] ≈ 6.0
         @test prob.ps[s] ≈ 2.0
         sol = solve(prob)
@@ -517,6 +541,26 @@ end
         @test sol[x] ≈ 1.0
         @test sol[y] ≈ 1.0
     end
+end
+
+@testset "Unknowns without initial conditions start from their guesses" begin
+    @variables x y
+    @parameters p
+    @mtkcompile sys = System([0 ~ x^3 + x - p, 0 ~ y^3 + y - sin(x)]; guesses = [x => 3.0])
+    @test length(unknowns(sys)) == 2
+    prob = NonlinearProblem(sys, [p => 4.0]; guesses = [y => 1.5])
+    @test prob[x] ≈ 3.0
+    @test prob[y] ≈ 1.5
+    # explicit values take precedence over guesses
+    prob = NonlinearProblem(sys, [p => 4.0, x => 1.0]; guesses = [y => 1.5])
+    @test prob[x] ≈ 1.0
+    # neither an initial condition nor a guess follows `missing_guess_value`
+    @test_throws ModelingToolkitBase.MissingVariablesError NonlinearProblem(
+        sys, [p => 4.0]; missing_guess_value = MissingGuessValue.Error()
+    )
+    prob = NonlinearProblem(sys, [p => 4.0]; missing_guess_value = MissingGuessValue.Constant(2.0))
+    @test prob[x] ≈ 3.0
+    @test prob[y] ≈ 2.0
 end
 
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin

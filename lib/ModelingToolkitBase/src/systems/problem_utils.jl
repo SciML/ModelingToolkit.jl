@@ -2251,6 +2251,20 @@ function __process_SciMLProblem(
     end
     add_observed_equations!(op, obs)
 
+    # For a nonlinear solve, guesses are the starting point of unknowns without a value
+    if !is_time_dependent(sys) && !is_initializeprob
+        all_guesses = merge(ModelingToolkitBase.guesses(sys), todict(guesses))
+        all_guesses = as_atomic_dict_with_defaults(
+            Dict{SymbolicT, SymbolicT}(all_guesses), COMMON_NOTHING
+        )
+        for v in dvs
+            get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING || continue
+            guess = get_possibly_indexed(all_guesses, v, COMMON_NOTHING)
+            guess === COMMON_NOTHING && continue
+            write_possibly_indexed_array!(op, v, guess, COMMON_NOTHING)
+        end
+    end
+
     if warn_cyclic_dependency
         cycles = check_substitution_cycles(
             op, dvs; max_cycle_length = circular_dependency_max_cycle_length,
@@ -2274,9 +2288,13 @@ function __process_SciMLProblem(
             missing_values = missing_guess_value
         )
     else
+        # Like in initialization, time-independent `u0` is only the start of a nonlinear
+        # solve, so unknowns without a value or guess follow the same policy.
+        missing_values = is_time_dependent(sys) ? MissingGuessValue.Error() : missing_guess_value
         u0 = varmap_to_vars(
             op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
-            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
+            allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
+            missing_values
         )
     end
     if u0 !== nothing
