@@ -1696,7 +1696,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
             if SU.is_array_shape(SU.shape(x))
                 # `D(u[2:4])` has no single `toterm` name; the derivatives that can be
                 # requested are those of its elements.
-                dop = operation(eq.lhs)
+                dop = operation(eq.lhs)::Union{Differential, Shift}
                 for idx in SU.stable_eachindex(x)
                     push!(dervars, default_toterm(dop(x[idx])))
                 end
