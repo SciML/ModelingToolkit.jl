@@ -339,6 +339,58 @@ Back in ModelingToolkit.jl's `systemstructure.jl`, the observed equations are
 topologically sorted. In ModelingToolkitBase.jl's `systems.jl`, the `additional_passes`
 are run and the system passed through `complete`. This concludes `mtkcompile`.
 
+### Array equations
+
+The bipartite graph is always scalar: `TearingState` scalarizes every equation, and
+`fullvars` only contains scalar variables. This is what lets matching, Pantelides, dummy
+derivatives, tearing and alias elimination see the exact per-element incidence of an array
+equation such as `D(u[2:(n - 1)]) ~ lap(u)` (a MethodOfLines discretization), where each
+element depends on a different subset of `u`. Reasoning about a whole array equation as one
+node would either lose that information or require every algorithm to understand slices.
+
+Instead, array *differential* equations are tracked as blocks of rows. When
+`TearingState` scalarizes an equation whose one side is `D(x[slice])` (a first-order
+derivative of an array unknown or of a constant-index slice of one; the residual forms
+`D(x) .- f ~ 0` and `D(x) .+ f ~ 0` are canonicalized too), it records an
+`ArrayEquationGroup` holding the canonical equation `D(x[slice]) ~ rhs` and the list of
+element derivatives `D(x[k])`. `ts.row_group[i]` and `ts.row_elem[i]` tag each equation
+row with its group and its position within it; `0` marks scalar rows. Algebraic array
+equations and equations with derivatives on both sides are simply scalarized.
+
+Every pass that changes rows in a way the array equation cannot represent marks the group
+`dirty` via `dirty_array_group!`:
+
+- `eq_derivative!` (index reduction differentiated an element),
+- `rm_eqs_vars!` (an element was removed as redundant),
+- `substitute_derivatives_algevars!` (a dummy derivative was substituted into a row),
+- the inline linear SCC path and the algebraic/solved branches of `codegen_equation!`
+  (a row is solved for something other than its own `D(x[k])`, or a previously solved
+  derivative was substituted into its RHS),
+- `system_subset` when a block is split across clock partitions, and discrete systems.
+
+Substituting an eliminated alias or zero variable into a row does *not* dirty the group,
+because the eliminated variable is retained as an observed equation and the array equation
+remains correct with it. To keep this true, `alias_elimination!` excludes group rows from
+the integer-linear elimination (`split_array_group_rows`/`merge_array_group_rows`): they
+are neither reduced nor used as pivots, since a pivot on `D(x[1]) ~ -x[1] + y` to
+eliminate `y` from `y ~ sum(x)` would leave `D(x[1])` matched to the rewritten equation.
+
+At the end of reassembly, `blt_reorder_generated_equations!` places the rows of an intact
+group contiguously and in element order (tagged with the earliest SCC among them; they are
+all differential equations of selected states, so this does not affect the algebraic BLT
+order). With `preserve_array_equations = true` (a keyword of `mtkcompile` /
+`DefaultReassembleAlgorithm`), `collapse_array_equations!` then replaces each intact run
+by the single array equation. The unknowns stay scalar (`x[k]`), in the same order as the
+rows they replace, so `calculate_massmatrix` and the DAE/ODE code generators lay the array
+equation out over the correct unknown slots. `row_to_equation_indices` maps graph rows
+back to equations for consumers such as `map_variables_to_equations`.
+
+Code generation for such a system substitutes `u ~ array_literal(u[1], …, u[n])` (the
+observed equation added for arrays that are part unknown, part observed) into the array
+equation, which would make the generated code `O(n)`. `build_function_wrapper` rewrites
+those literals into `vcat`s of `view`s into the argument buffers
+(`compress_array_literals`), so the generated function is independent of `n`.
+
 ## Clock Inference
 
 Clock inference begins with the `ClockInference` struct. This takes `state` and

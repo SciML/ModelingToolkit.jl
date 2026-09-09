@@ -893,16 +893,14 @@ function alias_elimination!(
     # to existing connections.
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
     mm = StateSelection.linear_subsys_adjmat!(state; kwargs...)
+    # Rows that are elements of an array equation are kept out of the elimination: they
+    # must neither become linear combinations of other rows nor act as pivots for other
+    # rows, or the array equation can no longer be emitted as a unit.
+    mm, group_rows = MTKTearing.split_array_group_rows(state, mm)
     if size(mm, 1) > 0
-        # Rows that are elements of an array equation must not be turned into linear
-        # combinations of rows by the elimination, or the array equation can no longer be
-        # emitted as a unit. Their original coefficients are restored afterwards, which
-        # preserves the row space (and hence the redundant equations found).
-        group_rows = MTKTearing.array_group_mm_rows(state, mm)
         mm, _ = StateSelection.structural_singularity_removal!(
             state, mm, Val{true}(); variable_underconstrained!
         )
-        MTKTearing.restore_array_group_rows!(mm, group_rows)
         # `linear_subsys_adjmat!` may have created the solvable graph.
         sgraph = state.structure.solvable_graph
         for (ei, e) in enumerate(mm.nzrows)
@@ -912,6 +910,7 @@ function alias_elimination!(
             end
         end
     end
+    mm = MTKTearing.merge_array_group_rows(mm, group_rows)
 
     if print_underconstrained_variables
         underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
