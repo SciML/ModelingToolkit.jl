@@ -2618,6 +2618,7 @@ per element through `array_residual_maker`; constructors whose generated functio
 not assemble residuals this way must keep returning `false`, so that the system is
 required to be scalarized by `mtkcompile` first.
 """
+accepts_array_equations(::Type{<:SciMLBase.ODEFunction}) = true
 accepts_array_equations(::Type{<:SciMLBase.DAEFunction}) = true
 accepts_array_equations(::Type{<:SciMLBase.NonlinearFunction}) = true
 accepts_array_equations(::Any) = false

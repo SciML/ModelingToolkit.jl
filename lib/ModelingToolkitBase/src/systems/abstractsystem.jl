@@ -2192,7 +2192,9 @@ end
 $(TYPEDSIGNATURES)
 
 Like `equations(sys)`, but also substitutes the observed equations eliminated from the
-equations during `mtkcompile`. These equations matches generated numerical code.
+equations during `mtkcompile`. These equations matches generated numerical code: an array
+equation such as `D(u[2:4]) ~ f` is expanded into one scalar equation per element, the
+rows it occupies in the generated code and in the mass matrix.
 
 See also [`equations`](@ref) and [`ModelingToolkitBase.get_eqs`](@ref).
 """
@@ -2209,11 +2211,12 @@ function full_equations(sys::AbstractSystem; simplify = false)
         for (eq, rhs_idx) in zip(eqs, info.eqs_idxs)
             push!(new_eqs, eq.lhs ~ ir[rhs_idx])
         end
-        return new_eqs
+        return scalarize_array_equations(new_eqs)
     end
-    empty_substitutions(sys) && return equations(sys)
+    empty_substitutions(sys) && return scalarize_array_equations(equations(sys))
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
+        eq = explicit_array_derivative_form(eq)
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return substitute_and_simplify(eq.lhs, subs, simplify) ~
                 substitute_and_simplify(
@@ -2229,7 +2232,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
         end
         eq
     end
-    return neweqs
+    return scalarize_array_equations(neweqs)
 end
 
 """
