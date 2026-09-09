@@ -892,25 +892,7 @@ function alias_elimination!(
     # continues to remove redundant equations, since it is essential for adding analysis points
     # to existing connections.
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
-    mm = StateSelection.linear_subsys_adjmat!(state; kwargs...)
-    # Rows that are elements of an array equation are kept out of the elimination: they
-    # must neither become linear combinations of other rows nor act as pivots for other
-    # rows, or the array equation can no longer be emitted as a unit.
-    mm, group_rows = MTKTearing.split_array_group_rows(state, mm)
-    if size(mm, 1) > 0
-        mm, _ = StateSelection.structural_singularity_removal!(
-            state, mm, Val{true}(); variable_underconstrained!
-        )
-        # `linear_subsys_adjmat!` may have created the solvable graph.
-        sgraph = state.structure.solvable_graph
-        for (ei, e) in enumerate(mm.nzrows)
-            BipartiteGraphs.set_neighbors!(graph, e, mm.row_cols[ei])
-            if sgraph isa BipartiteGraph{Int, Nothing}
-                BipartiteGraphs.set_neighbors!(sgraph, e, mm.row_cols[ei])
-            end
-        end
-    end
-    mm = MTKTearing.merge_array_group_rows(mm, group_rows)
+    mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
 
     if print_underconstrained_variables
         underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
@@ -928,10 +910,9 @@ function alias_elimination!(
             push!(eqs_to_rm, eq)
             continue
         end
-        # Elements of array equations keep their original row and equation.
-        iszero(MTKTearing.row_group(state, eq)) || continue
 
         rhs = build_expr_from_coeffs_vars!(add_buffer, rval, rcol, fullvars)
+        orig = eqs[eq]
         eqs[eq] = Symbolics.COMMON_ZERO ~ rhs
         oeq = original_eqs[eq]
         # NOTE: For discrete systems, `original_eqs` isn't shifted forward by 1

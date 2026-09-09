@@ -370,9 +370,10 @@ Every pass that changes rows in a way the array equation cannot represent marks 
 
 Substituting an eliminated alias or zero variable into a row does *not* dirty the group,
 because the eliminated variable is retained as an observed equation and the array equation
-remains correct with it. To keep this true, `alias_elimination!` excludes group rows from
-the integer-linear elimination (`split_array_group_rows`/`merge_array_group_rows`): they
-are neither reduced nor used as pivots, since a pivot on `D(x[1]) ~ -x[1] + y` to
+remains correct with it. To keep this true, `linear_subsys_adjmat!` leaves the rows of
+intact groups out of the integer-linear subsystem `mm` (their solvability is still recorded
+in `solvable_graph`): they are neither reduced nor used as pivots by alias elimination,
+singularity removal or exact SCC matching, since a pivot on `D(x[1]) ~ -x[1] + y` to
 eliminate `y` from `y ~ sum(x)` would leave `D(x[1])` matched to the rewritten equation.
 
 At the end of reassembly, `blt_reorder_generated_equations!` places the rows of an intact
