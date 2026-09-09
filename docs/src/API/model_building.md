@@ -167,6 +167,20 @@ complete
 @mtkcomplete
 ```
 
+### Preserving array equations
+
+By default `mtkcompile` scalarizes array equations so that structural simplification can
+operate on scalar equations. `mtkcompile(sys; scalarize_arrays = false)` instead keeps
+first-order array differential equations (such as `D(u[2:(n - 1)]) ~ rhs` from a
+finite-difference discretization) intact, skipping tearing and index reduction, so that the
+generated code does not grow with the size of the arrays (see the `scalarize_arrays` keyword
+of [`mtkcompile`](@ref)). The choice is recorded in the system's metadata:
+
+```@docs
+ModelingToolkitBase.arrays_scalarized
+ModelingToolkitBase.ScalarizeArraysCtx
+```
+
 ### Exploring the results of simplification
 
 Similar to how [`full_equations`](@ref) returns the equations of a system with all variables
