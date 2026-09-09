@@ -49,12 +49,16 @@ end
     @test any(!iszero, out)
 end
 
-@testset "other problem types still require scalarized equations" begin
+@testset "array unknowns still require `mtkcompile`" begin
     n = 11
-    sys, u, t, D = heat_array_system(n)
-    op = [u[i] => 0.0 for i in 1:n]
-    # ODEProblem cannot consume array equations; the guard must remain in place
-    @test_throws Exception ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    @named sys = System([D(u) ~ -u], t, [u], [])
+    sys = complete(sys)
+    op = [u => zeros(n), D(u) => zeros(n)]
+    # the equation is fine, but `u` as a single array unknown is not
+    @test_throws ["array unknowns"] ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
 end
 
 @testset "array-equation DAE solves to the analytic solution" begin

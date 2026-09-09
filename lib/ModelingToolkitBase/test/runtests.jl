@@ -86,6 +86,8 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Array Equation DAEProblem Test" include("array_equation_dae.jl")
+        @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
         @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
