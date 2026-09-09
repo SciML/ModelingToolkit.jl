@@ -1354,9 +1354,17 @@ Given a time-dependent system `sys` of ODEs, convert it to a time-independent sy
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
 replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
 does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as initial conditions, bindings, guesses, observed and
-initialization equations are retained. The independent variable of `sys` becomes a
-parameter of the returned system.
+All other information such as initial conditions, bindings, guesses and observed equations
+are retained. The independent variable of `sys` becomes a parameter of the returned system.
+
+Initialization equations of `sys` describe the state at `t = 0`, which has no counterpart
+in the returned system, whose unknowns are fully determined by its equations. Derivatives
+in them are replaced by zero like in the equations. An initialization equation of the form
+`x ~ expr`, where `x` is an unknown and `expr` does not involve unknowns, observed
+variables or the independent variable, then becomes the initial condition (the starting
+point of the nonlinear solve) of `x`, overriding any existing initial condition.
+Initialization equations involving only parameters are retained. All other initialization
+equations, including those left without any variables, are dropped.
 
 If `sys` is hierarchical (it contains subsystems) this transformation will be applied
 recursively to all subsystems. The output system will be marked as `complete` if and only
@@ -1383,17 +1391,54 @@ function NonlinearSystem(sys::System)
     if iscomplete(sys)
         append!(new_ps, collect(bound_parameters(sys)))
     end
+    new_ics, init_eqs = nonlinear_initialization_equations(sys, subrules)
     nsys = System(
         eqs, unknowns(sys), new_ps;
         bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
-        initial_conditions = initial_conditions(sys), guesses = guesses(sys),
-        initialization_eqs = initialization_equations(sys), name = nameof(sys),
+        initial_conditions = new_ics, guesses = guesses(sys),
+        initialization_eqs = init_eqs, name = nameof(sys),
         observed = obs, systems = map(NonlinearSystem, get_systems(sys))
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
     return nsys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Translate the initialization equations of time-dependent `sys` for the time-independent
+system built by [`NonlinearSystem`](@ref), after applying the substitution rules
+`subrules` used to zero the derivatives in its equations. Returns the updated initial
+conditions and the retained initialization equations. See the docstring of
+`NonlinearSystem` for the semantics.
+"""
+function nonlinear_initialization_equations(sys::System, subrules)
+    new_ics = copy(initial_conditions(sys))
+    init_eqs = Equation[]
+    dvs = as_atomic_array_set(unknowns(sys))
+    # Everything whose value is only meaningful at a point in time
+    tvars = as_atomic_array_set(observables(sys))
+    union!(tvars, dvs)
+    push!(tvars, get_iv(sys))
+    is_tvar = Base.Fix1(contains_possibly_indexed_element, tvars)
+    vs = Set{SymbolicT}()
+    for eq in initialization_equations(sys)
+        eq = substitute(eq, subrules)
+        # e.g. `D(x) ~ 0` says nothing once derivatives are zero
+        SU.isconst(eq.lhs) && SU.isconst(eq.rhs) && continue
+        empty!(vs)
+        SU.search_variables!(vs, eq.rhs; is_atomic = OperatorIsAtomic{Initial}())
+        rhs_is_static = !any(is_tvar, vs)
+        if rhs_is_static && contains_possibly_indexed_element(dvs, eq.lhs)
+            write_possibly_indexed_array!(new_ics, eq.lhs, eq.rhs, COMMON_NOTHING)
+            continue
+        end
+        SU.search_variables!(vs, eq.lhs; is_atomic = OperatorIsAtomic{Initial}())
+        any(is_tvar, vs) || push!(init_eqs, eq)
+    end
+    return new_ics, init_eqs
 end
 
 ########

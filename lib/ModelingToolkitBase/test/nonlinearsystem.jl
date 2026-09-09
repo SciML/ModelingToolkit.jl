@@ -489,6 +489,34 @@ end
         @test !in(D(x), vs)
         @test !in(D(y), vs)
     end
+
+    @testset "Initialization equations containing unknowns" begin
+        @variables x(t) y(t)
+        @parameters p q r s
+        @named sys = System(
+            [D(x) ~ p - x, 0 ~ y^3 + y - q * x], t;
+            initial_conditions = [y => 0.5], guesses = [x => 0.5, r => 1.0, s => 1.0],
+            bindings = [r => missing, s => missing],
+            initialization_eqs = [x ~ 2p, x + y ~ q, D(x) ~ 0, r ~ 3q, s ~ 2 + D(x)]
+        )
+        nlsys = NonlinearSystem(sys)
+        # `x ~ 2p` becomes the starting point of `x`; derivatives are zeroed; other
+        # equations involving unknowns have no meaning for the nonlinear system
+        @test isequal(initial_conditions(nlsys)[x], 2p)
+        @test value(initial_conditions(nlsys)[y]) == 0.5
+        @test value(guesses(nlsys)[x]) == 0.5
+        @test isequal(initialization_equations(nlsys), [r ~ 3q, s ~ 2.0])
+
+        prob = NonlinearProblem(NonlinearSystem(mtkcompile(sys)), [p => 1.0, q => 2.0])
+        @test prob[x] ≈ 2.0
+        @test prob[y] ≈ 0.5
+        @test prob.ps[r] ≈ 6.0
+        @test prob.ps[s] ≈ 2.0
+        sol = solve(prob)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x] ≈ 1.0
+        @test sol[y] ≈ 1.0
+    end
 end
 
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
