@@ -121,7 +121,7 @@ end
 ```
 
 When you do not already know which variable carries the external signal — a model built by
-someone else, or one assembled programmatically — [`unbound_inputs`](@ref) reports the input
+someone else, or one assembled programmatically — [`unbound_inputs`](@ref ModelingToolkit.unbound_inputs) reports the input
 variables that the connection structure leaves external, and its result can be passed
 straight to `mtkcompile`:
 
