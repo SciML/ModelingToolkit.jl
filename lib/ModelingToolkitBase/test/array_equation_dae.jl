@@ -3,7 +3,6 @@ using ModelingToolkitBase: unwrap, complete, unknowns
 using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
-using DiffEqBase: BrownFullBasicInit
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -57,19 +56,28 @@ end
     @test_throws Exception ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
 end
 
+# Consistent initial derivatives of the discretized heat equation: the discrete Laplacian
+# of `u0` in the interior, zero on the (algebraic) boundary.
+function heat_du0(u0)
+    n = length(u0)
+    dx = 1 / (n - 1)
+    du0 = zeros(n)
+    du0[2:(n - 1)] .= (u0[1:(n - 2)] .- 2 .* u0[2:(n - 1)] .+ u0[3:n]) ./ dx^2
+    return du0
+end
+
 @testset "array-equation DAE solves to the analytic solution" begin
     n = 21
     sys, u, t, D = heat_array_system(n)
     xs = range(0.0, 1.0, length = n)
-    op = vcat(
-        [u[i] => sinpi(xs[i]) for i in 1:n],
-        [D(u[i]) => 0.0 for i in 1:n]
-    )
+    u0 = sinpi.(xs)
+    du0 = heat_du0(u0)
+    op = vcat([u[i] => u0[i] for i in 1:n], [D(u[i]) => du0[i] for i in 1:n])
     tend = 0.1
     prob = DAEProblem(sys, op, (0.0, tend); build_initializeprob = false)
-    # `du0` above is not consistent; the solver's own DAE initialization supplies it.
+    # `du0` is consistent, so no initialization is needed
     sol = solve(
-        prob, DFBDF(); initializealg = BrownFullBasicInit(),
+        prob, DFBDF(); initializealg = SciMLBase.NoInit(),
         reltol = 1.0e-8, abstol = 1.0e-8, saveat = [tend]
     )
     @test SciMLBase.successful_retcode(sol)
@@ -158,7 +166,8 @@ end
     sys = complete(sys)
 
     xs = range(0.0, 1.0, length = n)
-    op = vcat([u[i] => sinpi(xs[i]) for i in 1:n], [D(u[i]) => 0.0 for i in 1:n])
+    u0 = sinpi.(xs)
+    op = vcat([u[i] => u0[i] for i in 1:n], [D(u[i]) => heat_du0(u0)[i] for i in 1:n])
     prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
     @test length(prob.u0) == n
 
@@ -168,9 +177,12 @@ end
     du[2:(n - 1)] .= [-pi^2 * sinpi(x) for x in xs[2:(n - 1)]]
     prob.f(out, du, prob.u0, prob.p, 0.0)
     @test maximum(abs, out) < 1.0e-1
+    # and vanishes for the consistent `du0`
+    prob.f(out, prob.du0, prob.u0, prob.p, 0.0)
+    @test maximum(abs, out) < 1.0e-10
 
     sol = solve(
-        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        prob, DFBDF(); initializealg = SciMLBase.NoInit(), reltol = 1.0e-8,
         abstol = 1.0e-8, saveat = [0.1]
     )
     @test SciMLBase.successful_retcode(sol)

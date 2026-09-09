@@ -7,7 +7,6 @@ using Symbolics, SymbolicUtils, LinearAlgebra
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
 using OrdinaryDiffEqRosenbrock: Rodas5P
-using DiffEqBase: BrownFullBasicInit
 
 # Method-of-lines discretization of the heat equation with Dirichlet boundaries, written
 # as one array equation over slices of the unknowns plus scalar boundary equations.
@@ -92,9 +91,14 @@ end
     tend = 0.1
     exact = [exp(-pi^2 * tend) * sinpi(x) for x in xs]
 
-    prob = DAEProblem(ssys, [u => u0, D(u) => zeros(n)], (0.0, tend); build_initializeprob = false)
+    # consistent initial derivatives: the discrete Laplacian of `u0` in the interior
+    dx = 1 / (n - 1)
+    du0 = zeros(n)
+    du0[2:(n - 1)] .= (u0[1:(n - 2)] .- 2 .* u0[2:(n - 1)] .+ u0[3:n]) ./ dx^2
+    prob = DAEProblem(ssys, [u => u0, D(u) => du0], (0.0, tend); build_initializeprob = false)
     @test length(prob.u0) == n - 2
     @test prob.u0 == u0[2:(n - 1)]
+    @test prob.du0 == du0[2:(n - 1)]
     resid = zeros(n - 2)
     du = zeros(n - 2)
     prob.f(resid, du, prob.u0, prob.p, 0.0)
@@ -102,9 +106,12 @@ end
     @test maximum(abs, resid .- (-pi^2 .* u0[2:(n - 1)])) < 0.05
     # the out-of-place form agrees
     @test prob.f(du, prob.u0, prob.p, 0.0) ≈ resid
+    # and the consistent `du0` gives a zero residual
+    prob.f(resid, prob.du0, prob.u0, prob.p, 0.0)
+    @test maximum(abs, resid) < 1.0e-10
 
     sol = solve(
-        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        prob, DFBDF(); initializealg = SciMLBase.NoInit(), reltol = 1.0e-8,
         abstol = 1.0e-8, saveat = [tend]
     )
     @test SciMLBase.successful_retcode(sol)
