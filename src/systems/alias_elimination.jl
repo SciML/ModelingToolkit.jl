@@ -892,7 +892,26 @@ function alias_elimination!(
     # continues to remove redundant equations, since it is essential for adding analysis points
     # to existing connections.
     variable_underconstrained! = IgnoreUnderconstrainedVariable()
-    mm = StateSelection.structural_singularity_removal!(state; variable_underconstrained!, kwargs...)
+    mm = StateSelection.linear_subsys_adjmat!(state; kwargs...)
+    if size(mm, 1) > 0
+        # Rows that are elements of an array equation must not be turned into linear
+        # combinations of rows by the elimination, or the array equation can no longer be
+        # emitted as a unit. Their original coefficients are restored afterwards, which
+        # preserves the row space (and hence the redundant equations found).
+        group_rows = MTKTearing.array_group_mm_rows(state, mm)
+        mm, _ = StateSelection.structural_singularity_removal!(
+            state, mm, Val{true}(); variable_underconstrained!
+        )
+        MTKTearing.restore_array_group_rows!(mm, group_rows)
+        # `linear_subsys_adjmat!` may have created the solvable graph.
+        sgraph = state.structure.solvable_graph
+        for (ei, e) in enumerate(mm.nzrows)
+            BipartiteGraphs.set_neighbors!(graph, e, mm.row_cols[ei])
+            if sgraph isa BipartiteGraph{Int, Nothing}
+                BipartiteGraphs.set_neighbors!(sgraph, e, mm.row_cols[ei])
+            end
+        end
+    end
 
     if print_underconstrained_variables
         underconstrained_vars = state.fullvars[variable_underconstrained!.underconstrained]
@@ -910,9 +929,10 @@ function alias_elimination!(
             push!(eqs_to_rm, eq)
             continue
         end
+        # Elements of array equations keep their original row and equation.
+        iszero(MTKTearing.row_group(state, eq)) || continue
 
         rhs = build_expr_from_coeffs_vars!(add_buffer, rval, rcol, fullvars)
-        orig = eqs[eq]
         eqs[eq] = Symbolics.COMMON_ZERO ~ rhs
         oeq = original_eqs[eq]
         # NOTE: For discrete systems, `original_eqs` isn't shifted forward by 1
