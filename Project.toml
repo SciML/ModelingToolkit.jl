@@ -55,8 +55,6 @@ OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 
 [sources]
-Sundials = {url = "https://github.com/ChrisRackauckas-Claude/Sundials.jl.git", rev = "fix-32bit-nvector-length"}
-DiffEqBase = {url = "https://github.com/ChrisRackauckas-Claude/OrdinaryDiffEq.jl.git", rev = "fix-32bit-interp-points-range", subdir = "lib/DiffEqBase"}
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
 
