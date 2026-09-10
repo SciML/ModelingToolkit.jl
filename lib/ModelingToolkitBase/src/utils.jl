@@ -1805,7 +1805,24 @@ The leaves of the struct symbolic `root`, in canonical linear order. This is the
 used to lay out a record's value in [`AtomicArrayDict`](@ref).
 """
 SU.@cache limit = 500_000 function record_leaves(root::SymbolicT)::Vector{SymbolicT}
-    return collect(Symbolics.SymStruct{SU.symtype(root)}(root))::Vector{SymbolicT}
+    return _record_leaves(root)
+end
+
+function _record_leaves(root::SymbolicT)
+    T = SU.symtype(root)
+    # An array of records is not itself a record, so `SymStruct` cannot iterate it.
+    # Expand over the indices and concatenate the leaves of each element.
+    if T <: AbstractArray && Symbolics.is_symstruct_type(eltype(T))
+        SU.is_array_shape(SU.shape(root)) || throw(ArgumentError(LazyString(
+            "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
+            "shape is not known. Declare the variable with a concrete shape.")))
+        leaves = SymbolicT[]
+        for i in SU.stable_eachindex(root)
+            append!(leaves, record_leaves(root[i]))
+        end
+        return leaves
+    end
+    return collect(Symbolics.SymStruct{T}(root))::Vector{SymbolicT}
 end
 
 """
