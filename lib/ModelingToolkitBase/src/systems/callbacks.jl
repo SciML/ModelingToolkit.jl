@@ -921,6 +921,9 @@ residuals floor at the same roundoff level the ODE solver already lives with; ho
 affect solve to a tighter tolerance than the integration itself makes a solvable callback
 report as unsolvable.
 
+Not every integrator has tolerances at all: `JumpProcesses`' `SSAIntegrator` stores `opts` as
+`(callback = ...,)`, so the field is simply absent and the nonlinear solver's default is used.
+
 Two values need translating before the nonlinear solver can be given them:
 
   - `false` is what `OrdinaryDiffEqCore` stores for a tolerance that was not supplied under a
@@ -937,7 +940,9 @@ Two values need translating before the nonlinear solver can be given them:
     integration.
 """
 function affect_tolerance(integ, name::Symbol)
-    tol = getproperty(integ.opts, name)
+    opts = integ.opts
+    hasproperty(opts, name) || return nothing
+    tol = getproperty(opts, name)
     tol isa Bool && return nothing
     tol isa AbstractArray && return isempty(tol) ? nothing : minimum(tol)
     return tol
