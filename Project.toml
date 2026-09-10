@@ -55,6 +55,9 @@ OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 
 [sources]
+# Until MonteCarloIntegration 0.3.0 registers: BVDE→Integrals→MCI 0.2 pins
+# QMC 0.3.x → LatticeRules 0.0.1, which hard-fails i686 precompile (`2^32` Int32).
+MonteCarloIntegration = {url = "https://github.com/ranjanan/MonteCarloIntegration.jl.git", rev = "master"}
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
 
@@ -150,7 +153,7 @@ SpecialFunctions = "2"
 StableRNGs = "1"
 Statistics = "1"
 SteadyStateDiffEq = "2"
-Sundials = "6.5"
+Sundials = "6.7.1"
 Test = "1"
 TestEnv = "1"
 URIs = "1"
