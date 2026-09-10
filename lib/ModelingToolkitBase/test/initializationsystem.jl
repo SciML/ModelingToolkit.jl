@@ -1896,8 +1896,12 @@ end
         SciMLStructures.replace!(portion, full_p, replacement)
         @test SciMLStructures.canonicalize(portion, full_p)[1] == replacement
     end
+    # Only isbits buffers become static. A `StaticArray` over heap elements is not
+    # GPU-resident anyway (the elements are pointers), `MArray` cannot `setindex!` a
+    # non-isbits eltype, and a `SizedVector` sends `remake`'s `similar_type`
+    # reconstruction into infinite recursion.
     nonbits = ModelingToolkitBase._static_initialization_buffer(Any[Ref(1)], (Ref(2),))
-    @test nonbits isa SizedVector
+    @test !(nonbits isa StaticArray)
     nonbits[1] = Ref(3)
     @test only(nonbits)[] == 3
 
@@ -1961,6 +1965,29 @@ end
     @test typeof(second_data.initializeprobmap) === typeof(full_data.initializeprobmap)
     @test typeof(second_data.initializeprobpmap) === typeof(full_data.initializeprobpmap)
     @test second_data.initializeprobmap(second_data.initializeprob) == full_u
+
+    # A callable parameter closing over an array is nonnumeric and not isbits. Its buffer
+    # must stay on the heap while the isbits buffers still go static.
+    nonbits_fn = let d = [2.0]
+        x -> d[1] * x
+    end
+    @test !isbitstype(typeof(nonbits_fn))
+    @variables nonbits_x(t)
+    @parameters nonbits_rate = 1.0
+    @parameters (nonbits_scale::typeof(nonbits_fn))(..) = nonbits_fn [tunable = false]
+    @mtkcompile nonbits_sys = System(
+        [D(nonbits_x) ~ -nonbits_rate * nonbits_scale(nonbits_x)], t;
+        initialization_eqs = [nonbits_x^3 + nonbits_x ~ 2]
+    )
+    nonbits_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        nonbits_sys, [], (0.0, 1.0); guesses = [nonbits_x => 1.0]
+    )
+    nonbits_init = nonbits_prob.f.initialization_data
+    nonbits_p = nonbits_init.initializeprobpmap(nonbits_prob, nonbits_init.initializeprob)
+    @test nonbits_p.tunable isa StaticArray
+    @test nonbits_p.initials isa StaticArray
+    @test !any(buf -> buf isa StaticArray, nonbits_p.nonnumeric)
+    @test remake(nonbits_prob, p = [nonbits_rate => 3.0]).p.tunable == [3.0]
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin

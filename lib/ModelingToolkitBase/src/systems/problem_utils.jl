@@ -1712,7 +1712,7 @@ function _static_initialization_buffer(prototype, values)
     elseif isbitstype(T)
         return MVector{length(values), T}(values)
     else
-        return SizedVector{length(values), T}(collect(T, values))
+        return collect(T, values)
     end
 end
 
@@ -1892,6 +1892,11 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
     p_constructor === identity || return p_constructor
     pType <: StaticArray || return p_constructor
     return function (vals)
+        # Only isbits buffers become static. A buffer whose elements are heap objects
+        # (nonnumeric parameters, array-valued discretes) gains nothing from a
+        # `StaticArray` — the elements are still pointers — and `MArray` cannot
+        # `setindex!` a non-isbits eltype at all.
+        isbitstype(eltype(vals)) || return vals
         return SymbolicUtils.Code.create_array(
             pType, eltype(vals) <: AbstractFloat ? floatT : nothing, Val(ndims(vals)), Val(size(vals)), vals...
         )
