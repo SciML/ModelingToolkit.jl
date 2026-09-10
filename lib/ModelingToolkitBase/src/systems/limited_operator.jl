@@ -88,9 +88,11 @@ Symbolics.@register_derivative limited(actual, limiter) 2 Symbolics.SConst(0)
 # `gensym`, for the same precompile-safety reasons as `HOMOTOPY_LAMBDA`; the `ₘₜₖ`
 # suffix makes user collisions practically impossible. Declared as parameters so that
 # variable discovery classifies them as (removable) parameters and the time-dependent
-# `System` constructor's is-a-function-of-`t` validation does not reject them.
-const LIMIT_NEW = unwrap(only(@parameters __limitnew_ₘₜₖ))
-const LIMIT_OLD = unwrap(only(@parameters __limitold_ₘₜₖ))
+# `System` constructor's is-a-function-of-`t` validation does not reject them, and
+# `GlobalScope`d so that a limiter written inside a component keeps referring to these two
+# symbols rather than namespaced copies of them once the model is flattened.
+const LIMIT_NEW = unwrap(GlobalScope(only(@parameters __limitnew_ₘₜₖ)))
+const LIMIT_OLD = unwrap(GlobalScope(only(@parameters __limitold_ₘₜₖ)))
 
 """
     limitnew
@@ -109,34 +111,43 @@ in an `nlstep` transient solve is the previous Newton iterate of the current imp
 """
 const limitold = wrap(LIMIT_OLD)
 
-"""
-    IsLimitedNode()
-
-Predicate matching `limited(actual, limiter)` call nodes. Used both as a `query`
-predicate and as an `is_atomic` for `search_variables!`, which then collects the
-`limited` nodes themselves rather than the variables inside them.
-"""
-struct IsLimitedNode end
-
-(::IsLimitedNode)(x) = iscall(x) && operation(x) === limited
+# Predicate matching `limited(actual, limiter)` call nodes. Used both as a `query`
+# predicate and as an `is_atomic` for `search_variables!`, which then collects the
+# `limited` nodes themselves rather than the variables inside them.
+__has_limited_predicate(e) = iscall(e) && operation(e) === limited
 
 """
     has_limited(expr)
 
 Return `true` iff `expr` contains at least one `limited(...)` node.
 """
-function has_limited(expr)
-    return SU.query(IsLimitedNode(), unwrap(expr))
+function has_limited(expr::Union{Symbolics.Arr, Num, SymbolicT})
+    x = unwrap(expr)
+    ir = SU.IRStructure{VartypeT}()
+    SU.populate_ir!(ir, x)
+    return has_limited(ir, x)
 end
 
 """
-    has_limited_in_equations(eqs)
+    has_limited(ir::IRStructure, expr::SymbolicT)
+
+Return `true` iff `expr` contains at least one `limited(...)` node, reusing `ir` so that a
+shared subexpression of a large flattened model is visited once rather than once per path
+that reaches it. `expr` is added to `ir` if it is not already present.
+"""
+function has_limited(ir::IRStructure{VartypeT}, expr::SymbolicT)
+    SU.populate_ir!(ir, expr)
+    return SU.query(__has_limited_predicate, ir, expr)
+end
+
+"""
+    has_limited_in_equations(ir, eqs)
 
 Return `true` iff any equation in `eqs` (lhs or rhs) contains a `limited(...)` node.
 """
-function has_limited_in_equations(eqs)
+function has_limited_in_equations(ir::IRStructure{VartypeT}, eqs)
     for eq in eqs
-        if has_limited(eq.lhs) || has_limited(eq.rhs)
+        if has_limited(ir, eq.lhs) || has_limited(ir, eq.rhs)
             return true
         end
     end
@@ -149,9 +160,10 @@ end
 Return `true` iff `sys` contains a `limited(...)` node anywhere in its equations or its
 observed equations.
 """
-function has_any_limited(sys)
-    has_limited_in_equations(equations(sys)) && return true
-    return any(eq -> has_limited(eq.lhs) || has_limited(eq.rhs), observed(sys))
+function has_any_limited(sys::AbstractSystem)
+    ir = get_irstructure(sys)
+    return has_limited_in_equations(ir, equations(sys)) ||
+        has_limited_in_equations(ir, observed(sys))
 end
 
 """
@@ -165,7 +177,7 @@ models are visited once rather than once per occurrence.
 function collect_limited_nodes!(nodes::OrderedSet{SymbolicT}, ir::IRStructure, exprs)
     buffer = SU.IRStructureSearchBuffer(ir, nodes)
     for expr in exprs
-        SU.search_variables!(buffer, unwrap(expr); is_atomic = IsLimitedNode())
+        SU.search_variables!(buffer, unwrap(expr); is_atomic = __has_limited_predicate)
     end
     return nodes
 end
@@ -177,45 +189,13 @@ function _substitute_equations(ir::IRStructure, rules::Dict{SymbolicT, SymbolicT
     return [Equation(subber(unwrap(eq.lhs)), subber(unwrap(eq.rhs))) for eq in eqs]
 end
 
-# The `limitnew`/`limitold` sentinels appear inside limiter arguments, so `System`'s
-# variable discovery collects them as unknowns — namespaced (`diode₊__limitnew_ₘₜₖ`)
-# when the `limited` call lives in a subsystem. Sentinels are therefore recognized by
-# their name suffix, and limiter expressions are canonicalized back to the toplevel
-# sentinels during lowering.
-function _sentinel_kind(x)
-    x = unwrap(x)
-    iscall(x) && return :none
-    hasname(x) || return :none
-    s = string(getname(x))
-    endswith(s, string(getname(LIMIT_NEW))) && return :new
-    endswith(s, string(getname(LIMIT_OLD))) && return :old
-    return :none
-end
+# The sentinels appear inside limiter arguments, so `System`'s variable discovery collects
+# them alongside the real parameters. They are `GlobalScope`d, so a limiter written inside
+# a subsystem still refers to these exact two symbols after flattening and they can be
+# dropped by identity.
+_is_sentinel(x) = isequal(x, LIMIT_NEW) || isequal(x, LIMIT_OLD)
 
-function _remove_sentinels(vars)
-    return filter(v -> _sentinel_kind(v) === :none, vars)
-end
-
-struct IsSentinel end
-
-(::IsSentinel)(x) = _sentinel_kind(x) !== :none
-
-# Map namespaced sentinel occurrences back to the toplevel `LIMIT_NEW`/`LIMIT_OLD`, so a
-# limiter written inside a subsystem compiles against the same two placeholders. Built as
-# a substitution rule set (the sentinels are leaves) and applied with the IR substituter.
-function _canonicalize_sentinels(ir::IRStructure, x)
-    x = unwrap(x)
-    sentinels = OrderedSet{SymbolicT}()
-    SU.search_variables!(
-        SU.IRStructureSearchBuffer(ir, sentinels), x; is_atomic = IsSentinel()
-    )
-    isempty(sentinels) && return x
-    rules = Dict{SymbolicT, SymbolicT}()
-    for s in sentinels
-        rules[s] = _sentinel_kind(s) === :new ? LIMIT_NEW : LIMIT_OLD
-    end
-    return SU.IRSubstituter{false}(ir, rules)(x)
-end
+_remove_sentinels(vars) = filter(v -> !_is_sentinel(unwrap(v)), vars)
 
 """
     $(TYPEDSIGNATURES)
@@ -253,7 +233,7 @@ function strip_limited_system(sys::AbstractSystem)
     # so a (rejected elsewhere, but harmless here) nested annotation still resolves.
     rules = Dict{SymbolicT, SymbolicT}(node => unwrap(arguments(node)[1]) for node in nodes)
     specs = Pair{SymbolicT, SymbolicT}[
-        unwrap(arguments(node)[1]) => _canonicalize_sentinels(ir, unwrap(arguments(node)[2]))
+        unwrap(arguments(node)[1]) => unwrap(arguments(node)[2])
             for node in nodes
     ]
     newsys = ConstructionBase.setproperties(
@@ -314,7 +294,7 @@ function lower_limited(sys::AbstractSystem)
     for (k, node) in enumerate(nodes)
         args = arguments(node)
         actual, limiter = unwrap(args[1]), unwrap(args[2])
-        if has_limited(actual) || has_limited(limiter)
+        if has_limited(ir, actual) || has_limited(ir, limiter)
             throw(ArgumentError("`limited` operators may not be nested; found $(node)."))
         end
         # `#` makes the generated name unwritable as a Julia identifier, so it cannot
@@ -325,7 +305,7 @@ function lower_limited(sys::AbstractSystem)
         var = unwrap(only(@variables $name [irreducible = true]))
         push!(new_vars, var)
         rules[node] = var
-        push!(specs, var => _canonicalize_sentinels(ir, limiter))
+        push!(specs, var => limiter)
         push!(new_eqs, wrap(var) ~ wrap(actual))
         push!(guessmap, var => actual)
     end
@@ -500,10 +480,14 @@ function attach_stage_limiters(
         append!(todo, ((v, lim, :bounds) for (v, lim) in bounds_limiter_specs(sys)))
     end
     isempty(todo) && return stagesys
+    ir = get_irstructure(stagesys)
+    # One substituter for the whole pass: it caches by IR index, so the stage rewrite of a
+    # subexpression shared between limited quantities is computed once.
+    stage_subber = SU.IRSubstituter{false}(ir, Dict{SymbolicT, SymbolicT}(subrules))
     dvset = Set{SymbolicT}(unwrap.(unknowns(stagesys)))
     stage_specs = Pair{SymbolicT, SymbolicT}[]
     for (actual, limiter, origin) in todo
-        if has_limited(actual) || has_limited(limiter)
+        if has_limited(ir, unwrap(actual)) || has_limited(ir, unwrap(limiter))
             throw(
                 ArgumentError("`limited` operators may not be nested; found `$(actual)`.")
             )
@@ -513,7 +497,7 @@ function attach_stage_limiters(
         # resolve it through the variables each of the two compilations eliminated, and
         # through the stage substitution in between.
         q = unwrap(substitute_observed(sys, unwrap(actual)))
-        q = unwrap(substitute(q, subrules))
+        q = stage_subber(unwrap(q))
         q = unwrap(substitute_observed(stagesys, q))
         zs = unique(filter(in(dvset), unwrap.(get_variables(q))))
         # A limited quantity that no stage unknown feeds is constant throughout the stage
@@ -533,8 +517,10 @@ function attach_stage_limiters(
             )
         end
         z = only(zs)
-        a = unwrap(Symbolics.derivative(q, z))
-        if any(isequal(z), unwrap.(get_variables(a)))
+        # `strict` so that a `z` buried in an `ifelse` condition is not called affine: the
+        # conjugation below is only valid for a genuine `a * z + b`.
+        a, b, islinear = get_linear_expander_for!(stagesys, z, true)(q)
+        if !islinear
             origin === :bounds && continue
             throw(
                 ArgumentError(
@@ -545,8 +531,7 @@ function attach_stage_limiters(
                 )
             )
         end
-        b = unwrap(substitute(q, Dict(z => 0)))
-        push!(stage_specs, z => _conjugate_limiter(limiter, a, b))
+        push!(stage_specs, z => _conjugate_limiter(ir, limiter, a, b))
     end
     isempty(stage_specs) && return stagesys
     return setmetadata(stagesys, LimitedCtx, stage_specs)
@@ -558,15 +543,16 @@ function _limiter_origin(actual, origin::Symbol)
 end
 
 # `L` limits the physical quantity `a * z + b`; the stage solver only ever sees `z`, so the
-# corrector it needs is `L` conjugated by that affine map. `Substituter` rewrites each node
-# at most once, so the sentinels reintroduced by the replacements are not rewritten again.
-function _conjugate_limiter(limiter, a, b)
+# corrector it needs is `L` conjugated by that affine map. The substituter rewrites each
+# node at most once, so the sentinels reintroduced by the replacements are not rewritten
+# again.
+function _conjugate_limiter(ir::IRStructure{VartypeT}, limiter, a, b)
     rules = Dict{SymbolicT, SymbolicT}(
         LIMIT_NEW => unwrap(a * limitnew + b),
         LIMIT_OLD => unwrap(a * limitold + b)
     )
-    subber = SU.Substituter{false}(rules, SU.default_substitute_filter)
-    return unwrap((wrap(subber(unwrap(limiter))) - b) / a)
+    conjugated = SU.IRSubstituter{false}(ir, rules)(unwrap(limiter))
+    return unwrap((wrap(conjugated) - b) / a)
 end
 
 """
@@ -598,16 +584,28 @@ function merge_limited_postcondition(
     return merge(NamedTuple(kwargs), (; postcondition = post))
 end
 
+# Placeholders standing for the entries of the compiled corrector's `u` argument, which is
+# `[proposed values...; previous values...]` over the limited unknowns. `#` makes the names
+# unwritable as Julia identifiers, so they cannot collide with a model symbol.
+function _limit_slot_sym(prefix::String, k::Int)
+    name = Symbol(prefix, k)
+    return unwrap(only(@parameters $name))
+end
+
 """
     generate_limited_postcondition(sys::AbstractSystem, iip::Bool; kwargs...)
 
 Compile the limiter registry recorded by [`lower_limited`](@ref) into a
 `postcondition` corrector `H(u_proposed, u_prev, p, cache)` (mutating `u_proposed` when
-`iip`; the solver cache is unused by generated limiters). Returns `nothing` when the system carries no limiters. Each limiter is
-compiled with [`generate_custom_function`](@ref) as a scalar function of
-`(limitnew, limitold)` and the system's parameters; the hook applies it to the auxiliary
-limited unknowns at their indices in `unknowns(sys)`, in registry order and each on the
-running value, so several correctors registered against one unknown compose.
+`iip`; the solver cache is unused by generated limiters). Returns `nothing` when the system
+carries no limiters.
+
+Correctors registered against the same unknown are composed *symbolically*, in registry
+order and each on the running value, and the whole registry is then compiled by a single
+[`generate_custom_function`](@ref) call into one function of the limited entries of the
+proposed and previous iterates plus the system's parameters. One generated function rather
+than one per limiter keeps the corrector concretely typed and its compile time independent
+of how many quantities a device library limits.
 """
 function generate_limited_postcondition(
         sys::AbstractSystem, iip::Bool;
@@ -620,7 +618,12 @@ function generate_limited_postcondition(
     ps = parameters(sys)
     ir = get_irstructure(sys)
     varbuffer = Set{SymbolicT}()
-    lims = map(specs) do (var, lexpr)
+    idxs = Int[]
+    slots = Dict{Int, Int}()
+    newsyms = SymbolicT[]
+    oldsyms = SymbolicT[]
+    exprs = SymbolicT[]
+    for (var, lexpr) in specs
         idx = findfirst(isequal(var), dvs)
         if idx === nothing
             error(
@@ -644,42 +647,56 @@ function generate_limited_postcondition(
                 )
             )
         end
-        fn = generate_custom_function(
-            sys, lexpr, [LIMIT_NEW, LIMIT_OLD], ps;
-            expression = Val{false}, eval_expression, eval_module
-        )
-        (idx, fn)
+        k = get(slots, idx, 0)
+        if iszero(k)
+            push!(idxs, idx)
+            k = slots[idx] = length(idxs)
+            push!(newsyms, _limit_slot_sym("#limitnew_", k))
+            push!(oldsyms, _limit_slot_sym("#limitold_", k))
+            push!(exprs, newsyms[k])
+        end
+        # Composition: this corrector sees the running corrected value as `limitnew`, and
+        # the iterate the solver last accepted as `limitold`.
+        rules = Dict{SymbolicT, SymbolicT}(LIMIT_NEW => exprs[k], LIMIT_OLD => oldsyms[k])
+        exprs[k] = SU.IRSubstituter{false}(ir, rules)(unwrap(lexpr))
     end
-    lims = Tuple(lims)
-    return iip ? LimitedPostcondition{true, typeof(lims)}(lims) :
-        LimitedPostcondition{false, typeof(lims)}(lims)
+    fn, = generate_custom_function(
+        sys, exprs, [newsyms; oldsyms], ps;
+        expression = Val{false}, eval_expression, eval_module
+    )
+    return LimitedPostcondition{iip, typeof(fn)}(idxs, fn)
 end
 
 """
-    LimitedPostcondition{iip}(limiters)
+    LimitedPostcondition{iip}(idxs, fn)
 
-The `NonlinearFunction.postcondition` callable generated by
-[`generate_limited_postcondition`](@ref). `limiters` is a tuple of
-`(index into unknowns, compiled limiter)` pairs; calling it applies each limiter to its
-entry of the proposed iterate. The solver-cache argument is accepted for the corrector
-contract and ignored, since limiters are functions of the iterate and parameters only. A struct rather than a closure so every captured field is
-explicit.
+The `postcondition` callable generated by [`generate_limited_postcondition`](@ref). `fn`
+maps `[proposed values...; previous values...]` at the unknown indices `idxs` to their
+corrected values; calling the struct writes those back into the proposed iterate. The
+solver-cache argument is accepted for the corrector contract and ignored, since limiters
+are functions of the iterate and parameters only. A struct rather than a closure so every
+captured field is explicit.
 """
-struct LimitedPostcondition{iip, L}
-    limiters::L
+struct LimitedPostcondition{iip, F}
+    idxs::Vector{Int}
+    fn::F
 end
+
+_limited_corrected(h::LimitedPostcondition, up, uprev, p) =
+    h.fn(vcat(up[h.idxs], uprev[h.idxs]), p)
 
 function (h::LimitedPostcondition{true})(up, uprev, p, cache)
-    for (idx, fn) in h.limiters
-        up[idx] = fn((up[idx], uprev[idx]), p)
+    vals = _limited_corrected(h, up, uprev, p)
+    for (k, idx) in enumerate(h.idxs)
+        up[idx] = vals[k]
     end
     return nothing
 end
 
 function (h::LimitedPostcondition{false})(up, uprev, p, cache)
-    for (idx, fn) in h.limiters
-        val = fn((up[idx], uprev[idx]), p)
-        up = _limited_setindex(up, val, idx)
+    vals = _limited_corrected(h, up, uprev, p)
+    for (k, idx) in enumerate(h.idxs)
+        up = _limited_setindex(up, vals[k], idx)
     end
     return up
 end
