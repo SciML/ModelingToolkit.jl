@@ -434,6 +434,12 @@ end
 Check if a variable `sym` is of the form `foo(iv)`.
 """
 function is_variable_like_symbolic(sym::SymbolicT, iv::SymbolicT)
+    # A struct projection is variable-like exactly when the record it projects out of is.
+    # Array elements are collapsed to their parent before reaching here, so this only
+    # needs to handle field accesses (and indices interleaved with them).
+    if is_symstruct_field(sym)
+        return is_variable_like_symbolic(split_field_access(sym)[1], iv)
+    end
     return Moshi.Match.@match sym begin
         BSImpl.Term(; f, args) => begin
             return f isa SymbolicT && !SU.is_function_symbolic(f) &&
