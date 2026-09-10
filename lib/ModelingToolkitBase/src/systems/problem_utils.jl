@@ -1633,6 +1633,17 @@ function (map::InitializationMap{true})(x)
     return __iip_u0_ad_wrapper(map.u0_constructor(map.map(x)))
 end
 
+# Locals of the generated initialization maps are fixed sentinel names, never `gensym`.
+# A `gensym` embeds a process-global counter, so the same system would lower to a
+# different `Expr` in the precompile process than in the user session, defeating the
+# `RuntimeGeneratedFunctions` Expr-hash cache. The `__mtk_` prefix matches
+# `generated_argument_name` and makes a collision with a user symbol implausible.
+const INITMAP_VALUES = :__mtk_initialization_map_values
+const INITMAP_ELTYPE = :__mtk_initialization_map_eltype
+const INITMAP_SOLUTION = :__mtk_initialization_solution
+const INITMAP_PROBLEM = :__mtk_initialization_problem
+const INITMAP_OUTER_PARAMETERS = :__mtk_initialization_outer_parameters
+
 function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr})
     @assert expr.head === :function
     signature = expr.args[1]
@@ -1644,10 +1655,11 @@ function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sourc
     for (arg, source) in zip(generated_args, sources)
         push!(body.args, :(local $arg = $source))
     end
-    raw = gensym(:initialization_map_values)
-    push!(body.args, :(local $raw = $(expr.args[2])))
-    push!(body.args, finish(raw))
-    return Expr(:function, Expr(:tuple, map_args...), body)
+    push!(body.args, :(local $INITMAP_VALUES = $(expr.args[2])))
+    push!(body.args, finish(INITMAP_VALUES))
+    fn_args = Expr(:tuple)
+    append!(fn_args.args, map_args)
+    return Expr(:function, fn_args, body)
 end
 
 function _generated_map_sources(valp::Symbol, time_dependent::Bool)
@@ -1670,12 +1682,12 @@ function _construct_fullspecialize_initializeprobmap(
         initsys, solved_unknowns;
         expression = Val(true), output_type = SVector, compiler_options, kwargs...
     )
-    sol = gensym(:initialization_solution)
+    sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
     n = length(solved_unknowns)
     static_type = iip ? MVector : SVector
     map_expr = _generated_map_expr(expr, [sol], sources) do raw
-        T = gensym(:initialization_map_eltype)
+        T = INITMAP_ELTYPE
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
         promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
@@ -1700,12 +1712,15 @@ function _static_initialization_buffer(prototype, values)
     elseif isbitstype(T)
         return MVector{length(values), T}(values)
     else
-        return SizedVector{length(values), T}(T[values...])
+        return SizedVector{length(values), T}(collect(T, values))
     end
 end
 
 function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
-    values = Expr(:tuple, [Expr(:ref, raw, i) for i in idxs]...)
+    values = Expr(:tuple)
+    for i in idxs
+        push!(values.args, Expr(:ref, raw, i))
+    end
     buffer = Expr(
         :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), prototype, values
     )
@@ -1719,12 +1734,21 @@ function _construct_fullspecialize_initializeprobpmap(
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     )
     ps = parameters(sys; initial_parameters = true)
-    groups = if is_split(sys)
+    # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
+    # concretely typed `Vector` rather than a tuple of tuples: the portions are iterated,
+    # not indexed heterogeneously, and a tuple here would force the whole loop below to
+    # specialize per system.
+    groups = Vector{Vector{SymbolicT}}[]
+    if is_split(sys)
         grouped = reorder_parameters(sys, ps; flatten = false)
-        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]), initsys)
-        ((grouped[1],), (initial_syms,), grouped[3:5]...)
+        push!(groups, Vector{SymbolicT}[grouped[1]::Vector{SymbolicT}])
+        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]::Vector{SymbolicT}), initsys)
+        push!(groups, Vector{SymbolicT}[initial_syms])
+        for i in 3:5
+            push!(groups, grouped[i]::Vector{Vector{SymbolicT}})
+        end
     else
-        ((ps,),)
+        push!(groups, Vector{SymbolicT}[ps])
     end
     flat_syms = SymbolicT[]
     for group in groups, buffer in group
@@ -1734,11 +1758,11 @@ function _construct_fullspecialize_initializeprobpmap(
         initsys, Tuple(flat_syms);
         expression = Val(true), compiler_options, kwargs...
     )
-    prob = gensym(:problem)
-    sol = gensym(:initialization_solution)
+    prob = INITMAP_PROBLEM
+    sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
     map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
-        outer_p = gensym(:outer_parameters)
+        outer_p = INITMAP_OUTER_PARAMETERS
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
         if !is_split(sys)
             result = _parameter_buffer_expr(outer_p, raw, eachindex(flat_syms), p_constructor)
@@ -1759,24 +1783,28 @@ function _construct_fullspecialize_initializeprobpmap(
                 buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
                 if field === :discrete
                     sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
-                    block_sizes = Expr(
-                        :call, Expr(:curly, SVector, length(sizes), Int),
-                        map(size -> size.length, sizes)...
-                    )
+                    block_sizes = Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    for sz in sizes
+                        push!(block_sizes.args, sz.length)
+                    end
                     p_constructor === identity ||
                         (block_sizes = Expr(:call, QuoteNode(p_constructor), block_sizes))
                     buffer = Expr(:call, BlockedArray, buffer, block_sizes)
                 end
                 push!(buffers, buffer)
             end
-            portion = field === :tunable || field === :initials ? only(buffers) :
-                Expr(:tuple, buffers...)
+            portion = if field === :tunable || field === :initials
+                only(buffers)
+            else
+                tup = Expr(:tuple)
+                append!(tup.args, buffers)
+                tup
+            end
             push!(portions, portion)
         end
-        result = Expr(
-            :call, MTKParameters, portions...,
-            :($map($copy, $outer_p.caches))
-        )
+        result = Expr(:call, MTKParameters)
+        append!(result.args, portions)
+        push!(result.args, :($map($copy, $outer_p.caches)))
         return Expr(:block, :(local $outer_p = $p), result)
     end
     return eval_or_rgf(map_expr; eval_module, compiler_options)

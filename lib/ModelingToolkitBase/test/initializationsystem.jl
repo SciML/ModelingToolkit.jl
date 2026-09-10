@@ -1944,6 +1944,23 @@ end
         @test u == adata.initializeprobmap(adata.initializeprob)
         @test p == adata.initializeprobpmap(auto, adata.initializeprob)
     end
+
+    # The generated maps name their locals with fixed sentinels, so lowering the same
+    # system twice has to produce the same `Expr` and hence the same `RuntimeGeneratedFunction`
+    # type. A `gensym`ed local makes each lowering a fresh type, defeating the RGF cache.
+    second_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t;
+                name = nameof(map_sys),
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            )
+        ), [], (0.0, 1.0); guesses
+    )
+    second_data = second_prob.f.initialization_data
+    @test typeof(second_data.initializeprobmap) === typeof(full_data.initializeprobmap)
+    @test typeof(second_data.initializeprobpmap) === typeof(full_data.initializeprobpmap)
+    @test second_data.initializeprobmap(second_data.initializeprob) == full_u
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
