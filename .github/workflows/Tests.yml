@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   tests:
-    uses: "SciML/.github/.github/workflows/grouped-tests.yml@master"
+    uses: "ChrisRackauckas-Claude/.github/.github/workflows/grouped-tests.yml@i686-gitconfig-consumable"
     with:
       coverage-directories: "src,ext,lib/ModelingToolkitBase/src,lib/ModelingToolkitBase/ext"
       cache: false
