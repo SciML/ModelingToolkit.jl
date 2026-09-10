@@ -55,9 +55,11 @@ OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 OrdinaryDiffEqTsit5 = "b1df2697-797e-41e3-8120-5422d3b24e4a"
 
 [sources]
-# Until MonteCarloIntegration 0.3.0 registers: BVDE→Integrals→MCI 0.2 pins
-# QMC 0.3.x → LatticeRules 0.0.1, which hard-fails i686 precompile (`2^32` Int32).
+# Until MonteCarloIntegration 0.3.0 registers: registry Integrals Compat-pins
+# MCI 0.2 → QMC 0.3 → LatticeRules 0.0.1 (i686 hard-fail). Source MCI 0.3 +
+# Integrals master (accepts MCI 0.3). Drop after MCI+Integrals register.
 MonteCarloIntegration = {url = "https://github.com/ranjanan/MonteCarloIntegration.jl.git", rev = "master"}
+Integrals = {url = "https://github.com/SciML/Integrals.jl.git", rev = "master"}
 ModelingToolkitBase = {path = "lib/ModelingToolkitBase"}
 SciCompDSL = {path = "lib/SciCompDSL"}
 
@@ -71,6 +73,7 @@ MTKOrdinaryDiffEqTsit5Ext = "OrdinaryDiffEqTsit5"
 
 [compat]
 MonteCarloIntegration = "0.2, 0.3"
+Integrals = "5"
 ADTypes = "1.14.0"
 BipartiteGraphs = "0.1.4"
 BlockArrays = "1.9.3"
@@ -161,6 +164,7 @@ URIs = "1"
 
 [extras]
 MonteCarloIntegration = "4886b29c-78c9-11e9-0a6e-41e1f4161f7b"
+Integrals = "de52edbc-65ea-441a-8357-d3a637375a31"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 BoundaryValueDiffEqAscher = "7227322d-7511-4e07-9247-ad6ff830280e"
@@ -209,4 +213,4 @@ TestEnv = "1e6cf692-eddd-4d53-88a5-2d735e33781b"
 URIs = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
 
 [targets]
-test = ["MonteCarloIntegration", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "DiffEqCallbacks", "URIs", "JumpProcesses", "RecursiveArrayTools", "SpecialFunctions", "SciCompDSL", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqFIRK"]
+test = ["MonteCarloIntegration", "Integrals", "BenchmarkTools", "BoundaryValueDiffEqMIRK", "BoundaryValueDiffEqAscher", "ControlSystemsBase", "DataInterpolations", "DelayDiffEq", "NonlinearSolve", "ForwardDiff", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OrdinaryDiffEq", "OrdinaryDiffEqCore", "OrdinaryDiffEqDefault", "REPL", "Random", "ReferenceTests", "SafeTestsets", "SciMLTesting", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "OrdinaryDiffEqNonlinearSolve", "Logging", "OptimizationBase", "LinearSolve", "Latexify", "Distributed", "DiffEqNoiseProcess", "DynamicQuantities", "DiffEqCallbacks", "URIs", "JumpProcesses", "RecursiveArrayTools", "SpecialFunctions", "SciCompDSL", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqBDF", "OrdinaryDiffEqFunctionMap", "OrdinaryDiffEqFIRK"]
