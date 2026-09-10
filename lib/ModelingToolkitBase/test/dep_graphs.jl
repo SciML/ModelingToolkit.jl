@@ -2,7 +2,20 @@ using Test
 using ModelingToolkitBase, Graphs, JumpProcesses, RecursiveArrayTools
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 import ModelingToolkitBase: value
+import SymbolicUtils
 using Symbolics: SymbolicT
+
+@testset "Jump dependency search does not pirate SymbolicUtils" begin
+    jump_types = (ConstantRateJump, VariableRateJump, MassActionJump)
+    @test all(methods(SymbolicUtils.search_variables!)) do method
+        method.module !== ModelingToolkitBase || all(jump_types) do jump_type
+            typeintersect(
+                method.sig,
+                Tuple{typeof(SymbolicUtils.search_variables!), Any, jump_type}
+            ) === Union{}
+        end
+    end
+end
 
 #################################
 #  testing for Jumps / all dgs
