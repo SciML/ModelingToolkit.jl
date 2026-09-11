@@ -471,3 +471,48 @@ end
     prob.f.hess(iip_hess, prob.u0, prob.p)
     @test iip_hess ≈ symbolic_hess_value
 end
+
+@testset "Multi-cost `weights`" begin
+    @variables x
+    @parameters w1 w2
+    costs = [(x - 1)^2, (x - 2)^2]
+
+    sys = complete(OptimizationSystem(costs, [x], []; name = :wsys))
+    prob = OptimizationProblem(sys, [x => 0.0]; weights = [1, 3], grad = true)
+    # objective is (x - 1)^2 + 3 * (x - 2)^2, minimized at (1 + 3 * 2) / (1 + 3)
+    @test prob.f.f([1.5], prob.p) ≈ 1.0 * (0.5)^2 + 3 * (0.5)^2
+    sol = solve(prob, Optim.LBFGS())
+    @test sol.u[1] ≈ 1.75 atol = 1.0e-4
+
+    # `weights` is also accepted by `OptimizationFunction` and affects grad/hess
+    f = OptimizationFunction{false}(sys; grad = true, hess = true, weights = [1, 3])
+    @test f.f([1.5], nothing) ≈ 1.0
+    @test f.grad([1.5], nothing) ≈ [2 * (1.5 - 1) + 6 * (1.5 - 2)]
+    @test f.hess([1.5], nothing) ≈ reshape([8.0], 1, 1)
+
+    # default path is unchanged
+    prob_default = OptimizationProblem(sys, [x => 0.0]; grad = true)
+    @test prob_default.f.f([1.5], prob_default.p) ≈ 2 * (0.5)^2
+    sol_default = solve(prob_default, Optim.LBFGS())
+    @test sol_default.u[1] ≈ 1.5 atol = 1.0e-4
+
+    @test_throws ArgumentError OptimizationProblem(sys, [x => 0.0]; weights = [1.0])
+
+    # symbolic weights must be declared parameters, and are updatable via `remake`
+    ssys = complete(OptimizationSystem(costs, [x], [w1, w2]; name = :ssys))
+    @test_throws ArgumentError OptimizationProblem(
+        sys, [x => 0.0]; weights = [w1, w2]
+    )
+    sprob = OptimizationProblem(
+        ssys, [x => 0.0, w1 => 1.0, w2 => 3.0]; weights = [w1, w2], grad = true
+    )
+    @test occursin("w1", string(sprob.f.expr))
+    @test sprob.f.f([1.5], sprob.p) ≈ 1.0
+    sol = solve(sprob, Optim.LBFGS())
+    @test sol.u[1] ≈ 1.75 atol = 1.0e-4
+
+    sprob2 = remake(sprob; p = Dict(w1 => 3.0, w2 => 1.0))
+    @test sprob2.f.f([1.5], sprob2.p) ≈ 3 * (0.5)^2 + (0.5)^2
+    sol2 = solve(sprob2, Optim.LBFGS())
+    @test sol2.u[1] ≈ 1.25 atol = 1.0e-4
+end

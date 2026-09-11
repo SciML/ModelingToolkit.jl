@@ -288,6 +288,16 @@ const CONSJ_KWARGS = """
   constraints.
 """
 
+const WEIGHTS_KWARGS = """
+- `weights`: An optional vector of weights for scalarizing a system with multiple costs.
+  If provided, the generated objective is `sum(weights .* get_costs(sys))` plus the
+  recursively consolidated costs of all subsystems, replacing the system's `consolidate`
+  function for this lowering. `weights` must have one entry per top-level cost of `sys`.
+  Entries may be real numbers or symbolic parameters of `sys`; symbolic weights must be
+  declared as `@parameters` of the system so that they are part of the parameter object
+  and can be updated via `remake` between solves.
+"""
+
 const CONSSPARSE_KWARGS = """
 - `cons_sparse`: Identical to the `sparse` keyword, but specifically for jacobian/hessian
   functions of the constraints.
