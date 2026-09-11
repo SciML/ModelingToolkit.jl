@@ -1,13 +1,19 @@
-"""$(function_docstring(OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j]; extra_kwargs = WEIGHTS_KWARGS))"""
+"""$(function_docstring(OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j, :adtype]; extra_kwargs = WEIGHTS_KWARGS))"""
 function SciMLBase.OptimizationFunction(sys::System, args...; kwargs...)
     return OptimizationFunction{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.OptimizationFunction{iip}(
+        sys::System, adtype::ADTypes.AbstractADType; kwargs...
+    ) where {iip}
+    return OptimizationFunction{iip}(sys; adtype, kwargs...)
 end
 
 function SciMLBase.OptimizationFunction{iip}(
         sys::System;
         u0 = nothing, p = nothing, t = nothing, grad = false, hess = false,
         sparse = false, cons_j = false, cons_h = false,
-        cons_sparse = false,
+        cons_sparse = false, adtype::ADTypes.AbstractADType = SciMLBase.NoAD(),
         linenumbers = true, eval_expression = false,
         eval_module = @__MODULE__,
         simplify = false, check_compatibility = true, checkbounds = false,
@@ -19,7 +25,7 @@ function SciMLBase.OptimizationFunction{iip}(
         eval_expression, eval_module, compiler_options, checkbounds, optimize, kwargs...,
     )
     return OptimizationFunction{iip}(
-        sys, opts; grad, hess, cons_j, cons_h, cons_sparse, weights
+        sys, opts; grad, hess, cons_j, cons_h, cons_sparse, weights, adtype
     )
 end
 
@@ -32,7 +38,8 @@ Public entry point that builds an `OptimizationFunction` directly from a pre-ass
 function SciMLBase.OptimizationFunction{iip}(
         sys::System, opts::SciMLFunctionOptions{E};
         grad::Bool = false, hess::Bool = false, cons_j::Bool = false, cons_h::Bool = false,
-        cons_sparse::Bool = false, weights = nothing
+        cons_sparse::Bool = false, weights = nothing,
+        adtype::ADTypes.AbstractADType = SciMLBase.NoAD()
     ) where {iip, E}
     check_complete(sys, OptimizationFunction)
     opts.check_compatibility && check_compatible_system(OptimizationFunction, sys)
@@ -92,7 +99,7 @@ function SciMLBase.OptimizationFunction{iip}(
 
     observedfun = ObservedFunctionCache(sys, codegen_opts)
 
-    args = (; f, ad = SciMLBase.NoAD())
+    args = (; f, ad = adtype)
     kwargs = (;
         sys = sys,
         grad = _grad,
@@ -111,7 +118,7 @@ function SciMLBase.OptimizationFunction{iip}(
     return maybe_codegen_scimlfn(Val{E}, OptimizationFunction{iip}, args; kwargs...)
 end
 
-"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false, extra_kwargs = WEIGHTS_KWARGS))"""
+"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false, extra_kwargs = WEIGHTS_KWARGS * ADTYPE_PROBLEM_KWARGS))"""
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
     return OptimizationProblem{true}(sys, args...; kwargs...)
 end

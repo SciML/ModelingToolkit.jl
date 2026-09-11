@@ -303,6 +303,22 @@ const CONSSPARSE_KWARGS = """
   functions of the constraints.
 """
 
+const ADTYPE_KWARGS = """
+- `adtype`: The choice of AD backend to use for derivatives of the objective and
+  constraints, given as an `ADTypes.AbstractADType` such as `AutoForwardDiff()` or
+  `AutoEnzyme()`. This is stored as the `adtype` field of the resulting function, which
+  `Optimization.jl` dispatches on when instantiating it for a solver. Defaults to
+  `SciMLBase.NoAD()`, which defers the choice of backend to the solver. `adtype` can also
+  be passed as the second positional argument of `OptimizationFunction`, matching the
+  `SciMLBase.OptimizationFunction` constructor. It is independent of `grad`, `hess`,
+  `cons_j` and `cons_h`, which control symbolic generation of derivative functions.
+"""
+
+const ADTYPE_PROBLEM_KWARGS = """
+- `adtype`: Forwarded to the `OptimizationFunction` constructor; sets the `adtype` field
+  of the resulting function.
+"""
+
 const INPUTFN_KWARGS = """
 - `inputs`: The variables in the input vector. The system must have been simplified using
   `mtkcompile` with these variables passed as `inputs`.
@@ -332,6 +348,7 @@ const OPTIONAL_FN_KWARGS_DICT = Dict(
     :cons_h => CONSH_KWARGS,
     :cons_j => CONSJ_KWARGS,
     :cons_sparse => CONSSPARSE_KWARGS,
+    :adtype => ADTYPE_KWARGS,
     :inputfn => INPUTFN_KWARGS,
     :controljac => CONTROLJAC_KWARGS,
     :paramjac => PARAMJAC_KWARGS
