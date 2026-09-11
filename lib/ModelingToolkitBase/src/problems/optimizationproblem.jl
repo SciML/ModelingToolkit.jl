@@ -1,4 +1,4 @@
-"""$(function_docstring(OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j]))"""
+"""$(function_docstring(OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j]; extra_kwargs = WEIGHTS_KWARGS))"""
 function SciMLBase.OptimizationFunction(sys::System, args...; kwargs...)
     return OptimizationFunction{true}(sys, args...; kwargs...)
 end
@@ -11,14 +11,16 @@ function SciMLBase.OptimizationFunction{iip}(
         linenumbers = true, eval_expression = false,
         eval_module = @__MODULE__,
         simplify = false, check_compatibility = true, checkbounds = false,
-        expression = Val{false}, optimize = nothing,
+        expression = Val{false}, optimize = nothing, weights = nothing,
         compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip}
     opts = SciMLFunctionOptions(;
         u0, p, t, sparse, simplify, expression, check_compatibility,
         eval_expression, eval_module, compiler_options, checkbounds, optimize, kwargs...,
     )
-    return OptimizationFunction{iip}(sys, opts; grad, hess, cons_j, cons_h, cons_sparse)
+    return OptimizationFunction{iip}(
+        sys, opts; grad, hess, cons_j, cons_h, cons_sparse, weights
+    )
 end
 
 """
@@ -30,10 +32,14 @@ Public entry point that builds an `OptimizationFunction` directly from a pre-ass
 function SciMLBase.OptimizationFunction{iip}(
         sys::System, opts::SciMLFunctionOptions{E};
         grad::Bool = false, hess::Bool = false, cons_j::Bool = false, cons_h::Bool = false,
-        cons_sparse::Bool = false
+        cons_sparse::Bool = false, weights = nothing
     ) where {iip, E}
     check_complete(sys, OptimizationFunction)
     opts.check_compatibility && check_compatible_system(OptimizationFunction, sys)
+
+    if weights !== nothing
+        sys = system_with_cost_weights(sys, weights)
+    end
 
     cstr = constraints(sys)
 
@@ -105,7 +111,7 @@ function SciMLBase.OptimizationFunction{iip}(
     return maybe_codegen_scimlfn(Val{E}, OptimizationFunction{iip}, args; kwargs...)
 end
 
-"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false))"""
+"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false, extra_kwargs = WEIGHTS_KWARGS))"""
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
     return OptimizationProblem{true}(sys, args...; kwargs...)
 end
@@ -178,4 +184,67 @@ function check_compatible_system(
     check_no_jumps(sys, T)
     check_no_noise(sys, T)
     return check_no_equations(sys, T)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `consolidate` function computing `sum(weights .* costs)` plus the sum of the
+consolidated `subcosts` of all subsystems. See [`system_with_cost_weights`](@ref).
+"""
+function weighted_consolidate(weights)
+    ws = unwrap.(weights)
+    return function (costs, subcosts)
+        return _sum_costs(SymbolicT[w * c for (w, c) in zip(ws, costs)]) +
+            _sum_costs(subcosts)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a copy of `sys` whose `consolidate` function computes the `weights`-weighted sum of
+the top-level costs of `sys` instead of deferring to the system's own `consolidate`. The
+costs of subsystems are still consolidated recursively by their own `consolidate` and
+added to the result.
+
+`weights` must have one entry per top-level cost of `sys` (that is,
+`length(weights) == length(get_costs(sys))`). Entries may be real numbers or symbolic
+parameters of `sys`. Symbolic weights must be declared as parameters of `sys` so that
+they are discoverable in the parameter object (`prob.p`) and can be updated via `remake`
+between solves.
+"""
+function system_with_cost_weights(sys::System, weights)
+    weights isa AbstractVector || throw(
+        ArgumentError(
+            "`weights` must be a vector with one entry per cost of `sys`."
+        )
+    )
+    cs = get_costs(sys)
+    length(weights) == length(cs) || throw(
+        ArgumentError(
+            "Expected `weights` to have one entry per cost of `sys`, but got \
+            $(length(weights)) weights for $(length(cs)) costs."
+        )
+    )
+    for w in weights
+        # `Num <: Number`, so `unwrap` before checking for numeric weights.
+        w = unwrap(w)
+        w isa Number && continue
+        symbolic_type(w) === NotSymbolic() && throw(
+            ArgumentError(
+                "Entries of `weights` must be real numbers or symbolic parameters of \
+                `sys`; got `$w`."
+            )
+        )
+        is_parameter(sys, w) || throw(
+            ArgumentError(
+                "Symbolic weight `$w` is not a parameter of `sys`. Declare it via \
+                `@parameters` in the system so that it can be provided and updated \
+                through the parameter object."
+            )
+        )
+    end
+    @set! sys.consolidate = weighted_consolidate(weights)
+    return sys
 end
