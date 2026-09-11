@@ -76,6 +76,7 @@ ModelingToolkit.ProblemTypeCtx
 SciMLBase.OptimizationFunction
 SciMLBase.OptimizationProblem
 SciMLBase.ODEInputFunction
+ModelingToolkit.constraints_to_penalties
 ```
 
 ## The state vector and parameter object
