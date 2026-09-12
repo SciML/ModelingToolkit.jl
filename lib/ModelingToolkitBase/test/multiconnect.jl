@@ -5,6 +5,7 @@ using ModelingToolkitBase:
     t_nounits as t, D_nounits as D, generate_connection_set,
     scalarize, ConnectionVertex
 using Symbolics, Graphs
+using Symbolics: unwrap
 import SymbolicUtils as SU
 import ModelingToolkitBase as MTK
 import SciMLBase
