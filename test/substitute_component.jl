@@ -147,7 +147,7 @@ end
     # nodes hold the substituted component forms (Resistor/Capacitor), not the
     # original OnePort systems the network was built with
     @test Set(ModelingToolkit.getname.(parameters(net.nodes[1]))) ==
-          Set([:R, :T_ref, :alpha])
+        Set([:R, :T_ref, :alpha])
     @test Set(ModelingToolkit.getname.(parameters(net.nodes[2]))) == Set([:C])
 
     @named reference = RC()

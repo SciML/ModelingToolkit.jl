@@ -747,7 +747,7 @@ function handle_maybe_connect_equation!(
         add_domain_connection_edge!(state, hyperedge)
     else
         connected_systems = get_systems(rhs)::Union{
-            Vector{System}, Vector{SymbolicT}, ConnectionNetwork
+            Vector{System}, Vector{SymbolicT}, ConnectionNetwork,
         }
         generate_connectionsets!(state, namespace, connected_systems, isouter)
     end

@@ -86,8 +86,8 @@ function _network_port(node::System, port::Union{Symbol, Nothing})
     catch
         throw(
             ArgumentError(
-            lazy"Node `$(nameof(node))` has no connector or variable named `$port`."
-        )
+                lazy"Node `$(nameof(node))` has no connector or variable named `$port`."
+            )
         )
     end
     return result isa AbstractSystem ? result : unwrap(result)
@@ -113,8 +113,8 @@ function _default_network_port(node::System)
     else
         throw(
             ArgumentError(
-            lazy"""Cannot infer ports for node `$(nameof(node))`: it has $(length(connectors)) connector subsystems. Provide a `portmap` to `multiconnect` to select which port each edge uses. Available connectors: $(join(connectors, ", "))."""
-        )
+                lazy"""Cannot infer ports for node `$(nameof(node))`: it has $(length(connectors)) connector subsystems. Provide a `portmap` to `multiconnect` to select which port each edge uses. Available connectors: $(join(connectors, ", "))."""
+            )
         )
     end
 end
@@ -122,10 +122,10 @@ end
 function _normalize_port_pair(pair, i, j)
     pair isa Union{Pair, Tuple{Any, Any}} ||
         throw(
-            ArgumentError(
+        ArgumentError(
             lazy"Port map for edge $i -> $j must be a `Pair` or 2-`Tuple` of port names. Got `$pair`."
         )
-        )
+    )
     src_port, dst_port = pair
     (src_port === nothing || src_port isa Symbol) ||
         throw(ArgumentError(lazy"Invalid source port `$src_port` for edge $i -> $j."))
@@ -205,7 +205,7 @@ eqs = [multiconnect(comps, g, :n => :p)]
 """
 function multiconnect(
         nodes::AbstractVector{<:AbstractSystem}, edges::AbstractVector{ConnectionEdge}
-)
+    )
     isempty(nodes) &&
         throw(ArgumentError("`multiconnect` requires at least one node."))
     _nodes = System[node for node in nodes]
@@ -216,8 +216,8 @@ function multiconnect(
         for (idx, side) in ((edge.src, "source"), (edge.dst, "destination"))
             1 <= idx <= n || throw(
                 ArgumentError(
-                lazy"Edge $edge references $side node $idx, but only $n nodes were given."
-            )
+                    lazy"Edge $edge references $side node $idx, but only $n nodes were given."
+                )
             )
         end
         edge.src == edge.dst && edge.src_port == edge.dst_port &&
@@ -226,8 +226,8 @@ function multiconnect(
         dst_port = _network_port(_nodes[edge.dst], edge.dst_port)
         (src_port isa AbstractSystem) == (dst_port isa AbstractSystem) || throw(
             ArgumentError(
-            lazy"Edge $edge connects ports of different kinds: `$src_port` and `$dst_port`."
-        )
+                lazy"Edge $edge connects ports of different kinds: `$src_port` and `$dst_port`."
+            )
         )
         if src_port isa SymbolicT
             validate_causal_variables_connection(SymbolicT[src_port, dst_port])
@@ -239,11 +239,11 @@ end
 
 function multiconnect(
         nodes::AbstractVector{<:AbstractSystem}, g::Graphs.AbstractGraph, portmap = nothing
-)
+    )
     Graphs.nv(g) == length(nodes) || throw(
         ArgumentError(
-        lazy"Graph has $(Graphs.nv(g)) vertices, but $(length(nodes)) nodes were given."
-    )
+            lazy"Graph has $(Graphs.nv(g)) vertices, but $(length(nodes)) nodes were given."
+        )
     )
     edges = ConnectionEdge[]
     sizehint!(edges, Graphs.ne(g))
@@ -266,7 +266,7 @@ ordinary machinery.
 function _generate_connectionsets!(
         connection_state::AbstractConnectionState,
         namespace::Vector{Symbol}, network::ConnectionNetwork, isouter::IsOuter
-)
+    )
     for edge in network.edges
         src_port = _network_port(network.nodes[edge.src], edge.src_port)
         dst_port = _network_port(network.nodes[edge.dst], edge.dst_port)
@@ -304,13 +304,13 @@ function _network_port_var(var, n::Int)
     sh = SU.shape(var)
     sh isa SU.ShapeVecT && length(sh) == 1 || throw(
         ArgumentError(
-        lazy"Port variable `$var` must be a one-dimensional symbolic array indexed by node."
-    )
+            lazy"Port variable `$var` must be a one-dimensional symbolic array indexed by node."
+        )
     )
     length(only(sh)) == n || throw(
         ArgumentError(
-        lazy"Port variable `$var` has length $(length(only(sh))), expected `nv(graph) = $n`."
-    )
+            lazy"Port variable `$var` has length $(length(only(sh))), expected `nv(graph) = $n`."
+        )
     )
     return var::SymbolicT
 end
@@ -331,16 +331,16 @@ function _validate_causal_network_vars(a::SymbolicT, b::SymbolicT, srcs, dsts)
     else
         throw(
             ArgumentError(
-            lazy"Causal `multiconnect` requires each edge to pair an output variable with an input variable. Got `$a` (input = $(isinput(a)), output = $(isoutput(a))) and `$b` (input = $(isinput(b)), output = $(isoutput(b)))."
-        )
+                lazy"Causal `multiconnect` requires each edge to pair an output variable with an input variable. Got `$a` (input = $(isinput(a)), output = $(isoutput(a))) and `$b` (input = $(isinput(b)), output = $(isoutput(b)))."
+            )
         )
     end
     seen = Int[]
     for node in driven
         node in seen && throw(
             ArgumentError(
-            lazy"Input port variable at node $node is driven by multiple edges in the network."
-        )
+                lazy"Input port variable at node $node is driven by multiple edges in the network."
+            )
         )
         push!(seen, node)
     end
@@ -434,8 +434,8 @@ function multiconnect(portspec::Pair, g::Graphs.AbstractGraph)
     bvars = _port_var_tuple(portspec.second)
     length(avars) == length(bvars) || throw(
         ArgumentError(
-        lazy"Source and destination port lists must have the same length. Got $(length(avars)) and $(length(bvars))."
-    )
+            lazy"Source and destination port lists must have the same length. Got $(length(avars)) and $(length(bvars))."
+        )
     )
     isempty(avars) &&
         throw(ArgumentError("`multiconnect` requires at least one port variable."))
@@ -465,16 +465,16 @@ function multiconnect(portspec::Pair, g::Graphs.AbstractGraph)
         ctype_b = get_connection_type(b)
         ctype_a === ctype_b || throw(
             ArgumentError(
-            lazy"Connected port variables `$a` and `$b` have different connect types `$ctype_a` and `$ctype_b`."
-        )
+                lazy"Connected port variables `$a` and `$b` have different connect types `$ctype_a` and `$ctype_b`."
+            )
         )
         if ctype_a === Flow
             append!(eqs, _flow_net_equations(a, b, n, srcs, dsts))
         elseif ctype_a === Stream
             throw(
                 ArgumentError(
-                "`Stream` port variables are not supported by `multiconnect`."
-            )
+                    "`Stream` port variables are not supported by `multiconnect`."
+                )
             )
         else # Equality
             push!(eqs, Ps * a ~ Pd * b)

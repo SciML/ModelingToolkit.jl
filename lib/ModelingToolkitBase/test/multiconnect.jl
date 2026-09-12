@@ -2,8 +2,8 @@ using Test
 using ModelingToolkitBase, OrdinaryDiffEqRosenbrock
 using OrdinaryDiffEqNonlinearSolve
 using ModelingToolkitBase:
-                           t_nounits as t, D_nounits as D, generate_connection_set,
-                           scalarize, ConnectionVertex
+    t_nounits as t, D_nounits as D, generate_connection_set,
+    scalarize, ConnectionVertex
 using Symbolics, Graphs
 import SymbolicUtils as SU
 import ModelingToolkitBase as MTK
@@ -110,7 +110,7 @@ function parallel_rc_model(multiconnect_form::Bool)
             ConnectionEdge(1, 3, :n, :p),
             ConnectionEdge(2, 3, :n, :p),
             ConnectionEdge(3, 4, :n, :n),
-            ConnectionEdge(3, 5, :n, :g)
+            ConnectionEdge(3, 5, :n, :g),
         ]
         eqs = [multiconnect(nodes, edges)]
     else
@@ -120,7 +120,7 @@ function parallel_rc_model(multiconnect_form::Bool)
             connect(resistor1.n, capacitor.p),
             connect(resistor2.n, capacitor.p),
             connect(capacitor.n, source.n),
-            connect(capacitor.n, ground.g)
+            connect(capacitor.n, ground.g),
         ]
     end
     @named sys = System(eqs, t)
@@ -202,7 +202,7 @@ end
     eq = multiconnect(nodes, g, portmap)
     net = MTK.value(eq.rhs).systems
     @test net.edges == [
-        ConnectionEdge(1, 2, :n, :p), ConnectionEdge(2, 3, :n, :g)
+        ConnectionEdge(1, 2, :n, :p), ConnectionEdge(2, 3, :n, :g),
     ]
 
     # vertex count must match the number of nodes
@@ -211,11 +211,11 @@ end
     # `nothing` portmap uses the single connector of each node
     single_nodes = [
         SinglePinNode(name = :n1), SinglePinNode(name = :n2),
-        SinglePinNode(name = :n3)
+        SinglePinNode(name = :n3),
     ]
     eq_auto = multiconnect(single_nodes, Graphs.path_graph(3))
     @test MTK.value(eq_auto.rhs).systems.edges ==
-          [ConnectionEdge(1, 2, :port, :port), ConnectionEdge(2, 3, :port, :port)]
+        [ConnectionEdge(1, 2, :port, :port), ConnectionEdge(2, 3, :port, :port)]
 
     # ambiguous `nothing` portmap errors with the list of connectors
     @test_throws ["Cannot infer ports"] multiconnect(nodes, Graphs.path_graph(3))
@@ -247,7 +247,7 @@ end
     eqs = Equation[
         connect(source2.output, gain12.input),
         connect(gain12.output, gain22.input),
-        connect(gain22.output, sink2.input)
+        connect(gain22.output, sink2.input),
     ]
     @named sys_man = System(eqs, t)
     sys_man = compose(sys_man, [source2, gain12, gain22, sink2])
@@ -396,7 +396,7 @@ end
     net = MTK.value(conneq.rhs).systems
     @test net isa ConnectionNetwork
     @test nameof.(net.nodes) ==
-          [:resistor1, :resistor2, :capacitor, :source, :ground]
+        [:resistor1, :resistor2, :capacitor, :source, :ground]
     # the network must reference the transformed node systems, not the stale
     # pre-transformation objects
     @test all(n -> isequal(MTK.get_iv(n), MTK.get_iv(sys2)), net.nodes)
@@ -415,7 +415,7 @@ end
     # capacitor. Every node has a p-port and an n-port; the graph closes the loop
     # n_i -> p_{i+1} (cyclically), so `multiconnect` generates all four junction
     # equalities and conservation equations from two compact symbolic equations.
-    @parameters V=12.0 R=1.0 C=1.0
+    @parameters V = 12.0 R = 1.0 C = 1.0
     @variables vp(t)[1:4] vn(t)[1:4] fp(t)[1:4] fn(t)[1:4] vc(t)
     vp, vn, fp, fn = unwrap.([vp, vn, fp, fn])
     fp = MTK.setmetadata(fp, MTK.VariableConnectType, MTK.Flow)
@@ -425,7 +425,7 @@ end
         vp[2] - vn[2] ~ R * fp[2], fp[2] + fn[2] ~ 0.0, # resistor nodes
         vp[3] - vn[3] ~ R * fp[3], fp[3] + fn[3] ~ 0.0,
         vc ~ vp[4] - vn[4], D(vc) ~ fp[4] / C, fp[4] + fn[4] ~ 0.0, # capacitor node
-        multiconnect((vn, fn) => (vp, fp), Graphs.cycle_digraph(4))...
+        multiconnect((vn, fn) => (vp, fp), Graphs.cycle_digraph(4))...,
     ]
     @named sys = System(
         eqs, t,
