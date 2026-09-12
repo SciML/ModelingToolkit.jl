@@ -119,23 +119,32 @@ systems in the hierarchy.
 """
 function recreate_connections(sys::AbstractSystem)
     eqs = map(get_eqs(sys)) do eq
-        eq.lhs isa Union{Connection, AnalysisPoint} || return eq
-        if eq.lhs isa Connection
-            oldargs = get_systems(eq.rhs)
+        lhs = value(eq.lhs)
+        rhs = value(eq.rhs)
+        lhs isa Union{Connection, AnalysisPoint} || return eq
+        if lhs isa Connection
+            oldargs = get_systems(rhs)
+            if oldargs isa ConnectionNetwork
+                newnodes = System[
+                    recursive_getproperty(sys, namespace_hierarchy(nameof(node)))
+                        for node in oldargs.nodes
+                ]
+                return eq.lhs ~ Connection(ConnectionNetwork(newnodes, oldargs.edges))
+            end
         else
-            ap::AnalysisPoint = eq.rhs
+            ap::AnalysisPoint = rhs
             oldargs = [ap.input; ap.outputs]
         end
-        newargs = map(get_systems(eq.rhs)::Union{Vector{System}, Vector{SymbolicT}}) do arg
+        newargs = map(oldargs) do arg
             name = arg isa AbstractSystem ? nameof(arg) : getname(arg)
             hierarchy = namespace_hierarchy(name)
             newarg = recursive_getproperty(sys, hierarchy)
             return newarg
         end
-        if eq.lhs isa Connection
+        if lhs isa Connection
             return eq.lhs ~ Connection(newargs)
         else
-            return eq.lhs ~ AnalysisPoint(newargs[1], eq.rhs.name, newargs[2:end])
+            return eq.lhs ~ AnalysisPoint(newargs[1], ap.name, newargs[2:end])
         end
     end
     @set! sys.eqs = eqs

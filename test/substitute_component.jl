@@ -98,6 +98,73 @@ end
     @test sol1.u ≈ sol2.u atol = 1.0e-8
 end
 
+@component function TwoComponentMC(; name)
+    systems = @named begin
+        component1 = OnePort()
+        component2 = OnePort()
+        source = Voltage()
+        signal = SignalInterface()
+        ground = Ground()
+    end
+
+    nodes = [component1, component2, source, ground]
+    equations = Equation[
+        connect(signal.output.u, source.V.u),
+        multiconnect(
+            nodes,
+            ConnectionEdge[
+                ConnectionEdge(3, 1, :p, :p),
+                ConnectionEdge(1, 2, :n, :p),
+                ConnectionEdge(2, 3, :n, :n),
+                ConnectionEdge(2, 4, :n, :g),
+            ]
+        ),
+    ]
+
+    return System(equations, t, [], []; name, systems)
+end
+
+@testset "Replacement inside multiconnect networks works" begin
+    @named templated = TwoComponentMC()
+    @named component1 = Resistor(R = 1.0)
+    @named component2 = Capacitor(C = 1.0, v = 0.0)
+    @named signal = Constant(k = 1.0)
+    rsys = substitute_component(templated, templated.component1 => component1)
+    rsys = substitute_component(rsys, rsys.component2 => component2)
+    rcsys = substitute_component(rsys, rsys.signal => signal)
+
+    # the connection network must reference the substituted systems, not the
+    # stale pre-substitution objects
+    conneq = only(
+        filter(
+            e -> ModelingToolkit.value(e.rhs) isa Connection &&
+                ModelingToolkit.value(e.rhs).systems isa ConnectionNetwork,
+            ModelingToolkit.get_eqs(rcsys)
+        )
+    )
+    net = ModelingToolkit.value(conneq.rhs).systems
+    @test nameof.(net.nodes) == [:component1, :component2, :source, :ground]
+    # nodes hold the substituted component forms (Resistor/Capacitor), not the
+    # original OnePort systems the network was built with
+    @test Set(ModelingToolkit.getname.(parameters(net.nodes[1]))) ==
+        Set([:R, :T_ref, :alpha])
+    @test Set(ModelingToolkit.getname.(parameters(net.nodes[2]))) == Set([:C])
+
+    @named reference = RC()
+
+    sys1 = mtkcompile(rcsys)
+    sys2 = mtkcompile(reference)
+    @test isequal(unknowns(sys1), unknowns(sys2))
+    @test isequal(equations(sys1), equations(sys2))
+
+    prob1 = ODEProblem(sys1, [], (0.0, 10.0))
+    prob2 = ODEProblem(sys2, [], (0.0, 10.0))
+
+    sol1 = solve(prob1, Tsit5())
+    sol2 = solve(prob2, Tsit5(); saveat = sol1.t)
+    @test sol1.u ≈ sol2.u atol = 1.0e-8
+end
+
 @component function BadOnePort1(; name)
     pars = @parameters begin
     end
