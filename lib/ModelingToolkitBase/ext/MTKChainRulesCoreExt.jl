@@ -9,6 +9,17 @@ import SciMLStructures
 import SymbolicIndexingInterface: remake_buffer, parameter_index
 import SciMLBase: AbstractNonlinearProblem, remake
 
+function ChainRulesCore.rrule(::typeof(MTK._static_initialization_buffer), prototype, values)
+    result = MTK._static_initialization_buffer(prototype, values)
+    project = ChainRulesCore.ProjectTo(values)
+    function buffer_pullback(dt)
+        dt = unthunk(dt)
+        dvalues = dt isa ChainRulesCore.AbstractZero ? dt : project(values isa Tuple ? Tuple(dt) : dt)
+        return NoTangent(), NoTangent(), dvalues
+    end
+    return result, buffer_pullback
+end
+
 # Positional arguments of `MTKParameters` after `tunables`, in order. `setproperties`
 # (and hence every `@set!`/`SciMLStructures.replace` rebuild) lowers to this
 # constructor, so the pullback has to route each buffer's cotangent back to its own
