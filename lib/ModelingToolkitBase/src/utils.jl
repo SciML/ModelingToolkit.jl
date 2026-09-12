@@ -46,12 +46,15 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Turn `x(t)` into `x`
+Turn `x(t)` into `x`.
+
+A call to a callable parameter also has a symbolic operation but is not an unknown, so it
+is kept and its arguments are detimed instead.
 """
 function detime_dvs(op)
     return if !iscall(op)
         op
-    elseif issym(operation(op))
+    elseif issym(operation(op)) && !isparameter(operation(op))
         SSym(nameof(operation(op)); type = Real, shape = SU.shape(op))
     else
         maketerm(
