@@ -74,12 +74,17 @@ function Base.show(io::IO, net::ConnectionNetwork)
 end
 
 """
+A resolved network port: a connector subsystem or a symbolic (causal) variable.
+"""
+const NetworkPort = Union{System, SymbolicT}
+
+"""
     $(TYPEDSIGNATURES)
 
 Resolve port `port` of `node` to a connector subsystem or symbolic variable. A
 `port` of `nothing` resolves to the node itself.
 """
-function _network_port(node::System, port::Union{Symbol, Nothing})
+function _network_port(node::System, port::Union{Symbol, Nothing})::NetworkPort
     port === nothing && return node
     result = try
         getproperty(node, port)
@@ -91,6 +96,24 @@ function _network_port(node::System, port::Union{Symbol, Nothing})
         )
     end
     return result isa AbstractSystem ? result : unwrap(result)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the resolved `(src_port, dst_port)` pair of every edge of `net`, in edge order.
+Each port is the connector subsystem or symbolic variable the edge refers to, namespaced
+by its node exactly as `node.port` would be. A port of `nothing` in the edge resolves to
+the node itself.
+"""
+function network_edge_ports(net::ConnectionNetwork)
+    return Tuple{NetworkPort, NetworkPort}[
+        (
+            _network_port(net.nodes[e.src], e.src_port),
+            _network_port(net.nodes[e.dst], e.dst_port),
+        )
+            for e in net.edges
+    ]
 end
 
 """
@@ -267,9 +290,7 @@ function _generate_connectionsets!(
         connection_state::AbstractConnectionState,
         namespace::Vector{Symbol}, network::ConnectionNetwork, isouter::IsOuter
     )
-    for edge in network.edges
-        src_port = _network_port(network.nodes[edge.src], edge.src_port)
-        dst_port = _network_port(network.nodes[edge.dst], edge.dst_port)
+    for (src_port, dst_port) in network_edge_ports(network)
         if src_port isa AbstractSystem && dst_port isa AbstractSystem
             _generate_connectionsets!(
                 connection_state, namespace, System[src_port, dst_port], isouter

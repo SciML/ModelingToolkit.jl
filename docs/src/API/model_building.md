@@ -103,6 +103,7 @@ does not grow with the number of edges.
 ```@docs
 ConnectionEdge
 ConnectionNetwork
+ModelingToolkitBase.network_edge_ports
 ```
 
 Connections can be expanded using `expand_connections`.

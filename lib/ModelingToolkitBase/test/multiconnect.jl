@@ -4,8 +4,9 @@ using OrdinaryDiffEqNonlinearSolve
 using ModelingToolkitBase:
     t_nounits as t, D_nounits as D, generate_connection_set,
     scalarize, ConnectionVertex
-using Symbolics, Graphs
+using Symbolics, Graphs, DynamicQuantities
 using Symbolics: unwrap
+using ModelingToolkitBase: t as t_u
 import SymbolicUtils as SU
 import ModelingToolkitBase as MTK
 import SciMLBase
@@ -441,4 +442,37 @@ end
     @test sol[sys.vc] ≈ 12.0 .* (1.0 .- exp.(.-sol.t ./ 2.0)) atol = 1.0e-4
     @test sol[sys.vn[4]][end] ≈ 0.0 atol = 1.0e-4
     @test isapprox(sol[sys.fp[2]][1], 6.0, atol = 1.0e-3) # I(0) = V / (2R)
+end
+
+@connector function UnitPin(; name, vunit = u"V")
+    vars = @variables begin
+        v(t_u), [unit = vunit]
+        i(t_u), [connect = Flow, unit = u"A"]
+    end
+    System(Equation[], t_u, vars, []; name)
+end
+
+@component function UnitResistor(; name)
+    @parameters R = 1.0 [unit = u"Ω"]
+    @named p = UnitPin()
+    @named n = UnitPin()
+    @variables v(t_u) [unit = u"V"] i(t_u) [unit = u"A"]
+    eqs = [v ~ p.v - n.v; i ~ p.i; p.i + n.i ~ 0; v ~ i * R]
+    System(eqs, t_u, [v, i], [R]; systems = [p, n], name)
+end
+
+@testset "Unit validation of networks" begin
+    r1 = UnitResistor(name = :r1)
+    r2 = UnitResistor(name = :r2)
+    eq = multiconnect([r1, r2], [ConnectionEdge(1, 2, :n, :p)])
+    @test MTK.validate(eq)
+    @test System([eq], t_u; systems = [r1, r2], name = :sys, checks = true) isa System
+
+    # every edge is unit-checked like the pairwise `connect` it stands for
+    bad = UnitPin(name = :bad, vunit = u"A")
+    eq_bad = multiconnect([r1, bad], [ConnectionEdge(1, 2, :n, nothing)])
+    @test_logs (:warn, r"mismatched units") match_mode = :any (@test !MTK.validate(eq_bad))
+    @test_throws MTK.ValidationError System(
+        [eq_bad], t_u; systems = [r1, bad], name = :sys, checks = true
+    )
 end
