@@ -127,8 +127,15 @@ function SciMLBase.ODEFunction{iip, spec}(
 
     observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state)
 
-    _W_sparsity = W_sparsity(sys)
-    W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
+    # The W sparsity pattern is a symbolic computation over every scalar equation; only
+    # pay for it when something consumes it.
+    if sparse || sparsity
+        _W_sparsity = W_sparsity(sys)
+        W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
+    else
+        _W_sparsity = nothing
+        W_prototype = nothing
+    end
 
     args = (; f)
     kwargs = (;

@@ -177,8 +177,13 @@ function generate_rhs(
         end
     else
         if !override_discrete && !is_discrete_system(sys)
+            # An array differential equation `D(u[2:4]) ~ f` (or `D(u[2:4]) .- f ~ 0`)
+            # stays one equation: its right-hand side is written to a contiguous block
+            # of `du` below, the same way implicit-DAE residuals are packed.
+            eqs = map(explicit_array_derivative_form, eqs)
             check_operator_variables(eqs, Differential)
             check_lhs(eqs, Differential, Set(dvs))
+            assemble_residuals = any(is_array_equation, eqs)
         end
         rhss = [eq.rhs for eq in eqs]
     end
@@ -639,16 +644,30 @@ applied to the symbolic mass matrix. Returns a `Diagonal` or `LinearAlgebra.I` w
 possible.
 """
 function calculate_massmatrix(sys::System; simplify = false)
-    eqs = [eq for eq in equations(sys)]
-    M = zeros(length(eqs), length(eqs))
-    for (i, eq) in enumerate(eqs)
+    eqs = equations(sys)
+    # An array equation stands for one row per element, laid out as `generate_rhs`
+    # packs them: the rows of consecutive equations follow each other.
+    n = count_equation_rows(eqs)
+    M = zeros(n, n)
+    i = 0
+    for eq in eqs
+        eq = explicit_array_derivative_form(eq)
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
-            st = var_from_nested_derivative(eq.lhs)[1]
-            j = variable_index(sys, st)
-            M[i, j] = 1
+            x = only(arguments(eq.lhs))
+            if SU.is_array_shape(SU.shape(x))
+                for idx in SU.stable_eachindex(x)
+                    i += 1
+                    M[i, variable_index(sys, x[idx])] = 1
+                end
+            else
+                st = var_from_nested_derivative(eq.lhs)[1]
+                i += 1
+                M[i, variable_index(sys, st)] = 1
+            end
         else
             _iszero(eq.lhs) ||
                 error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            i += equation_row_count(eq)
         end
     end
     M = simplify ? Symbolics.simplify.(M) : M
@@ -1671,8 +1690,19 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         end
     else
         for eq in equations(sys)
+            eq = explicit_array_derivative_form(eq)
             isdiffeq(eq) || continue
-            push!(dervars, default_toterm(eq.lhs))
+            x = only(arguments(eq.lhs))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` has no single `toterm` name; the derivatives that can be
+                # requested are those of its elements.
+                dop = operation(eq.lhs)::Union{Differential, Shift}
+                for idx in SU.stable_eachindex(x)
+                    push!(dervars, default_toterm(dop(x[idx])))
+                end
+            else
+                push!(dervars, default_toterm(eq.lhs))
+            end
         end
     end
     pred = CheckInvalidAndTrackNamespaced(

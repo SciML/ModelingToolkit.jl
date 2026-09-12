@@ -3,7 +3,6 @@ using ModelingToolkitBase: unwrap, complete, unknowns
 using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
-using DiffEqBase: BrownFullBasicInit
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -49,12 +48,16 @@ end
     @test any(!iszero, out)
 end
 
-@testset "other problem types still require scalarized equations" begin
+@testset "array unknowns still require `mtkcompile`" begin
     n = 11
-    sys, u, t, D = heat_array_system(n)
-    op = [u[i] => 0.0 for i in 1:n]
-    # ODEProblem cannot consume array equations; the guard must remain in place
-    @test_throws Exception ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    @named sys = System([D(u) ~ -u], t, [u], [])
+    sys = complete(sys)
+    op = [u => zeros(n), D(u) => zeros(n)]
+    # the equation is fine, but `u` as a single array unknown is not
+    @test_throws ["array unknowns"] ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
 end
 
 @testset "array-equation DAE solves to the analytic solution" begin
@@ -67,9 +70,15 @@ end
     )
     tend = 0.1
     prob = DAEProblem(sys, op, (0.0, tend); build_initializeprob = false)
-    # `du0` above is not consistent; the solver's own DAE initialization supplies it.
+    # Supply a consistent `du0` by hand (boundary values are already zero) so the solve
+    # does not depend on the solver's own DAE initialization.
+    du0 = zeros(n)
+    dx = 1 / (n - 1)
+    u0 = prob.u0
+    du0[2:(n - 1)] .= (u0[1:(n - 2)] .- 2 .* u0[2:(n - 1)] .+ u0[3:n]) ./ dx^2
+    prob = remake(prob; du0)
     sol = solve(
-        prob, DFBDF(); initializealg = BrownFullBasicInit(),
+        prob, DFBDF(); initializealg = SciMLBase.NoInit(),
         reltol = 1.0e-8, abstol = 1.0e-8, saveat = [tend]
     )
     @test SciMLBase.successful_retcode(sol)
@@ -141,8 +150,10 @@ end
     prob.f(out, du, prob.u0, prob.p, 0.0)
     @test maximum(abs, out) < 1.0e-1
 
+    du0 = zeros(n)
+    du0[2:(n - 1)] .= (prob.u0[1:(n - 2)] .- 2 .* prob.u0[2:(n - 1)] .+ prob.u0[3:n]) ./ dx^2
     sol = solve(
-        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        remake(prob; du0), DFBDF(); initializealg = SciMLBase.NoInit(), reltol = 1.0e-8,
         abstol = 1.0e-8, saveat = [0.1]
     )
     @test SciMLBase.successful_retcode(sol)

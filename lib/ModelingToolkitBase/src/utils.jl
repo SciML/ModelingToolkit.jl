@@ -192,11 +192,93 @@ function check_variables(dvs, iv)
     return
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` is an array equation: its left-hand side is array-valued, so it stands for
+one scalar equation per element.
+"""
+is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
+
+_array_add(a::SymbolicT, b::SymbolicT) = _iszero(a) ? b : _iszero(b) ? a : unwrap(wrap(a) .+ wrap(b))
+function _array_sub(a::SymbolicT, b::SymbolicT)
+    _iszero(b) && return a
+    _iszero(a) && return unwrap(.-(wrap(b)))
+    return unwrap(wrap(a) .- wrap(b))
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Rewrite an array differential equation given in residual form, `D(x) .- f ~ 0` or
+`D(x) .+ g ~ 0` (as a finite-difference discretization emits it), into the explicit form
+`D(x) ~ f` that ODE code generation and the mass matrix are built from. Scalar equations,
+array equations already of the form `D(x) ~ f` and array equations whose left-hand side
+is not a broadcast sum or difference involving a derivative are returned unchanged.
+"""
+function explicit_array_derivative_form(eq::Equation)
+    lhs = eq.lhs
+    is_array_equation(eq) && iscall(lhs) || return eq
+    op = operation(lhs)
+    op isa Differential && return eq
+    op === broadcast || return eq
+    args = arguments(lhs)
+    length(args) == 3 || return eq
+    bop = unwrap_const(args[1])
+    bop === (-) || bop === (+) || return eq
+    a, b = args[2], args[3]
+    rhs = eq.rhs
+    if isdifferential(a)
+        dx = a
+        f = bop === (-) ? _array_add(rhs, b) : _array_sub(rhs, b)
+    elseif isdifferential(b)
+        dx = b
+        f = bop === (-) ? _array_sub(a, rhs) : _array_sub(rhs, a)
+    else
+        return eq
+    end
+    # A scalar derivative broadcast against an array is not an array differential equation.
+    SU.is_array_shape(SU.shape(dx)) || return eq
+    return Equation(dx, f)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Expand the array equations in `eqs` into one scalar equation per element, so that the
+result has one equation per row of the generated code and of the mass matrix. Array
+differential equations in residual form are first rewritten to `D(x) ~ f`. Returns `eqs`
+itself when it has no array equations.
+"""
+function scalarize_array_equations(eqs::Vector{Equation})
+    any(is_array_equation, eqs) || return eqs
+    new_eqs = Equation[]
+    sizehint!(new_eqs, count_equation_rows(eqs))
+    for eq in eqs
+        if is_array_equation(eq)
+            append!(new_eqs, vec(Symbolics.scalarize(explicit_array_derivative_form(eq))))
+        else
+            push!(new_eqs, eq)
+        end
+    end
+    return new_eqs
+end
+
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
-    op = operation(v)
-    op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
+    if iscall(v)
+        op = operation(v)
+        if op isa Differential && isone(op.order)
+            x = only(arguments(v))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` names the slice; each of its elements must be an unknown.
+                all(idx -> x[idx] in dvs, SU.stable_eachindex(x)) && return
+            elseif x in dvs
+                return
+            end
+        end
+    end
     error(lazy"$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
 function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
@@ -663,9 +745,22 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
         is_tmp_fine ||
             error(lazy"The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
         for v in tmp
-            v in ops &&
-                error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
-            push!(ops, v)
+            # `D(u[2:4])` stands for the derivatives of its elements, which must not be
+            # differentiated again by another equation, as a slice or as a scalar.
+            if isdifferential(v) && SU.is_array_shape(SU.shape(only(arguments(v))))
+                dop = operation(v)::Differential
+                x = only(arguments(v))
+                for idx in SU.stable_eachindex(x)
+                    el = dop(x[idx])
+                    el in ops &&
+                        error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $el appears in LHS more than once.")
+                    push!(ops, el)
+                end
+            else
+                v in ops &&
+                    error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
+                push!(ops, v)
+            end
         end
         empty!(tmp)
         empty!(visited)

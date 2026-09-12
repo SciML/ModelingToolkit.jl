@@ -2197,9 +2197,12 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    # Implicit-DAE codegen expands an array equation into one output row per element, so
-    # array equations are usable there. Every other problem type still needs `mtkcompile`.
-    implicit_dae || check_array_equations_unknowns(eqs, dvs)
+    # Implicit-DAE and explicit-ODE codegen expand an array equation into one output row
+    # per element, so array equations are usable there. Every other problem type still
+    # needs `mtkcompile`.
+    implicit_dae || check_array_equations_unknowns(
+        eqs, dvs; allow_array_equations = constructor <: ODEFunction
+    )
 
     op = build_operating_point(sys, op; fast_path = true)
 

@@ -1360,16 +1360,16 @@ end
 @testset "Issue #2597" begin
     @variables x(t)[1:2] = ones(2) y(t) = 1.0
 
+    # `ODEProblem` accepts the array equation `D(x) ~ x` from `complete`, but the
+    # unknowns must be scalars: the array unknown `x` still needs `mtkcompile`.
     for eqs in [D(x) ~ x, collect(D(x) .~ x)]
         for dvs in [[x], collect(x)]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
+            if length(dvs) == 2
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
-                @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
-                ] ODEProblem(
+                @test_throws ["array unknowns", "mtkcompile", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0)
                 )
             end
@@ -1379,12 +1379,10 @@ end
         for dvs in [[x, y], [x..., y]]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
+            if length(dvs) == 3
                 @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
             else
-                @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
-                ] ODEProblem(
+                @test_throws ["array unknowns", "mtkcompile", "scalarize"] ODEProblem(
                     sys, [], (0.0, 1.0)
                 )
             end
