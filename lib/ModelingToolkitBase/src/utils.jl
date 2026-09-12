@@ -340,7 +340,7 @@ function check_bindings(atomic_ps::AtomicArraySet{Dict{SymbolicT, Nothing}}, bin
     for p in atomic_ps
         val = get(bindings, p, COMMON_NOTHING)
         val === COMMON_NOTHING && continue
-        if val === COMMON_MISSING
+        if isequal(val, COMMON_MISSING)
             if !is_variable_floatingpoint(p)
                 throw(
                     ArgumentError(
@@ -541,7 +541,7 @@ function collect_defaults!(initial_conditions::SymmapT, bindings::SymmapT, v::Sy
             Moshi.Match.@match def begin
                 # `get!` here is just shorthand for "if the key doesn't exist, add this
                 # value".
-                BSImpl.Const() => if def === COMMON_MISSING
+                BSImpl.Const() => if isequal(def, COMMON_MISSING)
                     get!(bindings, v, def)
                 else
                     get!(initial_conditions, v, def)
@@ -1703,7 +1703,7 @@ Identical to `no_override_merge!` but `COMMON_MISSING` values in `b` are ignored
 """
 function no_override_merge_except_missing!(a::AbstractDict, b::AbstractDict)
     for (k, v) in b
-        v === COMMON_MISSING && continue
+        isequal(v, COMMON_MISSING) && continue
         if haskey(a, k)
             throw(ArgumentError("Cannot merge without overriding: common key $k."))
         end

@@ -132,7 +132,7 @@ function InitializationProblem{iip, specialize}(
 
     uninit = as_atomic_array_set(unknowns(sys))
     for (k, v) in bindings(sys)
-        v === COMMON_MISSING || continue
+        isequal(v, COMMON_MISSING) || continue
         push!(uninit, k)
     end
     setdiff!(uninit, as_atomic_array_set(unknowns(isys)))
