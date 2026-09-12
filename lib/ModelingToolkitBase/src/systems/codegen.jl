@@ -1729,6 +1729,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     else
         for eq in equations(sys)
             isdiffeq(eq) || continue
+            SU.is_array_shape(SU.shape(eq.lhs)) && continue
             push!(dervars, default_toterm(eq.lhs))
         end
     end

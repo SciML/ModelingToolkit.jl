@@ -133,6 +133,10 @@ end
     op = vcat([u[i] => sinpi(xs[i]) for i in 1:n], [D(u[i]) => 0.0 for i in 1:n])
     prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
     @test length(prob.u0) == n
+    total = ModelingToolkitBase.build_explicit_observed_function(sys, sum(u))
+    interior = ModelingToolkitBase.build_explicit_observed_function(sys, u[2:(n - 1)])
+    @test total(prob.u0, prob.p, 0.0) ≈ sum(prob.u0)
+    @test interior(prob.u0, prob.p, 0.0) ≈ prob.u0[2:(n - 1)]
 
     # the residual matches the analytic derivative of the initial condition
     out = zeros(n)
