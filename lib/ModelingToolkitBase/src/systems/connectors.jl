@@ -42,6 +42,9 @@ const _debug_mode = Base.JLOptions().check_bounds == 1
 
 function Base.show(io::IO, c::Connection)
     Symbolics.warn_load_latexify()
+    if c.systems isa ConnectionNetwork
+        return print(io, "multiconnect(", c.systems, ")")
+    end
     print(io, "connect(")
     if c.systems isa AbstractArray || c.systems isa Tuple
         n = length(c.systems)
@@ -743,7 +746,9 @@ function handle_maybe_connect_equation!(
         end
         add_domain_connection_edge!(state, hyperedge)
     else
-        connected_systems = get_systems(rhs)::Union{Vector{System}, Vector{SymbolicT}}
+        connected_systems = get_systems(rhs)::Union{
+            Vector{System}, Vector{SymbolicT}, ConnectionNetwork
+        }
         generate_connectionsets!(state, namespace, connected_systems, isouter)
     end
     return nothing

@@ -304,6 +304,7 @@ include("systems/imperative_affect.jl")
 include("systems/callbacks.jl")
 include("systems/system.jl")
 include("systems/analysis_points.jl")
+include("systems/multiconnect.jl")
 include("systems/ir_info.jl")
 include("problems/docs.jl")
 include("systems/codegen.jl")
@@ -409,8 +410,8 @@ export OptimizationProblem, constraints, constraints_to_penalties
 export SteadyStateProblem
 export JumpProblem, SymbolicMassActionJump
 export flatten
-export connect, domain_connect, @connector, Connection, AnalysisPoint, Flow, Stream,
-    instream
+export connect, domain_connect, multiconnect, ConnectionEdge, ConnectionNetwork,
+    @connector, Connection, AnalysisPoint, Flow, Stream, instream
 export @component, @mtkcompile, @mtkbuild, @mtkcomplete
 export isinput, isoutput, getbounds, hasbounds, getnominal, hasnominal, setnominal, getguess, hasguess, isdisturbance,
     istunable, getdist, hasdist,

@@ -2517,11 +2517,37 @@ function round_trip_expr(t, var2name)
 end
 
 function round_trip_eq(eq::Equation, var2name)
-    return if eq.lhs isa Connection
-        syss = get_systems(eq.rhs)
-        call = Expr(:call, connect)
-        for sys in syss
-            strs = split(string(nameof(sys)), NAMESPACE_SEPARATOR)
+    return if value(eq.lhs) isa Connection
+        syss = get_systems(value(eq.rhs))
+        if syss isa ConnectionNetwork
+            call = Expr(:call, multiconnect)
+            nodes_expr = Expr(:vect)
+            edges_expr = Expr(:vect)
+            for node in syss.nodes
+                strs = split(string(nameof(node)), NAMESPACE_SEPARATOR)
+                s = Symbol(strs[1])
+                for st in strs[2:end]
+                    s = Expr(:., s, Meta.quot(Symbol(st)))
+                end
+                push!(nodes_expr.args, s)
+            end
+            for edge in syss.edges
+                push!(
+                    edges_expr.args,
+                    Expr(
+                        :call, ConnectionEdge, edge.src, edge.dst,
+                        QuoteNode(edge.src_port), QuoteNode(edge.dst_port)
+                    )
+                )
+            end
+            push!(call.args, nodes_expr, edges_expr)
+            return call
+        end
+        isdomain = get_systems(value(eq.lhs)) === :domain
+        call = Expr(:call, isdomain ? domain_connect : connect)
+        for arg in syss
+            name = arg isa AbstractSystem ? nameof(arg) : getname(arg)
+            strs = split(string(name), NAMESPACE_SEPARATOR)
             s = Symbol(strs[1])
             for st in strs[2:end]
                 s = Expr(:., s, Meta.quot(Symbol(st)))
@@ -2645,7 +2671,7 @@ Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
     n_expanded_connection_equations(sys::AbstractSystem)
 
 Returns the number of equations that the connections in `sys` expands to.
-Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> !(eq.lhs isa Connection), equations(sys)))`.
+Equivalent to `length(equations(expand_connections(sys))) - length(filter(eq -> !(value(eq.lhs) isa Connection), equations(sys)))`.
 """
 function n_expanded_connection_equations(sys::AbstractSystem)
     # TODO: what about inputs?
@@ -2707,7 +2733,7 @@ function Base.show(
     # Print equations
     eqs = equations(sys)
     if eqs isa AbstractArray && eltype(eqs) <: Equation
-        neqs = count(eq -> !(eq.lhs isa Connection), eqs)
+        neqs = count(eq -> !(value(eq.lhs) isa Connection), eqs)
         next = n_expanded_connection_equations(sys)
         ntot = neqs + next
         ntot > 0 && printstyled(io, "\nEquations ($ntot):"; bold)

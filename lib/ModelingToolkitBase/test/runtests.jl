@@ -108,6 +108,7 @@ end
         @safetestset "print_tree" include("print_tree.jl")
         @safetestset "Analysis Points Test" include("analysis_points.jl")
         @safetestset "Causal Variables Connection Test" include("causal_variables_connection.jl")
+        @safetestset "Multiconnect Test" include("multiconnect.jl")
         @safetestset "Debugging Test" include("debugging.jl")
         @safetestset "Namespacing test" include("namespacing.jl")
         @safetestset "LinearProblem Tests" include("linearproblem.jl")
