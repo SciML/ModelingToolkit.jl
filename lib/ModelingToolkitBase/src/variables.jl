@@ -450,8 +450,11 @@ function getbounds(x::SymbolicT)
     bounds = getmetadata(arrx, VariableBounds, nothing)::NTuple{2, Any}
     idxs = @views unwrap_const.(arguments(x)[2:end])
     return map(bounds) do b
-        @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
-        return b[idxs...]
+        if SU.is_array_shape(SU.shape(b))
+            @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
+            return b[idxs...]
+        end
+        return b
     end
 end
 
