@@ -612,3 +612,14 @@ end
     @test isempty(ModelingToolkitBase.get_constraints(only(ModelingToolkitBase.get_systems(tpsys))))
     @test length(get_costs(only(ModelingToolkitBase.get_systems(tpsys)))) == 2
 end
+
+@testset "`ProblemTypeCtx` is forwarded to `OptimizationProblem`" begin
+    @variables x
+    @mtkcompile sys = System(
+        Equation[]; costs = [(x - 1)^2], metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"]
+    )
+    prob = OptimizationProblem(sys, [x => 0.0])
+    @test SciMLBase.problem_type(prob) == "A"
+    @mtkcompile sys2 = System(Equation[]; costs = [(x - 1)^2])
+    @test SciMLBase.problem_type(OptimizationProblem(sys2, [x => 0.0])) === nothing
+end

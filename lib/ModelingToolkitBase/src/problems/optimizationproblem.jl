@@ -177,7 +177,8 @@ function SciMLBase.OptimizationProblem{iip}(
     end
 
     kwargs = process_kwargs(sys; kwargs...)
-    kwargs = (; lb, ub, int, lcons, ucons, kwargs...)
+    ptype = getmetadata(sys, ProblemTypeCtx, nothing)
+    kwargs = (; lb, ub, int, lcons, ucons, problem_type = ptype, kwargs...)
     args = (; f, u0, p)
     return maybe_codegen_scimlproblem(expression, OptimizationProblem{iip}, args; kwargs...)
 end
