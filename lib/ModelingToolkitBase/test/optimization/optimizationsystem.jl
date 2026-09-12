@@ -1,6 +1,6 @@
 using ModelingToolkitBase, SparseArrays, Test, Optimization, OptimizationMOI,
     Ipopt, AmplNLWriter, SymbolicIndexingInterface,
-    LinearAlgebra
+    LinearAlgebra, ADTypes, ForwardDiff
 using OptimizationOptimJL: Optim
 using Ipopt: Ipopt_jll
 using Symbolics: value
@@ -515,4 +515,29 @@ end
     @test sprob2.f.f([1.5], sprob2.p) ≈ 3 * (0.5)^2 + (0.5)^2
     sol2 = solve(sprob2, Optim.LBFGS())
     @test sol2.u[1] ≈ 1.25 atol = 1.0e-4
+end
+
+@testset "`adtype` passthrough" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys = complete(OptimizationSystem(loss, [x, y], [a, b], name = :sys))
+    op = [x => 0.0, y => 0.0, a => 1.0, b => 100.0]
+
+    f = OptimizationFunction(sys, AutoForwardDiff())
+    @test f.adtype isa AutoForwardDiff
+    f = OptimizationFunction{true}(sys; adtype = AutoEnzyme())
+    @test f.adtype isa AutoEnzyme
+    f = OptimizationFunction(sys, AutoForwardDiff(); grad = true, hess = true)
+    @test f.adtype isa AutoForwardDiff
+    @test f.grad !== nothing && f.hess !== nothing
+    @test OptimizationFunction(sys).adtype isa ModelingToolkitBase.SciMLBase.NoAD
+
+    prob = OptimizationProblem(sys, op; adtype = AutoForwardDiff())
+    @test prob.f.adtype isa AutoForwardDiff
+    @test OptimizationProblem(sys, op).f.adtype isa ModelingToolkitBase.SciMLBase.NoAD
+
+    sol = solve(prob, Optim.BFGS())
+    @test sol.objective < 1.0e-8
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
 end

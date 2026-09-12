@@ -27,6 +27,7 @@ using Reexport: Reexport, @reexport
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
+import ADTypes
 import SciMLBase
 using SciMLBase: BVPFunction, BVProblem, CallbackSet, ContinuousCallback, DAEFunction,
     DAEProblem, DDEFunction, DDEProblem, DiscreteCallback, DiscreteFunction,
