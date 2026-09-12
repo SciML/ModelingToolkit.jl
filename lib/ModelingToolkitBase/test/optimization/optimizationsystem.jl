@@ -1,4 +1,4 @@
-using ModelingToolkitBase, SparseArrays, Test, Optimization, OptimizationMOI,
+using ModelingToolkitBase, SciMLBase, SparseArrays, Test, Optimization, OptimizationMOI,
     Ipopt, AmplNLWriter, SymbolicIndexingInterface,
     LinearAlgebra, ADTypes, ForwardDiff
 using OptimizationOptimJL: Optim
