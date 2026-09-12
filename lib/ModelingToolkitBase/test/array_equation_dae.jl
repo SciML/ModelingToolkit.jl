@@ -148,3 +148,118 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end
+
+@testset "array derivative code size" begin
+    syntax_nodes(x) = x isa Expr ? 1 + sum(syntax_nodes, x.args; init = 0) : 1
+    sizes = Int[]
+    for n in (24, 96)
+        @independent_variables t
+        @variables x(t)[1:n]
+        D = Differential(t)
+        sys = complete(System([D(x) ~ -x], t, collect(x), []; name = :array_decay))
+        generated = DAEFunction(sys; expression = Val{true})
+        @test isequal(generated, DAEFunction(sys; expression = Val{true}))
+        push!(sizes, syntax_nodes(generated))
+        prob = DAEProblem(
+            sys, [x => ones(n), D(x) => -ones(n)], (0.0, 1.0);
+            build_initializeprob = false
+        )
+        sol = solve(prob, DFBDF(); reltol = 1.0e-8, abstol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol(1.0; idxs = x) ≈ fill(exp(-1), n) rtol = 1.0e-6
+    end
+    @test sizes[1] == sizes[2]
+end
+
+@testset "derivatives in observed expressions" begin
+    @independent_variables t
+    @variables u(t)[1:6] z(t) v(t)
+    D = Differential(t)
+    sys = complete(
+        System(
+            [D(u) ~ -u .+ v, D(z) ~ -z], t, [collect(u); z], [];
+            observed = [v ~ D(z)], name = :mixed
+        )
+    )
+    prob = DAEProblem(
+        sys, [u => ones(6), z => 1.0, D(u) => -ones(6), D(z) => -1.0],
+        (0.0, 1.0); build_initializeprob = false
+    )
+    out = zeros(7)
+    prob.f(out, prob.du0, prob.u0, prob.p, 0.0)
+    @test out ≈ [-ones(6);0.0]
+end
+
+@testset "interleaved derivative arguments" begin
+    @independent_variables t
+    @variables x(t)[1:6] z(t)
+    D = Differential(t)
+    vars = [x[1]; z; collect(x)[2:end]]
+    sys = complete(System([D(x) ~ -x, D(z) ~ -z], t, vars, []; name = :interleaved))
+    prob = DAEProblem(
+        sys, [x => ones(6), z => 2.0, D(x) => -ones(6), D(z) => -2.0],
+        (0.0, 1.0); build_initializeprob = false
+    )
+    sol = solve(prob, DFBDF(); reltol = 1.0e-8, abstol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol(1.0; idxs = x) ≈ fill(exp(-1), 6) rtol = 1.0e-6
+    @test sol(1.0; idxs = z) ≈ 2exp(-1) rtol = 1.0e-6
+end
+
+@testset "array derivatives in observed expressions" begin
+    @independent_variables t
+    @variables u(t)[1:6] v(t)[1:6] z(t)[1:6]
+    D = Differential(t)
+    sys = complete(
+        System(
+            [D(u) ~ -u .+ v, D(z) ~ -z], t,
+            [collect(u); collect(z)], []; observed = [v ~ D(z)], name = :array_observed
+        )
+    )
+    prob = DAEProblem(
+        sys, [
+            u => ones(6), z => fill(2.0, 6),
+            D(u) => fill(-3.0, 6), D(z) => fill(-2.0, 6),
+        ], (0.0, 1.0);
+        build_initializeprob = false
+    )
+    out = zeros(12)
+    prob.f(out, prob.du0, prob.u0, prob.p, 0.0)
+    @test out ≈ zeros(12)
+end
+
+@testset "array derivative sentinel collision" begin
+    @independent_variables t
+    @variables x(t)[1:6]
+    @parameters __mtk_dae_du[1:6]
+    D = Differential(t)
+    sys = complete(
+        System(
+            [D(x) ~ -x .+ __mtk_dae_du], t, collect(x),
+            [__mtk_dae_du]; name = :collision
+        )
+    )
+    @test_throws ArgumentError DAEFunction(sys)
+end
+
+@testset "Multidimensional derivative code size" begin
+    syntax_nodes(x) = x isa Expr ? 1 + sum(syntax_nodes, x.args; init = 0) : 1
+    for layouts in (((4, 6), (8, 12)), ((2, 3, 4), (4, 6, 4)))
+        sizes = Int[]
+        for dims in layouts
+            ranges = map(n -> 1:n, dims)
+            @independent_variables t
+            @variables x(t)[ranges...]
+            D = Differential(t)
+            vars = vec(collect(Symbolics.scalarize(x)))
+            sys = complete(System([D(x) ~ -x], t, vars, []; name = :multidimensional_decay))
+            push!(sizes, syntax_nodes(DAEFunction(sys; expression = Val{true})))
+            initial = reshape(collect(1.0:prod(dims)), dims) / prod(dims)
+            prob = DAEProblem(sys, [x => initial, D(x) => -initial], (0.0, 1.0); build_initializeprob = false)
+            sol = solve(prob, DFBDF(); reltol = 1.0e-8, abstol = 1.0e-10)
+            @test SciMLBase.successful_retcode(sol)
+            @test sol(1.0; idxs = x) ≈ exp(-1) .* initial rtol = 1.0e-6
+        end
+        @test sizes[1] == sizes[2]
+    end
+end
