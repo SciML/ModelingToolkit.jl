@@ -293,14 +293,17 @@ the system. Return the modified `munknowns`.
 function modified_unknowns!(munknowns, jump::Union{ConstantRateJump, VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(munknowns, st)
+        isin(sts, st) && push!(munknowns, st)
     end
     return munknowns
 end
 
 function modified_unknowns!(munknowns, jump::MassActionJump, sts)
     for (unknown, stoich) in jump.net_stoch
-        any(isequal(unknown), sts) && push!(munknowns, unknown)
+        isin(sts, unknown) && push!(munknowns, unknown)
     end
     return munknowns
 end
+
+isin(sts, st) = any(isequal(st), sts)
+isin(sts::AbstractSet, st) = st in sts
