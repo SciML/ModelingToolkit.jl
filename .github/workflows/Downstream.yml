@@ -63,12 +63,19 @@ jobs:
         shell: julia --color=yes --project=downstream {0}
         run: |
           using Pkg
-          Pkg.develop(PackageSpec(path="."))
+          # Resolve the root and every lib/* sublibrary in ONE `develop`. Two calls
+          # cannot work whenever a PR bumps a sublibrary's version and the root's floor
+          # along with it: the first call resolves the root alone, needs the new
+          # sublibrary version from the registry, and fails before the second call can
+          # supply it from the checkout.
+          specs = PackageSpec[PackageSpec(path = ".")]
           if isdir("lib")
-              Pkg.develop(map(name -> PackageSpec(; path = joinpath("lib", name)),
-                              filter(name -> isfile(joinpath("lib", name, "Project.toml")),
-                                     readdir("lib"))))
+              append!(specs,
+                      map(name -> PackageSpec(; path = joinpath("lib", name)),
+                          filter(name -> isfile(joinpath("lib", name, "Project.toml")),
+                                 readdir("lib"))))
           end
+          Pkg.develop(specs)
           subpkg = "${{ matrix.package.subpkg }}"
           if subpkg != ""
             Pkg.develop(PackageSpec(path=joinpath("./downstream/lib", subpkg)))

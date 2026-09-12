@@ -54,7 +54,9 @@ const NONPUBLIC_EXPLICIT_IMPORTS = (
 # public spelling. Beyond the Symbolics/SymbolicUtils internals covered above, these are:
 # the SciMLBase callback/keyword defaults every problem constructor has to reproduce, the
 # `Moshi.Data`/`Moshi.Match` macro entry points, the Base internals with no public spelling
-# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, ...), and the AD hooks
+# (`@__doc__`, `@ntuple`, `literal_pow`, `ReshapedArray`, and `setindex` — the
+# non-mutating array update an immutable iterate needs, which Base declares no public
+# spelling for), and the AD hooks
 # (`ForwardDiff.Dual`, `EnzymeCore.EnzymeRules`) the generated code dispatches on.
 const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Symbolics
@@ -105,7 +107,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # Base
     Symbol("@__doc__"), :Callable, :Cartesian, :deepcopy_internal, :Experimental,
     :HasEltype, :JLOptions, :literal_pow, Symbol("@nospecializeinfer"), Symbol("@ntuple"),
-    :ReshapedArray,
+    :ReshapedArray, :setindex,
     # Base.Cartesian
     :poplinenum,
     # Base.Experimental
