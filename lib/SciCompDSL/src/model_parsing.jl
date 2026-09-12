@@ -41,7 +41,7 @@ end
 
 function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     if fullname isa Symbol
-        name, type = fullname, :System
+        name, type = fullname, MTKBase.System
     else
         if fullname.head == :(::)
             name, type = fullname.args
@@ -71,9 +71,9 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
     push!(exprs.args, :(variables = []))
     push!(exprs.args, :(parameters = []))
     # We build `System` by default
-    push!(exprs.args, :(systems = ModelingToolkitBase.System[]))
-    push!(exprs.args, :(equations = Union{Equation, Vector{Equation}}[]))
-    push!(exprs.args, :(defaults = Dict{Num, Union{Number, Symbol, Function}}()))
+    push!(exprs.args, :(systems = $MTKBase.System[]))
+    push!(exprs.args, :(equations = Union{$Equation, Vector{$Equation}}[]))
+    push!(exprs.args, :(defaults = Dict{$Num, Union{Number, Symbol, Function}}()))
 
     Base.remove_linenums!(expr)
     for arg in expr.args
@@ -165,7 +165,7 @@ function _model_macro(mod, fullname::Union{Expr, Symbol}, expr, isconnector)
 
     meta_exprs = quote
         for (k, v) in $model_meta
-            var"#___sys___" = setmetadata(var"#___sys___", $get_var($mod, k), v)
+            var"#___sys___" = $setmetadata(var"#___sys___", $get_var($mod, k), v)
         end
     end
     push!(exprs.args, meta_exprs)
