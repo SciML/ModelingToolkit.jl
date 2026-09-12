@@ -541,3 +541,74 @@ end
     @test sol.objective < 1.0e-8
     @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
 end
+
+@testset "constraints_to_penalties" begin
+    get_costs = ModelingToolkitBase.get_costs
+
+    # min (x - 2)^2 s.t. x <= 1: penalized argmin is (2 + w) / (1 + w)
+    @variables x
+    @named sys = OptimizationSystem((x - 2)^2, [x], []; constraints = [x ≲ 1.0])
+    sys = complete(sys)
+
+    psys = constraints_to_penalties(sys)
+    @test isempty(constraints(psys))
+    @test length(get_costs(psys)) == length(get_costs(sys)) + 1
+    @test isequal(unknowns(psys), unknowns(sys))
+    prob = OptimizationProblem(psys, [x => 0.0])
+    @test prob.lcons === nothing && prob.ucons === nothing
+    @test prob.f.cons === nothing
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ 1.5 atol = 1.0e-4
+
+    # penalty magnitude scales with the weight
+    psys = constraints_to_penalties(sys; weights = 1.0e4)
+    prob = OptimizationProblem(psys, [x => 0.0])
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ (2.0 + 1.0e4) / (1.0 + 1.0e4) atol = 1.0e-4
+
+    # without the penalty the unconstrained argmin is 2
+    @named usys = OptimizationSystem((x - 2)^2, [x], [])
+    usol = solve(OptimizationProblem(complete(usys), [x => 0.0]), Optim.NelderMead())
+    @test usol.u[1] ≈ 2.0 atol = 1.0e-4
+
+    # equality constraint: min (x - 2)^2 s.t. x ~ 0.5, argmin (2 + 0.5w) / (1 + w)
+    @named esys = OptimizationSystem((x - 2)^2, [x], []; constraints = [x ~ 0.5])
+    esys = complete(esys)
+    epsys = constraints_to_penalties(esys)
+    @test isempty(constraints(epsys))
+    @test length(get_costs(epsys)) == 2
+    sol = solve(OptimizationProblem(epsys, [x => 0.0]), Optim.NelderMead())
+    @test sol.u[1] ≈ 1.25 atol = 1.0e-4
+
+    # per-constraint weights
+    @variables y
+    @named msys = OptimizationSystem(
+        (x - 1)^2 + (y - 1)^2, [x, y], [];
+        constraints = [x + y ~ 0.0, y ≲ 0.25]
+    )
+    msys = complete(msys)
+    mpsys = constraints_to_penalties(msys; weights = [10.0, 2.0])
+    @test isempty(constraints(mpsys))
+    @test length(get_costs(mpsys)) == 3
+    @test_throws ArgumentError constraints_to_penalties(msys; weights = [1.0])
+
+    # symbolic weights are added to the system parameters
+    @parameters w
+    spsys = constraints_to_penalties(sys; weights = w)
+    @test any(isequal(w), parameters(spsys))
+    prob = OptimizationProblem(spsys, [x => 0.0, w => 1.0e4])
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ (2.0 + 1.0e4) / (1.0 + 1.0e4) atol = 1.0e-4
+
+    # subsystem constraints are lowered recursively (`complete` flattens the
+    # hierarchy, so keep the system unflattened here)
+    @named sub = OptimizationSystem((y - 3)^2, [y], []; constraints = [y ≲ 1.5])
+    @named tpsys = OptimizationSystem(
+        (x - 2)^2, [x], []; constraints = [x ≲ 1.0], systems = [sub]
+    )
+    tpsys = constraints_to_penalties(tpsys)
+    @test isempty(constraints(tpsys))
+    @test length(get_costs(tpsys)) == 2
+    @test isempty(ModelingToolkitBase.get_constraints(only(ModelingToolkitBase.get_systems(tpsys))))
+    @test length(get_costs(only(ModelingToolkitBase.get_systems(tpsys)))) == 2
+end

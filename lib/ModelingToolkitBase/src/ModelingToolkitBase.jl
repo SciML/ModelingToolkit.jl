@@ -404,7 +404,7 @@ export NonlinearProblem
 export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
-export OptimizationProblem, constraints
+export OptimizationProblem, constraints, constraints_to_penalties
 export SteadyStateProblem
 export JumpProblem, SymbolicMassActionJump
 export flatten

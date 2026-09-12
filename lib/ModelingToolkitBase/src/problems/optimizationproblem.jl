@@ -255,3 +255,112 @@ function system_with_cost_weights(sys::System, weights)
     @set! sys.consolidate = weighted_consolidate(weights)
     return sys
 end
+
+"""
+    constraints_to_penalties(sys::System; weights = 1.0)
+
+Return a new [`System`](@ref) in which every constraint of `sys` - including those of
+its subsystems - is removed from `constraints` and appended to `costs` as a weighted
+quadratic penalty term. This is the "classical PINN" formulation of a constrained
+problem: all constraint residuals are folded into the objective, producing an
+unconstrained system that can be solved by optimizers which do not accept explicit
+`cons`/`lcons`/`ucons` constraints.
+
+- `Equation` constraints `l ~ r` contribute `weights[i] * (l - r)^2`.
+- `Inequality` constraints contribute `weights[i] * max(residual, 0)^2`, where
+  `residual` is the constraint rewritten in canonical `residual ≲ 0` form via
+  `Symbolics.canonical_form`, so only violations of the constraint are penalized.
+
+`weights` may be a scalar applied to every constraint, or a vector with one entry per
+element of `constraints(sys)`, which orders a system's own constraints before its
+subsystems'. Symbolic weights (e.g. penalty parameters that should be tunable through
+the problem's parameter object) that are not already parameters or unknowns of the
+system are automatically added to its parameters.
+
+Penalty terms are appended to `costs(sys)` and are therefore combined with the rest of
+the objective through the system's `consolidate` function. Note that a finite `weights`
+makes the constraint satisfaction soft: increasing the magnitude of the weights enforces
+the constraints more tightly at the cost of a stiffer objective.
+
+# Example
+
+```julia
+using ModelingToolkitBase
+@variables x
+@named sys = OptimizationSystem((x - 2)^2, [x], []; constraints = [x ≲ 1])
+pen_sys = constraints_to_penalties(complete(sys); weights = 1.0e3)
+```
+"""
+function constraints_to_penalties(sys::System; weights = 1.0)
+    if weights isa Union{AbstractVector, Tuple} &&
+            length(weights) != length(constraints(sys))
+        throw(
+            ArgumentError(
+                """
+                Expected `weights` to be a scalar or have one entry per constraint of the \
+                system (including subsystem constraints). Got $(length(weights)) weights \
+                for $(length(constraints(sys))) constraints.
+                """
+            )
+        )
+    end
+    return _constraints_to_penalties(sys, weights)
+end
+
+function _constraints_to_penalties(sys::System, weights)
+    cstrs = get_constraints(sys)
+    own_weights = weights isa Union{AbstractVector, Tuple} ?
+        weights[1:length(cstrs)] : Iterators.repeated(weights, length(cstrs))
+    penalties = SymbolicT[]
+    new_ps = SymbolicT[]
+    for (cstr, w) in zip(cstrs, own_weights)
+        w = unwrap(w)
+        res = Symbolics.canonical_form(cstr).lhs
+        pen = cstr isa Equation ? w * res^2 : w * max(res, 0)^2
+        push!(penalties, value(pen))
+        _weight_parameters!(new_ps, sys, w)
+    end
+    @set! sys.costs = [get_costs(sys); penalties]
+    @set! sys.constraints = Union{Equation, Inequality}[]
+
+    subsystems = get_systems(sys)
+    if !isempty(subsystems)
+        newsystems = System[]
+        offset = length(cstrs)
+        for ssys in subsystems
+            subweights = weights
+            if weights isa Union{AbstractVector, Tuple}
+                nsub = length(constraints(ssys))
+                subweights = weights[(offset + 1):(offset + nsub)]
+                offset += nsub
+            end
+            push!(newsystems, _constraints_to_penalties(ssys, subweights))
+        end
+        @set! sys.systems = newsystems
+    end
+
+    if !isempty(new_ps)
+        @set! sys.ps = [get_ps(sys); new_ps]
+        if has_index_cache(sys) && get_index_cache(sys) !== nothing
+            # the `IndexCache` constructor reads `is_parameter` and family, so it must be
+            # cleared before rebuilding to avoid seeing the stale cache.
+            @set! sys.index_cache = nothing
+            @set! sys.index_cache = IndexCache(sys)
+        end
+    end
+    return sys
+end
+
+# Collect symbolic variables in a penalty weight that are not already parameters or
+# unknowns of `sys`, so they can be added to the system's parameters.
+function _weight_parameters!(new_ps::Vector{SymbolicT}, sys::System, w)
+    symbolic_type(w) === NotSymbolic() && return new_ps
+    for v in get_variables(w)
+        symbolic_type(v) === NotSymbolic() && continue
+        is_parameter(sys, v) && continue
+        any(Base.Fix2(isequal, v), get_unknowns(sys)) && continue
+        any(Base.Fix2(isequal, v), new_ps) && continue
+        push!(new_ps, v)
+    end
+    return new_ps
+end
