@@ -306,4 +306,4 @@ function modified_unknowns!(munknowns, jump::MassActionJump, sts)
 end
 
 isin(sts, st) = any(isequal(st), sts)
-isin(sts::Union{AbstractSet, Base.KeySet}, st) = st in sts
+isin(sts::AbstractSet, st) = st in sts
