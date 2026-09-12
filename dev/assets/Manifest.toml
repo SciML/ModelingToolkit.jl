@@ -726,9 +726,9 @@ version = "1.5.0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "BracketingNonlinearSolve", "ConcreteStructs", "DocStringExtensions", "FastBroadcast", "FastClosures", "FastPower", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "PrecompileTools", "Printf", "RecursiveArrayTools", "Reexport", "RespecializeParams", "SciMLBase", "SciMLLogging", "SciMLOperators", "SciMLStructures", "Setfield", "StaticArraysCore", "SymbolicIndexingInterface", "TruncatedStacktraces"]
-git-tree-sha1 = "4c891f1fb0db55190e0bda36fd583844c5225361"
+git-tree-sha1 = "e2a0c69c358ed6a8a6ac5ae8f1c7e36150a4dbd9"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "7.21.0"
+version = "7.21.1"
 
     [deps.DiffEqBase.extensions]
     DiffEqBaseCUDAExt = "CUDA"
