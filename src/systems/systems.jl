@@ -57,6 +57,8 @@ function MTKBase.__mtkcompile(
             (coeff, residual, islinear) = Symbolics.linear_expansion(eq, brown)
             islinear || error("$brown isn't linear in $eq")
             new_eqs[i] = COMMON_ZERO ~ residual
+            # The drift equation no longer matches the array equation (which has the noise).
+            MTKTearing.dirty_array_group!(state, i)
             push!(vals, coeff)
         end
         g = Matrix(sparse(Is, Js, vals))
@@ -191,9 +193,18 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     for eq in eqs
         isdifferential(eq.lhs) || continue
         var = arguments(eq.lhs)[1]
+        if SU.is_array_shape(SU.shape(var))
+            # Preserved array equation: every element maps to it.
+            for i in SU.stable_eachindex(var)
+                mapping[var[i]] = eq
+            end
+            continue
+        end
         var = get(dummy_sub, var, var)
         mapping[var] = eq
     end
+    # Rows of the structure graph are scalar; preserved array equations span several rows.
+    row_to_eq = MTKTearing.row_to_equation_indices(ts)
 
     graph = ts.structure.graph
     algvars = BitSet(
@@ -209,7 +220,7 @@ function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivative
     alge_var_eq_matching = complete(maximal_matching(graph, in(algeqs), in(algvars)))
     for (i, eq) in enumerate(alge_var_eq_matching)
         eq isa Unassigned && continue
-        mapping[get(dummy_sub, ts.fullvars[i], ts.fullvars[i])] = eqs[eq]
+        mapping[get(dummy_sub, ts.fullvars[i], ts.fullvars[i])] = eqs[row_to_eq[eq]]
     end
     for eq in observed(sys)
         mapping[get(dummy_sub, eq.lhs, eq.lhs)] = eq

@@ -108,6 +108,12 @@ once — calling `mtkcompile` on an already-compiled system throws
   selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
   derived from the compiled system are compiled the same way. Use this for targets that
   cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+- `preserve_array_equations = false`: Whether array differential equations
+  `D(x[slice]) ~ rhs` that structural simplification did not need to break apart (no
+  element was differentiated by index reduction, removed, or solved for another variable)
+  are kept as single array equations in the compiled system instead of one equation per
+  element. The unknowns remain the scalar elements of `x`. Array equations that index
+  reduction or tearing must scalarize are still scalarized.
 
 Remaining keyword arguments are forwarded to the internal compilation passes.
 
