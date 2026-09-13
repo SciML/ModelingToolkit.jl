@@ -122,13 +122,12 @@ function generate_initializesystem_timevarying(
     # properly handling singular systems. Without this, singular systems will always
     # error as incomplete, since the system symbolically won't contain some unknowns.
     derivative_rules = DerivativeDict()
-    dd_guess_sym = BSImpl.Const{VartypeT}(default_dd_guess)
     banned_derivatives = Set{SymbolicT}()
     if has_schedule(_sys) && (schedule = get_schedule(_sys); schedule isa Schedule)
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
             if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+                write_possibly_indexed_array!(guesses, ttk, default_derivative_guess(ttk, default_dd_guess), COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
             if _has_delays(sys, v, banned_derivatives)
@@ -153,7 +152,7 @@ function generate_initializesystem_timevarying(
                 k = eq.lhs
                 ttk = default_toterm(eq.lhs)
                 if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                    write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+                    write_possibly_indexed_array!(guesses, ttk, default_derivative_guess(ttk, default_dd_guess), COMMON_NOTHING)
                 end
                 push_as_atomic_array!(init_vars_set, ttk)
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
@@ -384,6 +383,10 @@ function generate_initializesystem_timeindependent(
     diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
     isys = SU.setmetadata(isys, DiffCacheParams, diffcache_params)
     return isys
+end
+
+function default_derivative_guess(var, value)
+    return BSImpl.Const{VartypeT}(ndims(var) == 0 ? value : fill(value, size(var)))
 end
 
 function initsys_sort_system_parameters!(
