@@ -45,6 +45,16 @@ for i in eachindex(y)
     @test b[1] == -1 && b[2] == [1.0 Inf; 2.0 3.0][i]
 end
 
+# A scalar bound on an array variable applies to each element.
+@variables y[1:2, 1:2] [bounds = (-1, 1)]
+@test hasbounds(y)
+@test getbounds(y) == (-1, 1)
+for i in eachindex(y)
+    @test hasbounds(y[i])
+    @test getbounds(y[i]) == (-1, 1)
+end
+@test getbounds(y[1:2, 1]) == (-1, 1)
+
 @variables y[1:2] [bounds = (-Inf * ones(2), [1.0, Inf])]
 @test hasbounds(y)
 @test getbounds(y)[1] == [-Inf, -Inf]
