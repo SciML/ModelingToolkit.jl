@@ -1,5 +1,6 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitBase: unwrap, complete, unknowns
+using ModelingToolkitBase: has_array_equations, accepts_array_equations
 using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
@@ -147,4 +148,58 @@ end
     )
     @test SciMLBase.successful_retcode(sol)
     @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
+end
+
+@testset "has_array_equations detects every array-equation form" begin
+    n = 5
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
+    @test has_array_equations([zeros(n - 2) ~ broadcast(-, lap)])
+    @test has_array_equations([broadcast(-, lap) ~ zeros(n - 2)])
+    @test has_array_equations([D(u[2:(n - 1)]) ~ lap])
+    @test !has_array_equations([u[1] ~ 0.0, u[n] ~ 0.0])
+    @test !has_array_equations(Equation[])
+end
+
+@testset "accepting array equations is a per-constructor capability" begin
+    @test accepts_array_equations(DAEFunction)
+    @test accepts_array_equations(NonlinearFunction)
+    @test !accepts_array_equations(ODEFunction)
+    @test !accepts_array_equations(SDEFunction)
+    @test !accepts_array_equations(ImplicitDiscreteFunction)
+    # `OptimizationProblem` rejects `equations` outright (`check_no_equations`);
+    # constraints are a separate `generate_cons` codegen path.
+    @test !accepts_array_equations(OptimizationFunction)
+end
+
+@testset "array residuals reject `jac`/`sparse` with a clear error" begin
+    n = 11
+    sys, u, t, D = heat_array_system(n)
+    xs = range(0.0, 1.0, length = n)
+    op = vcat(
+        [u[i] => sinpi(xs[i]) for i in 1:n],
+        [D(u[i]) => 0.0 for i in 1:n]
+    )
+    for kwargs in ((; jac = true), (; sparse = true), (; jac = true, sparse = true))
+        err = @test_throws ArgumentError DAEProblem(
+            sys, op, (0.0, 0.1); build_initializeprob = false, kwargs...
+        )
+        @test occursin("jac = true", err.value.msg)
+        @test occursin("sparse = true", err.value.msg)
+        @test occursin("mtkcompile", err.value.msg)
+    end
+    err = @test_throws ArgumentError DAEFunction(sys; jac = true)
+    @test occursin("mtkcompile", err.value.msg)
+
+    # Scalar systems still produce a usable Jacobian.
+    @variables x(t) y(t)
+    @named dae_scalar = System([D(x) ~ -x, 0 ~ x + y], t)
+    dae_scalar = complete(dae_scalar)
+    prob = DAEProblem(
+        dae_scalar, [x => 1.0, y => -1.0, D(x) => -1.0, D(y) => 0.0], (0.0, 0.1);
+        build_initializeprob = false, jac = true
+    )
+    @test prob.f.jac !== nothing
 end

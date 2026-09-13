@@ -3281,6 +3281,12 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
     return ModelingToolkitBase.AbstractSystem
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eqs` contains array equations: equations whose sides are array-valued. Such an
+equation stands for one scalar residual row per element rather than a single equation.
+"""
 function has_array_equations(eqs)
     return any(eq -> eq isa Equation && SU.is_array_shape(SU.shape(eq.lhs)), eqs)
 end

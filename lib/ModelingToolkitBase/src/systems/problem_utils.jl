@@ -2457,12 +2457,10 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    # Implicit-DAE and nonlinear codegen expand an array equation into one output row per
-    # element, so array equations are usable there. Every other problem type still needs
-    # `mtkcompile`.
-    if !implicit_dae && !(constructor <: NonlinearFunction)
-        check_array_equations(eqs)
-    end
+    # Residual-style codegen expands an array equation into one output row per element,
+    # so constructors that build such residuals accept array equations directly.
+    # Every other problem type still needs `mtkcompile`.
+    accepts_array_equations(constructor) || check_array_equations(eqs)
     dvs = flat_unknowns(sys)
 
     op = build_operating_point(sys, op; fast_path = true)
@@ -2610,6 +2608,19 @@ function __process_SciMLProblem(
         return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `constructor` accepts a system containing array equations (equations whose sides
+are array-valued). Residual-style codegen lowers each array equation to one scalar row
+per element through `array_residual_maker`; constructors whose generated function does
+not assemble residuals this way must keep returning `false`, so that the system is
+required to be scalarized by `mtkcompile` first.
+"""
+accepts_array_equations(::Type{<:SciMLBase.DAEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.NonlinearFunction}) = true
+accepts_array_equations(::Any) = false
 
 # Check that the keys of a u0map or pmap are valid
 # (i.e. are symbolic keys, and are defined for the system.)
