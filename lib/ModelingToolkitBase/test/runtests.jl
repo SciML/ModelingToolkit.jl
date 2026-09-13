@@ -80,6 +80,7 @@ end
     end
 
     if GROUP == "All" || GROUP == "Initialization"
+        @safetestset "Array derivative initialization" include("array_initialization.jl")
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")
