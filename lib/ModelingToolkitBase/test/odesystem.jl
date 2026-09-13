@@ -1765,3 +1765,50 @@ end
     ss = mtkcompile(sys)
     @test length(equations(ss)) == length(unknowns(ss)) == 0
 end
+
+@testset "`calculate_tgrad` with callable parameters" begin
+    @parameters (fn::Function)(..) c
+    @variables u(t)
+
+    # `detime_dvs` keeps calls to callable parameters so that the derivative reaches
+    # their arguments
+    @test isequal(ModelingToolkitBase.detime_dvs(unwrap(fn(c))), unwrap(fn(c)))
+
+    # arguments which do not involve `t`: the gradient is exact
+    @named sys = System([D(u) ~ fn(c) * t + u], t, [u], [fn, c])
+    sys = mtkcompile(sys)
+    @test isequal(calculate_tgrad(sys), [fn(c)])
+    prob = ODEProblem(
+        sys, [u => 1.0, fn => (x -> 3x), c => 2.0], (0.0, 1.0); tgrad = true
+    )
+    @test prob.f.tgrad([1.5], prob.p, 0.4) ≈ [6.0]
+    fd = (prob.f([1.5], prob.p, 0.4 + 1.0e-6)[1] - prob.f([1.5], prob.p, 0.4 - 1.0e-6)[1]) /
+        2.0e-6
+    @test prob.f.tgrad([1.5], prob.p, 0.4)[1] ≈ fd rtol = 1.0e-6
+
+    # arguments which involve only unknowns: they are held fixed, so the gradient is zero
+    @named sys2 = System([D(u) ~ fn(u)], t, [u], [fn])
+    sys2 = mtkcompile(sys2)
+    @test iszero(calculate_tgrad(sys2))
+    @test ModelingToolkitBase.isautonomous(sys2)
+
+    # called with `t`: no derivative rule, so this must throw rather than return zero
+    @named sys3 = System([D(u) ~ fn(t) * u], t, [u], [fn])
+    sys3 = mtkcompile(sys3)
+    @test_throws ["derivative", "sys3"] calculate_tgrad(sys3)
+    @test_throws ArgumentError ODEFunction(sys3; tgrad = true)
+    tg = calculate_tgrad(sys3; throw_no_derivative = false)
+    @test Symbolics.hasderiv(unwrap(tg[1]))
+    @test !ModelingToolkitBase.isautonomous(sys3)
+
+    # a registered function with a derivative rule is unaffected
+    @named sys4 = System([D(u) ~ sin(t) * u], t, [u], [])
+    sys4 = mtkcompile(sys4)
+    @test isequal(calculate_tgrad(sys4), [cos(t) * u])
+    @test !ModelingToolkitBase.isautonomous(sys4)
+
+    # a plain system is unaffected
+    @named sys5 = System([D(u) ~ u * t + sin(t)], t)
+    sys5 = mtkcompile(sys5)
+    @test isequal(calculate_tgrad(sys5), [u + cos(t)])
+end
