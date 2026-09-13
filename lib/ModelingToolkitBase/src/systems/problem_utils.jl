@@ -1457,7 +1457,7 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     get_updated_u0::GUU
     """
     A function which takes parameter object and `u0` of the problem and sets
-    `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
+    `Initial.(flat_unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
     """
@@ -1478,27 +1478,27 @@ $(TYPEDFIELDS)
 """
 struct GetUpdatedU0{GG, GIU}
     """
-    Mask with length `length(unknowns(sys))` denoting indices of variables which should
-    take the guess value from `initializeprob`.
+    Mask with length `length(flat_unknowns(sys))` denoting indices of variables which
+    should take the guess value from `initializeprob`.
     """
     guessvars::BitVector
     """
     Function which returns the values of variables in `initializeprob` for which
-    `guessvars` is `true`, in the order they occur in `unknowns(sys)`.
+    `guessvars` is `true`, in the order they occur in `flat_unknowns(sys)`.
     """
     get_guessvars::GG
     """
-    Function which returns `Initial.(unknowns(sys))` as a `Vector`.
+    Function which returns `Initial.(flat_unknowns(sys))` as a `Vector`.
     """
     get_initial_unknowns::GIU
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict; kwargs...)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
-        varval = get(op, var, COMMON_NOTHING)
+        varval = get_possibly_indexed(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
     get_guessvars = iszero(count(guessvars)) ? nothing : CopyParamsByTemplate(initsys, dvs[guessvars]; kwargs...)
@@ -1521,7 +1521,7 @@ struct SetInitialUnknowns{S}
 end
 
 function SetInitialUnknowns(sys::AbstractSystem)
-    initpars = Initial.(unknowns(sys))
+    initpars = Initial.(flat_unknowns(sys))
     idxs_in_initials = Int[]
     sizehint!(idxs_in_initials, length(initpars))
     if is_split(sys)
@@ -2209,7 +2209,7 @@ function maybe_build_initialization_problem(
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        solved_unknowns = filter(var -> var in all_init_syms, flat_unknowns(sys))
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         elseif map_specialize === SciMLBase.FullSpecialize
@@ -2459,7 +2459,8 @@ function __process_SciMLProblem(
 
     # Implicit-DAE codegen expands an array equation into one output row per element, so
     # array equations are usable there. Every other problem type still needs `mtkcompile`.
-    implicit_dae || check_array_equations_unknowns(eqs, dvs)
+    implicit_dae || check_array_equations(eqs)
+    dvs = flat_unknowns(sys)
 
     op = build_operating_point(sys, op; fast_path = true)
 

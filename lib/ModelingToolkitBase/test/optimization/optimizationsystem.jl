@@ -623,3 +623,90 @@ end
     @mtkcompile sys2 = System(Equation[]; costs = [(x - 1)^2])
     @test SciMLBase.problem_type(OptimizationProblem(sys2, [x => 0.0])) === nothing
 end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables x[1:3] y
+    @parameters a[1:3]
+    op = [x => zeros(3), y => 0.0, a => [1.0, 2.0, 3.0]]
+
+    # A lazy array cost: `sum(f, arr)` stays an unexpanded `mapreduce` term, which is the
+    # shape a PINN objective has.
+    @named sys = System(Equation[], [x, y], [a]; costs = [sum(abs2, x .- a) + (y - 1)^2])
+    csys = complete(sys)
+
+    prob = OptimizationProblem(csys, op)
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ zeros(4)
+    @test prob.f(prob.u0, prob.p) ≈ 14 + 1
+
+    @test variable_index(csys, x) == 1:3
+    @test variable_index(csys, y) == 4
+    @test getu(prob, x)(prob) ≈ zeros(3)
+    @test getu(prob, x[2])(prob) ≈ 0.0
+
+    # observed expressions must read array unknowns out of the same flat layout
+    iprob = OptimizationProblem(csys, [x => [1.0, 2.0, 3.0], y => 4.0, a => ones(3)])
+    @test getu(iprob, sum(x) + y)(iprob) ≈ 10.0
+    @test getu(iprob, x[3] * y)(iprob) ≈ 12.0
+
+    adprob = OptimizationProblem(csys, op; adtype = AutoForwardDiff())
+    @test adprob.f.adtype isa AutoForwardDiff
+    sol = solve(adprob, Optim.BFGS())
+    @test sol.objective < 1.0e-8
+    @test sol[x] ≈ [1.0, 2.0, 3.0] atol = 1.0e-6
+    @test sol[y] ≈ 1.0 atol = 1.0e-6
+
+    # `mtkcompile` reaches the same problem by scalarizing the unknowns instead.
+    msys = mtkcompile(sys)
+    mprob = OptimizationProblem(msys, op)
+    @test length(mprob.u0) == length(prob.u0)
+    @test mprob.f(mprob.u0, mprob.p) ≈ prob.f(prob.u0, prob.p)
+
+    @testset "`mapreduce` cost" begin
+        @named sys2 = System(
+            Equation[], [x, y], [a]; costs = [mapreduce(abs2, +, x .- a) + (y - 1)^2]
+        )
+        prob2 = OptimizationProblem(complete(sys2), op)
+        @test prob2.f(prob2.u0, prob2.p) ≈ 14 + 1
+    end
+
+    @testset "symbolic gradient and hessian" begin
+        cst = (x[1] - a[1])^2 + (x[2] - a[2])^2 + (x[3] - a[3])^2 + (y - 1)^2
+        gsys = complete(System(Equation[], [x, y], [a]; costs = [cst], name = :gsys))
+        gprob = OptimizationProblem(gsys, op; grad = true, hess = true)
+        @test gprob.f(gprob.u0, gprob.p) ≈ 15
+        @test gprob.f.grad(gprob.u0, gprob.p) ≈ [-2.0, -4.0, -6.0, -2.0]
+        @test gprob.f.hess(gprob.u0, gprob.p) ≈ 2.0I(4)
+
+        buffer = zeros(4)
+        gprob.f.grad(buffer, gprob.u0, gprob.p)
+        @test buffer ≈ [-2.0, -4.0, -6.0, -2.0]
+
+        gsol = solve(gprob, Optim.BFGS())
+        @test gsol[x] ≈ [1.0, 2.0, 3.0] atol = 1.0e-6
+        @test gsol[y] ≈ 1.0 atol = 1.0e-6
+
+        spprob = OptimizationProblem(gsys, op; hess = true, sparse = true)
+        @test spprob.f.hess(spprob.u0, spprob.p) ≈ 2.0I(4)
+    end
+
+    @testset "constraints" begin
+        @named csys2 = System(
+            Equation[], [x], [a]; costs = [sum(abs2, x .- a)],
+            constraints = [x[1] + x[2] ~ 1.0]
+        )
+        cprob = OptimizationProblem(
+            complete(csys2), [x => zeros(3), a => [1.0, 2.0, 3.0]]; cons_j = true
+        )
+        @test cprob.f.cons(cprob.u0, cprob.p) ≈ [-1.0]
+        @test cprob.f.cons_j(cprob.u0, cprob.p) ≈ [1.0 1.0 0.0]
+    end
+
+    @testset "bounds on array unknowns" begin
+        @variables z[1:2] [bounds = ([0.5, 0.5], [3.0, 3.0])]
+        @named bsys = System(Equation[], [z], []; costs = [sum(abs2, z .- 2.0)])
+        bprob = OptimizationProblem(complete(bsys), [z => [1.0, 1.0]])
+        @test bprob.lb == [0.5, 0.5]
+        @test bprob.ub == [3.0, 3.0]
+    end
+end

@@ -3281,12 +3281,9 @@ function Base.eltype(::Type{<:TreeIterator{ModelingToolkitBase.AbstractSystem}})
     return ModelingToolkitBase.AbstractSystem
 end
 
-function check_array_equations_unknowns(eqs, dvs)
-    if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
+function check_array_equations(eqs)
+    return if any(eq -> eq isa Equation && Symbolics.isarraysymbolic(eq.lhs), eqs)
         throw(ArgumentError("The system has array equations. Call `mtkcompile` to handle such equations or scalarize them manually."))
-    end
-    return if any(x -> Symbolics.isarraysymbolic(x), dvs)
-        throw(ArgumentError("The system has array unknowns. Call `mtkcompile` to handle this or scalarize them manually."))
     end
 end
 

@@ -137,7 +137,7 @@ function SciMLBase.OptimizationProblem{iip}(
         check_compatibility, tofloat = false, check_length = false, expression, kwargs...
     )
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     int = symtype.(unwrap.(dvs)) .<: Integer
     if lb === nothing && ub === nothing
         lb = first.(getbounds.(dvs))
