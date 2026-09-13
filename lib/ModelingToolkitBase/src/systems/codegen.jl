@@ -130,7 +130,7 @@ function generate_rhs(
     (; eval_expression, eval_module, compiler_options) = opts
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
-    dvs = unknowns(sys)
+    dvs = implicit_dae ? scalarized_vars(unknowns(sys)) : unknowns(sys)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
@@ -545,16 +545,16 @@ function generate_dae_jacobian(
     (; eval_expression, eval_module, compiler_options) = opts
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
-    dvs = unknowns(sys)
+    dvs = scalarized_vars(unknowns(sys))
     ps = parameters(sys; initial_parameters = true)
     jac_u = calculate_dae_jacobian(sys; simplify, sparse)
     t = get_iv(sys)
-    derivatives = Differential(t).(unknowns(sys))
+    derivatives = Differential(t).(dvs)
     jac_du = calculate_dae_jacobian(
         sys; simplify = simplify, sparse = sparse,
         dvs = derivatives
     )
-    dvs = unknowns(sys)
+    dvs = scalarized_vars(unknowns(sys))
     jac = W_GAMMA * jac_du + jac_u
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
@@ -648,7 +648,7 @@ function scalarized_dae_residuals(sys::System)
 end
 
 function calculate_dae_jacobian(
-        sys::System; sparse = false, simplify = false, dvs = unknowns(sys)
+        sys::System; sparse = false, simplify = false, dvs = scalarized_vars(unknowns(sys))
     )
     check_symbolic_ad_allowed(sys)
     residuals = scalarized_dae_residuals(sys)
@@ -732,8 +732,9 @@ See also: [`generate_dae_jacobian`](@ref).
 """
 function jacobian_dae_sparsity(sys::System)
     residuals = scalarized_dae_residuals(sys)
-    J1 = jacobian_sparsity(residuals, unknowns(sys))
-    derivatives = Differential(get_iv(sys)).(unknowns(sys))
+    dvs = scalarized_vars(unknowns(sys))
+    J1 = jacobian_sparsity(residuals, dvs)
+    derivatives = Differential(get_iv(sys)).(dvs)
     J2 = jacobian_sparsity(residuals, derivatives)
     return J1 .| J2
 end
@@ -1711,7 +1712,7 @@ Base.@nospecializeinfer function build_explicit_observed_function(
     dvs = if param_only
         ()
     else
-        (unknowns(sys),)
+        (scalarized_vars(unknowns(sys)),)
     end
     if inputs isa Vector{SymbolicT}
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list

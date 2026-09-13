@@ -69,6 +69,7 @@ end
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
             @safetestset "Array DAE Jacobians" include("array_dae_jacobian.jl")
+            @safetestset "Array unknown DAE Jacobians" include("array_unknowns_dae_jacobian.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
@@ -80,6 +81,8 @@ end
     end
 
     if GROUP == "All" || GROUP == "Initialization"
+        @safetestset "Array derivative initialization" include("array_initialization.jl")
+        @safetestset "Array DAE Unknowns" include("array_unknowns_dae.jl")
         @safetestset "Guess Propagation" include("guess_propagation.jl")
         @safetestset "InitializationSystem Test" include("initializationsystem.jl")
         @safetestset "Initial Values Test" include("initial_values.jl")

@@ -40,6 +40,7 @@ const SymbolicParam = SymbolicT
 
 struct IndexCache
     unknown_idx::UnknownIndexMap
+    unknown_buffer_size::Int
     # sym => (bufferidx, idx_in_buffer)
     discrete_idx::Dict{SymbolicParam, DiscreteIndex}
     # sym => (clockidx, idx_in_clockbuffer)
@@ -60,7 +61,7 @@ end
 
 function Base.copy(ic::IndexCache)
     return IndexCache(
-        copy(ic.unknown_idx), copy(ic.discrete_idx), copy(ic.callback_to_clocks),
+        copy(ic.unknown_idx), ic.unknown_buffer_size, copy(ic.discrete_idx), copy(ic.callback_to_clocks),
         copy(ic.tunable_idx), copy(ic.initials_idx), copy(ic.constant_idx),
         copy(ic.nonnumeric_idx), copy(ic.observed_syms_to_timeseries),
         copy(ic.dependent_pars_to_timeseries), copy(ic.discrete_buffer_sizes),
@@ -333,6 +334,7 @@ function IndexCache(sys::AbstractSystem)
 
     return IndexCache(
         unk_idxs,
+        sum(length, unks; init = 0),
         disc_idxs,
         callback_to_clocks,
         tunable_idxs,
@@ -887,6 +889,7 @@ function subset_unknowns_observed(
         end
     end
     ic = @set ic.unknown_idx = unknown_idx
+    @set! ic.unknown_buffer_size = length(newunknowns)
     @set! ic.observed_syms_to_timeseries = observed_syms_to_timeseries
     return ic
 end

@@ -138,7 +138,7 @@ end
     )
 
     diffvars = collect_differential_variables(sys)
-    sts = unknowns(sys)
+    sts = scalarized_vars(unknowns(sys))
     differential_vars = map(Base.Fix2(in, diffvars), sts)
 
     ptype = getmetadata(sys, ProblemTypeCtx, SciMLBase.StandardDAEProblem())

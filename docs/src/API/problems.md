@@ -22,6 +22,25 @@ ModelingToolkitBase.Both
 
 ## Dynamical systems
 
+`DAEProblem` and `DAEFunction` accept array unknowns in a completed `System`.
+The numerical state concatenates the unknowns in `unknowns(sys)` order, with each
+array contributing its elements in column-major order. `u0`, `du0`, and
+`differential_vars` use this flat layout; symbolic indexing preserves each array's
+shape. Initial conditions may use whole-array or indexed keys, and initialization
+is enabled by default.
+
+```@example dae_array_unknowns
+using ModelingToolkitBase, SciMLBase
+
+@parameters t
+@variables x(t)[1:3]
+D = Differential(t)
+@named raw = System([D(x) ~ -x], t, [x], [])
+sys = complete(raw)
+prob = DAEProblem(sys, [x => ones(3)], (0.0, 1.0))
+(length(unknowns(sys)), length(prob.u0))
+```
+
 ```@docs
 SciMLBase.ODEFunction
 SciMLBase.ODEProblem
