@@ -180,16 +180,6 @@ end
     @test maximum(abs.(reshape(sol.u, n, n) .- exact)) < 1.0e-8
 end
 
-@testset "other problem types still require scalarized equations" begin
-    n = 11
-    sys, u, _, _ = heat_array_nl_system(n)
-    op = [u[i] => 0.0 for i in 1:n]
-    err = @test_throws ArgumentError ODEProblem(
-        sys, op, (0.0, 0.1); build_initializeprob = false
-    )
-    @test occursin("array equations", err.value.msg)
-end
-
 @testset "scalar 0 ~ f systems do not assemble an ArrayMaker" begin
     @variables x y z
     @parameters σ ρ β

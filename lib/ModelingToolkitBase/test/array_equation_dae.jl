@@ -49,7 +49,7 @@ end
     @test any(!iszero, out)
 end
 
-@testset "array unknowns still require `mtkcompile`" begin
+@testset "array unknowns flatten under an array equation" begin
     n = 11
     @independent_variables t
     @variables u(t)[1:n]
@@ -57,8 +57,10 @@ end
     @named sys = System([D(u) ~ -u], t, [u], [])
     sys = complete(sys)
     op = [u => zeros(n), D(u) => zeros(n)]
-    # the equation is fine, but `u` as a single array unknown is not
-    @test_throws ["array unknowns"] ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    # `flat_unknowns` flattens `u`, so the array equation over the array unknown
+    # constructs directly
+    prob = ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    @test length(prob.u0) == n
 end
 
 @testset "array-equation DAE solves to the analytic solution" begin
