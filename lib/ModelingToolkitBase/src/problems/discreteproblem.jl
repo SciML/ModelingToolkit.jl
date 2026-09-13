@@ -64,7 +64,7 @@ end
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,

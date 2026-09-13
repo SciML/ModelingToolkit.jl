@@ -170,6 +170,16 @@ function mtkcompile(
     return newsys
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+The unknowns of `sys` in the layout of a problem's state vector `u`. Array unknowns
+contribute one entry per element, so `u` stays flat even when `sys` has not been scalarized
+by `mtkcompile`; the generated code then reconstructs each array unknown as a view into
+`u`.
+"""
+flat_unknowns(sys::AbstractSystem) = scalarized_vars(unknowns(sys))
+
 function scalarized_vars(vars)
     scal = SymbolicT[]
     for var in vars

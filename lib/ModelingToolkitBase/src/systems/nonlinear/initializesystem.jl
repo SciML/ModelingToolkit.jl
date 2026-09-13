@@ -38,6 +38,22 @@ function generate_initializesystem(
 end
 
 """
+    $(TYPEDSIGNATURES)
+
+Guess `guess` for the dummy-derivative variable `ttk`. An array-valued `ttk` is not an
+indexed symbolic, so it needs an array of the guess rather than the scalar one
+`write_possibly_indexed_array!` would store under an array-shaped key.
+"""
+function write_dd_guess!(guesses::AtomicArrayDict{SymbolicT}, ttk::SymbolicT, guess::SymbolicT)
+    if Symbolics.isarraysymbolic(ttk)
+        guesses[ttk] = BSImpl.Const{VartypeT}(fill(unwrap_const(guess), size(ttk)))
+    else
+        write_possibly_indexed_array!(guesses, ttk, guess, COMMON_NOTHING)
+    end
+    return guesses
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Generate `System` of nonlinear equations which initializes a problem from specified initial conditions of a time-dependent `AbstractSystem`.
@@ -128,7 +144,7 @@ function generate_initializesystem_timevarying(
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
             if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+                write_dd_guess!(guesses, ttk, dd_guess_sym)
             end
             # For DDEs, the derivatives can have delayed terms
             if _has_delays(sys, v, banned_derivatives)
@@ -153,7 +169,7 @@ function generate_initializesystem_timevarying(
                 k = eq.lhs
                 ttk = default_toterm(eq.lhs)
                 if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                    write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
+                    write_dd_guess!(guesses, ttk, dd_guess_sym)
                 end
                 push_as_atomic_array!(init_vars_set, ttk)
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
@@ -645,7 +661,7 @@ function _remake_initialization_data_impl(
         return @set oldinitdata.initializeprob = initprob
     end
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys)
     if eltype(u0) <: Pair
         if u0 isa Union{AbstractArray, Tuple}

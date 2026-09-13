@@ -77,7 +77,7 @@
         sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
     )
 
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))
     js = jumps(sys)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
