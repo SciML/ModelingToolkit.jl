@@ -40,9 +40,12 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Guess `guess` for the dummy-derivative variable `ttk`. An array-valued `ttk` is not an
-indexed symbolic, so it needs an array of the guess rather than the scalar one
-`write_possibly_indexed_array!` would store under an array-shaped key.
+Guess `guess` for the dummy-derivative variable `ttk`.
+
+Workaround, to be removed: `write_possibly_indexed_array!` stores a scalar under an
+array-shaped key when `ttk` is an array symbolic rather than an indexed expression, which
+`get_possibly_indexed` cannot read back. It should broadcast the scalar to the key's shape
+itself; until it does (https://github.com/SciML/ModelingToolkit.jl/issues/5147), this helper stores the filled array.
 """
 function write_dd_guess!(guesses::AtomicArrayDict{SymbolicT}, ttk::SymbolicT, guess::SymbolicT)
     if Symbolics.isarraysymbolic(ttk)
