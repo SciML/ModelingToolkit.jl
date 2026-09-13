@@ -1704,14 +1704,24 @@ function _construct_fullspecialize_initializeprobmap(
     )
 end
 
+# `prototype` says what the result has to look like: a `StaticArray` type for the state
+# map, and the problem's own corresponding `p` buffer for each parameter portion.
 function _static_initialization_buffer(prototype, values)
-    T = isempty(values) ? eltype(prototype) :
-        promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
-    if !ArrayInterface.ismutable(prototype)
+    P = prototype isa Type ? prototype : typeof(prototype)
+    T = isempty(values) ? eltype(P) :
+        promote_type(eltype(P), mapreduce(typeof, promote_type, values))
+    if !ArrayInterface.ismutable(P)
         return SVector{length(values), T}(values)
-    elseif isbitstype(T)
+    elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
     else
+        # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
+        # initialization assigns the result straight back (`integrator.p = pmap(...)`),
+        # which cannot convert between buffer types — so the result must carry the same
+        # `MTKParameters` type the problem already has. Static storage is produced exactly
+        # where the problem already uses it, which is the GPU / `p_constructor` case this
+        # path exists for. A mutable non-isbits buffer additionally cannot be a
+        # `StaticArray` at all: `MVector` rejects `setindex!` on a non-isbits eltype.
         return collect(T, values)
     end
 end
