@@ -160,7 +160,7 @@ It is also possible (though not always advisable) to build numerical problems fr
 passing them through `mtkcompile`. To do this, the system must first be marked as "complete" via
 the `complete` function. This process is used to indicate that a system will not be modified
 further and allows ModelingToolkit to perform any necessary preprocessing to it. `mtkcompile`
-Use `mtkcompile` before requesting `jac = true` or
+calls `complete` internally. Use `mtkcompile` before requesting `jac = true` or
 `sparse = true`.
 
 ```@docs

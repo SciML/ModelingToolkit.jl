@@ -1352,8 +1352,9 @@ end
 
 Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
-replacing every derivative `D(x)` of an unknown `x` with zero. Array derivatives are
-expanded first. Note that this process does not retain noise equations, brownian terms,
+replacing every derivative `D(x)` of an unknown `x` with zero. A derivative of a slice,
+`D(u[2:n-1])`, is expanded into the derivatives of its elements, which are unknowns
+themselves. Note that this process does not retain noise equations, brownian terms,
 jumps or costs associated with `sys`. All other information such as initial conditions,
 bindings, guesses, observed and initialization equations are retained. The independent
 variable of `sys` becomes a parameter of the returned system.
@@ -1369,16 +1370,17 @@ function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = expand_array_derivatives(equations(sys))
+    eqs = equations(sys)
     obs = observed(sys)
     D = Differential(get_iv(sys))
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
-    eqs = map(eqs) do eq
-        substitute(eq, subrules)
-    end
+    # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
+    # slice is not one of them, so expand it and replace its elements.
+    eqs = map(eq -> substitute(eq, subrules), eqs)
+    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
     new_ps = [parameters(sys); get_iv(sys)]
     if iscomplete(sys)
         append!(new_ps, collect(bound_parameters(sys)))

@@ -241,6 +241,17 @@ end
     @test !array_derivative_is_atomic(unwrap(D(u[1])))
 end
 
+@testset "derivative of an unscalarized array unknown is zeroed" begin
+    @independent_variables t
+    @variables u(t)[1:3]
+    D = Differential(t)
+    @named sys = System([broadcast(-, D(u), u) ~ zeros(3)], t, [u], [])
+    nlsys = NonlinearSystem(complete(sys))
+    for eq in equations(nlsys)
+        @test isempty(collect_applied_operators(eq, Differential))
+    end
+end
+
 @testset "time-dependent D(slice) becomes a finite steady-state residual" begin
     n = 21
     exact = range(0.0, 1.0, length = n)
