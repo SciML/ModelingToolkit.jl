@@ -319,7 +319,7 @@ end
 
 @named simple = System([connect(vp1, vp2, vp3)], t)
 sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
-@test ssort(equations(sys)) == ssort(
+@test ssort(reduce(vcat, Symbolics.scalarize.(equations(sys)))) == ssort(
     [
         0 .~ collect(vp1.i)
         0 .~ collect(vp2.i)
