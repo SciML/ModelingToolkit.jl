@@ -3291,7 +3291,7 @@ Whether `eqs` contains array equations: equations whose sides are array-valued. 
 equation stands for one scalar residual row per element rather than a single equation.
 """
 function has_array_equations(eqs)
-    return any(eq -> eq isa Equation && SU.is_array_shape(SU.shape(eq.lhs)), eqs)
+    return any(eq -> eq isa Equation && is_array_equation(eq), eqs)
 end
 
 function check_array_equations(eqs)

@@ -177,7 +177,7 @@ end
 @testset "accepting array equations is a per-constructor capability" begin
     @test accepts_array_equations(DAEFunction)
     @test accepts_array_equations(NonlinearFunction)
-    @test !accepts_array_equations(ODEFunction)
+    @test accepts_array_equations(ODEFunction)
     @test !accepts_array_equations(SDEFunction)
     @test !accepts_array_equations(ImplicitDiscreteFunction)
     # `OptimizationProblem` rejects `equations` outright (`check_no_equations`);
