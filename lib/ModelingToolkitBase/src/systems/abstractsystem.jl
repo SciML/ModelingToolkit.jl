@@ -79,7 +79,12 @@ end
 function SymbolicIndexingInterface.is_variable(sys::AbstractSystem, sym)
     sym = unwrap(sym)
     if sym isa Int    # [x, 1] coerces 1 to a Num
-        return sym in 1:length(variable_symbols(sys))
+        nvars = if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
+            ic.unknown_buffer_size
+        else
+            sum(length, variable_symbols(sys); init = 0)
+        end
+        return sym in 1:nvars
     end
     if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
         return is_variable(ic, sym) ||

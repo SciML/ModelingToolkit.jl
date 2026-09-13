@@ -1475,7 +1475,7 @@ $(TYPEDFIELDS)
 """
 struct GetUpdatedU0{GG, GIU}
     """
-    Mask with length `length(unknowns(sys))` denoting indices of variables which should
+    Mask over the scalar entries of `unknowns(sys)` denoting variables which should
     take the guess value from `initializeprob`.
     """
     guessvars::BitVector
@@ -1491,7 +1491,7 @@ struct GetUpdatedU0{GG, GIU}
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict; kwargs...)
-    dvs = unknowns(sys)
+    dvs = scalarized_vars(unknowns(sys))
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
@@ -1518,7 +1518,7 @@ struct SetInitialUnknowns{S}
 end
 
 function SetInitialUnknowns(sys::AbstractSystem)
-    initpars = Initial.(unknowns(sys))
+    initpars = Initial.(scalarized_vars(unknowns(sys)))
     idxs_in_initials = Int[]
     sizehint!(idxs_in_initials, length(initpars))
     if is_split(sys)
@@ -1987,7 +1987,10 @@ function maybe_build_initialization_problem(
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        solved_unknowns = filter(scalarized_vars(unknowns(sys))) do var
+            var in all_init_syms || iscall(var) && operation(var) === getindex &&
+                arguments(var)[1] in all_init_syms
+        end
         if isempty(solved_unknowns)
             initializeprobmap = nothing
         else
@@ -2043,7 +2046,8 @@ function maybe_build_initialization_problem(
             end
         end
         if implicit_dae
-            for v in unknowns(sys)
+            add_toterms!(op)
+            for v in scalarized_vars(unknowns(sys))
                 v = Differential(get_iv(sys))(v)
                 ttv = default_toterm(v)
                 if get_possibly_indexed(op, v, COMMON_NOTHING) === COMMON_NOTHING &&
@@ -2221,7 +2225,7 @@ function __process_SciMLProblem(
     (; t) = fn_opts
     (; eval_expression, eval_module, compiler_options) = fn_opts.codegen
 
-    dvs = unknowns(sys)
+    dvs = implicit_dae ? scalarized_vars(unknowns(sys)) : unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
@@ -2756,7 +2760,7 @@ function get_u0(sys::AbstractSystem, varmap; kwargs...)
     obs = observed(reverse_all_default_reversible_transformations(sys))
     add_observed_equations!(op, obs)
 
-    return varmap_to_vars(op, unknowns(sys); kwargs...)
+    return varmap_to_vars(op, scalarized_vars(unknowns(sys)); kwargs...)
 end
 
 """
