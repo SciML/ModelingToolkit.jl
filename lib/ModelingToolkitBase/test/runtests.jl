@@ -118,6 +118,7 @@ end
         @safetestset "SymbolicIndexingInterface test" include("symbolic_indexing_interface.jl")
         @safetestset "SciML Problem Input Test" include("sciml_problem_inputs.jl")
         @safetestset "MTKParameters Test" include("mtkparameters.jl")
+        @safetestset "Parameter array slices" include("array_parameter_slices.jl")
         @safetestset "Despecialized MTKParameters Test" include("despecialized_parameters.jl")
     end
 

@@ -159,6 +159,12 @@ function get_possibly_indexed(dd::AtomicArrayDict, k::SymbolicT, default)
     res = get(dd, arr, default)
     isarr || return res
     res === default && return default
+    if SU.is_array_shape(SU.shape(k))
+        while operation(k) isa Operator
+            k = only(arguments(k))
+        end
+        return res[unwrap_const.(arguments(k)[2:end])...]
+    end
     idx = get_stable_index(k)
     return res[idx]
 end
