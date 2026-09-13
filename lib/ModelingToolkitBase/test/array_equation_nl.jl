@@ -320,6 +320,15 @@ end
     @test maximum(abs.(reshape(sol.u, n, n) .- exact)) < 1.0e-8
 end
 
+@testset "array unknowns carry an array equation" begin
+    sys, u = unscalarized_unknown_system(4)
+    @test any(Symbolics.isarraysymbolic, unknowns(sys))
+    prob = NonlinearProblem(sys, [u => zeros(4)])
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.u ≈ ones(4)
+end
+
 @testset "jac and sparse fail fast on array residuals" begin
     n = 11
     sys, u = laplace_array_system(n)
