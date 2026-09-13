@@ -1674,13 +1674,11 @@ function _generated_map_sources(valp::Symbol, time_dependent::Bool)
 end
 
 function _construct_fullspecialize_initializeprobmap(
-        initsys::AbstractSystem, solved_unknowns;
-        iip::Bool, u0_constructor, floatT, eval_module,
-        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        initsys::AbstractSystem, solved_unknowns, gen_opts::GeneratedFunctionOptions;
+        iip::Bool, u0_constructor, floatT
     )
     expr = build_explicit_observed_function(
-        initsys, solved_unknowns;
-        expression = Val(true), output_type = SVector, compiler_options, kwargs...
+        initsys, solved_unknowns, gen_opts; output_type = SVector
     )
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
@@ -1701,7 +1699,9 @@ function _construct_fullspecialize_initializeprobmap(
         end
         return Expr(:block, :(local $T = $promoted), result)
     end
-    return eval_or_rgf(map_expr; eval_module, compiler_options)
+    return eval_or_rgf(
+        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    )
 end
 
 function _static_initialization_buffer(prototype, values)
@@ -1729,9 +1729,8 @@ function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
 end
 
 function _construct_fullspecialize_initializeprobpmap(
-        sys::AbstractSystem, initsys::AbstractSystem;
-        p_constructor, eval_module,
-        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+        sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
+        p_constructor
     )
     ps = parameters(sys; initial_parameters = true)
     # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
@@ -1754,10 +1753,7 @@ function _construct_fullspecialize_initializeprobpmap(
     for group in groups, buffer in group
         append!(flat_syms, buffer)
     end
-    expr = build_explicit_observed_function(
-        initsys, Tuple(flat_syms);
-        expression = Val(true), compiler_options, kwargs...
-    )
+    expr = build_explicit_observed_function(initsys, Tuple(flat_syms), gen_opts)
     prob = INITMAP_PROBLEM
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
@@ -1807,7 +1803,9 @@ function _construct_fullspecialize_initializeprobpmap(
         push!(result.args, :($map($copy, $outer_p.caches)))
         return Expr(:block, :(local $outer_p = $p), result)
     end
-    return eval_or_rgf(map_expr; eval_module, compiler_options)
+    return eval_or_rgf(
+        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    )
 end
 
 """
@@ -2068,6 +2066,23 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Code-generation options for the `FullSpecialize` initialization maps. Reuses the
+problem's own codegen settings so the maps see the same `checkbounds`/`cse`/... the
+rest of the problem was built with, but emits an `Expr` and compiles it under the
+initialization system's `CompilerOptions`.
+"""
+function _fullspecialize_map_options(opts::SciMLProblemOptions)
+    codegen = opts.fn_opts.codegen
+    return GeneratedFunctionOptions(;
+        expression = Val{true}, codegen.eval_expression, codegen.eval_module,
+        compiler_options = opts.init_compiler_options,
+        codegen_function_options = codegen.codegen
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
 to the `SciMLFunction` constructor. Requires the system `sys`, whether the resulting
 `SciMLFunction` is in-place (`iip`), the operating point `op`, initial time `t`, and
@@ -2091,7 +2106,7 @@ function maybe_build_initialization_problem(
         warn_cyclic_dependency, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
         time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
-        is_steadystateprob, init_compiler_options,
+        is_steadystateprob,
     ) = opts
     (; eval_expression, eval_module) = opts.fn_opts.codegen
 
@@ -2175,10 +2190,8 @@ function maybe_build_initialization_problem(
             initializeprobmap = nothing
         elseif map_specialize === SciMLBase.FullSpecialize
             initializeprobmap = _construct_fullspecialize_initializeprobmap(
-                initializeprob.f.sys, solved_unknowns;
-                iip, u0_constructor, floatT, eval_module,
-                compiler_options = init_compiler_options,
-                kwargs...
+                initializeprob.f.sys, solved_unknowns, _fullspecialize_map_options(opts);
+                iip, u0_constructor, floatT
             )
         else
             initializeprobmap = InitializationMap{iip}(
@@ -2205,9 +2218,7 @@ function maybe_build_initialization_problem(
         initializeprobpmap = nothing
     elseif map_specialize === SciMLBase.FullSpecialize
         initializeprobpmap = _construct_fullspecialize_initializeprobpmap(
-            sys, initsys;
-            p_constructor, eval_module, compiler_options = init_compiler_options,
-            kwargs...
+            sys, initsys, _fullspecialize_map_options(opts); p_constructor
         )
     else
         initializeprobpmap = construct_initializeprobpmap(
