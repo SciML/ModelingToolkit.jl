@@ -68,6 +68,7 @@ end
             @safetestset "Function Registration Test" include("function_registration.jl")
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
+            @safetestset "Array DAE Jacobians" include("array_dae_jacobian.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
