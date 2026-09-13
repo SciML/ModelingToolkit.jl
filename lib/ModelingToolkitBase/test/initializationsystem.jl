@@ -1868,13 +1868,19 @@ end
 
     auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
     full_u = full_data.initializeprobmap(full_data.initializeprob)
-    @test full_u isa StaticVector
+    # Static `u0` is opt-in via `u0_constructor` (see the `static_constructor` cases
+    # below); without it the map returns the problem's own buffer type.
+    @test typeof(full_u) === typeof(full_prob.u0)
     @test full_u == auto_u
 
     auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)
     full_p = full_data.initializeprobpmap(full_prob, full_data.initializeprob)
-    @test full_p.tunable isa StaticVector
-    @test full_p.initials isa StaticVector
+    # The map rebuilds `p`, and solve-time initialization assigns the result straight
+    # back into the integrator, so each buffer must come back as the exact type the
+    # problem's own `p` carries. Static storage appears where the problem uses it — see
+    # the `static_constructor` cases below.
+    @test typeof(full_p.tunable) === typeof(full_prob.p.tunable)
+    @test typeof(full_p.initials) === typeof(full_prob.p.initials)
     @test full_p.tunable == auto_p.tunable
     @test full_p.initials == auto_p.initials
     @test full_p.discrete == auto_p.discrete
@@ -1984,10 +1990,41 @@ end
     )
     nonbits_init = nonbits_prob.f.initialization_data
     nonbits_p = nonbits_init.initializeprobpmap(nonbits_prob, nonbits_init.initializeprob)
-    @test nonbits_p.tunable isa StaticArray
-    @test nonbits_p.initials isa StaticArray
+    @test typeof(nonbits_p.tunable) === typeof(nonbits_prob.p.tunable)
+    @test typeof(nonbits_p.initials) === typeof(nonbits_prob.p.initials)
     @test !any(buf -> buf isa StaticArray, nonbits_p.nonnumeric)
     @test remake(nonbits_prob, p = [nonbits_rate => 3.0]).p.tunable == [3.0]
+end
+
+@testset "FullSpecialize initialization survives a solve-time initialization" begin
+    # A nonlinear `initialization_eqs` is solved at `solve` time, and the result of
+    # `initializeprobpmap` is assigned straight into the integrator, which cannot convert
+    # between buffer types. So the map has to rebuild `p` with the problem's own buffer
+    # types rather than promoting them to `StaticArray`s.
+    @variables def_x(t) def_y(t)
+    @parameters def_rate = 1.0
+    @mtkcompile def_sys = System(
+        [D(def_x) ~ -def_rate * def_x, D(def_y) ~ -def_y], t;
+        initialization_eqs = [def_x^3 + def_x ~ 2, def_y ~ 2def_x + 1]
+    )
+    def_guesses = [def_x => 1.0, def_y => 1.0]
+
+    def_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        def_sys, [], (0.0, 0.1); guesses = def_guesses
+    )
+    def_data = def_prob.f.initialization_data
+    @test def_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test typeof(def_data.initializeprobpmap(def_prob, def_data.initializeprob)) ===
+        typeof(def_prob.p)
+
+    def_sol = solve(def_prob, Tsit5())
+    @test SciMLBase.successful_retcode(def_sol)
+    auto_sol = solve(
+        ODEProblem{true, SciMLBase.AutoDespecialize}(
+            def_sys, [], (0.0, 0.1); guesses = def_guesses
+        ), Tsit5()
+    )
+    @test def_sol.u[1] == auto_sol.u[1]
 end
 
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin

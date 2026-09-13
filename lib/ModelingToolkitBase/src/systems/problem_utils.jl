@@ -1683,15 +1683,18 @@ function _construct_fullspecialize_initializeprobmap(
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
     n = length(solved_unknowns)
-    static_type = iip ? MVector : SVector
+    # Static `u0` is opt-in through `u0_constructor`, exactly as on the default map path.
+    # Forcing it here would change `prob.u0`'s type out from under the caller, and an
+    # `MVector` cannot even be the element type of a GPU array.
+    u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
+        Expr(:curly, SVector, n, INITMAP_ELTYPE)
     map_expr = _generated_map_expr(expr, [sol], sources) do raw
         T = INITMAP_ELTYPE
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
         promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
         static_values = Expr(
-            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer),
-            Expr(:curly, static_type, n, T), raw
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), u0_prototype, raw
         )
         result = Expr(:call, QuoteNode(u0_constructor), static_values)
         if iip
@@ -1704,15 +1707,33 @@ function _construct_fullspecialize_initializeprobmap(
     )
 end
 
+# `prototype` says what the result has to look like: a `StaticArray` type for the state
+# map, and the problem's own corresponding `p` buffer for each parameter portion.
 function _static_initialization_buffer(prototype, values)
-    T = isempty(values) ? eltype(prototype) :
-        promote_type(eltype(prototype), mapreduce(typeof, promote_type, values))
-    if !ArrayInterface.ismutable(prototype)
+    P = prototype isa Type ? prototype : typeof(prototype)
+    T = isempty(values) ? eltype(P) :
+        promote_type(eltype(P), mapreduce(typeof, promote_type, values))
+    if !ArrayInterface.ismutable(P)
         return SVector{length(values), T}(values)
-    elseif isbitstype(T)
+    elseif P <: StaticArray && isbitstype(T)
         return MVector{length(values), T}(values)
     else
-        return collect(T, values)
+        # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
+        # initialization assigns the result straight back (`integrator.p = pmap(...)`),
+        # which cannot convert between buffer types — so the result must carry the same
+        # `MTKParameters` type the problem already has. Static storage is produced exactly
+        # where the problem already uses it, which is the GPU / `p_constructor` case this
+        # path exists for. A mutable non-isbits buffer additionally cannot be a
+        # `StaticArray` at all: `MVector` rejects `setindex!` on a non-isbits eltype.
+        #
+        # Filled explicitly rather than with `collect`, because StaticArrays overloads
+        # `collect` to preserve staticness: `collect(T, ::SVector)` returns a
+        # `SizedVector`, not a `Vector`.
+        buffer = Vector{T}(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
     end
 end
 
