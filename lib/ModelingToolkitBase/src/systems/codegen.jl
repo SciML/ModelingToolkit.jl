@@ -534,7 +534,8 @@ standard jacobian.
 # Keyword Arguments
 
 $GENERATE_X_KWARGS
-- `simplify`, `sparse`: Forwarded to [`calculate_jacobian`](@ref).
+- `simplify`: Simplify the symbolic derivatives of the DAE residual.
+- `sparse`: Generate a sparse Jacobian.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
