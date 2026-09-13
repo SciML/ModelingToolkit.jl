@@ -226,10 +226,17 @@ end
     # a slice whose elements are not all unknowns
     @named notunknown = System([D(u[1:3]) ~ -u[1:3]], t, collect(u[1:2]), [])
     @test_throws ["not a valid LHS"] generate_rhs(complete(notunknown), opts)
+end
 
-    # array unknowns still need `mtkcompile`
-    @named arrunknown = System([D(u) ~ -u], t, [u], [])
-    @test_throws ["array unknowns"] ODEProblem(
-        complete(arrunknown), [u => ones(4)], (0.0, 1.0); build_initializeprob = false
+@testset "array unknowns flatten under an array equation" begin
+    @independent_variables t
+    @variables u(t)[1:4]
+    D = Differential(t)
+    @named sys = System([D(u) ~ -u], t, [u], [])
+    prob = ODEProblem(
+        complete(sys), [u => ones(4)], (0.0, 1.0); build_initializeprob = false
     )
+    du = zeros(4)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test du ≈ -ones(4)
 end
