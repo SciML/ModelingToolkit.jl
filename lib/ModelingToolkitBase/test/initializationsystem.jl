@@ -1868,7 +1868,9 @@ end
 
     auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
     full_u = full_data.initializeprobmap(full_data.initializeprob)
-    @test full_u isa StaticVector
+    # Static `u0` is opt-in via `u0_constructor` (see the `static_constructor` cases
+    # below); without it the map returns the problem's own buffer type.
+    @test typeof(full_u) === typeof(full_prob.u0)
     @test full_u == auto_u
 
     auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)

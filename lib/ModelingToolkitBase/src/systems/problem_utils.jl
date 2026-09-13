@@ -1683,15 +1683,18 @@ function _construct_fullspecialize_initializeprobmap(
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
     n = length(solved_unknowns)
-    static_type = iip ? MVector : SVector
+    # Static `u0` is opt-in through `u0_constructor`, exactly as on the default map path.
+    # Forcing it here would change `prob.u0`'s type out from under the caller, and an
+    # `MVector` cannot even be the element type of a GPU array.
+    u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
+        Expr(:curly, SVector, n, INITMAP_ELTYPE)
     map_expr = _generated_map_expr(expr, [sol], sources) do raw
         T = INITMAP_ELTYPE
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
         promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
         static_values = Expr(
-            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer),
-            Expr(:curly, static_type, n, T), raw
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), u0_prototype, raw
         )
         result = Expr(:call, QuoteNode(u0_constructor), static_values)
         if iip
@@ -1722,7 +1725,15 @@ function _static_initialization_buffer(prototype, values)
         # where the problem already uses it, which is the GPU / `p_constructor` case this
         # path exists for. A mutable non-isbits buffer additionally cannot be a
         # `StaticArray` at all: `MVector` rejects `setindex!` on a non-isbits eltype.
-        return collect(T, values)
+        #
+        # Filled explicitly rather than with `collect`, because StaticArrays overloads
+        # `collect` to preserve staticness: `collect(T, ::SVector)` returns a
+        # `SizedVector`, not a `Vector`.
+        buffer = Vector{T}(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
     end
 end
 
