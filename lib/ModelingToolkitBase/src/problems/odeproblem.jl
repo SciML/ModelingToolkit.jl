@@ -218,10 +218,11 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return a value to store under the `Type{SCCNonlinearProblem}` metadata key of
-`sys`, recording how a `SteadyStateProblem` built on `sys` lowers to an
-`SCCNonlinearProblem`. The stored value is a zero-argument callable producing the
-lowered problem on demand, or `nothing` when no such lowering is available.
+Return the `lowered_problem` to store on a `SteadyStateProblem` built on `sys`:
+a callable `prob -> problem` producing the problem the steady-state residual
+lowers to (an `SCCNonlinearProblem` when it decomposes into multiple SCCs), or
+`nothing` when no such lowering is available. The callable is evaluated on the
+current problem so that `remake`d `u0`/`p` values are reflected.
 
 This is a stub; the implementation is provided by ModelingToolkit. Retrieving the
 stored value is possible without it via
@@ -237,23 +238,16 @@ by SCC decomposition, or `nothing` if the problem does not record such a
 lowering. This is usually an `SCCNonlinearProblem`, but systems whose residual
 reduces to a single SCC lower to a plain `NonlinearProblem`,
 `HomotopyProblem`, or `LinearProblem` instead. Problems constructed through
-ModelingToolkit store a deferred lowering under the
-`Type{SCCNonlinearProblem}` metadata key of `prob.f.sys`; it is materialized
-(and memoized) on first access.
+ModelingToolkit store a deferred lowering in the `lowered_problem` field; it is
+materialized against the problem's current `u0`/`p` on each access.
 """
 SciMLBase.SCCNonlinearProblem(::SciMLBase.AbstractSciMLProblem) = nothing
 
 function SciMLBase.SCCNonlinearProblem(prob::SteadyStateProblem)
-    f = prob.f
-    hasproperty(f, :sys) || return nothing
-    sys = f.sys
-    sys === nothing && return nothing
-    isdefined(sys, :metadata) || return nothing
-    meta = getfield(sys, :metadata)
-    meta isa AbstractDict || return nothing
-    v = get(meta, Type{SCCNonlinearProblem}, nothing)
-    v === nothing && return nothing
-    return v isa Base.Callable ? v() : v
+    hasfield(typeof(prob), :lowered_problem) || return nothing
+    lp = prob.lowered_problem
+    lp === nothing && return nothing
+    return lp isa Base.Callable ? lp(prob) : lp
 end
 
 """$(problem_docstring(DiffEqBase.SteadyStateProblem, ODEFunction, false))"""
@@ -264,9 +258,15 @@ end
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
-    sccprob = steady_state_sccprob(sys, op; kwargs...)
-    sccprob === nothing ||
-        (sys = setmetadata(sys, Type{SCCNonlinearProblem}, sccprob))
+    # `build_scimlproblem_expr` embeds keyword values as literals, so a lowering
+    # closure (which captures the system) cannot ride the codegen path. The
+    # `hasfield` check keeps this a no-op on SciMLBase versions that predate the
+    # `lowered_problem` field.
+    sccprob = if expression === Val{true} || !hasfield(SteadyStateProblem, :lowered_problem)
+        nothing
+    else
+        steady_state_sccprob(sys, op; kwargs...)
+    end
 
     _iip = resolve_iip(iip, op)
     f, u0,
@@ -278,8 +278,11 @@ end
 
     kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
+    lp = sccprob === nothing ? (;) : (; lowered_problem = sccprob)
 
-    maybe_codegen_scimlproblem(expression, SteadyStateProblem{_iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(
+        expression, SteadyStateProblem{_iip}, args; lp..., kwargs...
+    )
 end
 
 function check_compatible_system(

@@ -808,17 +808,18 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return a zero-argument callable producing, on first invocation, the
-`SCCNonlinearProblem` that a `SteadyStateProblem` built on `sys` lowers to: the
-`NonlinearSystem` steady-state residual of the original (uncompiled) model is
-`mtkcompile`d and decomposed into SCCs. The result is memoized. The lowering is
-deferred because building it requires a full `mtkcompile` of the residual
+Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
+`SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
+steady-state residual of the original (uncompiled) model is `mtkcompile`d and
+decomposed into SCCs. The compiled residual system is memoized, while the
+operating point is rebuilt from the queried problem's `u0`/`p` on every call so
+that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
+is deferred because building it requires a full `mtkcompile` of the residual
 system, which most `SteadyStateProblem` consumers never need.
 """
 function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
-    op = op isa AbstractDict ? copy(op) : op
     ref = Ref{Any}(nothing)
-    return function _sccprob()
+    return function _sccprob(prob)
         if ref[] === nothing
             ssys = sys
             while MTKBase.has_parent(ssys)
@@ -826,8 +827,11 @@ function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
                 (parent === nothing || parent === ssys) && break
                 ssys = parent
             end
-            ref[] = SCCNonlinearProblem(mtkcompile(NonlinearSystem(ssys)), op)
+            ref[] = mtkcompile(NonlinearSystem(ssys))
         end
-        return ref[]
+        op = calculate_op_from_u0_p(
+            prob.f.sys, state_values(prob), parameter_values(prob)
+        )
+        return SCCNonlinearProblem(ref[], op)
     end
 end
