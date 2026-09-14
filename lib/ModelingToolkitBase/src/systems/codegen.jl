@@ -26,7 +26,7 @@ Takes every residual at once, and works in the system's `ir`, so the search and
 substitution caches are shared and the rewritten residuals are already populated for
 codegen.
 """
-function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+function expand_array_derivatives!(rhss::Union{Vector{SymbolicT}, Vector{Equation}}, ir::IRStructure{VartypeT})
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for rhs in rhss
