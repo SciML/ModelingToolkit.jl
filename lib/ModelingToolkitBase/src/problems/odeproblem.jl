@@ -215,6 +215,47 @@ Base.@nospecializeinfer function SciMLBase.ODEProblem{
     )
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Return a value to store under the `Type{SCCNonlinearProblem}` metadata key of
+`sys`, recording how a `SteadyStateProblem` built on `sys` lowers to an
+`SCCNonlinearProblem`. The stored value is a zero-argument callable producing the
+lowered problem on demand, or `nothing` when no such lowering is available.
+
+This is a stub; the implementation is provided by ModelingToolkit. Retrieving the
+stored value is possible without it via
+`SciMLBase.SCCNonlinearProblem(::SteadyStateProblem)`.
+"""
+steady_state_sccprob(::AbstractSystem, op; kwargs...) = nothing
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the problem that `prob` lowers to when its steady-state residual is solved
+by SCC decomposition, or `nothing` if the problem does not record such a
+lowering. This is usually an `SCCNonlinearProblem`, but systems whose residual
+reduces to a single SCC lower to a plain `NonlinearProblem`,
+`HomotopyProblem`, or `LinearProblem` instead. Problems constructed through
+ModelingToolkit store a deferred lowering under the
+`Type{SCCNonlinearProblem}` metadata key of `prob.f.sys`; it is materialized
+(and memoized) on first access.
+"""
+SciMLBase.SCCNonlinearProblem(::SciMLBase.AbstractSciMLProblem) = nothing
+
+function SciMLBase.SCCNonlinearProblem(prob::SteadyStateProblem)
+    f = prob.f
+    hasproperty(f, :sys) || return nothing
+    sys = f.sys
+    sys === nothing && return nothing
+    isdefined(sys, :metadata) || return nothing
+    meta = getfield(sys, :metadata)
+    meta isa AbstractDict || return nothing
+    v = get(meta, Type{SCCNonlinearProblem}, nothing)
+    v === nothing && return nothing
+    return v isa Base.Callable ? v() : v
+end
+
 """$(problem_docstring(DiffEqBase.SteadyStateProblem, ODEFunction, false))"""
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
         sys::System, op; check_length = true, check_compatibility = true,
@@ -222,6 +263,10 @@ end
     ) where {iip, spec}
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
+
+    sccprob = steady_state_sccprob(sys, op; kwargs...)
+    sccprob === nothing ||
+        (sys = setmetadata(sys, Type{SCCNonlinearProblem}, sccprob))
 
     _iip = resolve_iip(iip, op)
     f, u0,

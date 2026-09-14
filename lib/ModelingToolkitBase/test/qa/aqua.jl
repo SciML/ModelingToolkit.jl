@@ -8,11 +8,15 @@ using SciMLTesting
 const STALE_EXTENSION_DEPENDENCIES = [:SimpleNonlinearSolve]
 
 # ModelingToolkitBase supplies Symbolics expression-protocol methods for equations and
-# JumpProcesses jump types. These methods intentionally extend the corresponding
-# SymbolicUtils generic functions, while all other piracies remain checked.
+# JumpProcesses jump types. It is also the de-facto owner of `SCCNonlinearProblem`
+# construction: it provides the `SCCNonlinearProblem(::System)` constructors and the
+# `SCCNonlinearProblem(::SteadyStateProblem)` accessor for the lowering recorded on
+# `prob.f.sys`. These methods intentionally extend the corresponding external generic
+# functions, while all other piracies remain checked.
 const INTENTIONAL_EXTERNAL_GENERIC_EXTENSIONS = (
     ModelingToolkitBase.SymbolicUtils.search_variables!,
     ModelingToolkitBase.toexpr,
+    ModelingToolkitBase.SciMLBase.SCCNonlinearProblem,
 )
 
 # Moshi's `@data` expands to a submodule whose source ExplicitImports cannot walk.

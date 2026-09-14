@@ -473,3 +473,44 @@ end
     sol = solve(prob, Rodas5P())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "SteadyStateProblem stores its SCC lowering" begin
+    # `irreducible` keeps all three states in the residual system, so the
+    # steady-state residual decomposes into a linear `{a, b}` SCC and a
+    # nonlinear scalar `{x}` SCC. The steady state is a = 1, b = 2, x = ∛3.
+    @variables a(t) = 1.0 b(t) = 1.0 x(t) = 1.0 [irreducible = true]
+    @mtkcompile sys = System(
+        [D(a) ~ 5 - 3a - b, D(b) ~ 5 - a - 2b, D(x) ~ a + b - x^3], t
+    )
+    prob = SteadyStateProblem(sys, Dict())
+
+    # The lowering is stored deferred on the system's metadata...
+    builder = get(getfield(prob.f.sys, :metadata), Type{SCCNonlinearProblem}, nothing)
+    @test builder !== nothing
+    @test builder isa Base.Callable
+
+    # ...and materializes through `SCCNonlinearProblem(prob)`, memoized.
+    sccprob = SCCNonlinearProblem(prob)
+    @test sccprob isa SCCNonlinearProblem
+    @test SCCNonlinearProblem(prob) === sccprob
+    @test length(sccprob.probs) == 2
+    @test sccprob.probs[1] isa LinearProblem
+    @test sccprob.probs[2] isa NonlinearProblem
+
+    sol = solve(sccprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[[a, b, x]] ≈ [1, 2, cbrt(3)] atol = 1.0e-10
+
+    # Survives `remake` through `prob.f.sys`.
+    prob2 = remake(prob; u0 = [1.0, 1.0, 1.0])
+    @test SCCNonlinearProblem(prob2) isa SCCNonlinearProblem
+
+    # Still stored when initialization data is not built.
+    prob3 = SteadyStateProblem(sys, Dict(); build_initializeprob = false)
+    @test prob3.f.initialization_data === nothing
+    @test SCCNonlinearProblem(prob3) isa SCCNonlinearProblem
+
+    # Not stored on non-steady-state problems.
+    odeprob = ODEProblem(sys, Dict(), (0.0, 1.0))
+    @test SCCNonlinearProblem(odeprob) === nothing
+end
