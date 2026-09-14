@@ -244,10 +244,9 @@ materialized against the problem's current `u0`/`p` on each access.
 SciMLBase.SCCNonlinearProblem(::SciMLBase.AbstractSciMLProblem) = nothing
 
 function SciMLBase.SCCNonlinearProblem(prob::SteadyStateProblem)
-    hasfield(typeof(prob), :lowered_problem) || return nothing
     lp = prob.lowered_problem
     lp === nothing && return nothing
-    return lp isa Base.Callable ? lp(prob) : lp
+    return lp isa SciMLBase.AbstractSciMLProblem ? lp : lp(prob)
 end
 
 """$(problem_docstring(DiffEqBase.SteadyStateProblem, ODEFunction, false))"""
@@ -259,14 +258,8 @@ end
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
     # `build_scimlproblem_expr` embeds keyword values as literals, so a lowering
-    # closure (which captures the system) cannot ride the codegen path. The
-    # `hasfield` check keeps this a no-op on SciMLBase versions that predate the
-    # `lowered_problem` field.
-    sccprob = if expression === Val{true} || !hasfield(SteadyStateProblem, :lowered_problem)
-        nothing
-    else
-        steady_state_sccprob(sys, op; kwargs...)
-    end
+    # closure (which captures the system) cannot ride the codegen path.
+    sccprob = expression === Val{true} ? nothing : steady_state_sccprob(sys, op; kwargs...)
 
     _iip = resolve_iip(iip, op)
     f, u0,
@@ -278,10 +271,9 @@ end
 
     kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
-    lp = sccprob === nothing ? (;) : (; lowered_problem = sccprob)
 
     maybe_codegen_scimlproblem(
-        expression, SteadyStateProblem{_iip}, args; lp..., kwargs...
+        expression, SteadyStateProblem{_iip}, args; lowered_problem = sccprob, kwargs...
     )
 end
 
