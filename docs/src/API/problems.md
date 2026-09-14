@@ -74,6 +74,7 @@ ModelingToolkit.ProblemTypeCtx
 
 ```@docs
 SciMLBase.OptimizationFunction
+SciMLBase.MultiObjectiveOptimizationFunction
 SciMLBase.OptimizationProblem
 SciMLBase.ODEInputFunction
 ModelingToolkit.constraints_to_penalties

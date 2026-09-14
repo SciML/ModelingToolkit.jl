@@ -1275,6 +1275,160 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Generate the vector-valued objective function of a [`System`](@ref) for
+`SciMLBase.MultiObjectiveOptimizationFunction`: it returns [`costs`](@ref) elementwise
+instead of the scalar `consolidate`d [`cost`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    res = build_function_wrapper(sys, objs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the jacobian of the objective vector of `sys` with respect to unknowns.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian.
+"""
+function calculate_multiobjective_jacobian(
+        sys::System; simplify = false, sparse = false,
+        return_sparsity = false
+    )
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    sparsity = nothing
+    if sparse
+        jac = Symbolics.sparsejacobian(objs, dvs; simplify)::AbstractSparseArray
+        sparsity = similar(jac, Float64)
+    else
+        jac = Symbolics.jacobian(objs, dvs; simplify)
+    end
+    return return_sparsity ? (jac, sparsity) : jac
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the jacobian function of the objective vector of `sys`, for the `jac` field of
+`SciMLBase.MultiObjectiveOptimizationFunction`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_multiobjective_jacobian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_jacobian(
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    jac,
+        sparsity = calculate_multiobjective_jacobian(
+        sys; simplify, sparse, return_sparsity = true
+    )
+    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+    fn = maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the hessian of each objective of `sys` with respect to unknowns, as a vector of
+hessian matrices.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.hessian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of each hessian.
+"""
+function calculate_multiobjective_hessian(
+        sys::System; simplify = false, sparse = false, return_sparsity = false
+    )
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    sparsity = nothing
+    if sparse
+        hess = map(objs) do obj
+            Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
+        end
+        sparsity = similar.(hess, Float64)
+    else
+        hess = [Symbolics.hessian(obj, dvs; simplify) for obj in objs]
+    end
+    return return_sparsity ? (hess, sparsity) : hess
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the hessian functions of the objectives of `sys`, for the `hess` field of
+`SciMLBase.MultiObjectiveOptimizationFunction`: one generated function per objective,
+in the order of [`costs`](@ref). In expression mode, a `vect` expression of them.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_multiobjective_hessian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of each hessian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_hessian(
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    hess,
+        sparsity = calculate_multiobjective_hessian(
+        sys; simplify, sparse, return_sparsity = true
+    )
+    fns = map(hess) do H
+        res = build_function_wrapper(sys, H, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+        maybe_compile_function(
+            expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+        )
+    end
+    fn = expression == Val{true} ? Expr(:vect, fns...) : fns
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Calculate the jacobian of the equations of `sys` with respect to the inputs.
 
 # Keyword arguments

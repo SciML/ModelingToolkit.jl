@@ -150,6 +150,7 @@ end
     if GROUP == "All" || GROUP == "Optimization"
         activate_optimization_env()
         @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
+        @safetestset "MultiObjective Optimization" include("optimization/multiobjective.jl")
         @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end

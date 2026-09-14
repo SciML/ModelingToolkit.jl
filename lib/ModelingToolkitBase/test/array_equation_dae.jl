@@ -4,6 +4,7 @@ using ModelingToolkitBase: has_array_equations, accepts_array_equations
 using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
+using DiffEqBase: BrownFullBasicInit
 
 # A system whose interior is written as one array equation over slices, as produced by a
 # finite-difference PDE discretization that does not scalarize.
@@ -73,15 +74,9 @@ end
     )
     tend = 0.1
     prob = DAEProblem(sys, op, (0.0, tend); build_initializeprob = false)
-    # Supply a consistent `du0` by hand (boundary values are already zero) so the solve
-    # does not depend on the solver's own DAE initialization.
-    du0 = zeros(n)
-    dx = 1 / (n - 1)
-    u0 = prob.u0
-    du0[2:(n - 1)] .= (u0[1:(n - 2)] .- 2 .* u0[2:(n - 1)] .+ u0[3:n]) ./ dx^2
-    prob = remake(prob; du0)
+    # `du0` above is not consistent; the solver's own DAE initialization supplies it.
     sol = solve(
-        prob, DFBDF(); initializealg = SciMLBase.NoInit(),
+        prob, DFBDF(); initializealg = BrownFullBasicInit(),
         reltol = 1.0e-8, abstol = 1.0e-8, saveat = [tend]
     )
     @test SciMLBase.successful_retcode(sol)
@@ -153,10 +148,8 @@ end
     prob.f(out, du, prob.u0, prob.p, 0.0)
     @test maximum(abs, out) < 1.0e-1
 
-    du0 = zeros(n)
-    du0[2:(n - 1)] .= (prob.u0[1:(n - 2)] .- 2 .* prob.u0[2:(n - 1)] .+ prob.u0[3:n]) ./ dx^2
     sol = solve(
-        remake(prob; du0), DFBDF(); initializealg = SciMLBase.NoInit(), reltol = 1.0e-8,
+        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
         abstol = 1.0e-8, saveat = [0.1]
     )
     @test SciMLBase.successful_retcode(sol)
@@ -182,12 +175,13 @@ end
     @test accepts_array_equations(ODEFunction)
     @test !accepts_array_equations(SDEFunction)
     @test !accepts_array_equations(ImplicitDiscreteFunction)
-    # `OptimizationProblem` rejects `equations` outright (`check_no_equations`);
-    # constraints are a separate `generate_cons` codegen path.
+    # Optimization vectorizes `costs` and `constraints`, not `equations`:
+    # `check_no_equations` rejects them before this gate is reached.
     @test !accepts_array_equations(OptimizationFunction)
+    @test !accepts_array_equations(MultiObjectiveOptimizationFunction)
 end
 
-@testset "array residuals reject `jac`/`sparse` with a clear error" begin
+@testset "symbolic jacobian from array residuals" begin
     n = 11
     sys, u, t, D = heat_array_system(n)
     xs = range(0.0, 1.0, length = n)
@@ -195,24 +189,23 @@ end
         [u[i] => sinpi(xs[i]) for i in 1:n],
         [D(u[i]) => 0.0 for i in 1:n]
     )
-    for kwargs in ((; jac = true), (; sparse = true), (; jac = true, sparse = true))
-        err = @test_throws ArgumentError DAEProblem(
-            sys, op, (0.0, 0.1); build_initializeprob = false, kwargs...
-        )
-        @test occursin("jac = true", err.value.msg)
-        @test occursin("sparse = true", err.value.msg)
-        @test occursin("mtkcompile", err.value.msg)
-    end
-    err = @test_throws ArgumentError DAEFunction(sys; jac = true)
-    @test occursin("mtkcompile", err.value.msg)
-
-    # Scalar systems still produce a usable Jacobian.
-    @variables x(t) y(t)
-    @named dae_scalar = System([D(x) ~ -x, 0 ~ x + y], t)
-    dae_scalar = complete(dae_scalar)
-    prob = DAEProblem(
-        dae_scalar, [x => 1.0, y => -1.0, D(x) => -1.0, D(y) => 0.0], (0.0, 0.1);
-        build_initializeprob = false, jac = true
+    # the jacobian is built from the scalarized `full_equations`, one row per residual;
+    # `sparse = true` is not tested because `W_sparsity` requires a semi-explicit mass
+    # matrix, which no residual-form DAE has
+    prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false, jac = true)
+    J = zeros(n, n)
+    γ = 2.0
+    prob.f.jac(J, prob.du0, prob.u0, prob.p, γ, 0.0)
+    dx = 1 / (n - 1)
+    # residual row 1 is `lap[1] - D(u[2])`
+    @test J[1, 1:3] ≈ [1, -2 - γ * dx^2, 1] ./ dx^2
+    # residual row `n - 1` is `0 - u[1]`
+    @test J[n - 1, 1] ≈ -1
+    @test count(!iszero, J) == 3 * (n - 2) + 2
+    sol = solve(
+        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        abstol = 1.0e-8, saveat = [0.1]
     )
-    @test prob.f.jac !== nothing
+    @test SciMLBase.successful_retcode(sol)
+    @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
 end

@@ -12,6 +12,7 @@ using SciMLStructures: replace, Tunable
 using NonlinearSolve
 using ForwardDiff
 using StaticArrays
+using SparseArrays: nnz
 import SymbolicUtils as SU
 
 # 1D Laplace interior as one array equation.
@@ -319,30 +320,30 @@ end
     @test sol.u ≈ ones(4)
 end
 
-@testset "jac and sparse fail fast on array residuals" begin
+@testset "symbolic jacobian and sparsity from array residuals" begin
     n = 11
     sys, u = laplace_array_system(n)
     op = [u[i] => 0.5 for i in 1:n]
-    for kwargs in ((; jac = true), (; sparse = true), (; jac = true, sparse = true))
-        err = @test_throws ArgumentError NonlinearProblem(sys, op; kwargs...)
-        @test occursin("jac = true", err.value.msg)
-        @test occursin("sparse = true", err.value.msg)
-        @test occursin("mtkcompile", err.value.msg)
-    end
-    err = @test_throws ArgumentError NonlinearProblem{false}(sys, op; jac = true)
-    @test occursin("array residuals", lowercase(err.value.msg))
-    err = @test_throws ArgumentError NonlinearFunction(sys; jac = true)
-    @test occursin("array residuals", lowercase(err.value.msg))
-    err = @test_throws ArgumentError NonlinearFunction(sys; sparse = true, expression = Val{true})
-    @test occursin("array residuals", lowercase(err.value.msg))
+    # the jacobian is built from the scalarized `full_equations`, one row per residual
+    prob = NonlinearProblem(sys, op; jac = true)
+    proboop = NonlinearProblem{false}(sys, op)
+    J_sc = ForwardDiff.jacobian(u -> collect(proboop.f(u, proboop.p)), proboop.u0)
+    @test prob.f.jac(prob.u0, prob.p) ≈ J_sc
+    J = zeros(n, n)
+    prob.f.jac(J, prob.u0, prob.p)
+    @test J ≈ J_sc
+    dx = 1 / (n - 1)
+    @test J[1, 1:3] ≈ [-1, 2, -1] ./ dx^2
 
-    sys_sc, _ = laplace_array_system(n; compile = mtkcompile)
-    prob_jac = NonlinearProblem(sys_sc, op; jac = true)
-    J = prob_jac.f.jac(prob_jac.u0, prob_jac.p)
-    @test size(J) == (length(prob_jac.u0), length(prob_jac.u0))
-    @test all(isfinite, J)
-    prob_sparse = NonlinearProblem(sys_sc, op; sparse = true)
-    @test prob_sparse.f.jac_prototype !== nothing
+    prob_sparse = NonlinearProblem(sys, op; jac = true, sparse = true)
+    @test size(prob_sparse.f.jac_prototype) == (n, n)
+    @test nnz(prob_sparse.f.jac_prototype) == 3 * (n - 2) + 2
+    Js = similar(prob_sparse.f.jac_prototype)
+    prob_sparse.f.jac(Js, prob_sparse.u0, prob_sparse.p)
+    @test Js ≈ J_sc
+    sol = solve(prob_sparse, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.u ≈ range(0.0, 1.0, length = n) atol = 1.0e-10
 end
 
 @testset "non-square array residual contract" begin

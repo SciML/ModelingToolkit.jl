@@ -48,8 +48,6 @@ function SciMLBase.OptimizationFunction{iip}(
         sys = system_with_cost_weights(sys, weights)
     end
 
-    cstr = constraints(sys)
-
     (; u0, p, sparse, simplify) = opts
     codegen_opts = opts.codegen
 
@@ -71,29 +69,9 @@ function SciMLBase.OptimizationFunction{iip}(
             hess_prototype = cost_hessian_sparsity(sys)
         end
     end
-    if isempty(cstr)
-        cons = _cons_j = cons_jac_prototype = _cons_h = nothing
-        cons_hess_prototype = cons_expr = nothing
-    else
-        cons = generate_cons(sys, codegen_opts)
-        if cons_j
-            _cons_j,
-                cons_jac_prototype = generate_constraint_jacobian(
-                sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
-            )
-        else
-            _cons_j = cons_jac_prototype = nothing
-        end
-        if cons_h
-            _cons_h,
-                cons_hess_prototype = generate_constraint_hessian(
-                sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
-            )
-        else
-            _cons_h = cons_hess_prototype = nothing
-        end
-        cons_expr = Code.toexpr.(expand.([eq.lhs for eq in Symbolics.canonical_form.(cstr)]))
-    end
+    constraint_fields = generate_constraint_fields(
+        sys, codegen_opts; cons_j, cons_h, cons_sparse, simplify
+    )
 
     obj_expr = Code.toexpr(expand(cost(sys)))
 
@@ -105,12 +83,7 @@ function SciMLBase.OptimizationFunction{iip}(
         grad = _grad,
         hess = _hess,
         hess_prototype = hess_prototype,
-        cons = cons,
-        cons_j = _cons_j,
-        cons_jac_prototype = cons_jac_prototype,
-        cons_h = _cons_h,
-        cons_hess_prototype = cons_hess_prototype,
-        cons_expr = cons_expr,
+        constraint_fields...,
         expr = obj_expr,
         observed = observedfun,
     )
@@ -118,7 +91,147 @@ function SciMLBase.OptimizationFunction{iip}(
     return maybe_codegen_scimlfn(Val{E}, OptimizationFunction{iip}, args; kwargs...)
 end
 
-"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false, extra_kwargs = WEIGHTS_KWARGS * ADTYPE_PROBLEM_KWARGS))"""
+"""$(function_docstring(MultiObjectiveOptimizationFunction, false, [:jac, :hess, :cons_h, :cons_j, :adtype]; extra_body = "The generated objective is vector-valued: it returns [`costs`](@ref) elementwise rather than the `consolidate`d scalar of `OptimizationFunction`."))"""
+function SciMLBase.MultiObjectiveOptimizationFunction(sys::System, args...; kwargs...)
+    return MultiObjectiveOptimizationFunction{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.MultiObjectiveOptimizationFunction{iip}(
+        sys::System, adtype::ADTypes.AbstractADType; kwargs...
+    ) where {iip}
+    return MultiObjectiveOptimizationFunction{iip}(sys; adtype, kwargs...)
+end
+
+function SciMLBase.MultiObjectiveOptimizationFunction{iip}(
+        sys::System;
+        u0 = nothing, p = nothing, t = nothing, jac = false, hess = false,
+        sparse = false, cons_j = false, cons_h = false,
+        cons_sparse = false, adtype::ADTypes.AbstractADType = SciMLBase.NoAD(),
+        linenumbers = true, eval_expression = false,
+        eval_module = @__MODULE__,
+        simplify = false, check_compatibility = true, checkbounds = false,
+        expression = Val{false}, optimize = nothing, weights = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
+    ) where {iip}
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, sparse, simplify, expression, check_compatibility,
+        eval_expression, eval_module, compiler_options, checkbounds, optimize, kwargs...,
+    )
+    return MultiObjectiveOptimizationFunction{iip}(
+        sys, opts; hess, cons_j, cons_h, cons_sparse, weights, adtype
+    )
+end
+
+"""
+    SciMLBase.MultiObjectiveOptimizationFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `MultiObjectiveOptimizationFunction` directly from a
+pre-assembled `SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.MultiObjectiveOptimizationFunction{iip}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        hess::Bool = false, cons_j::Bool = false, cons_h::Bool = false,
+        cons_sparse::Bool = false, weights = nothing,
+        adtype::ADTypes.AbstractADType = SciMLBase.NoAD()
+    ) where {iip, E}
+    check_complete(sys, MultiObjectiveOptimizationFunction)
+    opts.check_compatibility &&
+        check_compatible_system(MultiObjectiveOptimizationFunction, sys)
+    weights !== nothing && throw(
+        ArgumentError(
+            "`weights` scalarizes the costs of `sys`; a multiobjective objective keeps \
+            them separate. Use `OptimizationFunction` for a weighted-sum objective."
+        )
+    )
+
+    (; u0, p, jac, sparse, simplify) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_multiobjective_cost(sys, codegen_opts)
+
+    if jac
+        _jac = generate_multiobjective_jacobian(sys, codegen_opts)
+    else
+        _jac = nothing
+    end
+    if hess
+        _hess,
+            hess_prototype = generate_multiobjective_hessian(
+            sys, codegen_opts; sparse, simplify, return_sparsity = true
+        )
+    else
+        _hess = hess_prototype = nothing
+        if sparse
+            _, hess_prototype = calculate_multiobjective_hessian(
+                sys; sparse = true, return_sparsity = true
+            )
+        end
+    end
+    constraint_fields = generate_constraint_fields(
+        sys, codegen_opts; cons_j, cons_h, cons_sparse, simplify
+    )
+
+    obj_expr = Code.toexpr.(expand.(costs(sys)))
+
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
+
+    args = (; f, ad = adtype)
+    kwargs = (;
+        sys = sys,
+        jac = _jac,
+        hess = _hess,
+        hess_prototype = hess_prototype,
+        constraint_fields...,
+        expr = obj_expr,
+        observed = observedfun,
+    )
+
+    return maybe_codegen_scimlfn(Val{E}, MultiObjectiveOptimizationFunction{iip}, args; kwargs...)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The constraint-related fields of an `OptimizationFunction` or
+`MultiObjectiveOptimizationFunction` built from `sys`: the constraint function `cons`,
+its symbolic form `cons_expr`, and, when requested, the constraint jacobian `cons_j` and
+hessian `cons_h` with their sparsity prototypes. Every field is `nothing` when `sys` has
+no constraints.
+"""
+function generate_constraint_fields(
+        sys::System, codegen_opts::GeneratedFunctionOptions;
+        cons_j::Bool, cons_h::Bool, cons_sparse::Bool, simplify::Bool
+    )
+    cstr = constraints(sys)
+    if isempty(cstr)
+        return (;
+            cons = nothing, cons_j = nothing, cons_jac_prototype = nothing,
+            cons_h = nothing, cons_hess_prototype = nothing, cons_expr = nothing,
+        )
+    end
+    cons = generate_cons(sys, codegen_opts)
+    _cons_j = cons_jac_prototype = nothing
+    if cons_j
+        _cons_j,
+            cons_jac_prototype = generate_constraint_jacobian(
+            sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
+        )
+    end
+    _cons_h = cons_hess_prototype = nothing
+    if cons_h
+        _cons_h,
+            cons_hess_prototype = generate_constraint_hessian(
+            sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
+        )
+    end
+    cons_expr = Code.toexpr.(expand.([eq.lhs for eq in Symbolics.canonical_form.(cstr)]))
+    return (;
+        cons, cons_j = _cons_j, cons_jac_prototype, cons_h = _cons_h,
+        cons_hess_prototype, cons_expr,
+    )
+end
+
+"""$(problem_docstring(SciMLBase.OptimizationProblem, OptimizationFunction, false; init = false, extra_kwargs = WEIGHTS_KWARGS * MULTIOBJECTIVE_KWARGS * ADTYPE_PROBLEM_KWARGS))"""
 function SciMLBase.OptimizationProblem(sys::System, args...; kwargs...)
     return OptimizationProblem{true}(sys, args...; kwargs...)
 end
@@ -126,6 +239,7 @@ end
 function SciMLBase.OptimizationProblem{iip}(
         sys::System, op; lb = nothing,
         ub = nothing, check_compatibility = true, expression = Val{false},
+        multiobjective::Bool = false,
         kwargs...
     ) where {iip}
     check_complete(sys, OptimizationProblem)
@@ -133,7 +247,8 @@ function SciMLBase.OptimizationProblem{iip}(
 
     f, u0,
         p = process_SciMLProblem(
-        OptimizationFunction{iip}, sys, op;
+        (multiobjective ? MultiObjectiveOptimizationFunction{iip} : OptimizationFunction{iip}),
+        sys, op;
         check_compatibility, tofloat = false, check_length = false, expression, kwargs...
     )
 
@@ -184,7 +299,10 @@ function SciMLBase.OptimizationProblem{iip}(
 end
 
 function check_compatible_system(
-        T::Union{Type{OptimizationFunction}, Type{OptimizationProblem}}, sys::System
+        T::Union{
+            Type{OptimizationFunction}, Type{MultiObjectiveOptimizationFunction},
+            Type{OptimizationProblem},
+        }, sys::System
     )
     check_time_independent(sys, T)
     check_not_dde(sys)

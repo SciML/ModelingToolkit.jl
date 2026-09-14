@@ -63,15 +63,6 @@ function SciMLBase.DAEFunction{iip, spec}(
     (; u0, p, t, jac, tgrad, sparse, analytic, simplify, initialization_data) = opts
     codegen_opts = opts.codegen
 
-    if (jac || sparse) && has_array_equations(equations(sys))
-        throw(
-            ArgumentError(
-                "Array residuals do not support `jac = true` or `sparse = true`. " *
-                    "Call `mtkcompile` first."
-            )
-        )
-    end
-
     f = generate_rhs(sys, codegen_opts; implicit_dae = true)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip

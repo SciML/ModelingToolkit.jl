@@ -2309,6 +2309,22 @@ function cost(sys::AbstractSystem)
     return consolidate(cs, subcosts)::SymbolicT
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+The unconsolidated objective vector of `sys`: its own costs followed by the consolidated
+cost of each subsystem, namespaced. `cost(sys)` folds this vector through the system's
+`consolidate` function into a scalar; [`SciMLBase.MultiObjectiveOptimizationFunction`](@ref)
+generates an objective that evaluates it elementwise instead.
+"""
+function costs(sys::AbstractSystem)
+    cs = collect(SymbolicT, get_costs(sys))
+    for subsys in get_systems(sys)
+        push!(cs, namespace_expr(cost(subsys), subsys))
+    end
+    return cs
+end
+
 namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
 
 namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)

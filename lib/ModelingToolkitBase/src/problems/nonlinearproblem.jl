@@ -40,15 +40,6 @@ function SciMLBase.NonlinearFunction{iip, spec}(
     (; u0, p, jac, sparse, analytic, simplify, initialization_data) = opts
     codegen_opts = opts.codegen
 
-    if (jac || sparse) && has_array_equations(equations(sys))
-        throw(
-            ArgumentError(
-                "Array residuals do not support `jac = true` or `sparse = true`. " *
-                    "Call `mtkcompile` first."
-            )
-        )
-    end
-
     f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
