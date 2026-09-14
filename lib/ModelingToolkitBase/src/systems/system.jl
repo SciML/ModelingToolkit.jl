@@ -1370,17 +1370,20 @@ function NonlinearSystem(sys::System)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
+    eqs = copy(equations(sys))
     obs = observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
+    ir = IRStructure{VartypeT}()
+    subber = SU.IRSubstituter{false}(ir, subrules)
     # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
     # slice is not one of them, so expand it and replace its elements.
-    eqs = map(eq -> substitute(eq, subrules), eqs)
-    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
+    map!(subber, eqs, eqs)
+    expand_array_derivatives!(eqs, ir)
+    map!(subber, eqs, eqs)
     new_ps = [parameters(sys); get_iv(sys)]
     if iscomplete(sys)
         append!(new_ps, collect(bound_parameters(sys)))
