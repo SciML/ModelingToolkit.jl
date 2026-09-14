@@ -595,9 +595,12 @@ end
     @test sol[z] ≈ [1.0, 2.0, 6.0]
     @test sol[w] ≈ 2.0
 
+    # `mtkcompile` may reorder the unknowns, or eliminate them entirely once tearing is
+    # loaded, so only the solution is comparable
     msys = mtkcompile(sys)
     mprob = NonlinearProblem(msys, op)
-    @test mprob.u0 ≈ prob.u0
-    @test mprob.f(mprob.u0, mprob.p) ≈ prob.f(prob.u0, prob.p)
-    @test solve(mprob, NewtonRaphson())[z] ≈ sol[z]
+    msol = solve(mprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(msol)
+    @test msol[z] ≈ sol[z]
+    @test msol[w] ≈ sol[w]
 end

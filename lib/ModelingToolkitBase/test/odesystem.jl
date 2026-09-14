@@ -1783,11 +1783,16 @@ end
     @test sol[x[3]][end] ≈ analytic(1.0)[3] rtol = 1.0e-6
     @test sol[w][end] ≈ analytic(1.0)[4] rtol = 1.0e-6
 
-    # `mtkcompile` reaches the same problem by scalarizing the unknowns instead
+    # `mtkcompile` reaches the same problem by scalarizing the unknowns instead. Their
+    # order after `mtkcompile` is not guaranteed, so compare through the symbolic indices.
     msys = mtkcompile(sys)
     mprob = ODEProblem(msys, op, (0.0, 1.0))
-    @test mprob.u0 ≈ prob.u0
-    @test mprob.f(mprob.u0, mprob.p, 0.0) ≈ prob.f(prob.u0, prob.p, 0.0)
+    @test length(mprob.u0) == 4
+    @test mprob[x] ≈ prob[x]
+    @test mprob[w] ≈ prob[w]
+    midx = [variable_index(mprob, x[i]) for i in 1:3]
+    push!(midx, variable_index(mprob, w))
+    @test mprob.f(mprob.u0, mprob.p, 0.0)[midx] ≈ [-1.0, -4.0, -5.0, -4.0]
     msol = solve(mprob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
     @test msol[x][end] ≈ sol[x][end] rtol = 1.0e-6
 
