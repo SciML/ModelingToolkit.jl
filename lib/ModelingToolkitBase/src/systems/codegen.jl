@@ -104,7 +104,11 @@ function similar_for_residual(prototype, extras...)
     for x in extras
         T = promote_type(T, residual_eltype(x))
     end
-    return sz -> similar(prototype, T, sz)
+    return let prototype = prototype, T = T
+        function __similar_for_residual(sz)
+            return similar(prototype, T, sz)
+        end
+    end
 end
 
 function residual_allocator_arg(arg)
