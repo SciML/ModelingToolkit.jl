@@ -804,3 +804,34 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
     merge!(op, bindings(sys))
     return op
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return a `prob -> problem` callable producing the `SCCNonlinearProblem` that a
+`SteadyStateProblem` built on `sys` lowers to: the `NonlinearSystem`
+steady-state residual of the original (uncompiled) model is `mtkcompile`d and
+decomposed into SCCs. The compiled residual system is memoized, while the
+operating point is rebuilt from the queried problem's `u0`/`p` on every call so
+that a `remake`d `SteadyStateProblem` yields a matching lowering. The lowering
+is deferred because building it requires a full `mtkcompile` of the residual
+system, which most `SteadyStateProblem` consumers never need.
+"""
+function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
+    ref = Ref{Any}(nothing)
+    return function _sccprob(prob)
+        if ref[] === nothing
+            ssys = sys
+            while MTKBase.has_parent(ssys)
+                parent = MTKBase.get_parent(ssys)
+                (parent === nothing || parent === ssys) && break
+                ssys = parent
+            end
+            ref[] = mtkcompile(NonlinearSystem(ssys))
+        end
+        op = calculate_op_from_u0_p(
+            prob.f.sys, state_values(prob), parameter_values(prob)
+        )
+        return SCCNonlinearProblem(ref[], op)
+    end
+end
