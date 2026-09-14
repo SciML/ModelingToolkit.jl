@@ -80,6 +80,9 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # SciMLBase
     :allowedkeywords, :anyeltypedual, :diagnose_symbolic_instability,
     :DISCRETE_INPLACE_DEFAULT, :FINALIZE_DEFAULT, :INITIALIZE_DEFAULT,
+    :strip_solution,
+    # NonlinearSolveBase
+    :get_raw_f,
     # JumpProcesses
     :NullAggregator,
     # BipartiteGraphs
@@ -93,7 +96,7 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     # EnzymeCore.EnzymeRules
     :inactive_noinl, :inactive_type,
     # ForwardDiff
-    :Dual, :valtype,
+    :Dual, :jacobian, :npartials, :Partials, :partials, :value, :valtype,
     # Moshi
     :Data, :Derive, :Match,
     # Setfield

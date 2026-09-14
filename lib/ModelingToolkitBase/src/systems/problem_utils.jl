@@ -1372,7 +1372,7 @@ function construct_initializeprobpmap(
                 eval_expression, eval_module, kwargs...
             )
             function initprobpmap_split(prob, initsol)
-                return getter(initsol, prob)
+                return getter(correct_initialsol_duals(initsol), prob)
             end
         end
     else
@@ -1382,7 +1382,7 @@ function construct_initializeprobpmap(
             ), p_constructor = p_constructor
 
             function initprobpmap_nosplit(prob, initsol)
-                p = p_constructor(getter(initsol))
+                p = p_constructor(getter(correct_initialsol_duals(initsol)))
                 if parameter_values(prob) isa SciMLBase.DespecializedParameters
                     p = SciMLBase.DespecializedParameters(p)
                 end
@@ -1401,6 +1401,433 @@ function get_scimlfn(valp)
     throw(ArgumentError("SciMLFunction not found. This should never happen."))
 end
 
+_initprob_value(x::ForwardDiff.Dual) = _initprob_value(ForwardDiff.value(x))
+_initprob_value(x::Number) = x
+_initprob_value(x::AbstractArray) = _initprob_value.(x)
+_initprob_value(x::Tuple) = map(_initprob_value, x)
+_initprob_value(x::NamedTuple) = map(_initprob_value, x)
+_initprob_value(x::AbstractDict) = Dict(k => _initprob_value(v) for (k, v) in pairs(x))
+_initprob_value(::Nothing) = nothing
+function _initprob_value(x::MTKParameters)
+    return MTKParameters(
+        _initprob_value(x.tunable), _initprob_value(x.initials),
+        _initprob_value(x.discrete), _initprob_value(x.constant),
+        x.nonnumeric, _initprob_value_caches(x.caches)
+    )
+end
+# cache buffers are mutated in place by the solver (`__explicitfun_copy_states`,
+# `CacheWriter`), so the stripped object must own fresh buffers rather than alias
+# the dual-valued ones
+_initprob_value_caches(::Tuple{}) = ()
+function _initprob_value_caches(caches)
+    return map(caches) do c
+        c′ = _initprob_value(c)
+        c′ === c || return c′
+        c isa Union{AbstractArray, AbstractDict} ? copy(c) : c′
+    end
+end
+function _initprob_value(x::SciMLBase.DespecializedParameters)
+    return SciMLBase.DespecializedParameters(
+        _initprob_value(SciMLBase.unwrap_parameters(x))
+    )
+end
+_initprob_value(x) = x
+
+_contains_dual(x) = false
+_contains_dual(::ForwardDiff.Dual) = true
+_contains_dual(::Number) = false
+function _contains_dual(x::AbstractArray)
+    T = eltype(x)
+    T <: ForwardDiff.Dual && return true
+    isconcretetype(T) && T <: Number && return false
+    return any(_contains_dual, x)
+end
+_contains_dual(x::Tuple) = any(_contains_dual, x)
+_contains_dual(x::NamedTuple) = any(_contains_dual, x)
+_contains_dual(x::AbstractDict) = any(_contains_dual, values(x))
+function _contains_dual(x::MTKParameters)
+    return _contains_dual(x.tunable) || _contains_dual(x.initials) ||
+        _contains_dual(x.discrete) || _contains_dual(x.constant) ||
+        _contains_dual(x.caches)
+end
+function _contains_dual(x::SciMLBase.DespecializedParameters)
+    return _contains_dual(SciMLBase.unwrap_parameters(x))
+end
+
+"""
+    $(TYPEDEF)
+
+Marker callable used as the `f` of an initialization `NonlinearProblem` whose `u0`/`p`
+were stripped of `ForwardDiff.Dual` values before solving. Carrying duals into the
+nonlinear solve is unreliable: quasi-Newton rank-one updates divide by `Dual`-valued
+quantities, so partials can grow without bound while the value residuals still
+converge (https://github.com/SciML/NonlinearSolve.jl/issues/1283), and nested-`Dual`
+buffer writes can throw outright. The stripped problem has identical value semantics
+and an honest retcode; [`correct_initialsol_duals`](@ref) re-attaches the parameter
+sensitivities to the returned solution via the implicit function theorem, using the
+dual-valued parameters stored in `p`.
+
+# Fields
+
+$(TYPEDFIELDS)
+"""
+struct InitSensitivityData{F, P}
+    """
+    The original callable of the initialization problem.
+    """
+    f::F
+    """
+    The parameter object as reconstructed for the enclosing (dual-valued) problem.
+    """
+    p::P
+end
+
+(wrapper::InitSensitivityData)(args...) = wrapper.f(args...)
+SciMLBase.numargs(wrapper::InitSensitivityData) = SciMLBase.numargs(wrapper.f)
+
+"""
+    $(TYPEDSIGNATURES)
+
+Find the [`InitSensitivityData`](@ref) marking `f`, unwrapping the specialization
+wrappers that concretization may have placed around it. Returns `nothing` if `f`
+does not wrap one.
+"""
+function _init_sensitivity_data(f, depth::Int = 0)
+    f isa InitSensitivityData && return f
+    depth >= 10 && return nothing
+    if hasproperty(f, :orig)
+        return _init_sensitivity_data(getproperty(f, :orig), depth + 1)
+    elseif hasproperty(f, :f)
+        return _init_sensitivity_data(getproperty(f, :f), depth + 1)
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the concrete `ForwardDiff.Dual` element type carried by `p`, or `nothing`.
+"""
+function _initprob_dual_eltype(x)
+    x = SciMLBase.unwrap_parameters(x)
+    if x isa MTKParameters
+        for arr in (x.tunable, x.initials, x.discrete, x.constant)
+            T = _initprob_dual_eltype(arr)
+            T === nothing || return T
+        end
+        return nothing
+    end
+    if x isa Union{Tuple, NamedTuple}
+        for xi in x
+            T = _initprob_dual_eltype(xi)
+            T === nothing || return T
+        end
+        return nothing
+    end
+    x isa AbstractArray || return nothing
+    T = eltype(x)
+    T <: ForwardDiff.Dual && isconcretetype(T) && return T
+    isconcretetype(T) && T <: Number && return nothing
+    for xi in x
+        T = _initprob_dual_eltype(xi)
+        T === nothing || return T
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Evaluate the residual of `rawf` at `(u, p)`. `iip` selects the mutating call
+(`out` is a buffer of matching eltype) or the allocating one (`out === nothing`).
+`λ` is the target homotopy parameter for `HomotopyProblem` blocks and `nothing`
+otherwise.
+"""
+function _eval_init_resid(rawf, iip::Bool, u, p, λ, out)
+    if iip
+        λ === nothing ? rawf(out, u, p) : rawf(out, u, p, λ)
+        return out
+    else
+        λ === nothing && return rawf(u, p)
+        return rawf(u, p, λ)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Given the converged value solution `u` of a (block of a) stripped initialization
+problem, return `(u′, resid′)` where `u′` carries the exact parameter
+sensitivities ``-J_u^{-1} \\partial f/\\partial \\theta`` computed from the
+dual-valued parameters `dualp`, and `resid′` is the residual at `(u′, dualp)`.
+`primalp` is the value-stripped parameter object used for the jacobian
+evaluation. Returns `nothing` if the dual partial structure is inconsistent with
+`N`, in which case the caller should leave the solution unchanged.
+"""
+function _initprob_block_sens(rawf, iip::Bool, u, dualp, primalp, resid_proto, λ, DT, N, V)
+    # `rawf` evaluated on the dual parameters gives all parameter partials of the
+    # residual in a single call, since each dual entry tracks its own coordinate
+    residd = _eval_init_resid(rawf, iip, u, dualp, λ, similar(resid_proto, DT))
+    RD = eltype(residd)
+    dfdp = if RD <: ForwardDiff.Dual
+        ForwardDiff.npartials(RD) == N || return nothing
+        reduce(hcat, (ForwardDiff.partials.(residd, k) for k in 1:N))
+    else
+        zeros(V, length(residd), N)
+    end
+    J = if iip
+        ForwardDiff.jacobian(resid_proto, u) do du, x
+            _eval_init_resid(rawf, true, x, primalp, λ, du)
+        end
+    else
+        ForwardDiff.jacobian(u) do x
+            _eval_init_resid(rawf, false, x, primalp, λ, nothing)
+        end
+    end
+    sens = try
+        -(J \ dfdp)
+    catch err
+        err isa Union{LinearAlgebra.SingularException, LinearAlgebra.LAPACKException} ||
+            rethrow()
+        -(LinearAlgebra.pinv(J) * dfdp)
+    end
+    u′ = [
+        DT(u[i], ForwardDiff.Partials{N, V}(ntuple(k -> sens[i, k], N)))
+            for i in eachindex(u)
+    ]
+    resid′ = _eval_init_resid(rawf, iip, u′, dualp, λ, similar(resid_proto, DT))
+    return u′, resid′
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+If the initialization solution `nlsol` came from a problem whose duals were stripped
+by [`update_initializeprob!`](@ref) (see [`InitSensitivityData`](@ref)), return an
+equivalent solution whose `u` carries the exact parameter sensitivities
+``-J_u^{-1} \\partial f/\\partial \\theta`` of the converged root and whose `prob.p`
+is the dual-valued parameter object. Otherwise return `nlsol` unchanged.
+"""
+function correct_initialsol_duals(nlsol)
+    # for trivial initialization the maps are called with `initprob` itself
+    nlsol isa SciMLBase.AbstractNonlinearSolution || return nlsol
+    prob = nlsol.prob
+    if prob isa SCCNonlinearProblem
+        return _correct_scc_initialsol_duals(nlsol, prob)
+    end
+    prob isa Union{
+        NonlinearProblem, SciMLBase.ImmutableNonlinearProblem,
+        SciMLBase.HomotopyProblem,
+    } || return nlsol
+    # a failed solve has no root to differentiate; the failure propagates to the
+    # caller through `success` either way
+    SciMLBase.successful_retcode(nlsol) || return nlsol
+    prob.f === nothing && return nlsol
+    w = _init_sensitivity_data(prob.f.f)
+    w === nothing && return nlsol
+    u = nlsol.u
+    u isa AbstractVector || return nlsol
+    dualp = w.p
+    DT = _initprob_dual_eltype(dualp)
+    DT === nothing && return nlsol
+    N = ForwardDiff.npartials(DT)
+    V = ForwardDiff.valtype(DT)
+
+    rawf = NonlinearSolveBase.get_raw_f(w.f)
+    iip = SciMLBase.isinplace(prob)
+    primalp = parameter_values(prob)
+    resid_proto = nlsol.resid === nothing ? u : _initprob_value(nlsol.resid)
+    λ = prob isa SciMLBase.HomotopyProblem ? prob.λspan[2] : nothing
+
+    r = _initprob_block_sens(
+        rawf, iip, u, dualp, primalp, resid_proto, λ, DT, N, V
+    )
+    r === nothing && return nlsol
+    u′, resid′ = r
+    return SciMLBase.build_solution(
+        remake(prob; p = dualp), nlsol.alg, u′, resid′;
+        retcode = nlsol.retcode, original = nlsol.original, stats = nlsol.stats,
+        trace = nlsol.trace, left = nlsol.left, right = nlsol.right
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Build a stripped sub-solution mirroring the one `SCCNonlinearSolve` records for a
+block, for replay into that SCC's `explicitfuns!`.
+"""
+function _scc_subsol(sub, u, resid)
+    solprob = if sub isa LinearProblem
+        NonlinearProblem{true}(Returns(nothing), u, sub.p)
+    else
+        sub
+    end
+    return SciMLBase.strip_solution(
+        SciMLBase.build_solution(
+            solprob, nothing, u, resid; retcode = ReturnCode.Success
+        )
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+`SCCNonlinearProblem` counterpart of [`correct_initialsol_duals`](@ref). Blocks
+are solved in dependency order, so sensitivities are reconstructed in the same
+order: for each block the `explicitfun!` cache writes are replayed on both a
+fully dual-valued parameter object `pdual` (propagating the sensitivities of
+upstream block solutions through the cache regions) and a value-stripped `pprim`
+(used for the block jacobian). Nonlinear and homotopy blocks get their partials
+from the implicit function theorem; linear blocks are re-solved on the dual
+`A`/`b`, which is exact.
+"""
+function _correct_scc_initialsol_duals(nlsol, prob)
+    SciMLBase.successful_retcode(nlsol) || return nlsol
+    prob.f === nothing && return nlsol
+    w = _init_sensitivity_data(prob.f.f)
+    w === nothing && return nlsol
+    u = nlsol.u
+    u isa AbstractVector || return nlsol
+    dualp = w.p
+    DT = _initprob_dual_eltype(dualp)
+    DT === nothing && return nlsol
+    N = ForwardDiff.npartials(DT)
+    V = ForwardDiff.valtype(DT)
+
+    pdual = promote_with_nothing(DT, dualp)
+    pprim = _initprob_value(dualp)
+    uvals = _initprob_value(u)
+
+    probs = prob.probs
+    efuns = prob.explicitfuns!
+    uparts = Vector[]
+    rparts = Vector[]
+    dual_sols = Any[]
+    prim_sols = Any[]
+    offset = 0
+    for i in eachindex(probs)
+        sub = probs[i]
+        SciMLBase.invoke_with_despecialized_parameters(
+            efuns[i], (pdual, dual_sols)
+        )
+        SciMLBase.invoke_with_despecialized_parameters(
+            efuns[i], (pprim, prim_sols)
+        )
+        n = length(state_values(sub))
+        ui = view(uvals, (offset + 1):(offset + n))
+        offset += n
+        if sub isa LinearProblem
+            lin = remake(sub; p = pdual)
+            ui′ = lin.A \ lin.b
+            ri′ = lin.A * ui′ - lin.b
+            ri = sub.A * ui - sub.b
+        else
+            subf = sub.f
+            (subf === nothing || subf.f === nothing) && return nlsol
+            rawf = NonlinearSolveBase.get_raw_f(subf.f)
+            λ = sub isa SciMLBase.HomotopyProblem ? sub.λspan[2] : nothing
+            iip = SciMLBase.isinplace(sub)
+            r = _initprob_block_sens(
+                rawf, iip, ui, pdual, pprim, similar(ui), λ, DT, N, V
+            )
+            r === nothing && return nlsol
+            ui′, ri′ = r
+            ri = _eval_init_resid(
+                rawf, iip, ui, pprim, λ, iip ? similar(ui) : nothing
+            )
+        end
+        push!(uparts, ui′)
+        push!(rparts, ri′)
+        push!(dual_sols, _scc_subsol(sub, ui′, ri′))
+        push!(prim_sols, _scc_subsol(sub, ui, ri))
+    end
+    u′ = reduce(vcat, uparts)
+    resid′ = reduce(vcat, rparts)
+    return SciMLBase.build_solution(
+        remake(prob; u0 = u′, p = pdual), nlsol.alg, u′, resid′;
+        retcode = nlsol.retcode, original = nlsol.original, stats = nlsol.stats,
+        trace = nlsol.trace, left = nlsol.left, right = nlsol.right
+    )
+end
+
+"""
+    $(TYPEDEF)
+
+Callable adapter applying [`correct_initialsol_duals`](@ref) to the solution
+argument before calling the wrapped callable.
+"""
+struct CorrectedInitSol{F}
+    f::F
+end
+
+(c::CorrectedInitSol)(nlsol) = c.f(correct_initialsol_duals(nlsol))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Remake `initprob` with the reconstructed parameters `p`. When `p` (or the stored
+`u0`) carries `ForwardDiff.Dual` values, strip them so that the nonlinear solve runs
+on the value problem, and mark `f` with [`InitSensitivityData`](@ref) so that
+[`correct_initialsol_duals`](@ref) can re-attach the parameter sensitivities to the
+solution. Other problem kinds keep the original dual-valued behavior.
+"""
+_strip_dual_initialization(initprob, p) = remake(initprob; p)
+
+function _strip_dual_initialization(
+        initprob::Union{
+            NonlinearProblem, SciMLBase.ImmutableNonlinearProblem,
+            SciMLBase.HomotopyProblem,
+        }, p
+    )
+    # a problem without state values is a trivial initialization: its `u0`/`p` are
+    # used directly by the maps rather than being inputs to a nonlinear solve
+    state_values(initprob) === nothing && return remake(initprob; p)
+    # the sensitivity correction only handles vector-valued solutions
+    initprob.u0 isa AbstractArray || return remake(initprob; p)
+    _contains_dual(p) || _contains_dual(initprob.u0) || return remake(initprob; p)
+    _contains_dual(p) || return remake(
+        initprob; p, u0 = _initprob_value(initprob.u0)
+    )
+    innerf = initprob.f.f
+    innerf isa InitSensitivityData && (innerf = innerf.f)
+    f = remake(
+        initprob.f; f = InitSensitivityData(innerf, p),
+        resid_prototype = _initprob_value(initprob.f.resid_prototype)
+    )
+    return remake(
+        initprob; u0 = _initprob_value(initprob.u0), p = _initprob_value(p), f
+    )
+end
+
+function _strip_dual_initialization(initprob::SCCNonlinearProblem, p)
+    # `parameters_alias = false` problems cannot be remade from a shared `p`;
+    # keep the original behavior for those
+    initprob.parameters_alias === Val(true) || return remake(initprob; p)
+    u0 = state_values(initprob)
+    # all-linear problems have no states to solve for; the linear solves are
+    # exact under dual-valued parameters anyway
+    u0 === nothing && return remake(initprob; p)
+    _contains_dual(p) || _contains_dual(u0) || return remake(initprob; p)
+    innerf = initprob.f.f
+    innerf isa InitSensitivityData && (innerf = innerf.f)
+    f = remake(initprob.f; f = InitSensitivityData(innerf, p))
+    # `remake` re-uses `probs`, so any dual-typed residual prototypes have to be
+    # stripped before `scc_update_subproblems` rebuilds them with the new `u0`/`p`
+    probs = map(_strip_initprob_resid_prototype, initprob.probs)
+    return remake(
+        initprob; probs, u0 = _initprob_value(u0), p = _initprob_value(p), f
+    )
+end
+
+function _strip_initprob_resid_prototype(sub)
+    subf = sub.f
+    (subf === nothing || !hasproperty(subf, :resid_prototype)) && return sub
+    rp = subf.resid_prototype
+    (rp === nothing || !_contains_dual(rp)) && return sub
+    return remake(sub; f = remake(subf; resid_prototype = _initprob_value(rp)))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1412,7 +1839,7 @@ Any changes to this method should also be made to the one in ChainRulesCoreExt.
 function update_initializeprob!(initprob, prob)
     pgetter = get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
     p = pgetter(prob, initprob)
-    return remake(initprob; p)
+    return _strip_dual_initialization(initprob, p)
 end
 
 """
@@ -1644,7 +2071,10 @@ const INITMAP_SOLUTION = :__mtk_initialization_solution
 const INITMAP_PROBLEM = :__mtk_initialization_problem
 const INITMAP_OUTER_PARAMETERS = :__mtk_initialization_outer_parameters
 
-function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr})
+function _generated_map_expr(
+        finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr};
+        corrected::Union{Symbol, Nothing} = nothing
+    )
     @assert expr.head === :function
     signature = expr.args[1]
     @assert signature isa Expr && signature.head === :tuple
@@ -1652,6 +2082,15 @@ function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sourc
     @assert length(generated_args) == length(sources)
 
     body = Expr(:block)
+    if corrected !== nothing
+        push!(
+            body.args,
+            :(
+                local $corrected =
+                    $(GlobalRef(@__MODULE__, :correct_initialsol_duals))($corrected)
+            )
+        )
+    end
     for (arg, source) in zip(generated_args, sources)
         push!(body.args, :(local $arg = $source))
     end
@@ -1688,7 +2127,7 @@ function _construct_fullspecialize_initializeprobmap(
     # `MVector` cannot even be the element type of a GPU array.
     u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
         Expr(:curly, SVector, n, INITMAP_ELTYPE)
-    map_expr = _generated_map_expr(expr, [sol], sources) do raw
+    map_expr = _generated_map_expr(expr, [sol], sources; corrected = sol) do raw
         T = INITMAP_ELTYPE
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
         tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
@@ -1778,7 +2217,7 @@ function _construct_fullspecialize_initializeprobpmap(
     prob = INITMAP_PROBLEM
     sol = INITMAP_SOLUTION
     sources = _generated_map_sources(sol, is_time_dependent(initsys))
-    map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
+    map_expr = _generated_map_expr(expr, [prob, sol], sources; corrected = sol) do raw
         outer_p = INITMAP_OUTER_PARAMETERS
         p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
         if !is_split(sys)
@@ -2220,12 +2659,14 @@ function maybe_build_initialization_problem(
         else
             initializeprobmap = InitializationMap{iip}(
                 u0_constructor,
-                PromoteToTunableEltype(
-                    CopyParamsByTemplate(
-                        initializeprob.f.sys, solved_unknowns;
-                        eval_expression, eval_module, kwargs...
-                    ),
-                    floatT
+                CorrectedInitSol(
+                    PromoteToTunableEltype(
+                        CopyParamsByTemplate(
+                            initializeprob.f.sys, solved_unknowns;
+                            eval_expression, eval_module, kwargs...
+                        ),
+                        floatT
+                    )
                 )
             )
         end

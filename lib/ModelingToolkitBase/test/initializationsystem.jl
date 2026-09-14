@@ -2498,6 +2498,53 @@ end
     @test ForwardDiff.gradient(loss, [1.5])[1] ≈ fd rtol = 1.0e-4
 end
 
+@testset "Initialization gradient through quasi-Newton solves, use_scc = $use_scc" for use_scc in (false, true)
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5125
+    # Quasi-Newton methods can converge in the value residual of a `Dual`-valued
+    # problem while the partials diverge, silently corrupting the gradient. The
+    # initialization solve runs on the value problem instead and the parameter
+    # sensitivities are re-attached through the implicit function theorem.
+    prob = chain_dae_problem(3, 1.0; use_scc)
+    sys = prob.f.sys
+    setter = setp_oop(prob, [sys.a[1]])
+    function loss(theta; initializealg...)
+        newprob = remake(prob; p = setter(prob, theta))
+        sol = solve(
+            newprob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10, initializealg...
+        )
+        return sum(sol.u[end])
+    end
+    # `Broyden` converges on the value problem here but is not reliable enough
+    # for a finite-difference reference, so compute it with the default
+    # initialization
+    fd = (loss([1.5 + 1.0e-5]) - loss([1.5 - 1.0e-5])) / 2.0e-5
+    qnloss(theta) = loss(
+        theta; initializealg = SciMLBase.OverrideInit(; nlsolve = Broyden())
+    )
+    for _ in 1:3
+        @test ForwardDiff.gradient(qnloss, [1.5])[1] ≈ fd rtol = 1.0e-4
+    end
+
+    # The solver must see the value problem: `update_initializeprob!` strips the
+    # duals before solving and `correct_initialsol_duals` re-attaches the
+    # sensitivities afterwards.
+    newprob = remake(prob; p = setter(prob, [DualT{Float64}(1.5, ForwardDiff.Partials{1, Float64}((1.0,)))]))
+    initprob = newprob.f.initialization_data.initializeprob
+    updated = ModelingToolkitBase.update_initializeprob!(initprob, newprob)
+    if updated isa SciMLBase.SCCNonlinearProblem
+        @test all(sub -> eltype(state_values(sub)) <: Float64, updated.probs)
+    else
+        @test eltype(state_values(updated)) <: Float64
+    end
+    @test eltype(parameter_values(updated).tunable) <: Float64
+    nlsol = solve(updated, nothing; abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(nlsol)
+    @test eltype(nlsol.u) <: Float64
+    csol = ModelingToolkitBase.correct_initialsol_duals(nlsol)
+    @test eltype(csol.u) <: ForwardDiff.Dual
+    @test eltype(parameter_values(csol.prob).tunable) <: ForwardDiff.Dual
+end
+
 @testset "Concretized initialization callbacks keep the generated arity" begin
     # `remake` of the stored initialization problem re-derives `isinplace` for every
     # callback from `SciMLBase.numargs`. The wrappers must report the generated function's

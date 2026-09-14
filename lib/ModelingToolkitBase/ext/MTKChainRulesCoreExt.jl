@@ -161,7 +161,7 @@ ChainRulesCore.@non_differentiable Base.getproperty(sys::AbstractSystem, x::Symb
 function ModelingToolkitBase.update_initializeprob!(initprob::AbstractNonlinearProblem, prob)
     pgetter = ChainRulesCore.@ignore_derivatives MTK.get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
     p = pgetter(prob, initprob)
-    return remake(initprob; p)
+    return MTK._strip_dual_initialization(initprob, p)
 end
 
 function ChainRulesCore.rrule(siu::MTK.SetInitialUnknowns, p::MTKParameters, u0)
