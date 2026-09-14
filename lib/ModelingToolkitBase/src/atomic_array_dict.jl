@@ -124,8 +124,12 @@ function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::Symbol
             fill(default, size(arr))
         end
         isempty(buffer) && return dd
-        idx = get_stable_index(k)
-        buffer[idx] = v
+        if ndims(k) == 0
+            buffer[get_stable_index(k)] = v
+        else
+            indices = unwrap_const.(arguments(k)[2:end])
+            buffer[indices...] = collect(v)
+        end
         if all(SU.isconst, buffer)
             dd[arr] = BSImpl.Const{VartypeT}(unwrap_const.(buffer))
         else
