@@ -120,7 +120,7 @@ end
 
 function residual_allocator_term(args)
     return STerm(
-        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        similar_for_residual, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
