@@ -7,6 +7,7 @@ using Statistics
 # imported as tt because `t` is used extensively below
 using ModelingToolkitBase: t_nounits as tt, D_nounits as D, MTKParameters
 using Symbolics: value
+using SymbolicIndexingInterface: variable_index
 import SymbolicUtils as SU
 import DiffEqNoiseProcess
 
@@ -1238,11 +1239,16 @@ end
     @test prob.g(prob.u0, prob.p, 0.0) ≈ [0.1, 0.2, 0.3, 0.4]
     @test prob[x] ≈ [1.0, 2.0, 3.0]
 
+    # the unknown order after `mtkcompile` is not guaranteed; compare through the indices
     msys = mtkcompile(sys)
     mprob = SDEProblem(msys, op, (0.0, 1.0))
-    @test mprob.u0 ≈ prob.u0
-    @test mprob.f(mprob.u0, mprob.p, 0.0) ≈ prob.f(prob.u0, prob.p, 0.0)
-    @test mprob.g(mprob.u0, mprob.p, 0.0) ≈ prob.g(prob.u0, prob.p, 0.0)
+    @test length(mprob.u0) == 4
+    @test mprob[x] ≈ prob[x]
+    @test mprob[y] ≈ prob[y]
+    midx = [variable_index(mprob, x[i]) for i in 1:3]
+    push!(midx, variable_index(mprob, y))
+    @test mprob.f(mprob.u0, mprob.p, 0.0)[midx] ≈ [-1.0, -4.0, -9.0, -4.0]
+    @test mprob.g(mprob.u0, mprob.p, 0.0)[midx] ≈ [0.1, 0.2, 0.3, 0.4]
 
     sol = solve(prob, SOSRI(); seed = 1, saveat = 0.1)
     @test SciMLBase.successful_retcode(sol)
