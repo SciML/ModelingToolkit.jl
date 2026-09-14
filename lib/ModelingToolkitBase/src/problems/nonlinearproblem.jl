@@ -46,10 +46,11 @@ function SciMLBase.NonlinearFunction{iip, spec}(
         if u0 === nothing || p === nothing
             error("u0, and p must be specified for FunctionWrapperSpecialize on NonlinearFunction.")
         end
+        resid = resid_prototype === nothing ? u0 : resid_prototype
         if E
-            f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p)))
+            f = :($(SciMLBase.wrapfun_iip)($f, ($resid, $u0, $p)))
         else
-            f = SciMLBase.wrapfun_iip(f, (u0, u0, p))
+            f = SciMLBase.wrapfun_iip(f, (resid, u0, p))
         end
     end
 
@@ -221,7 +222,7 @@ end
     f, u0,
         p = process_SciMLProblem(
         NonlinearFunction{_iip, spec}, sys, op;
-        check_length, expression, kwargs...
+        check_length, check_compatibility, expression, kwargs...
     )
 
     lb, ub = resolve_nonlinear_bounds(sys, op, lb, ub)

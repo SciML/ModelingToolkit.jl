@@ -314,6 +314,15 @@ const ADTYPE_KWARGS = """
   `cons_j` and `cons_h`, which control symbolic generation of derivative functions.
 """
 
+const MULTIOBJECTIVE_KWARGS = """
+- `multiobjective`: Whether to build a `SciMLBase.MultiObjectiveOptimizationFunction`
+  instead of an `OptimizationFunction`. The generated objective is vector-valued and
+  returns [`costs`](@ref) elementwise - each of the system's own costs followed by the
+  consolidated cost of each subsystem - rather than scalarizing them through the
+  system's `consolidate` function. `weights` cannot be combined with
+  `multiobjective = true`.
+"""
+
 const ADTYPE_PROBLEM_KWARGS = """
 - `adtype`: Forwarded to the `OptimizationFunction` constructor; sets the `adtype` field
   of the resulting function.

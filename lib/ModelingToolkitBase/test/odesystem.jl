@@ -1360,33 +1360,22 @@ end
 @testset "Issue #2597" begin
     @variables x(t)[1:2] = ones(2) y(t) = 1.0
 
-    # An array unknown is flattened into `u`; an array *equation* still needs `mtkcompile`.
+    # Array unknowns are flattened into `u` and `ODEFunction` accepts array
+    # equations, so every combination below constructs from `complete`.
     for eqs in [D(x) ~ x, collect(D(x) .~ x)]
         for dvs in [[x], collect(x)]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if eqs isa Vector
-                prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
-                @test length(prob.u0) == 2
-            else
-                @test_throws ["array equations", "mtkcompile", "scalarize"] ODEProblem(
-                    sys, [], (0.0, 1.0)
-                )
-            end
+            prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            @test length(prob.u0) == 2
         end
     end
     for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
         for dvs in [[x, y], [x..., y]]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if length(eqs) == 3
-                prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
-                @test length(prob.u0) == 3
-            else
-                @test_throws ["array equations", "mtkcompile", "scalarize"] ODEProblem(
-                    sys, [], (0.0, 1.0)
-                )
-            end
+            prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            @test length(prob.u0) == 3
         end
     end
 end

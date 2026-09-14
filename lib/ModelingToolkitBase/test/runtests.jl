@@ -87,6 +87,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
         @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
@@ -97,6 +98,7 @@ end
         @safetestset "DDESystem Test" include("dde.jl")
         @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
         @safetestset "Limited operator (PCNR iterate limiting)" include("limited_operator.jl")
+        @safetestset "Array-equation Nonlinear" include("array_equation_nl.jl")
         @safetestset "Homotopy lowering" include("homotopy_lowering.jl")
         @safetestset "Homotopy problem construction & sweep" include("homotopy_problem.jl")
         @safetestset "Homotopy OMC parity" include("homotopy_omc_parity.jl")
@@ -148,6 +150,7 @@ end
     if GROUP == "All" || GROUP == "Optimization"
         activate_optimization_env()
         @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
+        @safetestset "MultiObjective Optimization" include("optimization/multiobjective.jl")
         @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end
