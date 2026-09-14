@@ -415,6 +415,15 @@ function isolate_subsystem(
             elseif rhs_val isa Connection
                 conn_list = get_systems(rhs_val)
                 conn_list === nothing && continue
+                if conn_list isa ConnectionNetwork
+                    for (src, dst) in network_edge_ports(conn_list)
+                        p1 = _conn_to_path(src, parent_path)
+                        p2 = _conn_to_path(dst, parent_path)
+                        (p1 === nothing || p2 === nothing) && continue
+                        _try_add_edge!(p1, p2)
+                    end
+                    continue
+                end
                 cps = [
                     p for c in conn_list
                         for p in (_conn_to_path(c, parent_path),) if p !== nothing
@@ -467,6 +476,28 @@ function isolate_subsystem(
     end
     has_inside(path) = path in inside_prefixes
 
+    # Restrict a `multiconnect` network to the edges whose endpoints are all inside,
+    # dropping nodes no kept edge references. Returns `nothing` if no edge survives.
+    function _restrict_network(eq::Equation, net::ConnectionNetwork, parent_path)
+        keep_edge = map(network_edge_ports(net)) do (src, dst)
+            all((_conn_to_path(src, parent_path), _conn_to_path(dst, parent_path))) do p
+                p === nothing || has_inside(p)
+            end
+        end
+        all(keep_edge) && return eq
+        any(keep_edge) || return nothing
+        kept = net.edges[keep_edge]
+        used = falses(length(net.nodes))
+        for e in kept
+            used[e.src] = used[e.dst] = true
+        end
+        newidx = cumsum(used)
+        edges = [
+            ConnectionEdge(newidx[e.src], newidx[e.dst], e.src_port, e.dst_port) for e in kept
+        ]
+        return Equation(value(eq.lhs), Connection(ConnectionNetwork(net.nodes[used], edges)))
+    end
+
     # Step 4: rebuild the system hierarchy keeping only inside components and equations.
     # Systems that are directly inside (their path is in the `inside` set) are returned
     # as-is — their internal structure belongs to the isolated subsystem.
@@ -511,12 +542,13 @@ function isolate_subsystem(
             _reconstruct!(s, [parent_path; nameof(s)], _get_next_clock_substitutions(clock_subs, nameof(s)))
                 for s in get_systems(cur) if has_inside([parent_path; nameof(s)])
         ]
-        new_eqs = filter(get_eqs(cur)) do eq
+        new_eqs = Equation[]
+        for eq in get_eqs(cur)
             lhs_val = value(eq.lhs)
             rhs_val = value(eq.rhs)
             if lhs_val isa AnalysisPoint
                 ap_data = rhs_val::AnalysisPoint
-                _full_ap_name(parent_path, nameof(ap_data)) in boundary_ap_names && return false
+                _full_ap_name(parent_path, nameof(ap_data)) in boundary_ap_names && continue
                 in_conn = ap_data.input
                 out_conns = something(ap_data.outputs, [])
                 all_conns = in_conn === nothing ? out_conns : [in_conn; out_conns]
@@ -524,17 +556,21 @@ function isolate_subsystem(
                     p for c in all_conns
                         for p in (_conn_to_path(c, parent_path),) if p !== nothing
                 ]
-                return all(has_inside, all_paths)
+                all(has_inside, all_paths) && push!(new_eqs, eq)
             elseif rhs_val isa Connection
                 conn_list = get_systems(rhs_val)
-                conn_list === nothing && return true
-                cps = [
-                    p for c in conn_list
-                        for p in (_conn_to_path(c, parent_path),) if p !== nothing
-                ]
-                return all(has_inside, cps)
-            else
-                return false
+                if conn_list === nothing
+                    push!(new_eqs, eq)
+                elseif conn_list isa ConnectionNetwork
+                    neweq = _restrict_network(eq, conn_list, parent_path)
+                    neweq === nothing || push!(new_eqs, neweq)
+                else
+                    cps = [
+                        p for c in conn_list
+                            for p in (_conn_to_path(c, parent_path),) if p !== nothing
+                    ]
+                    all(has_inside, cps) && push!(new_eqs, eq)
+                end
             end
         end
         if !isempty(clock_subs)
