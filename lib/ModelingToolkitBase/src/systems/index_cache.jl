@@ -300,7 +300,7 @@ function IndexCache(sys::AbstractSystem)
         v = tunable_idxs[k]
         v isa AbstractArray || continue
         v = v::Union{UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}
-        iter = vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}
+        iter = vec(convert(Array{SymbolicT}, collect(k)))
         for (kk::SymbolicT, vv) in zip(iter, v)
             tunable_idxs[kk] = vv
         end
@@ -309,7 +309,7 @@ function IndexCache(sys::AbstractSystem)
         v = initials_idxs[k]
         v isa AbstractArray || continue
         v = v::Union{UnitRange{Int}, Base.ReshapedArray{Int, N, UnitRange{Int}} where {N}}
-        iter = vec(collect(k)::Array{SymbolicT})::Vector{SymbolicT}
+        iter = vec(convert(Array{SymbolicT}, collect(k)))
         for (kk, vv) in zip(iter, v)
             initials_idxs[kk] = vv
         end
@@ -718,6 +718,7 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
             if i isa Int
                 param_buf[i] = p
             else
+                isempty(i) && continue
                 i = (first(i)::Int):(last(i)::Int)
                 for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
                     param_buf[buf_i] = p[p_i]
@@ -727,6 +728,7 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
             if i isa Int
                 initials_buf[i] = p
             else
+                isempty(i) && continue
                 i = (first(i)::Int):(last(i)::Int)
                 for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
                     initials_buf[buf_i] = p[p_i]

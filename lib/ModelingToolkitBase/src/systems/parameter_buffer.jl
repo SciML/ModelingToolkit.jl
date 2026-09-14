@@ -475,6 +475,8 @@ function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::Para
 end
 function _ducktyped_parameter_values(p, pind::ParameterIndex)
     @unpack portion, idx = pind
+    # Base's view offset calculation indexes the first element of reshaped ranges.
+    idx isa AbstractArray && isempty(idx) && (idx = collect(idx))
     if portion isa SciMLStructures.Tunable
         return idx isa Int ? p.tunable[idx] : view(p.tunable, idx)
     end
