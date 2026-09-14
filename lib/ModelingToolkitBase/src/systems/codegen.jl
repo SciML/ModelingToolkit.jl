@@ -177,9 +177,9 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 
-Time-independent systems use `_iszero(lhs) ? rhs : rhs - lhs` and
-`array_residual_maker`. No `du`. Out-of-place ArrayMaker residuals promote
-their element type from the function arguments.
+An array equation is kept as one equation whose value fills a contiguous block of the
+output. Out of place, such a residual is allocated with the element type promoted from
+the function arguments, so that `Dual` inputs propagate.
 """
 function generate_rhs(
         sys::System, opts::GeneratedFunctionOptions;
@@ -239,10 +239,9 @@ function generate_rhs(
         assemble_residuals = true
     else
         if !override_discrete && !is_discrete_system(sys)
-            # An array differential equation `D(u[2:4]) ~ f` (or `D(u[2:4]) .- f ~ 0`)
-            # stays one equation: its right-hand side is written to a contiguous block
-            # of `du` below, the same way implicit-DAE residuals are packed.
-            eqs = map(explicit_array_derivative_form, eqs)
+            # An array differential equation `D(u[2:4]) ~ f` stays one equation: its
+            # right-hand side is written to a contiguous block of `du` below, the same
+            # way implicit-DAE residuals are packed.
             check_operator_variables(eqs, Differential)
             check_lhs(eqs, Differential, Set(dvs))
             assemble_residuals = any(is_array_equation, eqs)
@@ -723,7 +722,6 @@ function calculate_massmatrix(sys::System; simplify = false)
     M = zeros(n, n)
     i = 0
     for eq in eqs
-        eq = explicit_array_derivative_form(eq)
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
             x = only(arguments(eq.lhs))
             if SU.is_array_shape(SU.shape(x))
@@ -1762,7 +1760,6 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         end
     else
         for eq in equations(sys)
-            eq = explicit_array_derivative_form(eq)
             isdiffeq(eq) || continue
             x = only(arguments(eq.lhs))
             if SU.is_array_shape(SU.shape(x))

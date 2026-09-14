@@ -200,55 +200,12 @@ one scalar equation per element.
 """
 is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
 
-_array_add(a::SymbolicT, b::SymbolicT) = _iszero(a) ? b : _iszero(b) ? a : unwrap(wrap(a) .+ wrap(b))
-function _array_sub(a::SymbolicT, b::SymbolicT)
-    _iszero(b) && return a
-    _iszero(a) && return unwrap(.-(wrap(b)))
-    return unwrap(wrap(a) .- wrap(b))
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Rewrite an array differential equation given in residual form, `D(x) .- f ~ 0` or
-`D(x) .+ g ~ 0` (as a finite-difference discretization emits it), into the explicit form
-`D(x) ~ f` that ODE code generation and the mass matrix are built from. Scalar equations,
-array equations already of the form `D(x) ~ f` and array equations whose left-hand side
-is not a broadcast sum or difference involving a derivative are returned unchanged.
-"""
-function explicit_array_derivative_form(eq::Equation)
-    lhs = eq.lhs
-    is_array_equation(eq) && iscall(lhs) || return eq
-    op = operation(lhs)
-    op isa Differential && return eq
-    op === broadcast || return eq
-    args = arguments(lhs)
-    length(args) == 3 || return eq
-    bop = unwrap_const(args[1])
-    bop === (-) || bop === (+) || return eq
-    a, b = args[2], args[3]
-    rhs = eq.rhs
-    if isdifferential(a)
-        dx = a
-        f = bop === (-) ? _array_add(rhs, b) : _array_sub(rhs, b)
-    elseif isdifferential(b)
-        dx = b
-        f = bop === (-) ? _array_sub(a, rhs) : _array_sub(rhs, a)
-    else
-        return eq
-    end
-    # A scalar derivative broadcast against an array is not an array differential equation.
-    SU.is_array_shape(SU.shape(dx)) || return eq
-    return Equation(dx, f)
-end
-
 """
     $(TYPEDSIGNATURES)
 
 Expand the array equations in `eqs` into one scalar equation per element, so that the
-result has one equation per row of the generated code and of the mass matrix. Array
-differential equations in residual form are first rewritten to `D(x) ~ f`. Returns `eqs`
-itself when it has no array equations.
+result has one equation per row of the generated code and of the mass matrix. Returns
+`eqs` itself when it has no array equations.
 """
 function scalarize_array_equations(eqs::Vector{Equation})
     any(is_array_equation, eqs) || return eqs
@@ -256,7 +213,7 @@ function scalarize_array_equations(eqs::Vector{Equation})
     sizehint!(new_eqs, count_equation_rows(eqs))
     for eq in eqs
         if is_array_equation(eq)
-            append!(new_eqs, vec(Symbolics.scalarize(explicit_array_derivative_form(eq))))
+            append!(new_eqs, vec(Symbolics.scalarize(eq)))
         else
             push!(new_eqs, eq)
         end

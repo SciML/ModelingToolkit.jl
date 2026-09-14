@@ -2216,7 +2216,6 @@ function full_equations(sys::AbstractSystem; simplify = false)
     empty_substitutions(sys) && return scalarize_array_equations(equations(sys))
     subs = get_substitutions(sys)
     neweqs = map(equations(sys)) do eq
-        eq = explicit_array_derivative_form(eq)
         if iscall(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return substitute_and_simplify(eq.lhs, subs, simplify) ~
                 substitute_and_simplify(

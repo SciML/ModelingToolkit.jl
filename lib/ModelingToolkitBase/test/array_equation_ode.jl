@@ -13,9 +13,10 @@ using OrdinaryDiffEqRosenbrock: Rodas5P
 # is written to a contiguous block of `du`.
 
 # Interior of the 1D heat equation as one array equation over slices, as a
-# finite-difference discretization emits it. `:explicit` is `D(u[2:n-1]) ~ lap`,
-# `:residual` is the cardinalized `D(u[2:n-1]) .- lap ~ 0`.
-function heat_array_system(n, form)
+# finite-difference discretization emits it. `:explicit` is `D(u[2:n-1]) ~ lap`;
+# `:residual` is `D(u[2:n-1]) .- lap ~ 0`, which, like its scalar counterpart, only the
+# DAE path accepts.
+function heat_array_system(n, form = :explicit)
     @independent_variables t
     @variables u(t)[1:n]
     D = Differential(t)
@@ -67,9 +68,9 @@ end
     @test sol2.u[end] ≈ fill(exp(-1.0), n) rtol = 1.0e-6
 end
 
-@testset "heat equation over a slice, $form form" for form in (:explicit, :residual)
+@testset "heat equation over a slice" begin
     n = 21
-    sys, u, t, D = heat_array_system(n, form)
+    sys, u, t, D = heat_array_system(n)
     sys = complete(sys)
     xs = range(0.0, 1.0, length = n)
     tend = 0.1
@@ -97,16 +98,14 @@ end
     # second-order spatial discretization on 21 points
     @test maximum(abs.(sol.u[end] .- exact)) < 1.0e-3
 
-    # parity with the scalarized equations, through `mtkcompile` (which, without
-    # ModelingToolkit loaded, needs the explicit form) and through `complete`
-    explicit_sys, = heat_array_system(n, :explicit)
-    csys = mtkcompile(explicit_sys)
+    # parity with the scalarized equations, through `mtkcompile` and through `complete`
+    csys = mtkcompile(heat_array_system(n)[1])
     @test all(eq -> !Symbolics.isarraysymbolic(eq.lhs), equations(csys))
     cprob = ODEProblem(csys, [u => u0], (0.0, tend); build_initializeprob = false)
     csol = solve(cprob, Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-8, saveat = [tend])
     @test sol[u][end] ≈ csol[u][end] atol = 1.0e-10
 
-    scalar_sys, = heat_array_system(n, form)
+    scalar_sys, = heat_array_system(n)
     @named ssys = System(scalarize_array_equations(equations(scalar_sys)), t, collect(u), [])
     ssys = complete(ssys)
     @test length(equations(ssys)) == n
@@ -180,7 +179,7 @@ end
 
 @testset "symbolic jacobian and sparsity from array equations" begin
     n = 11
-    sys, u, t, D = heat_array_system(n, :explicit)
+    sys, u, t, D = heat_array_system(n)
     sys = complete(sys)
     u0 = sinpi.(range(0.0, 1.0, length = n))
     prob = ODEProblem(
@@ -202,15 +201,12 @@ end
 
 @testset "`full_equations` expands array equations into rows" begin
     n = 7
-    for form in (:explicit, :residual)
-        sys, u, t, D = heat_array_system(n, form)
-        sys = complete(sys)
-        eqs = full_equations(sys)
-        @test length(eqs) == n
-        @test all(eq -> !Symbolics.isarraysymbolic(eq.lhs), eqs)
-        # the residual form is rewritten to `D(u[i]) ~ f_i`
-        @test all(isequal(D(u[i]), eqs[i].lhs) for i in 2:(n - 1))
-    end
+    sys, u, t, D = heat_array_system(n)
+    sys = complete(sys)
+    eqs = full_equations(sys)
+    @test length(eqs) == n
+    @test all(eq -> !Symbolics.isarraysymbolic(eq.lhs), eqs)
+    @test all(isequal(D(u[i]), eqs[i].lhs) for i in 2:(n - 1))
 end
 
 @testset "invalid array differential equations are rejected" begin
@@ -226,6 +222,12 @@ end
     # a slice whose elements are not all unknowns
     @named notunknown = System([D(u[1:3]) ~ -u[1:3]], t, collect(u[1:2]), [])
     @test_throws ["not a valid LHS"] generate_rhs(complete(notunknown), opts)
+
+    # the residual form `D(u[2:n-1]) .- lap ~ 0` is a DAE, exactly like its scalar
+    # counterpart `D(x) - f ~ 0`
+    rsys, = heat_array_system(5, :residual)
+    @test_throws ["nondifferentiated variables"] generate_rhs(complete(rsys), opts)
+    @test_throws ["mass matrices"] calculate_massmatrix(complete(rsys))
 end
 
 @testset "array unknowns flatten under an array equation" begin
