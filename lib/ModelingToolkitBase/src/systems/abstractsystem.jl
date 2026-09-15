@@ -622,6 +622,15 @@ function discover_globalscoped(sys::AbstractSystem)
     newparams = OrderedSet{SymbolicT}()
     iv::Union{SymbolicT, Nothing} = has_iv(sys) ? get_iv(sys) : nothing
     collect_scoped_vars!(newunknowns, newparams, sys, iv; depth = -1)
+    # A `GlobalScope`d parameter can be given an initial condition by one subsystem and
+    # not be used in any equation. It is still a parameter of the root system, and leaving
+    # it out would leave its initial condition referring to a parameter that doesn't exist.
+    for k in keys(initial_conditions(sys))
+        arr, _ = split_indexed_var(k)
+        isparameter(arr) || continue
+        check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, -1) || continue
+        push!(newparams, setmetadata(arr, SymScope, LocalScope()))
+    end
     setdiff!(newunknowns, observables(sys))
     # Find parameters that were discovered scalarized, and add the array instead.
     # We can push to the set while iterating over it because it is an `OrderedSet`

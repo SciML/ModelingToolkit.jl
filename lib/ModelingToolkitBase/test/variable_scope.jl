@@ -179,3 +179,22 @@ end
     @named sys = System([D(x) ~ p[1] * x + p[2]], t)
     @test_nowarn complete(sys)
 end
+
+@testset "Issue#4990: `GlobalScope` parameter with an initial condition and no consumer" begin
+    ga = GlobalScope(only(@parameters garr[1:3]))
+    @named provider = System(
+        Equation[], t, [], [];
+        initial_conditions = Dict(ga => [1.0, 2.0, 3.0])
+    )
+    @variables y(t)
+    @named nonconsumer = System(
+        [D(y) ~ y], t, [y], [];
+        initial_conditions = Dict(y => 1.0)
+    )
+    @named outer = System(Equation[], t; systems = [provider, nonconsumer])
+    sys = mtkcompile(outer)
+    @test any(isequal(value(ga)), parameters(sys))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    @test prob.ps[ga] == [1.0, 2.0, 3.0]
+    @test prob[sys.nonconsumer.y] == 1.0
+end
