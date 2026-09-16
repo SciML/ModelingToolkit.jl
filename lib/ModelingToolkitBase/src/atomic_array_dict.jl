@@ -261,8 +261,14 @@ end
 
 The nodes a record key is lowered to: the deepest projections of `root` whose symtype
 flattens into a numeric buffer. This is a leaf, except where a field is a numeric array,
-which stays whole because ordinary array atomicity already covers it. It is the same
-granularity `Initial` uses, which is what the initialization system pairs `op` keys with.
+which stays whole because ordinary array atomicity already covers it.
+
+This is the granularity `Initial` uses, and lowering is how the two are kept in agreement.
+Records are not left atomic here, because `Initial` cannot be applied to one: `Initial(p)`
+carries a record symtype, which has no slot in the flat numeric initials buffer, and unlike
+`getindex` it does not commute with field access, so `Initial(p).x` is a different symbolic
+from the `Initial(p.x)` the index cache holds. Arrays go the other way - atomic in both
+places - because an array parameter *is* a contiguous numeric block.
 """
 function record_lowering_nodes(root::SymbolicT)::Vector{SymbolicT}
     nodes = SymbolicT[]

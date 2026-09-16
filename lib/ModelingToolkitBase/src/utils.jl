@@ -1813,7 +1813,7 @@ function _record_leaves(root::SymbolicT)
     # An array of records is not itself a record, so `SymStruct` cannot iterate it.
     # Expand over the indices and concatenate the leaves of each element.
     if T <: AbstractArray && Symbolics.is_symstruct_type(eltype(T))
-        SU.is_array_shape(SU.shape(root)) || throw(ArgumentError(LazyString(
+        SU.shape(root) isa SU.ShapeVecT || throw(ArgumentError(LazyString(
             "Cannot enumerate the leaves of `", root, "`, an array of records whose ",
             "shape is not known. Declare the variable with a concrete shape.")))
         leaves = SymbolicT[]
