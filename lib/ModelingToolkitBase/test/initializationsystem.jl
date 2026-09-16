@@ -2,6 +2,7 @@ using ModelingToolkitBase, OrdinaryDiffEq, NonlinearSolve, Test
 using OrdinaryDiffEqBDF
 using StochasticDiffEq, DelayDiffEq, JumpProcesses
 using ForwardDiff, StaticArrays
+using RuntimeGeneratedFunctions: RuntimeGeneratedFunction
 using SymbolicIndexingInterface, SciMLStructures
 using SciMLStructures: Tunable
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, observed
@@ -1842,6 +1843,190 @@ end
     end
 end
 
+@testset "FullSpecialize initialization maps are generated functions" begin
+    @variables map_x(t) map_y(t)
+    @parameters map_rate = 1.0 map_scale::Int = 2 [tunable = false]
+    @mtkcompile map_sys = System(
+        [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t;
+        initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+    )
+    guesses = [map_x => 1.0, map_y => 1.0]
+    auto_prob = ODEProblem{true, SciMLBase.AutoSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    full_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        map_sys, [], (0.0, 1.0); guesses
+    )
+    auto_data = auto_prob.f.initialization_data
+    full_data = full_prob.f.initialization_data
+
+    @test auto_data.initializeprobmap isa ModelingToolkitBase.InitializationMap
+    @test full_data.initializeprobmap isa RuntimeGeneratedFunction
+    @test full_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test isbitstype(typeof(full_data.initializeprobmap))
+    @test isbitstype(typeof(full_data.initializeprobpmap))
+
+    auto_u = auto_data.initializeprobmap(auto_data.initializeprob)
+    full_u = full_data.initializeprobmap(full_data.initializeprob)
+    # Static `u0` is opt-in via `u0_constructor` (see the `static_constructor` cases
+    # below); without it the map returns the problem's own buffer type.
+    @test typeof(full_u) === typeof(full_prob.u0)
+    @test full_u == auto_u
+
+    auto_p = auto_data.initializeprobpmap(auto_prob, auto_data.initializeprob)
+    full_p = full_data.initializeprobpmap(full_prob, full_data.initializeprob)
+    # The map rebuilds `p`, and solve-time initialization assigns the result straight
+    # back into the integrator, so each buffer must come back as the exact type the
+    # problem's own `p` carries. Static storage appears where the problem uses it — see
+    # the `static_constructor` cases below.
+    @test typeof(full_p.tunable) === typeof(full_prob.p.tunable)
+    @test typeof(full_p.initials) === typeof(full_prob.p.initials)
+    @test full_p.tunable == auto_p.tunable
+    @test full_p.initials == auto_p.initials
+    @test full_p.discrete == auto_p.discrete
+    @test full_p.constant == auto_p.constant
+    @test full_p.nonnumeric == auto_p.nonnumeric
+    cached_p = ModelingToolkitBase.MTKParameters(
+        full_p.tunable, full_p.initials, full_p.discrete, full_p.constant,
+        full_p.nonnumeric, ([1.0, 2.0],)
+    )
+    mapped_p = full_data.initializeprobpmap(
+        ProblemState(; u = full_prob.u0, p = cached_p, t = 0.0), full_data.initializeprob
+    )
+    @test mapped_p.caches == cached_p.caches
+    @test only(mapped_p.caches) !== only(cached_p.caches)
+    for portion in (Tunable(), SciMLStructures.Constants())
+        values = SciMLStructures.canonicalize(portion, full_p)[1]
+        @test !isempty(values)
+        replacement = fill(3, length(values))
+        SciMLStructures.replace!(portion, full_p, replacement)
+        @test SciMLStructures.canonicalize(portion, full_p)[1] == replacement
+    end
+    # Only isbits buffers become static. A `StaticArray` over heap elements is not
+    # GPU-resident anyway (the elements are pointers), `MArray` cannot `setindex!` a
+    # non-isbits eltype, and a `SizedVector` sends `remake`'s `similar_type`
+    # reconstruction into infinite recursion.
+    nonbits = ModelingToolkitBase._static_initialization_buffer(Any[Ref(1)], (Ref(2),))
+    @test !(nonbits isa StaticArray)
+    nonbits[1] = Ref(3)
+    @test only(nonbits)[] == 3
+
+    array_parameter(x) = SVector(x, 2x)
+    @parameters (array_fn::typeof(array_parameter))(..)[1:2] = array_parameter [tunable = false]
+    @variables array_input(t) array_output(t) array_x(t) = 1.0
+    array_block = System(
+        [array_output ~ array_fn(array_input)[1]], t,
+        [array_input, array_output], [array_fn]; name = :array_block
+    )
+    @mtkcompile array_sys = System(
+        [D(array_x) ~ array_block.array_output, array_block.array_input ~ array_x], t;
+        systems = [array_block]
+    )
+    array_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        array_sys, [], (0.0, 1.0)
+    )
+    array_data = array_prob.f.initialization_data
+    array_p = array_data.initializeprobpmap(array_prob, array_data.initializeprob)
+    @test array_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test only(only(array_p.nonnumeric)) === array_parameter
+
+    static_constructor(values) = SVector{length(values)}(values)
+    for split in (true, false)
+        sys = mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t; name = :static_map,
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            ); split
+        )
+        auto = ODEProblem{false, SciMLBase.AutoSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        full = ODEProblem{false, SciMLBase.FullSpecialize}(
+            sys, [], (0.0, 1.0); guesses,
+            u0_constructor = static_constructor, p_constructor = static_constructor
+        )
+        adata, fdata = auto.f.initialization_data, full.f.initialization_data
+        u = fdata.initializeprobmap(fdata.initializeprob)
+        p = fdata.initializeprobpmap(full, fdata.initializeprob)
+        @test isbits(u)
+        @test isbits(p)
+        @test u == adata.initializeprobmap(adata.initializeprob)
+        @test p == adata.initializeprobpmap(auto, adata.initializeprob)
+    end
+
+    # The generated maps name their locals with fixed sentinels, so lowering the same
+    # system twice has to produce the same `Expr` and hence the same `RuntimeGeneratedFunction`
+    # type. A `gensym`ed local makes each lowering a fresh type, defeating the RGF cache.
+    second_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        mtkcompile(
+            System(
+                [D(map_x) ~ -map_rate * map_x, D(map_y) ~ -map_scale * map_y], t;
+                name = nameof(map_sys),
+                initialization_eqs = [map_x^3 + map_x ~ 2, map_y ~ 2map_x + 1]
+            )
+        ), [], (0.0, 1.0); guesses
+    )
+    second_data = second_prob.f.initialization_data
+    @test typeof(second_data.initializeprobmap) === typeof(full_data.initializeprobmap)
+    @test typeof(second_data.initializeprobpmap) === typeof(full_data.initializeprobpmap)
+    @test second_data.initializeprobmap(second_data.initializeprob) == full_u
+
+    # A callable parameter closing over an array is nonnumeric and not isbits. Its buffer
+    # must stay on the heap while the isbits buffers still go static.
+    nonbits_fn = let d = [2.0]
+        x -> d[1] * x
+    end
+    @test !isbitstype(typeof(nonbits_fn))
+    @variables nonbits_x(t)
+    @parameters nonbits_rate = 1.0
+    @parameters (nonbits_scale::typeof(nonbits_fn))(..) = nonbits_fn [tunable = false]
+    @mtkcompile nonbits_sys = System(
+        [D(nonbits_x) ~ -nonbits_rate * nonbits_scale(nonbits_x)], t;
+        initialization_eqs = [nonbits_x^3 + nonbits_x ~ 2]
+    )
+    nonbits_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        nonbits_sys, [], (0.0, 1.0); guesses = [nonbits_x => 1.0]
+    )
+    nonbits_init = nonbits_prob.f.initialization_data
+    nonbits_p = nonbits_init.initializeprobpmap(nonbits_prob, nonbits_init.initializeprob)
+    @test typeof(nonbits_p.tunable) === typeof(nonbits_prob.p.tunable)
+    @test typeof(nonbits_p.initials) === typeof(nonbits_prob.p.initials)
+    @test !any(buf -> buf isa StaticArray, nonbits_p.nonnumeric)
+    @test remake(nonbits_prob, p = [nonbits_rate => 3.0]).p.tunable == [3.0]
+end
+
+@testset "FullSpecialize initialization survives a solve-time initialization" begin
+    # A nonlinear `initialization_eqs` is solved at `solve` time, and the result of
+    # `initializeprobpmap` is assigned straight into the integrator, which cannot convert
+    # between buffer types. So the map has to rebuild `p` with the problem's own buffer
+    # types rather than promoting them to `StaticArray`s.
+    @variables def_x(t) def_y(t)
+    @parameters def_rate = 1.0
+    @mtkcompile def_sys = System(
+        [D(def_x) ~ -def_rate * def_x, D(def_y) ~ -def_y], t;
+        initialization_eqs = [def_x^3 + def_x ~ 2, def_y ~ 2def_x + 1]
+    )
+    def_guesses = [def_x => 1.0, def_y => 1.0]
+
+    def_prob = ODEProblem{true, SciMLBase.FullSpecialize}(
+        def_sys, [], (0.0, 0.1); guesses = def_guesses
+    )
+    def_data = def_prob.f.initialization_data
+    @test def_data.initializeprobpmap isa RuntimeGeneratedFunction
+    @test typeof(def_data.initializeprobpmap(def_prob, def_data.initializeprob)) ===
+        typeof(def_prob.p)
+
+    def_sol = solve(def_prob, Tsit5())
+    @test SciMLBase.successful_retcode(def_sol)
+    auto_sol = solve(
+        ODEProblem{true, SciMLBase.AutoDespecialize}(
+            def_sys, [], (0.0, 0.1); guesses = def_guesses
+        ), Tsit5()
+    )
+    @test def_sol.u[1] == auto_sol.u[1]
+end
+
 @testset "Issue#3570, #3552: `Initial`s/guesses are copied to `u0` during `solve`/`init`" begin
     @parameters g
     @variables x(t) [state_priority = 10] y(t) λ(t)
@@ -2268,6 +2453,61 @@ end
     @test integ.ps[T] ≈ 3.0
 end
 
+function chain_dae_problem(n, c; use_scc, jac = false)
+    @variables x(t)[1:n] y(t)[1:n]
+    @parameters a[1:n]
+    eqs = Equation[]
+    for i in 1:n
+        prev = i == 1 ? 0 : y[i - 1]
+        push!(eqs, D(x[i]) ~ -a[i] * x[i] + y[i])
+        push!(eqs, 0 ~ y[i]^3 + c * y[i] - x[i] - prev)
+    end
+    sys = mtkcompile(System(eqs, t; name = :sys))
+    op = [[sys.x[i] => 1.0 / i for i in 1:n]; [sys.a[i] => 0.5 + i for i in 1:n]]
+    return ODEProblem(
+        sys, op, (0.0, 1.0); guesses = [sys.y[i] => 0.5 for i in 1:n], use_scc, jac
+    )
+end
+
+@testset "Initialization problem type is shared across models, use_scc = $use_scc" for use_scc in (false, true)
+    # An `SCCNonlinearProblem` holds one block per SCC in a tuple, so its type is only
+    # shared between models with the same number of blocks.
+    specs = use_scc ? ((4, 1.0), (4, 2.0)) : ((3, 1.0), (4, 2.0))
+    probs = [chain_dae_problem(n, c; use_scc) for (n, c) in specs]
+    initprobs = [prob.f.initialization_data.initializeprob for prob in probs]
+    @test typeof(initprobs[1]) === typeof(initprobs[2])
+    for (prob, (n, c)) in zip(probs, specs)
+        sys = prob.f.sys
+        integ = init(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        for i in 1:n
+            prev = i == 1 ? 0.0 : integ[sys.y[i - 1]]
+            @test integ[sys.y[i]]^3 + c * integ[sys.y[i]] - integ[sys.x[i]] - prev ≈ 0 atol = 1.0e-8
+        end
+        @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+    end
+
+    # `remake` with Dual tunables promotes the (pre-wrapped) initialization problem
+    prob = probs[1]
+    setter = setp_oop(prob, [prob.f.sys.a[1]])
+    function loss(theta)
+        newprob = remake(prob; p = setter(prob, theta))
+        sol = solve(newprob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        return sum(sol.u[end])
+    end
+    fd = (loss([1.5 + 1.0e-5]) - loss([1.5 - 1.0e-5])) / 2.0e-5
+    @test ForwardDiff.gradient(loss, [1.5])[1] ≈ fd rtol = 1.0e-4
+end
+
+@testset "Concretized initialization callbacks keep the generated arity" begin
+    # `remake` of the stored initialization problem re-derives `isinplace` for every
+    # callback from `SciMLBase.numargs`. The wrappers must report the generated function's
+    # arity so that check never falls back to method-table introspection (which reverse-mode
+    # AD through `remake` cannot handle).
+    initf = chain_dae_problem(3, 1.0; use_scc = false, jac = true).f.initialization_data.initializeprob.f
+    @test 3 in SciMLBase.numargs(initf.f)
+    @test 3 in SciMLBase.numargs(initf.jac)
+end
+
 cube_plus(v) = v^3 + v
 @register_symbolic cube_plus(v)
 if @isdefined(ModelingToolkit)
@@ -2287,4 +2527,18 @@ if @isdefined(ModelingToolkit)
         )
         @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
     end
+end
+
+@testset "InitializationMetadata is inactive for Enzyme" begin
+    # `EnzymeVJP` differentiates the whole `ODEFunction` as `Duplicated`; the
+    # rebuild-only initialization metadata must not get a shadow that is
+    # re-zeroed on every adjoint RHS evaluation.
+    @variables x(t) = 1.0
+    @parameters k = 2.0
+    @mtkcompile sys = System([D(x) ~ -k * x], t)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    meta = prob.f.initialization_data.metadata
+    @test meta isa ModelingToolkitBase.InitializationMetadata
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
 end

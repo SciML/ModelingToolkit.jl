@@ -1568,6 +1568,10 @@ if @isdefined(ModelingToolkit)
         @test affect_tolerance((; opts = (; abstol = 1.0e-8)), :abstol) == 1.0e-8
         @test affect_tolerance((; opts = (; abstol = [1.0e-6, 1.0e-9])), :abstol) == 1.0e-9
         @test affect_tolerance((; opts = (; abstol = Float64[])), :abstol) === nothing
+        # An `SSAIntegrator` has no tolerances at all: its `opts` is `(callback = ...,)`.
+        ssa_opts = (; opts = (; callback = nothing))
+        @test affect_tolerance(ssa_opts, :abstol) === nothing
+        @test affect_tolerance(ssa_opts, :reltol) === nothing
     end
 end
 

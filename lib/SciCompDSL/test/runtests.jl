@@ -8,6 +8,7 @@ const MTKPkgSpec = PackageSpec(; path = MTKPath)
 
 Pkg.develop([MTKBasePkgSpec, MTKPkgSpec]; preserve = Pkg.PRESERVE_ALL)
 
+@safetestset "Model macro hygiene" include("macro_hygiene.jl")
 @safetestset "Model parsing - MTKBase" include("model_parsing.jl")
 @safetestset "Model parsing - MTK" begin
     using ModelingToolkit

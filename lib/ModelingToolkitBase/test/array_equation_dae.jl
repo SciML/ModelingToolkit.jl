@@ -1,5 +1,6 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitBase: unwrap, complete, unknowns
+using ModelingToolkitBase: has_array_equations, accepts_array_equations
 using Symbolics
 using SciMLBase
 using OrdinaryDiffEqBDF: DFBDF
@@ -49,12 +50,18 @@ end
     @test any(!iszero, out)
 end
 
-@testset "other problem types still require scalarized equations" begin
+@testset "array unknowns flatten under an array equation" begin
     n = 11
-    sys, u, t, D = heat_array_system(n)
-    op = [u[i] => 0.0 for i in 1:n]
-    # ODEProblem cannot consume array equations; the guard must remain in place
-    @test_throws Exception ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    @named sys = System([D(u) ~ -u], t, [u], [])
+    sys = complete(sys)
+    op = [u => zeros(n), D(u) => zeros(n)]
+    # `flat_unknowns` flattens `u`, so the array equation over the array unknown
+    # constructs directly
+    prob = ODEProblem(sys, op, (0.0, 0.1); build_initializeprob = false)
+    @test length(prob.u0) == n
 end
 
 @testset "array-equation DAE solves to the analytic solution" begin
@@ -141,6 +148,60 @@ end
     prob.f(out, du, prob.u0, prob.p, 0.0)
     @test maximum(abs, out) < 1.0e-1
 
+    sol = solve(
+        prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
+        abstol = 1.0e-8, saveat = [0.1]
+    )
+    @test SciMLBase.successful_retcode(sol)
+    @test maximum(abs, sol.u[end] .- [exp(-pi^2 * 0.1) * sinpi(x) for x in xs]) < 1.0e-2
+end
+
+@testset "has_array_equations detects every array-equation form" begin
+    n = 5
+    @independent_variables t
+    @variables u(t)[1:n]
+    D = Differential(t)
+    lap = u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]
+    @test has_array_equations([zeros(n - 2) ~ broadcast(-, lap)])
+    @test has_array_equations([broadcast(-, lap) ~ zeros(n - 2)])
+    @test has_array_equations([D(u[2:(n - 1)]) ~ lap])
+    @test !has_array_equations([u[1] ~ 0.0, u[n] ~ 0.0])
+    @test !has_array_equations(Equation[])
+end
+
+@testset "accepting array equations is a per-constructor capability" begin
+    @test accepts_array_equations(DAEFunction)
+    @test accepts_array_equations(NonlinearFunction)
+    @test accepts_array_equations(ODEFunction)
+    @test !accepts_array_equations(SDEFunction)
+    @test !accepts_array_equations(ImplicitDiscreteFunction)
+    # Optimization vectorizes `costs` and `constraints`, not `equations`:
+    # `check_no_equations` rejects them before this gate is reached.
+    @test !accepts_array_equations(OptimizationFunction)
+    @test !accepts_array_equations(MultiObjectiveOptimizationFunction)
+end
+
+@testset "symbolic jacobian from array residuals" begin
+    n = 11
+    sys, u, t, D = heat_array_system(n)
+    xs = range(0.0, 1.0, length = n)
+    op = vcat(
+        [u[i] => sinpi(xs[i]) for i in 1:n],
+        [D(u[i]) => 0.0 for i in 1:n]
+    )
+    # the jacobian is built from the scalarized `full_equations`, one row per residual;
+    # `sparse = true` is not tested because `W_sparsity` requires a semi-explicit mass
+    # matrix, which no residual-form DAE has
+    prob = DAEProblem(sys, op, (0.0, 0.1); build_initializeprob = false, jac = true)
+    J = zeros(n, n)
+    γ = 2.0
+    prob.f.jac(J, prob.du0, prob.u0, prob.p, γ, 0.0)
+    dx = 1 / (n - 1)
+    # residual row 1 is `lap[1] - D(u[2])`
+    @test J[1, 1:3] ≈ [1, -2 - γ * dx^2, 1] ./ dx^2
+    # residual row `n - 1` is `0 - u[1]`
+    @test J[n - 1, 1] ≈ -1
+    @test count(!iszero, J) == 3 * (n - 2) + 2
     sol = solve(
         prob, DFBDF(); initializealg = BrownFullBasicInit(), reltol = 1.0e-8,
         abstol = 1.0e-8, saveat = [0.1]

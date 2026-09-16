@@ -569,3 +569,38 @@ end
     @test uprob.lb == [-10.0]
     @test uprob.ub == [10.0]
 end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables z[1:3] w
+    @parameters a[1:3] b
+    eqs = [
+        0 ~ z[1] - a[1],
+        0 ~ z[2] - a[2],
+        0 ~ z[3] - a[3] * w,
+        0 ~ w - b,
+    ]
+    @named sys = System(eqs, [z, w], [a, b])
+    csys = complete(sys)
+    op = [z => zeros(3), w => 0.0, a => [1.0, 2.0, 3.0], b => 2.0]
+
+    prob = NonlinearProblem(csys, op)
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ zeros(4)
+    @test prob.f(prob.u0, prob.p) ≈ [-1.0, -2.0, 0.0, -2.0]
+    @test prob[z] ≈ zeros(3)
+    @test prob[z[2]] ≈ 0.0
+
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[z] ≈ [1.0, 2.0, 6.0]
+    @test sol[w] ≈ 2.0
+
+    # `mtkcompile` may reorder the unknowns, or eliminate them entirely once tearing is
+    # loaded, so only the solution is comparable
+    msys = mtkcompile(sys)
+    mprob = NonlinearProblem(msys, op)
+    msol = solve(mprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(msol)
+    @test msol[z] ≈ sol[z]
+    @test msol[w] ≈ sol[w]
+end

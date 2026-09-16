@@ -27,12 +27,14 @@ using Reexport: Reexport, @reexport
     import BandedMatrices: BandedMatrices, BandedMatrix, bandwidths
 end
 
+import ADTypes
 import SciMLBase
 using SciMLBase: BVPFunction, BVProblem, CallbackSet, ContinuousCallback, DAEFunction,
     DAEProblem, DDEFunction, DDEProblem, DiscreteCallback, DiscreteFunction,
     DiscreteProblem, HomotopyNonlinearFunction, ImplicitDiscreteFunction,
     ImplicitDiscreteProblem, IntervalNonlinearFunction, IntervalNonlinearProblem,
-    LinearProblem, NonlinearFunction, NonlinearLeastSquaresProblem, NonlinearProblem,
+    LinearProblem, MultiObjectiveOptimizationFunction, NonlinearFunction,
+    NonlinearLeastSquaresProblem, NonlinearProblem,
     ODEFunction, ODEInputFunction, ODEProblem, ODESolution, OptimizationFunction,
     OptimizationProblem, ReturnCode, SCCNonlinearProblem, SDDEFunction, SDDEProblem,
     SDEFunction, SDEProblem, SteadyStateProblem, VectorContinuousCallback, check_error,
@@ -150,6 +152,7 @@ import Random: AbstractRNG
 import DomainSets
 # `DomainSets` re-exports IntervalSets' `endpoints`; reach it through its owner.
 import IntervalSets
+import NonlinearSolveBase
 # For `LinearInitializationProblem`
 import SCCNonlinearSolve
 using TaskLocalValues: TaskLocalValue
@@ -310,6 +313,9 @@ include("systems/problem_utils.jl")
 # Operator + lowering layer; must load before the problem constructors that
 # consume it (problems/nonlinearproblem.jl selector + problems/homotopyproblem.jl).
 include("systems/homotopy_operator.jl")
+# The `limited` operator: symbolic SPICE-style iterate limiting (PCNR), lowered during
+# `mtkcompile` (`apply_limited_lowering`) and consumed by `problems/nonlinearproblem.jl`.
+include("systems/limited_operator.jl")
 
 include("problems/compatibility.jl")
 include("problems/odeproblem.jl")
@@ -400,7 +406,7 @@ export NonlinearProblem
 export AbstractNonlinearProblem
 export IntervalNonlinearFunction
 export IntervalNonlinearProblem
-export OptimizationProblem, constraints
+export OptimizationProblem, constraints, constraints_to_penalties
 export SteadyStateProblem
 export JumpProblem, SymbolicMassActionJump
 export flatten
@@ -422,7 +428,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation
 export Term
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, equations, observed, full_equations, jumps, cost,
+export independent_variable, equations, observed, full_equations, jumps, cost, costs,
     brownians
 export initialization_equations, guesses, bindings, initial_conditions, hierarchy
 export set_defaults
@@ -439,6 +445,9 @@ export calculate_tgrad, generate_tgrad
 export generate_cost, calculate_cost_gradient, generate_cost_gradient
 export generate_trajectory
 export calculate_cost_hessian, generate_cost_hessian
+export generate_multiobjective_cost, calculate_multiobjective_jacobian,
+    generate_multiobjective_jacobian, calculate_multiobjective_hessian,
+    generate_multiobjective_hessian
 export calculate_massmatrix, generate_diffusion_function
 export generate_control_function, build_explicit_observed_function
 export stochastic_integral_transform
@@ -457,6 +466,7 @@ export alg_equations, diff_equations, has_alg_equations, has_diff_equations
 export get_alg_eqs, get_diff_eqs, has_alg_eqs, has_diff_eqs
 
 export homotopy
+export limited, limitnew, limitold
 
 export @variables, @parameters, @independent_variables, @constants, @brownians, @brownian,
     @poissonians, @discretes
@@ -510,7 +520,7 @@ const set_scalar_metadata = setmetadata
 @public convert_bindings_for_time_independent_system, get_w
 @public Both
 @public SymbolicADDisallowed, check_symbolic_ad_allowed
-@public tobrownian, toparam
+@public tobrownian, toparam, tovar
 @public ProblemTypeCtx
 @public HomotopyCtx, homotopy_enabled, strip_homotopy
 
@@ -535,6 +545,18 @@ end
 # (which transitively carries the symbolic `System`) trips a
 # `MethodError MixedDuplicated(::System, ::System)` in `create_activity_wrapper`.
 EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
+# `InitializationMetadata` is rebuild-only data: the operating point, guesses and
+# extra initialization equations captured at problem construction, plus the
+# index-template reconstructors `remake` uses to rebuild the initialization
+# problem. Nothing in it is read by the generated RHS and none of it carries
+# derivative information (derivatives w.r.t. `u0`/`p`/`Initial`s flow through the
+# reconstructors' arguments, not their fields). Enzyme cannot prove that on its
+# own because of the `Dict{SymbolicT, SymbolicT}` maps, so without this rule every
+# `Duplicated` use of an `ODEFunction` (e.g. SciMLSensitivity's `EnzymeVJP`,
+# once per adjoint RHS evaluation) allocates and re-zeroes a shadow of the whole
+# metadata: ~100 µs per call against a ~5 ns RHS for a 32-state linear ODE,
+# an 8x slowdown of `GaussAdjoint(EnzymeVJP)` gradients.
+EnzymeCore.EnzymeRules.inactive_type(::Type{<:InitializationMetadata}) = true
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)

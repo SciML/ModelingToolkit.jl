@@ -7,6 +7,7 @@ using Statistics
 # imported as tt because `t` is used extensively below
 using ModelingToolkitBase: t_nounits as tt, D_nounits as D, MTKParameters
 using Symbolics: value
+using SymbolicIndexingInterface: variable_index
 import SymbolicUtils as SU
 import DiffEqNoiseProcess
 
@@ -1215,4 +1216,41 @@ if @isdefined(ModelingToolkit)
         @named sys = System(eqs, t, [x], [A], [Brw1, Brw2])
         @test_nowarn mtkcompile(sys)
     end
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables x(tt)[1:3] y(tt)
+    @parameters a[1:3] b
+    drift = [
+        D(x[1]) ~ -a[1] * x[1],
+        D(x[2]) ~ -a[2] * x[2],
+        D(x[3]) ~ -a[3] * x[3],
+        D(y) ~ -b * y,
+    ]
+    diffusion = [0.1 * x[1], 0.1 * x[2], 0.1 * x[3], 0.1 * y]
+    @named sys = System(drift, tt, [x, y], [a, b]; noise_eqs = diffusion)
+    csys = complete(sys)
+    op = [x => [1.0, 2.0, 3.0], y => 4.0, a => [1.0, 2.0, 3.0], b => 1.0]
+
+    prob = SDEProblem(csys, op, (0.0, 1.0))
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ [1.0, 2.0, 3.0, 4.0]
+    @test prob.f(prob.u0, prob.p, 0.0) ≈ [-1.0, -4.0, -9.0, -4.0]
+    @test prob.g(prob.u0, prob.p, 0.0) ≈ [0.1, 0.2, 0.3, 0.4]
+    @test prob[x] ≈ [1.0, 2.0, 3.0]
+
+    # the unknown order after `mtkcompile` is not guaranteed; compare through the indices
+    msys = mtkcompile(sys)
+    mprob = SDEProblem(msys, op, (0.0, 1.0))
+    @test length(mprob.u0) == 4
+    @test mprob[x] ≈ prob[x]
+    @test mprob[y] ≈ prob[y]
+    midx = [variable_index(mprob, x[i]) for i in 1:3]
+    push!(midx, variable_index(mprob, y))
+    @test mprob.f(mprob.u0, mprob.p, 0.0)[midx] ≈ [-1.0, -4.0, -9.0, -4.0]
+    @test mprob.g(mprob.u0, mprob.p, 0.0)[midx] ≈ [0.1, 0.2, 0.3, 0.4]
+
+    sol = solve(prob, SOSRI(); seed = 1, saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol)
+    @test length(sol[x][end]) == 3
 end

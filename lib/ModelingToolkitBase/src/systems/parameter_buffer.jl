@@ -967,7 +967,7 @@ end
                     Expr(
                         :tuple,
                         (
-                            :($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i]))
+                            :($similar_type($(fieldtype(N, i)), $(nonnumericT[i]))(nonnumerics[$i]))
                                 for i in 1:length(nonnumericT)
                         )...
                     )

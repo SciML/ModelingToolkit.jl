@@ -74,8 +74,10 @@ ModelingToolkit.ProblemTypeCtx
 
 ```@docs
 SciMLBase.OptimizationFunction
+SciMLBase.MultiObjectiveOptimizationFunction
 SciMLBase.OptimizationProblem
 SciMLBase.ODEInputFunction
+ModelingToolkit.constraints_to_penalties
 ```
 
 ## The state vector and parameter object
@@ -83,6 +85,20 @@ SciMLBase.ODEInputFunction
 Typically the unknowns of the system are present as a `Vector` of the appropriate length
 in the numerical problem. The state vector can also be constructed manually without building
 a problem.
+
+The state vector `u` is the concatenation of the unknowns in the order of `unknowns(sys)`;
+an array unknown `x` contributes `length(x)` consecutive entries, the generated functions
+reconstruct it as a view into `u`, and symbolic indexing is unchanged (`prob[x]` returns
+the whole array, `prob[x[i]]` one element).
+
+```julia
+@variables x(t)[1:3] y(t)
+@parameters a[1:3]
+eqs = [D(x[1]) ~ -a[1] * x[1], D(x[2]) ~ -a[2] * x[2], D(x[3]) ~ -a[3] * x[3] + y, D(y) ~ -y]
+@named sys = System(eqs, t, [x, y], [a])
+prob = ODEProblem(complete(sys), [x => ones(3), y => 1.0, a => [1.0, 2.0, 3.0]], (0.0, 1.0))
+length(prob.u0) == 4
+```
 
 ```@docs
 ModelingToolkit.get_u0

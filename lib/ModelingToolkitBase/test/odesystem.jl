@@ -1360,34 +1360,22 @@ end
 @testset "Issue #2597" begin
     @variables x(t)[1:2] = ones(2) y(t) = 1.0
 
+    # Array unknowns are flattened into `u` and `ODEFunction` accepts array
+    # equations, so every combination below constructs from `complete`.
     for eqs in [D(x) ~ x, collect(D(x) .~ x)]
         for dvs in [[x], collect(x)]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if eqs isa Vector && length(eqs) == 2 && length(dvs) == 2
-                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
-            else
-                @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
-                ] ODEProblem(
-                    sys, [], (0.0, 1.0)
-                )
-            end
+            prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            @test length(prob.u0) == 2
         end
     end
     for eqs in [[D(x) ~ x, D(y) ~ y], [collect(D(x) .~ x); D(y) ~ y]]
         for dvs in [[x, y], [x..., y]]
             @named sys = System(eqs, t, dvs, [])
             sys = complete(sys)
-            if eqs isa Vector && length(eqs) == 3 && length(dvs) == 3
-                @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
-            else
-                @test_throws [
-                    r"array (equations|unknowns)", "mtkcompile", "scalarize",
-                ] ODEProblem(
-                    sys, [], (0.0, 1.0)
-                )
-            end
+            prob = @test_nowarn ODEProblem(sys, [], (0.0, 1.0))
+            @test length(prob.u0) == 3
         end
     end
 end
@@ -1764,4 +1752,77 @@ end
     @named sys = System(Equation[], t)
     ss = mtkcompile(sys)
     @test length(equations(ss)) == length(unknowns(ss)) == 0
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables x(t)[1:3] w(t)
+    @parameters a[1:3] b
+    eqs = [
+        D(x[1]) ~ -a[1] * x[1],
+        D(x[2]) ~ -a[2] * x[2],
+        D(x[3]) ~ -a[3] * x[3] + w,
+        D(w) ~ -b * w,
+    ]
+    @named sys = System(eqs, t, [x, w], [a, b])
+    csys = complete(sys)
+    op = [x => [1.0, 2.0, 3.0], w => 4.0, a => [1.0, 2.0, 3.0], b => 1.0]
+
+    # x₁' = -x₁, x₂' = -2x₂, w' = -w and x₃' = -3x₃ + w with x(0) = [1, 2, 3], w(0) = 4
+    analytic(τ) = [exp(-τ), 2exp(-2τ), exp(-3τ) + 2exp(-τ), 4exp(-τ)]
+
+    prob = ODEProblem(csys, op, (0.0, 1.0))
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ analytic(0.0)
+    @test prob.f(prob.u0, prob.p, 0.0) ≈ [-1.0, -4.0, -5.0, -4.0]
+    @test prob[x] ≈ [1.0, 2.0, 3.0]
+    @test prob[x[2]] ≈ 2.0
+    @test prob[w] ≈ 4.0
+
+    sol = solve(prob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test sol[x][end] ≈ analytic(1.0)[1:3] rtol = 1.0e-6
+    @test sol[x[3]][end] ≈ analytic(1.0)[3] rtol = 1.0e-6
+    @test sol[w][end] ≈ analytic(1.0)[4] rtol = 1.0e-6
+
+    # `mtkcompile` reaches the same problem by scalarizing the unknowns instead. Their
+    # order after `mtkcompile` is not guaranteed, so compare through the symbolic indices.
+    msys = mtkcompile(sys)
+    mprob = ODEProblem(msys, op, (0.0, 1.0))
+    @test length(mprob.u0) == 4
+    @test mprob[x] ≈ prob[x]
+    @test mprob[w] ≈ prob[w]
+    midx = [variable_index(mprob, x[i]) for i in 1:3]
+    push!(midx, variable_index(mprob, w))
+    @test mprob.f(mprob.u0, mprob.p, 0.0)[midx] ≈ [-1.0, -4.0, -5.0, -4.0]
+    msol = solve(mprob, Tsit5(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test msol[x][end] ≈ sol[x][end] rtol = 1.0e-6
+
+    @testset "DAEProblem" begin
+        # the consistent derivatives at t = 0
+        du0 = [-1.0, -4.0, -5.0, -4.0]
+        dop = vcat([D(x) => du0[1:3], D(w) => du0[4]], op)
+        dprob = DAEProblem(csys, dop, (0.0, 1.0))
+        @test length(dprob.u0) == 4
+        @test dprob.u0 ≈ analytic(0.0)
+        @test dprob.du0 ≈ du0
+        @test dprob.f(zeros(4), dprob.u0, dprob.p, 0.0) ≈ du0
+        @test dprob.f(dprob.du0, dprob.u0, dprob.p, 0.0) ≈ zeros(4) atol = 1.0e-12
+        # every unknown here is differential, including all three array elements
+        @test all(dprob.differential_vars)
+
+        dsol = solve(dprob, DFBDF(); reltol = 1.0e-10, abstol = 1.0e-10)
+        @test SciMLBase.successful_retcode(dsol)
+        @test dsol[x][end] ≈ analytic(1.0)[1:3] rtol = 1.0e-5
+        @test dsol[w][end] ≈ analytic(1.0)[4] rtol = 1.0e-5
+    end
+
+    @testset "array equation reaches `DAEProblem`" begin
+        @named asys = System([D(x) ~ -a .* x, D(w) ~ -b * w], t, [x, w], [a, b])
+        acsys = complete(asys)
+        adu0 = [-1.0, -4.0, -9.0, -4.0]
+        adop = vcat([D(x) => adu0[1:3], D(w) => adu0[4]], op)
+        aprob = DAEProblem(acsys, adop, (0.0, 1.0))
+        @test length(aprob.u0) == 4
+        @test aprob.f(zeros(4), aprob.u0, aprob.p, 0.0) ≈ adu0
+        @test aprob.f(aprob.du0, aprob.u0, aprob.p, 0.0) ≈ zeros(4) atol = 1.0e-12
+    end
 end

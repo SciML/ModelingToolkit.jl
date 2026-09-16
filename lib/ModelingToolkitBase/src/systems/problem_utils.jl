@@ -1108,6 +1108,24 @@ struct MTKParametersReconstructor{T, I, D, C, N}
     diffcache_buffer_idx::Int
 end
 
+function _unwrap_initial_symbols!(initsyms, srcsys)
+    allsyms = Set{SymbolicT}(variable_symbols(srcsys))
+    for i in eachindex(initsyms)
+        sym = initsyms[i]
+        arr, isarr = split_indexed_var(sym)
+        innersym = if isarr
+            sidx = get_stable_index(sym)
+            first(arguments(arr))[sidx]
+        else
+            first(arguments(arr))
+        end
+        if innersym in allsyms
+            initsyms[i] = innersym
+        end
+    end
+    return initsyms
+end
+
 # TODO: make this infer when the nonnumerics are non-trivial
 function (recon::MTKParametersReconstructor)(src, dst)
     return recon(src, parameter_values(dst))
@@ -1185,22 +1203,7 @@ function MTKParametersReconstructor(
     end
     initials_getter = if initials && !isempty(syms[2])
         initsyms = syms[2]::Vector{SymbolicT}
-        allsyms = Set{SymbolicT}(variable_symbols(srcsys))
-        if unwrap_initials
-            for i in eachindex(initsyms)
-                sym = initsyms[i]
-                arr, isarr = split_indexed_var(sym)
-                innersym = if isarr
-                    sidx = get_stable_index(sym)
-                    first(arguments(arr))[sidx]
-                else
-                    first(arguments(arr))
-                end
-                if innersym in allsyms
-                    initsyms[i] = innersym
-                end
-            end
-        end
+        unwrap_initials && _unwrap_initial_symbols!(initsyms, srcsys)
         p_constructor ∘ CopyParamsByTemplate(srcsys, initsyms; kwargs...)
     else
         Returns(SVector{0, Float64}())
@@ -1454,7 +1457,7 @@ struct InitializationMetadata{R <: ReconstructInitializeprob, GUU, SIU}
     get_updated_u0::GUU
     """
     A function which takes parameter object and `u0` of the problem and sets
-    `Initial.(unknowns(sys))` in the former, returning the updated parameter object.
+    `Initial.(flat_unknowns(sys))` in the former, returning the updated parameter object.
     """
     set_initial_unknowns!::SIU
     """
@@ -1475,27 +1478,27 @@ $(TYPEDFIELDS)
 """
 struct GetUpdatedU0{GG, GIU}
     """
-    Mask with length `length(unknowns(sys))` denoting indices of variables which should
-    take the guess value from `initializeprob`.
+    Mask with length `length(flat_unknowns(sys))` denoting indices of variables which
+    should take the guess value from `initializeprob`.
     """
     guessvars::BitVector
     """
     Function which returns the values of variables in `initializeprob` for which
-    `guessvars` is `true`, in the order they occur in `unknowns(sys)`.
+    `guessvars` is `true`, in the order they occur in `flat_unknowns(sys)`.
     """
     get_guessvars::GG
     """
-    Function which returns `Initial.(unknowns(sys))` as a `Vector`.
+    Function which returns `Initial.(flat_unknowns(sys))` as a `Vector`.
     """
     get_initial_unknowns::GIU
 end
 
 function GetUpdatedU0(sys::AbstractSystem, initsys::AbstractSystem, op::AbstractDict; kwargs...)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     eqs = equations(sys)
     guessvars = trues(length(dvs))
     for (i, var) in enumerate(dvs)
-        varval = get(op, var, COMMON_NOTHING)
+        varval = get_possibly_indexed(op, var, COMMON_NOTHING)
         guessvars[i] = varval === COMMON_NOTHING || !SU.isconst(varval)
     end
     get_guessvars = iszero(count(guessvars)) ? nothing : CopyParamsByTemplate(initsys, dvs[guessvars]; kwargs...)
@@ -1518,7 +1521,7 @@ struct SetInitialUnknowns{S}
 end
 
 function SetInitialUnknowns(sys::AbstractSystem)
-    initpars = Initial.(unknowns(sys))
+    initpars = Initial.(flat_unknowns(sys))
     idxs_in_initials = Int[]
     sizehint!(idxs_in_initials, length(initpars))
     if is_split(sys)
@@ -1630,6 +1633,202 @@ function (map::InitializationMap{true})(x)
     return __iip_u0_ad_wrapper(map.u0_constructor(map.map(x)))
 end
 
+# Locals of the generated initialization maps are fixed sentinel names, never `gensym`.
+# A `gensym` embeds a process-global counter, so the same system would lower to a
+# different `Expr` in the precompile process than in the user session, defeating the
+# `RuntimeGeneratedFunctions` Expr-hash cache. The `__mtk_` prefix matches
+# `generated_argument_name` and makes a collision with a user symbol implausible.
+const INITMAP_VALUES = :__mtk_initialization_map_values
+const INITMAP_ELTYPE = :__mtk_initialization_map_eltype
+const INITMAP_SOLUTION = :__mtk_initialization_solution
+const INITMAP_PROBLEM = :__mtk_initialization_problem
+const INITMAP_OUTER_PARAMETERS = :__mtk_initialization_outer_parameters
+
+function _generated_map_expr(finish, expr::Expr, map_args::Vector{Symbol}, sources::Vector{Expr})
+    @assert expr.head === :function
+    signature = expr.args[1]
+    @assert signature isa Expr && signature.head === :tuple
+    generated_args = signature.args
+    @assert length(generated_args) == length(sources)
+
+    body = Expr(:block)
+    for (arg, source) in zip(generated_args, sources)
+        push!(body.args, :(local $arg = $source))
+    end
+    push!(body.args, :(local $INITMAP_VALUES = $(expr.args[2])))
+    push!(body.args, finish(INITMAP_VALUES))
+    fn_args = Expr(:tuple)
+    append!(fn_args.args, map_args)
+    return Expr(:function, fn_args, body)
+end
+
+function _generated_map_sources(valp::Symbol, time_dependent::Bool)
+    sources = Expr[
+        Expr(:call, GlobalRef(SymbolicIndexingInterface, :state_values), valp),
+        Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), valp),
+    ]
+    if time_dependent
+        push!(sources, Expr(:call, GlobalRef(SymbolicIndexingInterface, :current_time), valp))
+    end
+    return sources
+end
+
+function _construct_fullspecialize_initializeprobmap(
+        initsys::AbstractSystem, solved_unknowns, gen_opts::GeneratedFunctionOptions;
+        iip::Bool, u0_constructor, floatT
+    )
+    expr = build_explicit_observed_function(
+        initsys, solved_unknowns, gen_opts; output_type = SVector
+    )
+    sol = INITMAP_SOLUTION
+    sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    n = length(solved_unknowns)
+    # Static `u0` is opt-in through `u0_constructor`, exactly as on the default map path.
+    # Forcing it here would change `prob.u0`'s type out from under the caller, and an
+    # `MVector` cannot even be the element type of a GPU array.
+    u0_prototype = u0_constructor === identity ? Expr(:curly, Vector, INITMAP_ELTYPE) :
+        Expr(:curly, SVector, n, INITMAP_ELTYPE)
+    map_expr = _generated_map_expr(expr, [sol], sources) do raw
+        T = INITMAP_ELTYPE
+        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), sol)
+        tunable_eltype = Expr(:call, GlobalRef(@__MODULE__, :_tunable_eltype), p)
+        promoted = Expr(:call, promote_type, Expr(:call, eltype, raw), tunable_eltype, floatT)
+        static_values = Expr(
+            :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), u0_prototype, raw
+        )
+        result = Expr(:call, QuoteNode(u0_constructor), static_values)
+        if iip
+            result = Expr(:call, GlobalRef(@__MODULE__, :__iip_u0_ad_wrapper), result)
+        end
+        return Expr(:block, :(local $T = $promoted), result)
+    end
+    return eval_or_rgf(
+        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    )
+end
+
+# `prototype` says what the result has to look like: a `StaticArray` type for the state
+# map, and the problem's own corresponding `p` buffer for each parameter portion.
+function _static_initialization_buffer(prototype, values)
+    P = prototype isa Type ? prototype : typeof(prototype)
+    T = isempty(values) ? eltype(P) :
+        promote_type(eltype(P), mapreduce(typeof, promote_type, values))
+    if !ArrayInterface.ismutable(P)
+        return SVector{length(values), T}(values)
+    elseif P <: StaticArray && isbitstype(T)
+        return MVector{length(values), T}(values)
+    else
+        # A plain mutable buffer stays plain. The map rebuilds `p`, and solve-time
+        # initialization assigns the result straight back (`integrator.p = pmap(...)`),
+        # which cannot convert between buffer types — so the result must carry the same
+        # `MTKParameters` type the problem already has. Static storage is produced exactly
+        # where the problem already uses it, which is the GPU / `p_constructor` case this
+        # path exists for. A mutable non-isbits buffer additionally cannot be a
+        # `StaticArray` at all: `MVector` rejects `setindex!` on a non-isbits eltype.
+        #
+        # Filled explicitly rather than with `collect`, because StaticArrays overloads
+        # `collect` to preserve staticness: `collect(T, ::SVector)` returns a
+        # `SizedVector`, not a `Vector`.
+        buffer = Vector{T}(undef, length(values))
+        for (i, value) in enumerate(values)
+            buffer[i] = value
+        end
+        return buffer
+    end
+end
+
+function _parameter_buffer_expr(prototype, raw::Symbol, idxs, p_constructor)
+    values = Expr(:tuple)
+    for i in idxs
+        push!(values.args, Expr(:ref, raw, i))
+    end
+    buffer = Expr(
+        :call, GlobalRef(@__MODULE__, :_static_initialization_buffer), prototype, values
+    )
+    p_constructor === identity && return buffer
+    return Expr(:call, QuoteNode(p_constructor), buffer)
+end
+
+function _construct_fullspecialize_initializeprobpmap(
+        sys::AbstractSystem, initsys::AbstractSystem, gen_opts::GeneratedFunctionOptions;
+        p_constructor
+    )
+    ps = parameters(sys; initial_parameters = true)
+    # One entry per `MTKParameters` portion, each holding that portion's buffers. Kept a
+    # concretely typed `Vector` rather than a tuple of tuples: the portions are iterated,
+    # not indexed heterogeneously, and a tuple here would force the whole loop below to
+    # specialize per system.
+    groups = Vector{Vector{SymbolicT}}[]
+    if is_split(sys)
+        grouped = reorder_parameters(sys, ps; flatten = false)
+        push!(groups, Vector{SymbolicT}[grouped[1]::Vector{SymbolicT}])
+        initial_syms = _unwrap_initial_symbols!(copy(grouped[2]::Vector{SymbolicT}), initsys)
+        push!(groups, Vector{SymbolicT}[initial_syms])
+        for i in 3:5
+            push!(groups, grouped[i]::Vector{Vector{SymbolicT}})
+        end
+    else
+        push!(groups, Vector{SymbolicT}[ps])
+    end
+    flat_syms = SymbolicT[]
+    for group in groups, buffer in group
+        append!(flat_syms, buffer)
+    end
+    expr = build_explicit_observed_function(initsys, Tuple(flat_syms), gen_opts)
+    prob = INITMAP_PROBLEM
+    sol = INITMAP_SOLUTION
+    sources = _generated_map_sources(sol, is_time_dependent(initsys))
+    map_expr = _generated_map_expr(expr, [prob, sol], sources) do raw
+        outer_p = INITMAP_OUTER_PARAMETERS
+        p = Expr(:call, GlobalRef(SymbolicIndexingInterface, :parameter_values), prob)
+        if !is_split(sys)
+            result = _parameter_buffer_expr(outer_p, raw, eachindex(flat_syms), p_constructor)
+            return Expr(:block, :(local $outer_p = $p), result)
+        end
+
+        offset = 0
+        portions = Expr[]
+        for (field, group) in zip((:tunable, :initials, :discrete, :constant, :nonnumeric), groups)
+            buffers = Expr[]
+            for (buffer_idx, syms) in enumerate(group)
+                idxs = (offset + 1):(offset + length(syms))
+                offset += length(syms)
+                prototype = Expr(:., outer_p, QuoteNode(field))
+                if field !== :tunable && field !== :initials
+                    prototype = Expr(:ref, prototype, buffer_idx)
+                end
+                buffer = _parameter_buffer_expr(prototype, raw, idxs, p_constructor)
+                if field === :discrete
+                    sizes = get_index_cache(sys).discrete_buffer_sizes[buffer_idx]
+                    block_sizes = Expr(:call, Expr(:curly, SVector, length(sizes), Int))
+                    for sz in sizes
+                        push!(block_sizes.args, sz.length)
+                    end
+                    p_constructor === identity ||
+                        (block_sizes = Expr(:call, QuoteNode(p_constructor), block_sizes))
+                    buffer = Expr(:call, BlockedArray, buffer, block_sizes)
+                end
+                push!(buffers, buffer)
+            end
+            portion = if field === :tunable || field === :initials
+                only(buffers)
+            else
+                tup = Expr(:tuple)
+                append!(tup.args, buffers)
+                tup
+            end
+            push!(portions, portion)
+        end
+        result = Expr(:call, MTKParameters)
+        append!(result.args, portions)
+        push!(result.args, :($map($copy, $outer_p.caches)))
+        return Expr(:block, :(local $outer_p = $p), result)
+    end
+    return eval_or_rgf(
+        map_expr; gen_opts.eval_expression, gen_opts.eval_module, gen_opts.compiler_options
+    )
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -1712,6 +1911,11 @@ function get_p_constructor(p_constructor, pType::Type, floatT::Type)
     p_constructor === identity || return p_constructor
     pType <: StaticArray || return p_constructor
     return function (vals)
+        # Only isbits buffers become static. A buffer whose elements are heap objects
+        # (nonnumeric parameters, array-valued discretes) gains nothing from a
+        # `StaticArray` — the elements are still pointers — and `MArray` cannot
+        # `setindex!` a non-isbits eltype at all.
+        isbitstype(eltype(vals)) || return vals
         return SymbolicUtils.Code.create_array(
             pType, eltype(vals) <: AbstractFloat ? floatT : nothing, Val(ndims(vals)), Val(size(vals)), vals...
         )
@@ -1883,6 +2087,23 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Code-generation options for the `FullSpecialize` initialization maps. Reuses the
+problem's own codegen settings so the maps see the same `checkbounds`/`cse`/... the
+rest of the problem was built with, but emits an `Expr` and compiles it under the
+initialization system's `CompilerOptions`.
+"""
+function _fullspecialize_map_options(opts::SciMLProblemOptions)
+    codegen = opts.fn_opts.codegen
+    return GeneratedFunctionOptions(;
+        expression = Val{true}, codegen.eval_expression, codegen.eval_module,
+        compiler_options = opts.init_compiler_options,
+        codegen_function_options = codegen.codegen
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Build and return the initialization problem and associated data as a `NamedTuple` to be passed
 to the `SciMLFunction` constructor. Requires the system `sys`, whether the resulting
 `SciMLFunction` is in-place (`iip`), the operating point `op`, initial time `t`, and
@@ -1896,6 +2117,7 @@ function maybe_build_initialization_problem(
         sys::AbstractSystem, iip::Bool, op::SymmapT, t, guesses,
         opts::SciMLProblemOptions;
         specialize = SciMLBase.AutoDespecialize,
+        map_specialize = specialize,
         # Intercept `expression` because we don't support it here yet
         expression = Val{false}, kwargs...
     )
@@ -1905,7 +2127,7 @@ function maybe_build_initialization_problem(
         warn_cyclic_dependency, circular_dependency_max_cycle_length,
         circular_dependency_max_cycles, initsys_mtkcompile_kwargs, use_scc,
         time_dependent_init, algebraic_only, missing_guess_value, allow_incomplete,
-        is_steadystateprob, init_compiler_options,
+        is_steadystateprob,
     ) = opts
     (; eval_expression, eval_module) = opts.fn_opts.codegen
 
@@ -1964,6 +2186,9 @@ function maybe_build_initialization_problem(
     if needs_remake
         initializeprob = remake(initializeprob; u0 = _u0, p = initp)
     end
+    if specialize === SciMLBase.AutoDespecialize
+        initializeprob = concretize_initializeprob(initializeprob)
+    end
 
     get_initial_unknowns = if time_dependent_init
         GetUpdatedU0(sys, initsys, op; eval_expression, eval_module, kwargs...)
@@ -1984,9 +2209,14 @@ function maybe_build_initialization_problem(
 
     if time_dependent_init
         all_init_syms = Set(all_symbols(initializeprob))
-        solved_unknowns = filter(var -> var in all_init_syms, unknowns(sys))
+        solved_unknowns = filter(var -> var in all_init_syms, flat_unknowns(sys))
         if isempty(solved_unknowns)
             initializeprobmap = nothing
+        elseif map_specialize === SciMLBase.FullSpecialize
+            initializeprobmap = _construct_fullspecialize_initializeprobmap(
+                initializeprob.f.sys, solved_unknowns, _fullspecialize_map_options(opts);
+                iip, u0_constructor, floatT
+            )
         else
             initializeprobmap = InitializationMap{iip}(
                 u0_constructor,
@@ -2010,6 +2240,10 @@ function maybe_build_initialization_problem(
     ]
     if initializeprobmap === nothing && isempty(punknowns)
         initializeprobpmap = nothing
+    elseif map_specialize === SciMLBase.FullSpecialize
+        initializeprobpmap = _construct_fullspecialize_initializeprobpmap(
+            sys, initsys, _fullspecialize_map_options(opts); p_constructor
+        )
     else
         initializeprobpmap = construct_initializeprobpmap(
             sys, initsys; p_constructor, eval_expression, eval_module, kwargs...
@@ -2086,6 +2320,32 @@ end
 initialization_specialization(::Type{SciMLBase.AutoDespecialize}) =
     SciMLBase.AutoDespecialize
 initialization_specialization(::Type) = SciMLBase.AutoSpecialize
+
+"""
+    $(TYPEDSIGNATURES)
+
+Run `NonlinearSolveBase.get_concrete_problem` over the nonlinear (sub)problems of an
+initialization problem once, at construction time. The wrapped residuals share one Julia
+type across models, so the initialization solve inside `init` compiles once per session
+instead of once per model. Linear and homotopy problems, and problems whose state is not
+a mutable non-Dual array (nothing to wrap), are returned unchanged.
+"""
+concretize_initializeprob(prob) = prob
+function concretize_initializeprob(
+        prob::Union{NonlinearProblem, NonlinearLeastSquaresProblem}
+    )
+    u0 = state_values(prob)
+    u0 isa AbstractArray && ArrayInterface.ismutable(u0) &&
+        !(eltype(u0) <: ForwardDiff.Dual) || return prob
+    return NonlinearSolveBase.get_concrete_problem(prob)
+end
+function concretize_initializeprob(prob::SCCNonlinearProblem)
+    probs = map(concretize_initializeprob, prob.probs)
+    if probs isa AbstractVector
+        probs = convert(typeof(prob.probs), probs)
+    end
+    return remake(prob; probs)
+end
 
 """
     $(TYPEDSIGNATURES)
@@ -2197,9 +2457,11 @@ function __process_SciMLProblem(
     iv = has_iv(sys) ? get_iv(sys) : nothing
     eqs = equations(sys)
 
-    # Implicit-DAE codegen expands an array equation into one output row per element, so
-    # array equations are usable there. Every other problem type still needs `mtkcompile`.
-    implicit_dae || check_array_equations_unknowns(eqs, dvs)
+    # Residual-style codegen expands an array equation into one output row per element,
+    # so constructors that build such residuals accept array equations directly.
+    # Every other problem type still needs `mtkcompile`.
+    accepts_array_equations(constructor) || check_array_equations(eqs)
+    dvs = flat_unknowns(sys)
 
     op = build_operating_point(sys, op; fast_path = true)
 
@@ -2222,12 +2484,12 @@ function __process_SciMLProblem(
     end
 
     if build_initializeprob
+        problem_specialize = SciMLBase.specialization(constructor)
         kws = maybe_build_initialization_problem(
             sys, constructor <: SciMLBase.AbstractSciMLFunction{true},
             op, t, guesses, opts;
-            specialize = initialization_specialization(
-                SciMLBase.specialization(constructor)
-            ), kwargs...
+            specialize = initialization_specialization(problem_specialize),
+            map_specialize = problem_specialize, kwargs...
         )
 
         kwargs = merge(kwargs, kws)
@@ -2317,17 +2579,20 @@ function __process_SciMLProblem(
         du0 = nothing
     end
 
-    if constructor <: NonlinearFunction && length(dvs) != length(eqs)
-        kwargs = merge(
-            kwargs,
-            (;
-                resid_prototype = u0_constructor(
-                    calculate_resid_prototype(
-                        length(eqs), u0, p
-                    )
-                ),
+    if constructor <: NonlinearFunction
+        nrows = count_equation_rows(eqs)
+        if length(dvs) != nrows
+            kwargs = merge(
+                kwargs,
+                (;
+                    resid_prototype = u0_constructor(
+                        calculate_resid_prototype(
+                            nrows, u0, p
+                        )
+                    ),
+                )
             )
-        )
+        end
     end
 
     f = constructor(
@@ -2343,6 +2608,20 @@ function __process_SciMLProblem(
         return implicit_dae ? (f, du0, u0, p) : (f, u0, p)
     end
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `constructor` accepts a system containing array equations (equations whose sides
+are array-valued). Residual-style codegen lowers each array equation to one scalar row
+per element through `array_residual_maker`; constructors whose generated function does
+not assemble residuals this way must keep returning `false`, so that the system is
+required to be scalarized by `mtkcompile` first.
+"""
+accepts_array_equations(::Type{<:SciMLBase.ODEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.DAEFunction}) = true
+accepts_array_equations(::Type{<:SciMLBase.NonlinearFunction}) = true
+accepts_array_equations(::Any) = false
 
 # Check that the keys of a u0map or pmap are valid
 # (i.e. are symbolic keys, and are defined for the system.)

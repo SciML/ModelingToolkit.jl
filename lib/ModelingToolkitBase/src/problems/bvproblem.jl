@@ -26,7 +26,7 @@ end
     isnothing(callback) || error("BVP solvers do not support callbacks.")
 
     _iip = resolve_iip(iip, op)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ctrls = inputs(sys)
     op = to_varmap(op, dvs)
     # Optimal-control BVPs (systems carrying a cost) deliberately pin only the

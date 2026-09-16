@@ -403,6 +403,61 @@ end
     @test issetequal(keys(state), [x[1], 2x[2], x[2]^2, f(x[2] + 1)])
 end
 
+@testset "`specialize` is threaded through to the SCC blocks" begin
+    @variables x y z
+    @mtkcompile sys = System([0 ~ x^3 + x - 1, 0 ~ y^3 + y - x, 0 ~ z^3 + z - y])
+    op = [x => 1.0, y => 1.0, z => 1.0]
+    constructor, constructor_kwargs = ModelingToolkitBase._initialization_problem_constructor(
+        SCCNonlinearProblem, true, SciMLBase.AutoDespecialize
+    )
+    @test constructor === SCCNonlinearProblem{true}
+    @test constructor_kwargs === (; specialize = SciMLBase.AutoDespecialize)
+    keyword_prob = SCCNonlinearProblem{true}(
+        sys, op; specialize = SciMLBase.AutoDespecialize
+    )
+    @test all(
+        sp -> SciMLBase.specialization(sp.f) === SciMLBase.AutoDespecialize,
+        keyword_prob.probs
+    )
+    for (ctor, spec) in (
+            (SCCNonlinearProblem, SciMLBase.AutoSpecialize),
+            (SCCNonlinearProblem{true, SciMLBase.AutoDespecialize}, SciMLBase.AutoDespecialize),
+        )
+        prob = ctor(sys, op)
+        @test prob isa SCCNonlinearProblem
+        @test all(sp -> SciMLBase.specialization(sp.f) === spec, prob.probs)
+        sol = solve(prob, NewtonRaphson())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x]^3 + sol[x] ≈ 1 atol = 1.0e-8
+    end
+end
+
+@testset "Initialization `SCCNonlinearProblem` blocks are despecialized and wrapped once" begin
+    @variables a(t) b(t) c(t) d(t)
+    @mtkcompile sys1 = System(
+        [D(a) ~ b, 0 ~ b^3 + b + a - 2, 0 ~ c^3 + c - b, 0 ~ d - c * b], t
+    )
+    @mtkcompile sys2 = System(
+        [D(a) ~ b, 0 ~ b^3 + 2b + a - 3, 0 ~ c^3 + 2c - b, 0 ~ d - 2c * b], t
+    )
+    probs = [ODEProblem(sys, [a => 0.5], (0.0, 1.0)) for sys in (sys1, sys2)]
+    initprobs = [prob.f.initialization_data.initializeprob for prob in probs]
+    @test initprobs[1] isa SCCNonlinearProblem
+    @test typeof(initprobs[1]) === typeof(initprobs[2])
+    @test typeof(initprobs[1].probs) === typeof(initprobs[2].probs)
+    @test typeof(initprobs[1].explicitfuns!) === typeof(initprobs[2].explicitfuns!)
+    blocks = filter(sp -> sp isa NonlinearProblem, collect(initprobs[1].probs))
+    @test !isempty(blocks)
+    @test all(sp -> SciMLBase.specialization(sp.f) === SciMLBase.AutoDespecialize, blocks)
+    @test all(sp -> sp.p isa SciMLBase.DespecializedParameters, blocks)
+    @test allequal(typeof.(blocks))
+    for (prob, k) in zip(probs, (1, 2))
+        integ = init(prob, Rodas5P(); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test integ[c]^3 + k * integ[c] ≈ integ[b] atol = 1.0e-8
+        @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+    end
+end
+
 @testset "HashedRandom missing guesses in init `SCCNonlinearProblem` (#4603)" begin
     # Initialization decomposes into multiple SCCs and no guesses are provided,
     # so the default `HashedRandom` missing-guess strategy is used for the SCC

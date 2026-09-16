@@ -69,6 +69,7 @@ end
             @safetestset "Function Registration Test" include("function_registration.jl")
             @safetestset "Precompiled Modules Test" include("precompile_test.jl")
             @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
+            @safetestset "Array equations reach `DAEProblem`" include("array_equation_dae.jl")
             @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
             @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
             @safetestset "Constants Test" include("constants.jl")
@@ -87,6 +88,7 @@ end
 
     if GROUP == "All" || GROUP == "InterfaceII"
         @safetestset "Code Generation Test" include("code_generation.jl")
+        @safetestset "Array Equation ODEProblem Test" include("array_equation_ode.jl")
         @safetestset "IndexCache Test" include("index_cache.jl")
         @safetestset "Variable Utils Test" include("variable_utils.jl")
         @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
@@ -96,6 +98,8 @@ end
         @safetestset "SDESystem Test" include("sdesystem.jl")
         @safetestset "DDESystem Test" include("dde.jl")
         @safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+        @safetestset "Limited operator (PCNR iterate limiting)" include("limited_operator.jl")
+        @safetestset "Array-equation Nonlinear" include("array_equation_nl.jl")
         @safetestset "Homotopy lowering" include("homotopy_lowering.jl")
         @safetestset "Homotopy problem construction & sweep" include("homotopy_problem.jl")
         @safetestset "Homotopy OMC parity" include("homotopy_omc_parity.jl")
@@ -140,12 +144,14 @@ end
         @safetestset "LabelledArrays Test" include("extensions/labelledarrays.jl")
         @safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
         @safetestset "Despecialized MTKParameters AD Test" include("extensions/despecialized_parameters_ad.jl")
+        @safetestset "Initialization maps AD" include("extensions/initialization_maps_ad.jl")
         # @safetestset "Auto Differentiation Test" include("extensions/ad.jl")
     end
 
     if GROUP == "All" || GROUP == "Optimization"
         activate_optimization_env()
         @safetestset "OptimizationSystem Test" include("optimization/optimizationsystem.jl")
+        @safetestset "MultiObjective Optimization" include("optimization/multiobjective.jl")
         @safetestset "InfiniteOpt Extension Test" include("optimization/test_infiniteopt.jl")
         @safetestset "Dynamic Optimization Collocation Solvers" include("optimization/dynamic_optimization.jl")
     end
