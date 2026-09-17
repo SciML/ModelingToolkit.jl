@@ -1396,14 +1396,20 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     end
     # `iv => Inf` is only added at the top level; it propagates to subsystems as a
     # domain binding, and a per-subsystem copy would collide when `bindings` merges.
-    sys_bindings = get_bindings(sys)
+    sys_bindings = copy(parent(get_bindings(sys)))
+    # A variable binding is an initialization-time constraint, which a
+    # time-independent system cannot enforce; it is an initial-value default here.
+    new_ics = copy(get_initial_conditions(sys))
+    all_dvs = as_atomic_array_set(unknowns(sys))
+    union!(all_dvs, as_atomic_array_set(observables(sys)))
+    move_variable_bindings_to_ics!(all_dvs, new_ics, sys_bindings)
     if bind_iv
         sys_bindings = merge(sys_bindings, Dict(get_iv(sys) => Inf))
     end
     nsys = System(
         eqs, get_unknowns(sys), new_ps;
         bindings = sys_bindings,
-        initial_conditions = get_initial_conditions(sys), guesses = get_guesses(sys),
+        initial_conditions = new_ics, guesses = get_guesses(sys),
         initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
         observed = obs,
         systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))

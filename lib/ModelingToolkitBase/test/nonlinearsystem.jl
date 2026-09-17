@@ -547,6 +547,23 @@ end
     @test isequal(value(binds[inner.q]), 2.0)
 end
 
+@testset "NonlinearSystem conversion: variable bindings become initial conditions" begin
+    @independent_variables t
+    D = Differential(t)
+    @parameters p z0
+    @variables x(t) z(t) = z0
+    # `z`'s default lives in `bindings` of the time-dependent system, where it is
+    # enforced during initialization. A time-independent system cannot enforce it,
+    # so the conversion moves it to `initial_conditions`.
+    sys = complete(
+        System([D(x) ~ p - x, D(z) ~ p - z], t, [x, z], [p, z0]; name = :sys)
+    )
+    nlsys = NonlinearSystem(sys)
+    ics = ModelingToolkitBase.initial_conditions(nlsys)
+    @test isequal(ics[z], z0)
+    @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
