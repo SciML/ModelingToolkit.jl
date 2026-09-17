@@ -491,6 +491,62 @@ end
     end
 end
 
+@testset "NonlinearSystem conversion: invalidated bindings graph" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p q r
+    @named sys = System(
+        [D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+        bindings = [r => 3p]
+    )
+    # `complete(flatten = false)` invalidates `parameter_bindings_graph`, but bound
+    # parameters remain in `ps`; `bound_parameters` must not be called on it.
+    csys = complete(sys; flatten = false)
+    @test ModelingToolkitBase.iscomplete(csys)
+    @test ModelingToolkitBase.get_parameter_bindings_graph(csys) === nothing
+    nlsys = NonlinearSystem(csys)
+    @test ModelingToolkitBase.iscomplete(nlsys)
+    @test r in ModelingToolkitBase.bound_parameters(nlsys)
+end
+
+@testset "NonlinearSystem conversion: initialization equation translation" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System(
+        [D(x) ~ p * x, D(y) ~ x + y], t;
+        initialization_eqs = [
+            x ~ 1.0, x + y ~ p, Initial(y) ~ 2.0, D(x) ~ 0, Initial(D(y)) ~ 0,
+        ]
+    )
+    nlsys = NonlinearSystem(sys)
+    ieqs = initialization_equations(nlsys)
+    # Unknowns wrap in `Initial`, already-`Initial` terms pass through, and
+    # derivatives collapse to trivially-true equations which are dropped.
+    @test isequal(ieqs, [Initial(x) ~ 1.0, Initial(x) + Initial(y) ~ p, Initial(y) ~ 2.0])
+end
+
+@testset "NonlinearSystem conversion: hierarchical bindings" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) u(t)
+    @parameters p q
+    @named inner = System([D(u) ~ q - u], t, [u], [q]; bindings = [q => 2.0])
+    sys = System(
+        [D(x) ~ p * inner.u - x], t, [x], [p]; name = :outer, systems = [inner]
+    )
+    nlsys = NonlinearSystem(sys)
+    # The subsystem's `q` binding is namespaced onto the parent, and `t => Inf` is
+    # only bound once - either mistake trips `no_override_merge!` here.
+    binds = ModelingToolkitBase.bindings(nlsys)
+    @test isequal(value(binds[t]), Inf)
+    @test isequal(value(binds[inner.q]), 2.0)
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])

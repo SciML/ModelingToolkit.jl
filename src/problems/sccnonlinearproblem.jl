@@ -558,6 +558,19 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
     end
 
+    if isempty(var_sccs)
+        # `mtkcompile` may reduce every residual equation to an `observed`
+        # assignment, leaving no unknowns. The lowering is then an empty
+        # nonlinear problem; `process_SciMLProblem` reports `u0 === nothing`
+        # for a stateless system, which solvers reject.
+        TProb = MTKBase.get_nonlinear_problem_type(sys)
+        prob = TProb{iip, specialize}(
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+        )
+        state_values(prob) === nothing && return remake(prob; u0 = Float64[])
+        return prob
+    end
+
     if length(var_sccs) == 1
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
@@ -801,7 +814,15 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
     for eq in observed(_ss)
         write_possibly_indexed_array!(op, eq.lhs, eq.rhs, COMMON_NOTHING)
     end
-    merge!(op, bindings(sys))
+    # Bound parameters are excluded: their values come from the lowered system's own
+    # `bindings`, and having them in `op` trips the "Cannot merge without overriding"
+    # check when the subproblems are built.
+    bound_ps = iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing ?
+        bound_parameters(sys) : ()
+    for (k, v) in bindings(sys)
+        k in bound_ps && continue
+        op[k] = v
+    end
     return op
 end
 
@@ -834,4 +855,35 @@ function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
         )
         return SCCNonlinearProblem(ref[], op)
     end
+end
+
+# A `SteadyStateProblem`'s stored SCC lowering materializes through
+# `SciMLBase.NonlinearProblem(prob)` during `solve`. When it is an
+# `SCCNonlinearProblem`, the generic path re-dispatches `__solve` on it and the
+# fallbacks try to convert it back via `prob.u0` — a field it does not have — so
+# solve the lowering through its own `solve` dispatch (i.e. `SCCAlg`) instead.
+# Algorithms that do not lower to a nonlinear solve (`DynamicSS`, ODE algorithms)
+# keep their own `__solve` dispatch; non-SCC lowerings keep the upstream path
+# verbatim via `invoke`.
+function CommonSolve.solve(prob::SteadyStateProblem, args...; kwargs...)
+    alg = isempty(args) ? nothing : first(args)
+    alg === nothing && (alg = get(kwargs, :alg, nothing))
+    alg === nothing && prob.kwargs !== nothing &&
+        (alg = get(prob.kwargs, :alg, nothing))
+    if alg !== nothing &&
+            !(alg isa Union{SciMLBase.AbstractNonlinearAlgorithm, SCCNonlinearSolve.SCCAlg})
+        return invoke(
+            solve, Tuple{SciMLBase.AbstractNonlinearProblem, Vararg{Any}},
+            prob, args...; kwargs...
+        )
+    end
+    # Concretize like `NonlinearSolveBase.solve_up` (evaluates `u0(p, Inf)`-style
+    # `u0`s, promotes integer `u0`s, applies `u0`/`p` solve kwargs).
+    _prob = SimpleNonlinearSolve.NonlinearSolveBase.get_concrete_problem(prob; kwargs...)
+    nlprob = SciMLBase.NonlinearProblem(_prob)
+    nlprob isa SciMLBase.SCCNonlinearProblem && return solve(nlprob, args...; kwargs...)
+    return invoke(
+        solve, Tuple{SciMLBase.AbstractNonlinearProblem, Vararg{Any}},
+        _prob, args...; kwargs...
+    )
 end
