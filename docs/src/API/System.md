@@ -152,6 +152,7 @@ Functions for linearization and analysis of systems.
 
 ```@docs
 AnalysisPoint
+ap_var
 linearization_ap_transform
 get_sensitivity_function
 get_comp_sensitivity_function
@@ -180,6 +181,6 @@ eqs = [
 @named closed_loop = System(eqs, t, systems = [plant, controller])
 
 isolated, input_vars, output_vars =
-    isolate_subsystem(closed_loop, :plant_input, :plant_output)
+    isolate_subsystem(closed_loop, closed_loop.plant_input, closed_loop.plant_output)
 isequal(only(input_vars), plant.input.u), isequal(only(output_vars), plant.output.u)
 ```

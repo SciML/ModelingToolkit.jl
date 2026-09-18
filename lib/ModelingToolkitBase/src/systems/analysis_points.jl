@@ -12,9 +12,20 @@ Where `out` is the output being connected to the inputs `in...`. All involved
 connectors (input and outputs) are required to either have an unknown named
 `u` or a single unknown, all of which should have the same size.
 
+An analysis point of a model is referred to by property access on the system in which it
+was created, `sys.ap_name`, and the analysis functions accept the `AnalysisPoint` this
+returns. A point belonging to a subsystem is reached through the hierarchy,
+`sys.inner.ap_name`. The system must be the unsimplified and uncompleted model, since
+both `mtkcompile` and `complete` remove the analysis points.
+
+Referring to an analysis point by its `Symbol` name, as in
+`get_sensitivity(sys, :ap_name)`, is the old style and is retained only for backwards
+compatibility. It will be deprecated.
+
 See also [`get_sensitivity`](@ref ModelingToolkit.get_sensitivity),
 [`get_comp_sensitivity`](@ref ModelingToolkit.get_comp_sensitivity),
-[`get_looptransfer`](@ref ModelingToolkit.get_looptransfer), and [`open_loop`](@ref).
+[`get_looptransfer`](@ref ModelingToolkit.get_looptransfer), [`open_loop`](@ref), and
+[`ap_var`](@ref).
 
 # Fields
 
@@ -35,8 +46,8 @@ eqs = [connect(P.output, C.input)
        connect(C.output, :plant_input, P.input)]
 sys = System(eqs, t, systems = [P, C], name = :feedback_system)
 
-matrices_S, _ = get_sensitivity(sys, :plant_input) # Compute the matrices of a state-space representation of the (input) sensitivity function.
-matrices_T, _ = get_comp_sensitivity(sys, :plant_input)
+matrices_S, _ = get_sensitivity(sys, sys.plant_input) # Compute the matrices of a state-space representation of the (input) sensitivity function.
+matrices_T, _ = get_comp_sensitivity(sys, sys.plant_input)
 ```
 
 Continued linear analysis and design can be performed using ControlSystemsBase.jl.
@@ -276,12 +287,28 @@ function remove_analysis_points(sys::AbstractSystem)
 end
 
 """
-    $(TYPEDSIGNATURES)
+    ap_var(sys::AbstractSystem)
+    ap_var(var::ConnectableSymbolicT)
 
-Given a system involved in an `AnalysisPoint`, get the variable to be used in the
-connection. This is the variable named `u` if present, and otherwise the only
-variable in the system. If the system does not have a variable named `u` and
-contains multiple variables, throw an error.
+Given one endpoint of an [`AnalysisPoint`](@ref), return the variable used in the
+connection. The endpoints of a point `ap = sys.ap_name` are `ap.input` and `ap.outputs`,
+and are either connector systems or the connected variables themselves, depending on how
+the model was built. `ap_var` returns the variable in both cases.
+
+For a connector system the variable is the one named `u` if present, and otherwise the
+only unknown of the system. If the system has no variable named `u` and contains multiple
+unknowns, an error is thrown. For a causal variable the variable itself is returned.
+
+`ap.outputs` holds what the point drives, so `ap_var(only(ap.outputs))` is the variable
+whose operating point a linearization at that point is taken at:
+
+```julia
+ap = sys.plant_input
+u = ap_var(only(ap.outputs))
+```
+
+Note that `sys.plant_input` is namespaced by `sys`; the un-namespaced variable is obtained
+from the un-namespaced point, `@nonamespace sys.plant_input`.
 """
 function ap_var(sys::AbstractSystem)
     if hasproperty(sys, :u)
@@ -292,11 +319,6 @@ function ap_var(sys::AbstractSystem)
     error("Could not determine the analysis-point variable in system $(nameof(sys)). To use an analysis point, apply it to a connection between causal blocks which have a variable named `u` or a single unknown of the same size.")
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-For an `AnalysisPoint` involving causal variables. Simply return the variable.
-"""
 function ap_var(var::ConnectableSymbolicT)
     return unwrap(var)::SymbolicT
 end
@@ -863,6 +885,12 @@ end
 Apply `LoopTransferTransform` to the analysis point `ap` and return the
 result of `apply_transformation`.
 
+# Arguments
+
+- `sys`: The unsimplified, uncompleted system containing the analysis point.
+- `ap`: The analysis point, obtained as `sys.ap_name`. Passing the `Symbol` name of the
+  point is the old style and will be deprecated.
+
 # Keyword Arguments
 
 - `system_modifier`: a function which takes the modified system and returns a new system
@@ -876,9 +904,13 @@ function open_loop(sys, ap::Union{Symbol, AnalysisPoint}; system_modifier = iden
 end
 
 """
-    generate_control_function(sys::ModelingToolkitBase.AbstractSystem, input_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}, dist_ap_name::Union{Symbol, Vector{Symbol}, AnalysisPoint, Vector{AnalysisPoint}}; system_modifier = identity, kwargs)
+    generate_control_function(sys::ModelingToolkitBase.AbstractSystem, input_aps, dist_aps = nothing; system_modifier = identity, kwargs)
 
 When called with analysis points as input arguments, we assume that all analysis points corresponds to connections that should be opened (broken). The use case for this is to get rid of input signal blocks, such as `Step` or `Sine`, since these are useful for simulation but are not needed when using the plant model in a controller or state estimator.
+
+`input_aps` and `dist_aps` are analysis points of the unsimplified, uncompleted system
+`sys`, obtained as `sys.ap_name`, or vectors of such points. Passing the `Symbol` names of
+the points is the old style and will be deprecated.
 """
 function generate_control_function(
         sys::ModelingToolkitBase.AbstractSystem, input_ap_name::Union{

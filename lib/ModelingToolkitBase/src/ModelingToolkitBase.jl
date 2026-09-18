@@ -484,7 +484,7 @@ export MTKParameters, reorder_dimension_by_tunables!, reorder_dimension_by_tunab
 
 export HomotopyContinuationProblem
 
-export AnalysisPoint, open_loop
+export AnalysisPoint, open_loop, ap_var
 
 include("systems/optimal_control_interface.jl")
 
