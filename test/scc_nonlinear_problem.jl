@@ -2,6 +2,7 @@ using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using OrdinaryDiffEqBDF
+using SteadyStateDiffEq
 using SciMLBase, Symbolics
 using SymbolicIndexingInterface: getu
 using StaticArrays
@@ -527,4 +528,89 @@ end
     # Not stored on non-steady-state problems.
     odeprob = ODEProblem(sys, Dict(), (0.0, 1.0))
     @test SCCNonlinearProblem(odeprob) === nothing
+end
+
+@testset "SteadyStateProblem SCC lowering regressions" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @parameters α = 1.3 β = 0.9 γ = 0.8 δ = 1.8
+    @variables x(t) = 3.1 y(t) = 1.5
+    eqs = [D(x) ~ α * x - β * x * y, D(y) ~ -δ * y + γ * x * y]
+
+    # `complete` before `mtkcompile` records a parent snapshot whose
+    # `parameter_bindings_graph` is invalidated; the lowering walks to it.
+    sys = mtkcompile(complete(System(eqs, t; name = :lotka)))
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # `initialization_eqs` referring to unknowns translate to `Initial`
+    # constraints on the time-independent residual system.
+    model = System(eqs, t; initialization_eqs = [x ~ 3.1], name = :lotka)
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # Bound parameters belong to the lowered system's `bindings`, not the
+    # operating point.
+    @parameters p2
+    model = System(
+        eqs, t, [x, y], [α, β, γ, δ, p2];
+        bindings = [p2 => 2α], name = :lotka
+    )
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 2.25 atol = 1.0e-8
+    @test sol[y] ≈ 13 / 9 atol = 1.0e-8
+
+    # The `iv => Inf` binding is only added at the top level of a hierarchical
+    # conversion; subsystems receive it through domain bindings.
+    @variables u(t) [guess = 1.0] v(t) [guess = 1.0]
+    @parameters subβ = 1.0
+    @named inner = System(
+        [D(u) ~ subβ - u], t, [u], [subβ];
+        initialization_eqs = [u ~ 3.0]
+    )
+    model = System(
+        [D(v) ~ α * inner.u - v], t, [v], [α];
+        name = :outer, systems = [inner], initialization_eqs = [v ~ 2.0]
+    )
+    sys = mtkcompile(model)
+    sol = solve(SteadyStateProblem(sys, []))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[inner.u] ≈ 1.0 atol = 1.0e-8
+    @test sol[v] ≈ 1.3 atol = 1.0e-8
+
+    # A residual splitting into multiple SCCs lowers to an `SCCNonlinearProblem`;
+    # `solve` must route it to `SCCAlg` rather than the generic conversion that
+    # reads `prob.u0` (which `SCCNonlinearProblem` does not have).
+    @variables x2(t) y2(t) z2(t)
+    @mtkcompile sys = System(
+        [D(x2) ~ α - x2^3, D(y2) ~ x2^3 - y2^3, D(z2) ~ y2 - z2^3],
+        t, [x2, y2, z2], [α, β]
+    )
+    prob = SteadyStateProblem(sys, [])
+    @test SciMLBase.NonlinearProblem(prob) isa SciMLBase.SCCNonlinearProblem
+    for sol in (solve(prob), solve(prob, NewtonRaphson()))
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[x2] ≈ cbrt(1.3) atol = 1.0e-8
+        @test sol[y2] ≈ cbrt(1.3) atol = 1.0e-8
+        @test sol[z2] ≈ cbrt(cbrt(1.3)) atol = 1.0e-8
+    end
+
+    # A residual reduced entirely to `observed` assignments leaves an empty
+    # schedule; the lowering is a stateless `NonlinearProblem`.
+    @variables x3(t) y3(t)
+    @mtkcompile sys = System(
+        [D(x3) ~ α - x3, D(y3) ~ β + x3 - y3], t, [x3, y3], [α, β]
+    )
+    prob = SteadyStateProblem(sys, [])
+    @test SciMLBase.NonlinearProblem(prob) isa SciMLBase.NonlinearProblem
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x3] ≈ 1.3 atol = 1.0e-8
+    @test sol[y3] ≈ 2.2 atol = 1.0e-8
 end

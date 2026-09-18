@@ -1366,12 +1366,16 @@ if the input system is also `complete`. This also retains the `split` flag passe
 
 See also: [`complete`](@ref).
 """
-function NonlinearSystem(sys::System)
+function NonlinearSystem(sys::System; bind_iv::Bool = true)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
-    obs = observed(sys)
+    # `get_` accessors rather than the merging `equations`/`unknowns`/...: subsystems
+    # are recursively converted below, so their namespaced entries must not be folded
+    # into the parent's fields a second time. The rule keyspaces still use the merged
+    # accessors since the system's own equations can reference namespaced variables.
+    eqs = get_eqs(sys)
+    obs = get_observed(sys)
     D = Differential(get_iv(sys))
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
@@ -1381,21 +1385,99 @@ function NonlinearSystem(sys::System)
     # slice is not one of them, so expand it and replace its elements.
     eqs = map(eq -> substitute(eq, subrules), eqs)
     eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
-    new_ps = [parameters(sys); get_iv(sys)]
-    if iscomplete(sys)
+    new_ps = collect(get_ps(sys))
+    filter!(__no_initial_params_pred, new_ps)
+    push!(new_ps, get_iv(sys))
+    # A complete system whose `parameter_bindings_graph` was invalidated (e.g. the
+    # `complete(sys; flatten = false)` snapshot `complete` records as the parent)
+    # still carries bound parameters in `ps`, so they are already included above.
+    if iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing
         append!(new_ps, collect(bound_parameters(sys)))
     end
+    # `iv => Inf` is only added at the top level; it propagates to subsystems as a
+    # domain binding, and a per-subsystem copy would collide when `bindings` merges.
+    sys_bindings = copy(parent(get_bindings(sys)))
+    # A variable binding is an initialization-time constraint, which a
+    # time-independent system cannot enforce; it is an initial-value default here.
+    new_ics = copy(get_initial_conditions(sys))
+    all_dvs = as_atomic_array_set(unknowns(sys))
+    union!(all_dvs, as_atomic_array_set(observables(sys)))
+    move_variable_bindings_to_ics!(all_dvs, new_ics, sys_bindings)
+    if bind_iv
+        sys_bindings = merge(sys_bindings, Dict(get_iv(sys) => Inf))
+    end
     nsys = System(
-        eqs, unknowns(sys), new_ps;
-        bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
-        initial_conditions = initial_conditions(sys), guesses = guesses(sys),
-        initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs, systems = map(NonlinearSystem, get_systems(sys))
+        eqs, get_unknowns(sys), new_ps;
+        bindings = sys_bindings,
+        initial_conditions = new_ics, guesses = get_guesses(sys),
+        initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
+        observed = obs,
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
     return nsys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Translate `initialization_equations(sys)` of a time-dependent system for the
+time-independent steady-state residual system. Bare unknowns and observables in
+initialization equations refer to values at the initial time, which are the
+`Initial` parameters of a time-independent system, so they are wrapped in
+`Initial`. Derivatives are identically zero at steady state, so `D(x)` - also
+inside `Initial` - is replaced by `0`.
+"""
+function steady_state_initialization_eqs(sys::System)
+    # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
+    # their own translated equations through the recursive conversion.
+    initeqs = get_initialization_eqs(sys)
+    isempty(initeqs) && return initeqs
+    D = Differential(get_iv(sys))
+    subrules = Dict{SymbolicT, Float64}()
+    for v in Iterators.flatten((unknowns(sys), observables(sys)))
+        subrules[D(v)] = 0.0
+    end
+    for var in brownians(sys)
+        subrules[var] = 0.0
+    end
+    heads = Set{SymbolicT}()
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, observables(sys))
+    diff_heads = Set{SymbolicT}()
+    foreach(Iterators.flatten((unknowns(sys), observables(sys)))) do v
+        push!(diff_heads, split_indexed_var(D(v))[1])
+        push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
+    end
+    vs = Set{SymbolicT}()
+    initeqs = map(expand_array_derivatives(initeqs)) do eq
+        eq = substitute(eq, subrules)
+        empty!(vs)
+        SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
+        rules = Dict{SymbolicT, Any}()
+        for v in vs
+            if isinitial(v)
+                # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
+                # zero at steady state.
+                arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
+                if arg in diff_heads
+                    rules[v] = 0.0
+                end
+            else
+                head = split_indexed_var(v)[1]
+                if head in diff_heads
+                    rules[v] = 0.0
+                elseif head in heads
+                    rules[v] = Initial(v)
+                end
+            end
+        end
+        isempty(rules) ? eq : substitute(eq, rules)
+    end
+    # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
+    return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
 end
 
 ########

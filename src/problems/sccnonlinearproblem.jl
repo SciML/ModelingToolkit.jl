@@ -558,6 +558,19 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         end
     end
 
+    if isempty(var_sccs)
+        # `mtkcompile` may reduce every residual equation to an `observed`
+        # assignment, leaving no unknowns. The lowering is then an empty
+        # nonlinear problem; `process_SciMLProblem` reports `u0 === nothing`
+        # for a stateless system, which solvers reject.
+        TProb = MTKBase.get_nonlinear_problem_type(sys)
+        prob = TProb{iip, specialize}(
+            sys, op; eval_expression, eval_module, u0_constructor, missing_guess_value, kwargs...
+        )
+        state_values(prob) === nothing && return remake(prob; u0 = Float64[])
+        return prob
+    end
+
     if length(var_sccs) == 1
         if calculate_A_b(sys; throw = false) !== nothing
             linprob = LinearProblem{iip}(
@@ -801,7 +814,15 @@ function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector},
     for eq in observed(_ss)
         write_possibly_indexed_array!(op, eq.lhs, eq.rhs, COMMON_NOTHING)
     end
-    merge!(op, bindings(sys))
+    # Bound parameters are excluded: their values come from the lowered system's own
+    # `bindings`, and having them in `op` trips the "Cannot merge without overriding"
+    # check when the subproblems are built.
+    bound_ps = iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing ?
+        bound_parameters(sys) : ()
+    for (k, v) in bindings(sys)
+        k in bound_ps && continue
+        op[k] = v
+    end
     return op
 end
 
