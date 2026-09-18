@@ -2,6 +2,7 @@ using ModelingToolkit
 using NonlinearSolve, SCCNonlinearSolve
 using OrdinaryDiffEq
 using OrdinaryDiffEqBDF
+using SteadyStateDiffEq
 using SciMLBase, Symbolics
 using SymbolicIndexingInterface: getu
 using StaticArrays

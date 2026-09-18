@@ -335,9 +335,6 @@ const NONPUBLIC_QUALIFIED_ACCESSES = (
     :ShapeVecT, :stable_eachindex, :Unknown, :with_allocator,
     # SciMLBase, Moshi
     :Match, :ODENLStepData, :ParamJacobianWrapper, :Void,
-    # SCCNonlinearSolve: `SCCAlg` is the SCC solver algorithm but has no public
-    # spelling (the package only exports `scc_solve_up`).
-    :SCCAlg,
 )
 
 # ModelingToolkit is the upper half of ModelingToolkitBase: the two are one library split
