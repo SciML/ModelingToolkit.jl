@@ -80,3 +80,50 @@ let
     @test SciMLBase.successful_retcode(sol)
     @test sol[x^2 + y^2][end] < 1.1
 end
+
+# Index reduction through a struct-typed unknown. `pendulum2` above is the same system
+# written with three free-standing scalars, so it is the control: the record version must
+# reduce to the same structure and integrate to the same trajectory.
+let
+    struct PendulumState
+        x::Float64
+        y::Float64
+        λ::Float64
+    end
+    @symstruct PendulumState
+
+    @parameters L g
+    @variables p(t)::PendulumState
+
+    eqs = [D(D(p.x)) ~ p.λ * p.x
+           D(D(p.y)) ~ p.λ * p.y - g
+           0 ~ p.x^2 + p.y^2 - L^2]
+    struct_sys = mtkcompile(System(eqs, t, [p], [L, g]; name = :pendulum_struct))
+    scalar_sys = mtkcompile(pendulum2)
+
+    # Same reduction: index 3 -> 1, same number of states and equations.
+    @test length(unknowns(struct_sys)) == length(unknowns(scalar_sys))
+    @test length(equations(struct_sys)) == length(equations(scalar_sys))
+    # Every state is a field access, i.e. a projection of a record rather than a
+    # free-standing variable.
+    @test all(ModelingToolkitBase.is_symstruct_field, unknowns(struct_sys))
+
+    ivs = [p.x => sqrt(2) / 2, p.y => sqrt(2) / 2, L => 1.0, g => 9.8]
+    sivs = [x => sqrt(2) / 2, y => sqrt(2) / 2, L => 1.0, g => 9.8]
+    struct_prob = ODEProblem(struct_sys, ivs, (0.0, 0.5); guesses = [p.λ => 0.0])
+    scalar_prob = ODEProblem(scalar_sys, sivs, (0.0, 0.5); guesses = [T => 0.0])
+
+    # A surviving constraint means a singular mass matrix in both cases.
+    @test struct_prob.f.mass_matrix == scalar_prob.f.mass_matrix
+    @test !(struct_prob.f.mass_matrix === I)
+
+    kw = (; saveat = 0.05, reltol = 1e-10, abstol = 1e-10)
+    ssol = solve(struct_prob, FBDF(); kw...)
+    csol = solve(scalar_prob, FBDF(); kw...)
+    @test SciMLBase.successful_retcode(ssol)
+    @test ssol.t == csol.t
+    @test maximum(abs.(ssol[p.x] .- csol[x])) < 1e-8
+    @test maximum(abs.(ssol[p.y] .- csol[y])) < 1e-8
+    # The constraint is respected along the whole trajectory.
+    @test norm(ssol[p.x] .^ 2 + ssol[p.y] .^ 2 .- 1) < 1.0e-2
+end
