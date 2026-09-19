@@ -496,6 +496,9 @@ function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discr
     # on the partition would only have its problem compile callbacks for them.
     @set! psys.continuous_events = SymbolicContinuousCallback[]
     @set! psys.discrete_events = SymbolicDiscreteCallback[]
+    # An assertion is folded into the generated right-hand side, so a partition inheriting one
+    # whose variables belong to another partition generates code it cannot evaluate.
+    @set! psys.assertions = _evaluable_assertions(psys)
     # A partition with no state variable is a static map, and its matrices are the same in
     # either time domain. `DiscreteProblem` cannot represent a system without unknowns, so
     # such a partition goes through the continuous path; only its reported clock says which
@@ -503,6 +506,36 @@ function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discr
     stateless = isempty(unknowns(psys))
     discrete && !stateless && (@set! psys.is_discrete = true)
     return complete(psys), stateless
+end
+
+"""
+The assertions of `psys` that it can evaluate: those every variable of which the partition
+declares. A partition inherits the whole model's assertions, and `generate_rhs` adds their
+expressions to the right-hand side it generates, so one naming a variable of another partition
+would be generated as a reference to a name this partition does not have.
+
+A clocked partition names its own variables by their past values, which no assertion of the
+model is written in terms of, so it keeps none. An assertion is a statement about a simulated
+trajectory and takes no part in a linearization either way.
+"""
+function _evaluable_assertions(psys::AbstractSystem)
+    asserts = get_assertions(psys)
+    isempty(asserts) && return asserts
+    declared = Set{SymbolicT}()
+    for v in Iterators.flatten((unknowns(psys), get_ps(psys)))
+        push!(declared, _base_variable(v))
+    end
+    for eq in observed(psys)
+        push!(declared, _base_variable(eq.lhs))
+    end
+    kept = Dict{SymbolicT, String}()
+    buffer = Set{SymbolicT}()
+    for (expr, message) in asserts
+        empty!(buffer)
+        Symbolics.get_variables!(buffer, expr)
+        all(v -> _base_variable(v) in declared, buffer) && (kept[expr] = message)
+    end
+    return kept
 end
 
 """

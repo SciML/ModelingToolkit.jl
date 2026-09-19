@@ -342,3 +342,29 @@ vector_gain(v) = sum(v)
     @test ctrl2.D ≈ ctrl.D
     @test plant2.A ≈ plant.A
 end
+
+@testset "An assertion on another partition's variables is not inherited" begin
+    dt = 0.1
+    k = ShiftIndex(Clock(dt))
+    @variables x(t) y(t) u(t) yd(t) ud(t)
+    @parameters kp
+
+    # The plant asserts a bound on its own state. `generate_rhs` folds an assertion into the
+    # right-hand side it generates, so the clocked partition, which has no `x`, would generate
+    # a reference to a name it does not have.
+    @named sys = System(
+        [
+            yd ~ Sample(dt)(y),
+            ud ~ ud(k - 1) - kp * yd,
+            u ~ Hold(ud),
+            D(x) ~ -x + u,
+            y ~ x,
+        ], t; assertions = Dict(x < 10.0 => "the plant state exceeded its bound"))
+
+    op = Dict(x => 0.0, y => 0.0, u => 0.0, ud => 0.0, ud(k - 1) => 0.0, kp => 2.0)
+    ctrl, plant = linearize_clocked(sys, ModelingToolkit.SymbolicT[], [y]; op)
+    @test isempty(ModelingToolkit.assertions(ctrl.sys))
+    @test length(ModelingToolkit.assertions(plant.sys)) == 1
+    @test ctrl.A ≈ [1.0;;]
+    @test plant.A ≈ [-1.0;;]
+end
