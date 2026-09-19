@@ -182,10 +182,13 @@ function _partition_op(
     out = anydict()
     for (k, v) in op
         key = unwrap(k)
+        # A key that names a parameter or a state variable of this partition names it
+        # unambiguously. An observed one may be observed by more than one partition, so it is
+        # kept only for the partition the signal belongs to.
         keep = is_parameter(psys, key) ||
-               (belongs(key) &&
-                (SymbolicIndexingInterface.is_variable(psys, key) ||
-                 (allow_observed && SymbolicIndexingInterface.is_observed(psys, key))))
+               SymbolicIndexingInterface.is_variable(psys, key) ||
+               (allow_observed && belongs(key) &&
+                SymbolicIndexingInterface.is_observed(psys, key))
         keep || continue
         out[key] = v
         push!(seen, key)
@@ -194,14 +197,19 @@ function _partition_op(
 end
 
 """
-The variable an operator expression is built from: `Shift(t, -1)(x)`, `Sample(clk)(x)` and
-`Hold()(x)` all name the signal `x`.
+The variable an expression is built from: `Shift(t, -1)(x)`, `Sample(clk)(x)`, `Hold()(x)` and
+`x[i]` all name the signal `x`.
 """
 function _base_variable(v)
-    while isoperator(v, Union{Shift, Sample, Hold})
-        v = only(SU.arguments(v))
+    while true
+        if isoperator(v, Union{Shift, Sample, Hold})
+            v = only(SU.arguments(v))
+        elseif iscall(v) && operation(v) === getindex
+            v = first(SU.arguments(v))
+        else
+            return v
+        end
     end
-    return v
 end
 
 """
@@ -397,6 +405,14 @@ function linearize_clocked(
         end
         partition_op = _partition_op(
             psys, op, belongs, seen_op_keys; allow_observed = !discrete)
+        if discrete
+            # A clocked partition's operating point is given rather than solved for, so every
+            # signal entering it needs a value. For a crossing signal that is its value in the
+            # model, which an operating point taken from a solution has.
+            absent = [v for v in in_vars if !haskey(partition_op, v)]
+            isempty(absent) ||
+                error("The operating point does not provide values for the following inputs of the partition on $clock: $(join(string.(absent), ", ")).")
+        end
         linfun, _ = linearization_function(
             psys, in_vars, out_vars;
             already_simplified = true,
@@ -468,6 +484,15 @@ function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discr
         outputs = OrderedSet{SymbolicT}(out_terms)
     )
     psys = _unshift_partition_names(psys, shifted_io)
+    if discrete
+        # An input is left bound to `missing`, for an initialization problem to solve for when
+        # no value is given. A clocked partition solves none, and the discrete code generation
+        # substitutes the binding, so a `missing` reaches the generated expressions. Every one
+        # of these inputs is required in the operating point instead.
+        binds = copy(parent(bindings(psys)))
+        foreach(Base.Fix1(delete!, binds), in_vars)
+        @set! psys.bindings = ROSymmapT(binds)
+    end
     # The events are reported separately and take no part in the linearization; leaving them
     # on the partition would only have its problem compile callbacks for them.
     @set! psys.continuous_events = SymbolicContinuousCallback[]
