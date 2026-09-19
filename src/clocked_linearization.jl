@@ -486,12 +486,11 @@ function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discr
     psys = _unshift_partition_names(psys, shifted_io)
     if discrete
         # An input is left bound to `missing`, for an initialization problem to solve for when
-        # no value is given. A clocked partition solves none, and the discrete code generation
-        # substitutes the binding, so a `missing` reaches the generated expressions. Every one
-        # of these inputs is required in the operating point instead.
+        # no value is given. A clocked partition solves none, so every input is required in the
+        # operating point instead, and the same applies to any other parameter without a value.
         binds = copy(parent(bindings(psys)))
         foreach(Base.Fix1(delete!, binds), in_vars)
-        @set! psys.bindings = ROSymmapT(binds)
+        psys = _drop_unresolvable_parameters(psys, binds)
     end
     # The events are reported separately and take no part in the linearization; leaving them
     # on the partition would only have its problem compile callbacks for them.
@@ -504,6 +503,63 @@ function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discr
     stateless = isempty(unknowns(psys))
     discrete && !stateless && (@set! psys.is_discrete = true)
     return complete(psys), stateless
+end
+
+"""
+Remove from `psys` the parameters whose binding cannot be evaluated, leaving `binds` as the
+partition's bindings.
+
+A parameter without a value is bound to `missing`, for an initialization problem to solve for.
+A clocked partition solves none, and the discrete code generation substitutes every binding, so
+a `missing` would reach the generated expressions. Every such binding is dropped, together with
+those that depend on one; a parameter the partition's equations reference then takes its value
+from the operating point, and one they do not reference — a partition carries the whole model's
+parameter set, so most belong to another partition's equations — is dropped outright.
+"""
+function _drop_unresolvable_parameters(psys::AbstractSystem, binds::AbstractDict)
+    unresolved = _unresolvable_bindings(binds)
+    if !isempty(unresolved)
+        used = Set{SymbolicT}()
+        buffer = Set{SymbolicT}()
+        for eq in Iterators.flatten((equations(psys), observed(psys)))
+            empty!(buffer)
+            Symbolics.get_variables!(buffer, eq.lhs)
+            Symbolics.get_variables!(buffer, eq.rhs)
+            for v in buffer
+                push!(used, _base_variable(v))
+            end
+        end
+        foreach(Base.Fix1(delete!, binds), unresolved)
+        setdiff!(unresolved, used)
+        if !isempty(unresolved)
+            @set! psys.ps = SymbolicT[p for p in get_ps(psys) if !(p in unresolved)]
+        end
+        @set! psys.parameter_bindings_graph = nothing
+    end
+    @set! psys.bindings = ROSymmapT(binds)
+    return psys
+end
+
+"""
+The parameters of `binds` whose binding cannot be evaluated: those left bound to `missing`, and
+those whose binding depends on one of them, transitively.
+"""
+function _unresolvable_bindings(binds::AbstractDict)
+    unresolved = Set{SymbolicT}(
+        par for (par, val) in binds if SU.symtype(val) === Missing)
+    isempty(unresolved) && return unresolved
+    while true
+        grew = false
+        for (par, val) in binds
+            par in unresolved && continue
+            SU.symtype(val) === Missing && continue
+            if any(in(unresolved), Symbolics.get_variables(val))
+                push!(unresolved, par)
+                grew = true
+            end
+        end
+        grew || return unresolved
+    end
 end
 
 """
