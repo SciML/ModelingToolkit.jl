@@ -558,12 +558,15 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
+        fg_u = zeros(0, linfun.num_inputs)
+        h_xz = nothing
     end
     h_u = linfun.hp_jac(
         input_vals,
         DI.Constant(u), DI.Constant(p), DI.Constant(t)
     )
+    # A system without unknowns has no `h_jac` to give the output count; take it from `h_u`.
+    h_xz === nothing && (h_xz = zeros(size(h_u, 1), 0))
     return (
         f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],

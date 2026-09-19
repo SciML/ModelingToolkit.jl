@@ -170,31 +170,24 @@ _is_clock_crossing(τ) = isoperator(τ, Union{Sample, Hold})
 
 """
 Keep the entries of `op` that name something in `psys`, recording the keys used in `seen`.
-`input_map` renames the entries for input signals whose spelling inside the partition differs
-from the one the model uses. An entry naming an observed variable is kept only for a
+An entry naming a parameter is kept for every partition that has it; an entry naming a
+variable is kept for the partition that variable belongs to. An entry naming an observed
+variable is kept only for a
 continuous partition, where the initialization problem can solve for it; in a clocked
 partition the state is named by its own past value, for instance `x(k-1)`.
 """
 function _partition_op(
-        psys::AbstractSystem, op::AbstractDict, input_map::AbstractDict, belongs, seen::Set;
-        allow_observed::Bool
+        psys::AbstractSystem, op::AbstractDict, belongs, seen::Set; allow_observed::Bool
     )
     out = anydict()
     for (k, v) in op
         key = unwrap(k)
-        mapped = get(input_map, key, nothing)
-        if mapped === nothing
-            if is_parameter(psys, key)
-                mapped = key
-            elseif belongs(key) &&
-                   (SymbolicIndexingInterface.is_variable(psys, key) ||
-                    (allow_observed && SymbolicIndexingInterface.is_observed(psys, key)))
-                mapped = key
-            else
-                continue
-            end
-        end
-        out[mapped] = v
+        keep = is_parameter(psys, key) ||
+               (belongs(key) &&
+                (SymbolicIndexingInterface.is_variable(psys, key) ||
+                 (allow_observed && SymbolicIndexingInterface.is_observed(psys, key))))
+        keep || continue
+        out[key] = v
         push!(seen, key)
     end
     return out
@@ -377,18 +370,10 @@ function linearize_clocked(
     iv = get_iv(ets)
     for i in 1:npartitions
         clock = id_to_clock[i]
-        fullvars = Set{SymbolicT}(tss[i].fullvars)
-        in_vars, in_terms,
-            in_groups = _partition_signals_in(user_inputs[i], crossing_in[i], fullvars, iv)
-        out_vars, out_terms,
-            out_groups = _partition_signals_out(user_outputs[i], crossing_out[i], fullvars, iv)
-        # Signals whose partition spelling is a forward shift of the model's, to be renamed
-        # back once the partition is compiled.
-        unshift = Dict{SymbolicT, SymbolicT}(
-            τ => v
-            for (v, τ) in Iterators.flatten((zip(in_vars, in_terms), zip(out_vars, out_terms)))
-                if !isequal(v, τ) && !_is_clock_crossing(τ)
-        )
+        ts = deepcopy(tss[i])
+        fullvars = Set{SymbolicT}(ts.fullvars)
+        in_vars, in_groups = _partition_signals(user_inputs[i], crossing_in[i])
+        out_vars, out_groups = _partition_signals(user_outputs[i], crossing_out[i])
 
         if !(clock isa SciMLBase.PeriodicClock || clock isa SciMLBase.ContinuousClock)
             warn_unhandled && @warn "The partition on $clock is not a periodic clock and was not linearized. Its contribution is not included in the returned partitions."
@@ -402,33 +387,57 @@ function linearize_clocked(
             continue
         end
 
-        # Every input is passed as a `discrete_input`, that is, turned into a parameter
-        # without being registered as a system input. A crossing term and a shifted variable
-        # are both operator expressions, which `generate_initializesystem` rejects as system
-        # inputs; as parameters they are differentiated with respect to just the same.
+        # Name every boundary signal the way the model does. A crossing signal arrives as the
+        # `Sample`/`Hold` term that carries it, and `mark_discrete` has shifted a clocked
+        # partition's own variables forward one step; both are operator expressions, which
+        # the rest of the compiler does not accept as inputs. Rewriting them to the plain
+        # variable leaves an ordinary system whose inputs, outputs and operating point are
+        # addressed by the names the model uses.
+        discrete = !(clock isa SciMLBase.ContinuousClock)
+        ts = _rename_boundary_signals(ts, fullvars, crossing_in[i], iv, discrete)
+        fullvars = Set{SymbolicT}(ts.fullvars)
+        in_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in in_vars]
+        out_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in out_vars]
+        # A user-requested input of a clocked partition is still spelled shifted. It cannot
+        # be registered as a system input, since the initialization machinery rejects an
+        # operator expression there, so it becomes a plain parameter and is renamed back
+        # once the partition is compiled.
+        shifted_io = Dict{SymbolicT, SymbolicT}(
+            τ => v
+            for (v, τ) in Iterators.flatten((zip(in_vars, in_terms), zip(out_vars, out_terms)))
+                if !isequal(v, τ)
+        )
+        plain_inputs = SymbolicT[τ for τ in in_terms if !haskey(shifted_io, τ)]
+        shifted_inputs = SymbolicT[τ for τ in in_terms if haskey(shifted_io, τ)]
+
         psys = _mtkcompile!(
-            deepcopy(tss[i]); discrete_inputs = OrderedSet{SymbolicT}(in_terms),
+            ts; inputs = OrderedSet{SymbolicT}(plain_inputs),
+            discrete_inputs = OrderedSet{SymbolicT}(shifted_inputs),
             outputs = OrderedSet{SymbolicT}(out_terms)
         )
-        psys = complete(_unshift_partition_names(psys, unshift))
-        discrete = is_discrete_system(psys)
-        # After unshifting, the partition names a user signal the way the model does; a
-        # crossing signal is named by the term that carries it.
-        lin_inputs = SymbolicT[isequal(v, τ) || _is_clock_crossing(τ) ? τ : v
-                               for (v, τ) in zip(in_vars, in_terms)]
-        input_map = Dict{SymbolicT, SymbolicT}(
-            v => τ for (v, τ) in zip(in_vars, lin_inputs) if !isequal(v, τ))
+        psys = _unshift_partition_names(psys, shifted_io)
+        # A partition with no state variable is a static map, and its matrices are the same
+        # in either time domain. `DiscreteProblem` cannot represent a system without
+        # unknowns, so such a partition goes through the continuous path; only its reported
+        # clock says which rate it runs at.
+        stateless = isempty(unknowns(psys))
+        discrete && !stateless && (@set! psys.is_discrete = true)
+        psys = complete(psys)
         belongs = function (key)
             base = _base_variable(key)
             domain = get(domain_of, base, nothing)
             return domain !== nothing && partition_of_clock[domain] == i
         end
         partition_op = _partition_op(
-            psys, op, input_map, belongs, seen_op_keys; allow_observed = !discrete)
+            psys, op, belongs, seen_op_keys; allow_observed = !discrete)
         linfun, _ = linearization_function(
-            psys, lin_inputs, out_vars;
+            psys, in_vars, out_vars;
             already_simplified = true,
-            problem_constructor = discrete ? DiscreteProblem : ODEProblem,
+            problem_constructor = discrete && !stateless ? DiscreteProblem : ODEProblem,
+            # A clocked partition's operating point is given rather than solved for, and a
+            # static map has no initialization problem to speak of: its would-be
+            # initialization system consists of parameter equations alone.
+            problem_kwargs = discrete || stateless ? (; build_initializeprob = false) : (;),
             initialize = initialize === nothing ? !discrete : initialize,
             op = partition_op, t, warn_empty_op = false,
             loop_opening_params = filter(Base.Fix1(is_parameter, psys), loop_opening_params),
@@ -485,8 +494,8 @@ Undo, in the compiled partition, the forward shift that `mark_discrete` applied 
 signals named in `subs`.
 
 Reassembly writes a clocked partition's equations in unshifted form but leaves the parameter
-list holding the shifted spelling that the inputs were declared with, so a variable promoted
-to an input ends up referenced by the equations under a name the system does not have. This
+list holding the shifted spelling that an input was declared with, so a variable promoted to
+an input ends up referenced by the equations under a name the system does not have. This
 renames those parameters and outputs back, leaving the partition consistent and addressable
 by the names the model uses.
 """
@@ -506,40 +515,52 @@ function _unshift_partition_names(psys::AbstractSystem, subs::AbstractDict)
 end
 
 """
-Order a partition's inputs as the user-requested ones followed by one group per source
-partition. Returns the signal variables as the model names them, the terms that carry them
-inside the partition, and the group ranges.
+Rewrite the boundary signals of a partition's tearing state to the names the model uses.
+
+A signal arriving from another partition appears as the `Sample` or `Hold` term that carries
+it, an operator expression that the compiler does not accept as an input. Substituting it for
+the variable it names, in place and before compilation, leaves an ordinary system.
+
+Inside a clocked partition every variable is shifted forward one step by `mark_discrete`, and
+reassembly shifts them all back again, so there the substitute must be the shifted variable;
+a plain one would end up a step out of step with the rest of the partition. A name is only
+taken when it is free.
 """
-function _partition_signals_in(user, crossing, fullvars, iv)
-    vars = copy(user)
-    terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in user]
-    groups = [0 => 1:length(vars)]
-    for p in sort!(unique(first.(crossing)))
-        selected = filter(x -> first(x) == p, crossing)
-        start = length(vars) + 1
-        append!(vars, last.(selected))
-        append!(terms, getindex.(selected, 2))
-        push!(groups, p => start:length(vars))
+function _rename_boundary_signals(ts, fullvars::Set{SymbolicT}, crossing, iv, shifted::Bool)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for (_, term, v) in crossing
+        target = shifted ? MTKBase.simplify_shifts(Shift(iv, 1)(v)) : v
+        target in fullvars || (subs[term] = target)
     end
-    return vars, terms, groups
+    isempty(subs) && return ts
+
+    for (i, v) in enumerate(ts.fullvars)
+        ts.fullvars[i] = get(subs, v, v)
+    end
+    sys = ts.sys
+    @set! sys.eqs = Equation[substitute(eq, subs) for eq in get_eqs(sys)]
+    @set! sys.unknowns = SymbolicT[get(subs, v, v) for v in get_unknowns(sys)]
+    @set! sys.initialization_eqs = Equation[substitute(eq, subs)
+                                            for eq in get_initialization_eqs(sys)]
+    ts.sys = sys
+    ts.original_eqs = Equation[substitute(eq, subs) for eq in ts.original_eqs]
+    return ts
 end
 
 """
-Order a partition's outputs as the user-requested ones followed by one group per destination
-partition. Returns the signal variables as the model names them, the terms that carry them
-inside the partition, and the group ranges.
+Order a partition's signals as the user-requested ones followed by one group per neighbouring
+partition, and return them with the index range of each group.
 """
-function _partition_signals_out(user, crossing, fullvars, iv)
+function _partition_signals(user, crossing)
     vars = copy(user)
     groups = [0 => 1:length(vars)]
-    for q in sort!(unique(first.(crossing)))
-        selected = filter(x -> first(x) == q, crossing)
+    for j in sort!(unique(first.(crossing)))
+        selected = filter(x -> first(x) == j, crossing)
         start = length(vars) + 1
         append!(vars, last.(selected))
-        push!(groups, q => start:length(vars))
+        push!(groups, j => start:length(vars))
     end
-    terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in vars]
-    return vars, terms, groups
+    return vars, groups
 end
 
 """
