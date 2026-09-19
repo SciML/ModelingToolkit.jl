@@ -293,3 +293,52 @@ end
     @test cont.extras.x ≈ [sol(0.5; idxs = xp)]
     @test ctrl.A ≈ [1.0;;]
 end
+
+"A function of a whole vector, the way a controller calls a solver."
+vector_gain(v) = sum(v)
+@register_symbolic vector_gain(v::AbstractVector)
+
+@testset "An array-valued clocked variable used at a previous tick" begin
+    dt = 0.1
+    k = ShiftIndex(Clock(dt))
+    @variables x1(t) x2(t) y1(t) y2(t) u(t) ud(t)
+    @variables (xd(t))[1:2]
+    @parameters kp
+    kpval = 3.0
+
+    # The elements of `xd` are aliased to the sampled measurements and the control law is a
+    # function of the whole vector one tick back, as a model-predictive controller calling its
+    # solver with the whole state estimate is.
+    loop_equations(spelling) = [
+        xd[1] ~ Sample(dt)(y1),
+        xd[2] ~ Sample(dt)(y2),
+        ud ~ kp * spelling,
+        u ~ Hold(ud),
+        D(x1) ~ -x1 + u,
+        D(x2) ~ -2x2 + u,
+        y1 ~ x1,
+        y2 ~ x2,
+    ]
+    @named whole = System(loop_equations(vector_gain(xd(k - 1))), t)
+    @named elementwise = System(loop_equations(xd(k - 1)[1] + xd(k - 1)[2]), t)
+
+    op = Dict(x1 => 0.0, x2 => 0.0, y1 => 0.0, y2 => 0.0, u => 0.0, ud => 0.0,
+        xd(k - 1)[1] => 0.0, xd(k - 1)[2] => 0.0, kp => kpval)
+    ctrl, plant = linearize_clocked(whole, ModelingToolkit.SymbolicT[], [y1]; op)
+
+    @test sampletime(ctrl) == dt
+    # The state variables are the two elements of `xd` at the previous tick, each updated by
+    # the measurement it is aliased to, and the control law sums them. The order the elements
+    # are given is an implementation detail, so the assertion is on the input-output map.
+    @test ctrl.A ≈ zeros(2, 2)
+    @test ctrl.D ≈ zeros(1, 2)
+    @test ctrl.C * ctrl.B ≈ [kpval kpval]
+    @test sort(real(eigvals(plant.A))) ≈ [-2.0, -1.0]
+
+    # The two spellings of the same control law must give the same matrices.
+    ctrl2, plant2 = linearize_clocked(elementwise, ModelingToolkit.SymbolicT[], [y1]; op)
+    @test ctrl2.A ≈ ctrl.A
+    @test ctrl2.C * ctrl2.B ≈ ctrl.C * ctrl.B
+    @test ctrl2.D ≈ ctrl.D
+    @test plant2.A ≈ plant.A
+end
