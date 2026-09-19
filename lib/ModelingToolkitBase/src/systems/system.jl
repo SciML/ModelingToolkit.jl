@@ -1374,17 +1374,20 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     # are recursively converted below, so their namespaced entries must not be folded
     # into the parent's fields a second time. The rule keyspaces still use the merged
     # accessors since the system's own equations can reference namespaced variables.
-    eqs = get_eqs(sys)
+    eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
+    ir = IRStructure{VartypeT}()
+    subber = SU.IRSubstituter{false}(ir, subrules)
     # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
     # slice is not one of them, so expand it and replace its elements.
-    eqs = map(eq -> substitute(eq, subrules), eqs)
-    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
+    map!(subber, eqs, eqs)
+    expand_array_derivatives!(eqs, ir)
+    map!(subber, eqs, eqs)
     new_ps = collect(get_ps(sys))
     filter!(__no_initial_params_pred, new_ps)
     push!(new_ps, get_iv(sys))
