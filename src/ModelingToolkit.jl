@@ -149,6 +149,7 @@ include("systems/systemstructure.jl")
 include("initialization.jl")
 include("systems/systems.jl")
 include("systems/clock_inference.jl")
+include("clocked_linearization.jl")
 include("systems/if_lifting.jl")
 include("systems/substitute_component.jl")
 
@@ -171,6 +172,7 @@ export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, LinearizationOpPoint, linearization_ap_transform
+export linearize_clocked, ClockPartition
 export solve
 export map_variables_to_equations, substitute_component
 
@@ -217,6 +219,7 @@ function FMIComponent end
 
 @public linearize_symbolic, reorder_unknowns
 @public similarity_transform
+@public sampletime, is_continuous_partition, is_linearized, input_group, output_group
 @public precompile_ode_problem, precompile_dae_problem
 
 include("precompile.jl")

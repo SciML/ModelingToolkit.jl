@@ -103,7 +103,9 @@ function _build_op_from_solution(op::LinearizationOpPoint{S, <:AbstractVector}) 
     end
 end
 
-function _linearization_wrap_odeproblem_f(@nospecialize(prob::ODEProblem), ::Type{T}) where {T}
+function _linearization_wrap_odeproblem_f(
+        @nospecialize(prob::SciMLBase.AbstractDEProblem), ::Type{T}
+    ) where {T}
     f = SciMLBase.Void{Any}(prob.f.f)
     u0 = prob.u0 === nothing ? T[] : T.(prob.u0)
     t = T(prob.tspan[1])
@@ -141,6 +143,13 @@ The `simplified_sys` has undergone [`ModelingToolkitBase.mtkcompile`](@ref) and 
   - `initialization_solver_alg`: A NonlinearSolve algorithm to use for solving for a feasible set of state and algebraic variables that satisfies the specified operating point.
   - `autodiff`: An `ADType` supported by DifferentiationInterface.jl to use for calculating the necessary jacobians. Defaults to using `AutoForwardDiff()`
   - `ignore_system_initial_conditions`: Whether to ignore `initial_conditions(sys)` and only use `op`.
+  - `already_simplified`: If true, `sys` has already been through `mtkcompile` with the given
+    inputs and outputs and is used as the simplified system directly. Used by
+    [`linearize_clocked`](@ref), which compiles each clock partition itself.
+  - `problem_constructor`: The problem type to build for the linearized system. `ODEProblem`
+    for a continuous system, `DiscreteProblem` for a discrete-time one, in which case the
+    returned jacobians are those of the difference equation `xₙ₊₁ = f(xₙ, u)`.
+  - `problem_kwargs`: Extra keyword arguments for the problem constructor.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
@@ -165,6 +174,9 @@ function linearization_function(
         t = 0.0,
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
+        already_simplified = false,
+        problem_constructor = ODEProblem,
+        problem_kwargs = (;),
         kwargs...
     )
     op = Dict(op)
@@ -173,7 +185,7 @@ function linearization_function(
     end
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
-    ssys = mtkcompile(sys; inputs, outputs, simplify, kwargs...)
+    ssys = already_simplified ? sys : mtkcompile(sys; inputs, outputs, simplify, kwargs...)
     if ignore_system_initial_conditions
         ics = copy(initial_conditions(ssys))
         filter!(Base.Fix2(SU.hasmetadata, MTKBase.AnalysisVariable) ∘ first, ics)
@@ -212,9 +224,9 @@ function linearization_function(
         initializealg = initialize ? OverrideInit() : NoInit()
     end
 
-    prob = ODEProblem{true}(
+    prob = problem_constructor{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value
+        algebraic_only = true, guesses, missing_guess_value, problem_kwargs...
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -404,7 +416,7 @@ A callable struct which linearizes a system.
 $(TYPEDFIELDS)
 """
 mutable struct LinearizationFunction{
-        I, P <: ODEProblem,
+        I, P <: SciMLBase.AbstractDEProblem,
         H, C, J1, J2, J3, J4, IA <: SciMLBase.DAEInitializationAlgorithm, IK,
     }
     """
@@ -429,7 +441,8 @@ mutable struct LinearizationFunction{
     """
     const num_states::Int
     """
-    The `ODEProblem` of the linearized system.
+    The problem of the linearized system: an `ODEProblem` for a continuous system and a
+    `DiscreteProblem` for a discrete-time one.
     """
     prob::P
     """
@@ -545,12 +558,15 @@ function (linfun::LinearizationFunction)(u, p, t)
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
+        fg_u = zeros(0, linfun.num_inputs)
+        h_xz = nothing
     end
     h_u = linfun.hp_jac(
         input_vals,
         DI.Constant(u), DI.Constant(p), DI.Constant(t)
     )
+    # A system without unknowns has no `h_jac` to give the output count; take it from `h_u`.
+    h_xz === nothing && (h_xz = zeros(size(h_u, 1), 0))
     return (
         f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],
@@ -760,7 +776,20 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
     p = parameter_values(prob)
     t = current_time(prob)
     linres = prob.f(u0, p, t)
-    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u, x, p, t = linres
+    matrices = _linearization_matrices(
+        linres, inputs(prob.f.prob.f.sys); allow_input_derivatives)
+    return matrices, (; x = linres.x, p = linres.p, t = linres.t)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Assemble the statespace matrices `(; A, B, C, D)` from the jacobians returned by a
+[`LinearizationFunction`](@ref). `input_vars` is the vector of input variables in the column
+order of `B`, used only to name the offending signals if input derivatives appear.
+"""
+function _linearization_matrices(linres, input_vars; allow_input_derivatives = false)
+    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 
     nx, nu = size(f_u)
     nz = size(f_z, 2)
@@ -794,14 +823,19 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(prob.f.prob.f.sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                differentiated = if length(input_vars) == nu
+                    input_vars[der_inds]
+                else
+                    der_inds
+                end
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(differentiated). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]
         end
     end
 
-    return (; A, B, C, D), (; x, p, t)
+    return (; A, B, C, D)
 end
 
 """

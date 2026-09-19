@@ -141,6 +141,74 @@ This means that to simulate this system, some order of derivatives of the input 
 
 If the modeled system is actually proper (but MTK failed to find a proper realization), further numerical simplification can be applied to the resulting statespace system to obtain a proper form. Such simplification is currently available in the package [ControlSystemsMTK](https://juliacontrol.github.io/ControlSystemsMTK.jl/dev/#Internals:-Transformation-of-non-proper-models-to-proper-statespace-form).
 
+## Clocked models
+
+`linearize` builds its linearization from the continuous problem and has no representation for
+a clocked subsystem, so a model whose controller is a synchronous program would linearize to
+the plant with the controller's contribution missing. [`linearize_clocked`](@ref) instead
+splits the model the way the compiler does and linearizes each partition in its own time
+domain, reporting the signals that cross each clock boundary so that the caller can reassemble
+the loop.
+
+```@example CLOCKED
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+dt = 0.1
+k = ShiftIndex(Clock(dt))
+@variables x(t) y(t) u(t) yd(t) ud(t) r(t)
+@parameters kp
+
+@named sys = System(
+    [
+        yd ~ Sample(dt)(y)
+        ud ~ ud(k - 1) + kp * (r - yd)
+        u ~ Hold(ud)
+        D(x) ~ -x + u
+        y ~ x
+    ], t)
+
+op = Dict(x => 0.0, y => 0.0, u => 0.0, ud => 0.0, ud(k - 1) => 0.0, r => 0.0, kp => 2.0)
+controller, plant = linearize_clocked(sys, [r], [y]; op)
+```
+
+Each partition carries the signals that cross its boundaries as inputs and outputs in addition
+to the requested ones, grouped by the partition they come from or go to, and the same variable
+names a signal on both sides of a boundary:
+
+```@example CLOCKED
+ModelingToolkit.output_group(plant, 1), ModelingToolkit.input_group(controller, 2)
+```
+
+A clocked partition's state variables are named by their own past values, so an operating
+point gives them as `x(k-1)`.
+
+### Assembling a closed loop
+
+The continuous partition is returned in continuous time and every clocked partition in
+discrete time at its own sample interval, given by `ModelingToolkit.sampletime`. Two routes to
+a closed-loop model are available, and they are not equivalent.
+
+Discretizing the continuous partition at the clock interval, with a zero-order hold, and
+connecting it to the clocked partitions is exact for a single periodic clock, because `Hold`
+is a zero-order hold and `Sample` is ideal sampling. Converting the clocked partitions to
+continuous time instead keeps the resolution of the fast dynamics, but it is an approximation
+whose reliability rests on the signals crossing each boundary having little content above that
+boundary's Nyquist frequency. That is a property of the nonlinear model rather than of any
+linearization, so it is worth measuring separately; a block being low-pass downstream of the
+sampler does not establish it, since the folding happens at the sampler.
+
+Returning the partitions separately rather than a single closed-loop model is what keeps each
+boundary's Nyquist frequency visible. The assembly itself is left to the caller, for example
+with `ControlSystems.feedback` or `RobustAndOptimalControl.connect`.
+
+### What is not included
+
+Events take no part in the result. A model carrying a continuous or discrete event, and a
+partition on a clock that is not periodic, are both reported by a warning; an unsupported
+partition is still returned with its signal lists, so a model of it obtained by other means
+can be connected in its place.
+
 ## Tools for linear analysis
 
 ModelingToolkit contains a set of [tools for more advanced linear analysis](https://docs.sciml.ai/ModelingToolkit/stable/tutorials/linear_analysis/). These can be used to make it easier to work with and analyze causal models, such as control and signal-processing systems.
@@ -155,6 +223,8 @@ Pages = ["Linearization.md"]
 
 ```@docs; canonical = false
 linearize
+linearize_clocked
+ModelingToolkit.ClockPartition
 ModelingToolkit.linearize_symbolic
 ModelingToolkit.linearization_function
 ModelingToolkit.LinearizationProblem
