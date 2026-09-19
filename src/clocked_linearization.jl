@@ -416,6 +416,10 @@ function linearize_clocked(
             outputs = OrderedSet{SymbolicT}(out_terms)
         )
         psys = _unshift_partition_names(psys, shifted_io)
+        # The events are reported separately and take no part in the linearization; leaving
+        # them on the partition would only have its problem compile callbacks for them.
+        @set! psys.continuous_events = SymbolicContinuousCallback[]
+        @set! psys.discrete_events = SymbolicDiscreteCallback[]
         # A partition with no state variable is a static map, and its matrices are the same
         # in either time domain. `DiscreteProblem` cannot represent a system without
         # unknowns, so such a partition goes through the continuous path; only its reported
