@@ -387,46 +387,9 @@ function linearize_clocked(
             continue
         end
 
-        # Name every boundary signal the way the model does. A crossing signal arrives as the
-        # `Sample`/`Hold` term that carries it, and `mark_discrete` has shifted a clocked
-        # partition's own variables forward one step; both are operator expressions, which
-        # the rest of the compiler does not accept as inputs. Rewriting them to the plain
-        # variable leaves an ordinary system whose inputs, outputs and operating point are
-        # addressed by the names the model uses.
         discrete = !(clock isa SciMLBase.ContinuousClock)
-        ts = _rename_boundary_signals(ts, fullvars, crossing_in[i], iv, discrete)
-        fullvars = Set{SymbolicT}(ts.fullvars)
-        in_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in in_vars]
-        out_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in out_vars]
-        # A user-requested input of a clocked partition is still spelled shifted. It cannot
-        # be registered as a system input, since the initialization machinery rejects an
-        # operator expression there, so it becomes a plain parameter and is renamed back
-        # once the partition is compiled.
-        shifted_io = Dict{SymbolicT, SymbolicT}(
-            τ => v
-            for (v, τ) in Iterators.flatten((zip(in_vars, in_terms), zip(out_vars, out_terms)))
-                if !isequal(v, τ)
-        )
-        plain_inputs = SymbolicT[τ for τ in in_terms if !haskey(shifted_io, τ)]
-        shifted_inputs = SymbolicT[τ for τ in in_terms if haskey(shifted_io, τ)]
-
-        psys = _mtkcompile!(
-            ts; inputs = OrderedSet{SymbolicT}(plain_inputs),
-            discrete_inputs = OrderedSet{SymbolicT}(shifted_inputs),
-            outputs = OrderedSet{SymbolicT}(out_terms)
-        )
-        psys = _unshift_partition_names(psys, shifted_io)
-        # The events are reported separately and take no part in the linearization; leaving
-        # them on the partition would only have its problem compile callbacks for them.
-        @set! psys.continuous_events = SymbolicContinuousCallback[]
-        @set! psys.discrete_events = SymbolicDiscreteCallback[]
-        # A partition with no state variable is a static map, and its matrices are the same
-        # in either time domain. `DiscreteProblem` cannot represent a system without
-        # unknowns, so such a partition goes through the continuous path; only its reported
-        # clock says which rate it runs at.
-        stateless = isempty(unknowns(psys))
-        discrete && !stateless && (@set! psys.is_discrete = true)
-        psys = complete(psys)
+        psys, stateless = _compile_partition(
+            ts, fullvars, in_vars, out_vars, crossing_in[i], iv, discrete)
         belongs = function (key)
             base = _base_variable(key)
             domain = get(domain_of, base, nothing)
@@ -477,6 +440,45 @@ function linearize_clocked(
         @warn "The operating point contains entries that name nothing in any partition and were ignored: $names."
     end
     return partitions
+end
+
+"""
+Compile one clock partition into a system whose inputs, outputs and operating point are
+addressed by the names the model uses. Returns that system and whether it is a static map.
+"""
+function _compile_partition(ts, fullvars, in_vars, out_vars, crossing, iv, discrete::Bool)
+    # A crossing signal arrives as the `Sample` or `Hold` term that carries it, and
+    # `mark_discrete` has shifted a clocked partition's own variables forward one step. Both
+    # are operator expressions, which the rest of the compiler does not accept as inputs.
+    ts = _rename_boundary_signals(ts, fullvars, crossing, iv, discrete)
+    fullvars = Set{SymbolicT}(ts.fullvars)
+    in_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in in_vars]
+    out_terms = SymbolicT[_partition_spelling(fullvars, v, iv) for v in out_vars]
+    # What is left spelled shifted is a user-requested signal of a clocked partition. It
+    # cannot be registered as a system input either, so it becomes a plain parameter and is
+    # renamed back once the partition is compiled.
+    shifted_io = Dict{SymbolicT, SymbolicT}(
+        τ => v
+        for (v, τ) in Iterators.flatten((zip(in_vars, in_terms), zip(out_vars, out_terms)))
+            if !isequal(v, τ)
+    )
+    psys = _mtkcompile!(
+        ts; inputs = OrderedSet{SymbolicT}(τ for τ in in_terms if !haskey(shifted_io, τ)),
+        discrete_inputs = OrderedSet{SymbolicT}(τ for τ in in_terms if haskey(shifted_io, τ)),
+        outputs = OrderedSet{SymbolicT}(out_terms)
+    )
+    psys = _unshift_partition_names(psys, shifted_io)
+    # The events are reported separately and take no part in the linearization; leaving them
+    # on the partition would only have its problem compile callbacks for them.
+    @set! psys.continuous_events = SymbolicContinuousCallback[]
+    @set! psys.discrete_events = SymbolicDiscreteCallback[]
+    # A partition with no state variable is a static map, and its matrices are the same in
+    # either time domain. `DiscreteProblem` cannot represent a system without unknowns, so
+    # such a partition goes through the continuous path; only its reported clock says which
+    # rate it runs at.
+    stateless = isempty(unknowns(psys))
+    discrete && !stateless && (@set! psys.is_discrete = true)
+    return complete(psys), stateless
 end
 
 """
