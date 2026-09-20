@@ -2063,7 +2063,13 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
     J = Int[]
     V = SymbolicT[]
     b = Vector{SymbolicT}(undef, length(rhss))
-    query_predicate = in(Set{SymbolicT}(dvs))
+    dvset = Set{SymbolicT}(dvs)
+    for var in dvs
+        if SU.iscall(var) && SU.operation(var) === getindex
+            push!(dvset, SU.arguments(var)[1])
+        end
+    end
+    query_predicate = in(dvset)
     ir = get_irstructure(sys)
     # `linear_expansion` caches values based on `var`. This loop ordering helps
     # avoid invalidating the cache frequently.
@@ -2089,6 +2095,24 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         end
     end
     for i in eachindex(rhss)
+        # `linear_expansion` only requires `a*x + b == t`, so a remainder can still
+        # contain an unknown syntactically (e.g. `x`-terms cancelling inside an
+        # opaque call). `b` is compiled without access to unknowns, so any leftover
+        # unknown makes the system non-affine for our purposes.
+        SU.populate_ir!(ir, rhss[i])
+        if SU.query(query_predicate, ir, rhss[i])
+            offender = nothing
+            for dv in dvset
+                if SU.query(Base.Fix2(isequal, dv), ir, rhss[i])
+                    offender = dv
+                    break
+                end
+            end
+            err = NotAffineError(fulleqs[i].rhs, something(offender, first(dvs)))
+            store_to_mutable_cache!(sys, CachedLinearAb, err)
+            throw || return nothing
+            Base.throw(err)
+        end
         # negate because `resid` is the residual on the LHS
         b[i] = -rhss[i]
     end

@@ -6,6 +6,7 @@ using SparseArrays
 using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SystemCompatibilityError
 import SymbolicUtils as SU
+import Symbolics
 
 @testset "Rejects non-affine systems" begin
     @variables x y
@@ -205,4 +206,23 @@ end
     # `x` and `y` are observed. `full_equations` should then contain `f([2, 3])` instead of
     # `f(x)`. This is verified by ensuring `calculate_A_b` works as intended.
     @test ModelingToolkitBase.calculate_A_b(sys; throw = false) !== nothing
+end
+
+@testset "`calculate_A_b` does not put unknowns in `b`" begin
+    @variables x
+    @parameters h w c (f::Any)(..)
+    # `x` enters `f`'s argument twice with coefficients that cancel during
+    # linear expansion (`-h*x + h*x`), so the argument is affine in `x` with a
+    # zero coefficient while still containing `x` syntactically. `b` is used to
+    # generate code that has no access to unknowns, so it must not reference
+    # `x`: either the expansion rewrites the remainder `x`-free or the system
+    # is reported non-affine.
+    sys = System(
+        [0 ~ -10x + f(-h * x + ifelse(c > 0, h * x, h * x) + w)],
+        [x], [h, w, c, f]; name = :remainder_unknowns
+    )
+    sys = complete(sys)
+    res = ModelingToolkitBase.calculate_A_b(sys; throw = false)
+    @test res === nothing ||
+        !any(v -> isequal(v, Symbolics.unwrap(x)), Symbolics.get_variables(only(res[2])))
 end
