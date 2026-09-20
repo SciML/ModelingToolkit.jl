@@ -1,3 +1,9 @@
+# Tests of `linearize_hybrid` with components from DiscreteComponents and BlockComponents,
+# simulated with SynchToolkit. These packages are registered in the DyadRegistry only, so this
+# file is not part of the test groups run in CI. Run it in an environment that provides
+# ModelingToolkit, DiscreteComponents, BlockComponents, SynchToolkit, ControlSystemsBase and
+# OrdinaryDiffEqTsit5. The `DiscreteStateSpace` cases shift unscalarized array variables and
+# were run with JuliaComputing/StateSelection.jl#161.
 using ModelingToolkit, Test, LinearAlgebra
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: unwrap

@@ -1,9 +1,7 @@
 [deps]
-BlockComponents = "1ef5d832-be8e-447f-9f2c-8b5d17d15fd3"
 ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
 ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
-DiscreteComponents = "b5590941-51af-4a5a-9bca-5ae7cd448b75"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
@@ -18,7 +16,6 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 SimpleDiffEq = "05bca326-078c-5bf0-a5bf-ce7c7982d7fd"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-SynchToolkit = "f500ffa8-9682-42ac-8d34-0ca7926c2e94"
 
 [compat]
 ModelingToolkitStandardLibrary = "2.19"
