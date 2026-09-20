@@ -147,6 +147,114 @@ ModelingToolkit contains a set of [tools for more advanced linear analysis](http
 
 Also see [ControlSystemsMTK.jl](https://juliacontrol.github.io/ControlSystemsMTK.jl/dev/) for an interface to [ControlSystems.jl](https://github.com/JuliaControl/ControlSystems.jl) that contains tools for linear analysis and frequency-domain analysis.
 
+## Hybrid systems with clock partitions
+
+`linearize` accounts for the continuous equations of a model only. A model that contains
+synchronous (clocked) subsystems, written with `ShiftIndex`, `Sample` and `Hold` or built
+from components such as those in DiscreteComponents, is linearized with
+[`linearize_hybrid`](@ref). The model is split into its clock partitions, one per periodic
+clock plus the continuous partition, and every partition is linearized separately. Each signal
+that crosses a clock boundary becomes an input of the partition it enters and an output of
+the partition it leaves, in addition to the inputs and outputs requested by the user.
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+dt = 0.1
+@variables x(t) y(t) u(t) d(t) yd(t) ud(t)
+@parameters kp = 2.0
+eqs = [
+    yd ~ Sample(dt)(y)      # sample the plant output
+    ud ~ -kp * yd           # discrete proportional controller
+    u ~ Hold(ud)            # hold the controller output
+    D(x) ~ -x + u + d       # plant with disturbance input d
+    y ~ x
+]
+@named sys = System(eqs, t)
+hl = linearize_hybrid(sys, [d], [y]; op = Dict(x => 0.0, d => 0.0, ud => 0.0, y => 0.0))
+```
+
+The result is a [`HybridLinearization`](@ref). The continuous partition comes first, followed
+by the discrete partitions.
+
+```julia
+cont, disc = hl.partitions
+cont.inputs   # [d, Hold(ud)]: the disturbance and the held controller output
+cont.outputs  # [y]: the plant output, which is also sampled by the controller
+disc.inputs   # [Sample(dt)(y)]
+disc.outputs  # [ud]
+disc.Ts       # 0.1
+hl.connections
+```
+
+The `inputs` and `outputs` of a partition list the user-specified signals first, in the order
+given by the user; the fields `nu_user` and `ny_user` give the number of user-specified
+inputs and outputs. The remaining signals are the boundary signals, grouped by the partition
+they come from or go to. The connections state which output of which partition drives which
+input of which other partition, `(; from, output, to, input)`, and correspond to the index
+pairs required by the advanced interface of `ControlSystemsBase.feedback`. The variables of the
+boundary signals can be used as signal names with `RobustAndOptimalControl.connect`.
+
+For a discrete partition with sample interval `Ts`, the state consists of the values of the
+discrete variables at the previous tick, denoted `xₜ₋₁` in `unknowns`, and the matrices
+describe the update performed at a tick,
+
+```math
+\begin{aligned}
+x(k) &= A x(k-1) + B u(k) \\
+y(k) &= C x(k-1) + D u(k)
+\end{aligned}
+```
+
+whose transfer function is ``C(zI - A)^{-1}B + D``. The continuous partition has the usual
+form ``\dot x = Ax + Bu``, ``y = Cx + Du``.
+
+To analyze the sampled-data loop, the partitions are brought to a common time domain and
+interconnected according to `hl.connections`. The example below discretizes the continuous
+partition with zero-order hold, which is the exact description of the loop at the sampling
+instants when all discrete partitions share one clock, and closes the loop with
+`ControlSystemsBase.feedback`.
+
+```julia
+using ControlSystemsBase
+Pd = c2d(ss(cont.A, cont.B, cont.C, cont.D), disc.Ts)
+Cd = ss(disc.A, disc.B, disc.C, disc.D, disc.Ts)
+# Connect output 1 of the continuous partition to input 1 of the discrete partition and
+# output 1 of the discrete partition to input 2 of the continuous partition; the remaining
+# input 1 (d) and output 1 (y) of the continuous partition are external.
+G = feedback(Pd, Cd; U1 = [2], Y1 = [1], U2 = [1], Y2 = [1], W1 = [1], Z1 = [1], pos_feedback = true)
+```
+
+For multi-rate models, each discrete partition carries its own sample interval and the
+connections span partitions on different clocks. Such loops can be analyzed either by
+converting the discrete partitions to continuous time with `d2c` or by lifting them to a
+common rate. In both cases the result is only meaningful for frequencies well below the
+Nyquist frequency of every sampler in the loop, since the frequency content above the Nyquist
+frequency of a sampler is folded by the sampling and is not represented by the individual
+partition linearizations.
+
+The Jacobians of each partition are computed from the generated functions of the compiled
+partition with the AD backend `autodiff` (`AutoForwardDiff()` by default), so models calling
+arbitrary Julia functions are supported. If differentiation of a partition fails, it is
+retried with `fallback_autodiff` (`AutoFiniteDiff()` by default).
+
+The operating point can be given as a dictionary or as a [`LinearizationOpPoint`](@ref)
+wrapping a solution of the model and a time. Signals crossing a clock boundary take the value
+of the variable they are derived from, and the history variables of a discrete partition take
+the value of the variable they are the history of, so the operating point is assumed to be
+stationary across ticks. Values that are not available default to zero, which is reported by
+a warning.
+
+Only periodic clocks are supported. Partitions on other clocks, as well as continuous and
+discrete events of the model, are not accounted for and produce a warning. Discrete
+partitions containing an algebraic loop within a single clock cannot be linearized.
+
+The analysis-point functions [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref) and
+[`get_looptransfer`](@ref) accept the keyword argument `hybrid = true` to return a
+`HybridLinearization` instead of the continuous linearization, and `linearize_hybrid` accepts
+analysis points as inputs and outputs in the same way as `linearize`.
+
 ## Docstrings
 
 ```@index
@@ -158,4 +266,8 @@ linearize
 ModelingToolkit.linearize_symbolic
 ModelingToolkit.linearization_function
 ModelingToolkit.LinearizationProblem
+ModelingToolkit.LinearizationOpPoint
+linearize_hybrid
+HybridLinearization
+ClockPartitionLinearization
 ```

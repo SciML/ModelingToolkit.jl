@@ -163,7 +163,9 @@ function InitializationProblem{iip, specialize}(
             haskey(sys_gs, k) || continue
             gs[k] = sys_gs[k]
         end
-        isys = complete(isys)
+        # The parameter-only equations set aside above were appended back to the system
+        # and must not fail the check performed by `complete`.
+        isys = complete(isys; allow_parameter_eqs = true)
     end
 
     if t !== nothing
