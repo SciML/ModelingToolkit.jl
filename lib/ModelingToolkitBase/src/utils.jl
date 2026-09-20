@@ -428,13 +428,21 @@ function find_all_parameter_equations(sys::AbstractSystem)
     allowed_vars = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
+    # Operator terms such as `Hold(x)` may themselves be unknowns or parameters of the
+    # system, for example after `mtkcompile` turned the clocked inputs of a hybrid system
+    # into parameters. Such symbols are atomic and must not be searched for the variables
+    # they are applied to.
+    known_syms = as_atomic_array_set(parameters(sys; initial_parameters = true))
+    is_atomic = let allowed_vars = allowed_vars, known_syms = known_syms
+        x -> check_bindings_is_atomic(x) || x in allowed_vars || x in known_syms
+    end
+    recurse = let is_atomic = is_atomic
+        ex -> iscall(ex) && !is_atomic(ex)
+    end
     rest_eqs = Equation[]
     for eq in equations(sys)
         empty!(varsbuf)
-        SU.search_variables!(
-            varsbuf, eq; is_atomic = check_bindings_is_atomic,
-            recurse = check_no_parameter_equations_recurse
-        )
+        SU.search_variables!(varsbuf, eq; is_atomic, recurse)
         isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
         intersect!(varsbuf, allowed_vars)
         push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
