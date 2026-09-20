@@ -2,6 +2,7 @@ using ModelingToolkit, Test, ADTypes, LinearAlgebra
 using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkit: ContinuousClock, unwrap
 using SciMLBase: PeriodicClock, SolverStepClock
+using SymbolicIndexingInterface: is_parameter
 import ControlSystemsBase as CS
 using OrdinaryDiffEqDefault
 
@@ -51,7 +52,7 @@ end
         y ~ x
     ]
     @named sys = System(eqs, t)
-    hl = linearize_hybrid(sys, [d], [x]; op = Dict(x => 0.0, d => 0.0, ud => 0.0, y => 0.0))
+    hl = @test_nowarn linearize_hybrid(sys, [d], [x]; op = Dict(x => 0.0, d => 0.0))
     @test length(hl.partitions) == 2
     @test hl.continuous_index == 1
     cont, disc = hl.partitions
@@ -141,7 +142,7 @@ end
             ya ~ Cd' * xa
         ]
         @named sys = System(eqs, t)
-        hl = linearize_hybrid(sys, [ua], [ya]; op = Dict(xa => zeros(2), ua => 0.0))
+        hl = @test_nowarn linearize_hybrid(sys, [ua], [ya]; op = Dict(xa => zeros(2), ua => 0.0))
         p = hl.partitions[1]
         @test length(p.unknowns) == 2
         @test isequal(p.inputs, unwrap.([ua]))
@@ -164,7 +165,7 @@ end
         z(k2) ~ 0.9z(k2 - 1) - 0.1Sample(dt2)(Hold(w))
     ]
     @named sys = System(eqs, t)
-    hl = linearize_hybrid(sys, [d], [xc]; op = Dict(xc => 0.0, d => 0.0, w => 0.0, z => 0.0))
+    hl = @test_nowarn linearize_hybrid(sys, [d], [xc]; op = Dict(xc => 0.0, d => 0.0, w => 0.0, z => 0.0))
     @test length(hl.partitions) == 3
     @test hl.continuous_index == 1
     cont = hl.partitions[1]
@@ -213,16 +214,47 @@ end
     ]
     @named sys = System(eqs, t)
     @testset "Dictionary" begin
-        hl = linearize_hybrid(sys, [], [y]; op = Dict(x => 2.0, ud => 0.0, y => 2.0))
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 2.0))
         cont = hl.partitions[hl.continuous_index]
         @test cont.A ≈ [-12.0;;]
         @test cont.x0 == [2.0]
     end
+    @testset "Boundary values are resolved from the source partition" begin
+        # The held input enters the plant through a nonlinearity, so the value of the
+        # controller output at the operating point determines the input matrix.
+        @variables xn(t) yn(t) un(t) ydn(t) udn(t)
+        eqs_n = [
+            ydn ~ Sample(dt)(yn)
+            udn ~ -kp * ydn^2
+            un ~ Hold(udn)
+            D(xn) ~ -xn + un^2
+            yn ~ xn
+        ]
+        @named sysn = System(eqs_n, t)
+        hl = @test_nowarn linearize_hybrid(sysn, [], [yn]; op = Dict(xn => 2.0))
+        cont = hl.partitions[hl.continuous_index]
+        # u = -kp yn^2 = -8 and B = 2u
+        @test cont.B ≈ [-16.0;;]
+        disc = hl.partitions[2]
+        # D = -2 kp yn = -8
+        @test disc.D ≈ [-8.0;;]
+    end
     @testset "Missing values default to zero with a warning" begin
-        hl = @test_logs (:warn, r"No operating-point value") match_mode = :any linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        k = ShiftIndex(Clock(dt))
+        @variables xm(t) ym(t) ydm(t) udm(t)
+        eqs_m = [
+            ydm ~ Sample(dt)(ym)
+            udm(k) ~ 0.5udm(k - 1) - kp * ydm
+            D(xm) ~ -xm^3 + Hold(udm)
+            ym ~ xm
+        ]
+        @named sysm = System(eqs_m, t)
+        # The history of the discrete state has no value.
+        hl = @test_logs (:warn, r"No operating-point value") match_mode = :any linearize_hybrid(sysm, [], [ym]; op = Dict(xm => 1.0))
         cont = hl.partitions[hl.continuous_index]
         @test cont.A ≈ [-3.0;;]
-        @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0), warn_missing_op = false)
+        @test_nowarn linearize_hybrid(sysm, [], [ym]; op = Dict(xm => 1.0), warn_missing_op = false)
+        @test_nowarn linearize_hybrid(sysm, [], [ym]; op = Dict(xm => 1.0, udm => 0.0))
     end
     @testset "Solution" begin
         @variables xs(t) us(t) ys(t)
@@ -250,7 +282,7 @@ nodual(x::Float64) = 2x
         y ~ x
     ]
     @named sys = System(eqs, t)
-    op = Dict(x => 1.5, d => 0.0, ud => 0.0, y => 1.5)
+    op = Dict(x => 1.5, d => 0.0)
     hl_fd = linearize_hybrid(sys, [d], [y]; op)
     hl_fdiff = linearize_hybrid(sys, [d], [y]; op, autodiff = AutoFiniteDiff())
     for (p1, p2) in zip(hl_fd.partitions, hl_fdiff.partitions)
@@ -273,6 +305,10 @@ nodual(x::Float64) = 2x
         disc = hl.partitions[2]
         @test disc.D ≈ [-4.0;;] atol = 1.0e-6
         @test_throws Exception linearize_hybrid(sysn, [d], [y]; op, fallback_autodiff = nothing)
+        # Errors unrelated to differentiation are not retried.
+        @variables zq(t)
+        @named sysq = System([eqs_nd; D(zq) ~ zq], t)
+        @test_throws ModelingToolkit.IONotFoundError linearize_hybrid(sysq, [d], [zq^2]; op)
     end
 end
 
@@ -286,9 +322,55 @@ end
         y ~ x
     ]
     @named sys = System(eqs, t; continuous_events = [[x ~ 0.5] => [x ~ 0.0]])
-    op = Dict(x => 0.0, ud => 0.0, y => 0.0)
+    op = Dict(x => 0.0)
     @test_logs (:warn, r"Events are not accounted for") match_mode = :any linearize_hybrid(sys, [], [y]; op)
     @test_nowarn linearize_hybrid(sys, [], [y]; op, warn_unsupported = false)
+end
+
+@testset "Model constructs that partitions must not inherit" begin
+    @variables x(t) y(t) u(t) yd(t) ud(t)
+    @parameters kp = 2.0
+    k = ShiftIndex(Clock(dt))
+    @testset "Assertions" begin
+        # An assertion on a clocked variable inherited by the continuous partition
+        eqs = [yd ~ Sample(dt)(y), ud ~ -kp * yd, u ~ Hold(ud), D(x) ~ -x + u, y ~ x]
+        @named sys = System(eqs, t; assertions = Dict(ud < 10.0 => "ud out of range"))
+        hl = @test_logs (:warn, r"Assertions are not accounted for") match_mode = :any linearize_hybrid(sys, [], [x]; op = Dict(x => 0.0))
+        @test hl.partitions[1].A == [-1.0;;]
+        # An assertion on a continuous variable inherited by a clocked partition with a state
+        eqs = [yd ~ Sample(dt)(y), ud(k) ~ 0.5ud(k - 1) - kp * yd, u ~ Hold(ud), D(x) ~ -x + u, y ~ x]
+        @named sys = System(eqs, t; assertions = Dict(x < 10.0 => "x out of range"))
+        hl = linearize_hybrid(sys, [], [x]; op = Dict(x => 0.0, ud => 0.0), warn_unsupported = false)
+        @test hl.partitions[2].A == [0.5;;]
+        @test isempty(ModelingToolkit.assertions(hl.partitions[2].sys))
+    end
+    @testset "Parameters of other partitions" begin
+        # `pm` is bound to `missing` and used by the plant only. The clocked partition must
+        # neither require a value for it nor keep it as a parameter.
+        @parameters pm
+        eqs = [yd ~ Sample(dt)(y), ud(k) ~ 0.5ud(k - 1) - kp * yd, u ~ Hold(ud), D(x) ~ -pm * x + u, y ~ x]
+        @named sys = System(eqs, t; bindings = [pm => missing])
+        hl = @test_nowarn linearize_hybrid(sys, [], [x]; op = Dict(x => 0.0, ud => 0.0, pm => 3.0))
+        cont, disc = hl.partitions
+        @test cont.A == [-3.0;;]
+        @test !is_parameter(disc.sys, pm)
+        @test is_parameter(cont.sys, pm)
+        @test !is_parameter(cont.sys, kp)
+    end
+    @testset "Initial value of an observed alias of a boundary signal" begin
+        # `u` is an alias of the held controller output and carries an initial value, which
+        # must not constrain the initialization of the continuous partition.
+        @variables ui(t) = 0.3
+        eqs = [yd ~ Sample(dt)(y), ud ~ -kp * yd, ui ~ Hold(ud), D(x) ~ -x + ui, y ~ x]
+        @named sys = System(eqs, t)
+        hl = @test_nowarn linearize_hybrid(sys, [], [x]; op = Dict(x => 1.0))
+        cont = hl.partitions[hl.continuous_index]
+        @test cont.A == [-1.0;;]
+        @test cont.x0 == [1.0]
+        # Likewise for an operating-point value given for such a variable.
+        hl = @test_nowarn linearize_hybrid(sys, [], [x]; op = Dict(x => 1.0, ui => 0.3))
+        @test hl.partitions[hl.continuous_index].x0 == [1.0]
+    end
 end
 
 @testset "Analysis points" begin
@@ -304,7 +386,7 @@ end
         y ~ x
     ]
     @named sys = System(eqs, t)
-    op = Dict(x => 0.0, ud => 0.0, y => 0.0, u => 0.0)
+    op = Dict(x => 0.0)
 
     @testset "linearize_hybrid with analysis points" begin
         hl = linearize_hybrid(sys, :plant_input, [y]; op)
@@ -339,7 +421,8 @@ end
         hl = get_comp_sensitivity(sys, :plant_input; op, hybrid = true)
         @test hl isa HybridLinearization
         @test hl.partitions[hl.continuous_index].nu_user == 1
-        hl = get_looptransfer(sys, :plant_input; op, hybrid = true)
+        # The input of the broken connection needs an operating-point value.
+        hl = @test_nowarn get_looptransfer(sys, :plant_input; op = Dict(x => 0.0, u => 0.0), hybrid = true)
         @test hl isa HybridLinearization
         @test hl.partitions[hl.continuous_index].nu_user == 1
         # Without `hybrid`, the standard compiler rejects the hybrid model.
@@ -355,7 +438,7 @@ end
             y ~ x
         ]
         @named sysd = System(eqs_d, t)
-        hl = get_sensitivity(sysd, :ctrl_input; op = Dict(x => 0.0, ud => 0.0, y => 0.0, ydi => 0.0), hybrid = true)
+        hl = get_sensitivity(sysd, :ctrl_input; op = Dict(x => 0.0), hybrid = true)
         disc = hl.partitions[2]
         @test disc.nu_user == 1
         @test disc.ny_user == 1

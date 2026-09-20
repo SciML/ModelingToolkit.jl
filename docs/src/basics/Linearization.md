@@ -172,7 +172,7 @@ eqs = [
     y ~ x
 ]
 @named sys = System(eqs, t)
-hl = linearize_hybrid(sys, [d], [y]; op = Dict(x => 0.0, d => 0.0, ud => 0.0, y => 0.0))
+hl = linearize_hybrid(sys, [d], [y]; op = Dict(x => 0.0, d => 0.0))
 ```
 
 The result is a [`HybridLinearization`](@ref). The continuous partition comes first, followed
@@ -240,15 +240,18 @@ arbitrary Julia functions are supported. If differentiation of a partition fails
 retried with `fallback_autodiff` (`AutoFiniteDiff()` by default).
 
 The operating point can be given as a dictionary or as a [`LinearizationOpPoint`](@ref)
-wrapping a solution of the model and a time. Signals crossing a clock boundary take the value
-of the variable they are derived from, and the history variables of a discrete partition take
-the value of the variable they are the history of, so the operating point is assumed to be
-stationary across ticks. Values that are not available default to zero, which is reported by
-a warning.
+wrapping a solution of the model and a time. It provides the values of the state variables of
+every partition; the history variables of a discrete partition take the value of the variable
+they are the history of, so the operating point is assumed to be stationary across ticks. The
+value of a signal crossing a clock boundary is taken from the operating point if present and
+otherwise evaluated from the operating point of the partition the signal originates from, so
+that in the example above the held controller output follows from the plant state. Remaining
+values that are not available default to zero, which is reported by a warning.
 
 Only periodic clocks are supported. Partitions on other clocks, as well as continuous and
-discrete events of the model, are not accounted for and produce a warning. Discrete
-partitions containing an algebraic loop within a single clock cannot be linearized.
+discrete events, assertions and state machines of the model, are not accounted for and
+produce a warning. Discrete partitions containing an algebraic loop within a single clock
+cannot be linearized.
 
 The analysis-point functions [`get_sensitivity`](@ref), [`get_comp_sensitivity`](@ref) and
 [`get_looptransfer`](@ref) accept the keyword argument `hybrid = true` to return a
