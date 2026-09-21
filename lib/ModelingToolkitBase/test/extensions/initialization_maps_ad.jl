@@ -1,7 +1,10 @@
 using ForwardDiff, ModelingToolkitBase, Test, Zygote
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SciMLBase
 using SymbolicIndexingInterface: ProblemState
-using SciMLStructures: Tunable, replace
+using SciMLStructures: Tunable, replace, canonicalize
+using SymbolicIndexingInterface: parameter_values, parameter_index, remake_buffer
+using ChainRulesCore: NoTangent
+import ChainRulesCore
 
 @testset "FullSpecialize parameter buffer gradients" begin
     for prototype in ([0.0], ModelingToolkitBase.SVector(0.0), Any[0.0])
@@ -39,4 +42,33 @@ end
     expected = ForwardDiff.gradient(parameter_loss, p)
     @test expected == 2p
     @test only(Zygote.gradient(parameter_loss, p)) ≈ expected
+end
+
+@testset "`nonnumeric` cotangent is `NoTangent` (matches the Enzyme inactive rule)" begin
+    @parameters m = 1.5 name::String = "a"
+    @variables s(t) = 1.0 v(t) = 1.0
+    # `name` is unused in the equations, so list it explicitly to keep it
+    sys = mtkcompile(System([D(s) ~ v, D(v) ~ (1 - v) / m], t, [s, v], [m, name]; name = :model))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    p0 = parameter_values(prob)
+    @test !isempty(p0.nonnumeric)
+
+    # constructor rrule: a rebuild via `SciMLStructures.replace` must not produce a
+    # tangent for the nonnumeric portion
+    buf = canonicalize(Tunable(), p0)[1]
+    g = Zygote.gradient(
+        p -> sum(replace(Tunable(), p, buf).initials), p0
+    )[1]
+    @test g.initials == ones(length(p0.initials))
+    @test g.nonnumeric isa NoTangent || g.nonnumeric === nothing
+
+    # `remake_buffer` rrule
+    idxs = [parameter_index(sys, m)]
+    _, back = ChainRulesCore.rrule(remake_buffer, sys, p0, idxs, [2.0])
+    dp = back(ChainRulesCore.Tangent{typeof(p0)}(; tunable = ones(length(p0.tunable))))[3]
+    @test dp.nonnumeric isa NoTangent
+
+    # the passthrough itself is non-differentiable
+    w = getfield(p0, :nonnumeric)
+    @test Zygote.gradient(w -> length(w.buffer), w)[1] === nothing
 end

@@ -2,7 +2,7 @@ module MTKChainRulesCoreExt
 
 import ChainRulesCore
 import ChainRulesCore: Tangent, ZeroTangent, NoTangent, zero_tangent, unthunk
-using ModelingToolkitBase: MTKParameters, ParameterIndex, NONNUMERIC_PORTION, AbstractSystem
+using ModelingToolkitBase: MTKParameters, ParameterIndex, AbstractSystem
 import ModelingToolkitBase
 import ModelingToolkitBase as MTK
 import SciMLStructures
@@ -45,6 +45,7 @@ function ChainRulesCore.rrule(::Type{MTKParameters}, tunables, args...)
         end
         dargs = ntuple(length(args)) do i
             field = MTP_NONTUNABLE_FIELDS[i]
+            field === :nonnumeric && return NoTangent()
             hasproperty(dt, field) ? _mtp_tangent(getproperty(dt, field)) : NoTangent()
         end
         return (NoTangent(), dtunables, dargs...)
@@ -132,7 +133,6 @@ function ChainRulesCore.rrule(
     )
     disc_idxs = subset_idxs(idxs, SciMLStructures.Discrete(), oldbuf.discrete)
     const_idxs = subset_idxs(idxs, SciMLStructures.Constants(), oldbuf.constant)
-    nn_idxs = subset_idxs(idxs, NONNUMERIC_PORTION, oldbuf.nonnumeric)
 
     pullback = let idxs = idxs
         function remake_buffer_pullback(buf′)
@@ -144,7 +144,7 @@ function ChainRulesCore.rrule(
             initials = selected_tangents(buf′.initials, initials_idxs)
             discrete = selected_tangents(buf′.discrete, disc_idxs)
             constant = selected_tangents(buf′.constant, const_idxs)
-            nonnumeric = selected_tangents(buf′.nonnumeric, nn_idxs)
+            nonnumeric = NoTangent()
             oldbuf′ = Tangent{typeof(oldbuf)}(;
                 tunable, initials, discrete, constant, nonnumeric
             )
@@ -157,6 +157,7 @@ function ChainRulesCore.rrule(
 end
 
 ChainRulesCore.@non_differentiable Base.getproperty(sys::AbstractSystem, x::Symbol)
+ChainRulesCore.@non_differentiable Base.getproperty(w::MTK.NonNumericWrapper, x::Symbol)
 
 function ModelingToolkitBase.update_initializeprob!(initprob::AbstractNonlinearProblem, prob)
     pgetter = ChainRulesCore.@ignore_derivatives MTK.get_scimlfn(prob).initialization_data.metadata.oop_reconstruct_u0_p.pgetter
@@ -171,7 +172,7 @@ function ChainRulesCore.rrule(siu::MTK.SetInitialUnknowns, p::MTKParameters, u0)
         function __pullback(ps′)
             ps′ = unthunk(ps′)
             initials′ = selected_tangents(ps′.initials, otheridxs)
-            p′ = Tangent{typeof(p)}(; tunable = ps′.tunable, initials = initials′, discrete = ps′.discrete, constant = ps′.constant, nonnumeric = ps′.nonnumeric)
+            p′ = Tangent{typeof(p)}(; tunable = ps′.tunable, initials = initials′, discrete = ps′.discrete, constant = ps′.constant, nonnumeric = NoTangent())
             u0′ = if ps′.initials isa ZeroTangent
                 ZeroTangent()
             else
