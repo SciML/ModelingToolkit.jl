@@ -85,6 +85,11 @@ end
     @test length(hl.connections) == 2
     @test (; from = 2, output = 1, to = 1, input = 2) in hl.connections
     @test (; from = 1, output = 2, to = 2, input = 1) in hl.connections
+    plant_to_ctrl = clock_boundary(hl, 1, 2)
+    ctrl_to_plant = clock_boundary(hl, 2, 1)
+    @test plant_to_ctrl == (; from = 1, to = 2, outputs = [2], inputs = [1])
+    @test ctrl_to_plant == (; from = 2, to = 1, outputs = [1], inputs = [2])
+    @test clock_boundary(hl, 1, 1) == (; from = 1, to = 1, outputs = Int[], inputs = Int[])
 
     # Assemble the sampled-data loop with the advanced interface of `feedback` and compare
     # with the closed-loop recursion x(k+1) = e^{-dt} x(k) + (1 - e^{-dt}) (u(k) + d(k)),
@@ -92,11 +97,16 @@ end
     Pd = CS.c2d(to_ss(cont), dt)
     Cd = to_ss(disc)
     G = CS.feedback(
-        Pd, Cd; U1 = [2], Y1 = [2], U2 = [1], Y2 = [1], W1 = [1], Z1 = [1], pos_feedback = true
+        Pd, Cd; Y1 = plant_to_ctrl.outputs, U2 = plant_to_ctrl.inputs,
+        Y2 = ctrl_to_plant.outputs, U1 = ctrl_to_plant.inputs,
+        W1 = 1:cont.nu_user, Z1 = 1:cont.ny_user, pos_feedback = true
     )
     a = exp(-dt)
     Gref = CS.ss(a - 2 * (1 - a), 1 - a, 1, 0, dt)
     @test freqresp_isapprox(G, Gref)
+    # The controller has no user-specified signals and the boundary signals are the last input
+    # and output of the plant, so the loop is also the lower linear fractional transformation.
+    @test freqresp_isapprox(CS.lft(Pd, Cd), Gref)
 end
 
 @testset "Discrete-only model" begin
@@ -200,6 +210,10 @@ end
     @test (; from = 1, output = 1, to = ifast, input = 1) in hl.connections
     @test (; from = ifast, output = 1, to = islow, input = 1) in hl.connections
     @test (; from = islow, output = 1, to = 1, input = 2) in hl.connections
+    @test clock_boundary(hl, 1, ifast) == (; from = 1, to = ifast, outputs = [1], inputs = [1])
+    @test clock_boundary(hl, ifast, islow) == (; from = ifast, to = islow, outputs = [1], inputs = [1])
+    @test clock_boundary(hl, islow, 1) == (; from = islow, to = 1, outputs = [1], inputs = [2])
+    @test isempty(clock_boundary(hl, 1, islow).outputs)
 end
 
 @testset "Operating point" begin
@@ -461,8 +475,12 @@ end
         # Sensitivity of the sampled-data loop, assembled in discrete time.
         Pd = CS.c2d(to_ss(cont), dt)
         Cd = to_ss(disc)
+        plant_to_ctrl = clock_boundary(hl, hl.continuous_index, 2)
+        ctrl_to_plant = clock_boundary(hl, 2, hl.continuous_index)
         S = CS.feedback(
-            Pd, Cd; U1 = [2], Y1 = [2], U2 = [1], Y2 = [1], W1 = [1], Z1 = [1], pos_feedback = true
+            Pd, Cd; Y1 = plant_to_ctrl.outputs, U2 = plant_to_ctrl.inputs,
+            Y2 = ctrl_to_plant.outputs, U1 = ctrl_to_plant.inputs,
+            W1 = 1:cont.nu_user, Z1 = 1:cont.ny_user, pos_feedback = true
         )
         a = exp(-dt)
         # u = d + uh, uh = -kp y_sampled, y(k+1) = a y(k) + (1 - a) u(k)

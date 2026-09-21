@@ -81,11 +81,14 @@ end
     # step response with the simulation of the model.
     Pd = CS.c2d(to_ss(cont), dt)
     Cd = to_ss(disc)
-    c_to_d = only(filter(c -> c.from == hl.continuous_index, hl.connections))
-    d_to_c = only(filter(c -> c.to == hl.continuous_index, hl.connections))
+    plant_to_ctrl = clock_boundary(hl, hl.continuous_index, 2)
+    ctrl_to_plant = clock_boundary(hl, 2, hl.continuous_index)
+    # The set point of the controller is the external input, the plant output the external
+    # output.
     G = CS.feedback(
-        Pd, Cd; U1 = [d_to_c.input], Y1 = [c_to_d.output], U2 = [c_to_d.input],
-        Y2 = [d_to_c.output], W1 = Int[], W2 = [1], Z1 = [1], pos_feedback = true
+        Pd, Cd; Y1 = plant_to_ctrl.outputs, U2 = plant_to_ctrl.inputs,
+        Y2 = ctrl_to_plant.outputs, U1 = ctrl_to_plant.inputs,
+        W1 = 1:cont.nu_user, W2 = 1:disc.nu_user, Z1 = 1:cont.ny_user, pos_feedback = true
     )
     timevec = 0:dt:Tf
     res = CS.lsim(G, (x, t) -> [0.5], timevec)
@@ -213,15 +216,15 @@ end
     @test length(hl.connections) == 3
     ifast = findfirst(p -> p.Ts == dt_fast, hl.partitions)
     islow = findfirst(p -> p.Ts == dt_slow, hl.partitions)
-    @test any(c -> c.from == hl.continuous_index && c.to == ifast, hl.connections)
-    @test any(c -> c.from == ifast && c.to == islow, hl.connections)
-    @test any(c -> c.from == islow && c.to == hl.continuous_index, hl.connections)
+    @test length(clock_boundary(hl, hl.continuous_index, ifast).outputs) == 1
+    @test length(clock_boundary(hl, ifast, islow).outputs) == 1
+    @test length(clock_boundary(hl, islow, hl.continuous_index).outputs) == 1
 
     # The clock change is expressed with `Latest`, whose first argument is the fast signal.
-    fast_to_slow = only(filter(c -> c.from == ifast && c.to == islow, hl.connections))
-    term = slow.inputs[fast_to_slow.input]
+    fast_to_slow = clock_boundary(hl, ifast, islow)
+    term = slow.inputs[only(fast_to_slow.inputs)]
     @test operation(term) isa SynchToolkit.Latest
-    @test isequal(fast.outputs[fast_to_slow.output], unwrap(model_nns.lat.u))
+    @test isequal(fast.outputs[only(fast_to_slow.outputs)], unwrap(model_nns.lat.u))
 
     @test freqresp_isapprox(to_ss(fast), CS.tf([1.0, 1.0, 1.0, 1.0] / N, [1.0, 0.0, 0.0, 0.0], dt_fast))
     @test cont.A == [-1.0;;]

@@ -172,7 +172,7 @@ export analyze_initialization_jacobian
 export alias_elimination
 export linearize, linearization_function,
     LinearizationProblem, LinearizationOpPoint, linearization_ap_transform
-export linearize_hybrid, HybridLinearization, ClockPartitionLinearization
+export linearize_hybrid, HybridLinearization, ClockPartitionLinearization, clock_boundary
 export solve
 export map_variables_to_equations, substitute_component
 
