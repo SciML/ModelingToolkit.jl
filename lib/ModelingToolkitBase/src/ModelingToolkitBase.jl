@@ -557,6 +557,14 @@ EnzymeCore.EnzymeRules.inactive_type(::Type{<:AbstractSystem}) = true
 # metadata: ~100 µs per call against a ~5 ns RHS for a 32-state linear ODE,
 # an 8x slowdown of `GaussAdjoint(EnzymeVJP)` gradients.
 EnzymeCore.EnzymeRules.inactive_type(::Type{<:InitializationMetadata}) = true
+# The nonnumeric portion of the MTKParameters is not differentiable and it
+# can hold a lot of data, like interpolation data structures that would
+# contain vectors of Floats that Enzyme can't prove are not differentiated,
+# so it would need to track them, even if they are not used.
+# Scratch buffers that generated code writes active intermediates into
+# (the `add_diffcache` `DiffCache`s) must therefore never live here; they
+# are stored in the `caches` portion, which Enzyme does shadow.
+EnzymeCore.EnzymeRules.inactive_type(::Type{<:NonNumericWrapper}) = true
 
 function __init__()
     SU.hashcons(unwrap(t_nounits), true)

@@ -3,6 +3,11 @@ symconvert(::Type{T}, ::Type{F}, x::V) where {T <: Real, F, V} = convert(T, x)
 symconvert(::Type{Real}, ::Type{F}, x::Integer) where {F} = convert(F, x)
 symconvert(::Type{V}, ::Type{F}, x) where {V <: AbstractArray, F} = symconvert.(eltype(V), F, x)
 
+# We wrap the nonnumeric section in a type so that we can tell Enzyme to ignore it
+struct NonNumericWrapper{T}
+    buffer::T
+end
+
 struct MTKParameters{T, I, D, C, N, H}
     tunable::T
     initials::I
@@ -22,7 +27,8 @@ struct MTKParameters{T, I, D, C, N, H}
         if initials isa StaticVector{0}
             initials = SVector{0, eltype(initials)}()
         end
-        return new{typeof(tunables), typeof(initials), D, C, N, H}(
+        nonnumeric isa NonNumericWrapper || (nonnumeric = NonNumericWrapper(nonnumeric))
+        return new{typeof(tunables), typeof(initials), D, C, typeof(nonnumeric), H}(
             tunables, initials,
             discrete, constant,
             nonnumeric, caches
@@ -39,6 +45,10 @@ struct MTKParameters{T, I, D, C, N, H}
         )
     end
 end
+
+Base.getproperty(p::MTKParameters, s::Symbol) = s === :nonnumeric ? getfield(p, :nonnumeric).buffer : getfield(p, s)
+
+nonnumeric_tuple_type(::Type{NonNumericWrapper{NT}}) where {NT} = NT
 
 _unwrap_mtk_parameters(params) = SciMLBase.unwrap_parameters(params)
 
@@ -242,12 +252,14 @@ function MTKParameters(
         nonnumeric_buffer = map(p_constructor, nonnumeric_buffer)
     end
 
+    wrapped_nonnumeric_buffer = NonNumericWrapper(nonnumeric_buffer)
+
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
-        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(caches_buffer),
+        typeof(const_buffer), typeof(wrapped_nonnumeric_buffer), typeof(caches_buffer),
     }(
         tunable_buffer,
-        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, caches_buffer
+        initials_buffer, disc_buffer, const_buffer, wrapped_nonnumeric_buffer, caches_buffer
     )
     return mtkps
 end
@@ -495,7 +507,7 @@ function ArrayInterface.ismutable(
     return ArrayInterface.ismutable(T) || ArrayInterface.ismutable(I) ||
         any(ArrayInterface.ismutable, fieldtypes(D)) ||
         any(ArrayInterface.ismutable, fieldtypes(C)) ||
-        any(ArrayInterface.ismutable, fieldtypes(N))
+        any(ArrayInterface.ismutable, fieldtypes(nonnumeric_tuple_type(N)))
 end
 
 function SymbolicIndexingInterface.parameter_values(p::MTKParameters, pind::ParameterIndex)
@@ -822,11 +834,12 @@ end
 
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
-        indp, oldbuf::MTKParameters{T, I, D, C, N, H},
+        indp, oldbuf::MTKParameters{T, I, D, C, NW, H},
         idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex}},
         vals::Union{AbstractArray, Tuple}; validate = true
-    ) where {T, I, D, C, N, H}
+    ) where {T, I, D, C, NW, H}
 
+    N = nonnumeric_tuple_type(NW)
     # fallback to non-generated method if values aren't type-stable
     if vals <: AbstractArray && !isconcretetype(eltype(vals))
         return quote
@@ -1155,7 +1168,7 @@ end
     for i in 1:fieldcount(C)
         push!(paths, :(ps.constant[$i]))
     end
-    for i in 1:fieldcount(N)
+    for i in 1:fieldcount(nonnumeric_tuple_type(N))
         push!(paths, :(ps.nonnumeric[$i]))
     end
     for i in 1:fieldcount(H)
@@ -1172,10 +1185,11 @@ end
 
 @generated function Base.length(
         ps::MTKParameters{
-            T, I, D, C, N, H,
+            T, I, D, C, NW, H,
         }
-    ) where {T, I, D, C, N, H}
+    ) where {T, I, D, C, NW, H}
     len = 0
+    N = nonnumeric_tuple_type(NW)
     if !(T <: SVector{0})
         len += 1
     end

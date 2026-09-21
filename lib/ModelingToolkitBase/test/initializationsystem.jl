@@ -2542,3 +2542,21 @@ end
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
 end
+
+@testset "Nonnumeric portion is inactive for Enzyme, caches are not" begin
+    @variables x(t) = 1.0
+    @parameters k = 2.0 name::String = "a"
+    # `name` is unused in the equations, so list it explicitly to keep it
+    sys = mtkcompile(System([D(x) ~ -k * x], t, [x], [k, name]; name = :sys))
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 3)
+    sys = complete(sys)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    p = prob.p
+    @test !isempty(p.nonnumeric)
+    wrapper = getfield(p, :nonnumeric)
+    @test wrapper isa ModelingToolkitBase.NonNumericWrapper
+    @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(wrapper))
+    # the `DiffCache` scratch must stay differentiable
+    @test only(p.caches) isa Vector{<:ModelingToolkitBase.DiffCacheAllocatorAPIWrapper}
+    @test !ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(p.caches))
+end
