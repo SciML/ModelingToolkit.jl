@@ -261,10 +261,24 @@ portion of `p`. The leading `length(ic.caches_buffer_sizes)` buffers are the per
 earlier call is dropped.
 """
 function rebuild_with_caches(ic::IndexCache, p::MTKParameters, cache_templates::BufferTemplate...)
+    return _rebuild_with_caches(p, length(ic.caches_buffer_sizes), cache_templates)
+end
+
+# Compatibility method for callers that predate the `IndexCache` argument. The
+# persistent `DiffCache` buffers are recognised by their element type.
+function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate...)
+    npersistent = 0
+    for buf in p.caches
+        eltype(buf) <: DiffCacheAllocatorAPIWrapper || break
+        npersistent += 1
+    end
+    return _rebuild_with_caches(p, npersistent, cache_templates)
+end
+
+function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
         Vector{template.type}(undef, template.length)
     end
-    npersistent = length(ic.caches_buffer_sizes)
     persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
     return @set p.caches = (persistent..., buffers...)
 end
