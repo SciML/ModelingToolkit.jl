@@ -337,7 +337,8 @@ function _linearization_function_compiled(
     input_getter = getsym(prob, inputs)
 
     lin_fun = LinearizationFunction(
-        diff_idxs, alge_idxs, input_getter, length(inputs), length(unknowns(sys)),
+        diff_idxs, alge_idxs, input_getter, length(inputs), collect(SymbolicT, inputs),
+        length(unknowns(sys)),
         prob, h, u0 === nothing ? nothing : similar(u0, T), uf_jac, h_jac, pf_jac,
         hp_jac, initializealg, initialization_kwargs, initial_idxs_for_unknowns,
         collect(SymbolicT, loop_opening_params)
@@ -466,6 +467,11 @@ mutable struct LinearizationFunction{
     Number of input variables.
     """
     const num_inputs::Int
+    """
+    The input variables, or the parameters that represent them, in the order of the columns
+    of the input jacobians.
+    """
+    const inputs::Vector{SymbolicT}
     """
     The number of unknowns in the linearized system.
     """
@@ -840,7 +846,7 @@ function CommonSolve.solve(prob::LinearizationProblem; allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(prob.f.prob.f.sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(prob.f.inputs[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]

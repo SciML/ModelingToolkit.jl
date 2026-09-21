@@ -355,6 +355,15 @@ operating point is a `LinearizationOpPoint`, the values of the unknowns and para
 each partition are taken from the solution; the values the solution holds for observed
 variables are not, since they would repeat the constraints the unknowns already satisfy.
 
+An operating point that fixes a signal the closed model determines from its state, such as
+a sampled plant output alongside the plant state it is computed from, makes the
+initialization of the continuous partition overdetermined. The initialization is then solved
+in the least-squares sense, and the state at which the partition is linearized can differ
+from the requested values; `linearize_hybrid` warns when a requested value of a differential
+unknown is not retained, and the `x0` field of the partition holds the values used. For the same reason, an operating point written for
+`linearize` with `loop_openings` does not in general carry over to `linearize_hybrid` on the
+same model, since the loop openings change which signals are free.
+
 Only periodic clocks are supported. Partitions on other clocks, as well as continuous and
 discrete events, assertions and state machines of the model, are not accounted for and
 produce a warning. Discrete partitions containing an algebraic loop within a single clock

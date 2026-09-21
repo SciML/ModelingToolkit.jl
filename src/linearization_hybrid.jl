@@ -438,7 +438,17 @@ function _compile_partition!(
         ts.sys = sys
         ts.original_eqs = Equation[substitute(eq, rules) for eq in ts.original_eqs]
     end
-    ssys = _mtkcompile!(ts; outputs = OrderedSet{SymbolicT}(outputs), kwargs...)
+    # The boundary and input parameters are registered as the inputs of the partition. The
+    # inline solution of linear subsystems derives the element type of its buffers from the
+    # unknowns and the first input of the system, so the buffers take the type of the
+    # perturbation when the Jacobians with respect to these parameters are evaluated.
+    ssys = _mtkcompile!(
+        ts; outputs = OrderedSet{SymbolicT}(outputs),
+        input_parameters = OrderedSet{SymbolicT}([params; input_params]), kwargs...
+    )
+    # `complete` requires the registered inputs to follow the order of the parameters.
+    input_set = Set{SymbolicT}([params; input_params])
+    @set! ssys.inputs = OrderedSet{SymbolicT}(p for p in MTKBase.get_ps(ssys) if p in input_set)
     # The initialization equations of the model that refer to symbols of the partition only
     # are kept aside; those compatible with the operating point take part in the
     # initialization of the partition. Events are not accounted for, and the assertions of
@@ -875,6 +885,33 @@ end
 """
     $(TYPEDSIGNATURES)
 
+Warn if the state `x0` at which the continuous partition `ssys` was linearized differs from
+the values its operating point `pop` requested for the differential unknowns, whose indices
+are `diff_idxs`. This happens when the operating point also fixes signals the model
+determines from the unknowns, so that the initialization problem is overdetermined and solved
+in the least-squares sense. Requested values of algebraic unknowns serve as guesses and are
+not compared.
+"""
+function _warn_operating_point_mismatch(
+        ssys::System, pop::Dict{SymbolicT, Any}, x0::Vector{Float64}, diff_idxs::Vector{Int}, description
+    )
+    mismatched = String[]
+    vars = unknowns(ssys)
+    for i in diff_idxs
+        v = vars[i]
+        val = get(pop, v, nothing)
+        val isa Number || continue
+        isapprox(x0[i], val; rtol = 1.0e-6, atol = 1.0e-8) && continue
+        push!(mismatched, "$v: requested $val, obtained $(x0[i])")
+    end
+    isempty(mismatched) && return nothing
+    @warn "The initialization of the $description did not retain the requested values of $(join(mismatched, "; ")). This happens when the operating point also fixes signals the model determines from these unknowns. The linearization is taken at the obtained values; see the `x0` field of the partition."
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Raise an error if the compiled partition `ssys`, its input parameters `inputs` or its
 outputs `outputs` contain Boolean-valued variables. Linearization is not defined with respect
 to a Boolean variable, and the generated functions of the partition cannot be evaluated with
@@ -1006,18 +1043,29 @@ function _linearize_discrete_partition(
     input_vals = collect(Float64, getp(ssys, inputs)(p))
     ny = length(outputs)
     nu = length(inputs)
+    # The Jacobians with respect to the inputs are only evaluated when there are inputs;
+    # finite differences reject an empty vector of differentiation variables.
     if u0 === nothing || isempty(u0)
         A = zeros(0, 0)
         B = zeros(0, nu)
         C = zeros(ny, 0)
-        D = DI.jacobian(inp -> vec(collect(h(nothing, setter(p, inp), t))), autodiff, input_vals)
+        D = if nu == 0
+            zeros(ny, 0)
+        else
+            DI.jacobian(inp -> vec(collect(h(nothing, setter(p, inp), t))), autodiff, input_vals)
+        end
         x0 = Float64[]
     else
         x0 = collect(Float64, u0)
         A = DI.jacobian((du, u) -> f(du, u, p, t), similar(x0), autodiff, x0)
-        B = DI.jacobian((du, inp) -> f(du, x0, setter(p, inp), t), similar(x0), autodiff, input_vals)
         C = DI.jacobian(u -> vec(collect(h(u, p, t))), autodiff, x0)
-        D = DI.jacobian(inp -> vec(collect(h(x0, setter(p, inp), t))), autodiff, input_vals)
+        if nu == 0
+            B = zeros(length(x0), 0)
+            D = zeros(ny, 0)
+        else
+            B = DI.jacobian((du, inp) -> f(du, x0, setter(p, inp), t), similar(x0), autodiff, input_vals)
+            D = DI.jacobian(inp -> vec(collect(h(x0, setter(p, inp), t))), autodiff, input_vals)
+        end
     end
     return (; A = Matrix{Float64}(A), B = Matrix{Float64}(B), C = Matrix{Float64}(C), D = Matrix{Float64}(D)), x0
 end
@@ -1329,6 +1377,7 @@ function linearize_hybrid(
         if !all(m -> all(isfinite, m), (mats.A, mats.B, mats.C, mats.D))
             @warn "The linearization of the $description has non-finite entries. The equations of the partition are not differentiable at the operating point."
         end
+        pd.discrete || _warn_operating_point_mismatch(pd.ssys, pops[i], x0, lin_funs[i].diff_idxs, description)
         results[i] = ClockPartitionLinearization(
             mats.A, mats.B, mats.C, mats.D, unknowns(pd.ssys),
             [user_inputs[i]; boundary_in[i]], pd.outs, length(user_inputs[i]), length(user_outputs[i]),
