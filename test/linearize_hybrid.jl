@@ -339,6 +339,39 @@ end
     op = Dict(x => 0.0)
     @test_logs (:warn, r"Events are not accounted for") match_mode = :any linearize_hybrid(sys, [], [y]; op)
     @test_nowarn linearize_hybrid(sys, [], [y]; op, warn_unsupported = false)
+
+    @testset "Boolean variables" begin
+        @variables uc(t) u(t) yb(t)
+        @variables s(t)::Bool
+        k = ShiftIndex(Clock(dt))
+        # A relay with hysteresis keeps a Boolean state.
+        eqs_b = [
+            uc ~ sin(t)
+            u ~ Sample(dt)(uc)
+            s(k) ~ ifelse(s(k - 1), u(k) > -0.5, u(k) > 0.5)
+            yb(k) ~ ifelse(s(k), 1.0, -1.0)
+        ]
+        @named sysb = System(eqs_b, t; initialization_eqs = [s(k - 1) ~ false])
+        err = try
+            linearize_hybrid(sysb, [], [yb]; warn_missing_op = false)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("Boolean variables", err.msg)
+        @test occursin("sₜ₋₁", err.msg)
+    end
+
+    @testset "Non-finite entries" begin
+        @variables xs(t) us(t) ys(t)
+        # The square root is not differentiable at zero.
+        @named syss = System([D(xs) ~ -xs + sqrt(us), ys ~ xs], t)
+        op_s = Dict(xs => 0.0, us => 0.0)
+        hl = @test_logs (:warn, r"non-finite entries") match_mode = :any linearize_hybrid(syss, [us], [ys]; op = op_s)
+        @test !isfinite(only(hl.partitions[1].B))
+        @test_nowarn linearize_hybrid(syss, [us], [ys]; op = Dict(xs => 0.0, us => 1.0))
+    end
 end
 
 @testset "Model constructs that partitions must not inherit" begin
