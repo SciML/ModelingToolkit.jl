@@ -208,7 +208,9 @@ function _linearization_function_compiled(
         t = 0.0,
         ignore_system_initial_conditions = false,
         loop_opening_params = SymbolicT[],
-        zero_dummy_der_vars = SymbolicT[]
+        zero_dummy_der_vars = SymbolicT[],
+        initialization_eqs = Equation[],
+        algebraic_only = isempty(initialization_eqs)
     )
     op = Dict(op)
     inputs isa AbstractVector || (inputs = [inputs])
@@ -252,7 +254,7 @@ function _linearization_function_compiled(
 
     prob = ODEProblem{true}(
         sys, merge(op, anydict(p)), (t, t); allow_incomplete = true,
-        algebraic_only = true, guesses, missing_guess_value
+        algebraic_only, initialization_eqs, guesses, missing_guess_value
     )
     initial_idxs_for_unknowns = ParameterIndex{SciMLStructures.Initials, Int}[]
     for v in unknowns(sys)
@@ -274,13 +276,15 @@ function _linearization_function_compiled(
 
     p = parameter_values(prob)
     t0 = current_time(prob)
-    inputvals = [prob.ps[i] for i in inputs]
 
     if u0 === nothing
         T = typeof(t0)
     else
         T = promote_type(eltype(u0), typeof(t0))
     end
+    # Preparing the jacobians with respect to the inputs requires a vector of a concrete
+    # element type, also when there are no inputs.
+    inputvals = isempty(inputs) ? T[] : [prob.ps[i] for i in inputs]
     prob = _linearization_wrap_odeproblem_f(prob, T)
     ct0 = DI.Constant(T(t0))
     u0T = if u0 === nothing
@@ -575,20 +579,24 @@ function (linfun::LinearizationFunction)(u, p, t)
         end
         fg_xz = linfun.uf_jac(u, DI.Constant(p), DI.Constant(t))
         h_xz = linfun.h_jac(u, DI.Constant(p), DI.Constant(t))
-        fg_u = linfun.pf_jac(
-            input_vals,
-            DI.Constant(u), DI.Constant(p), DI.Constant(t)
-        )
+        # The jacobian with respect to an empty input vector is not defined.
+        fg_u = if linfun.num_inputs == 0
+            zeros(eltype(fg_xz), size(fg_xz, 1), 0)
+        else
+            linfun.pf_jac(input_vals, DI.Constant(u), DI.Constant(p), DI.Constant(t))
+        end
     else
         linfun.num_states == 0 ||
             error("Number of unknown variables (0) does not match the expected number of unknowns ($(linfun.num_states))")
         fg_xz = zeros(0, 0)
-        h_xz = fg_u = zeros(0, length(linfun.num_inputs))
+        fg_u = zeros(0, linfun.num_inputs)
+        h_xz = zeros(size(linfun.hp_jac.buf, 1), 0)
     end
-    h_u = linfun.hp_jac(
-        input_vals,
-        DI.Constant(u), DI.Constant(p), DI.Constant(t)
-    )
+    h_u = if linfun.num_inputs == 0
+        zeros(eltype(h_xz), size(h_xz, 1), 0)
+    else
+        linfun.hp_jac(input_vals, DI.Constant(u), DI.Constant(p), DI.Constant(t))
+    end
     return (
         f_x = fg_xz[linfun.diff_idxs, linfun.diff_idxs],
         f_z = fg_xz[linfun.diff_idxs, linfun.alge_idxs],

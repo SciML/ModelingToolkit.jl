@@ -245,8 +245,12 @@ every partition; the history variables of a discrete partition take the value of
 they are the history of, so the operating point is assumed to be stationary across ticks. The
 value of a signal crossing a clock boundary is taken from the operating point if present and
 otherwise evaluated from the operating point of the partition the signal originates from, so
-that in the example above the held controller output follows from the plant state. Remaining
-values that are not available default to zero, which is reported by a warning.
+that in the example above the held controller output follows from the plant state. The
+initialization equations of the model that refer to the continuous partition only and
+determine a value the operating point does not fix take part in the initialization of the
+continuous partition; parameters bound to `missing` and constant states that such equations
+determine therefore take their values from them. Remaining values that are not available
+default to the guess of the symbol, or to zero, which is reported by a warning.
 
 Only periodic clocks are supported. Partitions on other clocks, as well as continuous and
 discrete events, assertions and state machines of the model, are not accounted for and

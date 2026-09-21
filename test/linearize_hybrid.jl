@@ -373,6 +373,58 @@ end
     end
 end
 
+@testset "Initialization equations of the model" begin
+    @variables x(t) y(t) u(t) yd(t) ud(t) w(t)
+    @parameters kp = 2.0
+    k = ShiftIndex(Clock(dt))
+    @testset "Parameter bound to `missing` determined by an initialization equation" begin
+        @parameters dia = 2.0 As
+        eqs = [yd ~ Sample(dt)(y), ud ~ -kp * yd, u ~ Hold(ud), D(x) ~ -As * x + u, y ~ x, w ~ dia * x]
+        @named sys = System(eqs, t; bindings = [As => missing], initialization_eqs = [As ~ dia^2 * pi / 4])
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        cont = hl.partitions[hl.continuous_index]
+        @test cont.A ≈ [-2.0^2 * pi / 4;;]
+        @test cont.x0 == [1.0]
+        # A value in the operating point takes precedence over the initialization equation.
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0, As => 5.0))
+        @test hl.partitions[hl.continuous_index].A == [-5.0;;]
+        # Without an initialization equation, the parameter takes its guess, and zero without one.
+        @named sys = System(eqs, t; bindings = [As => missing], guesses = [As => 4.0])
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        @test hl.partitions[hl.continuous_index].A == [-4.0;;]
+        @named sys = System(eqs, t; bindings = [As => missing])
+        hl = @test_logs (:warn, r"No operating-point value") match_mode = :any linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        @test hl.partitions[hl.continuous_index].A == [-0.0;;]
+    end
+    @testset "Constant state determined by an initialization equation" begin
+        # `der(c) = 0` compiles to a parameter that the initialization equation determines.
+        @variables c(t) m(t)
+        eqs = [yd ~ Sample(dt)(y), ud ~ -kp * yd, u ~ Hold(ud), D(x) ~ -c * x + u, y ~ x, D(c) ~ 0, m ~ 3.0 + 0 * t]
+        @named sys = System(eqs, t; initialization_eqs = [c ~ m])
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        cont = hl.partitions[hl.continuous_index]
+        @test cont.A == [-3.0;;]
+        @test cont.x0 == [1.0]
+    end
+    @testset "History values of a discrete partition" begin
+        @variables z(t) zd(t)
+        eqs = [zd ~ Sample(dt)(y), z(k) ~ 0.5 * z(k - 1) + zd(k)^2, u ~ Hold(z), D(x) ~ -x + u, y ~ x]
+        # An equation for the shifted variable gives the value of the history variable.
+        @named sys = System(eqs, t; initialization_eqs = [z(k - 1) ~ 2.0])
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        disc = hl.partitions[2]
+        @test disc.x0 == [2.0]
+        @test disc.B == [2.0;;]
+        # An equation for the variable itself gives the value of its history as well.
+        @named sys = System(eqs, t; initialization_eqs = [z ~ 3.0])
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0))
+        @test hl.partitions[2].x0 == [3.0]
+        # The operating point takes precedence.
+        hl = @test_nowarn linearize_hybrid(sys, [], [y]; op = Dict(x => 1.0, z => 4.0))
+        @test hl.partitions[2].x0 == [4.0]
+    end
+end
+
 @testset "Analysis points" begin
     @variables x(t) y(t) yd(t) ud(t)
     @variables uh(t) [output = true] u(t) [input = true]

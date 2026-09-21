@@ -404,13 +404,18 @@ function _compile_partition!(
             delete!(binds, term)
         end
         @set! sys.bindings = ROSymmapT(binds)
+        @set! sys.initialization_eqs = Equation[
+            substitute(eq, rules) for eq in MTKBase.get_initialization_eqs(sys)
+        ]
         ts.sys = sys
         ts.original_eqs = Equation[substitute(eq, rules) for eq in ts.original_eqs]
     end
     ssys = _mtkcompile!(ts; outputs = OrderedSet{SymbolicT}(outputs), kwargs...)
-    # Initialization equations of the model, such as initial values of held signals, do not
-    # concern the operating point of the linearization, events are not accounted for, and the
-    # assertions of the model may refer to variables of other partitions.
+    # The initialization equations of the model that refer to symbols of the partition only
+    # are kept aside; those compatible with the operating point take part in the
+    # initialization of the partition. Events are not accounted for, and the assertions of
+    # the model may refer to variables of other partitions.
+    init_eqs = _known_initialization_equations(ssys)
     @set! ssys.initialization_eqs = Equation[]
     @set! ssys.continuous_events = MTKBase.SymbolicContinuousCallback[]
     @set! ssys.discrete_events = MTKBase.SymbolicDiscreteCallback[]
@@ -418,7 +423,11 @@ function _compile_partition!(
     # The parameters are inherited from the whole model. Parameters the partition does not use
     # would require operating-point values, and those bound to `missing` would be treated as
     # unknowns of the initialization problem.
-    ssys = _prune_parameters(ssys, [params; input_params])
+    keep = SymbolicT[params; input_params]
+    for eq in init_eqs
+        union!(keep, _initialization_equation_symbols(eq))
+    end
+    ssys = _prune_parameters(ssys, keep)
     # Initial values are kept for the unknowns and parameters of the partition. Those of
     # observed variables would only constrain the initialization of the partition, and those
     # of variables of other partitions refer to symbols the partition does not know.
@@ -434,7 +443,151 @@ function _compile_partition!(
     if discrete
         @set! ssys.is_discrete = true
     end
-    return complete(ssys; split = true, allow_parameter_eqs = true), params
+    return complete(ssys; split = true, allow_parameter_eqs = true), params, init_eqs
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The symbols the initialization equation `eq` constrains: the variables and parameters
+occurring in it, with the argument of a `Differential` or `Shift` term standing for the
+term. Returns `nothing` if the equation contains an operator term that has no meaning in a
+partition on its own, such as a boundary term of another partition.
+"""
+function _initialization_equation_symbols(eq)
+    syms = Set{SymbolicT}()
+    for v in get_variables(eq)
+        v = unwrap(v)::SymbolicT
+        if iscall(v) && operation(v) isa Operator
+            op = operation(v)
+            if op isa Union{Differential, Shift}
+                push!(syms, _array_root(arguments(v)[1]))
+            elseif op isa Union{Initial, MTKBase.Pre}
+                push!(syms, v)
+            else
+                return nothing
+            end
+        else
+            push!(syms, _array_root(v))
+        end
+    end
+    return syms
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The initialization equations of the compiled partition `ssys` whose symbols are all known to
+the partition. Equations that refer to variables of other partitions are dropped.
+"""
+function _known_initialization_equations(ssys::System)
+    known = Set{SymbolicT}()
+    for v in Iterators.flatten((unknowns(ssys), MTKBase.observables(ssys), MTKBase.get_ps(ssys)))
+        push!(known, _array_root(v))
+    end
+    iv = get_iv(ssys)
+    iv === nothing || push!(known, iv)
+    kept = Equation[]
+    for eq in MTKBase.get_initialization_eqs(ssys)
+        syms = _initialization_equation_symbols(eq)
+        syms === nothing && continue
+        all(in(known), syms) || continue
+        push!(kept, eq)
+    end
+    return kept
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Select, among the initialization equations `init_eqs` of the partition `ssys`, those the
+initialization problem of the partition can use given its operating point `pop`: the
+equations that determine at least one unknown or parameter bound to `missing` whose value
+`pop` does not fix. Observed variables are expanded to the unknowns and parameters they
+depend on for this purpose. Returns the selected equations and the set of symbols they
+involve.
+"""
+function _usable_initialization_equations(
+        ssys::System, init_eqs::Vector{Equation}, pop::Dict{SymbolicT, Any}
+    )
+    kept = Equation[]
+    determined = Set{SymbolicT}()
+    isempty(init_eqs) && return kept, determined
+    fixed = Set{SymbolicT}(_array_root(k) for k in keys(pop))
+    free = Set{SymbolicT}()
+    for v in unknowns(ssys)
+        r = _array_root(v)
+        r in fixed || push!(free, r)
+    end
+    binds = bindings(ssys)
+    for p in parameters(ssys)
+        get(binds, p, nothing) === COMMON_MISSING || continue
+        r = _array_root(p)
+        r in fixed || push!(free, r)
+    end
+    rules = Dict{SymbolicT, SymbolicT}(eq.lhs => eq.rhs for eq in MTKBase.observed(ssys))
+    maxiters = length(rules) + 1
+    for eq in init_eqs
+        expanded = fixpoint_sub(eq.lhs, rules; maxiters) ~ fixpoint_sub(eq.rhs, rules; maxiters)
+        syms = _initialization_equation_symbols(expanded)
+        syms === nothing && continue
+        any(in(free), syms) || continue
+        push!(kept, eq)
+        union!(determined, syms)
+    end
+    return kept, determined
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Values given by the initialization equations `init_eqs` of a discrete partition, keyed by the
+symbol they determine. An equation `Shift(t, -1)(x) ~ expr` provides the value of the history
+variable of `x`, an equation `x ~ expr` provides the value of `x` itself, which the history
+variable takes as well under the assumption of an operating point that is stationary across
+ticks.
+"""
+function _initialization_values(init_eqs::Vector{Equation})
+    values = Dict{SymbolicT, Any}()
+    for eq in reverse(init_eqs)
+        lhs = eq.lhs
+        if iscall(lhs) && operation(lhs) isa Shift
+            values[MTKBase.default_toterm(lhs)] = eq.rhs
+        else
+            values[lhs] = eq.rhs
+        end
+    end
+    return values
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Give a value to the parameters of `ssys` bound to `missing` that neither `pop` fixes nor one
+of the equations that involve the symbols in `determined` determines. The value is taken from
+`op`, then from `fallback`, then from the guess of the parameter, and is zero otherwise, in
+which case the parameter is recorded in `missing_vars`.
+"""
+function _undetermined_parameters!(
+        pop::Dict{SymbolicT, Any}, ssys::System, op::HybridOperatingPoint,
+        determined::Set{SymbolicT}, fallback::Dict{SymbolicT, Any}, missing_vars::Vector{SymbolicT}
+    )
+    binds = bindings(ssys)
+    gs = MTKBase.guesses(ssys)
+    for p in parameters(ssys)
+        get(binds, p, nothing) === COMMON_MISSING || continue
+        haskey(pop, p) && continue
+        _array_root(p) in determined && continue
+        val = _op_value(op, p)
+        val === nothing && (val = get(fallback, p, nothing))
+        val === nothing && (val = get(gs, p, nothing))
+        if val === nothing
+            push!(missing_vars, p)
+            val = _zero_value(p)
+        end
+        pop[p] = val
+    end
+    return pop
 end
 
 """
@@ -562,7 +715,8 @@ belongs to. Other symbols without a value are set to zero and recorded in `missi
 """
 function _partition_operating_point(
         ssys::System, op::HybridOperatingPoint, boundary_values::Vector{Pair{SymbolicT, SymbolicT}},
-        input_params::Vector{Pair{SymbolicT, SymbolicT}}, discrete::Bool, missing_vars::Vector{SymbolicT}
+        input_params::Vector{Pair{SymbolicT, SymbolicT}}, init_values::Dict{SymbolicT, Any},
+        discrete::Bool, missing_vars::Vector{SymbolicT}
     )
     result = Dict{SymbolicT, Any}()
     unresolved = Pair{SymbolicT, SymbolicT}[]
@@ -601,25 +755,12 @@ function _partition_operating_point(
     if discrete
         for v in unknowns(ssys)
             haskey(result, v) && continue
-            val = _history_value(op, ics, v)
+            val = _history_value(op, ics, init_values, v)
             if val === nothing
                 push!(missing_vars, v)
                 val = 0.0
             end
             result[v] = val
-        end
-        # Parameters bound to `missing` are determined by initialization in a continuous
-        # partition. A discrete partition has no initialization problem, so they need a value.
-        binds = bindings(ssys)
-        for p in parameters(ssys)
-            get(binds, p, nothing) === COMMON_MISSING || continue
-            haskey(result, p) && continue
-            val = _op_value(op, p)
-            if val === nothing
-                push!(missing_vars, p)
-                val = _zero_value(p)
-            end
-            result[p] = val
         end
     end
     return result, unresolved
@@ -629,30 +770,38 @@ end
     $(TYPEDSIGNATURES)
 
 The operating-point value of the history variable `v` of a discrete partition, that is, the
-value of the variable `v` is the history of, taken from `op` or from the initial values `ics`.
-For an element of an array variable, the value of the whole array is consulted as well.
-Returns `nothing` if no value is available.
+value of the variable `v` is the history of, taken from `op`, from the initial values `ics`
+or from the values `init_values` given by initialization equations. For an element of an
+array variable, the value of the whole array is consulted as well. Returns `nothing` if no
+value is available.
 """
-function _history_value(op::HybridOperatingPoint, ics, v::SymbolicT)
+function _history_value(op::HybridOperatingPoint, ics, init_values, v::SymbolicT)
     root = _array_root(v)
     base_root = MTKBase.getunshifted(root)
     base_root === nothing && (base_root = root)
+    function lookup(sym)
+        val = _op_value(op, sym)
+        val === nothing && (val = get(ics, sym, nothing))
+        val === nothing && (val = get(init_values, sym, nothing))
+        return val
+    end
     if root === v
-        val = _op_value(op, base_root)
+        val = lookup(base_root)
         val === nothing && (val = get(ics, v, nothing))
-        val === nothing && (val = get(ics, base_root, nothing))
+        val === nothing && (val = get(init_values, v, nothing))
         return val
     end
     idxs = Int[Int(SU.unwrap_const(i)) for i in arguments(v)[2:end]]
     base = unwrap(wrap(base_root)[idxs...])
-    val = _op_value(op, base)
+    val = lookup(base)
     val === nothing && (val = get(ics, v, nothing))
-    val === nothing && (val = get(ics, base, nothing))
+    val === nothing && (val = get(init_values, v, nothing))
     val === nothing || return val
-    arr = _op_value(op, base_root)
-    arr === nothing && (arr = get(ics, base_root, nothing))
-    arr isa AbstractArray || return nothing
-    return arr[idxs...]
+    arr = lookup(base_root)
+    arr === nothing && (arr = get(init_values, root, nothing))
+    arr isa AbstractArray && return arr[idxs...]
+    arr isa SymbolicT && SU.is_array_shape(SU.shape(arr)) && return unwrap(wrap(arr)[idxs...])
+    return nothing
 end
 
 """
@@ -835,10 +984,15 @@ produce a warning.
   [`LinearizationOpPoint`](@ref) wrapping a solution and a time. The values of the state
   variables of every partition are taken from `op`; the history variables of a discrete
   partition take the value of the variable they are the history of, that is, the operating
-  point is assumed to be stationary across ticks. The value of a signal crossing a clock
-  boundary is taken from `op` if present and otherwise evaluated from the operating point of
-  the partition the signal originates from, with the boundary signals entering that partition
-  that are not in `op` set to zero. Remaining values that are not available default to zero.
+  point is assumed to be stationary across ticks, or the value an initialization equation of
+  the model gives. The value of a signal crossing a clock boundary is taken from `op` if
+  present and otherwise evaluated from the operating point of the partition the signal
+  originates from, with the boundary signals entering that partition that are not in `op` set
+  to zero. The initialization equations of the model that refer to symbols of the continuous
+  partition only and determine a value `op` does not fix take part in the initialization of
+  the continuous partition, so parameters bound to `missing` and constant states that such
+  equations determine take their values from them. Remaining values that are not available
+  default to the guess of the symbol or to zero.
 - `t`: The time at which to linearize. Ignored if `op` is a `LinearizationOpPoint`.
 - `autodiff`: The `ADTypes.AbstractADType` used to compute the Jacobians. Defaults to
   `AutoForwardDiff()`.
@@ -994,7 +1148,7 @@ function linearize_hybrid(
     partitions_data = map(1:npart) do i
         discrete = i != continuous_id
         outs = [user_outputs[i]; boundary_out[i]]
-        ssys, boundary_params = _compile_partition!(
+        ssys, boundary_params, init_eqs = _compile_partition!(
             tss[i], boundary_inputs[i], outs, user_input_params[i], discrete, iv; kwargs...
         )
         term_to_param = Dict{SymbolicT, SymbolicT}(zip(boundary_inputs[i], boundary_params))
@@ -1006,7 +1160,7 @@ function linearize_hybrid(
         sample_time_values = Pair{SymbolicT, Float64}[
             term_to_param[term] => _sample_interval(id_to_clock[i]) for term in sample_time_terms[i]
         ]
-        (; ssys, discrete, outs, ins, boundary_values, sample_time_values, clock = id_to_clock[i])
+        (; ssys, discrete, outs, ins, boundary_values, sample_time_values, init_eqs, clock = id_to_clock[i])
     end
 
     # Operating points of the partitions. Boundary signals without a value in `op` are resolved
@@ -1015,14 +1169,26 @@ function linearize_hybrid(
     all_input_params = Pair{SymbolicT, SymbolicT}[param => var for (var, param) in zip(inputs, input_params)]
     pops = Vector{Dict{SymbolicT, Any}}(undef, npart)
     unresolved = Vector{Vector{Pair{SymbolicT, SymbolicT}}}(undef, npart)
+    # The initialization equations of the model that the initialization problem of the
+    # continuous partition uses, such as those determining parameters bound to `missing`.
+    init_eqs = Vector{Vector{Equation}}(undef, npart)
     for i in 1:npart
         pd = partitions_data[i]
+        init_values = pd.discrete ? _initialization_values(pd.init_eqs) : Dict{SymbolicT, Any}()
         pops[i], unresolved[i] = _partition_operating_point(
-            pd.ssys, hop, pd.boundary_values, all_input_params, pd.discrete, missing_vars
+            pd.ssys, hop, pd.boundary_values, all_input_params, init_values, pd.discrete, missing_vars
         )
         for (param, val) in pd.sample_time_values
             pops[i][param] = val
         end
+        if pd.discrete
+            # A discrete partition has no initialization problem.
+            init_eqs[i] = Equation[]
+            determined = Set{SymbolicT}()
+        else
+            init_eqs[i], determined = _usable_initialization_equations(pd.ssys, pd.init_eqs, pops[i])
+        end
+        _undetermined_parameters!(pops[i], pd.ssys, hop, determined, init_values, missing_vars)
     end
     order = continuous_id == 0 ? collect(1:npart) : [continuous_id; filter(!=(continuous_id), 1:npart)]
     codegen = (; eval_expression, eval_module)
@@ -1041,7 +1207,8 @@ function linearize_hybrid(
             values = _evaluate_outputs(pd.ssys, pd.outs, u0, p, t; codegen...)
         else
             lin_fun, _ = _linearization_function_compiled(
-                pd.ssys, pd.ins, pd.outs; op = pops[i], t, autodiff, linearization_kwargs...
+                pd.ssys, pd.ins, pd.outs; op = pops[i], t, autodiff,
+                initialization_eqs = init_eqs[i], linearization_kwargs...
             )
             lin_funs[i] = lin_fun
             prob = lin_fun.prob
@@ -1070,7 +1237,7 @@ function linearize_hybrid(
                     first(
                         _linearization_function_compiled(
                             pd.ssys, pd.ins, pd.outs; op = pops[i], t, autodiff = ad,
-                            linearization_kwargs...
+                            initialization_eqs = init_eqs[i], linearization_kwargs...
                         )
                     )
                 end
