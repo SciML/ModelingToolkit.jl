@@ -1,4 +1,5 @@
 using ForwardDiff, ModelingToolkitBase, Test, Zygote
+import Functors
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, SciMLBase
 using SymbolicIndexingInterface: ProblemState
 using SciMLStructures: Tunable, replace, canonicalize
@@ -71,4 +72,34 @@ end
     # the passthrough itself is non-differentiable
     w = getfield(p0, :nonnumeric)
     @test Zygote.gradient(w -> length(w.buffer), w)[1] === nothing
+
+    # Reading a nonnumeric value whose contents Zygote could attach a tangent to must not
+    # produce a structured `(buffer = ...)` tangent: SciMLSensitivity reconciles parameter
+    # cotangents with Functors and expects `nothing` there.
+    @parameters tup::Tuple{Float64, Float64} = (1.0, 2.0)
+    sys2 = mtkcompile(System([D(s) ~ v, D(v) ~ (1 - v) / m], t, [s, v], [m, tup]; name = :model2))
+    p1 = parameter_values(ODEProblem(sys2, [], (0.0, 1.0)))
+    g2 = Zygote.gradient(p -> sum(p.tunable) + p.nonnumeric[1][1][1], p1)[1]
+    @test g2.tunable == ones(length(p1.tunable))
+    @test g2.nonnumeric === nothing
+
+    # SciMLSensitivity walks a parameter object together with its cotangent through
+    # `Functors.fmap`, and also walks the parameter object alone to allocate buffers. The
+    # wrapper must survive both: pairing with the `nothing` cotangent of the nonnumeric
+    # slot, and having children so single-argument walks do not recurse on it forever.
+    # (Functors cannot pair a non-empty tuple with `nothing` at all, so the paired walk is
+    # only exercised with an empty nonnumeric portion, as it was before the wrapper.)
+    zeroed = Functors.fmap(x -> x isa AbstractArray{<:Number} ? zero(x) : x, p1)
+    @test zeroed isa typeof(p1)
+    @test iszero(zeroed.tunable)
+    @test zeroed.nonnumeric == p1.nonnumeric
+    sys3 = mtkcompile(System([D(s) ~ v, D(v) ~ (1 - v) / m], t, [s, v], [m]; name = :model3))
+    p3 = parameter_values(ODEProblem(sys3, [], (0.0, 1.0)))
+    @test isempty(p3.nonnumeric)
+    Δ = (; tunable = ones(length(p3.tunable)), initials = nothing, discrete = nothing,
+        constant = nothing, nonnumeric = nothing, caches = nothing)
+    out = Functors.fmap((y, x) -> x === nothing ? y : x, p3, Δ)
+    @test out isa typeof(p3)
+    @test out.tunable == ones(length(p3.tunable))
+    @test out.nonnumeric === ()
 end

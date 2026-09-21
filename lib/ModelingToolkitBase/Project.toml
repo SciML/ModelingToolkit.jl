@@ -68,6 +68,7 @@ TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [weakdeps]
+Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 CasADi = "c49709b8-5c63-11e9-2fb2-69db5844192f"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
@@ -83,6 +84,7 @@ PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
 [extensions]
+MTKFunctorsExt = "Functors"
 MTKBifurcationKitExt = "BifurcationKit"
 MTKCasADiDynamicOptExt = "CasADi"
 MTKChainRulesCoreExt = "ChainRulesCore"
@@ -131,6 +133,7 @@ EnzymeCore = "0.8"
 ExprTools = "0.1.10"
 FillArrays = "1.13.0"
 ForwardDiff = "1"
+Functors = "0.4, 0.5"
 FunctionWrappers = "1.1.2"
 FunctionWrappersWrappers = "1"
 Graphs = "1.5.2"

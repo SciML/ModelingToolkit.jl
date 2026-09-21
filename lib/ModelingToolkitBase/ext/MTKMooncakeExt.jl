@@ -86,4 +86,9 @@ Mooncake.tangent_type(::Type{<:MissingGuessValue.Type}) = NoTangent
 # Base.getproperty on AbstractSystem is not differentiable
 @zero_adjoint MinimalCtx Tuple{typeof(Base.getproperty), AbstractSystem, Symbol}
 
+# The nonnumeric portion of `MTKParameters` carries no derivative information; this mirrors
+# the Enzyme `inactive_type` rule and the ChainRules `NoTangent` rules.
+Mooncake.tangent_type(::Type{<:MTK.NonNumericWrapper}) = NoTangent
+@zero_adjoint MinimalCtx Tuple{typeof(Base.getproperty), MTK.NonNumericWrapper, Symbol}
+
 end
