@@ -20,11 +20,17 @@ function CacheWriter(
     )
     (; eval_expression, eval_module) = opts
     rps = reorder_parameters(sys)  # 1 arg to use the cached version
+    # The SCC cache buffers sit after the persistent `DiffCache` buffers in `p.caches`.
+    cache_offset = if has_index_cache(sys) && get_index_cache(sys) !== nothing
+        length(get_index_cache(sys).caches_buffer_sizes)
+    else
+        0
+    end
     cache_writes = SymbolicT[]
     for (i, T) in enumerate(buffer_types)
         regions = SU.RegionsT()
         values = Symbolics.SArgsT()
-        output = SCC_EXPLICITFUN_CACHE_OUT[i]
+        output = SCC_EXPLICITFUN_CACHE_OUT[i + cache_offset]
         cacheexprs = get(exprs, T, SymbolicT[])
         isempty(cacheexprs) && continue
         N = length(cacheexprs)
@@ -696,7 +702,7 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
             end
             BufferTemplate(T, n)
         end
-        p = rebuild_with_caches(p, templates...)
+        p = rebuild_with_caches(get_index_cache(sys), p, templates...)
     end
 
     # yes, `get_p_constructor` since this is only used for `LinearProblem` and

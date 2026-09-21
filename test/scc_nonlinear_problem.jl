@@ -614,3 +614,29 @@ end
     @test sol[x3] ≈ 1.3 atol = 1.0e-8
     @test sol[y3] ≈ 2.2 atol = 1.0e-8
 end
+
+@testset "Persistent `DiffCache` buffers coexist with SCC cache buffers in `p.caches`" begin
+    @variables u1 u2 u3 u4
+    @parameters a = 1.0
+    eqs = [
+        0 ~ u1^3 - 2u1 - a
+        0 ~ u2 - exp(u1)
+        0 ~ u3^2 + u3 - u2
+        0 ~ u4 - sin(u3) - u1
+    ]
+    @named sys = System(eqs, [u1, u2, u3, u4], [a])
+    sys, dcp = ModelingToolkitBase.add_diffcache(sys, 5)
+    sys = mtkcompile(sys)
+    prob = SCCNonlinearProblem(sys, [u1 => 1.0, u2 => 1.0, u3 => 1.0, u4 => 1.0])
+    ic = ModelingToolkit.get_index_cache(sys)
+    # the `DiffCache` buffer is the persistent prefix, SCC caches are appended after it
+    @test length(ic.caches_buffer_sizes) == 1
+    @test prob.p.caches[1] isa Vector{<:ModelingToolkitBase.DiffCacheAllocatorAPIWrapper}
+    @test length(prob.p.caches) > 1
+    @test prob.ps[dcp] isa ModelingToolkitBase.DiffCacheAllocatorAPIWrapper
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[u2] ≈ exp(sol[u1]) atol = 1.0e-8
+    @test sol[u3]^2 + sol[u3] ≈ sol[u2] atol = 1.0e-8
+    @test sol[u4] ≈ sin(sol[u3]) + sol[u1] atol = 1.0e-8
+end
