@@ -8,6 +8,10 @@ struct NonNumericWrapper{T}
     buffer::T
 end
 
+# The wrapper is transparent: it compares and hashes like the tuple it holds.
+Base.:(==)(a::NonNumericWrapper, b::NonNumericWrapper) = a.buffer == b.buffer
+Base.hash(a::NonNumericWrapper, h::UInt) = hash(a.buffer, hash(NonNumericWrapper, h))
+
 struct MTKParameters{T, I, D, C, N, H}
     tunable::T
     initials::I
