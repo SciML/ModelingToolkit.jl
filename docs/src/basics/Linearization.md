@@ -269,10 +269,62 @@ gain_above / gain_below
 For this plant the ratio is about 0.03, that is, the plant attenuates the content above the
 Nyquist frequency by a factor of thirty relative to its passband, and the sampled plant output
 is well described by the discrete-time model. For partitions with several sampled signals or
-inputs, the singular values (`sigma`) are the corresponding measure. For a signal leaving a
-discrete partition for a partition on a slower clock, the same check applies to the transfer
-function of the faster partition from its inputs to that signal, evaluated between the
-Nyquist frequencies of the two clocks.
+inputs, the singular values (`sigma`) are the corresponding measure.
+
+In a multi-rate model, a signal leaving a discrete partition for a partition on a slower
+clock is decimated at the slower clock, which folds the band between the two Nyquist
+frequencies, ``\pi / T_{s,\mathrm{slow}}`` to ``\pi / T_{s,\mathrm{fast}}``, onto the slow
+baseband. The gain of the fast partition alone, from its inputs to that signal and evaluated
+in this band, is a sufficient but conservative check: it ignores the attenuation the
+continuous partition provides and rejects a boundary whose fast partition does not filter.
+The check that accounts for the whole path assembles the composite of the continuous
+partition, discretized at the fast rate, and the fast partition, and evaluates the gain from
+all inputs of the composite to the boundary signal in the band. The held outputs of the slow
+partition have to be among these inputs: the hold at the slow rate produces images of the
+slow signal at multiples of its sampling frequency, which fall in this band and have to be
+attenuated by the continuous partition.
+
+```julia
+dt1 = 0.1  # fast clock
+dt2 = 0.3  # slow clock
+k1 = ShiftIndex(Clock(dt1))
+k2 = ShiftIndex(Clock(dt2))
+@variables xc(t) d(t) w(t) z(t)
+eqs = [
+    D(xc) ~ -xc + Hold(z) + d                       # plant
+    w(k1) ~ 0.5w(k1 - 1) + 0.5Sample(dt1)(xc)       # fast filter
+    z(k2) ~ 0.9z(k2 - 1) - 0.1Sample(dt2)(Hold(w))  # slow controller
+]
+@named mr = System(eqs, t)
+hlm = linearize_hybrid(mr, [d], [xc]; op = Dict(xc => 0.0, d => 0.0, w => 0.0, z => 0.0))
+ic = hlm.continuous_index
+ifast = findfirst(p -> p.Ts == dt1, hlm.partitions)
+islow = findfirst(p -> p.Ts == dt2, hlm.partitions)
+cont, fast = hlm.partitions[ic], hlm.partitions[ifast]
+F = ss(fast.A, fast.B, fast.C, fast.D, fast.Ts)
+Pf = c2d(ss(cont.A, cont.B, cont.C, cont.D), dt1)  # the plant at the fast rate
+cont_to_fast = clock_boundary(hlm, ic, ifast)
+fast_to_cont = clock_boundary(hlm, ifast, ic)      # no such signal in this model
+fast_to_slow = clock_boundary(hlm, ifast, islow)
+# The composite from all inputs of the plant (the disturbance and the held slow output) and
+# the user-specified inputs of the fast partition to the signal entering the slow partition.
+Gb = feedback(
+    Pf, F; Y1 = cont_to_fast.outputs, U2 = cont_to_fast.inputs,
+    Y2 = fast_to_cont.outputs, U1 = fast_to_cont.inputs,
+    W1 = 1:Pf.nu, Z1 = Int[], W2 = 1:fast.nu_user, Z2 = fast_to_slow.outputs,
+    pos_feedback = true
+)
+band = exp10.(range(log10(pi / dt2), log10(pi / dt1), length = 200))
+below = exp10.(range(log10(pi / dt2) - 3, log10(pi / dt2), length = 200))
+maximum(abs, freqresp(Gb, band)) / maximum(abs, freqresp(Gb, below))
+```
+
+For this model the ratio is about 0.06, whereas the fast filter alone attenuates the band by
+less than a factor of two, so the attenuation of the signal entering the slow partition comes
+from the plant. The content above the Nyquist frequency of the fast sampler is not
+represented by the composite; it is checked on the continuous partition as above. With more
+clocks, the signal entering a partition is checked on the composite of the continuous
+partition and the partitions on faster clocks than the receiving one.
 
 For multi-rate models, each discrete partition carries its own sample interval and the
 connections span partitions on different clocks. Such loops can be analyzed either by
@@ -280,7 +332,7 @@ converting the discrete partitions to continuous time with `d2c` or by lifting t
 common rate. In both cases the result is only meaningful for frequencies well below the
 Nyquist frequency of every sampler in the loop, since the frequency content above the Nyquist
 frequency of a sampler is folded by the sampling and is not represented by the individual
-partition linearizations.
+partition linearizations; the checks above indicate whether this content is small.
 
 The Jacobians of each partition are computed from the generated functions of the compiled
 partition with the AD backend `autodiff` (`AutoForwardDiff()` by default), so models calling
