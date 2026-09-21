@@ -128,6 +128,18 @@ end
     @test p.D == [1.0;;]
     # x(k) = 0.5 x(k-1) + u(k), y(k) = x(k) has the transfer function z / (z - 0.5)
     @test freqresp_isapprox(to_ss(p), CS.tf([1.0, 0.0], [1.0, -0.5], dt))
+
+    @testset "Without inputs" begin
+        @named sys0 = System([xd(k) ~ 0.5xd(k - 1), yd ~ xd], t)
+        for autodiff in (AutoForwardDiff(), AutoFiniteDiff())
+            hl0 = linearize_hybrid(sys0, [], [yd]; op = Dict(xd => 1.0), autodiff)
+            p0 = hl0.partitions[1]
+            @test p0.A ≈ [0.5;;]
+            @test size(p0.B) == (1, 0)
+            @test p0.C ≈ [0.5;;]
+            @test size(p0.D) == (1, 0)
+        end
+    end
 end
 
 @testset "Deeper history and array discrete state" begin
@@ -270,6 +282,22 @@ end
         @test_nowarn linearize_hybrid(sysm, [], [ym]; op = Dict(xm => 1.0), warn_missing_op = false)
         @test_nowarn linearize_hybrid(sysm, [], [ym]; op = Dict(xm => 1.0, udm => 0.0))
     end
+    @testset "Requested values of the state" begin
+        @variables xo(t) uo(t) yo(t)
+        @named syso = System([D(xo) ~ -xo + uo, yo ~ 2xo], t)
+        # An operating point that also fixes the output consistently retains the state.
+        hl = @test_nowarn linearize_hybrid(syso, [uo], [yo]; op = Dict(xo => 1.0, yo => 2.0, uo => 0.0))
+        p = hl.partitions[1]
+        @test p.x0 == [1.0]
+        # When the initialization moves a differential unknown away from its requested
+        # value, the warning names the unknown and both values.
+        pop = Dict{ModelingToolkit.SymbolicT, Any}(unwrap(xo) => 1.0)
+        @test_logs (:warn, r"did not retain the requested values of xo\(t\): requested 1.0, obtained 0.0") ModelingToolkit._warn_operating_point_mismatch(
+            p.sys, pop, [0.0], [1], "continuous partition"
+        )
+        @test_nowarn ModelingToolkit._warn_operating_point_mismatch(p.sys, pop, [1.0], [1], "continuous partition")
+    end
+
     @testset "Solution" begin
         @variables xs(t) us(t) ys(t)
         @named sim = System([D(xs) ~ -xs^3 + 0.5], t)
@@ -361,6 +389,25 @@ end
         @test err isa ErrorException
         @test occursin("Boolean variables", err.msg)
         @test occursin("sₜ₋₁", err.msg)
+    end
+
+    @testset "Input derivatives" begin
+        # The algebraic equation cannot be solved for `za`, so the derivative of the input
+        # enters the linearization.
+        @variables xa(t) za(t) ua(t)
+        @named sysa = System([D(xa) ~ za, 0 ~ za^3 + za - ua], t)
+        op_a = Dict(xa => 0.0, za => 0.0, ua => 0.0)
+        err = try
+            linearize_hybrid(sysa, [ua], [xa]; op = op_a)
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("appeared differentiated", err.msg)
+        @test occursin("ua_input", err.msg)
+        hl = linearize_hybrid(sysa, [ua], [xa]; op = op_a, allow_input_derivatives = true)
+        @test size(hl.partitions[1].B) == (2, 2)
     end
 
     @testset "Non-finite entries" begin
