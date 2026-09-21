@@ -96,8 +96,10 @@ end
     sys3 = mtkcompile(System([D(s) ~ v, D(v) ~ (1 - v) / m], t, [s, v], [m]; name = :model3))
     p3 = parameter_values(ODEProblem(sys3, [], (0.0, 1.0)))
     @test isempty(p3.nonnumeric)
-    Δ = (; tunable = ones(length(p3.tunable)), initials = nothing, discrete = nothing,
-        constant = nothing, nonnumeric = nothing, caches = nothing)
+    Δ = (;
+        tunable = ones(length(p3.tunable)), initials = nothing, discrete = nothing,
+        constant = nothing, nonnumeric = nothing, caches = nothing,
+    )
     out = Functors.fmap((y, x) -> x === nothing ? y : x, p3, Δ)
     @test out isa typeof(p3)
     @test out.tunable == ones(length(p3.tunable))
