@@ -323,6 +323,8 @@ the user-provided dictionary first, and then, when the operating point was given
 """
 struct HybridOperatingPoint{S}
     dict::Dict{SymbolicT, Any}
+    """The symbols whose values were given explicitly by the user."""
+    explicit::Vector{SymbolicT}
     sol::S
     t::Float64
 end
@@ -332,7 +334,7 @@ function HybridOperatingPoint(op::AbstractDict, t)
     for (k, v) in op
         dict[unwrap(k)] = v
     end
-    return HybridOperatingPoint(dict, nothing, Float64(t))
+    return HybridOperatingPoint(dict, collect(SymbolicT, keys(dict)), nothing, Float64(t))
 end
 
 function HybridOperatingPoint(op::LinearizationOpPoint, t)
@@ -358,10 +360,13 @@ function HybridOperatingPoint(op::LinearizationOpPoint, t)
             dict[p] = getp(sol, p)(sol)
         end
     end
+    explicit = SymbolicT[]
     for (k, v) in op.op
-        dict[unwrap(k)] = v
+        k = unwrap(k)
+        dict[k] = v
+        push!(explicit, k)
     end
-    return HybridOperatingPoint(dict, sol, t)
+    return HybridOperatingPoint(dict, explicit, sol, t)
 end
 
 # The value of `var` in `sol` at time `t`, or `nothing` when it is not available (a discrete
@@ -745,12 +750,32 @@ function _partition_operating_point(
     unresolved = Pair{SymbolicT, SymbolicT}[]
     input_vars = Set{SymbolicT}(var for (_, var) in input_params)
     parameter_only = _parameter_only_observables(ssys)
-    for (k, v) in op.dict
+    # Values given explicitly by the user may address observed variables, which then
+    # constrain the initialization of the partition.
+    for k in op.explicit
         # User inputs are bound to parameters; their values are set through those.
         k in input_vars && continue
         k in parameter_only && continue
         _settable_in(ssys, k) || continue
-        result[k] = v
+        result[k] = op.dict[k]
+    end
+    # A solution provides a value for every variable it stores. Only the unknowns and the
+    # parameters of the partition are taken from it; values of observed variables would
+    # repeat the constraints the unknowns already satisfy.
+    if op.sol !== nothing
+        if !discrete
+            for v in unknowns(ssys)
+                haskey(result, v) && continue
+                val = _op_value(op, v)
+                val === nothing || (result[v] = val)
+            end
+        end
+        for p in parameters(ssys)
+            haskey(result, p) && continue
+            iscall(p) && operation(p) isa Operator && continue
+            val = _op_value(op, p)
+            val === nothing || (result[p] = val)
+        end
     end
     ics = initial_conditions(ssys)
     for (param, var) in boundary_values
@@ -845,6 +870,30 @@ function _resolve_boundary_values!(
         return false
     end
     return pop
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Raise an error if the compiled partition `ssys`, its input parameters `inputs` or its
+outputs `outputs` contain Boolean-valued variables. Linearization is not defined with respect
+to a Boolean variable, and the generated functions of the partition cannot be evaluated with
+real-valued perturbations of it. `description` names the partition in the message.
+"""
+function _check_boolean_variables(ssys::System, inputs::Vector{SymbolicT}, outputs::Vector{SymbolicT}, description)
+    boolean = SymbolicT[]
+    for v in Iterators.flatten((unknowns(ssys), inputs, outputs))
+        T = symtype(v)
+        T <: AbstractArray && (T = eltype(T))
+        T <: Bool && push!(boolean, v)
+    end
+    isempty(boolean) && return nothing
+    return error(
+        """
+        The $description has the Boolean variables $(join(string.(boolean), ", ")). \
+        Linearization is not defined with respect to Boolean variables.
+        """
+    )
 end
 
 """
@@ -993,7 +1042,10 @@ of a partition fails, it is retried with `fallback_autodiff`.
 
 Only periodic clocks are supported. Partitions on other clocks, as well as continuous and
 discrete events, assertions and state machines of the model, are not accounted for and
-produce a warning.
+produce a warning. Linearization is not defined with respect to Boolean-valued variables,
+and a partition containing them produces an error. Non-finite entries in the matrices of a
+partition, which arise when an equation is not differentiable at the operating point, are
+reported by a warning.
 
 # Arguments
 
@@ -1015,7 +1067,10 @@ produce a warning.
   partition only and determine a value `op` does not fix take part in the initialization of
   the continuous partition, so parameters bound to `missing` and constant states that such
   equations determine take their values from them. Remaining values that are not available
-  default to the guess of the symbol or to zero.
+  default to the guess of the symbol or to zero. From a `LinearizationOpPoint`, the values
+  of the unknowns and parameters of each partition are taken; the values the solution holds
+  for observed variables are not, since they would repeat the constraints the unknowns
+  already satisfy.
 - `t`: The time at which to linearize. Ignored if `op` is a `LinearizationOpPoint`.
 - `autodiff`: The `ADTypes.AbstractADType` used to compute the Jacobians. Defaults to
   `AutoForwardDiff()`.
@@ -1185,6 +1240,10 @@ function linearize_hybrid(
         ]
         (; ssys, discrete, outs, ins, boundary_values, sample_time_values, init_eqs, clock = id_to_clock[i])
     end
+    for pd in partitions_data
+        description = pd.discrete ? "clock partition on $(pd.clock)" : "continuous partition"
+        _check_boolean_variables(pd.ssys, pd.ins, pd.outs, description)
+    end
 
     # Operating points of the partitions. Boundary signals without a value in `op` are resolved
     # from the partition they originate from, in the order continuous partition first.
@@ -1266,6 +1325,9 @@ function linearize_hybrid(
                 end
                 _linearize_continuous_partition(pd.ssys, lin_fun, pd.ins, pops[i], t; allow_input_derivatives)
             end
+        end
+        if !all(m -> all(isfinite, m), (mats.A, mats.B, mats.C, mats.D))
+            @warn "The linearization of the $description has non-finite entries. The equations of the partition are not differentiable at the operating point."
         end
         results[i] = ClockPartitionLinearization(
             mats.A, mats.B, mats.C, mats.D, unknowns(pd.ssys),

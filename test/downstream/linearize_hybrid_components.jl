@@ -10,6 +10,7 @@ using ModelingToolkit: unwrap
 using DiscreteComponents
 using DiscreteComponents: DiscretizationMethod
 using BlockComponents.Continuous: FirstOrder
+using BlockComponents.Math: Gain
 using BlockComponents.Sources: Constant
 using SynchToolkit
 using OrdinaryDiffEqTsit5
@@ -176,6 +177,36 @@ end
     @test freqresp_isapprox(to_ss(disc), CS.tf([1.0, 1.0, 1.0] / N, [1.0, 0.0, 0.0], dt))
 end
 
+@testset "Unit delay whose output is consumed" begin
+    # A one-sample delay `y ~ u(k - 1)` whose output enters another equation. The alias
+    # elimination of the discrete partition then rebuilds the shifted form of the alias
+    # target, which requires ModelingToolkitTearing to build it as a shift rather than as a
+    # differential (fix of `var_derivative!` for discrete systems).
+    systems = @named begin
+        plant = FirstOrder(k = 1, T = 1)
+        sampler = Sampler()
+        clock = DiscreteComponents.PeriodicClock(; dt)
+        delay = UnitDelay()
+        gain = Gain(k = -0.5)
+        zoh = ZeroOrderHold()
+    end
+    equations = [
+        connect(plant.y, sampler.u)
+        connect(sampler.y, delay.u, clock.y)
+        connect(delay.y, gain.u)
+        connect(gain.y, zoh.u)
+        connect(zoh.y, plant.u)
+    ]
+    @named model = System(equations, t, [], []; systems)
+    model_nns = toggle_namespacing(model, false)
+    hl = linearize_hybrid(model, [], [model_nns.plant.y]; op = Dict(model_nns.plant.x => 0.0), warn_missing_op = false)
+    disc = hl.partitions[2]
+    @test length(disc.unknowns) == 1
+    @test length(hl.connections) == 2
+    # From the sampled plant output to the held controller output: a delayed gain.
+    @test freqresp_isapprox(to_ss(disc), CS.tf(-0.5, [1, 0], dt))
+end
+
 @testset "Multi-rate loop" begin
     dt_fast = dt
     dt_slow = 4dt
@@ -278,7 +309,9 @@ end
     t0 = 2.0
     @named model = NonlinearLoop(; with_reference = false)
     model_nns = toggle_namespacing(model, false)
-    hl = linearize_hybrid(
+    # The solution provides values of the observed variables as well, which must not enter
+    # the initialization of the continuous partition as additional constraints.
+    hl = @test_nowarn linearize_hybrid(
         model, [model_nns.controller.u_s], [model_nns.plant.y];
         op = LinearizationOpPoint(sol, t0; op = Dict(model_nns.controller.u_s => 1.0)),
         warn_missing_op = false
