@@ -192,9 +192,12 @@ The `inputs` and `outputs` of a partition list the user-specified signals first,
 given by the user; the fields `nu_user` and `ny_user` give the number of user-specified
 inputs and outputs. The remaining signals are the boundary signals, grouped by the partition
 they come from or go to. The connections state which output of which partition drives which
-input of which other partition, `(; from, output, to, input)`, and correspond to the index
-pairs required by the advanced interface of `ControlSystemsBase.feedback`. The variables of the
-boundary signals can be used as signal names with `RobustAndOptimalControl.connect`.
+input of which other partition, `(; from, output, to, input)`. [`clock_boundary`](@ref)
+collects the connections from one partition to another as index vectors, `outputs` into the
+outputs of the partition the signals leave and `inputs` into the inputs of the partition they
+enter, which are the index sets required by the advanced interface of
+`ControlSystemsBase.feedback`. The variables of the boundary signals can be used as signal
+names with `RobustAndOptimalControl.connect`.
 
 For a discrete partition with sample interval `Ts`, the state consists of the values of the
 discrete variables at the previous tick, denoted `xₜ₋₁` in `unknowns`, and the matrices
@@ -220,11 +223,56 @@ instants when all discrete partitions share one clock, and closes the loop with
 using ControlSystemsBase
 Pd = c2d(ss(cont.A, cont.B, cont.C, cont.D), disc.Ts)
 Cd = ss(disc.A, disc.B, disc.C, disc.D, disc.Ts)
-# Connect output 1 of the continuous partition to input 1 of the discrete partition and
-# output 1 of the discrete partition to input 2 of the continuous partition; the remaining
-# input 1 (d) and output 1 (y) of the continuous partition are external.
-G = feedback(Pd, Cd; U1 = [2], Y1 = [1], U2 = [1], Y2 = [1], W1 = [1], Z1 = [1], pos_feedback = true)
+plant_to_ctrl = clock_boundary(hl, 1, 2)  # the plant output, sampled by the controller
+ctrl_to_plant = clock_boundary(hl, 2, 1)  # the controller output, held and applied to the plant
+# The boundary signals close the loop; the user-specified signals of the plant remain external.
+G = feedback(
+    Pd, Cd; Y1 = plant_to_ctrl.outputs, U2 = plant_to_ctrl.inputs,
+    Y2 = ctrl_to_plant.outputs, U1 = ctrl_to_plant.inputs,
+    W1 = 1:cont.nu_user, Z1 = 1:cont.ny_user, pos_feedback = true
+)
 ```
+
+This interconnection is the Redheffer star product of the two partitions over the boundary
+signals. The functions `starprod` and `lft` of ControlSystemsBase compute it when the
+interconnected signals are the last inputs and outputs of the first system and the first
+inputs and outputs of the second, and when every output is either external or
+interconnected. The partitions list the user-specified signals first, and a signal may be
+both a user-specified output and a boundary output, as `y` is here, so the index sets are
+passed to `feedback` explicitly in general. In the example above, `lft(Pd, Cd)` is not
+applicable because `y` is the only output of the plant, whereas a plant whose sampled output
+differs from its user-specified output is assembled with `lft(Pd, Cd)` directly when the
+controller has no user-specified signals.
+
+The discrete-time model describes the loop at the sampling instants. The content of the
+sampled signals above the Nyquist frequency of the sampler, ``\omega_N = \pi / T_s``, is
+folded by the sampling and is not represented by the model. Whether such content is present
+can be checked on the partition that produces the sampled signals. Every signal entering a
+sampler is an output of the continuous partition, driven by its inputs: the external inputs
+and the held signals, whose piecewise constant form carries images of the discrete signal at
+multiples of the sampling frequency. If the gain from all inputs of the continuous partition
+to the sampled outputs is small above ``\omega_N`` compared with the gain below it, the
+sampled signals carry little content that the sampling folds, and the discrete-time model of
+the loop is representative.
+
+```julia
+P = ss(cont.A, cont.B, cont.C, cont.D)
+Gb = P[plant_to_ctrl.outputs, :]  # from all inputs of the plant to the sampled signals
+ωN = pi / disc.Ts
+ω_above = exp10.(range(log10(ωN), log10(1000ωN), length = 200))
+ω_below = exp10.(range(log10(ωN) - 3, log10(ωN), length = 200))
+gain_above = maximum(abs, freqresp(Gb, ω_above))
+gain_below = maximum(abs, freqresp(Gb, ω_below))
+gain_above / gain_below
+```
+
+For this plant the ratio is about 0.03, that is, the plant attenuates the content above the
+Nyquist frequency by a factor of thirty relative to its passband, and the sampled plant output
+is well described by the discrete-time model. For partitions with several sampled signals or
+inputs, the singular values (`sigma`) are the corresponding measure. For a signal leaving a
+discrete partition for a partition on a slower clock, the same check applies to the transfer
+function of the faster partition from its inputs to that signal, evaluated between the
+Nyquist frequencies of the two clocks.
 
 For multi-rate models, each discrete partition carries its own sample interval and the
 connections span partitions on different clocks. Such loops can be analyzed either by
@@ -277,4 +325,5 @@ ModelingToolkit.LinearizationOpPoint
 linearize_hybrid
 HybridLinearization
 ClockPartitionLinearization
+clock_boundary
 ```

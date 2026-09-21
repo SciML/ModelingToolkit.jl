@@ -98,6 +98,29 @@ struct HybridLinearization
     continuous_index::Union{Nothing, Int}
 end
 
+"""
+    clock_boundary(hl::HybridLinearization, from::Integer, to::Integer)
+
+The signals crossing the clock boundary from partition `from` to partition `to` of `hl`, as
+a named tuple `(; from, to, outputs, inputs)`. `outputs[i]` is the index into
+`hl.partitions[from].outputs` of the `i`-th signal leaving partition `from`, and `inputs[i]`
+is the index into `hl.partitions[to].inputs` of the entry it drives. With
+`hl.partitions[from]` as the first system and `hl.partitions[to]` as the second, the keyword
+arguments `Y1 = outputs, U2 = inputs` of the advanced interface of
+`ControlSystemsBase.feedback` connect these signals. Both index vectors are empty if no
+signal crosses from `from` to `to`.
+"""
+function clock_boundary(hl::HybridLinearization, from::Integer, to::Integer)
+    outputs = Int[]
+    inputs = Int[]
+    for c in hl.connections
+        c.from == from && c.to == to || continue
+        push!(outputs, c.output)
+        push!(inputs, c.input)
+    end
+    return (; from = Int(from), to = Int(to), outputs, inputs)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", hl::HybridLinearization)
     n = length(hl.partitions)
     printstyled(io, "HybridLinearization"; bold = true, color = :blue)
