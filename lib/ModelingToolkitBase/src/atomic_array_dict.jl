@@ -152,14 +152,6 @@ function Base.setindex!(dd::AtomicArrayDict, v, k)
     return __unsafe_aad_setindex!(dd, v, k)
 end
 
-"""
-    $TYPEDSIGNATURES
-
-Write `v` under `k` without checking the key. Used for keys already known to be in the
-form the dictionary keeps - whole arrays and lowered record nodes - where `setindex!`
-would only re-validate, and by the normalizing paths which produce those keys in the
-first place.
-"""
 function __unsafe_aad_setindex!(dd::AtomicArrayDict, v, k::SymbolicT)
     return setindex!(dd.dict, v, k)
 end
