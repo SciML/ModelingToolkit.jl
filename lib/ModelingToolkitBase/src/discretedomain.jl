@@ -190,10 +190,11 @@ $(TYPEDEF)
 at the inferred clock for that equation.
 """
 struct SampleTime <: Operator
+    k::ShiftIndex
     init::Union{Nothing, Real}
 end
 
-SampleTime(; init::Union{Nothing, Real} = nothing) = SampleTime(init)()
+SampleTime(k::ShiftIndex = ShiftIndex(); init::Union{Nothing, Real} = nothing) = SampleTime(k, init)()
 (D::SampleTime)() = STerm(D, SArgsT(()); type = Real, shape = SU.ShapeVecT())
 SymbolicUtils.promote_symtype(::SampleTime) = Real
 SymbolicUtils.promote_shape(::SampleTime) = SU.ShapeVecT()
