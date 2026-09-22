@@ -1982,13 +1982,28 @@ function record_node_value(root::SymbolicT, node::SymbolicT, buffer::AbstractVec
     Symbolics.issymstruct(node) || error(
         lazy"Cannot assemble a value for $node of type $T from the leaves of $root."
     )
-    return T(
-        map(fieldnames(T)) do fname
-            field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
-            record_node_value(root, field, buffer)
-        end...
-    )
+    fieldvals = map(fieldnames(T)) do fname
+        field = Symbolics.SymbolicGetproperty{T, fname}()(node)::SymbolicT
+        record_node_value(root, field, buffer)
+    end
+    # A record with a symbolic field has no value of type `T` - its fields are usually
+    # concretely typed - so build the symbolic literal instead. Calling `T` would also
+    # reach a literal for narrow structs, via the constructor methods `@symstruct`
+    # registers, but not for wide ones, where none are generated.
+    if any(_contains_symbolic, fieldvals)
+        return Symbolics.record_literal(T, fieldvals)
+    end
+    return T(fieldvals...)
 end
+
+"""
+    $TYPEDSIGNATURES
+
+Whether `x` is symbolic, or is an array with a symbolic entry. Used to decide whether a
+record can be assembled as a concrete value or has to stay a symbolic literal.
+"""
+_contains_symbolic(x) = x isa SymbolicT
+_contains_symbolic(x::AbstractArray) = any(_contains_symbolic, x)
 
 """
     $TYPEDSIGNATURES

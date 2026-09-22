@@ -281,3 +281,65 @@ end
     @test prob.ps[q] == [2.0, 3.0]
     @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
 end
+
+@testset "a struct connector expands to one equation per field" begin
+    @connector function Pair2Output(; name)
+        @variables bus(t)::Pair2, [output = true]
+        return System(Equation[], t, [bus], []; name)
+    end
+    @connector function Pair2Input(; name)
+        @variables bus(t)::Pair2, [input = true]
+        return System(Equation[], t, [bus], []; name)
+    end
+    @component function Src(; name)
+        @variables h(t)
+        @named outp = Pair2Output()
+        eqs = [D(h) ~ -1.0, outp.bus.x ~ h, outp.bus.y ~ 2h]
+        return System(eqs, t; name, systems = [outp], initialization_eqs = [h ~ 1.0])
+    end
+    @component function Sink(; name)
+        @variables e(t)
+        @named inp = Pair2Input()
+        return System([D(e) ~ inp.bus.x + inp.bus.y], t; name, systems = [inp])
+    end
+
+    @named src = Src()
+    @named snk = Sink()
+    @named sys = System([connect(src.outp, snk.inp)], t; systems = [src, snk],
+        initialization_eqs = [snk.e ~ 0.0])
+
+    # A whole-record connection has no arithmetic, so it must not survive connector
+    # expansion as a single equation - `canonicalize_eq!` would fail to build `rhs - lhs`.
+    esys, _ = ModelingToolkitBase.expand_connections(sys, Val(true))
+    @test !any(eq -> Symbolics.issymstruct(Symbolics.unwrap(eq.lhs)), equations(esys))
+
+    ssys = mtkcompile(sys)
+    prob = ODEProblem(ssys, [], (0.0, 1.0))
+    # The connection leaves algebraic equations between the two ports, so this is a
+    # mass-matrix system rather than a plain ODE.
+    @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
+end
+
+@testset "record entries with symbolic leaves are kept" begin
+    @variables af(t)::ArrField q(t)
+    # One entry of the array field is symbolic. The whole field must still be recorded:
+    # previously the entry was silently dropped, losing the concrete entry with it.
+    d = Dict{ModelingToolkitBase.SymbolicT, ModelingToolkitBase.SymbolicT}(
+        Symbolics.unwrap(af.v[1]) => Symbolics.unwrap(q),
+        Symbolics.unwrap(af.v[2]) => Symbolics.unwrap(Symbolics.wrap(2.0)))
+    out = ModelingToolkitBase.as_atomic_dict_with_defaults(
+        d, ModelingToolkitBase.COMMON_NOTHING)
+    @test !isempty(out)
+    @test haskey(out, Symbolics.unwrap(af.v))
+end
+
+@testset "`record_node_value` assembles a literal from symbolic leaves" begin
+    @variables pr(t)::Pair2 q(t)
+    root = Symbolics.unwrap(pr)
+    val = ModelingToolkitBase.record_node_value(root, root, Any[Symbolics.unwrap(q), 2.0])
+    # No `Pair2` value can hold a symbolic, so the result is a symbolic struct literal.
+    @test Symbolics.is_record_literal(val)
+    @test Symbolics.symtype(val) === Pair2
+    # Fully concrete leaves still build the real value.
+    @test ModelingToolkitBase.record_node_value(root, root, Any[1.0, 2.0]) == Pair2(1.0, 2.0)
+end

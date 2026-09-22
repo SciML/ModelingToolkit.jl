@@ -109,12 +109,57 @@ Base.haskey(dd::AtomicArrayDict, k) = haskey(dd.dict, k)
 
 Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
+"""
+    $TYPEDSIGNATURES
+
+Whether `v` has no fields to project out of, and so is written to every node a record key
+lowers to rather than being decomposed. The sentinels used for "unspecified" and "solve
+for this" are the cases: `getproperty` on them would throw.
+"""
+function is_unprojectable_record_value(v::SymbolicT)
+    return v === COMMON_NOTHING || v === COMMON_MISSING
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Write `v` under the record key `k` by lowering it, one entry per
+[`record_lowering_nodes`](@ref), each holding the corresponding projection of `v`.
+
+A record key is not a representation this dictionary keeps: `as_atomic_dict_with_defaults`
+lowers the ones it builds, and nothing downstream expects one. Writing directly has to do
+the same, or a record key enters through a path which does not normalize it - the system
+field returned by `get_initial_conditions` is an `AtomicArrayDict`, and mutating it is a
+supported way to set initial conditions.
+"""
+function __aad_setindex_record!(dd::AtomicArrayDict, v::SymbolicT, k::SymbolicT)
+    broadcast_value = is_unprojectable_record_value(v)
+    for node in record_lowering_nodes(k)
+        entry = broadcast_value ? v : record_leaf_entry(node, k, v)
+        __unsafe_aad_setindex!(dd, entry, node)
+    end
+    return v
+end
+
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
     validate_atomic_array_key(k)
+    if Symbolics.issymstruct(k)
+        # `v` is commonly a plain value of the struct type rather than a symbolic, since
+        # that is the natural thing to write; wrap it so it can be projected.
+        return __aad_setindex_record!(dd, BSImpl.Const{VartypeT}(unwrap(v)), k)
+    end
     return __unsafe_aad_setindex!(dd, v, k)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Write `v` under `k` without checking the key. Used for keys already known to be in the
+form the dictionary keeps - whole arrays and lowered record nodes - where `setindex!`
+would only re-validate, and by the normalizing paths which produce those keys in the
+first place.
+"""
 function __unsafe_aad_setindex!(dd::AtomicArrayDict, v, k::SymbolicT)
     return setindex!(dd.dict, v, k)
 end
@@ -137,7 +182,8 @@ otherwise.
 """
 function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, default::SymbolicT)
     dd = AtomicArrayDict(empty(dict))
-    indexed_array_vals = empty(dict, SymbolicT, Array{SymbolicT})
+    # `root => [(index => value), ...]` for every entry written through an array element.
+    indexed_array_writes = empty(dict, SymbolicT, Vector{Pair{Any, SymbolicT}})
     record_vals = empty(dict, SymbolicT, Vector{SymbolicT})
     # `(root, node, value, leaf indices)` for every entry stored under a record.
     record_writes = Tuple{SymbolicT, SymbolicT, SymbolicT, Vector{Int}}[]
@@ -146,18 +192,32 @@ function as_atomic_dict_with_defaults(dict::AbstractDict{SymbolicT, SymbolicT}, 
         if kind === COMPOSITE_RECORD
             push!(record_writes, (root, k, v, record_node_indices(root, k)))
         elseif kind === COMPOSITE_ARRAY
-            buffer = get!(() -> fill(default, size(root)), indexed_array_vals, root)
-            si = get_stable_index(k)
-            buffer[si] = v
+            # Collected rather than applied here: the buffer they are applied to depends
+            # on whether `dict` also writes the whole array, which may come later in
+            # iteration order.
+            push!(get!(() -> Pair{Any, SymbolicT}[], indexed_array_writes, root),
+                get_stable_index(k) => v)
         else
             dd[k] = v
         end
     end
-    for (k, v) in indexed_array_vals
-        if all(SU.isconst, v)
-            dd[k] = BSImpl.Const{VartypeT}(unwrap_const.(v))
+    # Broadest writes first, as for records below: an entry for one element overrides the
+    # whole-array entry it belongs to, rather than replacing it wholesale. This matches
+    # `write_possibly_indexed_array!`, which seeds from the existing entry.
+    for (root, writes) in indexed_array_writes
+        buffer::Array{SymbolicT} = if haskey(dd, root)
+            collect(dd[root])
         else
-            dd[k] = BSImpl.Const{VartypeT}(v)
+            fill(default, size(root))
+        end
+        isempty(buffer) && continue
+        for (si, v) in writes
+            buffer[si] = v
+        end
+        if all(SU.isconst, buffer)
+            __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(unwrap_const.(buffer)), root)
+        else
+            __unsafe_aad_setindex!(dd, BSImpl.Const{VartypeT}(buffer), root)
         end
     end
     # Broadest writes first, so that a more specific entry overrides the record it
@@ -315,8 +375,9 @@ function lower_record_entries!(dd::AtomicArrayDict{SymbolicT}, default::Symbolic
                 push!(lowered, node => buffer[only(idxs)])
                 continue
             end
-            # An intermediate node is only known once every leaf below it is.
-            all(SU.isconst, view(buffer, idxs)) || continue
+            # Leaves below this node may be symbolic rather than constant, in which case
+            # the assembled value is a symbolic literal. Holes are already excluded above,
+            # so everything here is specified.
             vals = map(x -> SU.isconst(x) ? unwrap_const(x) : x, buffer)
             push!(lowered, node => BSImpl.Const{VartypeT}(record_node_value(k, node, vals)))
         end
@@ -344,7 +405,9 @@ Base.isempty(x::AtomicArraySet) = isempty(x.dd)
 Base.length(x::AtomicArraySet) = length(x.dd)
 Base.sizehint!(x::AtomicArraySet, n::Integer) = (sizehint!(x.dd, n); x)
 Base.in(item, x::AtomicArraySet) = haskey(x.dd, item)
-Base.push!(x::AtomicArraySet, item) = (x.dd[item] = nothing; x)
+# Deliberately bypasses the record lowering in `setindex!`: a set records which variables
+# exist, and its callers expect a record pushed into it to stay one entry.
+Base.push!(x::AtomicArraySet, item) = (__unsafe_aad_setindex!(x.dd, nothing, unwrap(item)); x)
 Base.delete!(x::AtomicArraySet, item) = (delete!(x.dd, item); x)
 Base.empty(::AtomicArraySet{D}) where {D} = AtomicArraySet{D}()
 Base.copy(x::AtomicArraySet{D}) where {D} = AtomicArraySet{D}(copy(x.dd))
