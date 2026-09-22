@@ -71,3 +71,12 @@ struct NotASystem <: ModelingToolkitBase.AbstractSystem end
         NotASystem(), sys; name = :ext, description = "", gui_metadata = nothing
     )
 end
+
+@testset "`extend` keeps constraints" begin
+    @variables x(t) y(t)
+    @parameters p
+    @named sys1 = System([D(x) ~ -x], t; constraints = [x ~ p])
+    @named sys2 = System([y ~ 2x], t)
+    @test issetequal(MT.get_constraints(extend(sys2, sys1)), [x ~ p])
+    @test issetequal(MT.get_constraints(extend(sys1, sys2)), [x ~ p])
+end

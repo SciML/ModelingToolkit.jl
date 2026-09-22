@@ -3424,6 +3424,11 @@ function extend(
             kwargs, (; assertions = merge(get_assertions(basesys), get_assertions(sys)))
         )
     end
+    if has_constraints(basesys)
+        kwargs = merge(
+            kwargs, (; constraints = union(get_constraints(basesys), get_constraints(sys)))
+        )
+    end
 
     newsys = T(args...; kwargs...)
 
