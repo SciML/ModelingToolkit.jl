@@ -1436,7 +1436,7 @@ inside `Initial` - is replaced by `0`.
 function steady_state_initialization_eqs(sys::System)
     # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
     # their own translated equations through the recursive conversion.
-    initeqs = get_initialization_eqs(sys)
+    initeqs = copy(get_initialization_eqs(sys))
     isempty(initeqs) && return initeqs
     D = Differential(get_iv(sys))
     subrules = Dict{SymbolicT, Float64}()
@@ -1454,30 +1454,34 @@ function steady_state_initialization_eqs(sys::System)
         push!(diff_heads, split_indexed_var(D(v))[1])
         push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
     end
-    vs = Set{SymbolicT}()
-    initeqs = map(expand_array_derivatives(initeqs)) do eq
-        eq = substitute(eq, subrules)
+    ir = get_irstructure(sys)
+    expand_array_derivatives!(initeqs, ir)
+    ss_subber = SU.IRSubstituter{false}(ir, subrules)
+    map!(ss_subber, initeqs, initeqs)
+    vs_buffer = Set{SymbolicT}()
+    vs = SU.IRStructureSearchBuffer(ir, vs_buffer)
+    map!(initeqs, initeqs) do eq
         empty!(vs)
         SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
-        rules = Dict{SymbolicT, Any}()
+        rules = Dict{SymbolicT, SymbolicT}()
         for v in vs
             if isinitial(v)
                 # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
                 # zero at steady state.
                 arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
                 if arg in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 end
             else
                 head = split_indexed_var(v)[1]
                 if head in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 elseif head in heads
                     rules[v] = Initial(v)
                 end
             end
         end
-        isempty(rules) ? eq : substitute(eq, rules)
+        isempty(rules) ? eq : SU.IRSubstituter{false}(ir, rules)(eq)
     end
     # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
     return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
