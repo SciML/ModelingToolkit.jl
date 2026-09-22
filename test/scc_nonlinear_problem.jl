@@ -748,3 +748,4 @@ end
 end
 
 include("scc_zero_state_regression.jl")
+include("scc_array_cache_regression.jl")
