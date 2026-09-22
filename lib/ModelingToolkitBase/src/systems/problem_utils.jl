@@ -833,12 +833,16 @@ function __apply_copy_template(valp, template)
         return p.constant[template.idx[1]][template.idx[2]]
     elseif template isa ParameterIndex{Nonnumeric, Tuple{Int, UnitRange{Int}}}
         return p.nonnumeric[template.idx[1]][template.idx[2]]
+    elseif template isa ParameterIndex{SciMLStructures.Caches, Tuple{Int, UnitRange{Int}}}
+        return p.caches[template.idx[1]][template.idx[2]]
     elseif template isa StaticBufferIndex{SciMLStructures.Discrete}
         return _static_buffer(p.discrete, template)[template.range]
     elseif template isa StaticBufferIndex{SciMLStructures.Constants}
         return _static_buffer(p.constant, template)[template.range]
     elseif template isa StaticBufferIndex{Nonnumeric}
         return _static_buffer(p.nonnumeric, template)[template.range]
+    elseif template isa StaticBufferIndex{SciMLStructures.Caches}
+        return _static_buffer(p.caches, template)[template.range]
     elseif template isa UnitRange{Int}
         return u[template]
     elseif template isa ObservedWrapper
@@ -850,9 +854,12 @@ function __apply_copy_template(valp, template)
     elseif template isa ParameterIndex{SciMLStructures.Constants, <:Tuple{Vararg{Int}}}
         i, j, rest... = template.idx
         return p.constant[i][j][rest...]
-    elseif template isa ParameterIndex{SciMLStructures.Nonnumeric, <:Tuple{Vararg{Int}}}
+    elseif template isa ParameterIndex{Nonnumeric, <:Tuple{Vararg{Int}}}
         i, j, rest... = template.idx
         return p.nonnumeric[i][j][rest...]
+    elseif template isa ParameterIndex{SciMLStructures.Caches, <:Tuple{Vararg{Int}}}
+        i, j, rest... = template.idx
+        return p.caches[i][j][rest...]
     else
         # MethodError because this is a manual dispatch chain
         throw(MethodError(__apply_copy_template, (valp, template)))
@@ -1077,7 +1084,7 @@ function CopyParamsByTemplate(srcsys::AbstractSystem, syms::AbstractArray{Symbol
     for i in eachindex(template)
         entry = template[i]
         # Only lift the `(bufidx, range)` form into the type domain.
-        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric} && entry.idx isa Tuple{Int, UnitRange{Int}}
+        if entry isa ParameterIndex && entry.portion isa Union{SciMLStructures.Discrete, SciMLStructures.Constants, Nonnumeric, SciMLStructures.Caches} && entry.idx isa Tuple{Int, UnitRange{Int}}
             delete!(elem_types, typeof(entry))
             template[i] = StaticBufferIndex{typeof(entry.portion)}(entry.idx)
             push!(elem_types, typeof(template[i]))
@@ -1149,9 +1156,12 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     end
     initialvals = recon.initials_fn(src)
     nonnumerics = recon.nonnumerics_fn(src)::typeof(dst_ps.nonnumeric)
+    caches = oldcache isa Tuple{} ? () : copy.(oldcache)
+    # The `DiffCache` scratch buffers are not copied from `src`; they are re-typed to
+    # match the value type of the reconstructed parameters.
     (; diffcache_buffer_idx) = recon
     if !iszero(diffcache_buffer_idx)
-        @set! nonnumerics[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(nonnumerics[diffcache_buffer_idx])
+        @set! caches[diffcache_buffer_idx] = DiffCacheAllocatorAPIWrapper{ForwardDiff.valtype(eltype(initialvals))}.(caches[diffcache_buffer_idx])
     end
     # This `convert` exists because a `Real` discrete might get its value from an
     # integer function of integer parameters/discretes. This ends up creating a
@@ -1159,7 +1169,7 @@ function (recon::MTKParametersReconstructor)(src, dst_ps::MTKParameters)
     return MTKParameters(
         tunablevals, initialvals,
         convert(typeof(dst_ps.discrete), recon.discretes_fn(src)),
-        recon.consts_fn(src), nonnumerics, oldcache isa Tuple{} ? () : copy.(oldcache)
+        recon.consts_fn(src), nonnumerics, caches
     )
 end
 
@@ -1234,7 +1244,6 @@ function MTKParametersReconstructor(
     else
         Base.Fix1(broadcast, p_constructor) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[4]; kwargs...)
     end
-    diffcache_buffer_idx = 0
     nonnumeric_getter = if isempty(syms[5])
         Returns(())
     else
@@ -1244,18 +1253,17 @@ function MTKParametersReconstructor(
                 Vector{bufsize.type}
             end
         )
-
-        diffcache_params = SU.getmetadata(dstsys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
-        if !isempty(diffcache_params)
-            representative = first(keys(diffcache_params))
-            diffcache_buffer_idx, _ = ic.nonnumeric_idx[representative]
-            @set! buftypes[diffcache_buffer_idx] = identity
-            for (i, sym) in enumerate(syms[5][diffcache_buffer_idx])
-            end
-        end
         # nonnumerics retain the assigned buffer type without narrowing
         Base.Fix1(broadcast, _p_constructor) ∘
             Base.Fix1(Broadcast.BroadcastFunction(call), buftypes) ∘ Tuple ∘ CopyParamsByTemplate(srcsys, syms[5]; kwargs...)
+    end
+
+    # `DiffCache` buffers live in `caches` and are taken from the destination, not `src`.
+    diffcache_buffer_idx = 0
+    diffcache_params = SU.getmetadata(dstsys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    if !isempty(diffcache_params)
+        ic = get_index_cache(dstsys)
+        diffcache_buffer_idx, _ = ic.caches_idx[first(keys(diffcache_params))]
     end
 
     return MTKParametersReconstructor(tunable_getter, initials_getter, discs_getter, const_getter, nonnumeric_getter, diffcache_buffer_idx)

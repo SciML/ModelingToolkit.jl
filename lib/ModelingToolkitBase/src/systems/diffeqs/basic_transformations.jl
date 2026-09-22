@@ -1195,6 +1195,13 @@ Add a symbolic `DiffCache` containing a buffer of length `len` to `sys`. Return 
 and the symbolic parameter in it representing the added `DiffCache` wrapped in a
 [`DiffCacheAllocatorAPIWrapper`](@ref).
 
+The buffer is stored in the `caches` portion of `MTKParameters` (see [`MTKParameters`](@ref)),
+ahead of any cache buffers appended by `SCCNonlinearProblem`. It is scratch space that
+generated code writes into, so it is deliberately kept out of the `nonnumeric` portion,
+which is declared inactive for Enzyme and non-differentiable for ChainRules. `copy` and
+`remake_buffer` shallow-copy the buffer vector, so copies of an `MTKParameters` share the
+underlying `DiffCache`; problems built from such copies must not be solved concurrently.
+
 Only intended for internal use by ModelingToolkitBase, ModelingToolkitTearing and ModelingToolkit.
 """
 function add_diffcache(sys::AbstractSystem, len::Int)

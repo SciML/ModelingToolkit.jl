@@ -135,6 +135,10 @@ function MTKParameters(
         Vector{temp.type}(undef, temp.length)
             for temp in ic.nonnumeric_buffer_sizes
     )
+    caches_buffer = Tuple(
+        Vector{temp.type}(undef, temp.length)
+            for temp in ic.caches_buffer_sizes
+    )
     function set_value(sym, val)
         done = true
         if haskey(ic.tunable_idx, sym)
@@ -164,9 +168,9 @@ function MTKParameters(
     diffcache_sizes = zeros(Int, length(diffcache_params))
     if !isempty(diffcache_params)
         representative = first(keys(diffcache_params))
-        diffcaches_buffer_idx, _ = ic.nonnumeric_idx[representative]
+        diffcaches_buffer_idx, _ = ic.caches_idx[representative]
         for (param, len) in diffcache_params
-            _, j = ic.nonnumeric_idx[param]
+            _, j = ic.caches_idx[param]
             diffcache_sizes[j] = len
         end
     end
@@ -228,9 +232,9 @@ function MTKParameters(
     if !iszero(diffcaches_buffer_idx)
         cache_elT = eltype(initials_buffer)
         diffcaches_elT = DiffCacheAllocatorAPIWrapper{cache_elT}
-        @set! nonnumeric_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(nonnumeric_buffer[diffcaches_buffer_idx])
+        @set! caches_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(caches_buffer[diffcaches_buffer_idx])
         for (i, len) in enumerate(diffcache_sizes)
-            nonnumeric_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
+            caches_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
         end
     end
     # Don't narrow nonnumeric types
@@ -240,19 +244,43 @@ function MTKParameters(
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
-        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(()),
+        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(caches_buffer),
     }(
         tunable_buffer,
-        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, ()
+        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, caches_buffer
     )
     return mtkps
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Append freshly allocated cache buffers described by `cache_templates` to the `caches`
+portion of `p`. The leading `length(ic.caches_buffer_sizes)` buffers are the persistent
+`DiffCache` buffers registered in the index cache and are kept; anything appended by an
+earlier call is dropped.
+"""
+function rebuild_with_caches(ic::IndexCache, p::MTKParameters, cache_templates::BufferTemplate...)
+    return _rebuild_with_caches(p, length(ic.caches_buffer_sizes), cache_templates)
+end
+
+# Compatibility method for callers that predate the `IndexCache` argument. The
+# persistent `DiffCache` buffers are recognised by their element type.
 function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate...)
+    npersistent = 0
+    for buf in p.caches
+        eltype(buf) <: DiffCacheAllocatorAPIWrapper || break
+        npersistent += 1
+    end
+    return _rebuild_with_caches(p, npersistent, cache_templates)
+end
+
+function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
         Vector{template.type}(undef, template.length)
     end
-    return @set p.caches = buffers
+    persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
+    return @set p.caches = (persistent..., buffers...)
 end
 
 function narrow_buffer_type(buffer::AbstractArray; p_constructor = identity)
@@ -488,6 +516,8 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
         return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
     elseif portion === NONNUMERIC_PORTION
         return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
+    elseif portion isa SciMLStructures.Caches
+        return isempty(k) ? p.caches[i][j] : p.caches[i][j][k...]
     else
         error("Unhandled portion $portion")
     end
@@ -536,6 +566,12 @@ function SymbolicIndexingInterface.set_parameter!(
                 p.nonnumeric[i][j] = val
             else
                 p.nonnumeric[i][j][k...] = val
+            end
+        elseif portion isa SciMLStructures.Caches
+            if isempty(k)
+                p.caches[i][j] = val
+            else
+                p.caches[i][j][k...] = val
             end
         else
             error("Unhandled portion $portion")
@@ -607,8 +643,8 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     if stype <: FnType
         stype = fntype_to_function_type(stype)
     end
-    # Nonnumeric parameters have to match the type
-    if portion === NONNUMERIC_PORTION
+    # Nonnumeric and cache parameters have to match the type
+    if portion === NONNUMERIC_PORTION || portion isa SciMLStructures.Caches
         val isa stype && return nothing
         throw(
             ParameterTypeException(
