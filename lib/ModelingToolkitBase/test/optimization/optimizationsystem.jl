@@ -1,9 +1,9 @@
 using ModelingToolkitBase, SciMLBase, SparseArrays, Test, Optimization, OptimizationMOI,
     Ipopt, AmplNLWriter, SymbolicIndexingInterface,
-    LinearAlgebra, ADTypes, ForwardDiff
+    LinearAlgebra, ADTypes, ForwardDiff, OptimizationBase
 using OptimizationOptimJL: Optim
 using Ipopt: Ipopt_jll
-using Symbolics: value
+using Symbolics: Symbolics, value
 
 @testset "basic" begin
     @variables x y
@@ -80,7 +80,7 @@ end
         sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
         grad = true, hess = true, cons_j = true, cons_h = true
     )
-    @test prob.f.cons_expr isa Vector{Expr}
+    @test prob.f.cons_expr isa AbstractVector{Expr}
     @test prob.f.expr isa Expr
     @test prob.f.sys === sys
     sol = solve(prob, Optim.IPNewton())
@@ -708,5 +708,187 @@ end
         bprob = OptimizationProblem(complete(bsys), [z => [1.0, 1.0]])
         @test bprob.lb == [0.5, 0.5]
         @test bprob.ub == [3.0, 3.0]
+    end
+end
+
+@testset "Array-valued constraints" begin
+    @variables x[1:3] y
+    @parameters a[1:3] N[1:1, 1:3]
+    op = [x => [1.0, 2.0, 3.0], y => 0.5, a => [1.0, -1.0, 0.5], N => [1.0 2.0 3.0]]
+    # scalar, 3-vector, scalar and `1 × 3` constraints interleaved, so the rows of each
+    # array constraint must land between the scalar rows in declaration order
+    cstrs = [
+        y ~ 1.0,
+        x .- a ~ zeros(3),
+        y^2 ≲ 4.0,
+        Inequality(x' .* N, ones(1, 3), Symbolics.geq),
+    ]
+    @named sys = System(Equation[], [x, y], [a, N]; costs = [sum(abs2, x) + y^2], constraints = cstrs)
+    sys = complete(sys)
+
+    cons_val = [-0.5, 0.0, 3.0, 2.5, -3.75, 0.0, -3.0, -8.0]
+    cons_jac = [
+        0.0 0.0 0.0 1.0
+        1.0 0.0 0.0 0.0
+        0.0 1.0 0.0 0.0
+        0.0 0.0 1.0 0.0
+        0.0 0.0 0.0 1.0
+        -1.0 0.0 0.0 0.0
+        0.0 -2.0 0.0 0.0
+        0.0 0.0 -3.0 0.0
+    ]
+    cons_hess = [zeros(4, 4) for _ in 1:8]
+    cons_hess[5][4, 4] = 2.0
+
+    prob = OptimizationProblem(sys, op; cons_j = true, cons_h = true)
+    @test prob.lcons == [0.0, 0.0, 0.0, 0.0, -Inf, -Inf, -Inf, -Inf]
+    @test prob.ucons == zeros(8)
+    # `cons_expr` is only scalarized when an expression-graph consumer reads it
+    @test prob.f.cons_expr.exprs === nothing
+    @test length(prob.f.cons_expr) == 8
+    @test prob.f.cons_expr.exprs === nothing
+    @test prob.f.cons_expr[3] == ModelingToolkitBase.Code.toexpr(
+        ModelingToolkitBase.expand(ModelingToolkitBase.canonical_constraints(sys)[3])
+    )
+    @test length(prob.f.cons_expr.exprs) == 8
+    @test prob.f.cons(prob.u0, prob.p) ≈ cons_val
+    res = zeros(8)
+    prob.f.cons(res, prob.u0, prob.p)
+    @test res ≈ cons_val
+    @test prob.f.cons_j(prob.u0, prob.p) ≈ cons_jac
+    @test all(prob.f.cons_h(prob.u0, prob.p) .≈ cons_hess)
+
+    sprob = OptimizationProblem(sys, op; cons_j = true, cons_h = true, cons_sparse = true)
+    @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ cons_jac
+    H = similar.(sprob.f.cons_hess_prototype)
+    sprob.f.cons_h(H, sprob.u0, sprob.p)
+    @test all(H .≈ cons_hess)
+    @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ cons_hess)
+
+    adprob = OptimizationProblem(sys, op; adtype = AutoForwardDiff())
+    adf = OptimizationBase.instantiate_function(
+        adprob.f, adprob.u0, adprob.f.adtype, adprob.p, 8; cons_j = true, cons_h = true
+    )
+    J = zeros(8, 4)
+    adf.cons_j(J, adprob.u0)
+    @test J ≈ cons_jac
+    H = [zeros(4, 4) for _ in 1:8]
+    adf.cons_h(H, adprob.u0)
+    @test all(H .≈ cons_hess)
+
+    @testset "`dims` reductions" begin
+        @parameters M[1:2, 1:3] c
+        Mval = [1.0 0.0 1.0; 1.0 2.0 0.0]
+        rsys = complete(
+            System(
+                Equation[], [x], [M, c]; costs = [sum(abs2, x)], name = :rsys,
+                constraints = [Inequality(sum(abs2, M .* x'; dims = 1), c, Symbolics.leq)]
+            )
+        )
+        rop = [x => [1.0, 2.0, 3.0], M => Mval, c => 2.0]
+        # column `j` of `sum(abs2, M .* x'; dims = 1)` is `(M[1, j]^2 + M[2, j]^2) * x[j]^2`
+        rval = [2.0 * 1.0, 4.0 * 4.0, 1.0 * 9.0] .- 2.0
+        rjac = [4.0 0.0 0.0; 0.0 16.0 0.0; 0.0 0.0 6.0]
+        rprob = OptimizationProblem(rsys, rop; adtype = AutoForwardDiff())
+        @test rprob.lcons == fill(-Inf, 3)
+        @test rprob.ucons == zeros(3)
+        @test rprob.f.cons(rprob.u0, rprob.p) ≈ rval
+        rf = OptimizationBase.instantiate_function(
+            rprob.f, rprob.u0, rprob.f.adtype, rprob.p, 3; cons_j = true
+        )
+        J = zeros(3, 3)
+        rf.cons_j(J, rprob.u0)
+        @test J ≈ rjac
+
+        rhess = [zeros(3, 3) for _ in 1:3]
+        for (j, h) in enumerate([4.0, 8.0, 2.0])
+            rhess[j][j, j] = h
+        end
+        sprob = OptimizationProblem(rsys, rop; cons_j = true, cons_h = true)
+        @test sprob.f.cons(sprob.u0, sprob.p) ≈ rval
+        @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ rjac
+        @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ rhess)
+        @test length(sprob.f.cons_expr) == 3
+    end
+
+    @testset "expression graph through AmplNLWriter" begin
+        @variables u v w
+        @parameters M[1:2, 1:3] c
+        cases = [
+            ([[u, v] ~ [1.0, 2.0]], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            ([[u] ~ [1.0], v ~ 2.0], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            (
+                [Inequality(sum(abs2, M .* [u v w]; dims = 1), c, Symbolics.leq)],
+                (u - 2.0)^2 + (v - 2.0)^2 + (w - 2.0)^2, [u, v, w],
+                [1.0, sqrt(0.5), sqrt(2.0)],
+            ),
+        ]
+        for (cstrs, cost, dvs, uopt) in cases
+            gsys = complete(
+                System(Equation[], dvs, [M, c]; costs = [cost], constraints = cstrs, name = :gsys)
+            )
+            gop = [dvs .=> 0.5; M => [1.0 0.0 1.0; 1.0 2.0 0.0]; c => 2.0]
+            gprob = OptimizationProblem(gsys, gop)
+            @test length(gprob.f.cons_expr) == length(gprob.lcons)
+            gsol = solve(gprob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+            @test gprob.f.cons_expr.exprs !== nothing
+            @test SciMLBase.successful_retcode(gsol)
+            @test gsol.u ≈ uopt atol = 1.0e-6
+        end
+    end
+
+    @testset "Ipopt reaches the analytic optimum" begin
+        @variables z[1:3]
+        @parameters M[1:2, 1:3] c
+        pvals = [a => [1.0, -1.0, 0.5], M => [1.0 0.0 1.0; 1.0 2.0 0.0], c => 2.0]
+        u0 = [x => zeros(3), z => fill(0.5, 3), y => 0.0]
+        cost = sum(abs2, x) + sum(abs2, z .- 2.0) + (y - 3.0)^2
+        # `x = a` from the equality, `y = 1` and `colsq[j] * z[j]^2 = c` active, where
+        # `colsq = [2, 4, 1]` are the column sums of squares of `M`
+        xopt = [1.0, -1.0, 0.5]
+        zopt = [1.0, sqrt(0.5), sqrt(2.0)]
+        yopt = 1.0
+        objopt = sum(abs2, xopt) + sum(abs2, zopt .- 2.0) + (yopt - 3.0)^2
+
+        function check_optimum(sol)
+            @test SciMLBase.successful_retcode(sol)
+            @test sol[x] ≈ xopt atol = 1.0e-6
+            @test sol[z] ≈ zopt atol = 1.0e-6
+            @test sol[y] ≈ yopt atol = 1.0e-6
+            @test sol.objective ≈ objopt atol = 1.0e-6
+        end
+
+        @named isys = System(
+            Equation[], [x, z, y], [a, M, c]; costs = [cost],
+            constraints = [
+                x .- a ~ zeros(3),
+                y ≲ 1.0,
+                Inequality(sum(abs2, M .* z'; dims = 1), c, Symbolics.leq),
+            ]
+        )
+        iprob = OptimizationProblem(complete(isys), [u0; pvals]; adtype = AutoForwardDiff())
+        @test length(iprob.lcons) == 7
+        isol = solve(iprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(isol)
+        # Ipopt only calls the generated functions, so `cons_expr` is never built
+        @test iprob.f.cons_expr.exprs === nothing
+
+        # the same problem with symbolic derivatives instead of AD, which needs a cost
+        # without lazy array operations
+        scost = sum(x[i]^2 + (z[i] - 2.0)^2 for i in 1:3) + (y - 3.0)^2
+        @named ssys = System(
+            Equation[], [x, z, y], [a, M, c]; costs = [scost],
+            constraints = ModelingToolkitBase.get_constraints(isys)
+        )
+        sprob = OptimizationProblem(
+            complete(ssys), [u0; pvals]; grad = true, hess = true, cons_j = true, cons_h = true
+        )
+        ssol = solve(sprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(ssol)
+
+        msys = mtkcompile(isys)
+        mprob = OptimizationProblem(msys, [u0; pvals]; adtype = AutoForwardDiff())
+        msol = solve(mprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(msol)
     end
 end

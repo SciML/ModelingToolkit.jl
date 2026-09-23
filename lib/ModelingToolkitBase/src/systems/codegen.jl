@@ -1121,16 +1121,154 @@ function generate_cost_hessian(
     return return_sparsity ? (fn, sparsity) : fn
 end
 
-function canonical_constraints(sys::System)
-    return map(constraints(sys)) do cstr
-        Symbolics.canonical_form(cstr).lhs
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `r` of the constraint `cstr` such that the constraint reads `r ~ 0` for an
+`Equation` and `r ≲ 0` for an `Inequality`. For an array-valued constraint `r` is the
+array residual; a scalar side of the constraint is broadcast against the array side.
+"""
+function constraint_residual(cstr::Union{Equation, Inequality})
+    lhs = unwrap(cstr.lhs)
+    rhs = unwrap(cstr.rhs)
+    lsh = SU.shape(lhs)
+    rsh = SU.shape(rhs)
+    if !SU.is_array_shape(lsh) && !SU.is_array_shape(rsh)
+        return unwrap(Symbolics.canonical_form(cstr).lhs)::SymbolicT
     end
+    if SU.is_array_shape(lsh) && SU.is_array_shape(rsh) && size(lhs) != size(rhs)
+        throw(
+            ArgumentError(
+                "The two sides of the constraint `$cstr` have different sizes \
+                $(size(lhs)) and $(size(rhs))."
+            )
+        )
+    end
+    if cstr isa Inequality && cstr.relational_op != Symbolics.leq
+        lhs, rhs = rhs, lhs
+    end
+    res = unwrap(broadcast(-, Symbolics.wrap(lhs), Symbolics.wrap(rhs)))::SymbolicT
+    SU.shape(res) isa SU.Unknown &&
+        throw(ArgumentError("Cannot lower the constraint `$cstr` of unknown size."))
+    return res
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Generate the constraint function for a [`System`](@ref).
+The number of rows the constraint `cstr` contributes to the constraint function: `1` for
+a scalar constraint and the number of elements for an array-valued one.
+"""
+function constraint_length(cstr::Union{Equation, Inequality})
+    sh = SU.shape(constraint_residual(cstr))::SU.ShapeVecT
+    return SU.is_array_shape(sh) ? prod(length, sh; init = 1) : 1
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residuals of the constraints of `sys` (see [`constraint_residual`](@ref)), one per
+row of the constraint function. An array-valued constraint contributes one row per
+element in column-major order, and the rows of all constraints follow the order of
+`constraints(sys)`.
+
+If `scalarize` is `true` the row of an array element is its scalarized expression, as
+needed for symbolic differentiation and for the expression graph `cons_expr`, with
+reductions over `dims` expanded by `expand_dims_reductions`. Otherwise it is the
+unexpanded `r[i]` of the array residual `r`, so that generated code evaluates `r` once with
+its array operations intact.
+"""
+function canonical_constraints(sys::System; scalarize::Bool = true)
+    rows = SymbolicT[]
+    for cstr in constraints(sys)
+        res = constraint_residual(cstr)
+        sh = SU.shape(res)
+        if !SU.is_array_shape(sh)
+            push!(rows, scalarize ? expand_dims_reductions(res) : res)
+        elseif scalarize
+            append!(rows, vec(collect(expand_dims_reductions(res))::Array{SymbolicT}))
+        else
+            for idxs in Iterators.product(sh...)
+                args = SArgsT()
+                push!(args, res)
+                for i in idxs
+                    push!(args, SConst(i))
+                end
+                push!(
+                    rows, BSImpl.Term{VartypeT}(
+                        getindex, args; type = eltype(symtype(res)), shape = SU.ShapeVecT()
+                    )
+                )
+            end
+        end
+    end
+    return rows
+end
+
+function collect_dims_reductions!(reductions::Vector{SymbolicT}, ex::SymbolicT)
+    iscall(ex) || return reductions
+    for arg in arguments(ex)
+        collect_dims_reductions!(reductions, arg)
+    end
+    op = operation(ex)
+    if op isa SU.Mapreducer && op.dims isa Int && !any(isequal(ex), reductions)
+        push!(reductions, ex)
+    end
+    return reductions
+end
+
+function scalarized_dims_reduction(ex::SymbolicT)
+    op = operation(ex)::SU.Mapreducer
+    d = op.dims::Int
+    xs = map(arguments(ex)) do arg
+        SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
+    end
+    mapped_axes = axes(first(x for x in xs if x isa Array))
+    elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
+    for I in CartesianIndices(elements)
+        acc = op.init
+        for j in mapped_axes[d]
+            J = CartesianIndex(
+                ntuple(length(mapped_axes)) do i
+                    i == d ? j : first(mapped_axes[i]) + I[i] - 1
+                end
+            )
+            v = op.f((x isa Array ? x[J] : x for x in xs)...)
+            acc = acc === nothing ? v : op.reduce(acc, v)
+        end
+        elements[I] = unwrap(acc)
+    end
+    return SConst(elements)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `res` of a constraint (see [`constraint_residual`](@ref)) with every
+reduction over `dims` (`mapreduce`, `sum`, `prod`, ... with `dims = d`) replaced by the
+array of its reduced elements. Scalarizing the result gives the correct element
+expressions; SymbolicUtils' own scalarization of such a reduction currently reduces over
+every axis, which would silently corrupt the scalarized rows and their derivatives. This is
+a workaround for https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1093 and can be
+removed once that is fixed.
+"""
+function expand_dims_reductions(res::SymbolicT)
+    reductions = collect_dims_reductions!(SymbolicT[], res)
+    isempty(reductions) && return res
+    subs = Dict{SymbolicT, SymbolicT}()
+    # `reductions` is innermost-first, so nested reductions are replaced before their parent
+    for red in reductions
+        subs[red] = scalarized_dims_reduction(substitute(red, subs))
+    end
+    return substitute(res, subs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the constraint function for a [`System`](@ref). It returns one row per scalar
+constraint and one row per element of each array-valued constraint, in the order given by
+[`canonical_constraints`](@ref).
 
 # Keyword Arguments
 
@@ -1142,7 +1280,7 @@ function generate_cons(sys::System, opts::GeneratedFunctionOptions)
     (; eval_expression, eval_module) = opts
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
-    cons = canonical_constraints(sys)
+    cons = canonical_constraints(sys; scalarize = false)
     dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
@@ -1154,7 +1292,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the jacobian of the constraints of `sys` with respect to unknowns.
+Return the jacobian of the constraints of `sys` with respect to unknowns, with one row per
+row of the constraint function (see [`canonical_constraints`](@ref)).
 
 # Keyword arguments
 
