@@ -118,6 +118,44 @@ sol = solve(prob, Rodas5P())
     fully_determined = true
 )
 
+@testset "residual-form DAE initialization with array slices" begin
+    @independent_variables t_residual
+    @variables sx(t_residual) sy(t_residual)[1:3]
+    D = Differential(t_residual)
+    cases = [
+        (
+            "scalar", [0 ~ D(sx) + sx], [sx],
+            [sx => 1.0, D(sx) => 0.0], 1,
+        ),
+        (
+            "array scalar equations", [0 ~ D(sy[i]) + sy[i] for i in 1:3],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => zeros(3)], 3,
+        ),
+        (
+            "scalarized slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            collect(sy),
+            [
+                el => v for (el, v) in zip(
+                        vcat(collect(sy), D.(collect(sy))),
+                        [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+                    )
+            ], 3,
+        ),
+        (
+            "array slice equations", [zeros(3) ~ D(sy[1:3]) + sy[1:3]],
+            [sy], [sy => [1.0, 2.0, 3.0], D(sy) => zeros(3)], 3,
+        ),
+    ]
+    for (label, eqs, unks, op, n) in cases
+        @testset "$label" begin
+            sys = complete(System(eqs, t_residual, unks, []; name = :residual))
+            prob = DAEProblem(sys, op, (0.0, 1.0); build_initializeprob = true)
+            @test length(prob.u0) == n
+            @test prob.f.initializeprob !== nothing
+        end
+    end
+end
+
 @testset "Unbalanced initialization error names the initialization system" begin
     err = try
         ODEProblem(
