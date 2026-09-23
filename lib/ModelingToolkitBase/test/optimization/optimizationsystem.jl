@@ -753,6 +753,9 @@ end
 
     sprob = OptimizationProblem(sys, op; cons_j = true, cons_h = true, cons_sparse = true)
     @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ cons_jac
+    H = similar.(sprob.f.cons_hess_prototype)
+    sprob.f.cons_h(H, sprob.u0, sprob.p)
+    @test all(H .≈ cons_hess)
     @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ cons_hess)
 
     adprob = OptimizationProblem(sys, op; adtype = AutoForwardDiff())
