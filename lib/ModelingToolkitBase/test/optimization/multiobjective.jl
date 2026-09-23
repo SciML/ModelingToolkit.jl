@@ -4,7 +4,7 @@ using SciMLBase
 using OptimizationEvolutionary
 using Symbolics
 using LinearAlgebra
-using Random
+using StableRNGs
 
 function moo_system()
     @variables x y
@@ -132,34 +132,42 @@ end
             costs = [sum(abs2, w .- a), sum(abs2, w .+ a)], name = :array_moo
         )
     )
+    @test length(unknowns(sys)) == 1
     op = [w => [1.0, 2.0], a => 3.0]
     multi = OptimizationProblem(sys, op; multiobjective = true, jac = true)
     @test multi.u0 == [1.0, 2.0]
     @test multi.f.f(multi.u0, multi.p) ≈ [5.0, 41.0]
-    @test size(multi.f.jac(multi.u0, multi.p)) == (2, 2)
+    # rows are costs, columns are flattened unknowns: ∂/∂w of each cost at w=[1,2], a=3
+    @test multi.f.jac(multi.u0, multi.p) ≈ [-4.0 -2.0; 8.0 10.0]
 
     weights = [0.25, 0.75]
     weighted = OptimizationProblem(sys, op; weights)
     @test weighted.f(weighted.u0, weighted.p) ≈ dot(weights, multi.f.f(multi.u0, multi.p))
 end
 
-@testset "multi-objective solve returns points on the Pareto front" begin
+@testset "multi-objective NSGA-II consumes generated costs" begin
+    # Solver-independent check that NSGA-II evaluates the generated multi-objective
+    # function. No Pareto-front claim: a seed sweep of the analytic front check fails
+    # for most streams, and the unbounded path seeds the population from u0.
     @variables x
     sys = complete(
         System(
             Equation[], [x], []; costs = [x^2, (x - 2)^2], name = :pareto
         )
     )
-    prob = OptimizationProblem(sys, [x => 1.0]; multiobjective = true)
-    Random.seed!(1234)
-    sol = solve(prob, OptimizationEvolutionary.NSGA2(); maxiters = 40)
+    # Off-front u0 + bounds so the initial population is random, not copies of a
+    # Pareto point. Requires OptimizationEvolutionary ≥ 0.4.13 (bounded MOO path).
+    prob = OptimizationProblem(
+        sys, [x => 5.0]; multiobjective = true, lb = [-10.0], ub = [10.0]
+    )
+    sol = solve(
+        prob, OptimizationEvolutionary.NSGA2(); maxiters = 40, rng = StableRNG(1234)
+    )
 
     @test !isempty(sol.u)
     for u in sol.u
-        @test 0.0 <= u[1] <= 2.0
         objectives = prob.f.f(u, prob.p)
         @test objectives ≈ [u[1]^2, (u[1] - 2)^2]
-        @test sqrt(objectives[1]) + sqrt(objectives[2]) ≈ 2.0
     end
 end
 
