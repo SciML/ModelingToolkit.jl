@@ -1144,7 +1144,7 @@ function constraint_residual(cstr::Union{Equation, Inequality})
             )
         )
     end
-    if cstr isa Inequality && cstr.relational_op == Symbolics.geq
+    if cstr isa Inequality && cstr.relational_op != Symbolics.leq
         lhs, rhs = rhs, lhs
     end
     res = unwrap(broadcast(-, Symbolics.wrap(lhs), Symbolics.wrap(rhs)))::SymbolicT
