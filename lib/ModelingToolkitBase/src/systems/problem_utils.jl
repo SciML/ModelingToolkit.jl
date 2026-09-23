@@ -1286,13 +1286,40 @@ function ReconstructInitializeprob(
         eval_expression = false, eval_module = @__MODULE__, is_steadystateprob = false, kwargs...
     )
     @assert is_initializesystem(dstsys)
-    ugetter = u0_constructor ∘
-        concrete_getu(
-        srcsys, unknowns(dstsys);
+    dstvars = unknowns(dstsys)
+    srcdervars = Set{SymbolicT}()
+    for eq in equations(srcsys)
+        isdiffeq(eq) || continue
+        x = only(arguments(eq.lhs))
+        if SU.is_array_shape(SU.shape(x))
+            dop = operation(eq.lhs)
+            for idx in SU.stable_eachindex(x)
+                push!(srcdervars, default_toterm(dop(x[idx])))
+            end
+        else
+            push!(srcdervars, default_toterm(eq.lhs))
+        end
+    end
+    srcindices = findall(
+        v -> is_variable(srcsys, v) || has_observed_with_lhs(srcsys, v) || v in srcdervars,
+        dstvars
+    )
+    srcvars = dstvars[srcindices]
+    srcugetter = concrete_getu(
+        srcsys, srcvars;
         eval_expression, eval_module, force_time_independent = is_steadystateprob,
         iip_config = (true, false),
         kwargs...
     )
+    ugetter = let srcugetter = srcugetter, srcindices = srcindices,
+            u0_constructor = u0_constructor
+        function _ugetter(srcvalp, dstvalp)
+            u0 = copy(state_values(dstvalp))
+            srcu0 = srcugetter(srcvalp)
+            u0[srcindices] .= srcu0
+            return u0_constructor(u0)
+        end
+    end
     if is_split(dstsys)
         pgetter = MTKParametersReconstructor(
             srcsys, dstsys; p_constructor, eval_expression, eval_module,
@@ -1338,7 +1365,7 @@ function (rip::ReconstructInitializeprob)(srcvalp, dstvalp)
     elseif !isempty(newp)
         T = promote_type(eltype(newp), T)
     end
-    u0 = rip.ugetter(srcvalp)
+    u0 = rip.ugetter(srcvalp, dstvalp)
     # and the eltype of the destination u0
     if T != eltype(u0) && T != Union{} && T !== Any
         u0 = T.(u0)
@@ -2537,15 +2564,26 @@ function __process_SciMLProblem(
     end
 
     ir = get_irstructure(sys)
+    u0_op = op
+    if implicit_dae
+        u0_op = copy(op)
+        for (k, v) in guesses
+            is_variable(sys, k) || continue
+            has_possibly_indexed_key(u0_op, k) && continue
+            write_possibly_indexed_array!(
+                u0_op, k, v isa SymbolicT ? v : SConst(v), COMMON_NOTHING
+            )
+        end
+    end
     if is_initializeprob
         u0 = varmap_to_vars(
-            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
+            u0_op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit,
             missing_values = missing_guess_value
         )
     else
         u0 = varmap_to_vars(
-            op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
+            u0_op, dvs; ir, buffer_eltype = u0_eltype, container_type = u0Type,
             allow_symbolic = symbolic_u0, is_initializeprob, substitution_limit
         )
     end
@@ -2578,9 +2616,19 @@ function __process_SciMLProblem(
 
     if implicit_dae
         ddvs = map(default_toterm ∘ Differential(iv), dvs)
+        du0_op = copy(op)
+        add_toterms!(du0_op)
+        for (k, v) in guesses
+            isdifferential(k) || continue
+            ttk = default_toterm(k)
+            has_possibly_indexed_key(du0_op, ttk) && continue
+            write_possibly_indexed_array!(
+                du0_op, ttk, v isa SymbolicT ? v : SConst(v), COMMON_NOTHING
+            )
+        end
         du0 = varmap_to_vars(
-            op, ddvs; toterm = default_toterm,
-            tofloat
+            du0_op, ddvs; toterm = default_toterm,
+            tofloat, missing_values = MissingGuessValue.Constant(0.0)
         )
         kwargs = merge(kwargs, (; ddvs))
     else

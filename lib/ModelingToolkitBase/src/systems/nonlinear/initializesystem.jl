@@ -119,6 +119,16 @@ function generate_initializesystem_timevarying(
 
     guesses = as_atomic_dict_with_defaults(Dict{SymbolicT, SymbolicT}(guesses), COMMON_NOTHING)
     left_merge!(guesses, ModelingToolkitBase.guesses(sys))
+    for (k, v) in collect(guesses)
+        isdifferential(k) || continue
+        delete!(guesses, k)
+        ttk = default_toterm(k)
+        if Symbolics.isarraysymbolic(ttk) && !SU.is_array_shape(SU.shape(v))
+            write_dd_guess!(guesses, ttk, v)
+        else
+            write_possibly_indexed_array!(guesses, ttk, v, COMMON_NOTHING)
+        end
+    end
 
     # Anything with a binding of `missing` is solvable.
     binds = bindings(sys)
