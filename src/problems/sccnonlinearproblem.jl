@@ -591,7 +591,9 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
                     u0 = u0_constructor(ones(eltype(linprob.A), size(linprob.A, 2)))
                 )
             end
-            return SCCNonlinearProblem((linprob,), (Returns(nothing),), parameter_values(linprob), true; sys)
+            return _scc_problem(
+                Any[linprob], Any[Returns(nothing)], parameter_values(linprob), sys, specialize
+            )
         else
             # A single nonlinear block is solved directly rather than wrapped in an
             # `SCCNonlinearProblem`. When it carries Modelica `homotopy(actual, simplified)`
@@ -791,11 +793,21 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         sys; unknowns = new_dvs, eqs = new_eqs, index_cache = new_ic
     )
 
-    if length(subprobs) <= 5
+    return _scc_problem(subprobs, explicitfuns, p, sys, specialize)
+end
+
+# The block container decides how many distinct `SCCNonlinearProblem` types exist. A tuple
+# is type-stable per block but is a new type for every block count and sequence of block
+# kinds; a vector is one type for every model, so precompiled code covers unseen models.
+function _scc_problem(subprobs, explicitfuns, p, sys, specialize)
+    as_tuple = specialize === SciMLBase.FullSpecialize ||
+        (specialize === SciMLBase.AutoSpecialize && length(subprobs) <= 5)
+    if as_tuple
         return SCCNonlinearProblem(Tuple(subprobs), Tuple(explicitfuns), p, true; sys)
-    else
-        return SCCNonlinearProblem(subprobs, SciMLBase.Void{Any}.(explicitfuns), p, true; sys)
     end
+    return SCCNonlinearProblem(
+        collect(Any, subprobs), SciMLBase.Void{Any}.(explicitfuns), p, true; sys
+    )
 end
 
 function calculate_op_from_u0_p(sys::System, u0::Union{Nothing, AbstractVector}, p::MTKParameters)
