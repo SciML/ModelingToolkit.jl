@@ -1,8 +1,10 @@
 using ModelingToolkitBase, Test
 using ModelingToolkitBase: costs, cost, accepts_array_equations
 using SciMLBase
+using OptimizationEvolutionary
 using Symbolics
 using LinearAlgebra
+using Random
 
 function moo_system()
     @variables x y
@@ -119,6 +121,46 @@ end
     @test_throws ArgumentError MultiObjectiveOptimizationFunction{false}(
         sys; weights = [1.0, 1.0]
     )
+end
+
+@testset "array unknowns and weighted sums" begin
+    @variables w[1:2]
+    @parameters a
+    sys = complete(
+        System(
+            Equation[], [w], [a];
+            costs = [sum(abs2, w .- a), sum(abs2, w .+ a)], name = :array_moo
+        )
+    )
+    op = [w => [1.0, 2.0], a => 3.0]
+    multi = OptimizationProblem(sys, op; multiobjective = true, jac = true)
+    @test multi.u0 == [1.0, 2.0]
+    @test multi.f.f(multi.u0, multi.p) ≈ [5.0, 41.0]
+    @test size(multi.f.jac(multi.u0, multi.p)) == (2, 2)
+
+    weights = [0.25, 0.75]
+    weighted = OptimizationProblem(sys, op; weights)
+    @test weighted.f(weighted.u0, weighted.p) ≈ dot(weights, multi.f.f(multi.u0, multi.p))
+end
+
+@testset "multi-objective solve returns points on the Pareto front" begin
+    @variables x
+    sys = complete(
+        System(
+            Equation[], [x], []; costs = [x^2, (x - 2)^2], name = :pareto
+        )
+    )
+    prob = OptimizationProblem(sys, [x => 1.0]; multiobjective = true)
+    Random.seed!(1234)
+    sol = solve(prob, OptimizationEvolutionary.NSGA2(); maxiters = 40)
+
+    @test !isempty(sol.u)
+    for u in sol.u
+        @test 0.0 <= u[1] <= 2.0
+        objectives = prob.f.f(u, prob.p)
+        @test objectives ≈ [u[1]^2, (u[1] - 2)^2]
+        @test sqrt(objectives[1]) + sqrt(objectives[2]) ≈ 2.0
+    end
 end
 
 @testset "equations are still rejected" begin
