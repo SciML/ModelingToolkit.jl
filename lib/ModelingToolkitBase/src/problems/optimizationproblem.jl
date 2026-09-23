@@ -224,7 +224,9 @@ function generate_constraint_fields(
             sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
         )
     end
-    cons_expr = Code.toexpr.(expand.([eq.lhs for eq in Symbolics.canonical_form.(cstr)]))
+    cons_expr = map(canonical_constraints(sys; scalarize = false)) do row
+        return Code.toexpr(iscall(row) && operation(row) === getindex ? row : expand(row))
+    end
     return (;
         cons, cons_j = _cons_j, cons_jac_prototype, cons_h = _cons_h,
         cons_hess_prototype, cons_expr,
@@ -286,9 +288,11 @@ function SciMLBase.OptimizationProblem{iip}(
     if isempty(cstr)
         lcons = ucons = nothing
     else
-        lcons = fill(-Inf, length(cstr))
-        ucons = zeros(length(cstr))
-        lcons[findall(Base.Fix2(isa, Equation), cstr)] .= 0.0
+        lcons = Float64[]
+        for c in cstr
+            append!(lcons, Iterators.repeated(c isa Equation ? 0.0 : -Inf, constraint_length(c)))
+        end
+        ucons = zeros(length(lcons))
     end
 
     kwargs = process_kwargs(sys; kwargs...)

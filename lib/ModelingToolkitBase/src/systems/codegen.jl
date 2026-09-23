@@ -1121,16 +1121,120 @@ function generate_cost_hessian(
     return return_sparsity ? (fn, sparsity) : fn
 end
 
-function canonical_constraints(sys::System)
-    return map(constraints(sys)) do cstr
-        Symbolics.canonical_form(cstr).lhs
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `r` of the constraint `cstr` such that the constraint reads `r ~ 0` for an
+`Equation` and `r ≲ 0` for an `Inequality`. For an array-valued constraint `r` is the
+array residual; a scalar side of the constraint is broadcast against the array side.
+"""
+function constraint_residual(cstr::Union{Equation, Inequality})
+    lhs = unwrap(cstr.lhs)
+    rhs = unwrap(cstr.rhs)
+    lsh = SU.shape(lhs)
+    rsh = SU.shape(rhs)
+    if !SU.is_array_shape(lsh) && !SU.is_array_shape(rsh)
+        return unwrap(Symbolics.canonical_form(cstr).lhs)::SymbolicT
     end
+    if SU.is_array_shape(lsh) && SU.is_array_shape(rsh) && size(lhs) != size(rhs)
+        throw(
+            ArgumentError(
+                "The two sides of the constraint `$cstr` have different sizes \
+                $(size(lhs)) and $(size(rhs))."
+            )
+        )
+    end
+    if cstr isa Inequality && cstr.relational_op == Symbolics.geq
+        lhs, rhs = rhs, lhs
+    end
+    res = unwrap(broadcast(-, Symbolics.wrap(lhs), Symbolics.wrap(rhs)))::SymbolicT
+    SU.shape(res) isa SU.Unknown &&
+        throw(ArgumentError("Cannot lower the constraint `$cstr` of unknown size."))
+    return res
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Generate the constraint function for a [`System`](@ref).
+The number of rows the constraint `cstr` contributes to the constraint function: `1` for
+a scalar constraint and the number of elements for an array-valued one.
+"""
+function constraint_length(cstr::Union{Equation, Inequality})
+    sh = SU.shape(constraint_residual(cstr))::SU.ShapeVecT
+    return SU.is_array_shape(sh) ? prod(length, sh; init = 1) : 1
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residuals of the constraints of `sys` (see [`constraint_residual`](@ref)), one per
+row of the constraint function. An array-valued constraint contributes one row per
+element in column-major order, and the rows of all constraints follow the order of
+`constraints(sys)`.
+
+If `scalarize` is `true` the row of an array element is its scalarized expression, as
+needed for symbolic differentiation. Otherwise it is the unexpanded `r[i]` of the array
+residual `r`, so that generated code evaluates `r` once with its array operations intact.
+"""
+function canonical_constraints(sys::System; scalarize::Bool = true)
+    rows = SymbolicT[]
+    for cstr in constraints(sys)
+        res = constraint_residual(cstr)
+        sh = SU.shape(res)
+        if !SU.is_array_shape(sh)
+            push!(rows, res)
+        elseif scalarize
+            append!(rows, vec(collect(res)::Array{SymbolicT}))
+        else
+            for idxs in Iterators.product(sh...)
+                args = SArgsT()
+                push!(args, res)
+                for i in idxs
+                    push!(args, SConst(i))
+                end
+                push!(
+                    rows, BSImpl.Term{VartypeT}(
+                        getindex, args; type = eltype(symtype(res)), shape = SU.ShapeVecT()
+                    )
+                )
+            end
+        end
+    end
+    return rows
+end
+
+function has_dims_reduction(ex::SymbolicT)
+    iscall(ex) || return false
+    op = operation(ex)
+    op isa SU.Mapreducer && op.dims isa Int && return true
+    return any(has_dims_reduction, arguments(ex))
+end
+
+# SymbolicUtils scalarizes `mapreduce(f, op, A; dims = d)` (and `sum`/`prod` with `dims`)
+# as a reduction over every axis, which silently corrupts symbolic derivatives of
+# constraints that contain one. Refuse instead; `adtype` differentiates the generated
+# constraint function, which evaluates the reduction correctly.
+function check_differentiable_constraints(sys::System)
+    for cstr in constraints(sys)
+        has_dims_reduction(constraint_residual(cstr)) || continue
+        throw(
+            ArgumentError(
+                "The constraint `$cstr` contains a reduction with `dims`, which cannot \
+                currently be scalarized correctly for symbolic differentiation. Pass \
+                `cons_j = false, cons_h = false` and an `adtype` to differentiate the \
+                constraints with automatic differentiation instead."
+            )
+        )
+    end
+    return nothing
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the constraint function for a [`System`](@ref). It returns one row per scalar
+constraint and one row per element of each array-valued constraint, in the order given by
+[`canonical_constraints`](@ref).
 
 # Keyword Arguments
 
@@ -1142,7 +1246,7 @@ function generate_cons(sys::System, opts::GeneratedFunctionOptions)
     (; eval_expression, eval_module) = opts
     expression = expression_val(opts)
     wrap_gfw = wrap_gfw_val(opts)
-    cons = canonical_constraints(sys)
+    cons = canonical_constraints(sys; scalarize = false)
     dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
@@ -1154,7 +1258,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the jacobian of the constraints of `sys` with respect to unknowns.
+Return the jacobian of the constraints of `sys` with respect to unknowns, with one row per
+row of the constraint function (see [`canonical_constraints`](@ref)).
 
 # Keyword arguments
 
@@ -1165,6 +1270,7 @@ function calculate_constraint_jacobian(
         sys::System; simplify = false, sparse = false,
         return_sparsity = false
     )
+    check_differentiable_constraints(sys)
     cons = canonical_constraints(sys)
     dvs = flat_unknowns(sys)
     sparsity = nothing
@@ -1224,6 +1330,7 @@ Return the hessian of the constraints of `sys` with respect to unknowns.
 function calculate_constraint_hessian(
         sys::System; simplify = false, sparse = false, return_sparsity = false
     )
+    check_differentiable_constraints(sys)
     cons = canonical_constraints(sys)
     dvs = flat_unknowns(sys)
     sparsity = nothing
