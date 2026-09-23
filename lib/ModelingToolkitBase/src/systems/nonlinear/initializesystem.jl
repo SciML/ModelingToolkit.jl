@@ -180,7 +180,8 @@ function generate_initializesystem_timevarying(
                 ttk
             end
         else
-            for d in collect_applied_operators(eq, Differential)
+            residual_derivatives = collect_applied_operators(eq, Differential)
+            for d in residual_derivatives
                 arr, isarr = split_indexed_var(only(arguments(d)))
                 if isarr
                     array_d = operation(d)(arr)
@@ -217,7 +218,9 @@ function generate_initializesystem_timevarying(
                 end
             end
             push!(eqs_ics, eq)
-            push!(residual_eq_indices, length(eqs_ics))
+            if !isempty(residual_derivatives)
+                push!(residual_eq_indices, length(eqs_ics))
+            end
         end
     end
     D = Differential(get_iv(sys))
@@ -237,6 +240,7 @@ function generate_initializesystem_timevarying(
             get_irstructure(sys), derivative_rules
         ); maxiters = get_maxiters(derivative_rules)
     )
+    # Apply rules collected from the full equation set to residual-form derivatives.
     for i in residual_eq_indices
         eqs_ics[i] = subber(der_subber(eqs_ics[i]))
     end
