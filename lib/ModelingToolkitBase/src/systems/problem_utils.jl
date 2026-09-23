@@ -535,19 +535,96 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 `varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
 in `varmap`, it is ignored.
 """
-function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
-    evaluated = nothing
+function _store_evaluated_array!(
+        varmap::AtomicArrayDictSubstitutionWrapper, arr::SymbolicT, values::AbstractArray
+    )
+    varmap.dict[arr] = if all(SU.isconst, values)
+        BSImpl.Const{VartypeT}(unwrap_const.(values))
+    else
+        BSImpl.Const{VartypeT}(values)
+    end
+    return
+end
+
+function _requested_all_array_elements(keys, values)
+    length(keys) == length(values) || return false
+    indices = Set(get_stable_index(k) for k in keys)
+    length(indices) == length(values) || return false
+    return all(i -> i in indices, eachindex(values))
+end
+
+function _evaluate_varmap_array!(
+        subber, varmap::AtomicArrayDictSubstitutionWrapper, arr::SymbolicT, keys
+    )
+    raw = get(varmap.dict, arr, COMMON_NOTHING)
+    raw === COMMON_NOTHING && return
+    values = collect(raw)
+    has_holes = any(v -> v === varmap.default, values)
+
+    if !has_holes && (isempty(keys) || _requested_all_array_elements(keys, values))
+        value = get(varmap, arr, COMMON_NOTHING)
+        value === COMMON_NOTHING && return
+        SU.isconst(value) && return
+        varmap[arr] = subber(value)
+        return
+    end
+
+    requested = isempty(keys) ? unwrap.(collect(arr)) : keys
+    changed = false
+    for k in requested
+        value = get(varmap, k, varmap.default)
+        value === varmap.default && continue
+        SU.isconst(value) && continue
+        values[get_stable_index(k)] = subber(value)
+        changed = true
+    end
+    changed && _store_evaluated_array!(varmap, arr, values)
+    return
+end
+
+function _evaluate_varmap_entries!(
+        subber, varmap::AtomicArrayDictSubstitutionWrapper, vars
+    )
+    array_keys = Dict{SymbolicT, Vector{SymbolicT}}()
     for k in vars
-        arr, isarr = split_indexed_var(unwrap(k))
-        if isarr
-            evaluated === nothing && (evaluated = Set{SymbolicT}())
+        key = unwrap(k)
+        arr, is_indexed = split_indexed_var(key)
+        is_indexed || continue
+        push!(get!(() -> SymbolicT[], array_keys, arr), key)
+    end
+
+    evaluated_arrays = Set{SymbolicT}()
+    for k in vars
+        key = unwrap(k)
+        arr, is_indexed = split_indexed_var(key)
+        if is_indexed || Symbolics.isarraysymbolic(key)
+            arr in evaluated_arrays && continue
+            push!(evaluated_arrays, arr)
+            _evaluate_varmap_array!(subber, varmap, arr, get(array_keys, arr, SymbolicT[]))
+        else
+            value = get(varmap, key, COMMON_NOTHING)
+            value === COMMON_NOTHING && continue
+            SU.isconst(value) && continue
+            varmap[key] = subber(value)
+        end
+    end
+    return
+end
+
+function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    evaluated = Set{SymbolicT}()
+    for k in vars
+        arr, is_indexed = split_indexed_var(unwrap(k))
+        if is_indexed
             arr in evaluated && continue
             push!(evaluated, arr)
         end
-        v = get(varmap, arr, COMMON_NOTHING)
-        v === COMMON_NOTHING && continue
-        SU.isconst(v) && continue
-        varmap[arr] = fixpoint_sub(v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic)
+        value = get(varmap, arr, COMMON_NOTHING)
+        value === COMMON_NOTHING && continue
+        SU.isconst(value) && continue
+        varmap[arr] = fixpoint_sub(
+            value, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic
+        )
     end
     return
 end
@@ -560,20 +637,7 @@ function evaluate_varmap!(
         SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
-    evaluated = nothing
-    for k in vars
-        arr, isarr = split_indexed_var(unwrap(k))
-        if isarr
-            evaluated === nothing && (evaluated = Set{SymbolicT}())
-            arr in evaluated && continue
-            push!(evaluated, arr)
-        end
-        v = get(varmap, arr, COMMON_NOTHING)
-        v === COMMON_NOTHING && continue
-        SU.isconst(v) && continue
-        varmap[arr] = subber(v)
-    end
-    return
+    return _evaluate_varmap_entries!(subber, varmap, vars)
 end
 
 """

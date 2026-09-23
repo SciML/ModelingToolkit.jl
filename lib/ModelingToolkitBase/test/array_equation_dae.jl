@@ -82,6 +82,35 @@ end
     @test prob.du0 == vec(duval)
 end
 
+@testset "array operating points substitute specified symbolic elements" begin
+    @independent_variables t
+    @variables x(t)[1:3] y(t)
+    @parameters p q
+    D = Differential(t)
+    @named sys = System([D(x) ~ -x, D(y) ~ -y], t, [x, y], [p, q])
+    sys = complete(sys)
+    ir = ModelingToolkitBase.get_irstructure(sys)
+    dvs = Symbolics.unwrap.([x[1], x[2], x[3], y])
+
+    constant_filled = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, p => 3.0, y => 1.0), dvs; ir,
+        missing_values = ModelingToolkitBase.MissingGuessValue.Constant(0.0)
+    )
+    @test constant_filled == [6.0, 0.0, 0.0, 1.0]
+
+    hashed_filled = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, x[3] => y, p => 3.0, y => 1.0), dvs; ir,
+        missing_values = ModelingToolkitBase.MissingGuessValue.HashedRandom()
+    )
+    @test hashed_filled[[1, 3, 4]] == [6.0, 1.0, 1.0]
+
+    fully_specified = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, x[2] => y + 1, x[3] => x[1] + q, p => 3.0, q => 10.0, y => 1.0),
+        dvs; ir
+    )
+    @test fully_specified == [6.0, 2.0, 16.0, 1.0]
+end
+
 @testset "array-equation DAE solves to the analytic solution" begin
     n = 21
     sys, u, t, D = heat_array_system(n)
