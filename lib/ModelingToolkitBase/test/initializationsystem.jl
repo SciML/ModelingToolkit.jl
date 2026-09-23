@@ -1500,7 +1500,7 @@ end
     init_unknowns = ModelingToolkitBase.unwrap.(unknowns(initprob.f.sys))
     z1_index = findfirst(isequal(ModelingToolkitBase.unwrap(review_z[1])), init_unknowns)
     @test z1_index !== nothing
-    @test initprob.u0[z1_index] == -8.0
+    @test SciMLBase.state_values(initprob)[z1_index] == -8.0
 
     init_sol = solve(initprob)
     @test SciMLBase.successful_retcode(init_sol)
