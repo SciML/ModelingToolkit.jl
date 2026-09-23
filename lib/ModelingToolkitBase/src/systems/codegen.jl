@@ -403,11 +403,17 @@ function calculate_jacobian(
             # Add nonzeros of W as non-structural zeros of the Jacobian
             # (to ensure equal results for oop and iip Jacobian)
             JIs, JJs, JVs = findnz(jac)
+            # The in-place Jacobian writes one value per stored entry into a matrix with
+            # the pattern of `W_sparsity`, so this pattern must not exceed it. Drop the
+            # identically zero entries that a conservative `Symbolics.jacobian_sparsity`
+            # stores (e.g. Symbolics 7.40.1 marks every element of `x(t)` for `x(t)[i]`).
+            keep = findall(v -> !_iszero(unwrap(v)), JVs)
+            JIs, JJs, JVs = JIs[keep], JJs[keep], JVs[keep]
             WIs, WJs, _ = findnz(W_sparsity(sys))
             append!(JIs, WIs) # explicitly put all W's indices also in J,
             append!(JJs, WJs) # even if it duplicates some indices
             append!(JVs, zeros(eltype(JVs), length(WIs))) # add zero
-            jac = SparseArrays.sparse(JIs, JJs, JVs) # values at duplicate indices are summed; not overwritten
+            jac = SparseArrays.sparse(JIs, JJs, JVs, size(jac)...) # values at duplicate indices are summed; not overwritten
         end
     else
         jac = jacobian(rhs, dvs; simplify)
