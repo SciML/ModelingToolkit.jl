@@ -792,9 +792,41 @@ end
         J = zeros(3, 3)
         rf.cons_j(J, rprob.u0)
         @test J ≈ rjac
-        # Scalarizing a `dims` reduction currently sums over every axis (SymbolicUtils),
-        # so the symbolic derivative must refuse rather than return a wrong jacobian.
-        @test_throws ArgumentError OptimizationProblem(rsys, rop; cons_j = true)
+
+        rhess = [zeros(3, 3) for _ in 1:3]
+        for (j, h) in enumerate([4.0, 8.0, 2.0])
+            rhess[j][j, j] = h
+        end
+        sprob = OptimizationProblem(rsys, rop; cons_j = true, cons_h = true)
+        @test sprob.f.cons(sprob.u0, sprob.p) ≈ rval
+        @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ rjac
+        @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ rhess)
+        @test length(sprob.f.cons_expr) == 3
+    end
+
+    @testset "expression graph through AmplNLWriter" begin
+        @variables u v w
+        @parameters M[1:2, 1:3] c
+        cases = [
+            ([[u, v] ~ [1.0, 2.0]], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            ([[u] ~ [1.0], v ~ 2.0], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            (
+                [Inequality(sum(abs2, M .* [u v w]; dims = 1), c, Symbolics.leq)],
+                (u - 2.0)^2 + (v - 2.0)^2 + (w - 2.0)^2, [u, v, w],
+                [1.0, sqrt(0.5), sqrt(2.0)],
+            ),
+        ]
+        for (cstrs, cost, dvs, uopt) in cases
+            gsys = complete(
+                System(Equation[], dvs, [M, c]; costs = [cost], constraints = cstrs, name = :gsys)
+            )
+            gop = [dvs .=> 0.5; M => [1.0 0.0 1.0; 1.0 2.0 0.0]; c => 2.0]
+            gprob = OptimizationProblem(gsys, gop)
+            @test length(gprob.f.cons_expr) == length(gprob.lcons)
+            gsol = solve(gprob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+            @test SciMLBase.successful_retcode(gsol)
+            @test gsol.u ≈ uopt atol = 1.0e-6
+        end
     end
 
     @testset "Ipopt reaches the analytic optimum" begin
@@ -832,16 +864,11 @@ end
         check_optimum(isol)
 
         # the same problem with symbolic derivatives instead of AD, which needs a cost
-        # and constraints free of `dims` reductions
-        colsq = M[1, :] .^ 2 .+ M[2, :] .^ 2
+        # without lazy array operations
         scost = sum(x[i]^2 + (z[i] - 2.0)^2 for i in 1:3) + (y - 3.0)^2
         @named ssys = System(
             Equation[], [x, z, y], [a, M, c]; costs = [scost],
-            constraints = [
-                x .- a ~ zeros(3),
-                y ≲ 1.0,
-                Inequality(colsq .* z .^ 2, c, Symbolics.leq),
-            ]
+            constraints = ModelingToolkitBase.get_constraints(isys)
         )
         sprob = OptimizationProblem(
             complete(ssys), [u0; pvals]; grad = true, hess = true, cons_j = true, cons_h = true

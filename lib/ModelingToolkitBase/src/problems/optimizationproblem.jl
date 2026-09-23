@@ -224,9 +224,7 @@ function generate_constraint_fields(
             sys, codegen_opts; simplify, sparse = cons_sparse, return_sparsity = true
         )
     end
-    cons_expr = map(canonical_constraints(sys; scalarize = false)) do row
-        return Code.toexpr(iscall(row) && operation(row) === getindex ? row : expand(row))
-    end
+    cons_expr = Code.toexpr.(expand.(canonical_constraints(sys)))
     return (;
         cons, cons_j = _cons_j, cons_jac_prototype, cons_h = _cons_h,
         cons_hess_prototype, cons_expr,

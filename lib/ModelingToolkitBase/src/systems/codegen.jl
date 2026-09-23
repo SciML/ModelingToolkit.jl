@@ -1173,8 +1173,10 @@ element in column-major order, and the rows of all constraints follow the order 
 `constraints(sys)`.
 
 If `scalarize` is `true` the row of an array element is its scalarized expression, as
-needed for symbolic differentiation. Otherwise it is the unexpanded `r[i]` of the array
-residual `r`, so that generated code evaluates `r` once with its array operations intact.
+needed for symbolic differentiation and for the expression graph `cons_expr`, with
+reductions over `dims` expanded by `expand_dims_reductions`. Otherwise it is the
+unexpanded `r[i]` of the array residual `r`, so that generated code evaluates `r` once with
+its array operations intact.
 """
 function canonical_constraints(sys::System; scalarize::Bool = true)
     rows = SymbolicT[]
@@ -1182,9 +1184,9 @@ function canonical_constraints(sys::System; scalarize::Bool = true)
         res = constraint_residual(cstr)
         sh = SU.shape(res)
         if !SU.is_array_shape(sh)
-            push!(rows, res)
+            push!(rows, scalarize ? expand_dims_reductions(res) : res)
         elseif scalarize
-            append!(rows, vec(collect(res)::Array{SymbolicT}))
+            append!(rows, vec(collect(expand_dims_reductions(res))::Array{SymbolicT}))
         else
             for idxs in Iterators.product(sh...)
                 args = SArgsT()
@@ -1203,30 +1205,62 @@ function canonical_constraints(sys::System; scalarize::Bool = true)
     return rows
 end
 
-function has_dims_reduction(ex::SymbolicT)
-    iscall(ex) || return false
+function collect_dims_reductions!(reductions::Vector{SymbolicT}, ex::SymbolicT)
+    iscall(ex) || return reductions
+    for arg in arguments(ex)
+        collect_dims_reductions!(reductions, arg)
+    end
     op = operation(ex)
-    op isa SU.Mapreducer && op.dims isa Int && return true
-    return any(has_dims_reduction, arguments(ex))
+    if op isa SU.Mapreducer && op.dims isa Int && !any(isequal(ex), reductions)
+        push!(reductions, ex)
+    end
+    return reductions
 end
 
-# SymbolicUtils scalarizes `mapreduce(f, op, A; dims = d)` (and `sum`/`prod` with `dims`)
-# as a reduction over every axis, which silently corrupts symbolic derivatives of
-# constraints that contain one. Refuse instead; `adtype` differentiates the generated
-# constraint function, which evaluates the reduction correctly.
-function check_differentiable_constraints(sys::System)
-    for cstr in constraints(sys)
-        has_dims_reduction(constraint_residual(cstr)) || continue
-        throw(
-            ArgumentError(
-                "The constraint `$cstr` contains a reduction with `dims`, which cannot \
-                currently be scalarized correctly for symbolic differentiation. Pass \
-                `cons_j = false, cons_h = false` and an `adtype` to differentiate the \
-                constraints with automatic differentiation instead."
-            )
-        )
+function scalarized_dims_reduction(ex::SymbolicT)
+    op = operation(ex)::SU.Mapreducer
+    d = op.dims::Int
+    xs = map(arguments(ex)) do arg
+        SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
     end
-    return nothing
+    mapped_axes = axes(first(x for x in xs if x isa Array))
+    elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
+    for I in CartesianIndices(elements)
+        acc = op.init
+        for j in mapped_axes[d]
+            J = CartesianIndex(
+                ntuple(length(mapped_axes)) do i
+                    i == d ? j : first(mapped_axes[i]) + I[i] - 1
+                end
+            )
+            v = op.f((x isa Array ? x[J] : x for x in xs)...)
+            acc = acc === nothing ? v : op.reduce(acc, v)
+        end
+        elements[I] = unwrap(acc)
+    end
+    return SConst(elements)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `res` of a constraint (see [`constraint_residual`](@ref)) with every
+reduction over `dims` (`mapreduce`, `sum`, `prod`, ... with `dims = d`) replaced by the
+array of its reduced elements. Scalarizing the result gives the correct element
+expressions; SymbolicUtils' own scalarization of such a reduction currently reduces over
+every axis, which would silently corrupt the scalarized rows and their derivatives. This is
+a workaround for https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1093 and can be
+removed once that is fixed.
+"""
+function expand_dims_reductions(res::SymbolicT)
+    reductions = collect_dims_reductions!(SymbolicT[], res)
+    isempty(reductions) && return res
+    subs = Dict{SymbolicT, SymbolicT}()
+    # `reductions` is innermost-first, so nested reductions are replaced before their parent
+    for red in reductions
+        subs[red] = scalarized_dims_reduction(substitute(red, subs))
+    end
+    return substitute(res, subs)
 end
 
 """
@@ -1270,7 +1304,6 @@ function calculate_constraint_jacobian(
         sys::System; simplify = false, sparse = false,
         return_sparsity = false
     )
-    check_differentiable_constraints(sys)
     cons = canonical_constraints(sys)
     dvs = flat_unknowns(sys)
     sparsity = nothing
@@ -1330,7 +1363,6 @@ Return the hessian of the constraints of `sys` with respect to unknowns.
 function calculate_constraint_hessian(
         sys::System; simplify = false, sparse = false, return_sparsity = false
     )
-    check_differentiable_constraints(sys)
     cons = canonical_constraints(sys)
     dvs = flat_unknowns(sys)
     sparsity = nothing
