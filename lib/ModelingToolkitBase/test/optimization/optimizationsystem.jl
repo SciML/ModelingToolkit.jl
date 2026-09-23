@@ -744,13 +744,13 @@ end
     @test prob.lcons == [0.0, 0.0, 0.0, 0.0, -Inf, -Inf, -Inf, -Inf]
     @test prob.ucons == zeros(8)
     # `cons_expr` is only scalarized when an expression-graph consumer reads it
-    @test prob.f.cons_expr.exprs[] === nothing
+    @test prob.f.cons_expr.exprs === nothing
     @test length(prob.f.cons_expr) == 8
-    @test prob.f.cons_expr.exprs[] === nothing
+    @test prob.f.cons_expr.exprs === nothing
     @test prob.f.cons_expr[3] == ModelingToolkitBase.Code.toexpr(
         ModelingToolkitBase.expand(ModelingToolkitBase.canonical_constraints(sys)[3])
     )
-    @test length(prob.f.cons_expr.exprs[]) == 8
+    @test length(prob.f.cons_expr.exprs) == 8
     @test prob.f.cons(prob.u0, prob.p) ≈ cons_val
     res = zeros(8)
     prob.f.cons(res, prob.u0, prob.p)
@@ -831,7 +831,7 @@ end
             gprob = OptimizationProblem(gsys, gop)
             @test length(gprob.f.cons_expr) == length(gprob.lcons)
             gsol = solve(gprob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-            @test gprob.f.cons_expr.exprs[] !== nothing
+            @test gprob.f.cons_expr.exprs !== nothing
             @test SciMLBase.successful_retcode(gsol)
             @test gsol.u ≈ uopt atol = 1.0e-6
         end
@@ -871,7 +871,7 @@ end
         isol = solve(iprob, Ipopt.Optimizer(); print_level = 0)
         check_optimum(isol)
         # Ipopt only calls the generated functions, so `cons_expr` is never built
-        @test iprob.f.cons_expr.exprs[] === nothing
+        @test iprob.f.cons_expr.exprs === nothing
 
         # the same problem with symbolic derivatives instead of AD, which needs a cost
         # without lazy array operations

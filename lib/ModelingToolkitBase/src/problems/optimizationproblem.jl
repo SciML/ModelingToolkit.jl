@@ -199,15 +199,15 @@ constraints is expensive and only expression-graph consumers need it, so the exp
 are built on the first access to an element and cached; solvers that only call the
 generated functions never pay for them.
 """
-struct LazyConstraintExprs <: AbstractVector{Expr}
-    sys::System
-    len::Int
-    exprs::Base.RefValue{Union{Nothing, Vector{Expr}}}
-    lock::ReentrantLock
+mutable struct LazyConstraintExprs <: AbstractVector{Expr}
+    const sys::System
+    const len::Int
+    exprs::Union{Nothing, Vector{Expr}}
+    const lock::ReentrantLock
 end
 
 function LazyConstraintExprs(sys::System, len::Int)
-    return LazyConstraintExprs(sys, len, Ref{Union{Nothing, Vector{Expr}}}(nothing), ReentrantLock())
+    return LazyConstraintExprs(sys, len, nothing, ReentrantLock())
 end
 
 Base.size(c::LazyConstraintExprs) = (c.len,)
@@ -216,10 +216,10 @@ Base.getindex(c::LazyConstraintExprs, i::Int) = materialize_constraint_exprs(c)[
 
 function materialize_constraint_exprs(c::LazyConstraintExprs)
     return @lock c.lock begin
-        exprs = c.exprs[]
+        exprs = c.exprs
         if exprs === nothing
             exprs = Expr[Code.toexpr(expand(row)) for row in canonical_constraints(c.sys)]
-            c.exprs[] = exprs
+            c.exprs = exprs
         end
         exprs
     end::Vector{Expr}
