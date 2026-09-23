@@ -101,12 +101,10 @@ An equality constraint can be specified via a `~`, e.g., `x^2 + y^2 ~ 1`.
 Constraints can also be array-valued, such as `x .- a ~ zeros(3)` for `@variables x[1:3]`
 and `@parameters a[1:3]`, or an `Inequality` between an array expression and an array or a
 scalar. Each element of an array-valued constraint is one row of the generated constraint
-function, in column-major order, and the rows of all constraints follow the order in which
-the constraints are listed; `lcons` and `ucons` of the `OptimizationProblem` have one entry
-per row. Symbolic constraint derivatives (`cons_j = true`, `cons_h = true`) are not
-available for constraints that contain a reduction with `dims`, such as
-`sum(abs2, M; dims = 1)`, because SymbolicUtils currently scalarizes such reductions
-incorrectly. Pass an `adtype` to `OptimizationProblem` for those constraints instead.
+function, in column-major order, and the rows follow the order of `constraints(sys)` of the
+system passed to `OptimizationProblem` (`mtkcompile` may reorder the constraints of the
+original system). `lcons` and `ucons` have one entry per row; see
+[`ModelingToolkitBase.canonical_constraints`](@ref) for the rows themselves.
 
 A visualization of the Rosenbrock function and the inequality constraint is depicted below.
 
