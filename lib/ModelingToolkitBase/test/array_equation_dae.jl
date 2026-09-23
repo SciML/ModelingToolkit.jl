@@ -50,6 +50,50 @@ end
     @test any(!iszero, out)
 end
 
+@testset "DAE initialization accepts derivative guesses" begin
+    @independent_variables t
+    @variables y(t)[1:3] z(t)
+    D = Differential(t)
+    @named sys = System(
+        [zeros(3) ~ D(y[1:3]) .+ z .* y[1:3], 0 ~ z - sum(y)],
+        t, [collect(y); z], []
+    )
+    sys = complete(sys)
+    y0 = [1.0, 2.0, 3.0]
+    op = [y[i] => y0[i] for i in 1:3]
+
+    for provide_derivative_guesses in (true, false)
+        guesses = [z => 0.0]
+        if provide_derivative_guesses
+            append!(guesses, [D(y[i]) => 0.5 for i in 1:3])
+        end
+        prob = DAEProblem(sys, op, (0.0, 0.1); guesses)
+        @test prob.u0[4] == 0.0
+        @test prob.du0[1:3] == fill(provide_derivative_guesses ? 0.5 : 0.0, 3)
+        initprob = prob.f.initialization_data.initializeprob
+        init_sol = solve(initprob)
+
+        @test SciMLBase.successful_retcode(init_sol)
+        init_unknowns = unknowns(initprob.f.sys)
+        z_index = findfirst(isequal(z), init_unknowns)
+        derivative_values = init_sol.u[setdiff(eachindex(init_unknowns), [z_index])]
+        @test sort(derivative_values) ≈ sort(-sum(y0) .* y0)
+        @test init_sol.u[z_index] ≈ sum(y0)
+
+        integ = init(prob, DFBDF(); initializealg = BrownFullBasicInit())
+        @test integ.du[1:3] ≈ -sum(y0) .* y0
+        residual = zeros(4)
+        prob.f(residual, integ.du, integ.u, integ.p, 0.0)
+        @test maximum(abs, residual) < 1.0e-10
+    end
+
+    fixed_du0 = [D(y[i]) => 0.25 for i in 1:3]
+    prob = DAEProblem(
+        sys, [op; [z => 0.0]; fixed_du0], (0.0, 0.1); build_initializeprob = false
+    )
+    @test prob.du0[1:3] == fill(0.25, 3)
+end
+
 @testset "array unknowns flatten under an array equation" begin
     n = 11
     @independent_variables t
