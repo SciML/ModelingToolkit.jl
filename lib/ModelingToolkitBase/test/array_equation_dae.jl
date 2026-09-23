@@ -64,6 +64,24 @@ end
     @test length(prob.u0) == n
 end
 
+@testset "array-keyed DAE operating points preserve element order" begin
+    n = 4
+    @independent_variables t
+    @variables u(t)[1:n, 1:n]
+    D = Differential(t)
+    @named sys = System([D(u) ~ zeros(n, n)], t, [u], [])
+    sys = complete(sys)
+    uval = reshape(Float64.(1:(n * n)), n, n)
+    duval = reshape(Float64.((n * n + 1):(2 * n * n)), n, n)
+
+    prob = DAEProblem(
+        sys, [u => uval, D(u) => duval], (0.0, 1.0); build_initializeprob = false
+    )
+
+    @test prob.u0 == vec(uval)
+    @test prob.du0 == vec(duval)
+end
+
 @testset "array-equation DAE solves to the analytic solution" begin
     n = 21
     sys, u, t, D = heat_array_system(n)

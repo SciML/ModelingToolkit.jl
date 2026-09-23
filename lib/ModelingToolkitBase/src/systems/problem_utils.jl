@@ -536,8 +536,14 @@ Performs symbolic substitution on the values in `varmap` for the keys in `vars`,
 in `varmap`, it is ignored.
 """
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
+    evaluated = nothing
     for k in vars
-        arr, _ = split_indexed_var(unwrap(k))
+        arr, isarr = split_indexed_var(unwrap(k))
+        if isarr
+            evaluated === nothing && (evaluated = Set{SymbolicT}())
+            arr in evaluated && continue
+            push!(evaluated, arr)
+        end
         v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
@@ -554,11 +560,18 @@ function evaluate_varmap!(
         SU.IRSubstituter{true}(ir, varmap; filterer = Symbolics.FPSubFilterer{Nothing}());
         maxiters = limit, warn_maxiters = !allow_symbolic
     )
+    evaluated = nothing
     for k in vars
-        v = get(varmap, k, COMMON_NOTHING)
+        arr, isarr = split_indexed_var(unwrap(k))
+        if isarr
+            evaluated === nothing && (evaluated = Set{SymbolicT}())
+            arr in evaluated && continue
+            push!(evaluated, arr)
+        end
+        v = get(varmap, arr, COMMON_NOTHING)
         v === COMMON_NOTHING && continue
         SU.isconst(v) && continue
-        varmap[k] = subber(v)
+        varmap[arr] = subber(v)
     end
     return
 end
