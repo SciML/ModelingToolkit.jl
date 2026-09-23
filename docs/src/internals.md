@@ -24,10 +24,11 @@ These components work together to enable ModelingToolkit's symbolic manipulation
 ## Precompile workloads
 
 The precompile workload in ModelingToolkit and the ones in its OrdinaryDiffEq extensions
-build and solve the same two small models, so that `mtkcompile`, `ODEProblem` construction,
+build and solve the same three small models, so that `mtkcompile`, `ODEProblem` construction,
 initialization and the solver paths are all cached for one shape of generated problem.
 
 ```@docs
 ModelingToolkit.precompile_ode_problem
 ModelingToolkit.precompile_dae_problem
+ModelingToolkit.precompile_scc_dae_problem
 ```
