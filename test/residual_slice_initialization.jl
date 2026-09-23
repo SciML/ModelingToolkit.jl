@@ -10,6 +10,7 @@ using Test, ModelingToolkit, ModelingToolkitBase, SciMLBase, OrdinaryDiffEqBDF
             t_residual, [y, z], []; name = :residual_algebraic
         )
     )
+    # `z` is algebraic, but `DAEProblem` requires every `du0` entry in `op` (#5193)
     prob = DAEProblem(
         sys, [y => [1.0, 2.0, 3.0], D(z) => 0.0], (0.0, 1.0);
         build_initializeprob = true,
