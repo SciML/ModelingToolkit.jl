@@ -1439,12 +1439,12 @@ function steady_state_initialization_eqs(sys::System)
     initeqs = copy(get_initialization_eqs(sys))
     isempty(initeqs) && return initeqs
     D = Differential(get_iv(sys))
-    subrules = Dict{SymbolicT, Float64}()
+    subrules = Dict{SymbolicT, SymbolicT}()
     for v in Iterators.flatten((unknowns(sys), observables(sys)))
-        subrules[D(v)] = 0.0
+        subrules[D(v)] = Symbolics.COMMON_ZERO
     end
     for var in brownians(sys)
-        subrules[var] = 0.0
+        subrules[var] = Symbolics.COMMON_ZERO
     end
     heads = Set{SymbolicT}()
     foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
