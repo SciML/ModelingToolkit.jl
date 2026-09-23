@@ -1,5 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
-using BipartiteGraphs
+using BipartiteGraphs, Setfield, SparseArrays
 using Symbolics
 import ModelingToolkitBase
 using OrdinaryDiffEqRosenbrock
@@ -311,6 +311,19 @@ sys = mtkcompile(model; inputs = collect(input_x))
 @test length(unknowns(sys)) == length(equations(sys)) == 5
 @test size(ModelingToolkitBase.jacobian_sparsity(sys)) == (5, 5)
 @test size(ModelingToolkitBase.W_sparsity(sys)) == (5, 5)
+
+# `additional_passes` run after tearing, so the retained tearing graph does not describe
+# the equations they add.
+@variables x(t) y(t)
+@named model = System([D(x) ~ -x], t)
+function add_alg_eq(sys)
+    @set! sys.eqs = [equations(sys); 0 ~ y - x]
+    @set! sys.unknowns = [unknowns(sys); y]
+    return sys
+end
+sys = mtkcompile(model; additional_passes = [add_alg_eq])
+@test length(unknowns(sys)) == length(equations(sys)) == 2
+@test ModelingToolkitBase.jacobian_sparsity(sys) == sparse([1 0; 1 1])
 
 # MWE for #1722
 vars = @variables a(t) w(t) phi(t)
