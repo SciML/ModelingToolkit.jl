@@ -1411,7 +1411,7 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
         bindings = sys_bindings,
         initial_conditions = new_ics, guesses = get_guesses(sys),
         initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
-        observed = obs,
+        observed = obs, connector_type = get_connector_type(sys),
         systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
     )
     if iscomplete(sys)

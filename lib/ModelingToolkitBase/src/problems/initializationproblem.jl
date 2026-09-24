@@ -121,6 +121,10 @@ function InitializationProblem{iip, specialize}(
             isys, sys; fully_determined, initsys_mtkcompile_kwargs...
         )
     end
+    pareqs = mapreduce(vcat, pareqs; init = Equation[]) do eq
+        eqs = Symbolics.scalarize(eq)
+        eqs isa Equation ? [eqs] : vec(eqs)
+    end
     for i in eachindex(pareqs)
         eq = pareqs[i]
         pareqs[i] = Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs)
