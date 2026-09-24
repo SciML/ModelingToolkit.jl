@@ -956,5 +956,6 @@ function generate_control_function(
     return ModelingToolkitBase.generate_control_function(
         system_modifier(sys), u, isempty(d) ? nothing : d;
         known_disturbance_inputs = isempty(kd) ? nothing : kd,
-        kwargs...)
+        kwargs...
+    )
 end
