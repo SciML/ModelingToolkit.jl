@@ -210,7 +210,8 @@ outputs = [P.inertia1.phi, P.inertia2.phi, P.inertia1.w, P.inertia2.w]
 (f_oop, f_ip), x_sym,
 p_sym,
 io_sys = ModelingToolkit.generate_control_function(
-    model_with_disturbance, [:u]; known_disturbance_inputs = [:d1, :d2])
+    model_with_disturbance, model_with_disturbance.u;
+    known_disturbance_inputs = [model_with_disturbance.d1, model_with_disturbance.d2])
 
 inputs = ModelingToolkit.inputs(io_sys)
 g = ModelingToolkit.build_explicit_observed_function(
