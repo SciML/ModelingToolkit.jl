@@ -109,6 +109,35 @@ end
         dvs; ir
     )
     @test fully_specified == [6.0, 2.0, 16.0, 1.0]
+
+    # `vars` may mix a whole-array key with element keys of the same array
+    for (whole_idx, mixed_vars) in ((1, [x, x[1]]), (2, [x[1], x]))
+        mixed = ModelingToolkitBase.varmap_to_vars(
+            Dict(x => [p, 2p, 3p], p => 3.0), Symbolics.unwrap.(mixed_vars);
+            ir, allow_symbolic = true
+        )
+        @test mixed[whole_idx] == [3.0, 6.0, 9.0]
+        @test mixed[3 - whole_idx] == 3.0
+    end
+
+    # the non-IR path substitutes specified elements of partially filled arrays too
+    non_ir = ModelingToolkitBase.varmap_to_vars(
+        Dict(x[1] => 2p, p => 3.0, y => 1.0), dvs;
+        missing_values = ModelingToolkitBase.MissingGuessValue.Constant(0.0)
+    )
+    @test non_ir == [6.0, 0.0, 0.0, 1.0]
+
+    @variables u(t)[1:2, 1:2]
+    @parameters r
+    @named sys2 = System([D(u) ~ -u], t, [u], [r])
+    sys2 = complete(sys2)
+    ir2 = ModelingToolkitBase.get_irstructure(sys2)
+    dvs2 = Symbolics.unwrap.([u[1, 1], u[2, 1], u[1, 2], u[2, 2]])
+    twod = ModelingToolkitBase.varmap_to_vars(
+        Dict(u[1, 1] => r, u[2, 2] => 4r, r => 1.5), dvs2; ir = ir2,
+        missing_values = ModelingToolkitBase.MissingGuessValue.Constant(0.0)
+    )
+    @test twod == [1.5, 0.0, 0.0, 6.0]
 end
 
 @testset "array-equation DAE solves to the analytic solution" begin
