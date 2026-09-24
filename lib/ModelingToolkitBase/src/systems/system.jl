@@ -1412,7 +1412,16 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
         initial_conditions = new_ics, guesses = get_guesses(sys),
         initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
         observed = obs,
-        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys)),
+        # Unlike `flatten`, the hierarchy is retained, so connections are expanded after
+        # this conversion; that needs `connector_type` and `ignored_connections`.
+        connector_type = get_connector_type(sys),
+        ignored_connections = _maybe_copy(get_ignored_connections(sys)),
+        assertions = copy(get_assertions(sys)), inputs = copy(get_inputs(sys)),
+        outputs = copy(get_outputs(sys)), state_priorities = copy(get_state_priorities(sys)),
+        irreducibles = copy(get_irreducibles(sys)), maybe_zeros = copy(get_maybe_zeros(sys)),
+        metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys),
+        description = get_description(sys)
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
