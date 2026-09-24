@@ -64,54 +64,23 @@ end
 Turn input variables into parameters of the system.
 """
 function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{SymbolicT}, outputsyms::OrderedSet{SymbolicT})
-    @unpack structure, fullvars, sys = state
-    @unpack var_to_diff, graph, solvable_graph = structure
-    @assert solvable_graph === nothing
+    (; sys, fullvars) = state
 
-    var_reidx = zeros(Int, length(fullvars))
-    nvar = 0
-    new_fullvars = SymbolicT[]
-    for (i, v) in enumerate(fullvars)
-        if v in inputsyms
-            if var_to_diff[i] !== nothing
-                error("Input $(fullvars[i]) is differentiated!")
-            end
-            var_reidx[i] = -1
-        else
-            nvar += 1
-            var_reidx[i] = nvar
-            push!(new_fullvars, v)
-        end
-    end
-    ninputs = length(inputsyms)
-    @set! sys.inputs = inputsyms
-    @set! sys.outputs = outputsyms
-    if ninputs == 0
+    if isempty(inputsyms)
+        @set! sys.inputs = inputsyms
+        @set! sys.outputs = outputsyms
         state.sys = sys
         return state
     end
 
-    nvars = ndsts(graph) - ninputs
-    new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
-
-    for ie in 1:nsrcs(graph)
-        for iv in 𝑠neighbors(graph, ie)
-            iv = var_reidx[iv]
-            iv > 0 || continue
-            add_edge!(new_graph, ie, iv)
-        end
+    vars_to_rm = Int[]
+    for (i, v) in enumerate(fullvars)
+        v in inputsyms && push!(vars_to_rm, i)
     end
-
-    new_var_to_diff = StateSelection.DiffGraph(nvars, true)
-    for (i, v) in enumerate(var_to_diff)
-        new_i = var_reidx[i]
-        (new_i < 1 || v === nothing) && continue
-        new_v = var_reidx[v]
-        @assert new_v > 0
-        new_var_to_diff[new_i] = new_v
-    end
-    @set! structure.var_to_diff = complete(new_var_to_diff)
-    @set! structure.graph = complete(new_graph)
+    StateSelection.rm_eqs_vars!(
+        state, Int[], vars_to_rm; eqs_sorted_and_uniqued = true,
+        vars_sorted_and_uniqued = true
+    )
 
     binds = copy(parent(bindings(sys)))
     for var in inputsyms
@@ -120,14 +89,41 @@ function inputs_to_parameters!(state::TearingState, inputsyms::OrderedSet{Symbol
     @set! sys.unknowns = setdiff(unknowns(sys), inputsyms)
     ps = copy(parameters(sys))
     append!(ps, inputsyms)
+    @set! sys.inputs = inputsyms
+    @set! sys.outputs = outputsyms
     @set! sys.ps = ps
     @set! sys.bindings = ROSymmapT(binds)
-    @set! state.sys = sys
-    @set! state.fullvars = Vector{SymbolicT}(new_fullvars)
-    @set! state.structure = structure
+    state.sys = sys
     return state
 end
 
+"""
+    mtkcompile!(state::TearingState; kwargs...)
+
+Mutating structural simplification entry point for an existing tearing state.
+
+This is developer-facing API used by ModelingToolkit internals and extension packages that
+already have a `TearingState`. User code should normally call [`ModelingToolkitBase.mtkcompile`](@ref) on a
+`System` instead.
+
+# Arguments
+
+- `state`: tearing state to simplify in place.
+
+# Keyword Arguments
+
+- `check_consistency`: whether to check the transformed system for structural consistency.
+- `fully_determined`: whether the transformed system is expected to have a square
+  equation/unknown structure.
+- `inputs`: variables to treat as external inputs.
+- `outputs`: variables to treat as requested outputs.
+- `disturbance_inputs`: input variables that should be treated as disturbances.
+- `kwargs...`: additional simplification options forwarded to the internal compiler.
+
+# Returns
+
+The simplified `System`.
+"""
 function mtkcompile!(
         state::TearingState;
         check_consistency = true, fully_determined = true,
@@ -137,6 +133,7 @@ function mtkcompile!(
         kwargs...
     )
     if !is_time_dependent(state.sys)
+        MTKTearing.scalarize_tearing_state_eqs!(state)
         return _mtkcompile!(
             state; check_consistency,
             inputs, outputs, disturbance_inputs,
@@ -157,7 +154,12 @@ function mtkcompile!(
             discrete_pass_idx = findfirst(discrete_compile_pass, additional_passes)
             discrete_compile = additional_passes[discrete_pass_idx]
             deleteat!(additional_passes, discrete_pass_idx)
-            return discrete_compile(tss, clocked_inputs, ci)
+            sys = copy(state.sys)
+            sys = ConstructionBase.setproperties(
+                sys; eqs = Equation[], unknowns = SymbolicT[],
+                observed = Equation[], initialization_eqs = Equation[]
+            )
+            return discrete_compile(sys, tss, clocked_inputs, ci, id_to_clock)
         end
         throw(
             HybridSystemNotSupportedException(
@@ -169,6 +171,7 @@ function mtkcompile!(
         )
     end
     if length(tss) > 1
+        MTKTearing.scalarize_tearing_state_eqs!(tss[continuous_id])
         make_eqs_zero_equals!(tss[continuous_id])
         # simplify as normal
         sys = _mtkcompile!(
@@ -194,12 +197,12 @@ function mtkcompile!(
             HybridSystemNotSupportedException(
                 """
                 Hybrid continuous-discrete systems are currently not supported with \
-                the standard MTK compiler. This system requires JuliaSimCompiler.jl, \
-                see https://help.juliahub.com/juliasimcompiler/stable/
+                the standard MTK compiler.
                 """
             )
         )
     end
+    MTKTearing.scalarize_tearing_state_eqs!(state)
     if get_is_discrete(state.sys) ||
             continuous_id == 1 && any(Base.Fix2(isoperator, Shift), state.fullvars)
         state.structure.only_discrete = true
@@ -225,6 +228,7 @@ function _mtkcompile!(
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         outputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
         disturbance_inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
+        eliminate_mm_zeros = true,
         kwargs...
     )
     if fully_determined isa Bool
@@ -236,48 +240,58 @@ function _mtkcompile!(
     validate_io!(state, orig_inputs, inputs, discrete_inputs, outputs, disturbance_inputs)
     # ModelingToolkit.markio!(state, orig_inputs, inputs, outputs, disturbance_inputs)
     union!(inputs, disturbance_inputs)
-    state = ModelingToolkit.inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
-    state = ModelingToolkit.inputs_to_parameters!(state, inputs, outputs)
+    state = inputs_to_parameters!(state, discrete_inputs, OrderedSet{SymbolicT}())
+    state = inputs_to_parameters!(state, inputs, outputs)
+    eliminate_perfect_aliases!(state)
     StateSelection.trivial_tearing!(state)
-    sys, mm = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+    sys, mm = alias_elimination!(state; fully_determined, kwargs...)
+    old_to_new_eq, old_to_new_var, aliases = eliminate_perfect_aliases!(state)
+    sys = state.sys
+    mm = StateSelection.get_new_mm(aliases, old_to_new_eq, old_to_new_var, mm)
+    if eliminate_mm_zeros
+        # Do this after the second `eliminate_perfect_aliases!` so if any zeros we eliminate are
+        # aliases, we eliminate the "right" alias.
+        mm = eliminate_zero_variables_fixpoint!(state, mm; kwargs...)
+    end
+    state.mm = mm
+    @assert mm.nparentrows == nsrcs(state.structure.graph) && mm.ncols == ndsts(state.structure.graph) lazy"""
+    Invalid `mm`. Got `nparentrows, ncols` = ($(mm.nparentrows), $(mm.ncols)).
+    Expected ($(nsrcs(state.structure.graph)), $(ndsts(state.structure.graph))).
+    """
     if check_consistency
         fully_determined = StateSelection.check_consistency(
             state, orig_inputs; nothrow = fully_determined === nothing
         )
     end
-    # This phrasing avoids making the `kwcall` dynamic dispatch due to the type of a
-    # keyword (`mm`) being non-concrete
-    if mm isa CLIL.SparseMatrixCLIL{BigInt, Int}
-        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
-    else
-        sys = _mtkcompile_worker!(state, sys, mm; fully_determined, dummy_derivative, kwargs...)
-    end
+    sys = _mtkcompile_worker!(state, sys; fully_determined, dummy_derivative, kwargs...)
     fullunknowns = [observables(sys); unknowns(sys)]
-    @set! sys.observed = MTKBase.topsort_equations(observed(sys), fullunknowns)
+    @set! sys.observed = MTKBase.topsort_equations(sys, observed(sys), fullunknowns)
+    sys = state.sys = MTKBase.invalidate_cache!(sys)
 
-    return MTKBase.invalidate_cache!(sys)
+    return sys
 end
 
 function _mtkcompile_worker!(
-        state::TearingState, sys::System, mm::CLIL.SparseMatrixCLIL{T, Int};
+        state::TearingState, sys::System;
         fully_determined::Bool, dummy_derivative::Bool,
         kwargs...
-    ) where {T}
+    )
     if fully_determined && dummy_derivative
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, kwargs...
+            sys, state; kwargs...
         )
     elseif fully_determined
         var_eq_matching = StateSelection.pantelides!(state; finalize = false, kwargs...)
         sys = pantelides_reassemble(state, var_eq_matching)
         state = TearingState(sys)
-        sys, mm::CLIL.SparseMatrixCLIL{T, Int} = ModelingToolkit.alias_elimination!(state; fully_determined, kwargs...)
+        sys, mm = alias_elimination!(state; fully_determined, kwargs...)
+        state.mm = mm
         sys = ModelingToolkit.dummy_derivative(
-            sys, state; mm, fully_determined, kwargs...
+            sys, state; fully_determined, kwargs...
         )
     else
         sys = ModelingToolkit.tearing(
-            sys, state; mm, fully_determined, kwargs...
+            sys, state; fully_determined, kwargs...
         )
     end
     return sys
@@ -317,6 +331,17 @@ struct DifferentiatedVariableNotUnknownError <: Exception
     undifferentiated::Any
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Return how many levels above the current system a variable with the given `scope` becomes
+an unknown. `GlobalScope` returns `-1`, matching the sentinel used by
+[`ModelingToolkitBase.check_scope_depth`](@ref).
+"""
+expected_scope_depth(::LocalScope) = 0
+expected_scope_depth(::GlobalScope) = -1
+expected_scope_depth(scope::ParentScope) = expected_scope_depth(scope.parent)::Int + 1
+
 function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
     undiff = err.undifferentiated
     diff = err.differentiated
@@ -324,7 +349,7 @@ function Base.showerror(io::IO, err::DifferentiatedVariableNotUnknownError)
         io,
         "Variable $undiff occurs differentiated as $diff but is not an unknown of the system."
     )
-    scope = getmetadata(undiff, SymScope, LocalScope())
+    scope = getmetadata(undiff, SymScope, LocalScope())::AllScopes
     depth = expected_scope_depth(scope)
     return if depth > 0
         print(

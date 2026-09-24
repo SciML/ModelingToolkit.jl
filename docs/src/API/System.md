@@ -10,110 +10,25 @@ System
 ModelingToolkit.AbstractSystem
 ```
 
+The rules that hold for every `AbstractSystem`, and the generic functions available on any
+subtype, are stated in
+[The `AbstractSystem` Interface](@ref abstract_system_interface).
+
 ## Utility constructors
 
 Several utility constructors also exist to easily construct alternative system formulations.
+`NonlinearSystem`, `ODESystem`, `DiscreteSystem` and `ImplicitDiscreteSystem` are deprecated
+aliases for `System` kept for compatibility with ModelingToolkit v9; they emit a deprecation
+warning and are documented here so that the warning has a target to look up.
 
 ```@docs
 NonlinearSystem
 SDESystem
 JumpSystem
 OptimizationSystem
-```
-
-## Accessor functions
-
-Several accessor functions exist to query systems for the information they contain. In general,
-for every field `x` there exists a `has_x` function which checks if the system contains the
-field and a `get_x` function for obtaining the value in the field. Note that fields of a system
-cannot be accessed via `getproperty` - that is reserved for accessing variables, subsystems
-or analysis points of the hierarchical system.
-
-```@docs
-ModelingToolkit.has_eqs
-ModelingToolkit.get_eqs
-equations
-ModelingToolkit.equations_toplevel
-full_equations
-ModelingToolkit.has_noise_eqs
-ModelingToolkit.get_noise_eqs
-ModelingToolkit.has_jumps
-ModelingToolkit.get_jumps
-jumps
-ModelingToolkit.has_constraints
-ModelingToolkit.get_constraints
-constraints
-ModelingToolkit.has_costs
-ModelingToolkit.get_costs
-cost
-ModelingToolkit.has_consolidate
-ModelingToolkit.get_consolidate
-ModelingToolkit.has_unknowns
-ModelingToolkit.get_unknowns
-unknowns
-ModelingToolkit.unknowns_toplevel
-ModelingToolkit.has_ps
-ModelingToolkit.get_ps
-parameters
-ModelingToolkit.parameters_toplevel
-tunable_parameters
-ModelingToolkit.has_brownians
-ModelingToolkit.get_brownians
-brownians
-ModelingToolkit.has_iv
-ModelingToolkit.get_iv
-ModelingToolkit.has_observed
-ModelingToolkit.get_observed
-observed
-observables
-ModelingToolkit.has_name
-ModelingToolkit.get_name
-nameof
-ModelingToolkit.has_description
-ModelingToolkit.get_description
-ModelingToolkit.description
-bindings
-initial_conditions
-ModelingToolkit.has_guesses
-ModelingToolkit.get_guesses
-guesses
-ModelingToolkit.get_systems
-ModelingToolkit.has_initialization_eqs
-ModelingToolkit.get_initialization_eqs
-initialization_equations
-ModelingToolkit.has_continuous_events
-ModelingToolkit.get_continuous_events
-continuous_events
-ModelingToolkit.continuous_events_toplevel
-ModelingToolkit.has_discrete_events
-ModelingToolkit.get_discrete_events
-ModelingToolkit.discrete_events_toplevel
-ModelingToolkit.has_assertions
-ModelingToolkit.get_assertions
-ModelingToolkit.assertions
-ModelingToolkit.has_metadata
-ModelingToolkit.get_metadata
-SymbolicUtils.getmetadata(::ModelingToolkit.AbstractSystem, ::DataType, ::Any)
-SymbolicUtils.setmetadata(::ModelingToolkit.AbstractSystem, ::DataType, ::Any)
-ModelingToolkit.has_is_dde
-ModelingToolkit.get_is_dde
-ModelingToolkit.is_dde
-ModelingToolkit.has_tstops
-ModelingToolkit.get_tstops
-ModelingToolkit.symbolic_tstops
-ModelingToolkit.has_tearing_state
-ModelingToolkit.get_tearing_state
-ModelingToolkit.does_namespacing
-toggle_namespacing
-ModelingToolkit.iscomplete
-ModelingToolkit.has_preface
-ModelingToolkit.get_preface
-ModelingToolkit.preface
-ModelingToolkit.has_parent
-ModelingToolkit.get_parent
-ModelingToolkit.has_initializesystem
-ModelingToolkit.get_initializesystem
-ModelingToolkit.is_initializesystem
+ODESystem
+DiscreteSystem
+ImplicitDiscreteSystem
 ```
 
 ## `getproperty` syntax
@@ -124,7 +39,7 @@ namespaced version of `var`. Note that this can also be used to access subsystem
 or analysis points.
 
 !!! note
-    
+
     By default, top-level systems not marked as `complete` will apply their namespace. Systems
     marked as `complete` will not do this namespacing. This namespacing behavior can be toggled
     independently of whether the system is completed using [`toggle_namespacing`](@ref) and the
@@ -171,7 +86,11 @@ ModelingToolkit.dump_variable_metadata
 ## Inputs and outputs
 
 ```@docs
+ModelingToolkit.has_inputs
+ModelingToolkit.get_inputs
 ModelingToolkit.inputs
+ModelingToolkit.has_outputs
+ModelingToolkit.get_outputs
 ModelingToolkit.outputs
 ModelingToolkit.bound_inputs
 ModelingToolkit.unbound_inputs
@@ -211,6 +130,7 @@ ModelingToolkit.collect_var_to_name!
 ModelingToolkit.collect_vars!
 ModelingToolkit.eqtype_supports_collect_vars
 ModelingToolkit.modified_unknowns!
+ModelingToolkitBase.convert_bindings_for_time_independent_system
 ```
 
 ## Namespace manipulation
@@ -222,6 +142,8 @@ following functions are useful for manipulating namespacing functionality.
 ```@docs
 ModelingToolkit.renamespace
 ModelingToolkit.namespace_equations
+@nonamespace
+@namespace
 ```
 
 ## Linearization and Analysis
@@ -229,6 +151,8 @@ ModelingToolkit.namespace_equations
 Functions for linearization and analysis of systems.
 
 ```@docs
+AnalysisPoint
+ap_var
 linearization_ap_transform
 get_sensitivity_function
 get_comp_sensitivity_function
@@ -237,13 +161,26 @@ get_sensitivity
 get_comp_sensitivity
 get_looptransfer
 open_loop
+isolate_subsystem
 ```
 
-## Additional Equation Classification
+`isolate_subsystem` extracts the plant from an unsimplified feedback system using analysis
+points as boundaries.
 
-```@docs
-alg_equations
-diff_equations
-has_alg_equations
-has_diff_equations
+```@example ISOLATE_SUBSYSTEM
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkit: t_nounits as t
+
+@named plant = FirstOrder(k = 1, T = 1)
+@named controller = Gain(k = -1)
+eqs = [
+    connect(controller.output, :plant_input, plant.input)
+    connect(plant.output, :plant_output, controller.input)
+]
+@named closed_loop = System(eqs, t, systems = [plant, controller])
+
+isolated, input_vars, output_vars =
+    isolate_subsystem(closed_loop, closed_loop.plant_input, closed_loop.plant_output)
+isequal(only(input_vars), plant.input.u), isequal(only(output_vars), plant.output.u)
 ```

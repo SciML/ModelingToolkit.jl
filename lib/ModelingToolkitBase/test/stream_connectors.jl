@@ -1,6 +1,10 @@
 using Test
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
+using Symbolics
+using OrdinaryDiffEq
+using SciMLBase
+import SymbolicUtils as SU
 
 @connector function TwoPhaseFluidPort(; name, P = 0.0, m_flow = 0.0, h_outflow = 0.0)
     pars = @parameters begin
@@ -550,6 +554,7 @@ function OneFluidSystem(; name)
         connect(pipe_a.HB, volume_a.H)
         connect(source_b.H, pipe_b.HA)
         connect(pipe_b.HB, volume_b.H)
+        source_a.H.dm ~ 0
     ]
 
     return System(eqs, t, vars, pars; name, systems)
@@ -573,7 +578,7 @@ end
         vars = @variables begin
             p(t), [guess = 0.0, description = "Pressure, Pa"]
             md(t), [connect = Flow, guess = 0.0, description = "Mass flow, kg/s"]
-            x(t)[1:Ns], [connect = Stream, guess = 1 / Ns, description = "Mass fractions, -"]
+            x(t)[1:Ns], [connect = Stream, guess = ones(Ns) / Ns, description = "Mass fractions, -"]
         end
         System(Equation[], t, vars, []; name = name)
     end
@@ -705,4 +710,17 @@ end
     @named __sys = System(eqs, t)
     @named _sys = compose(__sys, [mp_1, pr_1, pb_1, va_1e, tnk_1])
     @test_nowarn expand_connections(_sys)
+
+    if @isdefined(ModelingToolkit)
+        sys = mtkcompile(_sys)
+        prob = ODEProblem(sys, nothing, (0.0, 30.0))
+        sol = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+end
+
+@testset "`instream_rt` can go through `scalarize`" begin
+    @variables x(t) y(t) a(t) b(t)
+    term = Symbolics.STerm(ModelingToolkitBase.instream_rt, [Val(1), Val(1), x, y, a, b]; type = Real, shape = UnitRange{Int}[])
+    @test isequal(term, SU.scalarize(term))
 end

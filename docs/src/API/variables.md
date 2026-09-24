@@ -3,15 +3,17 @@
 ModelingToolkit uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) for the symbolic
 manipulation infrastructure. In fact, the `@variables` macro is defined in Symbolics.jl. In
 addition to `@variables`, ModelingToolkit defines `@parameters`, `@independent_variables`,
-`@constants` and `@brownians`. These macros function identically to `@variables` but allow
-ModelingToolkit to attach additional metadata.
+`@constants`, `@brownians`, `@poissonians` and `@discretes`. These macros function identically
+to `@variables` but allow ModelingToolkit to attach additional metadata.
 
 ```@docs
-Symbolics.@variables
 @independent_variables
 @parameters
 @constants
 @brownians
+@brownian
+@poissonians
+@discretes
 ```
 
 Symbolic variables can have metadata attached to them. The defaults and guesses assigned
@@ -20,13 +22,31 @@ additional types of metadata.
 
 ## Variable defaults
 
-Variables can be assigned default values to avoid having to specify defaults to the
-[`System`](@ref) constructor.
+Variables can be assigned default values during construction. For example:
+
+```julia
+@variables x(t) = 1 y(t) = x
+```
+
+Here `x` has a default of `1`, and `y` has a default of `x`. While both of these cases are
+stored under the same metadata key, ModelingToolkit treats them differently. Constant
+(non-symbolic) defaults (such as that of `x`) are translated to initial conditions
+([`initial_conditions`](@ref)). Symbolic defaults (such as that of `y`) are translated to
+bindings ([`bindings`](@ref)). For more information on the difference between bindings and
+initial conditions, please refer to the documentation on [initialization](@ref initialization)
+of systems, and specifically the section on [bindings and initial conditions](@ref bindings_and_ics).
 
 ```@docs
 ModelingToolkit.hasdefault
 ModelingToolkit.getdefault
 ModelingToolkit.setdefault
+```
+
+The defaults of a system that has already been constructed are updated with `set_defaults`,
+which applies the same binding/initial condition semantics to an existing system.
+
+```@docs
+set_defaults
 ```
 
 ## Variable descriptions
@@ -162,6 +182,32 @@ getbounds
 ModelingToolkit.VariableBounds
 ```
 
+## Nominal Value
+
+A nominal value represents the characteristic magnitude of a variable. This is useful
+for scaling constraints in optimal control problems, preventing ill-conditioning when
+variables have vastly different magnitudes. The default nominal value is `1.0`.
+
+```@repl metadata
+@variables x [nominal = 1000.0];
+hasnominal(x)
+getnominal(x)
+```
+
+Nominal values can also be specified for array variables:
+
+```@repl metadata
+@variables x[1:3] [nominal = [100.0, 200.0, 300.0]];
+getnominal(x)
+getnominal(x[1])
+```
+
+```@docs
+hasnominal
+getnominal
+setnominal
+```
+
 ## Guess
 
 Specify an initial guess for variables of a `System`. This is used when building the
@@ -176,6 +222,7 @@ getguess(u)
 ```@docs
 hasguess
 getguess
+ModelingToolkitBase.setguess
 ```
 
 When a system is constructed, the guesses of the involved variables are stored in a `Dict`
@@ -213,7 +260,7 @@ ModelingToolkit.isconstant
 ```
 
 !!! note
-    
+
     [`@constants`](@ref) is a convenient way to create `@parameters` with `tunable = false`
     metadata
 
@@ -292,6 +339,16 @@ ModelingToolkit.MTKVariableTypeCtx
 ModelingToolkit.isparameter
 ```
 
+The `@parameters` and `@brownians` macros set this metadata on the variables they declare.
+The same can be done to an existing symbolic variable, which is useful when generating
+variables programmatically.
+
+```@docs
+ModelingToolkitBase.toparam
+ModelingToolkitBase.tovar
+ModelingToolkitBase.tobrownian
+```
+
 ## Miscellaneous metadata
 
 User-defined metadata can be added using the `misc` metadata. This can be queried
@@ -354,12 +411,9 @@ ModelingToolkit.dump_parameters
 ## Symbolic operators
 
 ModelingToolkit makes heavy use of "operators". These are custom functions that are applied
-to symbolic variables. The most common operator is the `Differential` operator, defined in
-Symbolics.jl.
-
-```@docs
-Symbolics.Differential
-```
+to symbolic variables. The most common operator is the
+[Differential operator](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/), defined
+in Symbolics.jl.
 
 ModelingToolkit also defines a plethora of custom operators.
 
@@ -384,12 +438,11 @@ system happen at discrete intervals on a clock. While ModelingToolkit cannot yet
 such systems, it has the capability to represent them.
 
 !!! warn
-    
+
     These operators are considered experimental API.
 
 ```@docs
 Sample
 Hold
 SampleTime
-sampletime
 ```

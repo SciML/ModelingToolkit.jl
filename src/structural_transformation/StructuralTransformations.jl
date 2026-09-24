@@ -1,60 +1,50 @@
+"""
+    StructuralTransformations
+
+Developer-facing structural transformations used by ModelingToolkit's compiler and SciML
+extension packages. The exported transformation functions are versioned developer API;
+end-user applications should use [`ModelingToolkitBase.mtkcompile`](@ref) instead.
+"""
 module StructuralTransformations
 
-using Setfield: @set!, @set
+using Setfield: @set!
 using UnPack: @unpack
 
-using Symbolics: unwrap, linear_expansion, VartypeT, SymbolicT
+using Symbolics: SymbolicT
 import Symbolics
-using SymbolicUtils
+import SymbolicUtils
 using SymbolicUtils: BSImpl
-using SymbolicUtils.Code
-using SymbolicUtils.Rewriters
-using SymbolicUtils: maketerm, iscall, symtype
 import SymbolicUtils as SU
 import Moshi
 
-using ModelingToolkit
-using ModelingToolkitBase: System, AbstractSystem, var_from_nested_derivative, Differential,
-    unknowns, equations, diff2term_with_unit,
-    value,
-    operation, arguments, simplify, symbolic_linear_solve,
-    isdiffeq, isdifferential, isirreducible,
-    empty_substitutions, get_substitutions,
-    get_tearing_state, get_iv, independent_variables,
-    has_tearing_state, InvalidSystemException,
-    ExtraEquationsSystemException,
-    ExtraVariablesSystemException,
-    invalidate_cache!, Shift,
-    topological_sort,
-    filter_kwargs, lower_varname_with_unit,
-    setio,
-    has_equations, observed,
-    Schedule, schedule, iscomplete, get_schedule, VariableUnshifted,
-    VariableShift, DerivativeDict, shift2term, simplify_shifts,
-    distribute_shift
+import ModelingToolkit
+using ModelingToolkitBase: System, AbstractSystem, Differential,
+    Equation, equations, full_equations, diff2term_with_unit,
+    operation, arguments,
+    isdiffeq, isdifferential,
+    get_tearing_state, get_iv,
+    invalidate_cache!,
+    iscomplete, get_schedule
 
-using BipartiteGraphs
-import BipartiteGraphs: invview, complete, IncrementalCycleTracker, add_edge_checked!
-using Graphs
-using ModelingToolkit: mtkcompile!
-using SymbolicIndexingInterface: symbolic_type, ArraySymbolic, NotSymbolic, getname
+using SymbolicUtils: substitute
 
-using ModelingToolkit.DiffEqBase
-using ModelingToolkit.StaticArrays
-import Symbolics: Num, Arr, CallAndWrap
+using BipartiteGraphs: maximal_matching, ndsts, unassigned, 𝑠neighbors
+import BipartiteGraphs: complete
+import Graphs
+using Graphs: edges, inneighbors, nv, outneighbors
+using Graphs.LinAlg: incidence_matrix
 import CommonSolve
 
-using SparseArrays
+using SparseArrays: sparse
 
-using SimpleNonlinearSolve
-
-using DocStringExtensions
+import DocStringExtensions
+using DocStringExtensions: TYPEDSIGNATURES
 
 import ModelingToolkitBase as MTKBase
 import StateSelection
-import StateSelection: CLIL, SelectedState
+import StateSelection: find_solvables!
 import ModelingToolkitTearing as MTKTearing
-using ModelingToolkitTearing: TearingState, SystemStructure, ReassembleAlgorithm,
+using ModelingToolkitTearing: TearingState, ReassembleAlgorithm,
     DefaultReassembleAlgorithm
 
 export tearing, dae_index_lowering
@@ -66,6 +56,23 @@ export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable
 include("utils.jl")
 include("pantelides.jl")
 
+"""
+    tearing_substitution(sys::AbstractSystem; kwargs...)
+
+Replace the equations of `sys` with its fully substituted equations.
+
+This is a structural-transformation helper used by simplification passes. End-user code
+should usually call [`ModelingToolkitBase.mtkcompile`](@ref).
+
+# Arguments
+
+- `sys`: system whose equations should be substituted.
+- `kwargs...`: keyword arguments forwarded to `full_equations`.
+
+# Returns
+
+A copy of `sys` with substituted equations and no cached schedule.
+"""
 function tearing_substitution(sys::AbstractSystem; kwargs...)
     neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs

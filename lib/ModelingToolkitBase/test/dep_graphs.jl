@@ -10,10 +10,10 @@ using Symbolics: SymbolicT
 @testset "JumpSystem" begin
     @parameters k1 k2
     @variables S(t) I(t) R(t)
-    j₁ = MassActionJump(k1, [0 => 1], [S => 1])
-    j₂ = MassActionJump(k1, [S => 1], [S => -1])
-    j₃ = MassActionJump(k2, [S => 1, I => 1], [S => -1, I => 1])
-    j₄ = MassActionJump(k2, [S => 2, R => 1], [R => -1])
+    j₁ = SymbolicMassActionJump(k1, [0 => 1], [S => 1])
+    j₂ = SymbolicMassActionJump(k1, [S => 1], [S => -1])
+    j₃ = SymbolicMassActionJump(k2, [S => 1, I => 1], [S => -1, I => 1])
+    j₄ = SymbolicMassActionJump(k2, [S => 2, R => 1], [R => -1])
     j₅ = ConstantRateJump(k1 * I, [R ~ R + 1])
     j₆ = VariableRateJump(k1 * k2 / (1 + t) * S, [S ~ S - 1, R ~ R + 1])
     alleqs = [j₁, j₂, j₃, j₄, j₅, j₆]

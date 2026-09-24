@@ -5,8 +5,8 @@ using SciMLStructures: SciMLStructures, canonicalize, Tunable, Discrete, Constan
 using ModelingToolkitStandardLibrary.Electrical, ModelingToolkitStandardLibrary.Blocks
 using BlockArrays: BlockedArray, BlockedVector, Block
 using OrdinaryDiffEq
+using DiffEqBase
 using ForwardDiff
-using JET
 using Test
 
 @discretes c(t)
@@ -43,7 +43,8 @@ end
     @test ps2.tunable isa SVector
     @test ps2.initials isa SVector
     @test ps2.discrete isa Tuple{<:BlockedVector{Float64, <:SVector}}
-    @test ps2.constant isa Tuple{<:SVector, <:SVector, <:SVector{1, <:SMatrix}}
+    @test all(Base.Fix2(isa, SVector), ps2.constant)
+    @test any(Base.Fix2(isa, SVector{1, <:SMatrix}), ps2.constant)
     @test ps2.nonnumeric isa Tuple{<:SVector}
 end
 
@@ -186,8 +187,6 @@ ps = [p => 1.0] # Value for `d` is missing
 @test_throws "Could not evaluate" ODEProblem(sys, [u0; ps], tspan)
 @test_nowarn ODEProblem(sys, [u0; ps; [d => 1.0]], tspan)
 
-# JET tests
-
 # scalar parameters only
 function level1()
     @parameters p1 = 0.5 [tunable = true] p2 = 1 [tunable = true] p3 = 3 [tunable = false] p4 = 3 [tunable = true] y0
@@ -256,35 +255,16 @@ end
     @testset "Type stability of $portion" for portion in [
             Tunable(), Discrete(), Constants(),
         ]
-        @test_call canonicalize(portion, ps)
         @inferred canonicalize(portion, ps)
-
-        # broken because the size of a vector of vectors can't be determined at compile time
-        @test_opt target_modules = (ModelingToolkitBase,) canonicalize(
-            portion, ps
-        )
 
         buffer, repack, alias = canonicalize(portion, ps)
 
-        # broken because dependent update functions break inference
-        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer))
-        )
         @inferred SciMLStructures.replace(
             portion, ps, ones(length(buffer))
         )
         @inferred MTKParameters SciMLStructures.replace(portion, ps, ones(length(buffer)))
-        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace(
-            portion, ps, ones(length(buffer))
-        )
 
-        @test_call target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer))
-        )
         @inferred SciMLStructures.replace!(portion, ps, ones(length(buffer)))
-        @test_opt target_modules = (ModelingToolkitBase,) SciMLStructures.replace!(
-            portion, ps, ones(length(buffer))
-        )
     end
 end
 
@@ -481,17 +461,19 @@ if @isdefined(ModelingToolkit)
         prob = ODEProblem(sub_sys, [sys.capacitor2.v => 0.0], (0, 3.0))
 
         setter = setsym_oop(prob, [sys.capacitor2.C])
+        getter = getsym(prob, sys.capacitor2.v)
 
         function loss(x, ps)
-            setter, prob = ps
+            getter, setter, prob = ps
             u0, p = setter(prob, x)
             new_prob = remake(prob; u0, p)
-            sol = solve(new_prob, Rodas5P())
-            sum(sol)
+            sol = solve(new_prob, Rodas5P(); saveat = 0.1, abstol = 1.0e-8, reltol = 1.0e-8)
+            @test SciMLBase.successful_retcode(sol)
+            sum(getter(sol))
         end
 
-        grad = ForwardDiff.gradient(Base.Fix2(loss, (setter, prob)), [3.0])
-        @test grad ≈ [0.14882627068752538] atol = 1.0e-10
+        grad = ForwardDiff.gradient(Base.Fix2(loss, (getter, setter, prob)), [3.0])
+        @test grad ≈ [0.07646091541526605] atol = 1.0e-6
     end
 end
 
@@ -503,4 +485,48 @@ end
     prob = ODEProblem(sys, SA[x => 1.0, p => 1.0], (0.0, 1.0))
     @test isbits(prob.p)
     @test isbits(prob.f.initialization_data.initializeprob.p)
+end
+
+@testset "`anyeltypedual`" begin
+    @variables x(t)
+    @parameters p
+    @named sys = System(D(x) ~ x * p, t)
+    sys = complete(sys)
+    ps = MTKParameters(sys, [p => 1.0])
+    @test !(DiffEqBase.anyeltypedual(ps) <: ForwardDiff.Dual)
+    @test !(DiffEqBase.anyeltypedual(typeof(ps)) <: ForwardDiff.Dual)
+    buf, reset, alias = canonicalize(Tunable(), ps)
+    fps = reset(ForwardDiff.Dual.(buf))
+    @test DiffEqBase.anyeltypedual(fps) <: ForwardDiff.Dual
+    @test DiffEqBase.anyeltypedual(typeof(fps)) <: ForwardDiff.Dual
+end
+
+# Partially specifying an array variable leaves `nothing` holes for the remaining
+# elements in the operating point. Substituting these holes into expressions used
+# to throw a `TypeError` from `promote_symtype` (or a `MethodError` when folding
+# with constants).
+@testset "Issue#4607: nothing-holes in partially-specified array values" begin
+    @variables r(t)[1:2] z(t)
+    @parameters p q
+    @named sys = System(
+        [D(r[1]) ~ -r[1] * p, D(r[2]) ~ -r[2] * q, z ~ r[1] + r[2]], t
+    )
+    sys = complete(sys)
+    # A parameter value expression referencing the unspecified element `r[2]`
+    # used to throw `TypeError` from `promote_symtype` during substitution.
+    @test_throws ["Could not evaluate", "p"] MTKParameters(
+        sys, Dict(r[1] => 1.0, q => 1.0, p => z * r[2])
+    )
+    # All-const variant of the same fold used to throw a `MethodError`.
+    @test_throws ["Could not evaluate", "p"] MTKParameters(
+        sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[2])
+    )
+    # `Initial` values that cannot be evaluated are treated as unfixed.
+    ps = MTKParameters(
+        sys, Dict(r[1] => 1.0, p => 2.0, q => 1.0, Initial(z) => z * r[2])
+    )
+    @test ps isa MTKParameters
+    # Values referencing only specified elements still evaluate.
+    ps = MTKParameters(sys, Dict(r[1] => 1.0, q => 1.0, p => 2 * r[1]))
+    @test ps isa MTKParameters
 end

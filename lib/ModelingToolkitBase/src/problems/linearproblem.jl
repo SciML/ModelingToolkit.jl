@@ -1,32 +1,71 @@
-struct LinearFunction{iip, I} <: SciMLBase.AbstractSciMLFunction{iip}
-    interface::I
-    A::AbstractMatrix
-    b::AbstractVector
+struct LinearFunction{iip} <: SciMLBase.AbstractSciMLFunction{iip}
+    interface::Any
+    A::Union{
+        Matrix{SymbolicT}, SparseMatrixCSC{SymbolicT, Int},
+        Diagonal{SymbolicT, Vector{SymbolicT}},
+        BandedMatrix{SymbolicT, Matrix{SymbolicT}, Base.OneTo{Int}},
+    }
+    b::Vector{SymbolicT}
 end
 
+Moshi.Data.@data StructuralHint begin
+    struct NoHint end
+    struct Diagonal end
+    struct Banded
+        lower_band_size::Int
+        upper_band_size::Int
+    end
+end
+
+Moshi.Derive.@derive StructuralHint[Show]
+
 function LinearFunction{iip}(
-        sys::System; expression = Val{false}, check_compatibility = true,
+        sys::System; u0 = nothing, p = nothing, t = nothing,
+        expression = Val{false}, check_compatibility = true,
         sparse = false, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true, kwargs...
+        checkbounds = false, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(),
+        structural_hint::StructuralHint.Type = StructuralHint.NoHint(),
+        cachesyms = (), kwargs...
     ) where {iip}
+    opts = SciMLFunctionOptions(;
+        u0, p, t, sparse, expression, check_compatibility, eval_expression, eval_module,
+        compiler_options, checkbounds, optimize, kwargs...,
+    )
+    return LinearFunction{iip}(sys, opts; structural_hint, cachesyms)
+end
+
+"""
+    LinearFunction{iip}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `LinearFunction` directly from a pre-assembled
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
+"""
+function LinearFunction{iip}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        structural_hint::StructuralHint.Type = StructuralHint.NoHint(),
+        cachesyms = ()
+    ) where {iip, E}
     check_complete(sys, LinearProblem)
-    check_compatibility && check_compatible_system(LinearProblem, sys)
+    opts.check_compatibility && check_compatible_system(LinearProblem, sys)
+
+    (; sparse) = opts
+    codegen_opts = opts.codegen
 
     A, b = calculate_A_b(sys; sparse)
-    update_A = generate_update_A(
-        sys, A; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, cse, kwargs...
-    )
-    update_b = generate_update_b(
-        sys, b; expression, wrap_gfw = Val{true}, eval_expression,
-        eval_module, checkbounds, cse, kwargs...
-    )
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
-    )
+    A = Moshi.Match.@match structural_hint begin
+        StructuralHint.NoHint() => A
+        # `Diagonal{T, Vector{T}}(::AbstractMatrix)` does not exist on 1.10
+        StructuralHint.Diagonal() => Diagonal{SymbolicT, Vector{SymbolicT}}(diag(A))
+        StructuralHint.Banded(; lower_band_size, upper_band_size) => begin
+            BandedMatrix{SymbolicT, Matrix{SymbolicT}}(A, (lower_band_size, upper_band_size))
+        end
+    end
+    update_A = generate_update_A(sys, A, codegen_opts; cachesyms)
+    update_b = generate_update_b(sys, b, codegen_opts; cachesyms)
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state = false)
 
-    if expression == Val{true}
+    if E
         symbolic_interface = quote
             update_A = $update_A
             update_b = $update_b
@@ -42,9 +81,10 @@ function LinearFunction{iip}(
         )
     end
 
-    return LinearFunction{iip, typeof(symbolic_interface)}(symbolic_interface, A, b)
+    return LinearFunction{iip}(symbolic_interface, A, b)
 end
 
+"""$(problem_docstring(SciMLBase.LinearProblem, LinearFunction, false))"""
 function SciMLBase.LinearProblem(sys::System, op; kwargs...)
     return SciMLBase.LinearProblem{true}(sys, op; kwargs...)
 end
@@ -62,18 +102,17 @@ function SciMLBase.LinearProblem{iip}(
     check_complete(sys, LinearProblem)
     check_compatibility && check_compatible_system(LinearProblem, sys)
 
-    f, u0,
-        p = process_SciMLProblem(
+    u0Type = typeof(op)
+    f, u0, p, op = process_SciMLProblem(
         LinearFunction{iip}, sys, op; check_length, expression,
         build_initializeprob = false, symbolic_u0 = true, u0_constructor, u0_eltype,
-        kwargs...
+        return_operating_point = true, sparse, kwargs...
     )
 
-    if any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
+    if u0 !== nothing && any(x -> symbolic_type(x) != NotSymbolic() || x === nothing, u0)
         u0 = nothing
     end
 
-    u0Type = typeof(op)
     floatT = if u0 === nothing
         calculate_float_type(op, u0Type)
     else
@@ -83,10 +122,12 @@ function SciMLBase.LinearProblem{iip}(
 
     u0_constructor = get_p_constructor(u0_constructor, u0Type, u0_eltype)
     symbolic_interface = f.interface
-    A,
-        b = get_A_b_from_LinearFunction(
-        sys, f, p; eval_expression, eval_module, expression, u0_constructor, sparse
+    A, b = get_A_b_from_LinearFunction(
+        sys, f, op; eval_expression, eval_module, expression, u0_constructor
     )
+    if expression === Val{false}
+        symbolic_interface = wrap_symbolic_linear_interface(symbolic_interface, iip, A, b, p)
+    end
 
     kwargs = (; u0, process_kwargs(sys; kwargs...)..., f = symbolic_interface)
     args = (; A, b, p)
@@ -94,18 +135,135 @@ function SciMLBase.LinearProblem{iip}(
     return maybe_codegen_scimlproblem(expression, LinearProblem{iip}, args; kwargs...)
 end
 
+function __make_fww(@nospecialize(f), retT::DataType, argsT::DataType)
+    fwt = (
+        FunctionWrapper{retT, argsT}(f),
+    )
+    cs = FunctionWrappersWrappers.SingleCacheStorage()
+    return FunctionWrappersWrapper{typeof(fwt), FunctionWrappersWrappers.AllowNonIsBits, typeof(cs)}(fwt, cs)
+end
+
+function __make_fww(@nospecialize(f), retT::NTuple{N, DataType}, argsT::NTuple{N, DataType}) where {N}
+    fwt = ntuple(i -> FunctionWrapper{retT[i], argsT[i]}(f), Val(N))
+    cs = FunctionWrappersWrappers.SingleCacheStorage()
+    return FunctionWrappersWrapper{typeof(fwt), FunctionWrappersWrappers.AllowNonIsBits, typeof(cs)}(fwt, cs)
+end
+
+Base.@nospecializeinfer function wrap_symbolic_linear_interface(
+        symbolic_interface::SciMLBase.SymbolicLinearInterface, iip::Bool, A, b, p
+    )
+    # We'll never infer the type of these, so no point specializing on them
+    @nospecialize symbolic_interface A b p
+    if iip
+        elT = eltype(A)
+        pT = typeof(p)
+        update_A! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_A!), (Nothing, Nothing, Nothing), (Tuple{Matrix{elT}, pT}, Tuple{Diagonal{elT, Vector{elT}}, pT}, Tuple{BandedMatrix{elT, Matrix{elT}, Base.OneTo{Int}}, pT}))
+        update_b! = __make_fww(SciMLBase.Void{Any}(symbolic_interface.update_b!), Nothing, typeof((b, p)))
+    else
+        update_A! = __make_fww(symbolic_interface.update_A!, typeof(A), typeof((p,)))
+        update_b! = __make_fww(symbolic_interface.update_b!, typeof(b), typeof((p,)))
+    end
+    return SciMLBase.SymbolicLinearInterface(
+        update_A!, update_b!, symbolic_interface.sys, symbolic_interface.observed, nothing
+    )
+end
+
 function get_A_b_from_LinearFunction(
-        sys::System, f::LinearFunction, p; eval_expression = false,
-        eval_module = @__MODULE__, expression = Val{false}, u0_constructor = identity,
-        u0_eltype = float, sparse = false
+        sys::System, @nospecialize(f::LinearFunction), op; kws...
+    )
+    return get_A_b_from_LinearFunction(sys, f, Symbolics.FixpointSubstituter{true}(op); kws...)
+end
+
+function get_A_b_from_LinearFunction(
+        sys::System, @nospecialize(f::LinearFunction), subber::Symbolics.FixpointSubstituter{true};
+        eval_expression = false, eval_module = @__MODULE__,
+        @nospecialize(expression = Val{false}),
+        @nospecialize(u0_constructor = identity),
+        @nospecialize(u0_eltype = float)
     )
     @unpack A, b, interface = f
+    if A isa Matrix{SymbolicT}
+        _A = similar(A, Any)
+        for i in eachindex(A)
+            _A[i] = unwrap_const(subber(A[i]))
+        end
+        A = u0_eltype.(_A)
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, size(A))
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(size(A)))(_A)
+        end
+    elseif A isa BandedMatrix{SymbolicT, Matrix{SymbolicT}, Base.OneTo{Int}}
+        pA = parent(A)
+        _pA = similar(pA, Any)
+        T = Union{}
+        for i in eachindex(pA)
+            isassigned(pA, i) || continue
+            _pA[i] = u0_eltype(unwrap_const(subber(pA[i])))
+            T = promote_type(T, typeof(_pA[i]))
+        end
+        _pA = u0_constructor(_pA)
+        __pA = similar(_pA, T)
+        copyto!(__pA, _pA)
+        _pA = __pA
+        if ArrayInterface.ismutable(_pA)
+            A = BandedMatrix{eltype(_pA), typeof(_pA)}(undef, size(A), bandwidths(A))
+            copyto!(parent(A), _pA)
+        else
+            throw(ArgumentError("BandedMatrices doesn't support StaticArrays"))
+        end
+    elseif A isa Diagonal{SymbolicT, Vector{SymbolicT}}
+        A = parent(A)
+        _A = similar(A, Any)
+        for i in eachindex(A)
+            _A[i] = unwrap_const(subber(A[i]))
+        end
+        A = u0_eltype.(_A)
+        _A = u0_constructor(A)
+        if ArrayInterface.ismutable(_A)
+            A = similar(_A, size(A))
+            copyto!(A, _A)
+        else
+            A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(size(A)))(_A)
+        end
+        A = Diagonal(A)
+    else
+        I, J, V = findnz(A)
+        _V = similar(V, Any)
+        for i in eachindex(V)
+            _V[i] = unwrap_const(subber(V[i]))
+        end
+        V = u0_constructor(u0_eltype.(_V))
+        A = SparseArrays.sparse(I, J, V, size(A)...)
+    end
+    _b = similar(b, Any)
+    for i in eachindex(b)
+        _b[i] = unwrap_const(subber(b[i]))
+    end
+    b = u0_constructor(u0_eltype.(_b))
+
+    return A, b
+end
+
+# Deprecation path for older MTK and newer MTKBase
+function get_A_b_from_LinearFunction(
+        sys::System, f::LinearFunction, p::MTKParameters; eval_expression = false,
+        eval_module = @__MODULE__, expression = Val{false}, u0_constructor = identity,
+        u0_eltype = float, sparse = false,
+    )
+    (; A, b, interface) = f
     if expression == Val{true}
         get_A = build_explicit_observed_function(
-            sys, A; param_only = true, eval_expression, eval_module
+            sys, A,
+            GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module);
+            param_only = true
         )
         get_b = build_explicit_observed_function(
-            sys, b; param_only = true, eval_expression, eval_module
+            sys, b,
+            GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module);
+            param_only = true
         )
         A = u0_constructor(u0_eltype.(get_A(p)))
         b = u0_constructor(u0_eltype.(get_b(p)))
@@ -119,12 +277,11 @@ function get_A_b_from_LinearFunction(
         else
             A = StaticArraysCore.similar_type(_A, StaticArraysCore.Size(szA))(_A)
         end
-        b = u0_constructor(u0_eltype.(interface.update_b!(p)))
     end
+    b = u0_constructor(u0_eltype.(interface.update_b!(p)))
     if sparse
         A = SparseArrays.sparse(A)
     end
-
     return A, b
 end
 

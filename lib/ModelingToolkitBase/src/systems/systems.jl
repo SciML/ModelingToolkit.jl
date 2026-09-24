@@ -76,18 +76,77 @@ $(SIGNATURES)
 Compile the given system into a form that ModelingToolkitBase can generate code for. Also
 performs order reduction for ODEs and handles simple discrete/implicit-discrete systems.
 
+The returned system is a new system; `sys` is not modified. A system can only be compiled
+once — calling `mtkcompile` on an already-compiled system throws
+`RepeatedStructuralSimplificationError`.
+
+# Arguments
+
+- `sys`: The [`System`](@ref) to compile. It must not already be compiled.
+
 # Keyword Arguments
 
-+ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
-+ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
+- `inputs`: Variables to treat as inputs. They are converted to parameters and are allowed
+  to be unconnected, permitting models where `n_unknowns = n_equations - n_inputs`. Array
+  variables must have known shape and be passed either whole or fully scalarized in sorted
+  order.
+- `outputs`: Variables to treat as outputs of the compiled system.
+- `disturbance_inputs`: Inputs that represent disturbances. Like `inputs`, they are
+  converted to parameters and excluded from the equation/unknown balance check.
+- `fully_determined = true`: Whether to throw an error when the system is unbalanced, i.e.
+  when the number of equations differs from the number of unknowns after `inputs` and
+  `disturbance_inputs` have been removed. Passing `false` (or `nothing`) skips the check.
+- `additional_passes = ()`: A collection of functions applied to the system, in order,
+  after the built-in compilation passes have run. Each takes and returns a system.
+- `split = true`: Whether the compiled system uses the split parameter representation,
+  which stores parameters in type-homogeneous buffers indexed by an `IndexCache`. Pass
+  `false` to use a flat parameter vector instead.
+- `homotopy = true`: Whether Modelica [`homotopy`](@ref)`(actual, simplified)` operators
+  are kept for lowering to a continuation solve. Pass `false` to replace every such node
+  by its `actual` branch before compilation: the generated code then contains only
+  `actual` (the `simplified` expression is never emitted), problem construction never
+  selects a `SciMLBase.HomotopyProblem`, and the initialization and event affect systems
+  derived from the compiled system are compiled the same way. Use this for targets that
+  cannot lower to a continuation solver. See [`strip_homotopy`](@ref).
+
+Remaining keyword arguments are forwarded to the internal compilation passes.
+
+# Returns
+
+A new, completed [`System`](@ref) suitable for code generation and problem construction.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `y` is eliminated as an observed variable of the compiled system
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :sys)
+csys = mtkcompile(sys)
+
+unknowns(csys)  # [x(t)]
+observed(csys)  # [y(t) ~ 2x(t)]
+```
 """
 function mtkcompile(
         sys::System; additional_passes = (),
         inputs = SymbolicT[], outputs = SymbolicT[],
         disturbance_inputs = SymbolicT[],
-        split = true, kwargs...
+        split = true, homotopy = true, kwargs...
     )
     isscheduled(sys) && throw(RepeatedStructuralSimplificationError())
+    if !homotopy
+        sys = strip_homotopy(sys)
+    end
+
+    # For backward compatibility with old ModelingToolkit which does not
+    # integrate with the reversible transformation API.
+    sys = with_reversible_transformation(sys, UnhackSystemTransformation)
+
     # Canonicalize types of arguments to prevent repeated compilation of inner methods
     inputs = canonicalize_io(unwrap_vars(inputs), "input")
     outputs = canonicalize_io(unwrap_vars(outputs), "output")
@@ -100,10 +159,26 @@ function mtkcompile(
     for pass in additional_passes
         newsys = pass(newsys)
     end
-    @set! newsys.parent = complete(sys; split = false, flatten = false)
-    newsys = complete(newsys; split)
+    @set! newsys.parent = toggle_namespacing(sys, false)
+    # Record the choice so systems derived from `newsys` (initialization system, event
+    # affect systems) are compiled with the same `homotopy` setting.
+    if !homotopy
+        newsys = setmetadata(newsys, HomotopyCtx, false)
+    end
+    # Singular systems may end up with parameter-only equations, which shouldn't error on `complete`
+    newsys = complete(newsys; split, allow_parameter_eqs = true)
     return newsys
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The unknowns of `sys` in the layout of a problem's state vector `u`. Array unknowns
+contribute one entry per element, so `u` stays flat even when `sys` has not been scalarized
+by `mtkcompile`; the generated code then reconstructs each array unknown as a view into
+`u`.
+"""
+flat_unknowns(sys::AbstractSystem) = scalarized_vars(unknowns(sys))
 
 function scalarized_vars(vars)
     scal = SymbolicT[]
@@ -120,14 +195,27 @@ function scalarized_vars(vars)
 end
 
 function _mtkcompile(sys::AbstractSystem; kwargs...)
-    # TODO: convert noise_eqs to brownians for simplification
+    # Extract poissonians to jumps first (before checking for existing jumps)
+    if !isempty(poissonians(sys))
+        sys = extract_poissonians_to_jumps(sys; kwargs...)
+    end
+
+    # For systems with jumps, skip full structural simplification to preserve
+    # variables that only appear in jumps.
+    if !isempty(jumps(sys))
+        # If brownians are present, extract them to noise_eqs for SDEProblem construction.
+        # If noise_eqs is already set, return as-is (no need to convert).
+        if !isempty(brownians(sys))
+            return extract_brownians_to_noise_eqs(sys)
+        end
+        return sys
+    end
+
+    # For non-jump systems, convert noise_eqs to brownians for simplification
     if has_noise_eqs(sys) && get_noise_eqs(sys) !== nothing
         sys = noise_to_brownians(sys; names = :αₘₜₖ)
     end
-    if !isempty(jumps(sys))
-        return sys
-    end
-    if isempty(equations(sys)) && !is_time_dependent(sys) && !_iszero(cost(sys))
+    if !has_some_equations(sys) && !is_time_dependent(sys) && !_iszero(cost(sys))
         return simplify_optimization_system(sys; kwargs...)::System
     end
     if !isempty(brownians(sys))
@@ -147,6 +235,7 @@ function __mtkcompile(
     sys = expand_connections(sys)
     sys = discrete_unknowns_to_parameters(sys)
     sys = discover_globalscoped(sys)
+    sys = apply_limited_lowering(sys)
     flat_dvs = scalarized_vars(unknowns(sys))
     original_vars = Set{SymbolicT}(flat_dvs)
     eqs = flatten_equations(equations(sys))
@@ -163,6 +252,15 @@ function __mtkcompile(
         else
             push!(_all_dvs, v)
         end
+    end
+    original_obs = observed(sys)
+    for eq in original_obs
+        delete!(original_vars, eq.lhs)
+        delete!(all_dvs, eq.lhs)
+        arr, isarr = split_indexed_var(eq.lhs)
+        isarr || continue
+        delete!(original_vars, arr)
+        delete!(all_dvs, arr)
     end
     all_dvs = _all_dvs
     filter!(all_dvs) do v
@@ -219,24 +317,31 @@ function __mtkcompile(
     end
     # Nonlinear system
     if !has_derivatives && !has_shifts
-        obseqs = Equation[]
+        obseqs = copy(original_obs)
         get_trivial_observed_equations!(Equation[], eqs, obseqs, all_dvs, nothing)
-        add_array_observed!(obseqs)
-        obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
         map!(eq -> Symbolics.COMMON_ZERO ~ (eq.rhs - eq.lhs), eqs, eqs)
         observables = Set{SymbolicT}()
         for eq in obseqs
             push!(observables, eq.lhs)
         end
         setdiff!(flat_dvs, observables)
+        sys = remove_unhack_system_transformation(sys)
+        tf = add_array_observed!(obseqs, flat_dvs)
+        sys = with_reversible_transformation(sys, tf)
+        obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
+        new_ps = [get_ps(sys); collect(inputs)]
         @set! sys.eqs = eqs
         @set! sys.unknowns = flat_dvs
         @set! sys.observed = obseqs
+        @set! sys.ps = new_ps
+        @set! sys.inputs = inputs
+        @set! sys.outputs = outputs
         return sys
     end
     iv = get_iv(sys)::SymbolicT
     total_sub = Dict{SymbolicT, SymbolicT}()
     subst = SU.Substituter{false}(total_sub, SU.default_substitute_filter)
+    obseqs = copy(original_obs)
     if has_derivatives
         D = Differential(iv)
 
@@ -261,8 +366,6 @@ function __mtkcompile(
 
             diffeqs[i] = D(cur) ~ eq.rhs
         end
-
-        obseqs = Equation[]
     else
         # The "most differentiated" variable in `x(k) ~ x(k - 1) + x(k - 2)` is `x(k)`.
         # To find how many times it is "differentiated", find the lowest shift.
@@ -301,7 +404,7 @@ function __mtkcompile(
             diffeq_idxs[i] = get(lowest_shift, eqs[i].lhs, typemax(Int)) <= 0
         end
         # They actually become observed.
-        obseqs = eqs[diffeq_idxs]
+        append!(obseqs, eqs[diffeq_idxs])
         alg_eqs = eqs[.!diffeq_idxs]
         diffeqs = Equation[]
         for (var, order) in lowest_shift
@@ -317,7 +420,7 @@ function __mtkcompile(
             end
         end
 
-        _obseqs = topsort_equations(obseqs, collect(all_dvs); check = false)
+        _obseqs = topsort_equations(sys, obseqs, collect(all_dvs); check = false)
         _algeqs = setdiff!(obseqs, _obseqs)
         for i in eachindex(_algeqs)
             _algeqs[i] = Symbolics.COMMON_ZERO ~ _algeqs[i].rhs - _algeqs[i].lhs
@@ -345,8 +448,6 @@ function __mtkcompile(
         )
     end
     get_trivial_observed_equations!(diffeqs, alg_eqs, obseqs, all_dvs, iv)
-    add_array_observed!(obseqs)
-    obseqs = topsort_equations(obseqs, [eq.lhs for eq in obseqs])
     for i in eachindex(alg_eqs)
         eq = alg_eqs[i]
         alg_eqs[i] = 0 ~ subst(eq.rhs - eq.lhs)
@@ -360,6 +461,11 @@ function __mtkcompile(
     new_eqs = [diffeqs; alg_eqs]
     new_dvs = [diffvars; alg_vars]
     new_ps = [get_ps(sys); collect(inputs)]
+
+    sys = remove_unhack_system_transformation(sys)
+    tf = add_array_observed!(obseqs, new_dvs)
+    sys = with_reversible_transformation(sys, tf)
+    obseqs = topsort_equations(sys, obseqs, [eq.lhs for eq in obseqs])
 
     for eq in new_eqs
         if SU.query(eq.rhs) do v
@@ -506,33 +612,86 @@ end
     ndims = ndims(arr)
 end
 
-function add_array_observed!(obseqs::Vector{Equation})
-    array_obsvars = Set{SymbolicT}()
-    for eq in obseqs
-        arr, isarr = split_indexed_var(eq.lhs)
-        isarr && push!(array_obsvars, arr)
-    end
-    for var in array_obsvars
-        firstind = first(SU.stable_eachindex(var))::SU.StableIndex{Int}
-        firstind = Tuple(firstind.idxs)
-        scal = SymbolicT[]
-        for i in SU.stable_eachindex(var)
-            push!(scal, var[i])
-        end
-        push!(obseqs, var ~ offset_array(firstind, reshape(scal, size(var))))
-    end
-    return
+struct ScalarizedArrayObserved <: ReversibleTransformations
+    arrvars::Set{SymbolicT}
 end
 
-function simplify_sde_system(sys::AbstractSystem; kwargs...)
-    brown_vars = brownians(sys)
-    @set! sys.brownians = SymbolicT[]
-    sys = __mtkcompile(sys; kwargs...)
+reverse_transformation_during_initialization(::ScalarizedArrayObserved) = false
 
-    new_eqs = copy(equations(sys))
+function add_array_observed!(obseqs::Vector{Equation}, unknowns::Vector{SymbolicT})
+    # map of array observed variable (unscalarized) to number of its
+    # scalarized terms that appear as observed variables
+    arr_obs_occurrences = Dict{SymbolicT, Int}()
+    for (i, eq) in enumerate(obseqs)
+        lhs = eq.lhs
+        rhs = eq.rhs
+        unscal, isarr = split_indexed_var(lhs)
+        isarr || continue
+        cnt = get(arr_obs_occurrences, unscal, 0)
+        arr_obs_occurrences[unscal] = cnt + 1
+    end
+
+    # count variables in unknowns if they are scalarized forms of variables
+    # also present as observed. e.g. if `x[1]` is an unknown and `x[2] ~ (..)`
+    # is an observed equation.
+    for sym in unknowns
+        unscal, isarr = split_indexed_var(sym)
+        isarr || continue
+        cnt = get(arr_obs_occurrences, unscal, 0)
+        iszero(cnt) && continue
+        arr_obs_occurrences[unscal] = cnt + 1
+    end
+
+    obs_arr_eqs = Equation[]
+    arrvars = Set{SymbolicT}()
+    for (arrvar, cnt) in arr_obs_occurrences
+        cnt == length(arrvar) || continue
+        firstind = (first(SU.stable_eachindex(arrvar))::SU.StableIndex{Int}).idxs
+        scal_args = Symbolics.SArgsT()
+        sizehint!(scal_args, length(arrvar)::Int)
+        push!(scal_args, Symbolics.SConst(size(arrvar)))
+        for i in SU.stable_eachindex(arrvar)
+            push!(scal_args, arrvar[i])
+        end
+        rhs = Symbolics.STerm(
+            SU.array_literal, scal_args;
+            type = SU.symtype(arrvar), shape = SU.shape(arrvar)
+        )
+        if !all(isone, firstind)
+            rhs = Symbolics.STerm(
+                offset_array,
+                Symbolics.SArgsT((Symbolics.SConst(Tuple(firstind)), rhs));
+                type = SU.symtype(arrvar), shape = SU.shape(arrvar)
+            )
+        end
+        push!(obs_arr_eqs, arrvar ~ rhs)
+        push!(arrvars, arrvar)
+    end
+    append!(obseqs, obs_arr_eqs)
+
+    return ScalarizedArrayObserved(arrvars)
+end
+
+function reverse_transformation(sys::AbstractSystem, tf::ScalarizedArrayObserved)
+    obs = copy(observed(sys))
+    filter!(eq -> !(eq.lhs in tf.arrvars), obs)
+    return @set! sys.observed = obs
+end
+
+"""
+    _brownians_to_noise_eqs(eqs::Vector{Equation}, brown_vars::Vector)
+
+Extract brownian coefficients from equations and return (new_eqs, noise_eqs).
+The brownian terms are removed from the equations and collected into a noise matrix.
+This is a helper function used by both `extract_brownians_to_noise_eqs` and
+`simplify_sde_system`.
+"""
+function _brownians_to_noise_eqs(eqs::Vector{Equation}, brown_vars::Vector)
+    new_eqs = copy(eqs)
     Is = Int[]
     Js = Int[]
     vals = SymbolicT[]
+
     for (i, eq) in enumerate(new_eqs)
         resid = eq.rhs
         for (j, bvar) in enumerate(brown_vars)
@@ -557,23 +716,205 @@ function simplify_sde_system(sys::AbstractSystem; kwargs...)
     end
 
     g = Matrix(sparse(Is, Js, vals, length(new_eqs), length(brown_vars)))
-    @set! sys.eqs = new_eqs
+
+    # Determine noise type (scalar, diagonal, or general)
     # Fix for https://github.com/SciML/ModelingToolkit.jl/issues/2490
-    if size(g, 2) == 1
-        # If there's only one brownian variable referenced across all the equations,
-        # we get a Nx1 matrix of noise equations, which is a special case known as scalar noise
-        noise_eqs = reshape(g[:, 1], (:, 1))
-        is_scalar_noise = true
+    noise_eqs = if size(g, 2) == 1
+        # Scalar noise: Nx1 matrix
+        reshape(g[:, 1], (:, 1))
     elseif __num_isdiag_noise(g)
-        # If each column of the noise matrix has either 0 or 1 non-zero entry, then this is "diagonal noise".
-        # In this case, the solver just takes a vector column of equations and it interprets that to
-        # mean that each noise process is independent
-        noise_eqs = __get_num_diag_noise(g)
-        is_scalar_noise = false
+        # Diagonal noise: each column has 0 or 1 non-zero entry
+        __get_num_diag_noise(g)
     else
-        noise_eqs = g
-        is_scalar_noise = false
+        g
     end
+
+    return new_eqs, noise_eqs
+end
+
+"""
+    extract_brownians_to_noise_eqs(sys::AbstractSystem)
+
+Extract brownian variables from equations and convert them to a noise_eqs matrix,
+without performing structural simplification. This is used for systems with both
+jumps and brownians, where full simplification could eliminate variables that
+only appear in jumps.
+"""
+function extract_brownians_to_noise_eqs(sys::AbstractSystem)
+    brown_vars = brownians(sys)
+    new_eqs, noise_eqs = _brownians_to_noise_eqs(equations(sys), brown_vars)
+
+    @set! sys.eqs = new_eqs
+    @set! sys.noise_eqs = noise_eqs
+    @set! sys.brownians = SymbolicT[]
+
+    return sys
+end
+
+"""
+    _poissonians_to_jumps(eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns; save_positions)
+
+Extract poissonian coefficients from equations and return (new_eqs, jumps, eqs_to_remove).
+Each poissonian is converted to a Jump (ConstantRateJump or VariableRateJump) with affects
+collected from all equations where it appears. Equations that become `D(X) ~ 0` after
+extraction are marked for removal.
+
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
+
+This is a helper function used by `extract_poissonians_to_jumps`.
+"""
+function _poissonians_to_jumps(
+        eqs::Vector{Equation}, poisson_vars::Vector, iv, sys_unknowns;
+        save_positions = (false, true)
+    )
+    new_eqs = copy(eqs)
+    generated_jumps = JumpType[]
+    eqs_to_remove = Set{Int}()
+
+    # Pre-allocate sets to avoid repeated allocations in _is_variable_rate_jump!
+    # Include iv in the set so get_variables! can filter to unknowns + iv directly
+    unknowns_and_iv = Set(sys_unknowns)
+    iv !== nothing && push!(unknowns_and_iv, iv)
+    rate_vars_set = Set{SymbolicT}()
+
+    for dN in poisson_vars
+        rate = getpoissonianrate(dN)
+        rate === nothing && continue
+
+        affects = Equation[]
+        expander = Symbolics.LinearExpander(dN)
+
+        for (i, eq) in enumerate(new_eqs)
+            # Skip non-differential equations (only handle Differential, not Shift)
+            (iscall(eq.lhs) && operation(eq.lhs) isa Differential) || continue
+
+            # Get the differential operator and check its order
+            # Note: D(D(X)) is represented as Differential(t, 2)(X(t)), so we check the
+            # operator's order field directly rather than using var_from_nested_derivative
+            diff_op = operation(eq.lhs)
+            if diff_op.order != 1
+                throw(
+                    ArgumentError(
+                        """
+                        Higher-order derivative equation $eq found in system with poissonians. \
+                        Poissonians are only supported in first-order differential equations.
+                        """
+                    )
+                )
+            end
+
+            # Get the variable being differentiated
+            var, _ = var_from_nested_derivative(eq.lhs)
+
+            # Extract coefficient of dN using cached LinearExpander
+            coeff, resid, islin = expander(eq.rhs)
+
+            if !islin
+                throw(
+                    ArgumentError(
+                        """
+                        Poissonian $dN appears non-linearly in equation $eq. \
+                        Poissonians may only appear as linear terms (coeff * dN).
+                        """
+                    )
+                )
+            end
+
+            _iszero(coeff) && continue
+
+            # Build affect using Pre() for pre-jump values
+            # The affect is: var ~ Pre(var) + Pre(coeff)
+            push!(affects, var ~ Pre(var) + Pre(coeff))
+
+            # Update equation with poissonian term removed
+            if _iszero(resid)
+                # Pure-jump equation: D(X) ~ 0, mark for removal
+                push!(eqs_to_remove, i)
+            else
+                new_eqs[i] = eq.lhs ~ resid
+            end
+        end
+
+        # Skip if no affects (coefficient was zero everywhere)
+        isempty(affects) && continue
+
+        # Classify jump type based on rate expression
+        is_variable_rate = _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+
+        jump = if is_variable_rate
+            VariableRateJump(rate, affects; save_positions)
+        else
+            ConstantRateJump(rate, affects)
+        end
+        push!(generated_jumps, jump)
+    end
+
+    return new_eqs, generated_jumps, eqs_to_remove
+end
+
+"""
+    _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+
+Determine if a jump rate expression results in a VariableRateJump or ConstantRateJump.
+
+Returns `true` (VariableRateJump) if:
+- The rate depends on the independent variable `t`
+- The rate depends on any system unknowns
+
+Returns `false` (ConstantRateJump) if the rate depends only on parameters.
+
+The `rate_vars_set` is a reusable set that will be emptied and filled with variables from the rate.
+The `unknowns_and_iv` should be a Set containing system unknowns and the independent variable.
+"""
+function _is_variable_rate_jump!(rate_vars_set, rate, unknowns_and_iv)
+    empty!(rate_vars_set)
+    Symbolics.get_variables!(rate_vars_set, rate, unknowns_and_iv)
+    return !isempty(rate_vars_set)
+end
+
+"""
+    extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
+
+Extract poissonian variables from equations and convert them to Jump objects.
+Returns a modified system with:
+- Poissonian terms removed from equations
+- Pure-jump equations (D(X) ~ 0) removed
+- Generated jumps merged with any existing jumps
+- Poissonians list cleared
+
+The `save_positions` kwarg is forwarded to VariableRateJumps created from poissonians.
+"""
+function extract_poissonians_to_jumps(sys::AbstractSystem; save_positions = (false, true), kwargs...)
+    poisson_vars = poissonians(sys)
+    isempty(poisson_vars) && return sys
+
+    iv_sym = get_iv(sys)
+    sys_unknowns = unknowns(sys)
+    existing_jumps = jumps(sys)
+
+    new_eqs, generated_jumps, eqs_to_remove = _poissonians_to_jumps(
+        equations(sys), poisson_vars, iv_sym, sys_unknowns; save_positions
+    )
+
+    # Remove pure-jump equations
+    final_eqs = [eq for (i, eq) in enumerate(new_eqs) if i ∉ eqs_to_remove]
+
+    # Merge generated jumps with existing jumps
+    all_jumps = vcat(generated_jumps, existing_jumps)
+
+    @set! sys.eqs = final_eqs
+    @set! sys.jumps = all_jumps
+    @set! sys.poissonians = SymbolicT[]
+
+    return sys
+end
+
+function simplify_sde_system(sys::AbstractSystem; kwargs...)
+    brown_vars = brownians(sys)
+    @set! sys.brownians = SymbolicT[]
+    sys = __mtkcompile(sys; kwargs...)
+
+    new_eqs, noise_eqs = _brownians_to_noise_eqs(equations(sys), brown_vars)
 
     dummy_sub = Dict{SymbolicT, SymbolicT}()
     for eq in new_eqs
@@ -626,7 +967,7 @@ function simplify_optimization_system(sys::System; split = true, kwargs...)
     snlsys = mtkcompile(nlsys; kwargs..., fully_determined = false)::System
     obs = observed(snlsys)
     seqs = equations(snlsys)
-    trueobs = observed(unhack_system(snlsys))
+    trueobs = observed(reverse_all_default_reversible_transformations(snlsys))
     subs = Dict{SymbolicT, SymbolicT}()
     for eq in trueobs
         subs[eq.lhs] = eq.rhs
@@ -687,13 +1028,14 @@ graph for the equations. Also construct a `Vector{Int}` mapping indices of `eqs`
 index in `unknowns` of the observed variable on the LHS of each equation. Return the
 constructed incidence graph and index mapping.
 """
-function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
+function observed2graph(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tuple{BipartiteGraph{Int, Nothing}, Vector{Int}}
     graph = BipartiteGraph(length(eqs), length(unknowns))
     v2j = Dict{SymbolicT, Int}(unknowns .=> 1:length(unknowns))
 
     # `assigns: eq -> var`, `eq` defines `var`
     assigns = similar(eqs, Int)
-    vars = Set{SymbolicT}()
+    ir = get_irstructure(sys)
+    vars = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
         lhs_j === nothing &&
@@ -713,6 +1055,12 @@ function observed2graph(eqs::Vector{Equation}, unknowns::Vector{SymbolicT})::Tup
 end
 
 """
+Toggle to control whether `topsort_equations` prints the equations in the
+cycle, if present.
+"""
+TOPSORT_EQS_PRINT_CYCLE::Bool = false
+
+"""
     $(TYPEDSIGNATURES)
 
 Use Kahn's algorithm to topologically sort observed equations.
@@ -730,15 +1078,17 @@ julia> eqs = [
            y ~ 2z + k
        ];
 
-julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
+julia> @named sys = System(Equation[], t, [x, y, z, k], [])
+
+julia> ModelingToolkit.topsort_equations(sys, eqs, [x, y, z, k])
 3-element Vector{Equation}:
  Equation(z(t), 2)
  Equation(y(t), k(t) + 2z(t))
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
-    graph, assigns = observed2graph(eqs, unknowns)
+function topsort_equations(sys::AbstractSystem, eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
+    graph, assigns = observed2graph(sys, eqs, unknowns)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 
@@ -781,7 +1131,43 @@ function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; c
         end
     end
 
-    (check && idx != neqs) && throw(ArgumentError("The equations have at least one cycle."))
+    if check && idx != neqs
+        # Build a directed eq→eq subgraph over unsorted equations, find smallest SCC.
+        if TOPSORT_EQS_PRINT_CYCLE
+            unsorted = findall(>(0), degrees)
+            unsorted_set = Set(unsorted)
+            n_unsorted = length(unsorted)
+            old_to_new = Dict(old => new for (new, old) in enumerate(unsorted))
+
+            g = SimpleDiGraph(n_unsorted)
+            for src_old in unsorted
+                for dst_old in 𝑑neighbors(graph, assigns[src_old])
+                    dst_old in unsorted_set || continue
+                    add_edge!(g, old_to_new[src_old], old_to_new[dst_old])
+                end
+            end
+
+            sccs = strongly_connected_components(g)
+            nontrivial = filter(scc -> length(scc) >= 2, sccs)
+            smallest_new = isempty(nontrivial) ? collect(1:n_unsorted) :
+                nontrivial[argmin(length.(nontrivial))]
+
+            println("=== topsort_equations: CYCLE DETECTED ===")
+            println("Smallest cycle ($(length(smallest_new)) equations):")
+            for new_idx in smallest_new
+                old_idx = unsorted[new_idx]
+                println("  LHS = $(unknowns[assigns[old_idx]])")
+                println("  EQ  = $(eqs[old_idx])")
+            end
+        end
+        throw(ArgumentError("The equations have at least one cycle."))
+    end
 
     return ordered_eqs
+end
+
+# Deprecation path
+function topsort_equations(eqs::Vector{Equation}, unknowns::Vector{SymbolicT}; check = true)
+    @named misc = System(eqs, unknowns, [])
+    return topsort_equations(misc, eqs, unknowns; check)
 end

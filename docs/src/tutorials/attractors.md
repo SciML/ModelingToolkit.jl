@@ -14,7 +14,7 @@ Hence the "nonlocal-" component.
 More differences and pros & cons are discussed in the documentation of Attractors.jl.
 
 !!! note "Attractors and basins"
-    
+
     This tutorial assumes that you have some familiarity with dynamical systems,
     specifically what are attractors and basins of attraction. If you don't have
     this yet, we recommend Chapter 1 of the textbook

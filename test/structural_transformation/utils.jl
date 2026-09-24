@@ -8,6 +8,8 @@ using Symbolics: unwrap
 using DataInterpolations
 using OrdinaryDiffEq, NonlinearSolve, StochasticDiffEq
 import DiffEqNoiseProcess
+import BipartiteGraphs
+import ModelingToolkitBase
 import SymbolicUtils as SU
 import StateSelection
 import ModelingToolkitTearing as MTKTearing
@@ -26,11 +28,12 @@ eqs = [
     0 ~ x^2 + y^2 - L^2,
 ]
 pendulum = System(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
-state = TearingState(pendulum)
+state = TearingState(pendulum; sort_eqs = false)
 StateSelection.find_solvables!(state)
 sss = state.structure
 @unpack graph, solvable_graph, var_to_diff = sss
-@test sort(graph.fadjlist) == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]
+sym_incidence = [[D(x), w], [D(y), z], [D(w), T, x], [D(z), T, y], [x, y]]
+@test all([issetequal(state.fullvars[v], sym_incidence[i]) for (i, v) in enumerate(graph.fadjlist)])
 @test length(graph.badjlist) == 9
 @test ne(graph) == nnz(incidence_matrix(graph)) == 12
 @test nv(solvable_graph) == 9 + 5
@@ -40,13 +43,14 @@ end
 
 se = collect(StructuralTransformations.edges(graph))
 @test se == mapreduce(vcat, enumerate(graph.fadjlist)) do (s, d)
-    StructuralTransformations.BipartiteEdge.(s, d)
+    BipartiteGraphs.BipartiteEdge.(s, d)
 end
 
 @testset "observed2graph handles unknowns inside callable parameters" begin
     @variables x(t) y(t)
     @parameters p(::Real)
-    g, _ = ModelingToolkit.observed2graph([y ~ p(x), x ~ 0], unwrap.([y, x]))
+    @named sys = System(Equation[], t, [x, y], [p])
+    g, _ = ModelingToolkit.observed2graph(sys, [y ~ p(x), x ~ 0], unwrap.([y, x]))
     @test ModelingToolkit.𝑠neighbors(g, 1) == [2]
     @test ModelingToolkit.𝑑neighbors(g, 2) == [1]
 end
@@ -66,8 +70,8 @@ end
     @test_nowarn prob.f(prob.u0, prob.p, 0.0)
 
     isys = ModelingToolkit.generate_initializesystem(sys)
-    @test length(unknowns(isys)) == 4
-    @test length(equations(isys)) == 5
+    @test length(unknowns(isys)) == 2
+    @test length(equations(isys)) == 1
     @test !any(equations(isys)) do eq
         iscall(eq.rhs) && operation(eq.rhs) in [MTKTearing.change_origin]
     end
@@ -122,25 +126,34 @@ end
 
     # Expand shifts
     @test isequal(
-        ST.distribute_shift(Shift(t, -1)(x + y)), Shift(t, -1)(x) + Shift(t, -1)(y)
+        ModelingToolkitBase.distribute_shift(Shift(t, -1)(x + y)),
+        Shift(t, -1)(x) + Shift(t, -1)(y)
     )
 
     expr = a * Shift(t, -2)(x) + Shift(t, 2)(y) + b
     @test isequal(
-        ST.simplify_shifts(ST.distribute_shift(Shift(t, 2)(expr))),
+        ModelingToolkitBase.simplify_shifts(
+            ModelingToolkitBase.distribute_shift(Shift(t, 2)(expr))
+        ),
         a * x + Shift(t, 4)(y) + b
     )
-    @test isequal(ST.distribute_shift(Shift(t, 2)(exp(z))), exp(Shift(t, 2)(z)))
-    @test isequal(ST.distribute_shift(Shift(t, 2)(exp(a) + b)), exp(a) + b)
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, 2)(exp(z))), exp(Shift(t, 2)(z))
+    )
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, 2)(exp(a) + b)), exp(a) + b
+    )
 
     expr = a^x - log(b * y) + z * x
     @test isequal(
-        ST.distribute_shift(Shift(t, -3)(expr)),
+        ModelingToolkitBase.distribute_shift(Shift(t, -3)(expr)),
         a^(Shift(t, -3)(x)) - log(b * Shift(t, -3)(y)) + Shift(t, -3)(z) * Shift(t, -3)(x)
     )
 
     expr = x(k + 1) ~ x + x(k - 1)
-    @test isequal(ST.distribute_shift(Shift(t, -1)(expr)), x ~ x(k - 1) + x(k - 2))
+    @test isequal(
+        ModelingToolkitBase.distribute_shift(Shift(t, -1)(expr)), x ~ x(k - 1) + x(k - 2)
+    )
 end
 
 @testset "`map_variables_to_equations`" begin
@@ -154,7 +167,7 @@ end
         @variables x(t) y(t) z(t)
         @mtkcompile sys = System([D(x) ~ 2x + y, y ~ x + z, z^3 + x^3 ~ 12], t)
         mapping = map_variables_to_equations(sys)
-        @test mapping[x] == (D(x) ~ 2x + y)
+        @test isequal(mapping[x].lhs, D(x))
         @test mapping[y] == (y ~ x + z)
         @test mapping[z] == (0 ~ 12 - z^3 - x^3)
         @test length(mapping) == 3
@@ -167,7 +180,8 @@ end
                 D(D(y)) ~ λ * y - g
                 x^2 + y^2 ~ 1
             ]
-            @mtkcompile sys = System(eqs, t)
+            reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+            @mtkcompile sys = System(eqs, t) reassemble_alg = reassemble_alg
             mapping = map_variables_to_equations(sys)
 
             yt = default_toterm(unwrap(D(y)))
@@ -178,7 +192,8 @@ end
             @test mapping[D(y)] == (D(yt) ~ -g + y * λ)
             @test mapping[D(x)] == (0 ~ -2xt * x - 2yt * y)
             @test mapping[D(D(x))] == (xtt ~ x * λ)
-            @test length(mapping) == 5
+            @test mapping[λ] == (0 ~ -2yt^2 - 2x * xtt - 2xt^2 - 2(-g + y * λ) * y)
+            @test length(mapping) == 6
 
             @testset "`rename_dummy_derivatives = false`" begin
                 mapping = map_variables_to_equations(sys; rename_dummy_derivatives = false)
@@ -188,13 +203,14 @@ end
                 @test mapping[yt] == (D(yt) ~ -g + y * λ)
                 @test mapping[xt] == (0 ~ -2xt * x - 2yt * y)
                 @test mapping[xtt] == (xtt ~ x * λ)
-                @test length(mapping) == 5
+                @test mapping[λ] == (0 ~ -2yt^2 - 2x * xtt - 2xt^2 - 2(-g + y * λ) * y)
+                @test length(mapping) == 6
             end
         end
         @testset "DDEs" begin
             function oscillator(; name, k = 1.0, τ = 0.01)
                 @parameters k = k τ = τ
-                @variables x(..) = 0.1 y(t) = 0.1 jcn(t) = 0.0 delx(t)
+                @variables x(..) = 0.1 y(t) = 0.1 jcn(t) = 0.0 [state_priority = -1] delx(t)
                 eqs = [
                     D(x(t)) ~ y,
                     D(y) ~ -k * x(t - τ) + jcn,
@@ -216,14 +232,14 @@ end
             mapping = map_variables_to_equations(sys)
             x1 = operation(unwrap(osc1.x))
             x2 = operation(unwrap(osc2.x))
-            @test mapping[osc1.x] == (D(osc1.x) ~ osc1.y)
-            @test mapping[osc1.y] == (D(osc1.y) ~ osc1.jcn - osc1.k * x1(t - osc1.τ))
-            @test mapping[osc1.delx] == (osc1.delx ~ x1(t - osc1.τ))
-            @test mapping[osc1.jcn] == (osc1.jcn ~ osc2.delx)
-            @test mapping[osc2.x] == (D(osc2.x) ~ osc2.y)
-            @test mapping[osc2.y] == (D(osc2.y) ~ osc2.jcn - osc2.k * x2(t - osc2.τ))
-            @test mapping[osc2.delx] == (osc2.delx ~ x2(t - osc2.τ))
-            @test mapping[osc2.jcn] == (osc2.jcn ~ osc1.delx)
+            @test mapping[sys.osc1.x] == (D(sys.osc1.x) ~ sys.osc1.y)
+            @test mapping[sys.osc1.y] == (D(sys.osc1.y) ~ sys.osc2.delx - sys.osc1.k * x1(t - sys.osc1.τ))
+            @test mapping[sys.osc1.delx] == (sys.osc1.delx ~ x1(t - sys.osc1.τ))
+            @test mapping[sys.osc1.jcn] == (sys.osc1.jcn ~ sys.osc2.delx)
+            @test mapping[sys.osc2.x] == (D(sys.osc2.x) ~ sys.osc2.y)
+            @test mapping[sys.osc2.y] == (D(sys.osc2.y) ~ sys.osc1.delx - sys.osc2.k * x2(t - sys.osc2.τ))
+            @test mapping[sys.osc2.delx] == (sys.osc2.delx ~ x2(t - sys.osc2.τ))
+            @test mapping[sys.osc2.jcn] == (sys.osc2.jcn ~ sys.osc1.delx)
             @test length(mapping) == 8
         end
     end
@@ -425,4 +441,22 @@ end
     @test_deprecated @mtkbuild sys = System([D(x) ~ x], t)
     @named sys = System([D(x) ~ x], t)
     @test_deprecated structural_simplify(sys)
+end
+
+@testset "`DifferentiatedVariableNotUnknownError` message" begin
+    @variables q(t)
+    uq = unwrap(q)
+    err = ModelingToolkit.DifferentiatedVariableNotUnknownError(unwrap(D(q)), uq)
+    @test sprint(showerror, err) ==
+        "Variable $uq occurs differentiated as $(unwrap(D(q))) but is not an unknown of the system."
+
+    scoped = unwrap(ModelingToolkit.ParentScope(ModelingToolkit.ParentScope(q)))
+    err = ModelingToolkit.DifferentiatedVariableNotUnknownError(unwrap(D(scoped)), scoped)
+    @test occursin("expects 2 more levels in the hierarchy", sprint(showerror, err))
+
+    @test ModelingToolkit.expected_scope_depth(ModelingToolkit.LocalScope()) == 0
+    @test ModelingToolkit.expected_scope_depth(ModelingToolkit.GlobalScope()) == -1
+    @test ModelingToolkit.expected_scope_depth(
+        ModelingToolkit.ParentScope(ModelingToolkit.LocalScope())
+    ) == 1
 end

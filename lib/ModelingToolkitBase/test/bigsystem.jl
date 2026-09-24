@@ -57,7 +57,7 @@ f(du, u, nothing, 0.0)
 multithreadedf = eval(
     ModelingToolkitBase.build_function(
         du, u, fillzeros = true,
-        parallel = ModelingToolkitBase.MultithreadedForm()
+        parallel = Symbolics.MultithreadedForm()
     )[2]
 )
 
@@ -76,8 +76,8 @@ end
 
 #=
 jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u)))
-fjac = eval(ModelingToolkit.build_function(jac,u,parallel=ModelingToolkit.SerialForm())[2])
-multithreadedfjac = eval(ModelingToolkit.build_function(jac,u,parallel=ModelingToolkit.MultithreadedForm())[2])
+fjac = eval(ModelingToolkit.build_function(jac,u,parallel=Symbolics.SerialForm())[2])
+multithreadedfjac = eval(ModelingToolkit.build_function(jac,u,parallel=Symbolics.MultithreadedForm())[2])
 
 u = rand(N,N,3)
 J = similar(jac,Float64)
@@ -96,7 +96,7 @@ maximum(J2 .- Array(J)) < 1e-5
 jac = ModelingToolkitBase.sparsejacobian(vec(du), vec(u))
 serialjac = eval(ModelingToolkitBase.build_function(vec(jac), u)[2])
 #multithreadedjac = eval(ModelingToolkit.build_function(vec(jac), u,
-#    parallel = ModelingToolkit.MultithreadedForm())[2])
+#    parallel = Symbolics.MultithreadedForm())[2])
 
 MyA = zeros(N, N)
 AMx = zeros(N, N)

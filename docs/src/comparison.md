@@ -11,7 +11,7 @@
     is a language with a single canonical open-source implementation.
   - All current Modelica compiler implementations are fixed and not extendable
     by the users from the Modelica language itself. For example, the Dymola
-    compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/),
+    compiler [shares its symbolic processing pipeline](https://blog.technia.com/en/mbse/model-translation-and-symbolic-manipulation/),
     which is roughly equivalent to the `dae_index_lowering` and `mtkcompile`
     of ModelingToolkit.jl. ModelingToolkit.jl is an open and hackable transformation
     system which allows users to add new non-standard transformations and control
@@ -87,7 +87,7 @@
     and thus the Julia expressions follow Julia semantics and can be manipulated
     using a computer algebra system (CAS).
   - Modia's compilation pipeline is similar to the
-    [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
+    [Dymola symbolic processing pipeline](https://blog.technia.com/en/mbse/model-translation-and-symbolic-manipulation/)
     with some improvements. ModelingToolkit.jl has an open transformation pipeline
     that allows for users to extend and reorder transformation passes, where
     `mtkcompile` is an adaptation of the Modia.jl-improved alias elimination

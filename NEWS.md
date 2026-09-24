@@ -488,7 +488,7 @@ now always performs this wrapping.
 ### Upgrade guide
 
   - The function `states` is renamed to `unknowns`. In a similar vein:
-    
+
       + `unknown_states` is now `solved_unknowns`.
       + `get_states` is `get_unknowns`.
       + `get_unknown_states` is now `get_solved_unknowns`.
@@ -498,7 +498,7 @@ now always performs this wrapping.
   - ModelingToolkit.jl now exports common definitions of `t` (time independent variable)
     and `D` (the first derivative with respect to `t`). Any models made using ModelingToolkit.jl
     should leverage these common definitions. There are three variants:
-    
+
       + `t` and `D` use DynamicQuantities.jl units. This is the default for standard library
         components.
       + `t_unitful` and `D_unitful` use Unitful.jl units.
@@ -522,7 +522,7 @@ now always performs this wrapping.
     parameters. Their value cannot be modified directly. Whenever a parameter value is changed, dependent
     parameter values are recalculated. For example, if `@parameters p1 p2 = 3p1` then `p2` can not be
     modified directly. If `p1` is changed, then `p2` will be updated accordingly. To restore the old behavior:
-    
+
       + Pass the `split = false` keyword to `structural_simplify`. E.g. `ss = structural_simplify(sys; split = false)`.
       + Pass `split = false` to `@mtkbuild`. E.g. `@mtkbuild sys = ODESystem(...) split = false`.
   - Discrete-time system using `Difference` are unsupported. Instead, use the new `Clock`-based syntax.

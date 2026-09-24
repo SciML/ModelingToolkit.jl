@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+using OrdinaryDiffEqBDF, OrdinaryDiffEqRosenbrock
 import SymbolicUtils as SU
 using ModelingToolkit: t_nounits as t, D_nounits as D
 
@@ -279,7 +280,10 @@ let
 
     # solution -------------------------------------------------------------------
     @named catapult = System(eqs, t, vars, params, initial_conditions = defs)
-    sys = mtkcompile(catapult)
+    sys = mtkcompile(
+        catapult;
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    )
     prob = ODEProblem(sys, [l_2f => 0.55, damp => 1.0e7], (0.0, 0.1); jac = true)
     @test solve(prob, Rodas4()).retcode == ReturnCode.Success
 end

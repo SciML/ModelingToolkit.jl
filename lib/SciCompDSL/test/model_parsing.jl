@@ -480,8 +480,21 @@ end
 
 using ModelingToolkitBase: D_nounits
 @testset "Event handling in MTKModel" begin
-    @mtkmodel M begin
+
+    cond = true
+    @mtkmodel A begin
         @variables begin
+            x(t) = 0
+        end
+    end
+    @mtkmodel M begin
+        @components begin
+            a = [A() for i in 1:3]
+            b = [A() for i in 1:3]
+        end
+        @variables begin
+            c(t)
+            d(t)
             x(t)
             y(t)
             z(t)
@@ -490,23 +503,57 @@ using ModelingToolkitBase: D_nounits
             D_nounits(x) ~ -x
             D_nounits(y) ~ 0
             D_nounits(z) ~ 0
+            [D_nounits(a[i].x) ~ 0 for i in 1:3]...
+            [D_nounits(b[i].x) ~ 0 for i in 1:3]...
+            D_nounits(c) ~ 0
+            D_nounits(d) ~ 0
         end
         @continuous_events begin
             [x ~ 1.5] => [x ~ 5, y ~ 1]
+            if cond
+                [t ~ 1.5] => [c ~ Pre(c) + 1]
+            end
+            if !cond
+                [t ~ 2.5] => [c ~ Pre(c) + 1]
+            end
+            [[t ~ 1.5 + i] => [a[i].x ~ i] for i in 1:3]...
         end
         @discrete_events begin
             (t == 1.5) => [x ~ Pre(x) + 5, z ~ 2]
+            if cond
+                (t == 1.5) => [d ~ Pre(d) + 1]
+            end
+            if !cond
+                (t == 2.5) => [d ~ Pre(d) + 1]
+            end
+            [(t == 1.5) => [b[i].x ~ i] for i in 1:3]...
         end
     end
 
     @mtkcompile model = M()
-    u0 = [model.x => 10, model.y => 0, model.z => 0]
+
+    u0 = [
+        model.x => 10,
+        model.y => 0,
+        model.z => 0,
+        model.c => 0,
+        model.d => 0,
+    ]
 
     prob = ODEProblem(model, u0, (0, 5.0))
-    sol = solve(prob, Tsit5(), tstops = [1.5])
+    sol = solve(prob, Tsit5(), tstops = [1.5, 2.5])
+
 
     @test isequal(sol[model.y][end], 1.0)
     @test isequal(sol[model.z][end], 2.0)
+    @test isequal(sol[model.a_1.x][end], 1.0)
+    @test isequal(sol[model.a_2.x][end], 2.0)
+    @test isequal(sol[model.a_3.x][end], 3.0)
+    @test isequal(sol[model.b_1.x][end], 1.0)
+    @test isequal(sol[model.b_2.x][end], 2.0)
+    @test isequal(sol[model.b_3.x][end], 3.0)
+    @test isequal(sol[model.c][end], 1.0)
+    @test isequal(sol[model.d][end], 1.0)
 end
 
 # Ensure that modules consisting MTKModels with component arrays and icons of

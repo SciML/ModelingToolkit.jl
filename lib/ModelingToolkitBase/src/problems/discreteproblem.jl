@@ -1,34 +1,48 @@
+"""$(function_docstring(DiscreteFunction, true, Symbol[]))"""
 @fallback_iip_specialize function SciMLBase.DiscreteFunction{iip, spec}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         eval_expression = false, eval_module = @__MODULE__, expression = Val{false},
-        checkbounds = false, analytic = nothing, simplify = false, cse = true,
+        checkbounds = false, analytic = nothing, simplify = false,
         initialization_data = nothing, check_compatibility = true,
-        kwargs...
+        optimize = nothing, compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
-    check_complete(sys, DiscreteFunction)
-    check_compatibility && check_compatible_system(DiscreteFunction, sys)
-
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    opts = SciMLFunctionOptions(;
+        u0, p, t, analytic, simplify, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return DiscreteFunction{iip, spec}(sys, opts)
+end
+
+"""
+    SciMLBase.DiscreteFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions)
+
+Public entry point that builds a `DiscreteFunction` directly from a pre-assembled
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
+"""
+function SciMLBase.DiscreteFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E}
+    ) where {iip, spec, E}
+    check_complete(sys, DiscreteFunction)
+    opts.check_compatibility && check_compatible_system(DiscreteFunction, sys)
+
+    (; u0, p, t, analytic, initialization_data) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on DiscreteFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p, $t)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
         end
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; steady_state = false, expression, eval_expression, eval_module, checkbounds,
-        cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     kwargs = (;
         sys = sys,
@@ -38,22 +52,24 @@
     )
     args = (; f)
 
-    return maybe_codegen_scimlfn(expression, DiscreteFunction{iip, spec}, args; kwargs...)
+    return maybe_codegen_scimlfn(Val{E}, DiscreteFunction{iip, spec}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.DiscreteProblem, DiscreteFunction, true))"""
 @fallback_iip_specialize function SciMLBase.DiscreteProblem{iip, spec}(
-        sys::System, op, tspan;
+        sys::System, op, tspan = default_tspan(sys);
         check_compatibility = true, expression = Val{false}, kwargs...
     ) where {iip, spec}
     check_complete(sys, DiscreteProblem)
     check_compatibility && check_compatible_system(DiscreteProblem, sys)
 
-    dvs = unknowns(sys)
+    _iip = resolve_iip(iip, op)
+    dvs = flat_unknowns(sys)
     op = to_varmap(op, dvs)
     add_toterms!(op; replace = true)
     f, u0,
         p = process_SciMLProblem(
-        DiscreteFunction{iip, spec}, sys, op;
+        DiscreteFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, check_compatibility, expression,
         kwargs...
     )
@@ -67,7 +83,7 @@ end
     kwargs = process_kwargs(sys; kwargs...)
     args = (; f, u0, tspan, p)
 
-    return maybe_codegen_scimlproblem(expression, DiscreteProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, DiscreteProblem{_iip}, args; kwargs...)
 end
 
 function check_compatible_system(

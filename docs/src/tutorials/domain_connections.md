@@ -119,7 +119,7 @@ To see how the domain works, we can examine the set parameter values for each of
 
 ```@repl domain
 sys = mtkcompile(odesys)
-ModelingToolkit.bindings(sys)[odesys.vol.port.ρ]
+ModelingToolkit.bindings(sys)[sys.vol.port.ρ]
 ```
 
 ## Multiple Domain Networks

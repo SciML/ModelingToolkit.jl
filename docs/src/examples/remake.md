@@ -90,7 +90,7 @@ We can perform the optimization as below:
 
 ```@example Remake
 using Optimization
-using OptimizationOptimJL
+using OptimizationOptimJL: Optim
 using SymbolicIndexingInterface
 
 # manually create an OptimizationFunction to ensure usage of `ForwardDiff`, which will
@@ -106,7 +106,7 @@ diffcache = DiffCache(copy(canonicalize(Tunable(), parameter_values(odeprob))[1]
 optprob = OptimizationProblem(
     optfn, rand(4), (odeprob, timesteps, data, setter, diffcache),
     lb = 0.1zeros(4), ub = 3ones(4))
-sol = solve(optprob, BFGS())
+sol = solve(optprob, Optim.BFGS())
 ```
 
 # Re-creating the problem

@@ -1,4 +1,4 @@
-using ModelingToolkitBase, SciMLBase, Serialization, OrdinaryDiffEq
+using ModelingToolkitBase, SciMLBase, Serialization, OrdinaryDiffEqSDIRK
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 
 missing_guess_value = MissingGuessValue.Constant(1.0)
@@ -29,8 +29,7 @@ str = String(take!(io))
 
 sys = include_string(@__MODULE__, str)
 rc2 = expand_connections(rc_model)
-@test isapprox(sys, rc2)
-@test issetequal(equations(sys), equations(rc2))
+@test issetequal(full_equations(sys), full_equations(rc2))
 @test issetequal(unknowns(sys), unknowns(rc2))
 @test issetequal(parameters(sys), parameters(rc2))
 
@@ -54,5 +53,4 @@ sol_ = solve(prob_, ImplicitEuler())
 probexpr = ODEProblem{true}(ss, [capacitor.v => 0.0], (0, 0.1); expr = Val{true}, missing_guess_value);
 prob_obs = eval(probexpr)
 sol_obs = solve(prob_obs, ImplicitEuler())
-@show all_obs
 @test sol_obs[all_obs] == sol[all_obs]

@@ -1,7 +1,10 @@
 using ModelingToolkitBase, ModelingToolkitStandardLibrary.Blocks, ControlSystemsBase
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
+using SymbolicIndexingInterface
 using OrdinaryDiffEq, LinearAlgebra
+using OrdinaryDiffEqRosenbrock
+using SciMLBase
 using Test
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, AnalysisPoint, AbstractSystem
 import ModelingToolkitBase as MTK
@@ -201,6 +204,107 @@ if @isdefined(ModelingToolkit)
         @test matrices.A[] == -2
         @test matrices.B[] * matrices.C[] == 1 # both positive
         @test matrices.D[] == 0
+    end
+
+    @testset "LinearizationOpPoint" begin
+        # sys here is the two-analysis-point system (plant_input + plant_output)
+        # Simulate to obtain a solution, then verify that linearizing at t=0 via
+        # LinearizationOpPoint gives the same result as the default operating point.
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        matrices_ref, _ = linearize(sys, sys.plant_input, sys.plant_output)
+        matrices_op, _ = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0)
+        )
+        @test matrices_op.A ≈ matrices_ref.A
+        @test matrices_op.B ≈ matrices_ref.B
+        @test matrices_op.C ≈ matrices_ref.C
+        @test matrices_op.D ≈ matrices_ref.D
+
+        # Vector of time points: linearization_function is built once and reused.
+        ts = [0.0, 0.5, 1.0]
+        mats_vec, _, extras_vec = linearize(
+            sys, sys.plant_input, sys.plant_output;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec) == 3
+        @test length(extras_vec) == 3
+        # The system is linear so all operating points yield the same A,B,C,D.
+        for mats_t in mats_vec
+            @test mats_t.A ≈ matrices_ref.A
+            @test mats_t.B ≈ matrices_ref.B
+            @test mats_t.C ≈ matrices_ref.C
+            @test mats_t.D ≈ matrices_ref.D
+        end
+        # Two-arg form: linearize(ssys, lin_fun; op=LinearizationOpPoint(sol, ts))
+        lin_fun, ssys_lin = linearization_function(sys, sys.plant_input, sys.plant_output)
+        mats_vec2, extras_vec2 = linearize(
+            ssys_lin, lin_fun;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts)
+        )
+        @test length(mats_vec2) == 3
+        for (m1, m2) in zip(mats_vec, mats_vec2)
+            @test m1.A ≈ m2.A
+            @test m1.B ≈ m2.B
+            @test m1.C ≈ m2.C
+            @test m1.D ≈ m2.D
+        end
+        # The vector-of-time-points path (which builds the problem and setters once and
+        # updates the operating point in place) must agree with calling the scalar
+        # LinearizationOpPoint form at each time point individually.
+        for (i, ti) in enumerate(ts)
+            mats_i, _ = linearize(
+                sys, sys.plant_input, sys.plant_output;
+                op = ModelingToolkit.LinearizationOpPoint(sol, ti)
+            )
+            @test mats_vec[i].A ≈ mats_i.A
+            @test mats_vec[i].B ≈ mats_i.B
+            @test mats_vec[i].C ≈ mats_i.C
+            @test mats_vec[i].D ≈ mats_i.D
+        end
+    end
+
+    @testset "loop_openings require an operating point" begin
+        # Opening a loop turns the opened signal into a parameter whose operating-point
+        # value is not implied by the solution. It must be provided explicitly, otherwise
+        # `linearize` errors instead of silently using a stale/default value.
+        # Linearize plant_input -> P.output.u while opening the `plant_output` analysis
+        # point (so the opened AP is neither the input nor the output).
+
+        ModelingToolkitBase.get_state_priorities(sys)[C.u] = 10
+        ssys_solve = mtkcompile(sys)
+        prob = ODEProblem(ssys_solve, [P.x => 0.0], (0.0, 1.0))
+        sol = solve(prob, Rodas5())
+        ts = [0.0, 0.5, 1.0]
+
+        lf_lo, _ = linearization_function(
+            sys, sys.plant_input, P.output.u; loop_openings = [sys.plant_output]
+        )
+        lops = lf_lo.loop_opening_params
+        @test !isempty(lops)
+
+        # Not providing the loop-opening parameter errors (both vector and scalar paths).
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts),
+            loop_openings = [sys.plant_output]
+        )
+        @test_throws Exception linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, 0.0),
+            loop_openings = [sys.plant_output]
+        )
+
+        # Providing it via the `op` keyword of `LinearizationOpPoint` works.
+        op_lo = Dict(p => 0.0 for p in lops)
+        mats_lo, _, _ = linearize(
+            sys, sys.plant_input, P.output.u;
+            op = ModelingToolkit.LinearizationOpPoint(sol, ts; op = op_lo),
+            loop_openings = [sys.plant_output]
+        )
+        @test length(mats_lo) == length(ts)
     end
 
     @testset "Complicated model" begin
@@ -425,7 +529,7 @@ if @isdefined(ModelingToolkit)
         @test P_not_broken.A[] == -2
         P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:u])
         @test P_broken.A[] == -1
-        P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:y])
+        P_broken, ssys = linearize(sys_inner, :u, :y, loop_openings = [:y], op = [feedback.input2.u => 0.0])
         @test P_broken.A[] == -1
 
         Sinner = sminreal(ss(get_sensitivity(sys_inner, :u)[1]...))
@@ -455,7 +559,8 @@ if @isdefined(ModelingToolkit)
         Sinner2 = sminreal(
             ss(
                 get_sensitivity(
-                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2]
+                    sys_outer, sys_outer.sys_inner.u, loop_openings = [:y2],
+                    op = [P_outer.input.u => 0]
                 )[1]...
             )
         )
@@ -498,7 +603,7 @@ if @isdefined(ModelingToolkit)
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(T)
 
         matrices, _ = get_looptransfer(
-            sys, :plant_input
+            sys, :plant_input; guesses = [MTK.D_nounits(P.x) => ones(2)]
         )
         L = Kss * Pss
         @test CS.tf(CS.ss(matrices...)) ≈ CS.tf(L)
@@ -617,6 +722,16 @@ if @isdefined(ModelingToolkit)
     @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
     matrices_normal, _ = get_sensitivity(sys_normal, sys_normal.normal_inner.ap)
 
+    function compare_matrices(reference, value)
+        @assert size(reference.A) == (2, 2) "This testing function is only valid for `2x2` systems"
+        @test isequal(reference.C, value.C) || isequal(reverse(reference.C), value.C)
+        colorder = isequal(reference.C, value.C) ? [1, 2] : [2, 1]
+        @test isequal(reference.B, value.B) || isequal(reverse(reference.B), value.B)
+        roworder = isequal(reference.B, value.B) ? [1, 2] : [2, 1]
+        @test isequal(reference.D, value.D)
+        return @test isequal(reference.A[roworder, colorder], value.A)
+    end
+
     @testset "Analysis point overriding part of connection - normal connect" begin
         @named F1 = FirstOrder(k = 1, T = 1)
         @named F2 = FirstOrder(k = 1, T = 1)
@@ -642,7 +757,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Analysis point overriding part of connection - variable connect" begin
@@ -670,7 +785,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Analysis point overriding part of connection - mixed connect" begin
@@ -698,7 +813,7 @@ if @isdefined(ModelingToolkit)
         @test SciMLBase.successful_retcode(solve(prob, Rodas5P()))
 
         matrices, _ = get_sensitivity(sys, sys.ap)
-        @test matrices == matrices_normal
+        compare_matrices(matrices_normal, matrices)
     end
 
     @testset "Ignored analysis points only affect relevant connection sets" begin
@@ -764,6 +879,399 @@ if @isdefined(ModelingToolkit)
             1.8100018764334602 + 0.3623845793211718im,
         ]
         @test isapprox(fr, reference_fr)
+    end
+
+    @testset "isolate_subsystem" begin
+        @testset "basic plant isolation" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            sys = System(eqs, t, systems = [P, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            @test length(ModelingToolkit.get_systems(isolated)) == 1
+            @test nameof(only(ModelingToolkit.get_systems(isolated))) == :P
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "external components are removed" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = 1)
+            @named add = Blocks.Add(k2 = -1)
+            @named ref = Step()
+
+            eqs = [
+                connect(ref.output, add.input1)
+                connect(P.output, :y, add.input2)
+                connect(add.output, C.input)
+                connect(C.output, :u, P.input)
+            ]
+            sys = System(eqs, t, systems = [P, C, add, ref], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P])
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "internal connections are preserved" begin
+            @named P1 = FirstOrder(k = 1, T = 1)
+            @named P2 = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [
+                connect(C.output, :u, P1.input)
+                connect(P1.output, P2.input)
+                connect(P2.output, :y, C.input)
+            ]
+            sys = System(eqs, t, systems = [P1, P2, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P1, :P2])
+            @test length(ModelingToolkit.get_eqs(isolated)) == 1
+            @test Symbolics.value(only(ModelingToolkit.get_eqs(isolated)).rhs) isa Connection
+            @test isequal(only(input_vars), P1.input.u)
+            @test isequal(only(output_vars), P2.output.u)
+        end
+
+        @testset "boundary connection duplicated as plain connection is still cut" begin
+            @named P1 = FirstOrder(k = 1, T = 1)
+            @named P2 = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [
+                connect(C.output, :u, P1.input)
+                connect(P1.output, P2.input)
+                # The output boundary connection is duplicated as a plain connection.
+                connect(P2.output, :y, C.input)
+                connect(P2.output, C.input)
+            ]
+            sys = System(eqs, t, systems = [P1, P2, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            # `C` must remain excluded even though the plain connection re-adds its edge.
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P1, :P2])
+            @test length(ModelingToolkit.get_eqs(isolated)) == 1
+            @test isequal(only(input_vars), P1.input.u)
+            @test isequal(only(output_vars), P2.output.u)
+        end
+
+        @testset "reachability finds intermediate inside components" begin
+            @named P1 = FirstOrder(k = 1, T = 1)
+            @named P_mid = FirstOrder(k = 1, T = 1)
+            @named P2 = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [
+                connect(C.output, :u, P1.input)
+                connect(P1.output, P_mid.input)
+                connect(P_mid.output, P2.input)
+                connect(P2.output, :y, C.input)
+            ]
+            sys = System(eqs, t, systems = [P1, P_mid, P2, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P1, :P_mid, :P2])
+            @test length(ModelingToolkit.get_eqs(isolated)) == 2
+            @test isequal(only(input_vars), P1.input.u)
+            @test isequal(only(output_vars), P2.output.u)
+        end
+
+        @testset "AnalysisPoint object API" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            sys = System(eqs, t, systems = [P, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, sys.u, sys.y)
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P])
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "causal variable connectors" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [
+                connect(C.output.u, :u, P.input.u)
+                connect(P.output.u, :y, C.input.u)
+            ]
+            sys = System(eqs, t, systems = [P, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, :u, :y)
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P])
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "vector of symbol API" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            sys = System(eqs, t, systems = [P, C], name = :cl)
+
+            isolated, input_vars, output_vars = isolate_subsystem(sys, [:u], [:y])
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:P])
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "nested analysis points" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            # APs live inside `inner`, not at the root level
+            inner_eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            @named inner = System(inner_eqs, t, systems = [P, C])
+            @named root = System(Equation[], t, systems = [inner])
+
+            # Access APs through the nested hierarchy using AnalysisPoint objects
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, root.inner.u, root.inner.y
+            )
+
+            # root is returned; its only direct child is a trimmed inner containing only P
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:inner])
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:P])
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isempty(ModelingToolkit.get_eqs(inner_isolated))
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "nested analysis points - symbol API" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+
+            inner_eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            @named inner = System(inner_eqs, t, systems = [P, C])
+            @named root = System(Equation[], t, systems = [inner])
+
+            # Access APs by their full namespaced symbol
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, nameof(inner.u), nameof(inner.y)
+            )
+
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:inner])
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:P])
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "nested with external components at outer level" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+            @named ref = Step()
+
+            # The APs bounding the plant live inside `inner`
+            inner_eqs = [connect(C.output, :u, P.input), connect(P.output, :y, C.input)]
+            @named inner = System(inner_eqs, t, systems = [P, C])
+
+            # `ref` exists at the outer level — it must not bleed into the isolated result
+            outer_eqs = [connect(ref.output, inner.C.input)]
+            @named root = System(outer_eqs, t, systems = [inner, ref])
+
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, root.inner.u, root.inner.y
+            )
+
+            # root is returned; ref is stripped, inner is trimmed to only P
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:inner])
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:P])
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isempty(ModelingToolkit.get_eqs(inner_isolated))
+            @test isequal(only(input_vars), P.input.u)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "mixed nesting levels" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named C = Blocks.Gain(k = -1)
+            @named A = Step()
+
+            # AP :y lives inside `inner`; AP :u lives at root level
+            inner_eqs = [connect(P.output, :y, C.input)]
+            @named inner = System(inner_eqs, t, systems = [P, C])
+
+            # A drives P.input through AP :u at the root level
+            outer_eqs = [connect(A.output, :u, inner.P.input)]
+            @named root = System(outer_eqs, t, systems = [A, inner])
+
+            # :u is at root level, inner.y is nested — different nesting levels
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, :u, root.inner.y
+            )
+
+            # root is returned; A is stripped, inner is trimmed to only P (C removed)
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:inner])
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:P])
+            @test isempty(ModelingToolkit.get_eqs(isolated))
+            @test isempty(ModelingToolkit.get_eqs(inner_isolated))
+            # input_var: from root-level AP :u, connector is inner.P.input (root-namespaced)
+            @test isequal(only(input_vars), inner.P.input.u)
+            # output_var: from inner-level AP :y, connector is P.output (inner-namespaced)
+            @test isequal(only(output_vars), P.output.u)
+        end
+
+        @testset "deep nesting — isolate middle two of four" begin
+            @named A = Blocks.Gain(k = 1)
+            @named B = FirstOrder(k = 1, T = 1)
+            @named C = FirstOrder(k = 1, T = 2)
+            @named D = Blocks.Gain(k = 1)
+
+            # Four components in series inside `inner`; APs bound B and C (the middle two)
+            inner_eqs = [
+                connect(A.output, :ap_in, B.input),
+                connect(B.output, :bc, C.input),
+                connect(C.output, :ap_out, D.input),
+            ]
+            @named inner = System(inner_eqs, t, systems = [A, B, C, D])
+            @named root = System(Equation[], t, systems = [inner])
+
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, root.inner.ap_in, root.inner.ap_out
+            )
+
+            # root is returned; inner is trimmed to contain only B and C
+            @test Set(nameof.(ModelingToolkit.get_systems(isolated))) == Set([:inner])
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:B, :C])
+            # The B→C connection equation is preserved; A and D boundary APs are removed
+            @test length(ModelingToolkit.get_eqs(inner_isolated)) == 1
+            @test isequal(only(input_vars), B.input.u)
+            @test isequal(only(output_vars), C.output.u)
+            # Container levels have no own variables/parameters/observed/defaults
+            @test isempty(ModelingToolkit.get_unknowns(isolated))
+            @test isempty(ModelingToolkit.get_ps(isolated))
+            @test isempty(ModelingToolkit.get_unknowns(inner_isolated))
+            @test isempty(ModelingToolkit.get_ps(inner_isolated))
+        end
+
+        @testset "container-level variables, parameters, and equations are stripped" begin
+            @named P = FirstOrder(k = 1, T = 1)
+            @named Q = FirstOrder(k = 1, T = 2)
+            @named R = FirstOrder(k = 1, T = 3)
+            @named S = Blocks.Gain(k = 1)
+
+            # Declare an extra variable and parameter at the inner (container) level
+            @variables extra_state(t) = 0.0
+            @parameters extra_gain = 2.0
+
+            inner_eqs = [
+                connect(P.output, :ap_in, Q.input),
+                connect(Q.output, :qr, R.input),
+                connect(R.output, :ap_out, S.input),
+                # Plain algebraic equation declared at the container level — must be removed
+                extra_state ~ extra_gain * Q.output.u,
+            ]
+            # inner has its own unknowns, ps, defaults, and a non-connection equation
+            inner = System(
+                inner_eqs, t, [extra_state], [extra_gain];
+                name = :inner, systems = [P, Q, R, S]
+            )
+            @named root = System(Equation[], t, systems = [inner])
+
+            isolated, input_vars, output_vars = isolate_subsystem(
+                root, root.inner.ap_in, root.inner.ap_out
+            )
+
+            inner_isolated = only(ModelingToolkit.get_systems(isolated))
+            @test Set(nameof.(ModelingToolkit.get_systems(inner_isolated))) == Set([:Q, :R])
+            # The Q→R connection AP is kept; extra_state equation and boundary APs are removed
+            @test length(ModelingToolkit.get_eqs(inner_isolated)) == 1
+            # extra_state, extra_gain, their defaults, and the algebraic equation are stripped
+            @test isempty(ModelingToolkit.get_unknowns(inner_isolated))
+            @test isempty(ModelingToolkit.get_ps(inner_isolated))
+            @test isempty(ModelingToolkit.get_observed(inner_isolated))
+            @test isempty(ModelingToolkit.get_initial_conditions(inner_isolated))
+            # root is also clean
+            @test isempty(ModelingToolkit.get_unknowns(isolated))
+            @test isempty(ModelingToolkit.get_ps(isolated))
+        end
+
+        import ModelingToolkitTearing as MTKTearing
+        @testset "Clock information inferred from removed sections is retained" begin
+            # The model is such that the clocks of variables in `Middle` and `End` are
+            # only inferable from the `Sample`s in `Provider`. Since `Provider` and `End`
+            # are removed by `isolate_subsystem`, ordinarily this would infer `Provider`'s
+            # variables as continuous. This is incorrect, and clock information from
+            # the full system should be used to ensure correct clock propagation in the
+            # isolated one.
+            @component function Provider(; name)
+                @variables x(t) xd(t) [output = true]
+                clk = Clock(0.1)
+                k = ShiftIndex(clk)
+                return System([D(x) ~ x, xd ~ Sample(clk)(x)], t, [x, xd], []; name)
+            end
+
+            @component function Middle(; name)
+                @variables xd(t) [input = true] yd(t) [output = true]
+                k = ShiftIndex()
+                return System([yd ~ 2xd], t, [xd, yd], []; name)
+            end
+            @component function End(; name)
+                @variables xd(t) [input = true]
+                k = ShiftIndex()
+                return System(Equation[], t, [xd], []; name)
+            end
+
+            @component function Model(; name)
+                @named begin
+                    provider = Provider()
+                    middle = Middle()
+                    final = End()
+                end
+                eqs = [
+                    connect(provider.xd, :A, middle.xd)
+                    connect(middle.yd, :B, final.xd)
+                ]
+                return System(eqs, t; name, systems = [provider, middle, final])
+            end
+
+            @named model = Model()
+            snippy, ips, ops = isolate_subsystem(model, model.A, model.B)
+            ts = TearingState(snippy)
+            ci = MTKTearing.ClockInference(ts)
+            MTKTearing.infer_clocks!(ci)
+            @test ci.var_domain == [Clock(0.1), Clock(0.1)]
+        end
+    end
+
+    @testset "Issue#4838: `get_sensitivity` correctly accepts and forwards `t`" begin
+        @variables x(t) = 0.0 e(t) uc(t) [output = true] up(t) [input = true]
+        @parameters k = 2.0 r = 1.0
+        @named sys = System(
+            [
+                D(x) ~ -(2 + sin(t)) * x + up,
+                e ~ r - x,
+                uc ~ k * e,
+                connect(uc, :ap, up),
+            ], t
+        )
+        mats0, _, _ = ModelingToolkit.get_sensitivity(sys, :ap; op = Dict(x => 0.0), t = 0.0)
+        mats3, _, _ = ModelingToolkit.get_sensitivity(sys, :ap; op = Dict(x => 0.0), t = 3.0)
+        @test mats0.A[1] ≈ -4.0
+        @test mats3.A[1] ≈ -4.0 - sin(3.0)
     end
 end
 
@@ -867,4 +1375,23 @@ using DynamicQuantities
     end
     @named sys2 = TestAPWithNoOutputs()
     @test sys2 isa System
+end
+
+@testset "Loop openings work with causal variable analysis points" begin
+    @named P = FirstOrder(k = 1, T = 1)
+    @named C = ModelingToolkitStandardLibrary.Blocks.Gain(; k = -1)
+
+    ap = AnalysisPoint(:plant_input)
+    eqs = [
+        connect(P.output, C.input)
+        connect(C.output.u, ap, P.input.u)
+    ]
+    @named sys = System(eqs, t; systems = [P, C])
+
+    newsys, (apvars,) = MTK.apply_transformation(MTK.Break(ap, true), sys)
+
+    @test isequal(only(apvars), P.input.u)
+    @test any(isequal(only(apvars)), parameters(newsys))
+    @test length(equations(expand_connections(sys))) == 9
+    @test length(equations(expand_connections(newsys))) == 8
 end

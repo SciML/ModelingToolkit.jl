@@ -1,4 +1,5 @@
 using ModelingToolkitBase, StaticArrays, LinearAlgebra
+using Symbolics: hessian_sparsity
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
@@ -92,9 +93,9 @@ jac = calculate_jacobian(ns)
 jac = generate_jacobian(ns)
 
 sH = calculate_hessian(ns)
-@test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :colptr) ==
+@test getfield.(hessian_sparsity(ns), :colptr) ==
     getfield.(sparse.(sH), :colptr)
-@test getfield.(ModelingToolkitBase.hessian_sparsity(ns), :rowval) ==
+@test getfield.(hessian_sparsity(ns), :rowval) ==
     getfield.(sparse.(sH), :rowval)
 
 prob = NonlinearProblem(ns, [x => 1.0, y => 1.0, z => 1.0, σ => 1.0, ρ => 1.0, β => 1.0])
@@ -311,19 +312,22 @@ end
     @parameters σ ρ β
     eqs = [
         0 ~ σ * (y - x)
-        0 ~ x * (ρ - z) - y
         0 ~ x * y - β * z
     ]
-    guesses = [x => 1.0, y => 1.0, z => 0.0]
+    obs = [
+        y ~ x * (ρ - z),
+    ]
+    guesses = [x => 1.0, z => 0.0]
     ps = [σ => 10.0, ρ => 26.0, β => 8 / 3]
-    @mtkcompile ns = System(eqs)
+    @named ns = System(eqs, [x, z], [σ, ρ, β]; observed = obs)
+    ns = complete(ns)
 
     @test isequal(
         calculate_jacobian(ns), [
             (-1 - z + ρ) * σ -x * σ
             2x * (-z + ρ) -β - (x^2)
         ]
-    ) broken = !@isdefined(ModelingToolkit)
+    )
     # solve without analytical jacobian
     prob = NonlinearProblem(ns, [guesses; ps])
     sol = solve(prob, NewtonRaphson())
@@ -336,17 +340,22 @@ end
 
     # system that contains a chain of observed variables when simplified
     @variables x y z
-    eqs = [0 ~ x^2 + 2z + y, z ~ y, y ~ x] # analytical solution x = y = z = 0 or -3
-    @mtkcompile ns = System(eqs) # solve for y with observed chain z -> y -> x
+    eqs = [
+        0 ~ y - z,
+    ]
+    obs = [
+        y ~ x
+        z ~ (x^2 + y) / (-2)
+    ]
+    @named ns = System(eqs, [x], []; observed = obs) # solve for y with observed chain z -> y -> x
+    ns = complete(ns)
     mtkjac = expand.(calculate_jacobian(ns))
-    jac1 = unwrap.([3 // 2 + y;;])
-    jac2 = unwrap.([-3 // 2 - x;;])
-    @test isequal(mtkjac, jac1) || isequal(mtkjac, jac2) broken = !@isdefined(ModelingToolkit)
+    jac1 = unwrap.([3 // 2 + x;;])
+    @test isequal(mtkjac, jac1)
     mtkhess = calculate_hessian(ns)
     hess1 = [Num[1;;]]
-    hess2 = [Num[-1;;]]
-    @test isequal(mtkhess, hess1) || isequal(mtkhess, hess2) broken = !@isdefined(ModelingToolkit)
-    prob = NonlinearProblem(ns, unknowns(ns) .=> -4.0) # give guess < -3 to reach -3
+    @test isequal(mtkhess, hess1)
+    prob = NonlinearProblem(ns, [x => -4.0]) # give guess < -3 to reach -3
     sol = solve(prob, NewtonRaphson())
     @test sol[x] ≈ sol[y] ≈ sol[z] ≈ -3
 end
@@ -482,6 +491,79 @@ end
     end
 end
 
+@testset "NonlinearSystem conversion: invalidated bindings graph" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p q r
+    @named sys = System(
+        [D(x) ~ p * x^3 + q, 0 ~ -y + q * x - r], t;
+        bindings = [r => 3p]
+    )
+    # `complete(flatten = false)` invalidates `parameter_bindings_graph`, but bound
+    # parameters remain in `ps`; `bound_parameters` must not be called on it.
+    csys = complete(sys; flatten = false)
+    @test ModelingToolkitBase.iscomplete(csys)
+    @test ModelingToolkitBase.get_parameter_bindings_graph(csys) === nothing
+    nlsys = NonlinearSystem(csys)
+    @test ModelingToolkitBase.iscomplete(nlsys)
+    @test r in ModelingToolkitBase.bound_parameters(nlsys)
+end
+
+@testset "NonlinearSystem conversion: initialization equation translation" begin
+    # https://github.com/SciML/ModelingToolkit.jl/issues/5162
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System(
+        [D(x) ~ p * x, D(y) ~ x + y], t;
+        initialization_eqs = [
+            x ~ 1.0, x + y ~ p, Initial(y) ~ 2.0, D(x) ~ 0, Initial(D(y)) ~ 0,
+        ]
+    )
+    nlsys = NonlinearSystem(sys)
+    ieqs = initialization_equations(nlsys)
+    # Unknowns wrap in `Initial`, already-`Initial` terms pass through, and
+    # derivatives collapse to trivially-true equations which are dropped.
+    @test isequal(ieqs, [Initial(x) ~ 1.0, Initial(x) + Initial(y) ~ p, Initial(y) ~ 2.0])
+end
+
+@testset "NonlinearSystem conversion: hierarchical bindings" begin
+    @independent_variables t
+    D = Differential(t)
+    @variables x(t) u(t)
+    @parameters p q
+    @named inner = System([D(u) ~ q - u], t, [u], [q]; bindings = [q => 2.0])
+    sys = System(
+        [D(x) ~ p * inner.u - x], t, [x], [p]; name = :outer, systems = [inner]
+    )
+    nlsys = NonlinearSystem(sys)
+    # The subsystem's `q` binding is namespaced onto the parent, and `t => Inf` is
+    # only bound once - either mistake trips `no_override_merge!` here.
+    binds = ModelingToolkitBase.bindings(nlsys)
+    @test isequal(value(binds[t]), Inf)
+    @test isequal(value(binds[inner.q]), 2.0)
+end
+
+@testset "NonlinearSystem conversion: variable bindings become initial conditions" begin
+    @independent_variables t
+    D = Differential(t)
+    @parameters p z0
+    @variables x(t) z(t) = z0
+    # `z`'s default lives in `bindings` of the time-dependent system, where it is
+    # enforced during initialization. A time-independent system cannot enforce it,
+    # so the conversion moves it to `initial_conditions`.
+    sys = complete(
+        System([D(x) ~ p - x, D(z) ~ p - z], t, [x, z], [p, z0]; name = :sys)
+    )
+    nlsys = NonlinearSystem(sys)
+    ics = ModelingToolkitBase.initial_conditions(nlsys)
+    @test isequal(ics[z], z0)
+    @test !haskey(ModelingToolkitBase.bindings(nlsys), z)
+end
+
 @testset "oop `NonlinearLeastSquaresProblem` with `u0 === nothing`" begin
     @variables x y
     @named sys = System([0 ~ x - y], [], []; observed = [x ~ 1.0, y ~ 1.0])
@@ -506,4 +588,92 @@ end
     )
     prob = NonlinearProblem(sys, [x => 1.0])
     @test prob.problem_type == "A"
+end
+
+@testset "Bounds metadata is forwarded to `NonlinearProblem`/`NonlinearLeastSquaresProblem`" begin
+    # The two roots of `x^2 - 4x + 3` are 1 and 3. Bounds select which root the solver
+    # can reach, so they double as a check that the bounds actually reach the solver.
+    @variables x [bounds = (0.0, 2.0)]
+    @mtkcompile sys = System([0 ~ x^2 - 4x + 3])
+
+    prob = NonlinearProblem(sys, [x => 1.5])
+    @test prob.lb == [0.0]
+    @test prob.ub == [2.0]
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ 1.0 atol = 1.0e-6
+
+    @variables xu [bounds = (2.5, 4.0)]
+    @mtkcompile sysu = System([0 ~ xu^2 - 4xu + 3])
+    solu = solve(NonlinearProblem(sysu, [xu => 3.5]))
+    @test SciMLBase.successful_retcode(solu)
+    @test solu[xu] ≈ 3.0 atol = 1.0e-6
+
+    # `NonlinearLeastSquaresProblem` gets the bounds too.
+    lsq = NonlinearLeastSquaresProblem(sys, [x => 1.5])
+    @test lsq.lb == [0.0]
+    @test lsq.ub == [2.0]
+
+    # `remake` keeps the bounds around.
+    prob2 = remake(prob; u0 = [1.2])
+    @test prob2.lb == [0.0]
+    @test prob2.ub == [2.0]
+
+    # Unknowns without bounds metadata produce no bounds, leaving the problem untouched.
+    @variables a b
+    @mtkcompile nosys = System([0 ~ a^2 - 2, 0 ~ b - a])
+    nob = NonlinearProblem(nosys, [a => 1.0, b => 1.0])
+    @test nob.lb === nothing
+    @test nob.ub === nothing
+    @test SciMLBase.successful_retcode(solve(nob))
+
+    # Partial bounds: only the bounded unknown gets finite bounds, aligned to `unknowns`.
+    @variables c [bounds = (-1.0, 1.0)] d
+    @mtkcompile psys = System([0 ~ c^2 + d^2 - 1, 0 ~ c^2 - d^2 - 0.5])
+    pprob = NonlinearProblem(psys, [c => 0.8, d => 0.4])
+    dvs = unknowns(psys)
+    ci = findfirst(isequal(c), dvs)
+    di = findfirst(isequal(d), dvs)
+    @test pprob.lb[ci] == -1.0 && pprob.ub[ci] == 1.0
+    @test pprob.lb[di] == -Inf && pprob.ub[di] == Inf
+
+    # Explicitly supplied `lb`/`ub` take precedence over the metadata.
+    uprob = NonlinearProblem(sys, [x => 1.5]; lb = [-10.0], ub = [10.0])
+    @test uprob.lb == [-10.0]
+    @test uprob.ub == [10.0]
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables z[1:3] w
+    @parameters a[1:3] b
+    eqs = [
+        0 ~ z[1] - a[1],
+        0 ~ z[2] - a[2],
+        0 ~ z[3] - a[3] * w,
+        0 ~ w - b,
+    ]
+    @named sys = System(eqs, [z, w], [a, b])
+    csys = complete(sys)
+    op = [z => zeros(3), w => 0.0, a => [1.0, 2.0, 3.0], b => 2.0]
+
+    prob = NonlinearProblem(csys, op)
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ zeros(4)
+    @test prob.f(prob.u0, prob.p) ≈ [-1.0, -2.0, 0.0, -2.0]
+    @test prob[z] ≈ zeros(3)
+    @test prob[z[2]] ≈ 0.0
+
+    sol = solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[z] ≈ [1.0, 2.0, 6.0]
+    @test sol[w] ≈ 2.0
+
+    # `mtkcompile` may reorder the unknowns, or eliminate them entirely once tearing is
+    # loaded, so only the solution is comparable
+    msys = mtkcompile(sys)
+    mprob = NonlinearProblem(msys, op)
+    msol = solve(mprob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(msol)
+    @test msol[z] ≈ sol[z]
+    @test msol[w] ≈ sol[w]
 end

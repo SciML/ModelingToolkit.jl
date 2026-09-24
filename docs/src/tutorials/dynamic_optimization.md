@@ -41,12 +41,12 @@ What we would like to optimize here is the final height of the rocket. We do thi
 
 Now we can construct a problem and solve it. Let us use JuMP as our backend here. Note that the package trigger is actually [InfiniteOpt](https://infiniteopt.github.io/InfiniteOpt.jl/stable/), and not JuMP - this package includes JuMP but is designed for optimization on function spaces. Additionally we need to load the solver package - we will use [Ipopt](https://github.com/jump-dev/Ipopt.jl) here (a good choice in general).
 
-Here we have also loaded DiffEqDevTools because we will need to construct the ODE tableau. This is only needed if one desires a custom ODE tableau for the collocation - by default the solver will use RadauIIA5.
+The collocation solver uses a default ODE tableau. A custom tableau can still be supplied when needed.
 
 ```@example dynamic_opt
-using InfiniteOpt, Ipopt, DiffEqDevTools
+import InfiniteOpt, Ipopt
 jprob = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001)
-jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer, constructRadauIIA5()));
+jsol = solve(jprob, JuMPCollocation(Ipopt.Optimizer));
 ```
 
 The solution has three fields: `jsol.sol` is the ODE solution for the states, `jsol.input_sol` is the ODE solution for the inputs, and `jsol.model` is the wrapped model that we can use to query things like objective and constraint residuals.
@@ -67,6 +67,111 @@ axislegend(ax1)
 axislegend(ax2)
 fig
 ```
+
+### Providing an initial trajectory
+
+By default every state variable is seeded with its constant value from `u0map` at
+each collocation point. When that starting point is a poor one, the solver can be
+given a guess of the whole trajectory instead. The `initial_trajectory` keyword
+takes a map from states to symbolic expressions in the independent variable:
+
+```@example dynamic_opt
+jprob_guess = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => 1 + t, v(t) => 1.0))
+jsol_guess = solve(jprob_guess, JuMPCollocation(Ipopt.Optimizer));
+```
+
+Each expression is compiled to a function and evaluated at the collocation points to
+produce the start values handed to the optimizer. Only the states listed are affected
+— the rest keep their constant seed. This changes where the solve starts from, not the
+optimum it converges to.
+
+Expressions may reference parameters, which are resolved from the operating point, so
+the guess can be written in terms of the same quantities as the model:
+
+```@example dynamic_opt
+jprob_guess2 = JuMPDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    initial_trajectory = Dict(h(t) => h₀ + t, v(t) => t))
+jsol_guess2 = solve(jprob_guess2, JuMPCollocation(Ipopt.Optimizer));
+```
+
+Only parameters of the compiled system can be referenced this way; anything else —
+another state, or a quantity `mtkcompile` has eliminated that does not reduce to time
+and parameters — raises an `ArgumentError` naming the unresolved quantity.
+
+`initial_trajectory` is supported by the JuMP, InfiniteOpt, and CasADi backends.
+Passing a non-empty map to Pyomo raises an `ArgumentError`.
+
+!!! note
+
+    For free final time problems (see below) the collocation grid is normalized to
+    `[0, 1]`, so the trajectory expressions are evaluated at normalized time rather
+    than physical time.
+
+### Scaling the dynamics constraints
+
+When the states of a system span very different magnitudes, the residuals of the
+dynamics constraints do too, which can make the optimizer favor the large states and
+converge poorly. The `nominal_values` keyword takes a map from states to their typical
+magnitudes, and each dynamics constraint is divided by the corresponding value so that
+all residuals are comparable in size:
+
+```@example dynamic_opt
+iprob_scaled = InfiniteOptDynamicOptProblem(rocket, [u0map; pmap], (ts, te); dt = 0.001,
+    nominal_values = Dict(h(t) => 1.25, m(t) => 0.6))
+isol_scaled = solve(iprob_scaled, InfiniteOptCollocation(Ipopt.Optimizer));
+```
+
+States not listed default to their [`nominal` metadata](@ref getnominal) if set, and to
+`1.0` otherwise, in which case the constraint is unchanged. Scaling a residual does not
+move the optimum, only how the solver converges towards it.
+
+`nominal_values` affects the InfiniteOpt and Pyomo backends, which emit the dynamics
+directly as derivative constraints. The JuMP and CasADi backends discretize through an
+ODE solver tableau instead and currently ignore it.
+
+### Bounds on observed variables
+
+Bounds declared on an observed variable are enforced too, not just bounds on states and
+inputs. Here the observed `power` is capped, which limits how hard the input may drive
+the state:
+
+```@example dynamic_opt
+@variables begin
+    z(..)
+    power(..), [bounds = (0.0, 1.0)]
+    w(..), [input = true, bounds = (-1.0, 1.0)]
+end
+
+@named limited = System(
+    [D(z(t)) ~ w(t), power(t) ~ 2z(t)], t; costs = [-z(1.0)])
+limited = mtkcompile(limited; inputs = [w(t)])
+
+lprob = JuMPDynamicOptProblem(
+    limited, [[z(t) => 0.0]; [w(t) => 0.0]], (0.0, 1.0); dt = 0.01)
+lsol = solve(lprob, JuMPCollocation(Ipopt.Optimizer));
+lsol.sol[z(t)][end]  # 0.5, not 1.0: power = 2z ≤ 1 binds
+```
+
+There are two ways to impose such a bound, selected with `observed_bounds_method`:
+
+  - `:lift` introduces an auxiliary decision variable bounded by `[lo, hi]` and ties it to
+    the observed expression with an equality constraint. Interior-point solvers such as
+    Ipopt handle variable bounds considerably better than the equivalent nonlinear
+    inequalities, so this is usually faster. Not every backend can do it.
+  - `:constraint` emits the bound directly as a nonlinear inequality. Every backend
+    supports this.
+  - `:auto`, the default, uses `:lift` where the backend supports it and `:constraint`
+    everywhere else.
+
+Currently only the JuMP and InfiniteOpt backends can lift; CasADi and Pyomo use
+`:constraint`. Asking a backend for `:lift` when it cannot raises an `ArgumentError`
+rather than silently doing something else.
+
+`:constraint` is worth choosing explicitly when the solver is not interior-point (active
+set and SQP methods handle inequalities natively), when there are many bounded observed
+variables and the extra equality constraints make finding an initial feasible point
+harder, or when comparing against a reference formulation.
 
 ### Free final time problems
 

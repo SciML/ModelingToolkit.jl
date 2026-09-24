@@ -124,7 +124,7 @@ if @isdefined(ModelingToolkit)
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ 1
         ]
-        @mtkcompile pend = System(eqs, t)
+        @mtkcompile pend = System(eqs, t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
 
         u0 = [x => 1, y => 0]
         prob = ODEProblem(
@@ -161,7 +161,7 @@ if @isdefined(ModelingToolkit)
             D(D(y)) ~ λ * y - g
             x^2 + y^2 ~ 1
         ]
-        @mtkcompile pend = System(eqs, t)
+        @mtkcompile pend = System(eqs, t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
         prob = ODEProblem(
             pend, [x => 0.0, D(x) => 1.0, g => 1.0], (0.0, 1.0);
             guesses = [y => 1.0, λ => 1.0], jac = true, sparse = true
@@ -179,7 +179,7 @@ if @isdefined(ModelingToolkit)
         t = ModelingToolkitBase.t_nounits
         D = ModelingToolkitBase.D_nounits
         @variables x(t) y(t)
-        @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t)
+        @mtkcompile sys = System([D(x) ~ x * D(y), D(y) ~ x - y], t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
         @test ModelingToolkitBase.jacobian_sparsity(sys) == [1 1; 1 1] # all nonzero
         J1 = calculate_jacobian(sys)
         J2 = isequal(unknowns(sys)[1], x) ? [2x - y -x; 1 -1] : [-1 1; -x 2x - y] # analytical result

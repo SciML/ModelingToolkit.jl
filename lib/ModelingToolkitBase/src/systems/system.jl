@@ -20,8 +20,52 @@ const MutableCacheT = Dict{DataType, Any}
     $TYPEDEF
 
 Utility metadata key for adding miscellaneous/one-off metadata to systems.
+
+```julia
+sys = setmetadata(sys, MiscSystemData, mydata)
+getmetadata(sys, MiscSystemData, nothing)
+```
 """
 abstract type MiscSystemData end
+
+"""
+    $TYPEDEF
+
+Metadata key used to mark a system as incompatible with symbolic automatic differentiation.
+When set on a system via `setmetadata(sys, SymbolicADDisallowed, reason)`, any attempt to
+perform symbolic AD on the equations of that system (e.g. via `calculate_jacobian`,
+`calculate_tgrad`, `linearize_symbolic`, or during structural simplification) will throw
+an error. The value associated with this key should be a descriptive `String` explaining
+why symbolic AD is unsupported, or `true` if no explanation is available.
+
+See also: [`check_symbolic_ad_allowed`](@ref).
+"""
+abstract type SymbolicADDisallowed end
+
+"""
+    check_symbolic_ad_allowed(sys::AbstractSystem)
+
+Check whether `sys` supports symbolic automatic differentiation. Throws an `ArgumentError`
+if the system has been marked with [`SymbolicADDisallowed`](@ref).
+"""
+function check_symbolic_ad_allowed(sys::AbstractSystem)
+    return if SymbolicUtils.hasmetadata(sys, SymbolicADDisallowed)
+        reason = SymbolicUtils.getmetadata(sys, SymbolicADDisallowed, nothing)
+        msg = "System $(nameof(sys)) does not support symbolic automatic differentiation."
+        if reason isa AbstractString && !isempty(reason)
+            msg *= " $reason"
+        end
+        throw(ArgumentError(msg))
+    end
+end
+
+__new_irstructure() = IRStructure{VartypeT}()
+__new_irstructure_tlv() = TaskLocalValue{IRStructure{VartypeT}}(__new_irstructure)
+const IRStructureTLVT = typeof(__new_irstructure_tlv())
+
+__new_mutable_cache() = MutableCacheT()
+__new_mutable_cache_tlv() = TaskLocalValue{MutableCacheT}(__new_mutable_cache)
+const MutableCacheTLVT = typeof(__new_mutable_cache_tlv())
 
 """
     $(TYPEDEF)
@@ -61,6 +105,8 @@ struct System <: IntermediateDeprecationSystem
     """
     Jumps associated with the system. Each jump can be a `VariableRateJump`,
     `ConstantRateJump` or `MassActionJump`. See `JumpProcesses.jl` for more information.
+    `MassActionJump`s must use `scale_rates = false` (pre-scaled rate expressions); see
+    [`SymbolicMassActionJump`](@ref).
     """
     jumps::Vector{JumpType}
     """
@@ -101,6 +147,13 @@ struct System <: IntermediateDeprecationSystem
     It needs to be compiled using `mtkcompile` into `noise_eqs`.
     """
     brownians::Vector{SymbolicT}
+    """
+    The poissonian variables of the system, created via `@poissonians`. Each poissonian
+    variable represents an independent Poisson counting process with an associated rate.
+    A system with poissonians cannot be simulated directly. It needs to be compiled using
+    `mtkcompile` which converts poissonians into jump equations.
+    """
+    poissonians::Vector{SymbolicT}
     """
     The independent variable for a time-dependent system, or `nothing` for a time-independent
     system.
@@ -200,6 +253,13 @@ struct System <: IntermediateDeprecationSystem
     """
     tstops::Vector{Any}
     """
+    The `(t0, t1)` timespan of the system, or `nothing` if it does not have one. Time-dependent
+    problem constructors use it as the `tspan` when the caller does not pass one. Only the
+    timespan of the top-level system is used; those of subsystems are ignored.
+    """
+    tspan::Union{Nothing, Tuple}
+
+    """
     $INTERNAL_FIELD_WARNING
     The list of input variables of the system.
     """
@@ -274,6 +334,15 @@ struct System <: IntermediateDeprecationSystem
     """
     irreducibles::AtomicSetT
     """
+    Expressions which may be zero and should be given special consideration during simplification.
+    """
+    maybe_zeros::AtomicSetT
+    """
+    $INTERNAL_FIELD_WARNING
+    The `IRStructure` used for efficient symbolic manipulation, stored in a `TaskLocalValue`.
+    """
+    irstructure_tlv::TaskLocalValue{IRStructure{VartypeT}}
+    """
     $INTERNAL_FIELD_WARNING
     Whether the system has been simplified by `mtkcompile`.
     """
@@ -283,21 +352,35 @@ struct System <: IntermediateDeprecationSystem
     The `Schedule` containing additional information about the simplified system.
     """
     schedule::Union{Schedule, Nothing}
+    """
+    Keys are variables that `mtkcompile` managed to integrate analytically. The analytically integrated
+    expression is present as an observed equation. Despite being observed, these variables
+    require initial conditions, typically to solve for auxililar parameters. For example,
+    `D(x) ~ 0` may be analytically solved as `x ~ x0`, in which case the new parameter `x0`
+    requires a value. Initialization solves for this value given an initial condition for `x`.
+    Currently, setting this field is only valid for flattened systems.
+
+    The values correspond to the introduced parameter for the constant of integration. This
+    must be solvable (have a binding of `missing`) and is allowed to be modified by callbacks
+    as a proxy for updating the analytically integrated variable.
+    """
+    analytically_integrated::Dict{SymbolicT, SymbolicT}
 
     function System(
             tag, eqs, noise_eqs, jumps, constraints, costs, consolidate, unknowns, ps,
-            brownians, iv, observed, var_to_name, name, description, bindings,
+            brownians, poissonians, iv, observed, var_to_name, name, description, bindings,
             initial_conditions, guesses, systems, initialization_eqs, continuous_events,
             discrete_events, connector_type, assertions = Dict{SymbolicT, String}(),
-            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [],
+            metadata = MetadataT(), gui_metadata = nothing, is_dde = false, tstops = [], tspan = nothing,
             inputs = Set{SymbolicT}(), outputs = Set{SymbolicT}(),
             tearing_state = nothing, namespacing = true,
             complete = false, index_cache = nothing, parameter_bindings_graph = nothing,
             ignored_connections = nothing,
             preface = nothing, parent = nothing, initializesystem = nothing,
             is_initializesystem = false, is_discrete = false, state_priorities = AtomicMapT{Int}(),
-            irreducibles = AtomicSetT(), isscheduled = false,
-            schedule = nothing; checks::Union{Bool, Int} = true
+            irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
+            irstructure_tlv = __new_irstructure_tlv(), isscheduled = false, schedule = nothing,
+            analytically_integrated = Dict{SymbolicT, SymbolicT}(); checks::Union{Bool, Int} = true
         )
         if is_initializesystem && iv !== nothing
             throw(
@@ -326,6 +409,15 @@ struct System <: IntermediateDeprecationSystem
                 error()
             end
             N1 == Neq || throw(IllFormedNoiseEquationsError(N1, Neq))
+            if noise_eqs !== nothing && !isempty(brownians)
+                throw(
+                    ArgumentError(
+                        "A system cannot have both `noise_eqs` and `brownians` specified. " *
+                            "Use either `noise_eqs` (a matrix of noise coefficients) or " *
+                            "`brownians` (symbolic brownian variables in equations), but not both."
+                    )
+                )
+            end
             check_equations(equations(continuous_events), iv)
             check_subsystems(systems)
         end
@@ -343,15 +435,15 @@ struct System <: IntermediateDeprecationSystem
         end
         return new(
             tag, eqs, noise_eqs, jumps, constraints, costs,
-            consolidate, unknowns, ps, brownians, iv,
+            consolidate, unknowns, ps, brownians, poissonians, iv,
             observed, var_to_name, name, description, bindings, initial_conditions,
             guesses, systems, initialization_eqs, continuous_events, discrete_events,
             connector_type, assertions, metadata, gui_metadata, is_dde,
-            tstops, inputs, outputs, tearing_state, namespacing,
+            tstops, tspan, inputs, outputs, tearing_state, namespacing,
             complete, index_cache, parameter_bindings_graph, ignored_connections,
             preface, parent, initializesystem, is_initializesystem, is_discrete,
-            state_priorities, irreducibles,
-            isscheduled, schedule
+            state_priorities, irreducibles, maybe_zeros, irstructure_tlv,
+            isscheduled, schedule, analytically_integrated
         )
     end
 end
@@ -377,6 +469,7 @@ function unwrap_vars(vars::AbstractArray)
 end
 
 defsdict(x::SymmapT) = x
+defsdict(x::Vector{Any}) = isempty(x) ? SymmapT() : defsdict(Dict(x))
 function defsdict(x::Union{AbstractDict, AbstractArray{<:Pair}})
     result = SymmapT()
     for (k, v) in x
@@ -414,21 +507,61 @@ Construct a system using the given equations `eqs`, independent variable `iv` (`
 for time-independent systems, unknowns `dvs`, parameters `ps` and brownian variables
 `brownians`.
 
-## Keyword Arguments
+This is the explicit form of the constructor: every unknown and parameter of the system
+must be listed. Use the `System(eqs, iv)` method to discover them from the equations
+instead.
 
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`. A single `Equation` is also
+  accepted.
+- `iv`: The independent variable of the system, or `nothing` for a time-independent system.
+- `dvs`: The unknowns of the system. When `iv` is given, entries that are delayed or
+  evaluated-at forms of a variable (such as `x(t - 1)` or `x(0)`) rather than functions of
+  `iv` itself are filtered out.
+- `ps`: The parameters of the system.
+- `brownians`: The brownian variables appearing in `eqs`, for systems written in brownian
+  form. Defaults to no brownian variables.
+
+# Keyword Arguments
+
+- `name`: The name of the system, as a `Symbol`. This has no default and must be provided;
+  a `NoNameError` is thrown otherwise. [`@named`](@ref) supplies it automatically.
+- `systems`: The subsystems of this system. Defaults to no subsystems.
 - `discover_from_metadata`: Whether to parse metadata of unknowns and parameters of the
   system to obtain bindings, initial conditions and/or guesses.
-- `checks`: Whether to perform sanity checks on the passed values.
+- `checks`: Whether to perform sanity checks on the passed values. Accepts `true`, `false`
+  or a bitmask combination of `CheckComponents` and `CheckUnits`.
 
 All other keyword arguments are named identically to the corresponding fields in
 [`System`](@ref).
+
+# Returns
+
+A [`System`](@ref) with the given equations, variables and metadata. The returned system is
+not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref) before building a
+problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+eqs = [D(x) ~ (y - x) / τ, y ~ 2x]
+sys = System(eqs, t, [x, y], [τ]; name = :explicit_sys)
+```
 """
 function System(
         eqs::Vector{Equation}, iv, dvs, ps, brownians = SymbolicT[];
+        poissonians = SymbolicT[],
         constraints = Union{Equation, Inequality}[], noise_eqs = nothing, jumps = JumpType[],
         costs = SymbolicT[], consolidate = default_consolidate,
         # `@nospecialize` is only supported on the first 32 arguments. Keep this early.
-        @nospecialize(preface = nothing), @nospecialize(tstops = []),
+        @nospecialize(preface = nothing), @nospecialize(tstops = []), @nospecialize(tspan = nothing),
         observed = Equation[], bindings = SymmapT(), initial_conditions = SymmapT(),
         guesses = SymmapT(), systems = System[], initialization_eqs = Equation[],
         continuous_events = SymbolicContinuousCallback[], discrete_events = SymbolicDiscreteCallback[],
@@ -437,9 +570,10 @@ function System(
         is_dde = nothing, inputs = OrderedSet{SymbolicT}(),
         outputs = OrderedSet{SymbolicT}(), tearing_state = nothing,
         ignored_connections = nothing, parent = nothing, state_priorities = AtomicMapT{Int}(),
-        irreducibles = AtomicSetT(),
+        irreducibles = AtomicSetT(), maybe_zeros = AtomicSetT(),
         description = "", name = nothing, discover_from_metadata = true,
         initializesystem = nothing, is_initializesystem = false, is_discrete = false,
+        irstructure = IRStructure{VartypeT}(), irstructure_tlv = nothing,
         checks = true, __legacy_defaults__ = nothing
     )
     name === nothing && throw(NoNameError())
@@ -469,6 +603,7 @@ function System(
         filter!(!Base.Fix2(_is_unknown_delay_or_evalat, iv), dvs)
     end
     brownians = unwrap_vars(brownians)
+    poissonians = unwrap_vars(poissonians)
 
     if noise_eqs !== nothing
         noise_eqs = unwrap_vars(noise_eqs)
@@ -546,23 +681,14 @@ function System(
         collect_metadata!(VariableStatePriority, state_priorities, dvs)
         collect_metadata!(VariableIrreducible, irreducibles, dvs)
     end
+    maybe_zeros = as_atomic_array_set(maybe_zeros)
 
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), initial_conditions)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), bindings)
     filter!(!(Base.Fix1(===, COMMON_NOTHING) ∘ last), guesses)
 
     if iv === nothing
-        filterer = let initial_conditions = initial_conditions, all_dvs = all_dvs
-            function _filterer(kvp)
-                k = kvp[1]
-                if k in all_dvs
-                    initial_conditions[k] = kvp[2]
-                    return false
-                end
-                return true
-            end
-        end
-        filter!(filterer, bindings)
+        move_variable_bindings_to_ics!(all_dvs, initial_conditions, bindings)
     end
 
     check_bindings(ps, bindings)
@@ -603,14 +729,37 @@ function System(
     end
     metadata = refreshed_metadata(metadata)
     jumps = Vector{JumpType}(jumps)
+    # MTK requires symbolic MassActionJumps to have pre-scaled rate expressions.
+    # JumpProcesses must not re-apply factorial scaling on parameter updates.
+    for j in jumps
+        if j isa MassActionJump && j.rescale_rates_on_update
+            throw(
+                ArgumentError(
+                    "MassActionJump with rescale_rates_on_update = true is not supported " *
+                        "in Systems with jumps or JumpSystems. Rate expressions must be pre-scaled (e.g. " *
+                        "k/factorial(n) for n-th order reactions). Use SymbolicMassActionJump " *
+                        "or pass scale_rates = false when constructing the MassActionJump."
+                )
+            )
+        end
+    end
+
+    if irstructure_tlv === nothing
+        irstructure_tlv = __new_irstructure_tlv()
+        if !iszero(length(irstructure))
+            irstructure_tlv[] = irstructure
+        end
+    end
+
     return System(
         __get_new_tag(), eqs, noise_eqs, jumps, constraints,
-        costs, consolidate, dvs, ps, brownians, iv, observed,
+        costs, consolidate, dvs, ps, brownians, poissonians, iv, observed,
         var_to_name, name, description, bindings, initial_conditions, guesses, systems, initialization_eqs,
         continuous_events, discrete_events, connector_type, assertions, metadata, gui_metadata, is_dde,
-        tstops, inputs, outputs, tearing_state, true, false,
+        tstops, tspan, inputs, outputs, tearing_state, true, false,
         nothing, nothing, ignored_connections, preface, parent,
-        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles; checks
+        initializesystem, is_initializesystem, is_discrete, state_priorities, irreducibles,
+        maybe_zeros, irstructure_tlv; checks
     )
 end
 
@@ -646,6 +795,35 @@ SymbolicIndexingInterface.getname(x::AbstractSystem) = nameof(x)
 
 Create a time-independent [`System`](@ref) with the given equations `eqs`, unknowns `dvs`
 and parameters `ps`.
+
+Equivalent to calling the explicit constructor with `iv = nothing`. Use this for
+systems that have no independent variable, such as nonlinear or optimization systems.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `dvs`: The unknowns of the system.
+- `ps`: The parameters of the system.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method. `name` is required.
+
+# Returns
+
+A time-independent [`System`](@ref). The returned system is not marked complete: call
+[`mtkcompile`](@ref) or [`complete`](@ref) before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+
+@variables x y
+@parameters a b
+
+sys = System([0 ~ a * x + y, 0 ~ x - b * y], [x, y], [a, b]; name = :steady_sys)
+```
 """
 function System(eqs::Vector{Equation}, dvs, ps; kwargs...)
     return System(eqs, nothing, dvs, ps; kwargs...)
@@ -657,6 +835,44 @@ end
 Create a time-dependent system with the given equations `eqs` and independent variable `iv`.
 Discover variables, parameters and brownians in the system by parsing the equations and
 other symbolic expressions passed to the system.
+
+This is the constructor most models use: only the equations and the independent variable
+have to be given, and the unknowns and parameters are inferred from them. Pass the
+unknowns and parameters explicitly when the inferred sets are not the intended ones.
+
+Note that only variables reachable from the equations and the other symbolic keyword
+arguments are discovered. A variable that appears nowhere in them is not made an unknown
+of the system.
+
+# Arguments
+
+- `eqs`: The equations of the system, as a `Vector{Equation}`.
+- `iv`: The independent variable of the system. Passing `nothing` forwards to the
+  time-independent method.
+
+# Keyword Arguments
+
+Identical to the explicit `System(eqs, iv, dvs, ps, brownians)` method, except that `dvs`,
+`ps` and `brownians` are discovered rather than passed. `name` is required.
+
+# Returns
+
+A [`System`](@ref) whose unknowns and parameters are those discovered from `eqs`. The
+returned system is not marked complete: call [`mtkcompile`](@ref) or [`complete`](@ref)
+before building a problem from it.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) y(t)
+@parameters τ
+
+# `x`, `y` are discovered as unknowns and `τ` as a parameter
+sys = System([D(x) ~ (y - x) / τ, y ~ 2x], t; name = :discovered_sys)
+```
 """
 function System(eqs::Vector{Equation}, iv; kwargs...)
     iv === nothing && return System(eqs; kwargs...)
@@ -696,13 +912,25 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
     eqs = [diffeqs; othereqs]
 
     brownians = Set{SymbolicT}()
+    poissonians = Set{SymbolicT}()
     for x in allunknowns
         x = unwrap(x)
         if getvariabletype(x) == BROWNIAN
             push!(brownians, x)
+        elseif getvariabletype(x) == POISSONIAN
+            push!(poissonians, x)
         end
     end
     setdiff!(allunknowns, brownians)
+    setdiff!(allunknowns, poissonians)
+
+    # Extract variables and parameters from poissonian rate expressions
+    for p in poissonians
+        rate = getpoissonianrate(p)
+        if rate !== nothing
+            collect_vars!(allunknowns, ps, rate, iv)
+        end
+    end
 
     cstrs = Vector{Union{Equation, Inequality}}(get(kwargs, :constraints, []))
     _cstrunknowns, cstrps = process_constraint_system(cstrs, allunknowns, ps, iv)
@@ -741,6 +969,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         collect_vars!(allunknowns, ps, arguments(v)[1], iv)
     end
 
+    for pair in get(kwargs, :initial_conditions, ())
+        collect_vars!(allunknowns, ps, pair, iv)
+    end
+    for pair in get(kwargs, :bindings, ())
+        collect_vars!(allunknowns, ps, pair, iv)
+    end
+
     new_ps = gather_array_params(ps)
 
     noiseeqs = get(kwargs, :noise_eqs, nothing)
@@ -751,12 +986,13 @@ function System(eqs::Vector{Equation}, iv; kwargs...)
         collect_vars!(noisedvs, noiseps, noiseeqs, iv)
         for dv in noisedvs
             dv ∈ allunknowns ||
-                throw(ArgumentError("Variable $dv in noise equations is not an unknown of the system."))
+                throw(ArgumentError(lazy"Variable $dv in noise equations is not an unknown of the system."))
         end
     end
 
     return System(
-        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians); kwargs...
+        eqs, iv, collect(allunknowns), collect(new_ps), collect(brownians);
+        poissonians = collect(poissonians), kwargs...
     )
 end
 
@@ -788,6 +1024,13 @@ function System(eqs::Vector{Equation}; kwargs...)
         collect_vars!(allunknowns, ps, eq, nothing)
     end
 
+    for pair in get(kwargs, :initial_conditions, ())
+        collect_vars!(allunknowns, ps, pair, nothing)
+    end
+    for pair in get(kwargs, :bindings, ())
+        collect_vars!(allunknowns, ps, pair, nothing)
+    end
+
     new_ps = gather_array_params(ps)
 
     return System(eqs, nothing, collect(allunknowns), collect(new_ps); kwargs...)
@@ -800,7 +1043,7 @@ Create a `System` with a single equation `eq`.
 """
 System(eq::Equation, args...; kwargs...) = System([eq], args...; kwargs...)
 
-function gather_array_params(ps)
+function gather_array_params(ps::AbstractSet{SymbolicT})
     new_ps = OrderedSet{SymbolicT}()
     for p in ps
         arr, isarr = split_indexed_var(p)
@@ -909,20 +1152,20 @@ function validate_vars_and_find_ps!(auxvars, auxps, sysvars, iv)
         if !iscall(var)
             SU.query(isequal(iv), var) && (
                 var ∈ sts ||
-                    throw(ArgumentError("Time-dependent variable $var is not an unknown of the system."))
+                    throw(ArgumentError(lazy"Time-dependent variable $var is not an unknown of the system."))
             )
         elseif length(arguments(var)) > 1
-            throw(ArgumentError("Too many arguments for variable $var."))
+            throw(ArgumentError(lazy"Too many arguments for variable $var."))
         elseif length(arguments(var)) == 1
             if iscall(var) && operation(var) isa Differential
                 var = only(arguments(var))
             end
             arg = only(arguments(var))
             operation(var)(iv) ∈ sts ||
-                throw(ArgumentError("Variable $var is not a variable of the System. Called variables must be variables of the System."))
+                throw(ArgumentError(lazy"Variable $var is not a variable of the System. Called variables must be variables of the System."))
 
             isequal(arg, iv) || isparameter(arg) || isconst(arg) && symtype(arg) <: Real ||
-                throw(ArgumentError("Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
+                throw(ArgumentError(lazy"Invalid argument specified for variable $var. The argument of the variable should be either $iv, a parameter, or a value specifying the time that the constraint holds."))
 
             isparameter(arg) && !isequal(arg, iv) && push!(auxps, arg)
         else
@@ -987,23 +1230,25 @@ function flatten(sys::System, noeqs = false)
     return System(
         noeqs ? Equation[] : equations(sys), get_iv(sys), unknowns(sys),
         parameters(sys; initial_parameters = true), brownians(sys);
+        poissonians = poissonians(sys),
         jumps = jumps(sys), constraints = constraints(sys), costs = costs,
         consolidate = default_consolidate, observed = observed(sys),
         bindings = bindings(sys), initial_conditions = initial_conditions(sys),
         guesses = guesses(sys),
         continuous_events = continuous_events(sys),
         discrete_events = discrete_events(sys), assertions = assertions(sys),
-        is_dde = is_dde(sys), tstops = symbolic_tstops(sys),
+        is_dde = is_dde(sys), tstops = symbolic_tstops(sys), tspan = get_tspan(sys),
         initialization_eqs = initialization_equations(sys),
         inputs = inputs(sys), outputs = outputs(sys),
         state_priorities = state_priorities(sys),
         irreducibles = irreducibles(sys),
+        maybe_zeros = maybe_zeros(sys),
         # without this, any initial conditions/bindings/guesses obtained from metadata that
         # were later removed by the user will be re-added. Right now, we just want to
         # retain `initial_conditions(sys)` as-is.
         discover_from_metadata = false, metadata = get_metadata(sys),
         gui_metadata = get_gui_metadata(sys),
-        description = description(sys), name = nameof(sys)
+        description = description(sys), name = nameof(sys), checks = false
     )
 end
 
@@ -1062,7 +1307,7 @@ end
 
 Get the metadata associated with key `k` in system `sys` or `default` if it does not exist.
 """
-function SymbolicUtils.getmetadata(sys::AbstractSystem, k::DataType, default)
+function SymbolicUtils.getmetadata(sys::AbstractSystem, @nospecialize(k::DataType), default)
     meta = get_metadata(sys)
     return get(meta, k, default)
 end
@@ -1074,7 +1319,7 @@ Set the metadata associated with key `k` in system `sys` to value `v`. This is a
 out-of-place operation, and will return a shallow copy of `sys` with the appropriate
 metadata values.
 """
-function SymbolicUtils.setmetadata(sys::AbstractSystem, k::DataType, v)
+function SymbolicUtils.setmetadata(sys::AbstractSystem, @nospecialize(k::DataType), @nospecialize(v))
     meta = get_metadata(sys)
     meta = Base.ImmutableDict(meta, k => v)::MetadataT
     return @set sys.metadata = meta
@@ -1107,11 +1352,12 @@ end
 
 Given a time-dependent system `sys` of ODEs, convert it to a time-independent system of
 nonlinear equations that solve for the steady-state of the unknowns. This is done by
-replacing every derivative `D(x)` of an unknown `x` with zero. Note that this process
-does not retain noise equations, brownian terms, jumps or costs associated with `sys`.
-All other information such as initial conditions, bindings, guesses, observed and
-initialization equations are retained. The independent variable of `sys` becomes a
-parameter of the returned system.
+replacing every derivative `D(x)` of an unknown `x` with zero. A derivative of a slice,
+`D(u[2:n-1])`, is expanded into the derivatives of its elements, which are unknowns
+themselves. Note that this process does not retain noise equations, brownian terms,
+jumps or costs associated with `sys`. All other information such as initial conditions,
+bindings, guesses, observed and initialization equations are retained. The independent
+variable of `sys` becomes a parameter of the returned system.
 
 If `sys` is hierarchical (it contains subsystems) this transformation will be applied
 recursively to all subsystems. The output system will be marked as `complete` if and only
@@ -1120,35 +1366,118 @@ if the input system is also `complete`. This also retains the `split` flag passe
 
 See also: [`complete`](@ref).
 """
-function NonlinearSystem(sys::System)
+function NonlinearSystem(sys::System; bind_iv::Bool = true)
     if !is_time_dependent(sys)
         throw(ArgumentError("`NonlinearSystem` constructor expects a time-dependent `System`"))
     end
-    eqs = equations(sys)
-    obs = observed(sys)
+    # `get_` accessors rather than the merging `equations`/`unknowns`/...: subsystems
+    # are recursively converted below, so their namespaced entries must not be folded
+    # into the parent's fields a second time. The rule keyspaces still use the merged
+    # accessors since the system's own equations can reference namespaced variables.
+    eqs = get_eqs(sys)
+    obs = get_observed(sys)
     D = Differential(get_iv(sys))
     subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
-    eqs = map(eqs) do eq
-        substitute(eq, subrules)
-    end
-    new_ps = [parameters(sys); get_iv(sys)]
-    if iscomplete(sys)
+    # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
+    # slice is not one of them, so expand it and replace its elements.
+    eqs = map(eq -> substitute(eq, subrules), eqs)
+    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
+    new_ps = collect(get_ps(sys))
+    filter!(__no_initial_params_pred, new_ps)
+    push!(new_ps, get_iv(sys))
+    # A complete system whose `parameter_bindings_graph` was invalidated (e.g. the
+    # `complete(sys; flatten = false)` snapshot `complete` records as the parent)
+    # still carries bound parameters in `ps`, so they are already included above.
+    if iscomplete(sys) && get_parameter_bindings_graph(sys) !== nothing
         append!(new_ps, collect(bound_parameters(sys)))
     end
+    # `iv => Inf` is only added at the top level; it propagates to subsystems as a
+    # domain binding, and a per-subsystem copy would collide when `bindings` merges.
+    sys_bindings = copy(parent(get_bindings(sys)))
+    # A variable binding is an initialization-time constraint, which a
+    # time-independent system cannot enforce; it is an initial-value default here.
+    new_ics = copy(get_initial_conditions(sys))
+    all_dvs = as_atomic_array_set(unknowns(sys))
+    union!(all_dvs, as_atomic_array_set(observables(sys)))
+    move_variable_bindings_to_ics!(all_dvs, new_ics, sys_bindings)
+    if bind_iv
+        sys_bindings = merge(sys_bindings, Dict(get_iv(sys) => Inf))
+    end
     nsys = System(
-        eqs, unknowns(sys), new_ps;
-        bindings = merge(bindings(sys), Dict(get_iv(sys) => Inf)),
-        initial_conditions = initial_conditions(sys), guesses = guesses(sys),
-        initialization_eqs = initialization_equations(sys), name = nameof(sys),
-        observed = obs, systems = map(NonlinearSystem, get_systems(sys))
+        eqs, get_unknowns(sys), new_ps;
+        bindings = sys_bindings,
+        initial_conditions = new_ics, guesses = get_guesses(sys),
+        initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
+        observed = obs,
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
     end
     return nsys
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Translate `initialization_equations(sys)` of a time-dependent system for the
+time-independent steady-state residual system. Bare unknowns and observables in
+initialization equations refer to values at the initial time, which are the
+`Initial` parameters of a time-independent system, so they are wrapped in
+`Initial`. Derivatives are identically zero at steady state, so `D(x)` - also
+inside `Initial` - is replaced by `0`.
+"""
+function steady_state_initialization_eqs(sys::System)
+    # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
+    # their own translated equations through the recursive conversion.
+    initeqs = get_initialization_eqs(sys)
+    isempty(initeqs) && return initeqs
+    D = Differential(get_iv(sys))
+    subrules = Dict{SymbolicT, Float64}()
+    for v in Iterators.flatten((unknowns(sys), observables(sys)))
+        subrules[D(v)] = 0.0
+    end
+    for var in brownians(sys)
+        subrules[var] = 0.0
+    end
+    heads = Set{SymbolicT}()
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
+    foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, observables(sys))
+    diff_heads = Set{SymbolicT}()
+    foreach(Iterators.flatten((unknowns(sys), observables(sys)))) do v
+        push!(diff_heads, split_indexed_var(D(v))[1])
+        push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
+    end
+    vs = Set{SymbolicT}()
+    initeqs = map(expand_array_derivatives(initeqs)) do eq
+        eq = substitute(eq, subrules)
+        empty!(vs)
+        SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
+        rules = Dict{SymbolicT, Any}()
+        for v in vs
+            if isinitial(v)
+                # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
+                # zero at steady state.
+                arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
+                if arg in diff_heads
+                    rules[v] = 0.0
+                end
+            else
+                head = split_indexed_var(v)[1]
+                if head in diff_heads
+                    rules[v] = 0.0
+                elseif head in heads
+                    rules[v] = Initial(v)
+                end
+            end
+        end
+        isempty(rules) ? eq : substitute(eq, rules)
+    end
+    # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
+    return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
 end
 
 ########
@@ -1210,12 +1539,42 @@ function OptimizationSystem(cost::Array, dvs, ps; kwargs...)
 end
 
 """
+    SymbolicMassActionJump(rate, reactant_stoch, net_stoch; kwargs...)
+
+Construct a `MassActionJump` with `scale_rates = false`, suitable for use in a
+`JumpSystem`. The rate expression must already include any desired combinatorial scaling
+(e.g. `k / factorial(n)` for a reaction like `n*A --> ...`).
+
+Returns a `MassActionJump` — this is a convenience constructor, not a new type.
+"""
+function SymbolicMassActionJump(
+        rate, reactant_stoch, net_stoch; scale_rates = false,
+        kwargs...
+    )
+    if scale_rates
+        throw(
+            ArgumentError(
+                "SymbolicMassActionJump requires pre-scaled rate expressions " *
+                    "(scale_rates = false). scale_rates = true is not supported in " *
+                    "ModelingToolkitBase."
+            )
+        )
+    end
+    return MassActionJump(rate, reactant_stoch, net_stoch; scale_rates = false, kwargs...)
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Construct a [`System`](@ref) to solve a system of jump equations. `jumps` is an array of
-jumps, expressed using `JumpProcesses.MassActionJump`, `JumpProcesses.ConstantRateJump`
-and `JumpProcesses.VariableRateJump`. It can also include standard equations to simulate
+jumps, expressed using `JumpProcesses.ConstantRateJump`, `JumpProcesses.VariableRateJump`,
+and `JumpProcesses.MassActionJump`. It can also include standard equations to simulate
 jump-diffusion processes. `iv` should be the independent variable of the system.
+
+`MassActionJump`s must be constructed with `scale_rates = false` (pre-scaled rate
+expressions). Use [`SymbolicMassActionJump`](@ref) for convenience, which handles this
+automatically. JumpProcesses will not re-apply factorial scaling on parameter updates for
+jumps constructed through the MTK pipeline.
 
 All keyword arguments are the same as those of the [`System`](@ref) constructor.
 """
@@ -1231,6 +1590,8 @@ end
 
 Identical to the 2-argument `JumpSystem` constructor, but uses the explicitly provided
 `dvs` and `ps` for unknowns and parameters of the system.
+
+See the 2-argument [`JumpSystem`](@ref) for details on `MassActionJump` requirements.
 """
 function JumpSystem(jumps, iv, dvs, ps; kwargs...)
     mask = isa.(jumps, Equation)
@@ -1381,7 +1742,7 @@ function Base.showerror(io::IO, err::EventsInTimeIndependentSystemError)
 end
 
 function supports_initialization(sys::System)
-    return isempty(get_systems(sys)) && isempty(jumps(sys)) &&
+    return isempty(get_systems(sys)) && isempty(get_jumps(sys)) &&
         isempty(get_costs(sys)) && isempty(get_constraints(sys))
 end
 
@@ -1416,6 +1777,7 @@ function Base.isapprox(sysa::System, sysb::System)
         issetequal(get_unknowns(sysa), get_unknowns(sysb)) &&
         issetequal(get_ps(sysa), get_ps(sysb)) &&
         issetequal(get_brownians(sysa), get_brownians(sysb)) &&
+        issetequal(get_poissonians(sysa), get_poissonians(sysb)) &&
         issetequal(get_observed(sysa), get_observed(sysb)) &&
         isequal(get_description(sysa), get_description(sysb)) &&
         isequal(get_bindings(sysa), get_bindings(sysb)) &&
@@ -1429,33 +1791,267 @@ function Base.isapprox(sysa::System, sysb::System)
         isequal(get_metadata(sysa), get_metadata(sysb)) &&
         isequal(get_is_dde(sysa), get_is_dde(sysb)) &&
         issetequal(get_tstops(sysa), get_tstops(sysb)) &&
+        isequal(get_tspan(sysa), get_tspan(sysb)) &&
         issetequal(get_inputs(sysa), get_inputs(sysb)) &&
         issetequal(get_outputs(sysa), get_outputs(sysb)) &&
         safe_issetequal(get_ignored_connections(sysa), get_ignored_connections(sysb)) &&
         isequal(get_is_initializesystem(sysa), get_is_initializesystem(sysb)) &&
         isequal(get_is_discrete(sysa), get_is_discrete(sysb)) &&
         isequal(get_state_priorities(sysa), get_state_priorities(sysb)) &&
+        isequal(get_irreducibles(sysa), get_irreducibles(sysb)) &&
+        isequal(get_maybe_zeros(sysa), get_maybe_zeros(sysb)) &&
         isequal(get_isscheduled(sysa), get_isscheduled(sysb))
 end
 
 _maybe_copy(x) = applicable(copy, x) ? copy(x) : x
 
 function Base.copy(sys::System)
+    ir_tlv = __new_irstructure_tlv()
+    ir_tlv[] = copy(get_irstructure(sys))
     return System(
         __get_new_tag(), copy(get_eqs(sys)), _maybe_copy(get_noise_eqs(sys)), copy(get_jumps(sys)),
         copy(get_constraints(sys)), copy(get_costs(sys)), get_consolidate(sys),
-        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)), get_iv(sys),
+        copy(get_unknowns(sys)), copy(get_ps(sys)), copy(get_brownians(sys)),
+        copy(get_poissonians(sys)), get_iv(sys),
         copy(get_observed(sys)), copy(get_var_to_name(sys)), nameof(sys), get_description(sys),
         copy(get_bindings(sys)), copy(get_initial_conditions(sys)), copy(get_guesses(sys)),
         map(copy, get_systems(sys)), copy(get_initialization_eqs(sys)),
         copy(get_continuous_events(sys)), copy(get_discrete_events(sys)), get_connector_type(sys),
         copy(get_assertions(sys)), refreshed_metadata(get_metadata(sys)), get_gui_metadata(sys),
-        get_is_dde(sys), copy(get_tstops(sys)), copy(get_inputs(sys)), copy(get_outputs(sys)),
+        get_is_dde(sys), copy(get_tstops(sys)), get_tspan(sys), copy(get_inputs(sys)), copy(get_outputs(sys)),
         get_tearing_state(sys), does_namespacing(sys), false, get_index_cache(sys),
         get_parameter_bindings_graph(sys), _maybe_copy(get_ignored_connections(sys)),
         _maybe_copy(get_preface(sys)), _maybe_copy(get_parent(sys)),
         _maybe_copy(get_initializesystem(sys)), get_is_initializesystem(sys),
         get_is_discrete(sys), copy(get_state_priorities(sys)), copy(get_irreducibles(sys)),
+        copy(get_maybe_zeros(sys)), ir_tlv,
         copy(get_isscheduled(sys)), _maybe_copy(get_schedule(sys)); checks = false
     )
+end
+
+# Mutable system cache
+"""
+    $TYPEDSIGNATURES
+
+If the mutable cache of `sys` contains an entry for key `K` return it. Otherwise,
+return `default`. `V` is the expected type of the cache entry, if it exists.
+"""
+function check_mutable_cache(
+        sys::System, @nospecialize(K::DataType), ::Type{V}, default::D
+    )::Union{V, D} where {V, D}
+    cache_tlv = getmetadata(sys, MutableCacheKey, nothing)
+    cache_tlv isa MutableCacheTLVT || return default
+    cache = cache_tlv[]::MutableCacheT
+    return get(cache, K, default)::Union{V, D}
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Store into the mutable cache of `sys` the key-value pair `K => value`.
+"""
+function store_to_mutable_cache!(sys::System, @nospecialize(K::DataType), value)
+    cache_tlv = getmetadata(sys, MutableCacheKey, nothing)
+    cache_tlv isa MutableCacheTLVT || return nothing
+    cache = cache_tlv[]::MutableCacheT
+    cache[K] = value
+    return nothing
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a `Bool` indicating whether the cached entry associated with key `K` should be
+invalidated if the given `patch` is applied to the system. By default, entries will be
+invalidated on all patches.
+"""
+function should_invalidate_mutable_cache_entry(
+        @nospecialize(K::DataType),
+        @nospecialize(patch::NamedTuple)
+    )
+    return true
+end
+
+abstract type LinearExpansionCache end
+
+const LinearExpansionCacheT = Dict{Tuple{SymbolicT, Bool}, Symbolics.LinearExpander}
+
+function should_invalidate_mutable_cache_entry(
+        ::Type{LinearExpansionCache}, @nospecialize(patch::NamedTuple)
+    )
+    return false
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get a cached `Symbolics.LinearExpander` for variable `var` and strictness `strict`. This
+allows reusing significant cached information between `LinearExpander` calls. This cache
+is never invalidated.
+"""
+function get_linear_expander_for!(sys::System, var::SymbolicT, strict::Bool)
+    cache = check_mutable_cache(sys, LinearExpansionCache, LinearExpansionCacheT, nothing)
+    if cache === nothing
+        cache = LinearExpansionCacheT()
+        store_to_mutable_cache!(sys, LinearExpansionCache, cache)
+    end
+    return get!(() -> Symbolics.LinearExpander(var; strict), cache, (var, strict))
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Get the `IRStructure` associated with the system.
+"""
+function get_irstructure(sys::System)
+    return get_irstructure_tlv(sys)[]::IRStructure{SymReal}
+end
+
+# Reversible transformation API
+
+abstract type ReversibleTransformations end
+
+"""
+    $TYPEDSIGNATURES
+
+Add `tf` to the list of reversible transformations applied to `sys`. Returns a modified
+copy of `sys`. Reversible transformations must define [`reverse_transformation`](@ref).
+They can also define several functions to determine when they are reversed. Transformations
+are reversed in the reverse order of application.
+"""
+function with_reversible_transformation(sys::System, @nospecialize(tf))
+    prev_tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    push!(new_tfs, tf)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Check if any of the reversible transformations applied to `sys` satisfy the predicate `f`.
+"""
+function any_reversible_transformation(f::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, nothing)::Union{Nothing, Vector{Any}}
+    return any(f, tfs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Filter the reversible transformations applied to `sys`. Return a new system with the
+updated list of transformations.
+"""
+function filter_reversible_transformations(fn::F, sys::System) where {F}
+    prev_tfs = getmetadata(sys, ReversibleTransformations, [])::Union{Nothing, Vector{Any}}
+    new_tfs::Vector{Any} = if prev_tfs === nothing
+        []
+    else
+        copy(prev_tfs)
+    end
+    filter!(fn, new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)
+end
+
+"""
+    function reverse_transformation(sys::System, tf)
+
+Reverse a reversible transformation ([`with_reversible_transformation`](@ref)) applied to `sys`.
+"""
+function reverse_transformation end
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when performing operations that require reversing such transformations. Defaults to
+`true` for all transformations.
+"""
+reverse_transformation_by_default(@nospecialize(tf)) = true
+
+"""
+    $TYPEDSIGNATURES
+
+Return a boolean indicating whether the transformation `tf` is reversed by default
+when building the initialization system.
+"""
+function reverse_transformation_during_initialization(@nospecialize(tf))
+    return reverse_transformation_by_default(tf)
+end
+
+function __reverse_transformations_helper(fn::F, sys::System) where {F}
+    tfs = getmetadata(sys, ReversibleTransformations, [])::Vector{Any}
+    new_tfs = []
+    for tf in Iterators.reverse(tfs)
+        if !fn(tf)::Bool
+            push!(new_tfs, tf)
+            continue
+        end
+        sys = reverse_transformation(sys, tf)::System
+    end
+    reverse!(new_tfs)
+    return setmetadata(sys, ReversibleTransformations, new_tfs)::System
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_by_default`](@ref) is `true`.
+"""
+function reverse_all_default_reversible_transformations(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_by_default, sys)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Reverse all reversible transformations ([`with_reversible_transformation`](@ref)) applied
+to `sys` for which [`reverse_transformation_during_initialization`](@ref) is `true`.
+"""
+function reverse_transformations_for_initialization(sys::System)
+    return __reverse_transformations_helper(reverse_transformation_during_initialization, sys)
+end
+
+# Necessary Initial Conditions API
+
+# Metadata key
+abstract type NecessaryInitialConditions end
+const NecessaryInitialConditionsT = OrderedDict{SymbolicT, Union{String, LazyString}}
+
+"""
+    $TYPEDSIGNATURES
+
+Get a map from variables in `sys` whose initial conditions are required to a `String`
+reason for why they are required. This can be mutated to change the necessary
+initial conditions. After mutation, [`set_necessary_initial_conditions`](@ref) MUST
+be called with the mutated map.
+"""
+function get_necessary_initial_conditions(sys::System)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("This is only valid for flattened systems!"))
+    end
+    return @something(
+        getmetadata(
+            sys, NecessaryInitialConditions, nothing
+        )::Union{NecessaryInitialConditionsT, Nothing},
+        NecessaryInitialConditionsT()
+    )
+end
+
+"""
+    $TYPEDSIGNATURES
+
+See [`get_necessary_initial_conditions`](@ref).
+"""
+function set_necessary_initial_conditions(sys::System, ics)
+    if !isempty(get_systems(sys))
+        throw(ArgumentError("This is only valid for flattened systems!"))
+    end
+    get_necessary_initial_conditions(sys) === ics && return sys
+    return setmetadata(sys, NecessaryInitialConditions, ics)::System
 end

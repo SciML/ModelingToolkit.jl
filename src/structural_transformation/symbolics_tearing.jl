@@ -12,21 +12,21 @@ end
     tearing(sys)
 
 Tear the nonlinear equations in system. When `simplify=true`, we simplify the
-new residual equations after tearing. End users are encouraged to call [`mtkcompile`](@ref)
+new residual equations after tearing. End users are encouraged to call [`ModelingToolkitBase.mtkcompile`](@ref)
 instead, which calls this function internally.
 """
 function tearing(
-        sys::AbstractSystem, state = TearingState(sys); mm = nothing,
+        sys::AbstractSystem, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
         fully_determined = true, kwargs...
     )
     tearing_result, extras = tearing(state; kwargs...)
-    return invalidate_cache!(reassemble_alg(state, tearing_result, mm; fully_determined))
+    return invalidate_cache!(reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...))
 end
 
 function safe_isinteger(@nospecialize(x::Number))
     if x isa Int64
-        return true
+        return typemin(Int) <= x <= typemax(Int)
     elseif x isa Int32
         return true
     elseif x isa BigInt
@@ -57,7 +57,7 @@ the system is balanced.
 function dummy_derivative(
         sys, state = TearingState(sys);
         reassemble_alg::ReassembleAlgorithm = DefaultReassembleAlgorithm(),
-        mm = nothing, fully_determined = true, kwargs...
+        fully_determined = true, kwargs...
     )
     jac = let state = state
         (eqs, vars) -> begin
@@ -77,23 +77,9 @@ function dummy_derivative(
             return J
         end
     end
-    state_priority = let state = state
-        var -> begin
-            p = 0.0
-            var_to_diff = state.structure.var_to_diff
-            diff_to_var = invview(var_to_diff)
-            while var_to_diff[var] !== nothing
-                var = var_to_diff[var]
-            end
-            while true
-                p = max(p, ModelingToolkit.state_priority(state.fullvars[var]))
-                (var = diff_to_var[var]) === nothing && break
-            end
-            p
-        end
-    end
+    state_priority = Base.Fix1(getindex, state.structure.state_priorities)
     tearing_result, extras = StateSelection.dummy_derivative_graph!(
         state, jac; state_priority, kwargs...
     )
-    return reassemble_alg(state, tearing_result, mm; fully_determined)
+    return reassemble_alg(state, tearing_result, state.mm; fully_determined, kwargs...)
 end

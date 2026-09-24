@@ -1,25 +1,3 @@
-@doc """
-    function mtkcompile(sys::System; kwargs...)
-
-Compile the given system into a form that ModelingToolkit can generate code for. Also
-performs a variety of symbolic-numeric enhancements. For ODEs, this includes processes
-such as order reduction, index reduction, alias elimination and tearing. A subset of the
-unknowns of the system may be eliminated as observables, eliminating the need for the
-numerical solver to solve for these variables.
-
-Does not rely on metadata to identify variables/parameters/brownians. Instead, queries
-the system for which symbolic quantites belong to which category. Any variables not
-present in the equations of the system will be removed in this process.
-
-# Keyword Arguments
-
-+ When `simplify=true`, the `simplify` function will be applied during the tearing process.
-+ `allow_symbolic=false`, `allow_parameter=true`, and `conservative=false` limit the coefficient types during tearing. In particular, `conservative=true` limits tearing to only solve for trivial linear systems where the coefficient has the absolute value of ``1``.
-+ `fully_determined=true` controls whether or not an error will be thrown if the number of equations don't match the number of inputs, outputs, and equations.
-+ `inputs`, `outputs` and `disturbance_inputs` are passed as keyword arguments.` All inputs` get converted to parameters and are allowed to be unconnected, allowing models where `n_unknowns = n_equations - n_inputs`.
-+ `sort_eqs=true` controls whether equations are sorted lexicographically before simplification or not.
-""" mtkcompile
-
 function MTKBase.__mtkcompile(
         sys::System;
         inputs::OrderedSet{SymbolicT} = OrderedSet{SymbolicT}(),
@@ -30,7 +8,9 @@ function MTKBase.__mtkcompile(
     )
     sys, statemachines = extract_top_level_statemachines(sys)
     sys, source_info = expand_connections(sys, Val(true))
-    state = TearingState(sys, source_info; sort_eqs)
+    sys = MTKBase.discover_maybe_zeros(sys)
+    sys, source_info = MTKBase.apply_limited_lowering(sys, source_info)
+    state = TearingState(sys, source_info; sort_eqs, defer_scalarization = true)
     append!(state.statemachines, statemachines)
 
     @unpack structure, fullvars = state
@@ -53,7 +33,10 @@ function MTKBase.__mtkcompile(
         Is = Int[]
         Js = Int[]
         vals = SymbolicT[]
+        MTKTearing.scalarize_tearing_state_eqs!(state)
         make_eqs_zero_equals!(state)
+        @unpack structure, fullvars = state
+        @unpack graph, var_to_diff, var_types = structure
         new_eqs = copy(equations(state))
         dvar2eq = Dict{SymbolicT, Int}()
         eqs = equations(state)
@@ -85,8 +68,9 @@ function MTKBase.__mtkcompile(
                 if !iszero(new_idxs[i]) &&
                 invview(var_to_diff)[i] === nothing
         ]
+        # Analytically eliminating `D(x) = 0` causes problems for SDEs
         ode_sys = mtkcompile(
-            sys; inputs, outputs, disturbance_inputs, kwargs...
+            sys; inputs, outputs, disturbance_inputs, eliminate_mm_zeros = false, kwargs...
         )
         eqs = equations(ode_sys)
         sorted_g_rows = fill(COMMON_ZERO, length(eqs), size(g, 2))
@@ -127,8 +111,20 @@ function MTKBase.__mtkcompile(
             guesses = guesses(sys), initialization_eqs = initialization_equations(sys),
             continuous_events = continuous_events(sys),
             discrete_events = discrete_events(sys),
-            gui_metadata = get_gui_metadata(sys)
+            gui_metadata = get_gui_metadata(sys),
+            tstops = symbolic_tstops(sys), tspan = get_tspan(sys)
         )
+        diffcache_params = SU.getmetadata(
+            ode_sys, DiffCacheParams, Dict{SymbolicT, Int}()
+        )::Dict{SymbolicT, Int}
+        ssys = SU.setmetadata(ssys, DiffCacheParams, copy(diffcache_params))
+        # Reuse `LinearExpander` cache
+        linear_expansion_cache = check_mutable_cache(
+            ode_sys, LinearExpansionCache, LinearExpansionCacheT, nothing
+        )
+        if linear_expansion_cache !== nothing
+            store_to_mutable_cache!(ssys, LinearExpansionCache, linear_expansion_cache)
+        end
         return ssys
     end
 end
@@ -144,11 +140,37 @@ Given a system that has been simplified via `mtkcompile`, return a `Dict` mappin
 variables of the system to equations that are used to solve for them. This includes
 observed variables.
 
+# Arguments
+
+- `sys`: a system returned by [`ModelingToolkitBase.mtkcompile`](@ref) or another simplification path that
+  records a tearing state.
+
 # Keyword Arguments
 
 - `rename_dummy_derivatives`: Whether to rename dummy derivative variable keys into their
   `Differential` forms. For example, this would turn the key `yˍt(t)` into
   `Differential(t)(y(t))`.
+
+# Returns
+
+A `Dict` mapping unknown or observed symbolic variables to the equations used to solve
+for them.
+
+# Examples
+
+```julia
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@variables x(t) = 1 y(t) = 0
+eqs = [D(x) ~ -x,
+       y ~ x + 1]
+@named sys = System(eqs, t)
+simplified = mtkcompile(sys)
+
+mapping = map_variables_to_equations(simplified)
+mapping[y]
+```
 """
 function map_variables_to_equations(sys::AbstractSystem; rename_dummy_derivatives = true)
     if !has_tearing_state(sys)

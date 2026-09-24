@@ -218,7 +218,9 @@ function fractional_to_ordinary(
 
     function fto_helper(sub_eq, sub_var, α; initial = 0)
         alpha_0 = α
+        α == 1 && throw(ArgumentError("`fractional_to_ordinary` requires non-integer orders, got α = 1"))
 
+        coeff = 1.0
         if (α > 1)
             coeff = 1 / (α - 1)
             m = 2
@@ -950,7 +952,7 @@ function convert_system_indepvar(sys::System, t; name = nameof(sys))
             end
             ns = maketerm(
                 typeof(s), operation(s), Any[t],
-                SymbolicUtils.metadata(s)
+                TermInterface.metadata(s)
             )
             newsts[i] = ns
             varmap[s] = ns
@@ -1137,4 +1139,203 @@ function respecialize(sys::AbstractSystem, mapping; all = false)
     @set! sys.costs = Vector{Union{Real, BasicSymbolic}}(map(substituter, get_costs(sys)))
     sys = complete(sys; split = is_split(sys))
     return sys
+end
+
+const DIFFCACHE_PREFIX = Vector{UInt8}("__diffcacheₘₜₖ#")
+
+function get_numbered_symbol_with_prefix(prefix::Vector{UInt8}, cnt::Int)
+    buffer = Vector{UInt8}()
+    sizehint!(buffer, length(prefix) + ndigits(cnt))
+    append!(buffer, prefix)
+    while cnt > 0
+        push!(buffer, '0' + (cnt % 10))
+        cnt = div(cnt, 10)
+    end
+    reverse!(@view(buffer[(length(prefix) + 1):end]))
+    return Symbol(buffer)
+end
+function get_diffcache_parameter_name(cnt::Int)
+    return get_numbered_symbol_with_prefix(DIFFCACHE_PREFIX, cnt)
+end
+
+abstract type DiffCacheParams end
+
+"""
+    $TYPEDEF
+
+A wrapper around a `DiffCache` enabling it to be used with SymbolicUtils' `with_allocator`.
+"""
+struct DiffCacheAllocatorAPIWrapper{T}
+    cache::DiffCache{Vector{T}, Vector{T}}
+end
+
+DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper{T}) where {T} = dcapiw
+
+function DiffCacheAllocatorAPIWrapper{T}(dcapiw::DiffCacheAllocatorAPIWrapper) where {T}
+    return convert(DiffCacheAllocatorAPIWrapper{T}, dcapiw)
+end
+
+function (dcapiw::DiffCacheAllocatorAPIWrapper)(reference, sz::NTuple{N, Int}) where {N}
+    return reshape(get_tmp(dcapiw.cache, reference), sz)
+end
+
+(dcapiw::DiffCacheAllocatorAPIWrapper)(reference) = Base.Fix1(dcapiw, reference)
+
+function Base.convert(::Type{DiffCacheAllocatorAPIWrapper{T}}, dcapiw::DiffCacheAllocatorAPIWrapper{R}) where {T, R}
+    buffer = get_tmp(dcapiw.cache, one(R))
+    len = length(buffer)
+    new_cache = DiffCache(zeros(T, len))
+    return DiffCacheAllocatorAPIWrapper(new_cache)
+end
+
+"""
+    $TYPEDEF
+
+Add a symbolic `DiffCache` containing a buffer of length `len` to `sys`. Return the new system
+and the symbolic parameter in it representing the added `DiffCache` wrapped in a
+[`DiffCacheAllocatorAPIWrapper`](@ref).
+
+The buffer is stored in the `caches` portion of `MTKParameters` (see [`MTKParameters`](@ref)),
+ahead of any cache buffers appended by `SCCNonlinearProblem`. It is scratch space that
+generated code writes into, so it is deliberately kept out of the `nonnumeric` portion,
+which is declared inactive for Enzyme and non-differentiable for ChainRules. `copy` and
+`remake_buffer` shallow-copy the buffer vector, so copies of an `MTKParameters` share the
+underlying `DiffCache`; problems built from such copies must not be solved concurrently.
+
+Only intended for internal use by ModelingToolkitBase, ModelingToolkitTearing and ModelingToolkit.
+"""
+function add_diffcache(sys::AbstractSystem, len::Int)
+    diffcaches = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    cnt = length(diffcaches) + 1
+    name = get_diffcache_parameter_name(cnt)
+    param = unwrap(only(@parameters ($name::Any)(..)::Any))
+
+    diffcaches[param] = len
+    sys = SU.setmetadata(sys, DiffCacheParams, diffcaches)
+
+    ps = copy(get_ps(sys))
+    push!(ps, param)
+    @set! sys.ps = ps
+    return sys, param
+end
+
+abstract type MiscParameterCnt end
+const MISC_PARAM_PREFIX = Vector{UInt8}("__miscₘₜₖ")
+
+"""
+    $TYPEDSIGNATURES
+
+Add a new unique miscellaneous parameter to the system. The parameter is equivalent to
+
+```julia
+@constants \$name::type
+```
+
+for scalars, or if `szs` is provided
+
+```julia
+@constants \$name[szs...]::type
+```
+
+Returns the updated `sys` and the added parameter.
+"""
+function add_misc_parameter(sys::AbstractSystem, type::SU.TypeT, szs::UnitRange{Int}...)
+    misc_param_count = SU.getmetadata(sys, MiscParameterCnt, 0)::Int
+    misc_param_count += 1
+    name = get_numbered_symbol_with_prefix(MISC_PARAM_PREFIX, misc_param_count)
+    param = if isempty(szs)
+        only(@constants $name::type)
+    else
+        only(@constants $name[szs...]::type)
+    end
+
+    sys = SU.setmetadata(sys, MiscParameterCnt, misc_param_count)
+    ps = copy(get_ps(sys))
+    push!(ps, param)
+    @set! sys.ps = ps
+    return sys, param
+end
+
+"""
+struct LiteralRewriter{FloatType <: AbstractFloat}
+
+INTERNAL: callable struct that can rewrite literal floats to the parameterized `FloatType`.
+Does nothing to integers or other number types.  Does affect Complex numbers.
+"""
+struct LiteralRewriter{FloatType <: AbstractFloat} end
+
+(::LiteralRewriter{FT})(x::AbstractFloat) where {FT} = convert(FT, x)
+function (rw::LiteralRewriter{FT})(x::Complex{F}) where {FT, F <: AbstractFloat}
+    return convert(Complex{typeof(rw(one(F)))}, x)
+end
+function (rw::LiteralRewriter{FT})(x::AbstractArray{F}) where {FT, F <: Union{AbstractFloat, Complex{<:AbstractFloat}}}
+    return map(rw, x)
+end
+(::LiteralRewriter{FT})(x) where {FT} = x
+
+function (rw::LiteralRewriter)(x::SymbolicT)
+    return Moshi.Match.@match x begin
+        BSImpl.Const(; val) => BSImpl.Const{VartypeT}(rw(val))
+        _ => x
+    end
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Convert floating point literals (including ones inside arrays or complex numbers) in the equations
+and observed of `sys` to ones of the specified type.  This can be any `AbstractFloat` type, for example
+`Float32`, `Float16`, or something like `MultiFloats.Float32x2`.
+"""
+function truncate_constant_floats(sys::System, ::Type{FloatType}) where {FloatType <: AbstractFloat}
+    if !isempty(get_systems(sys))
+        throw(
+            ArgumentError(
+                """
+                This pass expects a flattened system.
+                """
+            )
+        )
+    end
+    rw = SU.Rewriters.Postwalk(LiteralRewriter{FloatType}())
+    eqs = copy(get_eqs(sys))
+    for i in eachindex(eqs)
+        eqs[i] = rw(eqs[i].lhs) ~ rw(eqs[i].rhs)
+    end
+    obs = copy(get_observed(sys))
+    for i in eachindex(obs)
+        obs[i] = rw(obs[i].lhs) ~ rw(obs[i].rhs)
+    end
+
+    return ConstructionBase.setproperties(sys; eqs = eqs, observed = obs)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Use various heuristics to discover parameters that may be zero in `sys`. Useful when
+simplifying the system to avoid accidentally dividing by zero.
+"""
+function discover_maybe_zeros(sys::System)
+    defs = copy(parent(bindings(sys)))
+    left_merge!(defs, initial_conditions(sys))
+    filter!(Base.Fix2(!==, COMMON_MISSING) ∘ last, defs)
+    subber = Symbolics.FixpointSubstituter{true}(
+        AADSubWrapper(defs); maxiters = clamp(length(defs), 10, 1000), warn_maxiters = false
+    )
+    mbzs = copy(maybe_zeros(sys))
+    for k in [parameters(sys); unknowns(sys)]
+        is_variable_numeric(k) || continue
+        sh = SU.shape(k)
+        sh isa SU.ShapeVecT || continue
+        if !SU.is_array_shape(sh)
+            SU._iszero(subber(k)) && push_as_atomic_array!(mbzs, k)
+            continue
+        end
+        if any(SU._iszero ∘ subber ∘ Base.Fix1(getindex, k), SU.stable_eachindex(k))
+            push_as_atomic_array!(mbzs, k)
+        end
+    end
+
+    return @set! sys.maybe_zeros = mbzs
 end

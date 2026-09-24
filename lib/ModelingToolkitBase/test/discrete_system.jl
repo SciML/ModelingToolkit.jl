@@ -3,7 +3,7 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkitBase, SymbolicIndexingInterface, Test
+using ModelingToolkitBase, SciMLBase, SymbolicIndexingInterface, Test
 using ModelingToolkitBase: t_nounits as t
 using Setfield: @set!
 
@@ -68,7 +68,7 @@ prob_map = DiscreteProblem(
 @test prob_map.f.sys === syss
 
 # Solution
-using OrdinaryDiffEq
+using OrdinaryDiffEqFunctionMap
 sol_map = solve(prob_map, FunctionMap());
 @test sol_map[S] isa Vector
 @test sol_map[S(k - 1)] isa Vector
@@ -226,8 +226,10 @@ RHS2 = RHS
 
 @variables x(t) y(t) u(t)
 if @isdefined(ModelingToolkit)
-    eqs = [x ~ x(k - 1) + u, u ~ 1, y ~ x + u]
+    eqs = [x ~ x(k - 1) + u, u ~ 1]
     @mtkcompile de = System(eqs, t)
+    @set! de.observed = [ModelingToolkitBase.get_observed(de); [y ~ x + u]]
+    de = complete(de)
 else
     eqs = [x ~ x(k - 1) + u]
     @mtkcompile de = System(eqs, t) inputs = [u]
@@ -258,7 +260,7 @@ if @isdefined(ModelingToolkit)
         ]
         return System(eqs, t; name)
     end
-    function System(; name, buffer)
+    function DiscSystem(; name, buffer)
         @named y_sys = SampledData(; buffer = buffer)
         pars = @parameters begin
             α = 0.5, [description = "alpha"]
@@ -275,7 +277,7 @@ if @isdefined(ModelingToolkit)
         return System(eqs, t, vars, pars; systems = [y_sys], name = name)
     end
 
-    @test_nowarn @mtkcompile sys = System(; buffer = ones(10))
+    @test_nowarn @mtkcompile sys = DiscSystem(; buffer = ones(10))
 end
 
 @testset "Passing `nothing` to `u0`" begin
@@ -332,4 +334,21 @@ end
     discprob = DiscreteProblem(discsys, p, (0, 10); missing_guess_value)
     sol = solve(discprob, FunctionMap())
     @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "`Shift(steps)` constructor" begin
+    s = Shift(2)
+    @test s.t === nothing
+    @test s.steps == 2
+end
+
+@testset "`throw_invalid_operator` names non-derivative operators" begin
+    @variables x(t)
+    err = try
+        ModelingToolkitBase.throw_invalid_operator(Shift(t)(x), x ~ Shift(t)(x), Shift)
+    catch e
+        e
+    end
+    @test err isa ModelingToolkitBase.InvalidSystemException
+    @test occursin("difference variable", sprint(showerror, err))
 end

@@ -4,7 +4,7 @@ ModelingToolkit.jl is not only useful for generating initial value problems (`OD
 The package can also build optimization systems.
 
 !!! note
-    
+
     The high level `@mtkmodel` macro used in the
     [getting started tutorial](@ref getting_started)
     is not yet compatible with `OptimizationSystem`.
@@ -17,7 +17,8 @@ The package can also build optimization systems.
 Let's optimize the classical _Rosenbrock function_ in two dimensions.
 
 ```@example optimization
-using ModelingToolkit, Optimization, OptimizationOptimJL
+using ModelingToolkit, Optimization
+using OptimizationOptimJL: Optim
 @variables begin
     x = 1.0, [bounds = (-2.0, 2.0)]
     y = 3.0, [bounds = (-1.0, 3.0)]
@@ -53,7 +54,7 @@ u0 = [y => 2.0]
 p = [b => 100.0]
 
 prob = OptimizationProblem(sys, vcat(u0, p), grad = true, hess = true)
-u_opt = solve(prob, GradientDescent())
+u_opt = solve(prob, Optim.GradientDescent())
 ```
 
 A visualization of the Rosenbrock function is depicted below.
@@ -70,12 +71,13 @@ scatter!([u_opt[1]], [u_opt[2]], ms = 10, label = "minimum")
 
 ## Rosenbrock Function with Constraints
 
-ModelingToolkit is also capable of handing more complicated constraints than box constraints.
+ModelingToolkit is also capable of handling more complicated constraints than box constraints.
 Non-linear equality and inequality constraints can be added to the `OptimizationSystem`.
 Let's add an inequality constraint to the previous example:
 
 ```@example optimization_constrained
-using ModelingToolkit, Optimization, OptimizationOptimJL
+using ModelingToolkit, Optimization
+using OptimizationOptimJL: Optim
 
 @variables begin
     x = 0.14, [bounds = (-2.0, 2.0)]
@@ -88,13 +90,21 @@ cons = [
 ]
 @mtkcompile sys = OptimizationSystem(rosenbrock, [x, y], [a, b], constraints = cons)
 prob = OptimizationProblem(sys, [], grad = true, hess = true, cons_j = true, cons_h = true)
-u_opt = solve(prob, IPNewton())
+u_opt = solve(prob, Optim.IPNewton())
 ```
 
 Inequality constraints are constructed via a `≲` (or `≳`).
 [(To write these symbols in your own code write `\lesssim` or `\gtrsim` and then press tab.)]
 (https://docs.julialang.org/en/v1/manual/unicode-input/)
 An equality constraint can be specified via a `~`, e.g., `x^2 + y^2 ~ 1`.
+
+Constraints can also be array-valued, such as `x .- a ~ zeros(3)` for `@variables x[1:3]`
+and `@parameters a[1:3]`, or an `Inequality` between an array expression and an array or a
+scalar. Each element of an array-valued constraint is one row of the generated constraint
+function, in column-major order, and the rows follow the order of `constraints(sys)` of the
+system passed to `OptimizationProblem` (`mtkcompile` may reorder the constraints of the
+original system). `lcons` and `ucons` have one entry per row; see
+[`ModelingToolkitBase.canonical_constraints`](@ref) for the rows themselves.
 
 A visualization of the Rosenbrock function and the inequality constraint is depicted below.
 

@@ -40,6 +40,8 @@ struct MTKParameters{T, I, D, C, N, H}
     end
 end
 
+_unwrap_mtk_parameters(params) = SciMLBase.unwrap_parameters(params)
+
 """
     function MTKParameters(sys::AbstractSystem, p, u0 = Dict(); t0 = nothing)
 
@@ -65,6 +67,7 @@ function MTKParameters(
         error("Cannot create MTKParameters if system does not have index_cache")
     end
     all_ps = Set(get_ps(sys))
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
     if !fast_path
         op = operating_point_preprocess(sys, op)
         if floatT === nothing
@@ -91,7 +94,7 @@ function MTKParameters(
             haskey(op, arr) || continue
             push!(to_rm, p)
         end
-        setdiff!(missing_ps, keys(op), to_rm)
+        setdiff!(missing_ps, keys(op), to_rm, keys(diffcache_params))
         isempty(missing_ps) || throw(MissingParametersError(collect(missing_ps)))
     end
 
@@ -103,7 +106,11 @@ function MTKParameters(
         op[get_iv(sys)] = t0
     end
 
-    evaluate_varmap!(op, all_ps; limit = substitution_limit)
+    # Substitute through `AADSubWrapper` so that `COMMON_NOTHING` holes in partially
+    # specified array values are never substituted into expressions (issue #4607).
+    wrapped_op = AADSubWrapper(op)
+    ir = get_irstructure(sys)
+    evaluate_varmap!(ir, wrapped_op, all_ps; limit = substitution_limit, allow_symbolic = true)
 
     tunable_buffer = Vector{ic.tunable_buffer_size.type}(
         undef, ic.tunable_buffer_size.length
@@ -113,11 +120,11 @@ function MTKParameters(
     )
     disc_buffer = Tuple(
         BlockedArray(
-                Vector{subbuffer_sizes[1].type}(
-                    undef, sum(x -> x.length, subbuffer_sizes)
-                ),
-                map(x -> x.length, subbuffer_sizes)
-            )
+            Vector{subbuffer_sizes[1].type}(
+                undef, sum(x -> x.length, subbuffer_sizes)
+            ),
+            map(x -> x.length, subbuffer_sizes)
+        )
             for subbuffer_sizes in ic.discrete_buffer_sizes
     )
     const_buffer = Tuple(
@@ -127,6 +134,10 @@ function MTKParameters(
     nonnumeric_buffer = Tuple(
         Vector{temp.type}(undef, temp.length)
             for temp in ic.nonnumeric_buffer_sizes
+    )
+    caches_buffer = Tuple(
+        Vector{temp.type}(undef, temp.length)
+            for temp in ic.caches_buffer_sizes
     )
     function set_value(sym, val)
         done = true
@@ -152,25 +163,44 @@ function MTKParameters(
         end
         return done
     end
+
+    diffcaches_buffer_idx = 0
+    diffcache_sizes = zeros(Int, length(diffcache_params))
+    if !isempty(diffcache_params)
+        representative = first(keys(diffcache_params))
+        diffcaches_buffer_idx, _ = ic.caches_idx[representative]
+        for (param, len) in diffcache_params
+            _, j = ic.caches_idx[param]
+            diffcache_sizes[j] = len
+        end
+    end
+
     for sym in all_ps
-        val = fixpoint_sub(sym, op; maxiters = max(div(substitution_limit, 2), 2), fold = Val(true))
+        haskey(diffcache_params, sym) && continue
+        _sym = Moshi.Match.@match sym begin
+            BSImpl.Term(; f, args) && if f isa Pre end => args[1]
+            _ => sym
+        end
+        val = @something get(wrapped_op, sym, nothing) get(wrapped_op, _sym, sym)
         ctype = symtype(sym)
-        if !SU.isconst(val)
-            Moshi.Match.@match sym begin
-                BSImpl.Term(; f, args) && if f isa Initial end => begin
-                    if isequal(val, args[1])
-                        if Symbolics.isarraysymbolic(sym)
-                            val = BSImpl.Const{VartypeT}(fill(false, size(val)))
-                        else
-                            val = BSImpl.Const{VartypeT}(false)
-                        end
+        if !SU.isconst(val) && isinitial(sym)
+            # The value of an `Initial` parameter that cannot be fully evaluated
+            # refers to variables not fixed by the operating point. Treat such
+            # (elements of) the value as unfixed, mirroring the `COMMON_NOTHING`
+            # handling below.
+            if SU.is_array_shape(SU.shape(val))
+                val = BSImpl.Const{VartypeT}(
+                    map(SU.stable_eachindex(val)) do i
+                        el = val[i]
+                        SU.isconst(el) ? unwrap_const(el) : false
                     end
-                end
-                _ => nothing
+                )
+            else
+                val = BSImpl.Const{VartypeT}(false)
             end
         end
         if !SU.isconst(val)
-            error("Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
+            error(lazy"Could not evaluate value of parameter $sym. Missing values for variables in expression $val.")
         end
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)
@@ -198,6 +228,15 @@ function MTKParameters(
     end
     disc_buffer = narrow_buffer_type.(disc_buffer; p_constructor)
     const_buffer = narrow_buffer_type.(const_buffer; p_constructor)
+
+    if !iszero(diffcaches_buffer_idx)
+        cache_elT = eltype(initials_buffer)
+        diffcaches_elT = DiffCacheAllocatorAPIWrapper{cache_elT}
+        @set! caches_buffer[diffcaches_buffer_idx] = Vector{diffcaches_elT}(caches_buffer[diffcaches_buffer_idx])
+        for (i, len) in enumerate(diffcache_sizes)
+            caches_buffer[diffcaches_buffer_idx][i] = DiffCacheAllocatorAPIWrapper(DiffCache(zeros(cache_elT, len)))
+        end
+    end
     # Don't narrow nonnumeric types
     if !isempty(nonnumeric_buffer)
         nonnumeric_buffer = map(p_constructor, nonnumeric_buffer)
@@ -205,19 +244,43 @@ function MTKParameters(
 
     mtkps = MTKParameters{
         typeof(tunable_buffer), typeof(initials_buffer), typeof(disc_buffer),
-        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(()),
+        typeof(const_buffer), typeof(nonnumeric_buffer), typeof(caches_buffer),
     }(
         tunable_buffer,
-        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, ()
+        initials_buffer, disc_buffer, const_buffer, nonnumeric_buffer, caches_buffer
     )
     return mtkps
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Append freshly allocated cache buffers described by `cache_templates` to the `caches`
+portion of `p`. The leading `length(ic.caches_buffer_sizes)` buffers are the persistent
+`DiffCache` buffers registered in the index cache and are kept; anything appended by an
+earlier call is dropped.
+"""
+function rebuild_with_caches(ic::IndexCache, p::MTKParameters, cache_templates::BufferTemplate...)
+    return _rebuild_with_caches(p, length(ic.caches_buffer_sizes), cache_templates)
+end
+
+# Compatibility method for callers that predate the `IndexCache` argument. The
+# persistent `DiffCache` buffers are recognised by their element type.
 function rebuild_with_caches(p::MTKParameters, cache_templates::BufferTemplate...)
+    npersistent = 0
+    for buf in p.caches
+        eltype(buf) <: DiffCacheAllocatorAPIWrapper || break
+        npersistent += 1
+    end
+    return _rebuild_with_caches(p, npersistent, cache_templates)
+end
+
+function _rebuild_with_caches(p::MTKParameters, npersistent::Int, cache_templates)
     buffers = map(cache_templates) do template
         Vector{template.type}(undef, template.length)
     end
-    return @set p.caches = buffers
+    persistent = ntuple(Base.Fix1(getindex, p.caches), npersistent)
+    return @set p.caches = (persistent..., buffers...)
 end
 
 function narrow_buffer_type(buffer::AbstractArray; p_constructor = identity)
@@ -244,16 +307,18 @@ function narrow_buffer_type(
 end
 
 function narrow_buffer_type(buffer::BlockedArray; p_constructor = identity)
-    if eltype(buffer) <: AbstractArray
-        buffer = narrow_buffer_type.(buffer; p_constructor)
+    narrowed = if eltype(buffer) <: AbstractArray
+        narrow_buffer_type.(buffer; p_constructor)
+    else
+        buffer
     end
     type = Union{}
-    for x in buffer
+    for x in narrowed
         type = promote_type(type, typeof(x))
     end
-    tmp = p_constructor(type.(buffer))
-    blocks = ntuple(Val(ndims(buffer))) do i
-        bsizes = blocksizes(buffer, i)
+    tmp = p_constructor(type.(narrowed))
+    blocks = ntuple(Val(ndims(narrowed))) do i
+        bsizes = blocksizes(narrowed, i)
         p_constructor(Int.(bsizes))
     end
     return BlockedArray(tmp, blocks...)
@@ -272,12 +337,14 @@ function _split_helper(buf_v::T, recurse, raw, idx) where {T}
 end
 
 function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{N}, raw, idx) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v)
 end
 
 function _split_helper(
         ::Type{<:AbstractArray}, buf_v::BlockedArray, ::Val{N}, raw, idx
     ) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return BlockedArray(
         map(b -> _split_helper(eltype(b), b, Val(N - 1), raw, idx), buf_v),
         blocksizes(buf_v, 1)
@@ -285,14 +352,11 @@ function _split_helper(
 end
 
 function _split_helper(::Type{<:AbstractArray}, buf_v::Tuple, ::Val{N}, raw, idx) where {N}
+    iszero(N) && return _split_helper((), buf_v, (), raw, idx)
     return ntuple(
         i -> _split_helper(eltype(buf_v[i]), buf_v[i], Val(N - 1), raw, idx),
         Val(length(buf_v))
     )
-end
-
-function _split_helper(::Type{<:AbstractArray}, buf_v, ::Val{0}, raw, idx)
-    return _split_helper((), buf_v, (), raw, idx)
 end
 
 function _split_helper(_, buf_v, _, raw, idx)
@@ -452,6 +516,8 @@ function _ducktyped_parameter_values(p, pind::ParameterIndex)
         return isempty(k) ? p.constant[i][j] : p.constant[i][j][k...]
     elseif portion === NONNUMERIC_PORTION
         return isempty(k) ? p.nonnumeric[i][j] : p.nonnumeric[i][j][k...]
+    elseif portion isa SciMLStructures.Caches
+        return isempty(k) ? p.caches[i][j] : p.caches[i][j][k...]
     else
         error("Unhandled portion $portion")
     end
@@ -501,11 +567,23 @@ function SymbolicIndexingInterface.set_parameter!(
             else
                 p.nonnumeric[i][j][k...] = val
             end
+        elseif portion isa SciMLStructures.Caches
+            if isempty(k)
+                p.caches[i][j] = val
+            else
+                p.caches[i][j][k...] = val
+            end
         else
             error("Unhandled portion $portion")
         end
     end
     return nothing
+end
+
+function restore_static_buffers(oldbufs::Tuple, newbufs::Tuple)
+    return ntuple(Val(length(newbufs))) do i
+        similar_type.(oldbufs[i], eltype(newbufs[i]))(newbufs[i])
+    end
 end
 
 function narrow_buffer_type_and_fallback_undefs(
@@ -565,8 +643,8 @@ function validate_parameter_type(ic::IndexCache, stype, sz, sym, index, val)
     if stype <: FnType
         stype = fntype_to_function_type(stype)
     end
-    # Nonnumeric parameters have to match the type
-    if portion === NONNUMERIC_PORTION
+    # Nonnumeric and cache parameters have to match the type
+    if portion === NONNUMERIC_PORTION || portion isa SciMLStructures.Caches
         val isa stype && return nothing
         throw(
             ParameterTypeException(
@@ -735,15 +813,9 @@ function __remake_buffer(indp, oldbuf::MTKParameters, idxs, vals; validate = tru
     if !ArrayInterface.ismutable(oldbuf)
         @set! newbuf.tunable = similar_type(oldbuf.tunable, eltype(newbuf.tunable))(newbuf.tunable)
         @set! newbuf.initials = similar_type(oldbuf.initials, eltype(newbuf.initials))(newbuf.initials)
-        @set! newbuf.discrete = ntuple(Val(length(newbuf.discrete))) do i
-            similar_type.(oldbuf.discrete[i], eltype(newbuf.discrete[i]))(newbuf.discrete[i])
-        end
-        @set! newbuf.constant = ntuple(Val(length(newbuf.constant))) do i
-            similar_type.(oldbuf.constant[i], eltype(newbuf.constant[i]))(newbuf.constant[i])
-        end
-        @set! newbuf.nonnumeric = ntuple(Val(length(newbuf.nonnumeric))) do i
-            similar_type.(oldbuf.nonnumeric[i], eltype(newbuf.nonnumeric[i]))(newbuf.nonnumeric[i])
-        end
+        @set! newbuf.discrete = restore_static_buffers(oldbuf.discrete, newbuf.discrete)
+        @set! newbuf.constant = restore_static_buffers(oldbuf.constant, newbuf.constant)
+        @set! newbuf.nonnumeric = restore_static_buffers(oldbuf.nonnumeric, newbuf.nonnumeric)
     end
     return newbuf
 end
@@ -751,9 +823,9 @@ end
 # For type-inference when using `SII.setp_oop`
 @generated function _remake_buffer(
         indp, oldbuf::MTKParameters{T, I, D, C, N, H},
-        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex{P}}},
+        idxs::Union{Tuple{Vararg{ParameterIndex}}, AbstractArray{<:ParameterIndex}},
         vals::Union{AbstractArray, Tuple}; validate = true
-    ) where {T, I, D, C, N, H, P}
+    ) where {T, I, D, C, N, H}
 
     # fallback to non-generated method if values aren't type-stable
     if vals <: AbstractArray && !isconcretetype(eltype(vals))
@@ -931,7 +1003,7 @@ end
                     Expr(
                         :tuple,
                         (
-                            :($similar_type($(fieldtype(C, i)), $(nonnumericT[i]))(nonnumerics[$i]))
+                            :($similar_type($(fieldtype(N, i)), $(nonnumericT[i]))(nonnumerics[$i]))
                                 for i in 1:length(nonnumericT)
                         )...
                     )
@@ -979,10 +1051,9 @@ end
 Base.size(::NestedGetIndex) = ()
 
 function SymbolicIndexingInterface.with_updated_parameter_timeseries_values(
-        ::AbstractSystem, ps::MTKParameters, args::Pair{A, B}...
-    ) where {
-        A, B <: NestedGetIndex,
-    }
+        ::AbstractSystem, ps::MTKParameters,
+        args::Pair{<:Any, <:NestedGetIndex}...
+    )
     for (i, ngi) in args
         for (j, val) in enumerate(ngi.x)
             copyto!(view(ps.discrete[j], Block(i)), val)
@@ -1008,6 +1079,16 @@ function SciMLBase.create_parameter_timeseries_collection(
     return ParameterTimeseriesCollection(Tuple(buffers), copy(ps))
 end
 
+function SciMLBase.create_parameter_timeseries_collection(
+        sys::AbstractSystem, ps::SciMLBase.DespecializedParameters, tspan
+    )
+    collection = SciMLBase.create_parameter_timeseries_collection(
+        sys, SciMLBase.unwrap_parameters(ps), tspan
+    )
+    collection === nothing && return nothing
+    return ParameterTimeseriesCollection(parent(collection), copy(ps))
+end
+
 @inline __get_blocks(tsidx::Int) = ()
 @inline function __get_blocks(tsidx::Int, buffer::BlockedArray, buffers...)
     return (buffer[Block(tsidx)], __get_blocks(tsidx, buffers...)...)
@@ -1022,6 +1103,15 @@ function SciMLBase.get_saveable_values(
     return NestedGetIndex(__get_blocks(timeseries_idx, ps.discrete...))
 end
 
+
+function SciMLBase.get_saveable_values(
+        sys::AbstractSystem, ps::SciMLBase.DespecializedParameters, timeseries_idx
+    )
+    return SciMLBase.get_saveable_values(
+        sys, SciMLBase.unwrap_parameters(ps), timeseries_idx
+    )
+end
+
 function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)
     ic = get_index_cache(indp_to_system(integ))
     ic === nothing && return
@@ -1034,16 +1124,16 @@ function save_callback_discretes!(integ::SciMLBase.DEIntegrator, callback)
     return
 end
 
-function DiffEqBase.anyeltypedual(
+function SciMLBase.anyeltypedual(
         p::MTKParameters, ::Type{Val{counter}} = Val{0}
     ) where {counter}
-    return DiffEqBase.anyeltypedual(p.tunable)
+    return SciMLBase.anyeltypedual(p.tunable)
 end
-function DiffEqBase.anyeltypedual(
+function SciMLBase.anyeltypedual(
         p::Type{<:MTKParameters{T}},
         ::Type{Val{counter}} = Val{0}
     ) where {counter} where {T}
-    return DiffEqBase.__anyeltypedual(T)
+    return SciMLBase.anyeltypedual(T)
 end
 
 # for compiling callbacks

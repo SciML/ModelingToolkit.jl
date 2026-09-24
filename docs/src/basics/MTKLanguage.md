@@ -4,10 +4,6 @@
 
 MTK represents components and connectors with `Model`.
 
-```@docs
-ModelingToolkit.Model
-```
-
 ## Components
 
 Components are models from various domains. These models contain unknowns and their
@@ -173,13 +169,13 @@ julia> ModelingToolkit.getdefault(model_c1.v)
 One or more partial systems can be extended in a higher system with `@extend` statements. This can be done in two ways:
 
   - `@extend PartialSystem(var1 = value1)`
-    
+
       + This is the recommended way of extending a base system.
       + The default values for the arguments of the base system can be declared in the `@extend` statement.
       + Note that all keyword arguments of the base system are added as the keyword arguments of the main system.
 
   - `@extend var_to_unpack1, var_to_unpack2 = partial_sys = PartialSystem(var1 = value1)`
-    
+
       + In this method: explicitly list the variables that should be unpacked, provide a name for the partial system and declare the base system.
       + Note that only the arguments listed out in the declaration of the base system (here: `var1`) are added as the keyword arguments of the higher system.
 
@@ -214,6 +210,8 @@ getdefault(model_c3.model_a.k_array[2])
 #### `@continuous_events` begin block
 
   - Defining continuous events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Continuous-Events).
+  - Continuous events have the form `*condition* => *affect*` where *condition* is an equation
+  - The block can also handle `if`-statements (evaluated at compilation) and unpacked lists defined by [comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions)
   - If this block is not defined in the model, no continuous events will be added.
   - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
@@ -228,15 +226,21 @@ using ModelingToolkit: t
     @variables begin
         x(t)
         y(t)
+        z(t)[1:3]
     end
     @equations begin
         x ~ k * D(x)
         D(y) ~ -k
+        [D(z[i]) ~ 1]...
     end
     @continuous_events begin
         [x ~ 1.5] => [x ~ 5, y ~ 5]
         [t ~ 4] => [x ~ 10]
         [t ~ 5] => [k ~ 3], [discrete_parameters = k]
+        if condition
+            [t ~ 6] => [x ~ Pre(x) + 1]
+        end
+        [[z[i] ~ 5] => [z[i] ~ Pre(z[i]) + i] for i in 1:3]...
     end
 end
 ```
@@ -245,6 +249,8 @@ end
 
   - Defining discrete events as described [here](https://docs.sciml.ai/ModelingToolkit/stable/basics/Events/#Discrete-events-support).
   - If this block is not defined in the model, no discrete events will be added.
+  - The block can also handle `if`-statements (evaluated at compilation) and unpacked lists defined by [comprehension](https://docs.julialang.org/en/v1/manual/arrays/#man-comprehensions)
+  - Discrete events have the form `*condition* => *affect*` where *condition* is a boolean expression
   - Discrete parameters and other keyword arguments should be specified in a vector, as seen below.
 
 ```@example mtkmodel-example
@@ -257,14 +263,20 @@ using ModelingToolkit
     @variables begin
         x(t)
         y(t)
+        z(t)[1:3]
     end
     @equations begin
         x ~ k * D(x)
         D(y) ~ -k
+        [D(z[i]) ~ 1]...
     end
     @discrete_events begin
         (t == 1.5) => [x ~ Pre(x) + 5, y ~ 5]
         (t == 2.5) => [k ~ Pre(k) * 2], [discrete_parameters = k]
+        if condition
+            [t == 6.5] => [x ~ Pre(x) + 1]
+        end
+        [(z[i] == 5) => [z[i] ~ Pre(z[i]) + i] for i in 1:3]...
     end
 end
 ```
@@ -316,7 +328,7 @@ MTK provides 3 distinct connectors:
 
   - `DomainConnector`: A connector which has only one unknown which is of `Flow` type,
     specified by `[connect = Flow]`.
-  - `StreamConnector`: A connector which has atleast one stream variable, specified by
+  - `StreamConnector`: A connector which has at least one stream variable, specified by
     `[connect = Stream]`. A `StreamConnector` must have exactly one flow variable.
   - `RegularConnector`: Connectors that don't fall under above categories.
 
@@ -365,7 +377,7 @@ end
 ```
 
 !!! note
-    
+
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ## [More on `Model.structure`](@id model_structure)
@@ -554,7 +566,7 @@ end
 
 ## Build structurally simplified models:
 
-`@mtkcompile` builds an instance of a component and returns a structurally simplied system.
+`@mtkcompile` builds an instance of a component and returns a structurally simplified system.
 
 ```julia
 @mtkcompile sys = CustomModel()

@@ -1,3 +1,6 @@
+[default.extend-identifiers]
+LambaEulerHeun = "LambaEulerHeun"
+
 [default.extend-words]
 nin = "nin"
 nd = "nd"
@@ -7,3 +10,11 @@ ser = "ser"
 isconnection = "isconnection"
 Ue = "Ue"
 Derivate = "Derivate"
+missings = "missings"
+alph = "alph"
+fo = "fo"
+shs = "shs"
+setp = "setp"
+CMO = "CMO"
+gam = "gam"
+Comput = "Comput"

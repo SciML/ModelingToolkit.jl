@@ -137,7 +137,7 @@ You can check the observed equations via the `observed` function:
 observed(fol)
 ```
 
-For more information on this process, see [Observables and Variable Elimination](@ref).
+For more information on this process, see [`observables`](@ref observables).
 
 MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
@@ -291,6 +291,7 @@ still is the problem using the `connected` system above):
 
 ```@example ode2
 using BenchmarkTools
+using OrdinaryDiffEqRosenbrock: Rodas4
 @btime solve(prob, Rodas4());
 nothing # hide
 ```

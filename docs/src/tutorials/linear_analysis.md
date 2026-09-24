@@ -21,7 +21,7 @@ connect(comp1.output, :analysis_point_name, comp2.input, comp3.input, comp4.inpu
 ```
 
 !!! warning "Causality"
-    
+
     Analysis points are *causal*, i.e., they imply a directionality for the flow of information. The order of the connections in the connect statement is thus important, i.e., `connect(out, :name, in)` is different from `connect(in, :name, out)`.
 
 The directionality of an analysis point can be thought of as an arrow in a block diagram, where the name of the analysis point applies to the arrow itself.
@@ -35,6 +35,18 @@ The directionality of an analysis point can be thought of as an arrow in a block
 ```
 
 This is signified by the name being the middle argument to `connect`.
+
+An analysis point of a built model is referred to by property access on the system in
+which it was created, `sys.analysis_point_name`, and the functions above accept the
+[`AnalysisPoint`](@ref) this returns. A point belonging to a subsystem is reached through
+the hierarchy, `sys.inner.analysis_point_name`. The system must be the unsimplified and
+uncompleted model, since both `mtkcompile` and `complete` remove the analysis points.
+
+!!! warning "Old style"
+
+    Referring to an analysis point by its `Symbol` name, as in
+    `get_sensitivity(sys, :plant_input)`, is the old style and is retained only for
+    backwards compatibility. It will be deprecated.
 
 Of the above mentioned functions, all except for [`open_loop`](@ref) return the output of [`ModelingToolkit.linearize`](@ref), which is
 
@@ -67,8 +79,8 @@ eqs = [connect(P.output, :plant_output, C.input)  # Connect with an automaticall
        connect(C.output, :plant_input, P.input)]
 sys = System(eqs, t, systems = [P, C], name = :feedback_system)
 
-matrices_S = get_sensitivity(sys, :plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
-matrices_T = get_comp_sensitivity(sys, :plant_input)[1]
+matrices_S = get_sensitivity(sys, sys.plant_input)[1] # Compute the matrices of a state-space representation of the (input)sensitivity function.
+matrices_T = get_comp_sensitivity(sys, sys.plant_input)[1]
 ```
 
 Continued linear analysis and design can be performed using ControlSystemsBase.jl.
@@ -95,7 +107,7 @@ T = comp_sensitivity(P, C) # or feedback(P*C)
 We may also derive the loop-transfer function $L(s) = P(s)C(s)$ using
 
 ```@example LINEAR_ANALYSIS
-matrices_L = get_looptransfer(sys, :plant_output)[1]
+matrices_L = get_looptransfer(sys, sys.plant_output)[1]
 L = ss(matrices_L...)
 ```
 
@@ -109,7 +121,7 @@ To obtain the transfer function between two analysis points, we call `linearize`
 
 ```@example LINEAR_ANALYSIS
 using ModelingToolkit # hide
-matrices_PS = linearize(sys, :plant_input, :plant_output)[1]
+matrices_PS = linearize(sys, sys.plant_input, sys.plant_output)[1]
 ```
 
 this particular transfer function should be equivalent to the linear system `P(s)S(s)`, i.e., equivalent to
@@ -139,6 +151,17 @@ margin(P)
 ```@example LINEAR_ANALYSIS_CS
 nyquistplot(P)
 ```
+
+## Operating Point of Unconnected Inputs After Loop Openings
+When a connection is broken via `loop_openings`, the downstream input variable(s) that were previously driven by the connection become free. The value assigned to these inputs determines the operating point at which the linearization is computed, which is significant for nonlinear systems where the Jacobian depends on the operating point.
+Semantics: The variable introduced by a loop opening is treated as a parameter of the system, not as an additional input to the linearization. It does not appear as an extra column in the $B$ or $D$ matrices of the linearized state-space model. No default value is automatically propagated from the output side of the broken connection — the user is expected to provide the value explicitly via the operating point (e.g., `op = [u => value`]).
+For initialization, variables that become free due to loop openings are treated as solvable parameters: the initialization system always considers them as unknowns. If the user provides a value in the operating point, that value is used. If no value is provided, the initialization system will attempt to determine a consistent value, but the system may be underdetermined and a warning will be issued.
+Motivation: This design reflects a series of tradeoffs discovered through iteration:
+
+- Defaulting free inputs to zero (the original behavior) is incorrect for nonlinear systems because it changes the linearization point relative to the equilibrium, potentially yielding meaningless results.
+- Automatically propagating the output value of the broken connection preserves the correct operating point in some cases, makes it impossible to disconnect input sources (e.g., a Step signal). It also silently determines the operating point in a way that is difficult for the user to inspect or override.
+- Making the variable a parameter (rather than a linearization input) prevents it from appearing as an extra input dimension in the linearized system. The user requested a linearization from specific inputs to specific outputs; the broken connection's input is not one of them.
+- Requiring the user to explicitly provide the operating point for broken connections makes the linearization well-defined and inspectable. If the user wants the value that would have been present with the loop closed, they can determine this from a simulation or an initialization solution and pass it explicitly.
 
 ## Index
 

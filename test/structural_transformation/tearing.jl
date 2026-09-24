@@ -1,7 +1,6 @@
 using Test
 using ModelingToolkit
 using ModelingToolkit: Equation, observed
-using ModelingToolkit.StructuralTransformations: SystemStructure
 using NonlinearSolve
 using LinearAlgebra
 using UnPack
@@ -9,11 +8,14 @@ using SymbolicIndexingInterface
 using ModelingToolkit: t_nounits as t, D_nounits as D
 import StateSelection
 import SymbolicUtils as SU
+using ForwardDiff
+import ModelingToolkitTearing as MTKTearing
+
 ###
 ### Nonlinear system
 ###
 @constants h = 1
-@variables u1(t) u2(t) u3(t) u4(t) u5(t)
+@variables u1(t) u2(t) u3(t) u4(t) u5(t) [state_priority = 10]
 eqs = [
     0 ~ u1 - sin(u5) * h,
     0 ~ u2 - cos(u1),
@@ -65,7 +67,8 @@ graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
 
 newsys = tearing(sys)
 @test length(equations(newsys)) == 1
-@test issetequal(SU.search_variables(equations(newsys)), [u1, u4, u5])
+vars = SU.search_variables(equations(newsys))
+@test issetequal(vars, [u1, u4, u5]) || issetequal(vars, [h, u1, u5])
 
 # Before:
 #      u1  u2  u3  u4  u5
@@ -100,16 +103,32 @@ newsys = tearing(sys)
 # --------------------|-----
 # e5 [  1           1 |  1 ]
 
-let state = TearingState(sys)
-    result, = tearing(state)
-    S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
-    @test S == [
-        1 0 0 0 1
-        1 1 0 0 0
-        1 1 1 0 0
-        0 1 1 1 0
-        1 0 0 1 1
-    ]
+# Variable and equation ordering changes with version
+if v"1.12" <= VERSION < v"1.13"
+    let state = TearingState(sys)
+        result, = tearing(state)
+        S = StructuralTransformations.reordered_matrix(sys, result.var_eq_matching)
+        # Tearing `u5` or tearing `u1` (the two arrangements diagrammed above) are both
+        # valid maximal matchings; which one the heuristic picks depends on the
+        # lexicographic equation sort in `TearingState`, whose strings depend on the
+        # symbolic backend's term ordering (e.g. it flipped with a SymbolicUtils hashing
+        # change, see #4619). Accept either, like the `vars` test above does.
+        S_tear_u5 = [
+            1 0 0 0 1
+            1 1 0 0 0
+            1 1 1 0 0
+            0 1 1 1 0
+            1 0 0 1 1
+        ]
+        S_tear_u1 = [
+            1 0 0 1 1
+            0 1 0 0 1
+            0 1 1 0 1
+            0 1 1 1 0
+            1 0 0 0 1
+        ]
+        @test S == S_tear_u5 || S == S_tear_u1
+    end
 end
 
 # unknowns: u5
@@ -124,8 +143,8 @@ end
 # solve for
 # 0 = u5 - hypot(sin(u5), hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))))
 tornsys = complete(tearing(sys))
-@test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)])
-prob = NonlinearProblem(tornsys, [u5 => 1.0])
+@test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)]) || isequal(equations(tornsys), [0 ~ u1 - h * sin(u5)])
+prob = NonlinearProblem(tornsys, [u5 => 1.0, u1 => 1.0])
 sol = solve(prob, NewtonRaphson())
 @test norm(prob.f(sol.u, sol.prob.p)) < 1.0e-10
 
@@ -148,7 +167,7 @@ newsys = tearing(nlsys)
 ###
 using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @parameters p
-@variables x(t) y(t) z(t)
+@variables x(t) [state_priority = 1] y(t) z(t)
 eqs = [
     D(x) ~ z * h
     0 ~ x - y
@@ -156,7 +175,7 @@ eqs = [
 ]
 @named daesys = System(eqs, t)
 newdaesys = mtkcompile(daesys)
-@test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ y + sin(z) - p * t])
+@test issetequal(equations(newdaesys), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t])
 @test issetequal(
     equations(tearing_substitution(newdaesys)), [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 )
@@ -219,55 +238,36 @@ prob_complex = ODEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
 
-using ModelingToolkitStandardLibrary.Electrical
-using ModelingToolkitStandardLibrary.Blocks: Constant
-
-function RCModel(; name)
-    pars = @parameters begin
-        R = 1.0
-        C = 1.0
-        V = 1.0
-    end
-    systems = @named begin
-        resistor1 = Resistor(R = R)
-        resistor2 = Resistor(R = R)
-        capacitor = Capacitor(C = C, v = 0.0)
-        source = Voltage()
-        constant = Constant(k = V)
-        ground = Ground()
-    end
-    eqs = [
-        connect(constant.output, source.V)
-        connect(source.p, resistor1.p)
-        connect(resistor1.n, resistor2.p)
-        connect(resistor2.n, capacitor.p)
-        connect(capacitor.n, source.n, ground.g)
-    ]
-    return System(eqs, t, [], pars; systems, name)
-end
-
-
 @testset "Inline linear SCCs" begin
-    reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true)
-    reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 0)
-    @mtkcompile sys1 = RCModel()
-    @mtkcompile sys2 = RCModel() reassemble_alg = reassemble_alg1
-    @mtkcompile sys3 = RCModel() reassemble_alg = reassemble_alg2
+    reassemble_alg0 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    reassemble_alg1 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    reassemble_alg2 = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 5)
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys1 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg0
+    @mtkcompile sys2 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg1
+    @mtkcompile sys3 = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg2
 
-    @test length(equations(sys1)) == 2
-    @test length(equations(sys2)) == 1
-    @test isequal(only(unknowns(sys2)), sys2.capacitor.v)
-    @test length(equations(sys3)) == 1
-    @test isequal(only(unknowns(sys3)), sys3.capacitor.v)
+    @test length(equations(sys1)) > 3
+    @test length(equations(sys2)) == 3
+    @test length(equations(sys3)) == 3
 
-    idx = findfirst(isequal(sys3.capacitor.i), observables(sys3))
-    rhs = observed(sys3)[idx].rhs
-    @test operation(rhs) === getindex
-    @test operation(arguments(rhs)[1]) === (\)
+    idx = findfirst(observed(sys2)) do eq
+        arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
+    end
+    @test idx !== nothing
+    # This one is analytically solved
+    idx = findfirst(observed(sys3)) do eq
+        arr, isarr = ModelingToolkit.MTKBase.split_indexed_var(eq.rhs)
+        isarr && iscall(arr) && operation(arr) === MTKTearing.INLINE_LINEAR_SCC_OP
+    end
+    @test idx === nothing
 
-    prob1 = ODEProblem(sys1, [], (0.0, 10.0); guesses = [sys1.resistor1.v => 1.0])
-    prob2 = ODEProblem(sys2, [], (0.0, 10.0))
-    prob3 = ODEProblem(sys3, [], (0.0, 10.0))
+    pval = rand(3, 3)
+    prob1 = ODEProblem(sys1, [x => ones(3), p => pval], (0.0, 10.0); guesses = [y => ones(3)])
+    prob2 = ODEProblem(sys2, [x => ones(3), p => pval], (0.0, 10.0))
+    prob3 = ODEProblem(sys3, [x => ones(3), p => pval], (0.0, 10.0))
 
     sol1 = solve(prob1, Rodas5P(); abstol = 1.0e-8, reltol = 1.0e-8)
     sol2 = solve(prob2, Tsit5(), abstol = 1.0e-8, reltol = 1.0e-8)
@@ -277,13 +277,39 @@ end
     @test SciMLBase.successful_retcode(sol2)
     @test SciMLBase.successful_retcode(sol3)
 
-    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
-    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u atol = 1.0e-8
+    @test sol2(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u rtol = 1.0e-6
+    @test sol3(sol1.t; idxs = unknowns(sys1)).u ≈ sol1.u rtol = 1.0e-6
 end
 
 @testset "`Initial` parameters are added for observed variables solved by inline linear SCCS" begin
     reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
-    @mtkcompile sys = RCModel() reassemble_alg = reassemble_alg
-    @test Initial(sys.resistor1.v) in Set(ModelingToolkit.get_ps(sys))
-    @test Initial(sys.resistor2.v) in Set(ModelingToolkit.get_ps(sys))
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    @test Initial(y) in Set(ModelingToolkit.get_ps(sys))
+end
+
+@testset "AD through inline linear SCCs works" begin
+    reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = true, analytical_linear_scc_limit = 1)
+    @variables x(t)[1:3] y(t)[1:3]
+    @parameters p[1:3, 1:3]
+    @mtkcompile sys = System([D(x) ~ x, p * y ~ x], t) reassemble_alg = reassemble_alg
+    prob = ODEProblem(sys, [x => [1.0, 2.3, 5.7], p => rand(3, 3)], (0.0, 10.0))
+    @assert prob.p.caches[1] isa
+        Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+    @assert SciMLBase.has_initializeprob(prob.f)
+
+    setter = setsym_oop(prob, [p[1, 1]])
+
+    function loss(x)
+        new_u0, new_p = setter(prob, x)
+        new_prob = remake(prob; p = new_p)
+        sol = solve(new_prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8)
+        return sol[sys.y[1]][end]
+    end
+
+    # Primal works: returns ~0.993
+    @test_nowarn loss([1.0])
+
+    @test_nowarn ForwardDiff.gradient(loss, [1.0])
 end

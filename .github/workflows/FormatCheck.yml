@@ -11,9 +11,6 @@ on:
 
 jobs:
   runic:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: fredrikekre/runic-action@v1
-        with:
-          version: '1'
+    name: "Runic"
+    uses: "SciML/.github/.github/workflows/runic.yml@v1"
+    secrets: "inherit"

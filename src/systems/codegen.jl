@@ -118,7 +118,7 @@ const LINEAR_MATRIX_PARAM_NAME = :linear_Aₘₜₖ
     $(TYPEDSIGNATURES)
 
 Return a symbolic variable representing the `A` matrix returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_linear_matrix_param(size::NTuple{2, Int})
     m, n = size
@@ -129,7 +129,7 @@ end
     $(TYPEDSIGNATURES)
 
 Return the name of the `i`th matrix in `B` returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_quadratic_form_name(i::Int)
     return Symbol(:quadratic_Bₘₜₖ_, i)
@@ -139,7 +139,7 @@ end
     $(TYPEDSIGNATURES)
 
 Return a symbolic variable representing the `i`th matrix in `B` returned from
-[`calculate_semiquadratic_form`](@ref).
+`calculate_semiquadratic_form`.
 """
 function get_quadratic_form_param(sz::NTuple{2, Int}, i::Int)
     m, n = sz
@@ -190,8 +190,8 @@ end
 
 Generate `f1` and `f2` for [`SemilinearODEFunction`](@ref) (internally represented as a
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). This expects that the system has the necessary
-extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+`calculate_semiquadratic_form`. This expects that the system has the necessary
+extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 
@@ -204,10 +204,13 @@ $SEMILINEAR_A_B_C_CONSTRAINT
 $(MTKBase.EXPERIMENTAL_WARNING)
 """
 function generate_semiquadratic_functions(
-        sys::System, A, B, C; stiff_linear = true,
-        stiff_quadratic = false, stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys::System, A, B, C, opts::GeneratedFunctionOptions;
+        stiff_linear::Bool = true, stiff_quadratic::Bool = false,
+        stiff_nonlinear::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     if A === nothing && B === nothing
         throw(ArgumentError("Cannot generate split form for the system - it has no linear or quadratic part."))
     end
@@ -334,25 +337,33 @@ function generate_semiquadratic_functions(
     end
 
     f1_iip = build_function_wrapper(
-        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f1_iip_ir, expression = Val{true}, kwargs...
-    )
+        sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 2, p_start = 3, extra_assignments = f1_iip_ir,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
     f2_iip = build_function_wrapper(
-        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = f2_iip_ir, expression = Val{true}, kwargs...
-    )
+        sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 2, p_start = 3, extra_assignments = f2_iip_ir,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
     f1_oop = build_function_wrapper(
-        sys, f1_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
-    )
-    if f1_oop isa NTuple{2, Expr}
-        f1_oop = f1_oop[1]
-    end
+        sys, f1_expr, [Any[dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
     f2_oop = build_function_wrapper(
-        sys, f2_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
-    )
-    if f2_oop isa NTuple{2, Expr}
-        f2_oop = f2_oop[1]
-    end
+        sys, f2_expr, [Any[dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
+    )[1]
 
     f1 = maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)),
@@ -371,9 +382,9 @@ end
 
 Generate the jacobian of `f1` for [`SemilinearODEFunction`](@ref) (internally represented as a
 `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
+`calculate_semiquadratic_form`. `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 
@@ -386,10 +397,13 @@ $SEMILINEAR_A_B_C_CONSTRAINT
 $EXPERIMENTAL_WARNING
 """
 function generate_semiquadratic_jacobian(
-        sys::System, A, B, C, Cjac; sparse = false, stiff_linear = true, stiff_quadratic = false,
-        stiff_nonlinear = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
+        sys::System, A, B, C, Cjac, opts::GeneratedFunctionOptions;
+        sparse::Bool = false, stiff_linear::Bool = true, stiff_quadratic::Bool = false,
+        stiff_nonlinear::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     if sparse
         error("Sparse analytical jacobians for split ODEs is not implemented.")
     end
@@ -516,13 +530,19 @@ function generate_semiquadratic_jacobian(
     end
     oop_expr = length(terms) == 1 ? only(terms) : term(+, terms...)
 
-    j_iip = build_function_wrapper(
-        sys, nothing, Symbolics.DEFAULT_OUTSYM, dvs, ps..., iv; p_start = 3,
-        extra_assignments = iip_ir, expression = Val{true}, kwargs...
+    j_iip, _ = build_function_wrapper(
+        sys, nothing, [Any[Symbolics.DEFAULT_OUTSYM, dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 2, p_start = 3, extra_assignments = iip_ir,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
     )
-    j_oop,
-        _ = build_function_wrapper(
-        sys, oop_expr, dvs, ps..., iv; expression = Val{true}, kwargs...
+    j_oop, _ = build_function_wrapper(
+        sys, oop_expr, [Any[dvs]; ps; Any[iv]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = ConstructionBase.setproperties(opts.codegen, (; iip_config = (true, false)))
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)),
@@ -535,9 +555,9 @@ end
 
 Return the sparsity pattern of the  jacobian of `f1` for [`SemilinearODEFunction`](@ref)
 (internally represented as a `SplitFunction`). `A`, `B`, `C` are the matrices returned from
-[`calculate_semiquadratic_form`](@ref). `Cjac` is the jacobian of `C` with respect to the
+`calculate_semiquadratic_form`. `Cjac` is the jacobian of `C` with respect to the
 unknowns of the system, or `nothing` if `C === nothing`. This expects that the system has the
-necessary extra parmameters added by [`add_semiquadratic_parameters`](@ref).
+necessary extra parameters added by `add_semiquadratic_parameters`.
 
 ## Keyword Arguments
 
@@ -572,6 +592,6 @@ function get_semiquadratic_W_sparsity(
         jac .+= Cjac
     end
     M_sparsity = mm isa UniformScaling ? sparse(I, M, N) :
-        SparseMatrixCSC{Bool, Int64}((!iszero).(mm))
+        SparseMatrixCSC{Bool, Int}((!iszero).(mm))
     return (!_iszero).(jac) .| M_sparsity
 end

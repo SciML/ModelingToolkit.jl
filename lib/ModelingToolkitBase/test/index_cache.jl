@@ -1,5 +1,15 @@
 using ModelingToolkitBase, SymbolicIndexingInterface, SciMLStructures
-using ModelingToolkitBase: t_nounits as t
+using ModelingToolkitBase: t_nounits as t, D_nounits as D, SymbolicDiscreteCallback
+using OrdinaryDiffEq
+using OrdinaryDiffEqRosenbrock
+using SciMLBase
+import SymbolicUtils as SU
+using PreallocationTools: DiffCache
+using ForwardDiff
+using Symbolics: unwrap
+using Setfield: @set!
+import DifferentiationInterface as DI
+using ADTypes
 using Test
 
 # Ensure indexes of array symbolics are cached appropriately
@@ -77,6 +87,7 @@ end
     @test_throws ArgumentError reorder_dimension_by_tunables!(dst, sys, src, [p, q, r])
     @test_throws ArgumentError reorder_dimension_by_tunables(sys, src, [p, q, r])
     sys = complete(sys)
+    @test parameter_index(sys, r[:, 1]).idx == [5, 6]
     # and the arrays must have matching size
     @test_throws ArgumentError reorder_dimension_by_tunables!(
         zeros(2, 4), sys, src, [p, q, r]
@@ -122,4 +133,76 @@ end
     ss = @test_nowarn complete(sys)
     @test length(parameters(ss)) == 1
     @test !is_timeseries_parameter(ss, p_1)
+end
+
+@testset "Old index cache doesn't influence new index cache construction" begin
+    @variables x(t)
+    @discretes d(t)
+    @named sys = System([D(x) ~ t + 2], t)
+    sys = complete(sys)
+    @set! sys.discrete_events = [SymbolicDiscreteCallback(x > 1, [d ~ Pre(d) + 1]; discrete_parameters = [d])]
+    @set! sys.ps = [unwrap(d)]
+    # This used to throw, since `d` wasn't a parameter before and thus not present in
+    # the `IndexCache`. This failed the construction of the subsequent `IndexCache`, since
+    # it uses `is_parameter` to check if `discrete_parameters` are in the parameters of
+    # the system.
+    @test_nowarn complete(sys)
+end
+
+@testset "Special `DiffCache` params" begin
+    @variables x(t)
+    @named sys = System([D(x) ~ 2x + t], t)
+    sys, dcp = ModelingToolkitBase.add_diffcache(sys, 8)
+
+    @test SU.symtype(dcp) === SU.FnType{Tuple, Any, Any}
+    sys = complete(sys)
+    prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
+    # `DiffCache`s are scratch that generated code writes active values into, so they
+    # live in the AD-shadowed `caches` portion, not the Enzyme-inactive `nonnumeric` one.
+    @test isempty(prob.p.nonnumeric)
+    @test only(prob.p.caches) isa Vector{ModelingToolkitBase.DiffCacheAllocatorAPIWrapper{Float64}}
+    # generated code destructures `MTKParameters` through linear indexing
+    @test prob.p[length(prob.p)] === only(prob.p.caches)
+    @test copy(prob.p) == prob.p
+    diffcachewrapper = prob.ps[dcp]
+    arr = diffcachewrapper(1.0, (2, 2, 2))
+    @test arr isa Array{Float64, 3}
+    @test size(arr) == (2, 2, 2)
+    dual = ForwardDiff.Dual(1.0)
+    arr = diffcachewrapper(dual, (4, 2))
+    @test arr isa AbstractMatrix{typeof(dual)}
+    @test size(arr) == (4, 2)
+
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+    idata = prob.f.initialization_data
+    @test_nowarn @inferred idata.metadata.oop_reconstruct_u0_p.pgetter(prob, idata.initializeprob)
+end
+
+function costfn(theta, ps)
+    setter, prob, getter = ps
+    p = setter(prob, theta)
+    newprob = SciMLBase.remake(prob; p)
+    sol = solve(newprob, Rodas5P(); saveat = 0.1)
+    return sum(abs2, getter(sol))
+end
+
+@testset "gradients with special `DiffCache` params" begin
+    @variables x(t)
+    @parameters p1 = 2.0 p2 = 3.0
+    @named sys = System([D(x) ~ -p1 * x + p2 * t], t)
+    sys, _ = ModelingToolkitBase.add_diffcache(sys, 4)
+    sys = complete(sys)
+
+    prob = ODEProblem{true, SciMLBase.FullSpecialize}(sys, [x => 1.0], (0.0, 1.0))
+    setter = setp_oop(prob, [p1, p2])
+    getter = getsym(prob, x)
+
+    ps = (setter, prob, getter)
+    @test costfn([2.0, 3.0], ps) ≠ zeros(2)
+    prep = DI.prepare_gradient(Base.Fix2(costfn, ps), AutoForwardDiff(), [2.0, 3.0])
+    if VERSION >= v"1.12-" && VERSION < v"1.13-"
+        @test_nowarn @inferred DI.gradient(Base.Fix2(costfn, ps), prep, AutoForwardDiff(), [2.0, 3.0])
+    else
+        @test_nowarn DI.gradient(Base.Fix2(costfn, ps), prep, AutoForwardDiff(), [2.0, 3.0])
+    end
 end

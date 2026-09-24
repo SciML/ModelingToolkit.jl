@@ -8,9 +8,11 @@ a key but `x[1]` cannot.
 struct AtomicArrayDict{V, D <: AbstractDict{SymbolicT, V}} <: AbstractDict{SymbolicT, V}
     dict::D
 
-    function AtomicArrayDict(dict::AbstractDict{SymbolicT, V}) where {V}
-        for k in keys(dict)
-            validate_atomic_array_key(k)
+    function AtomicArrayDict(dict::AbstractDict{SymbolicT, V}; __check = true) where {V}
+        if __check
+            for k in keys(dict)
+                validate_atomic_array_key(k)
+            end
         end
         return new{V, typeof(dict)}(dict)
     end
@@ -41,7 +43,7 @@ function validate_atomic_array_key(k::SymbolicT)
     return split_indexed_var(k)[2] && throw(IndexedArrayKeyError(k))
 end
 
-Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict))
+Base.copy(dd::AtomicArrayDict) = AtomicArrayDict(copy(dd.dict); __check = false)
 function Base.empty(dd::AtomicArrayDict, ::Type{K}, ::Type{V}) where {K, V}
     return AtomicArrayDict(empty(dd.dict, K, V))
 end
@@ -59,7 +61,11 @@ Base.getindex(dd::AtomicArrayDict, k) = dd.dict[k]
 
 function Base.setindex!(dd::AtomicArrayDict, v, k)
     k = unwrap(k)
-    validate_atomic_array_key(unwrap(k))
+    validate_atomic_array_key(k)
+    return __unsafe_aad_setindex!(dd, v, k)
+end
+
+function __unsafe_aad_setindex!(dd::AtomicArrayDict, v, k::SymbolicT)
     return setindex!(dd.dict, v, k)
 end
 
@@ -117,6 +123,7 @@ function write_possibly_indexed_array!(dd::AtomicArrayDict{SymbolicT}, k::Symbol
         else
             fill(default, size(arr))
         end
+        isempty(buffer) && return dd
         idx = get_stable_index(k)
         buffer[idx] = v
         if all(SU.isconst, buffer)
@@ -198,7 +205,12 @@ end
 Convert an array of possibly scalarized variables into an `AtomicArraySet`.
 """
 as_atomic_array_set(vars::Vector{SymbolicT}) = as_atomic_array_set(Dict{SymbolicT, Nothing}, vars)
-function as_atomic_array_set(::Type{D}, vars::Vector{SymbolicT}) where {D}
+as_atomic_array_set(vars::Vector) = as_atomic_array_set(Vector{SymbolicT}(map(unwrap, vars)))
+as_atomic_array_set(vars::AtomicArraySet) = vars
+function as_atomic_array_set(
+        ::Type{D},
+        vars::Union{AbstractVector{SymbolicT}, AbstractSet{SymbolicT}}
+    ) where {D}
     set = AtomicArraySet{D}()
     for v in vars
         push_as_atomic_array!(set, v)
@@ -238,10 +250,16 @@ const AADSubWrapper{D} = AtomicArrayDictSubstitutionWrapper{D}
 
 Base.get(def::Base.Callable, dd::AADSubWrapper, k) = def()
 function Base.get(def::Base.Callable, dd::AADSubWrapper, k::SymbolicT)
-    arr, isarr = split_indexed_var(k)
     res = get_possibly_indexed(dd.dict, k, dd.default)
     if res === dd.default
+        arr, isarr = split_indexed_var(k)
         isarr && haskey(dd.dict, arr) && return k
+        return def()
+    end
+    if SU.is_array_shape(SU.shape(k)) && any(
+            Base.Fix2(===, dd.default) ∘ Base.Fix1(getindex, res),
+            SU.stable_eachindex(res)
+        )
         return def()
     end
     return res

@@ -90,6 +90,7 @@ macro.
 connect
 domain_connect
 @connector
+Connection
 ```
 
 Connections can be expanded using `expand_connections`.
@@ -115,6 +116,13 @@ for more information.
 instream
 ```
 
+Connectors marked as 3D multibody frames carry a rotation matrix, from which the angular
+velocity of the frame can be computed.
+
+```@docs
+ModelingToolkit.get_w
+```
+
 ### System composition utilities
 
 ```@docs
@@ -137,9 +145,15 @@ flatten
 and also perform other optimizations. This is done via the `mtkcompile` function. Connection expansion
 and flattening are preprocessing steps of simplification.
 
+`structural_simplify` and `@mtkbuild` are the deprecated ModelingToolkit v9 spellings. They
+forward to `mtkcompile`/`@mtkcompile` after emitting a deprecation warning, and are
+documented here so that the warning has a target to look up.
+
 ```@docs
 mtkcompile
 @mtkcompile
+structural_simplify
+@mtkbuild
 ```
 
 It is also possible (though not always advisable) to build numerical problems from systems without
@@ -150,6 +164,7 @@ calls `complete` internally.
 
 ```@docs
 complete
+@mtkcomplete
 ```
 
 ### Exploring the results of simplification
@@ -182,6 +197,7 @@ in the model. They compile to standard callbacks from `DiffEqCallbacks.jl`.
 ```@docs
 ModelingToolkit.SymbolicContinuousCallback
 ModelingToolkit.SymbolicDiscreteCallback
+ModelingToolkit.AssignmentAffect
 ```
 
 The affect functions for the above callbacks can be symbolic or user-defined functions.
@@ -190,6 +206,18 @@ section of the documentation. User-defined functions can be used via `Imperative
 
 ```@docs
 ModelingToolkit.ImperativeAffect
+```
+
+## Jump processes
+
+Systems can contain jumps, which are handled by
+[JumpProcesses.jl](https://docs.sciml.ai/JumpProcesses/stable/). The jump types of that
+package are used directly, with the exception of mass action jumps: symbolic rate
+expressions must already carry their combinatorial scaling, so ModelingToolkit provides a
+constructor that builds a `MassActionJump` without rescaling the rate.
+
+```@docs
+SymbolicMassActionJump
 ```
 
 ## Modelingtoolkitize
@@ -238,41 +266,14 @@ variables are only defined at points where the clock ticks.
 
 While ModelingToolkit is unable to simplify, compile and solve such systems on its own, it
 has the ability to represent them. Compilation strategies can be implemented independently
-on top of [`mtkcompile`](@ref) using the `additional_passes` functionality.
+on top of [`ModelingToolkitBase.mtkcompile`](@ref) using the `additional_passes` functionality.
 
 !!! warn
-    
+
     These operators are considered experimental API.
 
 ```@docs; canonical = false
 Sample
 Hold
 SampleTime
-```
-
-ModelingToolkit uses the clock definition in SciMLBase
-
-```@docs
-SciMLBase.TimeDomain
-SciMLBase.Clock
-SciMLBase.SolverStepClock
-SciMLBase.Continuous
-```
-
-### State machines
-
-While ModelingToolkit has the capability to represent state machines, it lacks the ability
-to compile and simulate them.
-
-!!! warn
-    
-    This functionality is considered experimental API
-
-```@docs
-initial_state
-transition
-activeState
-entry
-ticksInState
-timeInState
 ```

@@ -2,22 +2,32 @@
 # The call to Link(; m = 0.2, l = 10, I = 1, g = -9.807) hangs forever on Julia v1.6
 using LinearAlgebra
 using ModelingToolkit
+import ModelingToolkitTearing as MTKTearing
 using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
 using ModelingToolkitStandardLibrary.Mechanical.TranslationalPosition
 using Test
+import Symbolics
 import NonlinearSolve
+using Setfield: @set
 
 using ControlSystemsMTK
+using ControlSystemsBase
 using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
+using OrdinaryDiffEq
 connect = ModelingToolkit.connect
+
+function rm_bindings(sys)
+    return @set sys.bindings = empty(bindings(sys))
+end
 
 @independent_variables t
 D = Differential(t)
 
 @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
-@named cart = TranslationalPosition.Mass(; m = 1, s = 0)
+link1 = rm_bindings(link1)
+@named cart = TranslationalPosition.Mass(; m = 1)
 @named fixed = Fixed()
 @named force = Force(use_support = false)
 
@@ -33,14 +43,15 @@ lin_inputs = [force.f.u]
 
 # => nothing to remove extra defaults
 op = Dict(
-    cart.s => 10, cart.v => 0, link1.A => -pi / 2, link1.dA => 0, force.f.u => 0,
-    link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => nothing
+    cart.v => 0, link1.A => -pi / 2, link1.dA => 0, force.f.u => 0,
+    link1.x1 => nothing, link1.y1 => nothing, link1.x2 => nothing, link1.x_cm => 0
 )
 guesses = [link1.fx1 => 0]
 @info "named_ss"
 G = named_ss(
     model, lin_inputs, lin_outputs; allow_symbolic = true, op,
-    allow_input_derivatives = true, zero_dummy_der = true, guesses
+    allow_input_derivatives = true, zero_dummy_der = false, guesses,
+    balance = true,
 )
 G = sminreal(G)
 @info "minreal"
@@ -51,26 +62,23 @@ ps = poles(G)
 @test minimum(abs, ps) < 1.0e-6
 @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1.0e-10
 
-lsys,
-    syss = linearize(
+lin_fun, ssys = ModelingToolkit.linearization_function(
     model, lin_inputs, lin_outputs, allow_symbolic = true, op = op,
-    allow_input_derivatives = true, zero_dummy_der = true, guesses = guesses
-)
+    zero_dummy_der = false, guesses = guesses,
+    reassemble_alg = MTKTearing.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+);
+lsys, = ModelingToolkit.linearize(ssys, lin_fun; op, allow_input_derivatives = true);
 lsyss,
     sysss = ModelingToolkit.linearize_symbolic(
     model, lin_inputs, lin_outputs;
-    allow_input_derivatives = true
+    allow_input_derivatives = true, allow_symbolic = true,
 )
 
-dummyder = setdiff(unknowns(sysss), unknowns(model))
-# op2 = merge(ModelingToolkit.guesses(model), op, Dict(x => 0.0 for x in dummyder))
-op2 = merge(ModelingToolkit.defaults(syss), op)
-op2[link1.fy1] = -op2[link1.g] * op2[link1.m]
-op2[cart.f] = 0
+integ = init(lin_fun.prob, Rodas5P())
 
-@test substitute(lsyss.A, op2) ≈ lsys.A
-# We cannot pivot symbolically, so the part where a linear solve is required
-# is not reliable.
-@test substitute(lsyss.B, op2)[1:6, 1] ≈ lsys.B[1:6, 1]
-@test substitute(lsyss.C, op2) ≈ lsys.C
-@test substitute(lsyss.D, op2) ≈ lsys.D
+lsyss2 = (;
+    A = integ[lsyss.A], B = integ[lsyss.B],
+    C = integ[lsyss.C], D = integ[lsyss.D],
+)
+
+@test tf(ss(lsyss2...)) ≈ tf(ss(lsys...)) atol = 1.0e-8

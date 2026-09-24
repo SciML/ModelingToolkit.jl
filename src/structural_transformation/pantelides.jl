@@ -4,6 +4,21 @@
 
 const NOTHING_EQ = nothing ~ nothing
 
+"""
+    pantelides_reassemble(state::TearingState, var_eq_matching)
+
+Reassemble a `System` after Pantelides index reduction.
+
+# Arguments
+
+- `state`: tearing state containing the original system and derivative graphs.
+- `var_eq_matching`: variable-equation matching returned by the Pantelides pass.
+
+# Returns
+
+A system whose equations and unknowns include the differentiated equations selected by
+the Pantelides algorithm.
+"""
 function pantelides_reassemble(state::TearingState, var_eq_matching)
     fullvars = state.fullvars
     @unpack var_to_diff, eq_to_diff = state.structure
@@ -18,7 +33,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     fill!(out_vars, ModelingToolkit.COMMON_NOTHING)
     out_vars[1:length(fullvars)] .= fullvars
 
-    iv = get_iv(sys)
+    iv = get_iv(sys)::SymbolicT
     D = Differential(iv)
 
     for (varidx, diff) in edges(var_to_diff)
@@ -82,8 +97,8 @@ end
     dae_index_lowering(sys::System; kwargs...) -> System
 
 Perform the Pantelides algorithm to transform a higher index DAE to an index 1
-DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged to call [`mtkcompile`](@ref)
-instead, which calls this function internally.
+DAE. `kwargs` are forwarded to the internal Pantelides pass. End users are encouraged to
+call [`ModelingToolkitBase.mtkcompile`](@ref) instead, which calls this function internally.
 """
 function dae_index_lowering(sys::System; kwargs...)
     state = TearingState(sys)

@@ -184,7 +184,7 @@ end
 VarsUsedInCondition() = VarsUsedInCondition(Set())
 
 function (v::VarsUsedInCondition)(expr)
-    expr = Symbolics.unwrap(expr)
+    expr = SymbolicUtils.unwrap(expr)
     if symbolic_type(expr) == NotSymbolic()
         is_array_of_symbolics(expr) || return
         foreach(v, expr)
@@ -336,7 +336,9 @@ function generate_condition(cw::CondRewriter, sym)
     # the solvers don't treat the transition from a number to NaN or back as a zero-crossing,
     # so it can be used to effectively disable the affect when the condition is not meant to
     # be evaluated.
-    return ifelse(dep, zero_crossing, NaN) ~ 0
+    # `Equation` rather than `~`: the zero-crossing is always a scalar, and `~` widens to
+    # `Union{Equation, Vector{Equation}}` because of its complex-valued methods.
+    return Equation(ifelse(dep, zero_crossing, NaN), 0)
 end
 
 """
@@ -547,7 +549,7 @@ const CONDITION_SIMPLIFIER = Rewriters.Fixpoint(
 If lifting converts (nested) if statements into a series of continuous events + a logically equivalent if statement + parameters.
 
 Lifting proceeds through the following process:
-* rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS 
+* rewrite comparisons to be of the form eqn [op] 0; subtract the RHS from the LHS
 * replace comparisons with generated parameters; for each comparison eqn [op] 0, generate an event (dependent on op) that sets the parameter
 
 !!! warn
@@ -630,7 +632,7 @@ function IfLifting(sys::System)
     # "observed" equations
     new_cond_dep_eqs = [v ~ cw.conditions[v] for v in new_cond_vars]
     # construct the graph as a `DiCMOBiGraph`
-    new_cond_vars_graph = observed_dependency_graph(new_cond_dep_eqs)
+    new_cond_vars_graph = observed_dependency_graph(sys, new_cond_dep_eqs)
 
     new_callbacks = continuous_events(sys)
     new_initial_conditions = copy(initial_conditions(sys))

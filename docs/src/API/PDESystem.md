@@ -35,6 +35,12 @@ block symbolic functions like Jacobians.
 PDESystem
 ```
 
+Dependent variables may use the standard ModelingToolkit input and output metadata.
+The declarations are available through `inputs(sys)` and `outputs(sys)` in dependent-variable
+declaration order. If a variable is marked as both an input and an output, it is reported as an
+input. These roles describe the symbolic PDE interface; support for discretizing them depends on
+the selected PDE discretizer.
+
 ### Domains (WIP)
 
 Domains are specifying by saying `indepvar in domain`, where `indepvar` is a
@@ -62,6 +68,31 @@ The only functions which act on a PDESystem are the following:
   - `symbolic_discretize(sys,discretizer)`: produces a debugging symbolic description
     of the discretized problem.
 
+## Solution Interface
+
+Whatever the discretizer, `solve(prob, alg)` on the problem returned by `discretize`
+gives back a solution expressed in the `PDESystem`'s own variables: a
+`PDETimeSeriesSolution` when the system has a time variable and a `PDENoTimeSolution`
+otherwise (both from SciMLBase). Every discretizer indexes and evaluates them the same
+way:
+
+  - `sol[u(t, x)]` is the dependent variable `u` on the discretization grid (or, for a
+    mesh-free method, on its evaluation grid), as an array with one axis per argument of
+    `u`.
+  - `sol[x]` is the grid of the independent variable `x`; for a time-dependent solution
+    `sol[t]` (also `sol.t`) holds the saved times.
+  - `sol(t, x; dv = u(t, x))` evaluates `u` at arbitrary points: numbers or ranges, one
+    per independent variable, interpolated on a grid-based discretization and evaluated
+    directly by a mesh-free one. Without `dv` it returns the values of every dependent
+    variable.
+  - `sol.original_sol` is the underlying `ODESolution`, `OptimizationSolution`, or other
+    solution of the discretized problem, for anything the wrapper does not expose.
+
+[MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/solutions/) and
+[NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/) implement this interface; see the
+[PDEBase.jl developer documentation](https://github.com/SciML/PDEBase.jl/blob/master/docs/src/interface.md)
+for what a new discretizer has to define.
+
 ## Boundary Conditions (WIP)
 
 ## Transformations
@@ -73,8 +104,9 @@ The only functions which act on a PDESystem are the following:
 ### NeuralPDE.jl: PhysicsInformedNN
 
 [NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/) defines the `PhysicsInformedNN`
-discretizer which uses a [DiffEqFlux.jl](https://docs.sciml.ai/DiffEqFlux/stable/)
-neural network to solve the differential equation.
+discretizer, a physics-informed neural network: the dependent variables are represented by
+[Lux.jl](https://lux.csail.mit.edu/) networks whose parameters become the unknowns of an
+`OptimizationProblem` minimizing the residuals on collocation points.
 
 ### MethodOfLines.jl: MOLFiniteDifference
 

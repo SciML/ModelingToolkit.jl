@@ -48,6 +48,9 @@ struct IndexCache
     initials_idx::TunableIndexMap
     constant_idx::ParamIndexMap
     nonnumeric_idx::NonnumericMap
+    # `DiffCache` scratch buffers added via `add_diffcache`. They live in the `caches`
+    # portion of `MTKParameters`, ahead of any SCC cache buffers appended later.
+    caches_idx::ParamIndexMap
     observed_syms_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
     dependent_pars_to_timeseries::Dict{SymbolicT, TimeseriesSetType}
     discrete_buffer_sizes::Vector{Vector{BufferTemplate}}
@@ -55,6 +58,7 @@ struct IndexCache
     initials_buffer_size::BufferTemplate
     constant_buffer_sizes::Vector{BufferTemplate}
     nonnumeric_buffer_sizes::Vector{BufferTemplate}
+    caches_buffer_sizes::Vector{BufferTemplate}
     symbol_to_variable::Dict{Symbol, SymbolicParam}
 end
 
@@ -62,11 +66,11 @@ function Base.copy(ic::IndexCache)
     return IndexCache(
         copy(ic.unknown_idx), copy(ic.discrete_idx), copy(ic.callback_to_clocks),
         copy(ic.tunable_idx), copy(ic.initials_idx), copy(ic.constant_idx),
-        copy(ic.nonnumeric_idx), copy(ic.observed_syms_to_timeseries),
+        copy(ic.nonnumeric_idx), copy(ic.caches_idx), copy(ic.observed_syms_to_timeseries),
         copy(ic.dependent_pars_to_timeseries), copy(ic.discrete_buffer_sizes),
         ic.tunable_buffer_size, ic.initials_buffer_size,
         copy(ic.constant_buffer_sizes), copy(ic.nonnumeric_buffer_sizes),
-        copy(ic.symbol_to_variable)
+        copy(ic.caches_buffer_sizes), copy(ic.symbol_to_variable)
     )
 end
 
@@ -178,7 +182,18 @@ function IndexCache(sys::AbstractSystem)
         push!(disc_buffer_templates, map(Base.Fix1(BufferTemplate, symtype) ∘ length, disc_syms_by_partition))
     end
 
+    diffcache_params = SU.getmetadata(sys, DiffCacheParams, Dict{SymbolicT, Int}())::Dict{SymbolicT, Int}
+    # Diffcache params added via `add_diffcache` are special: they are scratch space the
+    # generated code writes active intermediates into, so they go in the `caches` portion
+    # (which AD shadows) rather than `nonnumeric` (which is declared inactive).
+    caches_buffers = Dict{TypeT, Set{SymbolicT}}()
+    for p in keys(diffcache_params)
+        buffer = get!(Set{SymbolicT}, caches_buffers, DiffCacheAllocatorAPIWrapper{Number})
+        push!(buffer, p)
+    end
+
     for p in parameters(sys; initial_parameters = true)
+        haskey(diffcache_params, p) && continue
         ctype = symtype(p)
         if ctype <: FnType
             ctype = fntype_to_function_type(ctype)::TypeT
@@ -187,12 +202,15 @@ function IndexCache(sys::AbstractSystem)
         haskey(constant_buffers, ctype) && p in constant_buffers[ctype] && continue
         haskey(nonnumeric_buffers, ctype) && p in nonnumeric_buffers[ctype] && continue
         insert_by_type!(
-            if ctype <: Real || ctype <: AbstractArray{<:Real}
+            if ctype <: Number || ctype <: AbstractArray{<:Number}
                 if istunable(p, true) && symbolic_has_known_size(p) &&
                         (
-                        ctype == Real || ctype <: AbstractFloat ||
-                            ctype <: AbstractArray{Real} ||
-                            ctype <: AbstractArray{<:AbstractFloat}
+                        ctype == Real || ctype == Number || ctype == Complex ||
+                            ctype <: AbstractFloat || ctype <: Complex ||
+                            ctype <: AbstractArray{Real} || ctype <: AbstractArray{Number} ||
+                            ctype <: AbstractArray{Complex} ||
+                            ctype <: AbstractArray{<:AbstractFloat} ||
+                            ctype <: AbstractArray{<:Complex}
                     )
                     if iscall(p) && operation(p) === Initial()
                         initial_pars
@@ -214,6 +232,8 @@ function IndexCache(sys::AbstractSystem)
         const_buffer_sizes = get_buffer_sizes_and_idxs(ParamIndexMap, sys, constant_buffers)
     nonnumeric_idxs,
         nonnumeric_buffer_sizes = get_buffer_sizes_and_idxs(NonnumericMap, sys, nonnumeric_buffers)
+    caches_idxs,
+        caches_buffer_sizes = get_buffer_sizes_and_idxs(ParamIndexMap, sys, caches_buffers)
 
     tunable_idxs = TunableIndexMap()
     tunable_buffer_size = 0
@@ -328,6 +348,7 @@ function IndexCache(sys::AbstractSystem)
         initials_idxs,
         const_idxs,
         nonnumeric_idxs,
+        caches_idxs,
         observed_syms_to_timeseries,
         dependent_pars_to_timeseries,
         disc_buffer_templates,
@@ -335,6 +356,7 @@ function IndexCache(sys::AbstractSystem)
         BufferTemplate(Number, initials_buffer_size),
         const_buffer_sizes,
         nonnumeric_buffer_sizes,
+        caches_buffer_sizes,
         symbol_to_variable
     )
 end
@@ -358,7 +380,8 @@ function get_observed_and_dependent_to_timeseries(
         return observed_syms_to_timeseries, dependent_pars_to_timeseries
     end
 
-    varsbuf = Set{SymbolicT}()
+    ir = get_irstructure(sys)
+    varsbuf = SU.IRStructureSearchBuffer(ir, Set{SymbolicT}())
     for eq in observed(sys)
         sym = eq.lhs
         empty!(varsbuf)
@@ -366,7 +389,9 @@ function get_observed_and_dependent_to_timeseries(
         timeseries = TimeseriesSetType()
         for v in varsbuf
             arrv, _ = split_indexed_var(v)
-            if (idx = get(disc_idxs, v, nothing)) !== nothing
+            if isequal(v, get_iv(sys)::SymbolicT)
+                push!(timeseries, ContinuousTimeseries())
+            elseif (idx = get(disc_idxs, v, nothing)) !== nothing
                 push!(timeseries, idx.clock_idx)
             elseif (idx = get(disc_idxs, arrv, nothing)) !== nothing
                 push!(timeseries, idx.clock_idx)
@@ -414,14 +439,59 @@ function insert_by_type!(buffers::Vector{SymbolicT}, sym::SymbolicT, ::TypeT)
     return push!(buffers, sym)
 end
 
+"""
+    $TYPEDSIGNATURES
+
+Check if a variable `sym` is of the form `foo(iv)`.
+"""
+function is_variable_like_symbolic(sym::SymbolicT, iv::SymbolicT)
+    return Moshi.Match.@match sym begin
+        BSImpl.Term(; f, args) => begin
+            return f isa SymbolicT && !SU.is_function_symbolic(f) &&
+                length(args) == 1 && isequal(args[1], iv)
+        end
+        _ => false
+    end
+end
+
 function parse_callbacks_for_discretes!(sys::AbstractSystem, events::Vector, disc_param_callbacks::Dict{SymbolicT, BitSet}, constant_buffers::Dict{TypeT, Set{SymbolicT}}, nonnumeric_buffers::Dict{TypeT, Set{SymbolicT}}, offset::Int)
+    discs = Set{SymbolicParam}()
+    affects = Union{AffectSystem, ImperativeAffect, Nothing}[]
     for (i, event) in enumerate(events)
-        discs = Set{SymbolicParam}()
-        affect = event.affect::Union{AffectSystem, ImperativeAffect, Nothing}
-        if affect isa AffectSystem || affect isa ImperativeAffect
-            union!(discs, discretes(affect))
-        elseif affect === nothing
-            continue
+        empty!(discs)
+        empty!(affects)
+        if event isa SymbolicContinuousCallback
+            push!(affects, event.affect)
+            push!(affects, event.affect_neg)
+        else
+            push!(affects, event.affect)
+        end
+        for affect in affects
+            if affect isa AffectSystem
+                union!(discs, discretes(affect))
+            elseif affect isa ImperativeAffect
+                syms = SymbolicT[]
+                for sym in modified(affect)
+                    sym = unwrap(sym)
+                    if sym isa SymbolicT
+                        push!(syms, sym)
+                    elseif sym isa AbstractArray
+                        append!(syms, Iterators.map(unwrap, sym))
+                    else
+                        error("Unhandled case in `ImperativeAffect`. Please open an issue in ModelingToolkit.jl")
+                    end
+                end
+                for sym in syms
+                    if is_parameter(sys, sym)
+                        push!(discs, sym)
+                    else
+                        arr, isarr = split_indexed_var(sym)
+                        if isarr && is_parameter(sys, arr)
+                            push!(discs, arr)
+                        end
+                    end
+                end
+            end
         end
 
         for sym in discs
@@ -435,8 +505,8 @@ function parse_callbacks_for_discretes!(sys::AbstractSystem, events::Vector, dis
             end
 
             # Only `foo(t)`-esque parameters can be saved
-            if iscall(sym) && length(arguments(sym)) == 1 &&
-                    isequal(only(arguments(sym)), get_iv(sys))
+            if is_variable_like_symbolic(sym, get_iv(sys)::SymbolicT) ||
+                    iscall(sym) && operation(sym) isa Hold
                 clocks = get!(BitSet, disc_param_callbacks, sym)
                 push!(clocks, i + offset)
             elseif is_variable_floatingpoint(sym)
@@ -466,7 +536,7 @@ function get_buffer_sizes_and_idxs(::Type{BufT}, sys::AbstractSystem, buffers::D
             idxs[rp] = (i, j)
             idxs[rttp] = (i, j)
         end
-        if T <: Symbolics.FnType
+        if T <: SU.FnType
             T = Any
         end
         push!(buffer_sizes, BufferTemplate(T, length(buf)))
@@ -523,6 +593,8 @@ function SymbolicIndexingInterface.parameter_index(ic::IndexCache, sym::Symbolic
         ParameterIndex(SciMLStructures.Constants(), idx, validate_size)
     elseif (idx = check_index_map(ic.nonnumeric_idx, sym)) !== nothing
         ParameterIndex(NONNUMERIC_PORTION, idx, validate_size)
+    elseif (idx = check_index_map(ic.caches_idx, sym)) !== nothing
+        ParameterIndex(SciMLStructures.Caches(), idx, validate_size)
     elseif iscall(sym) && operation(sym) == getindex
         args = arguments(sym)
         pidx = parameter_index(ic, args[1])
@@ -576,9 +648,38 @@ end
 
 const ReorderedParametersT = Vector{Union{Vector{SymbolicT}, Vector{Vector{SymbolicT}}}}
 
-function reorder_parameters(
-        sys::AbstractSystem, ps = parameters(sys; initial_parameters = true); kwargs...
+struct ReorderedDefaultParameters
+    value::ReorderedParametersT
+end
+
+function should_invalidate_mutable_cache_entry(::Type{ReorderedDefaultParameters}, patch::NamedTuple)
+    return haskey(patch, :ps) || haskey(patch, :index_cache)
+end
+
+function _copy_reordered(v::ReorderedParametersT)
+    return ReorderedParametersT(
+        map(v) do inner
+            inner isa Vector{SymbolicT} ? copy(inner) : map(copy, inner)
+        end
     )
+end
+
+function reorder_parameters(sys::AbstractSystem; kwargs...)
+    if isempty(kwargs) && sys isa System && has_index_cache(sys) && get_index_cache(sys) !== nothing
+        cached = check_mutable_cache(sys, ReorderedDefaultParameters, ReorderedDefaultParameters, nothing)
+        if cached isa ReorderedDefaultParameters
+            return _copy_reordered(cached.value)
+        end
+        val = reorder_parameters(
+            get_index_cache(sys)::IndexCache, parameters(sys; initial_parameters = true)
+        )
+        store_to_mutable_cache!(sys, ReorderedDefaultParameters, ReorderedDefaultParameters(val))
+        return _copy_reordered(val)
+    end
+    return reorder_parameters(sys, parameters(sys; initial_parameters = true); kwargs...)
+end
+
+function reorder_parameters(sys::AbstractSystem, ps; kwargs...)
     if has_index_cache(sys) && get_index_cache(sys) !== nothing
         return reorder_parameters(get_index_cache(sys)::IndexCache, ps; kwargs...)
     elseif ps isa Tuple
@@ -614,39 +715,51 @@ function reorder_parameters(ic::IndexCache, ps::Vector{SymbolicT}; drop_missing 
     for bufsz in ic.nonnumeric_buffer_sizes
         push!(nonnumeric_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
     end
+    caches_buf = Vector{SymbolicT}[]
+    for bufsz in ic.caches_buffer_sizes
+        push!(caches_buf, fill(COMMON_DEFAULT_VAR, bufsz.length))
+    end
     if flatten
         append!(result, disc_buf)
         append!(result, const_buf)
         append!(result, nonnumeric_buf)
+        append!(result, caches_buf)
     else
         push!(result, disc_buf)
         push!(result, const_buf)
         push!(result, nonnumeric_buf)
+        push!(result, caches_buf)
     end
     for p in ps
-        if haskey(ic.discrete_idx, p)
-            idx = ic.discrete_idx[p]
+        if (idx = get(ic.discrete_idx, p, nothing)) !== nothing
             disc_buf[idx.buffer_idx][idx.idx_in_buffer] = p
-        elseif haskey(ic.tunable_idx, p)
-            i = ic.tunable_idx[p]
+        elseif (i = get(ic.tunable_idx, p, nothing)) !== nothing
             if i isa Int
                 param_buf[i] = p
             else
-                param_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    param_buf[buf_i] = p[p_i]
+                end
             end
-        elseif haskey(ic.initials_idx, p)
-            i = ic.initials_idx[p]
+        elseif (i = get(ic.initials_idx, p, nothing)) !== nothing
             if i isa Int
                 initials_buf[i] = p
             else
-                initials_buf[i] = collect(p)
+                i = (first(i)::Int):(last(i)::Int)
+                for (buf_i, p_i) in zip(i, SU.stable_eachindex(p))
+                    initials_buf[buf_i] = p[p_i]
+                end
             end
-        elseif haskey(ic.constant_idx, p)
-            i, j = ic.constant_idx[p]
+        elseif (ij = get(ic.constant_idx, p, nothing)) !== nothing
+            i, j = ij
             const_buf[i][j] = p
-        elseif haskey(ic.nonnumeric_idx, p)
-            i, j = ic.nonnumeric_idx[p]
+        elseif (ij = get(ic.nonnumeric_idx, p, nothing)) !== nothing
+            i, j = ij
             nonnumeric_buf[i][j] = p
+        elseif (ij = get(ic.caches_idx, p, nothing)) !== nothing
+            i, j = ij
+            caches_buf[i][j] = p
         else
             error("Invalid parameter $p")
         end
@@ -694,6 +807,11 @@ function iterated_buffer_index(ic::IndexCache, ind::ParameterIndex)
     end
     if ind.portion == NONNUMERIC_PORTION
         return idx + ind.idx[1]
+    elseif !isempty(ic.nonnumeric_buffer_sizes)
+        idx += length(ic.nonnumeric_buffer_sizes)
+    end
+    if ind.portion isa SciMLStructures.Caches
+        return idx + ind.idx[1]
     end
     error("Unhandled portion $(ind.portion)")
 end
@@ -711,6 +829,8 @@ function get_buffer_template(ic::IndexCache, pidx::ParameterIndex)
         return ic.constant_buffer_sizes[idx[1]]
     elseif portion isa Nonnumeric
         return ic.nonnumeric_buffer_sizes[idx[1]]
+    elseif portion isa SciMLStructures.Caches
+        return ic.caches_buffer_sizes[idx[1]]
     else
         error("Unhandled portion $portion")
     end
@@ -750,9 +870,8 @@ function reorder_dimension_by_tunables!(
             throw(ArgumentError("`syms` must be a permutation of `tunable_parameters(sys)`. Found $sym which is not a tunable parameter."))
         end
 
-        dstidx = ntuple(
-            i -> i == dim ? (dsti:(dsti + length(sym) - 1)) : (:), Val(ndims(arr))
-        )
+        dstrange = dsti:(dsti + length(sym) - 1)
+        dstidx = ntuple(i -> i == dim ? dstrange : (:), Val(ndims(arr)))
         destv = @view dest[dstidx...]
         dsti += length(sym)
         arridx = ntuple(i -> i == dim ? (idx.idx) : (:), Val(ndims(arr)))

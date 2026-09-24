@@ -18,6 +18,146 @@ const EXPERIMENTAL_WARNING = """
 """
     $(TYPEDSIGNATURES)
 
+Rewrite derivatives of array-valued expressions, such as `D(u[2:4])`, into arrays of the
+corresponding scalar derivatives, in place. Implicit-DAE codegen binds scalar `D(uᵢ)` terms
+to elements of the `du` argument, and a derivative of a slice matches none of them.
+
+Takes every residual at once, and works in the system's `ir`, so the search and
+substitution caches are shared and the rewritten residuals are already populated for
+codegen.
+"""
+function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+    terms = Set{SymbolicT}()
+    buffer = SU.IRStructureSearchBuffer(ir, terms)
+    for rhs in rhss
+        SU.search_variables!(buffer, rhs; is_atomic = array_derivative_is_atomic)
+    end
+    isempty(terms) && return rhss
+
+    subber = SU.IRSubstituter{false}(ir, array_derivative_expansion_map(terms))
+    map!(subber, rhss, rhss)
+    return rhss
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Assemble residuals into a single array expression, where each residual writes to a
+contiguous region of the output. An array-valued residual stands for one output row per
+element, and writing it as a region keeps the array computation intact instead of
+scalarizing it into one expression per row.
+
+Returns `rhss` unchanged when every residual is scalar.
+"""
+function array_residual_maker(rhss::Vector{SymbolicT})
+    any(rhs -> SU.is_array_shape(SU.shape(rhs)), rhss) || return rhss
+
+    regions = Vector{Vector{UnitRange{Int}}}(undef, length(rhss))
+    values = similar(rhss)
+    offset = 0
+    for (i, rhs) in enumerate(rhss)
+        sh = SU.shape(rhs)::SU.ShapeVecT
+        if SU.is_array_shape(sh)
+            n = prod(length, sh)
+            # Elements become consecutive output rows, so a rank > 1 residual is flattened
+            # rather than given a multidimensional region. `vec` here stays symbolic.
+            values[i] = length(sh) == 1 ? rhs : vec(rhs)
+        else
+            n = 1
+            # `ArrayMaker` regions only accept array-valued entries.
+            values[i] = SU.Const{VartypeT}([rhs])
+        end
+        regions[i] = [(offset + 1):(offset + n)]
+        offset += n
+    end
+    return SU.ArrayMaker{VartypeT}(regions, values)
+end
+
+"""
+    residual_eltype(x)
+
+Return the numeric element type contributed by `x`, or `Union{}`.
+"""
+function residual_eltype(x)
+    x = SciMLBase.unwrap_parameters(x)
+    if x isa Number
+        return typeof(x)
+    elseif x isa AbstractArray
+        T = eltype(x)
+        return T === Any ? Union{} : T
+    elseif SciMLStructures.isscimlstructure(x)
+        tun = first(SciMLStructures.canonicalize(SciMLStructures.Tunable(), x))
+        return residual_eltype(tun)
+    else
+        return Union{}
+    end
+end
+
+"""
+    similar_for_residual(prototype, extras...)
+
+Return an allocator using `prototype` and the promoted runtime element type.
+"""
+function similar_for_residual(prototype, extras...)
+    T = residual_eltype(prototype)
+    T === Union{} && (T = Float64)
+    for x in extras
+        T = promote_type(T, residual_eltype(x))
+    end
+    return sz -> similar(prototype, T, sz)
+end
+
+function residual_allocator_arg(arg)
+    name = arg isa DestructuredArgs ? arg.name : arg
+    name isa SymbolicT && return name
+    name isa Symbol || throw(
+        ArgumentError(
+            "Cannot form a residual allocator argument from $(typeof(arg))."
+        )
+    )
+    return SSym(name; type = Any, shape = SU.ShapeVecT())
+end
+
+function residual_allocator_term(args)
+    return STerm(
+        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        type = SU.FnType{Tuple, Any, Any},
+        shape = SU.ShapeVecT(),
+    )
+end
+
+function inject_similar_for_residual(body, alloc_term)
+    if body isa Let
+        return Let(
+            body.pairs, inject_similar_for_residual(body.body, alloc_term),
+            body.let_block
+        )
+    elseif body isa SymbolicT && Code.supports_with_allocator(body)
+        # The public helper would wrap the symbolic allocator in `Const`.
+        return STerm(
+            Code.with_allocator,
+            SArgsT((alloc_term, body));
+            type = SU.symtype(body),
+            shape = SU.shape(body),
+        )
+    else
+        return body
+    end
+end
+
+function wrap_oop_similar_for_residual(fn)
+    fn isa Func || return fn
+    isempty(fn.args) && return fn
+    alloc_term = residual_allocator_term(fn.args)
+    return Func(
+        fn.args, fn.kwargs, inject_similar_for_residual(fn.body, alloc_term),
+        fn.pre
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
 Generate the RHS function for the [`equations`](@ref) of a [`System`](@ref).
 
 # Keyword Arguments
@@ -30,24 +170,38 @@ $GENERATE_X_KWARGS
   `is_discrete_system(sys)`.
 - `scalar`: Whether to generate a single-out-of-place function that returns a scalar for
   the only equation in the system.
+- `extra_args`: Extra trailing symbolic arguments appended after all standard arguments and
+  kept out of the `MTKParameters` collapse, so they stay live scalar arguments of the
+  generated function (e.g. the homotopy continuation `λ`, threaded as the "t slot"). Empty
+  by default, which leaves the standard codegen path byte-identical.
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+
+An array equation is kept as one equation whose value fills a contiguous block of the
+output. Out of place, such a residual is allocated with the element type promoted from
+the function arguments, so that `Dual` inputs propagate.
 """
 function generate_rhs(
-        sys::System; implicit_dae = false,
-        scalar = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, override_discrete = false,
-        kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        implicit_dae::Bool = false, scalar::Bool = false,
+        override_discrete::Bool = false, cachesyms = nothing, extra_args::Tuple = ()
     )
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     eqs = equations(sys)
     obs = observed(sys)
     u = dvs
-    p = reorder_parameters(sys, ps)
+    p = reorder_parameters(sys) # 1 arg to use the cached version
+    n_param_buffers = length(p)  # # of parameter buffers, BEFORE any cachesyms are appended
+    if cachesyms isa Vector{Vector{SymbolicT}}
+        append!(p, cachesyms)
+    end
     t = get_iv(sys)
     ddvs = nothing
     extra_assignments = Assignment[]
+    assemble_residuals = false
 
     # used for DAEProblem and ImplicitDiscreteProblem
     if implicit_dae
@@ -74,18 +228,40 @@ function generate_rhs(
         else
             D = Differential(t)
             ddvs = map(D, dvs)
-            rhss = [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+            rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+            # Rewrite array derivatives to the scalar ones bound to the `du` argument.
+            # Assembly into a single array happens below, after assertions.
+            expand_array_derivatives!(rhss, get_irstructure(sys))
+            assemble_residuals = true
         end
+    elseif !is_time_dependent(sys)
+        rhss = SymbolicT[_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs]
+        assemble_residuals = true
     else
         if !override_discrete && !is_discrete_system(sys)
+            # An array differential equation `D(u[2:4]) ~ f` stays one equation: its
+            # right-hand side is written to a contiguous block of `du` below, the same
+            # way implicit-DAE residuals are packed.
             check_operator_variables(eqs, Differential)
             check_lhs(eqs, Differential, Set(dvs))
+            assemble_residuals = any(is_array_equation, eqs)
         end
         rhss = [eq.rhs for eq in eqs]
     end
 
-    if !isempty(assertions(sys))
-        rhss[end] += unwrap(get_assertions_expr(sys))
+    if !isempty(assertions(sys)) && !isempty(rhss)
+        assertion_expr = unwrap(get_assertions_expr(sys))
+        # An array-valued residual stands for several output rows, and `+` is not defined
+        # between a symbolic array and a scalar, so add the assertion to each of its rows.
+        rhss[end] = if SU.is_array_shape(SU.shape(rhss[end]))
+            unwrap(wrap(rhss[end]) .+ assertion_expr)
+        else
+            rhss[end] + assertion_expr
+        end
+    end
+
+    if assemble_residuals
+        rhss = array_residual_maker(rhss)
     end
 
     # TODO: add an optional check on the ordering of observed equations
@@ -103,10 +279,31 @@ function generate_rhs(
         args = (ddvs, args...)
         p_start += 1
     end
+    # Extra trailing symbolic arguments (e.g. the homotopy continuation `λ`),
+    # appended after all standard arguments and kept out of the `MTKParameters`
+    # collapse via `p_end`. Empty by default, so every standard caller is
+    # byte-identical: `p_end` is only forwarded when `extra_args` is non-empty,
+    # and `nargs` already counts the extra arguments through `length(args)`.
+    args = (args..., extra_args...)
+    p_end_kw = isempty(extra_args) ? (;) :
+        (; p_end = (t === nothing ? length(args) : length(args) - 1) - length(extra_args))
 
+    u_arg = scalar ? -1 : (implicit_dae ? 2 : 1)
+    codegen_opts = opts.codegen
+    if !implicit_dae && assemble_residuals && rhss isa SymbolicT &&
+            Code.supports_with_allocator(rhss)
+        # `ArrayMaker` otherwise allocates a `Float64` buffer out of place.
+        oop_wrap, iip_wrap = codegen_opts.wrap_code
+        codegen_opts = setproperties(
+            codegen_opts,
+            (; wrap_code = (wrap_oop_similar_for_residual ∘ oop_wrap, iip_wrap))
+        )
+    end
     res = build_function_wrapper(
-        sys, rhss, args...; p_start, extra_assignments,
-        expression = Val{true}, expression_module = eval_module, kwargs...
+        sys, rhss, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, extra_assignments, u_arg, n_param_buffers, p_end_kw...,
+            codegen_function_options = codegen_opts
+        )
     )
     nargs = length(args) - length(p) + 1
     if is_dde(sys)
@@ -115,7 +312,7 @@ function generate_rhs(
     end
     return maybe_compile_function(
         expression, wrap_gfw, (p_start, nargs, is_split(sys)),
-        res; eval_expression, eval_module
+        res; compiler_options, eval_expression, eval_module
     )
 end
 
@@ -130,12 +327,11 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_diffusion_function(
-        sys::System; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
-    )
-    dvs = unknowns(sys)
+function generate_diffusion_function(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     eqs = get_noise_eqs(sys)
     if ndims(eqs) == 2 && size(eqs, 2) == 1
@@ -143,7 +339,7 @@ function generate_diffusion_function(
         eqs = vec(eqs)
     end
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, eqs, dvs, p..., get_iv(sys); kwargs...)
+    res = build_function_wrapper(sys, eqs, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     if expression == Val{true}
         return res
     end
@@ -166,12 +362,13 @@ Calculate the gradient of the equations of `sys` with respect to the independent
 `simplify` is forwarded to `Symbolics.expand_derivatives`.
 """
 function calculate_tgrad(sys::System; simplify = false)
+    check_symbolic_ad_allowed(sys)
     # We need to remove explicit time dependence on the unknown because when we
     # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
     # t + u(t)`.
     rhs = [detime_dvs(eq.rhs) for eq in full_equations(sys)]
     iv = get_iv(sys)
-    xs = unknowns(sys)
+    xs = flat_unknowns(sys)
     rule = Dict(map((x, xt) -> xt => x, detime_dvs.(xs), xs))
     rhs = substitute.(rhs, Ref(rule))
     tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
@@ -192,10 +389,15 @@ Calculate the jacobian of the equations of `sys`.
 """
 function calculate_jacobian(
         sys::System;
-        sparse = false, simplify = false, dvs = unknowns(sys)
+        sparse = false, simplify = false, dvs = flat_unknowns(sys)
     )
-    obs = Dict(eq.lhs => eq.rhs for eq in observed(sys))
-    rhs = map(eq -> fixpoint_sub(eq.rhs - eq.lhs, obs), equations(sys))
+    check_symbolic_ad_allowed(sys)
+    eqs = full_equations(sys)
+    rhs = SymbolicT[]
+    sizehint!(rhs, length(eqs))
+    for eq in eqs
+        push!(rhs, eq.rhs - eq.lhs)
+    end
 
     if sparse
         jac = sparsejacobian(rhs, dvs; simplify)
@@ -231,16 +433,17 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_jacobian(
-        sys::System;
-        simplify = false, sparse = false, eval_expression = false,
-        eval_module = @__MODULE__, expression = Val{true}, wrap_gfw = Val{false},
-        checkbounds = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     jac = calculate_jacobian(sys; simplify, sparse, dvs)
     p = reorder_parameters(sys)
     t = get_iv(sys)
-    if t !== nothing && sparse && checkbounds
+    if t !== nothing && sparse && opts.codegen.checkbounds
         wrap_code = assert_jac_length_header(sys) # checking sparse J indices at runtime is expensive for large systems
     else
         wrap_code = (identity, identity)
@@ -252,27 +455,27 @@ function generate_jacobian(
         nargs = 3
     end
     res = build_function_wrapper(
-        sys, jac, args...; wrap_code, expression = Val{true},
-        expression_module = eval_module, checkbounds, kwargs...
+        sys, jac, collect(Any, args), BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+        )
     )
     return maybe_compile_function(
-        expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
+end
+
+function assert_jac_length(arr::SparseMatrixCSC, I::Vector{<:Integer}, J::Vector{<:Integer})
+    return @assert findnz(arr)[1:2] == (I, J)
 end
 
 function assert_jac_length_header(sys)
     W = W_sparsity(sys)
     return identity,
         function add_header(expr)
-            return Func(
-                expr.args, [], expr.body,
-                [
-                    :(
-                        @assert $(SymbolicUtils.Code.toexpr(term(findnz, expr.args[1])))[1:2] ==
-                        $(findnz(W)[1:2])
-                    )
-                ]
-            )
+            body = Let([Assignment(:_, term(assert_jac_length, expr.args[1], findnz(W)[1:2]...))], expr.body, true)
+            return Func(expr.args, [], body)
     end
 end
 
@@ -289,26 +492,27 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_tgrad(
-        sys::System;
-        simplify = false, eval_expression = false, eval_module = @__MODULE__,
-        expression = Val{true}, wrap_gfw = Val{false}, kwargs...
+        sys::System, opts::GeneratedFunctionOptions; simplify::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
         sys, tgrad,
-        dvs,
-        p...,
-        get_iv(sys);
-        expression = Val{true},
-        expression_module = eval_module,
-        kwargs...
+        [Any[dvs]; p; Any[get_iv(sys)]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = opts.codegen
+        )
     )
 
     return maybe_compile_function(
-        expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
+        expression, wrap_gfw, (2, 3, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -324,7 +528,7 @@ Return an array of symbolic hessians corresponding to the equations of the syste
 """
 function calculate_hessian(sys::System; simplify = false, sparse = false)
     rhs = [eq.rhs - eq.lhs for eq in full_equations(sys)]
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     if sparse
         hess = map(rhs) do expr
             Symbolics.sparsehessian(expr, dvs; simplify)::AbstractSparseArray
@@ -363,11 +567,13 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_W(
-        sys::System;
-        simplify = false, sparse = false, expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, checkbounds = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     M = calculate_massmatrix(sys; simplify)
     if sparse
@@ -376,7 +582,7 @@ function generate_W(
     J = calculate_jacobian(sys; simplify, sparse, dvs)
     W = W_GAMMA * M + J
     t = get_iv(sys)
-    if t !== nothing && sparse && checkbounds
+    if t !== nothing && sparse && opts.codegen.checkbounds
         wrap_code = assert_jac_length_header(sys)
     else
         wrap_code = (identity, identity)
@@ -384,8 +590,10 @@ function generate_W(
 
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
-        sys, W, dvs, p..., W_GAMMA, t; wrap_code,
-        p_end = 1 + length(p), checkbounds, kwargs...
+        sys, W, [Any[dvs]; p; Any[W_GAMMA, t]], BuildFunctionWrapperOptions(;
+            u_arg = 1, p_end = 1 + length(p),
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 4, is_split(sys)), res; eval_expression, eval_module
@@ -407,28 +615,34 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_dae_jacobian(
-        sys::System; simplify = false, sparse = false,
-        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac_u = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     t = get_iv(sys)
-    derivatives = Differential(t).(unknowns(sys))
+    derivatives = Differential(t).(flat_unknowns(sys))
     jac_du = calculate_jacobian(
         sys; simplify = simplify, sparse = sparse,
         dvs = derivatives
     )
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     jac = W_GAMMA * jac_du + jac_u
     p = reorder_parameters(sys, ps)
     res = build_function_wrapper(
-        sys, jac, derivatives, dvs, p..., W_GAMMA, t;
-        p_start = 3, p_end = 2 + length(p), kwargs...
+        sys, jac, [Any[derivatives, dvs]; p; Any[W_GAMMA, t]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 2, p_start = 3, p_end = 2 + length(p),
+            codegen_function_options = opts.codegen
+        )
     )
     return maybe_compile_function(
-        expression, wrap_gfw, (3, 5, is_split(sys)), res; eval_expression, eval_module
+        expression, wrap_gfw, (3, 5, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -444,18 +658,52 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_history(
-        sys::System, u0; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
+function generate_history(sys::System, u0, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     p = reorder_parameters(sys)
     res = build_function_wrapper(
-        sys, u0, p..., get_iv(sys); expression = Val{true},
-        expression_module = eval_module, p_start = 1, p_end = length(p),
-        similarto = typeof(u0), wrap_delays = false, kwargs...
+        sys, u0, [p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(p), wrap_delays = false,
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(u0)))
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 2, is_split(sys)), res; eval_expression, eval_module
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate a function `f(p, t)` which evaluates the symbolic expression `expr` at time `t`
+with the parameter object `p`. `expr` may involve the independent variable, parameters,
+observed variables and bound parameters of `sys` (the latter two are inlined
+symbolically), but not its unknowns. The `f(p, t)` signature matches the initial guess
+function convention used across the SciML ecosystem, e.g. by `BVProblem`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+"""
+function generate_trajectory(sys::System, expr, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    p = reorder_parameters(sys)
+    res = build_function_wrapper(
+        sys, expr, [p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(;
+            p_start = 1, p_end = length(p), wrap_delays = false,
+            codegen_function_options = opts.codegen
+        )
+    )
+    if !(expr isa AbstractArray || symbolic_type(expr) == ArraySymbolic())
+        res = res[1]
+    end
+    return maybe_compile_function(
+        expression, wrap_gfw, (1, 2, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
 end
 
@@ -467,16 +715,29 @@ applied to the symbolic mass matrix. Returns a `Diagonal` or `LinearAlgebra.I` w
 possible.
 """
 function calculate_massmatrix(sys::System; simplify = false)
-    eqs = [eq for eq in equations(sys)]
-    M = zeros(length(eqs), length(eqs))
-    for (i, eq) in enumerate(eqs)
+    eqs = equations(sys)
+    # An array equation stands for one row per element, laid out as `generate_rhs`
+    # packs them: the rows of consecutive equations follow each other.
+    n = count_equation_rows(eqs)
+    M = zeros(n, n)
+    i = 0
+    for eq in eqs
         if iscall(eq.lhs) && operation(eq.lhs) isa Differential
-            st = var_from_nested_derivative(eq.lhs)[1]
-            j = variable_index(sys, st)
-            M[i, j] = 1
+            x = only(arguments(eq.lhs))
+            if SU.is_array_shape(SU.shape(x))
+                for idx in SU.stable_eachindex(x)
+                    i += 1
+                    M[i, variable_index(sys, x[idx])] = 1
+                end
+            else
+                st = var_from_nested_derivative(eq.lhs)[1]
+                i += 1
+                M[i, variable_index(sys, st)] = 1
+            end
         else
             _iszero(eq.lhs) ||
                 error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            i += equation_row_count(eq)
         end
     end
     M = simplify ? Symbolics.simplify.(M) : M
@@ -523,7 +784,7 @@ function jacobian_sparsity(sys::System)
 
     return Symbolics.jacobian_sparsity(
         [eq.rhs for eq in full_equations(sys)],
-        [dv for dv in unknowns(sys)]
+        [dv for dv in flat_unknowns(sys)]
     )
 end
 
@@ -537,9 +798,9 @@ See also: [`generate_dae_jacobian`](@ref).
 function jacobian_dae_sparsity(sys::System)
     J1 = jacobian_sparsity(
         [eq.rhs for eq in full_equations(sys)],
-        [dv for dv in unknowns(sys)]
+        [dv for dv in flat_unknowns(sys)]
     )
-    derivatives = Differential(get_iv(sys)).(unknowns(sys))
+    derivatives = Differential(get_iv(sys)).(flat_unknowns(sys))
     J2 = jacobian_sparsity(
         [eq.rhs for eq in full_equations(sys)],
         [dv for dv in derivatives]
@@ -559,7 +820,7 @@ function W_sparsity(sys::System)
     (n, n) = size(jac_sparsity)
     M = calculate_massmatrix(sys)
     M_sparsity = M isa UniformScaling ? sparse(I(n)) :
-        SparseMatrixCSC{Bool, Int64}((!iszero).(M))
+        SparseMatrixCSC{Bool, Int}((!iszero).(M))
     return jac_sparsity .| M_sparsity
 end
 
@@ -616,12 +877,13 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_boundary_conditions(
-        sys::System, u0, u0_idxs, t0; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__,
-        kwargs...
+        sys::System, u0, u0_idxs, t0, opts::GeneratedFunctionOptions
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     iv = get_iv(sys)
-    sts = unknowns(sys)
+    sts = flat_unknowns(sys)
     ps = parameters(sys)
     np = length(ps)
     ns = length(sts)
@@ -631,11 +893,12 @@ function generate_boundary_conditions(
     # sol = get_bv_solution_symbol(ns)
 
     cons = [con.lhs - con.rhs for con in constraints(sys)]
-    # conssubs = Dict()
-    # get_constraint_unknown_subs!(conssubs, cons, stidxmap, iv, sol)
-    # cons = map(x -> substitute(x, conssubs), cons)
+    conssubs = Dict{SymbolicT, SymbolicT}()
+    get_constraint_unknown_subs!(conssubs, cons, stidxmap, iv, BVP_SOLUTION)
+    substituter = SU.Substituter{false}(conssubs)
+    cons = map(substituter, cons)
 
-    init_conds = Any[]
+    init_conds = SymbolicT[]
     for i in u0_idxs
         expr = BVP_SOLUTION(t0)[i] - u0[i]
         push!(init_conds, expr)
@@ -645,9 +908,12 @@ function generate_boundary_conditions(
     _p = reorder_parameters(sys, ps)
 
     res = build_function_wrapper(
-        sys, exprs, _p..., iv; output_type = Array,
-        p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
-        histfn_symbolic = BVP_SOLUTION, wrap_delays = true, kwargs...
+        sys, exprs, [_p; Any[iv]], BuildFunctionWrapperOptions(;
+            output_type = Array,
+            p_start = 1, histfn = (p, t) -> BVP_SOLUTION(t),
+            histfn_symbolic = BVP_SOLUTION, wrap_delays = true,
+            codegen_function_options = opts.codegen
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
@@ -665,12 +931,12 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cost(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
+function generate_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
 
     if is_time_dependent(sys)
@@ -686,16 +952,69 @@ function generate_cost(
         args = (dvs, ps...)
         nargs = 2
     end
+    u_arg = is_time_dependent(sys) ? -1 : 1
     res = build_function_wrapper(
-        sys, obj, args...; expression = Val{true}, p_start, p_end, wrap_delays,
-        histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION, kwargs...
-    )
+        sys, obj, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, p_end, wrap_delays, u_arg,
+            histfn = (p, t) -> BVP_SOLUTION(t), histfn_symbolic = BVP_SOLUTION,
+            codegen_function_options = opts.codegen
+        )
+    )[1]
     if expression == Val{true}
         return res
     end
-    f_oop = eval_or_rgf(res; eval_expression, eval_module)
     return maybe_compile_function(
         expression, wrap_gfw, (2, nargs, is_split(sys)), res; eval_expression, eval_module
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the cost function for a BVP [`System`](@ref). The generated function has the
+signature `cost(sol, p)` where `sol` is a solution interpolation object (callable as
+`sol(t)` to get state at time `t`) and `p` is the parameter object.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_bvp_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    obj = cost(sys)
+    _iszero(obj) && return nothing
+
+    iv = get_iv(sys)
+    sts = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    stidxmap = Dict([v => i for (i, v) in enumerate(sts)])
+
+    # Substitute x(t_val) -> BVP_SOLUTION(t_val)[idx] for all state evaluations
+    costsubs = Dict()
+    get_constraint_unknown_subs!(costsubs, [obj], stidxmap, iv, BVP_SOLUTION)
+    obj = substitute(obj, costsubs)
+
+    # Build function with signature (sol, p) where sol = BVP_SOLUTION
+    # The histfn mechanism replaces BVP_SOLUTION with the sol argument
+    res = build_function_wrapper(
+        sys, obj, Vector{Any}(ps),
+        BuildFunctionWrapperOptions(;
+            p_start = 1,  # sol goes before parameters
+            p_end = length(ps),
+            wrap_delays = true,
+            histfn = (p, t) -> BVP_SOLUTION(t),
+            histfn_symbolic = BVP_SOLUTION,
+            codegen_function_options = opts.codegen
+        )
+    )[1]
+
+    # (2, 2, is_split) means: 2 args out-of-place, 2 original args, split status
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
 end
 
@@ -707,7 +1026,7 @@ Calculate the gradient of the consolidated cost of `sys` with respect to the unk
 """
 function calculate_cost_gradient(sys::System; simplify = false)
     obj = cost(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     return Symbolics.gradient(obj, dvs; simplify)
 end
 
@@ -724,14 +1043,16 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_cost_gradient(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, simplify = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions; simplify::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     exprs = calculate_cost_gradient(sys; simplify)
-    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -746,7 +1067,7 @@ matrix is returned.
 """
 function calculate_cost_hessian(sys::System; sparse = false, simplify = false)
     obj = cost(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     if sparse
         return Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
     else
@@ -778,19 +1099,21 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_cost_hessian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, simplify = false,
-        sparse = false, return_sparsity = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false, return_sparsity::Bool = false
     )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     obj = cost(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     sparsity = nothing
     exprs = calculate_cost_hessian(sys; sparse, simplify)
     if sparse
         sparsity = similar(exprs, Float64)
     end
-    res = build_function_wrapper(sys, exprs, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, exprs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -798,16 +1121,154 @@ function generate_cost_hessian(
     return return_sparsity ? (fn, sparsity) : fn
 end
 
-function canonical_constraints(sys::System)
-    return map(constraints(sys)) do cstr
-        Symbolics.canonical_form(cstr).lhs
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `r` of the constraint `cstr` such that the constraint reads `r ~ 0` for an
+`Equation` and `r ≲ 0` for an `Inequality`. For an array-valued constraint `r` is the
+array residual; a scalar side of the constraint is broadcast against the array side.
+"""
+function constraint_residual(cstr::Union{Equation, Inequality})
+    lhs = unwrap(cstr.lhs)
+    rhs = unwrap(cstr.rhs)
+    lsh = SU.shape(lhs)
+    rsh = SU.shape(rhs)
+    if !SU.is_array_shape(lsh) && !SU.is_array_shape(rsh)
+        return unwrap(Symbolics.canonical_form(cstr).lhs)::SymbolicT
     end
+    if SU.is_array_shape(lsh) && SU.is_array_shape(rsh) && size(lhs) != size(rhs)
+        throw(
+            ArgumentError(
+                "The two sides of the constraint `$cstr` have different sizes \
+                $(size(lhs)) and $(size(rhs))."
+            )
+        )
+    end
+    if cstr isa Inequality && cstr.relational_op != Symbolics.leq
+        lhs, rhs = rhs, lhs
+    end
+    res = unwrap(broadcast(-, Symbolics.wrap(lhs), Symbolics.wrap(rhs)))::SymbolicT
+    SU.shape(res) isa SU.Unknown &&
+        throw(ArgumentError("Cannot lower the constraint `$cstr` of unknown size."))
+    return res
 end
 
 """
     $(TYPEDSIGNATURES)
 
-Generate the constraint function for a [`System`](@ref).
+The number of rows the constraint `cstr` contributes to the constraint function: `1` for
+a scalar constraint and the number of elements for an array-valued one.
+"""
+function constraint_length(cstr::Union{Equation, Inequality})
+    sh = SU.shape(constraint_residual(cstr))::SU.ShapeVecT
+    return SU.is_array_shape(sh) ? prod(length, sh; init = 1) : 1
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residuals of the constraints of `sys` (see [`constraint_residual`](@ref)), one per
+row of the constraint function. An array-valued constraint contributes one row per
+element in column-major order, and the rows of all constraints follow the order of
+`constraints(sys)`.
+
+If `scalarize` is `true` the row of an array element is its scalarized expression, as
+needed for symbolic differentiation and for the expression graph `cons_expr`, with
+reductions over `dims` expanded by `expand_dims_reductions`. Otherwise it is the
+unexpanded `r[i]` of the array residual `r`, so that generated code evaluates `r` once with
+its array operations intact.
+"""
+function canonical_constraints(sys::System; scalarize::Bool = true)
+    rows = SymbolicT[]
+    for cstr in constraints(sys)
+        res = constraint_residual(cstr)
+        sh = SU.shape(res)
+        if !SU.is_array_shape(sh)
+            push!(rows, scalarize ? expand_dims_reductions(res) : res)
+        elseif scalarize
+            append!(rows, vec(collect(expand_dims_reductions(res))::Array{SymbolicT}))
+        else
+            for idxs in Iterators.product(sh...)
+                args = SArgsT()
+                push!(args, res)
+                for i in idxs
+                    push!(args, SConst(i))
+                end
+                push!(
+                    rows, BSImpl.Term{VartypeT}(
+                        getindex, args; type = eltype(symtype(res)), shape = SU.ShapeVecT()
+                    )
+                )
+            end
+        end
+    end
+    return rows
+end
+
+function collect_dims_reductions!(reductions::Vector{SymbolicT}, ex::SymbolicT)
+    iscall(ex) || return reductions
+    for arg in arguments(ex)
+        collect_dims_reductions!(reductions, arg)
+    end
+    op = operation(ex)
+    if op isa SU.Mapreducer && op.dims isa Int && !any(isequal(ex), reductions)
+        push!(reductions, ex)
+    end
+    return reductions
+end
+
+function scalarized_dims_reduction(ex::SymbolicT)
+    op = operation(ex)::SU.Mapreducer
+    d = op.dims::Int
+    xs = map(arguments(ex)) do arg
+        SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
+    end
+    mapped_axes = axes(first(x for x in xs if x isa Array))
+    elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
+    for I in CartesianIndices(elements)
+        acc = op.init
+        for j in mapped_axes[d]
+            J = CartesianIndex(
+                ntuple(length(mapped_axes)) do i
+                    i == d ? j : first(mapped_axes[i]) + I[i] - 1
+                end
+            )
+            v = op.f((x isa Array ? x[J] : x for x in xs)...)
+            acc = acc === nothing ? v : op.reduce(acc, v)
+        end
+        elements[I] = unwrap(acc)
+    end
+    return SConst(elements)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The residual `res` of a constraint (see [`constraint_residual`](@ref)) with every
+reduction over `dims` (`mapreduce`, `sum`, `prod`, ... with `dims = d`) replaced by the
+array of its reduced elements. Scalarizing the result gives the correct element
+expressions; SymbolicUtils' own scalarization of such a reduction currently reduces over
+every axis, which would silently corrupt the scalarized rows and their derivatives. This is
+a workaround for https://github.com/JuliaSymbolics/SymbolicUtils.jl/issues/1093 and can be
+removed once that is fixed.
+"""
+function expand_dims_reductions(res::SymbolicT)
+    reductions = collect_dims_reductions!(SymbolicT[], res)
+    isempty(reductions) && return res
+    subs = Dict{SymbolicT, SymbolicT}()
+    # `reductions` is innermost-first, so nested reductions are replaced before their parent
+    for red in reductions
+        subs[red] = scalarized_dims_reduction(substitute(red, subs))
+    end
+    return substitute(res, subs)
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the constraint function for a [`System`](@ref). It returns one row per scalar
+constraint and one row per element of each array-valued constraint, in the order given by
+[`canonical_constraints`](@ref).
 
 # Keyword Arguments
 
@@ -815,14 +1276,14 @@ $GENERATE_X_KWARGS
 
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
-function generate_cons(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, kwargs...
-    )
-    cons = canonical_constraints(sys)
-    dvs = unknowns(sys)
+function generate_cons(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    cons = canonical_constraints(sys; scalarize = false)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
-    res = build_function_wrapper(sys, cons, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, cons, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -831,7 +1292,8 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Return the jacobian of the constraints of `sys` with respect to unknowns.
+Return the jacobian of the constraints of `sys` with respect to unknowns, with one row per
+row of the constraint function (see [`canonical_constraints`](@ref)).
 
 # Keyword arguments
 
@@ -843,7 +1305,7 @@ function calculate_constraint_jacobian(
         return_sparsity = false
     )
     cons = canonical_constraints(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     sparsity = nothing
     if sparse
         jac = Symbolics.sparsejacobian(cons, dvs; simplify)::AbstractSparseArray
@@ -869,17 +1331,19 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_constraint_jacobian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     jac,
         sparsity = calculate_constraint_jacobian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, jac, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
@@ -900,7 +1364,7 @@ function calculate_constraint_hessian(
         sys::System; simplify = false, sparse = false, return_sparsity = false
     )
     cons = canonical_constraints(sys)
-    dvs = unknowns(sys)
+    dvs = flat_unknowns(sys)
     sparsity = nothing
     if sparse
         hess = map(cons) do cstr
@@ -928,20 +1392,176 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_constraint_hessian(
-        sys::System; expression = Val{true}, wrap_gfw = Val{false},
-        eval_expression = false, eval_module = @__MODULE__, return_sparsity = false,
-        simplify = false, sparse = false, kwargs...
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = reorder_parameters(sys)
     hess,
         sparsity = calculate_constraint_hessian(
         sys; simplify, sparse, return_sparsity = true
     )
-    res = build_function_wrapper(sys, hess, dvs, ps...; expression = Val{true}, kwargs...)
+    res = build_function_wrapper(sys, hess, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     fn = maybe_compile_function(
         expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
     )
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the vector-valued objective function of a [`System`](@ref) for
+`SciMLBase.MultiObjectiveOptimizationFunction`: it returns [`costs`](@ref) elementwise
+instead of the scalar `consolidate`d [`cost`](@ref).
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_cost(sys::System, opts::GeneratedFunctionOptions)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    res = build_function_wrapper(sys, objs, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the jacobian of the objective vector of `sys` with respect to unknowns.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian.
+"""
+function calculate_multiobjective_jacobian(
+        sys::System; simplify = false, sparse = false,
+        return_sparsity = false
+    )
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    sparsity = nothing
+    if sparse
+        jac = Symbolics.sparsejacobian(objs, dvs; simplify)::AbstractSparseArray
+        sparsity = similar(jac, Float64)
+    else
+        jac = Symbolics.jacobian(objs, dvs; simplify)
+    end
+    return return_sparsity ? (jac, sparsity) : jac
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the jacobian function of the objective vector of `sys`, for the `jac` field of
+`SciMLBase.MultiObjectiveOptimizationFunction`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_multiobjective_jacobian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of the jacobian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_jacobian(
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    jac,
+        sparsity = calculate_multiobjective_jacobian(
+        sys; simplify, sparse, return_sparsity = true
+    )
+    res = build_function_wrapper(sys, jac, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+    fn = maybe_compile_function(
+        expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+    )
+    return return_sparsity ? (fn, sparsity) : fn
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the hessian of each objective of `sys` with respect to unknowns, as a vector of
+hessian matrices.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.hessian`.
+- `return_sparsity`: Whether to also return the sparsity pattern of each hessian.
+"""
+function calculate_multiobjective_hessian(
+        sys::System; simplify = false, sparse = false, return_sparsity = false
+    )
+    objs = costs(sys)
+    dvs = flat_unknowns(sys)
+    sparsity = nothing
+    if sparse
+        hess = map(objs) do obj
+            Symbolics.sparsehessian(obj, dvs; simplify)::AbstractSparseArray
+        end
+        sparsity = similar.(hess, Float64)
+    else
+        hess = [Symbolics.hessian(obj, dvs; simplify) for obj in objs]
+    end
+    return return_sparsity ? (hess, sparsity) : hess
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the hessian functions of the objectives of `sys`, for the `hess` field of
+`SciMLBase.MultiObjectiveOptimizationFunction`: one generated function per objective,
+in the order of [`costs`](@ref). In expression mode, a `vect` expression of them.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_multiobjective_hessian`](@ref).
+- `return_sparsity`: Whether to also return the sparsity pattern of each hessian as the
+  second return value.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_multiobjective_hessian(
+        sys::System, opts::GeneratedFunctionOptions;
+        return_sparsity::Bool = false, simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
+    ps = reorder_parameters(sys)
+    hess,
+        sparsity = calculate_multiobjective_hessian(
+        sys; simplify, sparse, return_sparsity = true
+    )
+    fns = map(hess) do H
+        res = build_function_wrapper(sys, H, [Any[dvs]; ps], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
+        maybe_compile_function(
+            expression, wrap_gfw, (2, 2, is_split(sys)), res; eval_expression, eval_module
+        )
+    end
+    fn = expression == Val{true} ? Expr(:vect, fns...) : fns
     return return_sparsity ? (fn, sparsity) : fn
 end
 
@@ -959,7 +1579,7 @@ function calculate_control_jacobian(
         sparse = false, simplify = false
     )
     rhs = [eq.rhs for eq in full_equations(sys)]
-    ctrls = unbound_inputs(sys)
+    ctrls = default_codegen_inputs(sys)
 
     if sparse
         jac = sparsejacobian(rhs, ctrls, simplify = simplify)
@@ -983,27 +1603,199 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_control_jacobian(
-        sys::AbstractSystem;
-        expression = Val{true}, wrap_gfw = Val{false}, eval_expression = false,
-        eval_module = @__MODULE__, simplify = false, sparse = false, kwargs...
+        sys::AbstractSystem, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
     )
-    dvs = unknowns(sys)
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    dvs = flat_unknowns(sys)
     ps = parameters(sys; initial_parameters = true)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
     p = reorder_parameters(sys, ps)
-    res = build_function_wrapper(sys, jac, dvs, p..., get_iv(sys); kwargs...)
+    res = build_function_wrapper(sys, jac, [Any[dvs]; p; Any[get_iv(sys)]], BuildFunctionWrapperOptions(; u_arg = 1, codegen_function_options = opts.codegen))
     return maybe_compile_function(
         expression, wrap_gfw, (2, 3, is_split(sys)), res; eval_expression, eval_module
+    )
+end
+
+"""
+Assert that the buffer handed to a sparse in-place parameter jacobian has exactly the
+sparsity pattern the function was generated for, mirroring [`assert_jac_length_header`](@ref).
+"""
+function assert_paramjac_length_header(pjac::AbstractSparseArray)
+    return identity,
+        function add_header(expr)
+            body = Let([Assignment(:_, term(assert_jac_length, expr.args[1], findnz(pjac)[1:2]...))], expr.body, true)
+            return Func(expr.args, [], body)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+The parameters with respect to which [`calculate_paramjac`](@ref) differentiates, in the
+order they index the columns of the result.
+
+For a split system this is the tunable portion of `MTKParameters`, scalarized. For a
+non-split system it is every parameter of `sys`, since the parameter object is then a flat
+vector containing all of them.
+"""
+function paramjac_parameters(sys::AbstractSystem)
+    ps = parameters(sys; initial_parameters = true)
+    # `flatten = false` keeps the tunable buffer in slot 1 even when it is empty. With the
+    # default `flatten = true` an empty tunable buffer is dropped and slot 1 would silently
+    # be the initials buffer instead. `reorder_parameters` returns no buffers at all for an
+    # empty `ps`, so that case is guarded rather than indexed.
+    cols = isempty(ps) ? SymbolicT[] : reorder_parameters(sys, ps; flatten = false)[1]
+    pvars = SymbolicT[]
+    for p in cols
+        if symbolic_type(p) == ArraySymbolic()
+            append!(pvars, vec(collect(Symbolics.scalarize(p))))
+        else
+            push!(pvars, p)
+        end
+    end
+    return pvars
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Calculate the jacobian of the equations of `sys` with respect to its parameters, `df/dp`.
+
+`pJ[i, j]` is the derivative of equation `i` of `full_equations(sys)` with respect to entry
+`j` of `SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]`, where `p` is the
+parameter object of a problem built from `sys`. For `split = true` (the default) that array
+is the tunable portion of `MTKParameters`, already flattened, so parameters outside the
+tunable portion (`tunable = false`, integer-valued, nonnumeric, discrete and `Initial(...)`
+parameters) have no column, and array parameters occupy consecutive column-major columns.
+For `split = false` there is no index cache and `p` is a plain vector, so the columns are
+every parameter in `parameters(sys; initial_parameters = true)` order, including
+non-tunable and `Initial(...)` parameters. Array parameters are scalarized into one column
+each, so that correspondence is exact only for a system whose parameters are all scalars;
+a non-split system with array parameters cannot currently be turned into a problem anyway.
+
+The column order is the parameter-buffer order, which is not the order in which the
+parameters were declared. Use [`reorder_dimension_by_tunables`](@ref) with `dim = 2` to
+permute the columns into a chosen order, e.g.
+`reorder_dimension_by_tunables(sys, pJ, [a, b, c]; dim = 2)`.
+
+# Keyword arguments
+
+- `simplify`, `sparse`: Forwarded to `Symbolics.jacobian`/`Symbolics.sparsejacobian`.
+- `ps`: The parameters with respect to which the jacobian should be computed.
+
+A parameter that is only reached through a registered function with no derivative rule
+leaves an unexpanded `Differential` in the result, which generates a function returning
+`Num` rather than a number. `calculate_jacobian` has the same limitation for a registered
+function of an unknown.
+"""
+function calculate_paramjac(
+        sys::AbstractSystem;
+        sparse = false, simplify = false, ps = paramjac_parameters(sys)
+    )
+    check_symbolic_ad_allowed(sys)
+    # `Symbolics.jacobian` treats a delayed unknown `x(t - τ)` as opaque, so the column of
+    # a delay parameter would come out zero instead of `∂f/∂τ`. That is the right answer
+    # for `calculate_jacobian`, which holds the history fixed, but not here.
+    if is_dde(sys)
+        throw(
+            ArgumentError(
+                "`calculate_paramjac` does not support systems with delays, since the \
+                column of a delay parameter would silently be zero."
+            )
+        )
+    end
+    rhs = SymbolicT[eq.rhs for eq in full_equations(sys)]
+
+    if sparse
+        return sparsejacobian(rhs, ps; simplify)
+    else
+        return jacobian(rhs, ps; simplify)
+    end
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Generate the parameter-jacobian function for the equations of `sys`. The generated function
+has the signature `pJ = f(u, p, t)` (out-of-place) and `f(pJ, u, p, t)` (in-place),
+matching the `paramjac` field of a `SciMLBase.ODEFunction`. For a time-independent system
+the `t` argument is omitted.
+
+See [`calculate_paramjac`](@ref) for the meaning of the columns of `pJ`.
+
+# Keyword Arguments
+
+$GENERATE_X_KWARGS
+- `simplify`, `sparse`: Forwarded to [`calculate_paramjac`](@ref). A `sparse` in-place
+  function writes into the `nzval` of its output and therefore requires a
+  `SparseMatrixCSC` buffer with exactly the generated sparsity pattern. Pass
+  `checkbounds = true` to assert that at runtime.
+- `checkbounds`: Whether to check the sparsity pattern of the output buffer at runtime if
+  `sparse`. Also forwarded to `build_function_wrapper`.
+
+All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
+"""
+function generate_paramjac(
+        sys::AbstractSystem, opts::GeneratedFunctionOptions;
+        simplify::Bool = false, sparse::Bool = false
+    )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    pvars = paramjac_parameters(sys)
+    if isempty(pvars)
+        throw(
+            ArgumentError(
+                "Cannot generate a parameter jacobian for a system with no tunable \
+                parameters. `calculate_paramjac` returns an empty matrix for such a \
+                system, which cannot be compiled into an out-of-place function."
+            )
+        )
+    end
+    dvs = flat_unknowns(sys)
+    pjac = calculate_paramjac(sys; simplify, sparse, ps = pvars)
+    p = reorder_parameters(sys)
+    if sparse && opts.codegen.checkbounds
+        # the in-place function writes into `nzval` positionally, so a buffer with a
+        # different pattern is filled with values in the wrong cells
+        wrap_code = assert_paramjac_length_header(pjac)
+    else
+        wrap_code = (identity, identity)
+    end
+    args = Any[dvs]
+    append!(args, p)
+    nargs = 2
+    if is_time_dependent(sys)
+        push!(args, get_iv(sys))
+        nargs = 3
+    end
+    res = build_function_wrapper(
+        sys, pjac, args, BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = setproperties(opts.codegen, (; wrap_code))
+        )
+    )
+    return maybe_compile_function(
+        expression, wrap_gfw, (2, nargs, is_split(sys)), res;
+        compiler_options, eval_expression, eval_module
     )
 end
 
 function generate_rate_function(js::System, rate)
     p = reorder_parameters(js)
     return build_function_wrapper(
-        js, rate, unknowns(js), p...,
-        get_iv(js),
-        expression = Val{true}
-    )
+        js, rate, [Any[flat_unknowns(js)]; p; Any[get_iv(js)]],
+        BuildFunctionWrapperOptions(;
+            u_arg = 1,
+            codegen_function_options = Symbolics.CodegenFunctionOptions(;
+                expression = Val{true},
+                iip_config = (true, false)
+            )
+        )
+    )[1]
 end
 
 function generate_affect_function(js::System, affect; kwargs...)
@@ -1036,7 +1828,10 @@ end
 function assemble_maj(majv::Vector{U}, unknowntoid, pmapper) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, unknowntoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, unknowntoid) for maj in majv]
-    return MassActionJump(rs, ns; param_mapper = pmapper, nocopy = true)
+    return MassActionJump(
+        rs, ns; param_mapper = pmapper, nocopy = true,
+        scale_rates = false, rescale_rates_on_update = false
+    )
 end
 
 function numericrstoich(mtrs::Vector{Pair{V, W}}, unknowntoid) where {V, W}
@@ -1108,17 +1903,54 @@ function (pred::CheckInvalidAndTrackNamespaced)(x::SymbolicT)
     return false
 end
 
+struct NamespaceMap
+    value::Dict{SymbolicT, SymbolicT}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{NamespaceMap}, patch::NamedTuple)
+    return haskey(patch, :name) || haskey(patch, :observed) || haskey(patch, :unknowns) ||
+        haskey(patch, :ps) || haskey(patch, :systems)
+end
+
+function _build_namespace_map(sys)
+    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
+    for sym in unknowns(sys)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    for sym in parameters(sys; initial_parameters = true)
+        ns_map[renamespace(sys, sym)] = sym
+        if iscall(sym) && operation(sym) === getindex
+            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
+        end
+    end
+    return ns_map
+end
+
+function get_namespace_map(sys)
+    if sys isa System && iscomplete(sys)
+        cached = check_mutable_cache(sys, NamespaceMap, NamespaceMap, nothing)
+        cached isa NamespaceMap && return cached.value
+        m = _build_namespace_map(sys)
+        store_to_mutable_cache!(sys, NamespaceMap, NamespaceMap(m))
+        return m
+    end
+    return _build_namespace_map(sys)
+end
+
 """
     build_explicit_observed_function(sys, ts; kwargs...) -> Function(s)
 
 Generates a function that computes the observed value(s) `ts` in the system `sys`, while making the assumption that there are no cycles in the equations.
 
-## Arguments 
+## Arguments
 - `sys`: The system for which to generate the function
 - `ts`: The symbolic observed values whose value should be computed
 
 ## Keywords
-- `return_inplace = false`: If true and the observed value is a vector, then return both the in place and out of place methods.
+- `return_inplace = Val(false)`: If true and the observed value is a vector, then return both the in place and out of place methods. Can take boolean `true` or `false` values, but `Val(true)` or `Val(false)` is preferred.
 - `expression = false`: Generates a Julia `Expr`` computing the observed value if `expression` is true
 - `eval_expression = false`: If true and `expression = false`, evaluates the returned function in the module `eval_module`
 - `output_type = Array` the type of the array generated by a out-of-place vector-valued function
@@ -1126,10 +1958,9 @@ Generates a function that computes the observed value(s) `ts` in the system `sys
 - `inputs = nothing` additinoal symbolic variables that should be provided to the generated function
 - `disturbance_inputs = nothing` symbolic variables representing unknown disturbance inputs (removed from parameters, not added as function arguments)
 - `known_disturbance_inputs = nothing` symbolic variables representing known disturbance inputs (removed from parameters, added as function arguments)
-- `checkbounds = true` checks bounds if true when destructuring parameters
+- `checkbounds`: whether to check bounds when destructuring parameters (defaults to
+  `false`, i.e. generated code is wrapped in `@inbounds`)
 - `throw = true` if true, throw an error when generating a function for `ts` that reference variables that do not exist.
-- `mkarray`: only used if the output is an array (that is, `!isscalar(ts)`  and `ts` is not a tuple, in which case the result will always be a tuple). Called as `mkarray(ts, output_type)` where `ts` are the expressions to put in the array and `output_type` is the argument of the same name passed to build_explicit_observed_function.
-- `cse = true`: Whether to use Common Subexpression Elimination (CSE) to generate a more efficient function.
 - `wrap_delays = is_dde(sys)`: Whether to add an argument for the history function and use
   it to calculate all delayed variables.
 
@@ -1156,26 +1987,22 @@ The signatures will be of the form `g(...)` with arguments:
 For example, a function `g(op, unknowns, p..., inputs, t, known_disturbances)` will be the in-place function generated if `return_inplace` is true, `ts` is a vector,
 an array of inputs `inputs` is given, `known_disturbance_inputs` is provided, and `param_only` is false for a time-dependent system.
 """
-function build_explicit_observed_function(
-        sys, ts;
+Base.@nospecializeinfer function build_explicit_observed_function(
+        sys, @nospecialize(ts), opts::GeneratedFunctionOptions;
         inputs = nothing,
         disturbance_inputs = nothing,
         known_disturbance_inputs = nothing,
         disturbance_argument = false,
-        expression = false,
-        eval_expression = false,
-        eval_module = @__MODULE__,
         output_type = Array,
-        checkbounds = true,
         ps = parameters(sys; initial_parameters = true),
-        return_inplace = false,
+        return_inplace = Val(false),
         param_only = false,
         throw = true,
-        cse = true,
-        mkarray = nothing,
         wrap_delays = is_dde(sys) && !param_only,
-        force_time_independent = false,
+        force_time_independent = false
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
     if inputs === nothing
         inputs = ()
     else
@@ -1212,39 +2039,32 @@ function build_explicit_observed_function(
     end
 
     namespace_subs = Dict{SymbolicT, SymbolicT}()
-    ns_map = Dict{SymbolicT, SymbolicT}(renamespace(sys, eq.lhs) => eq.lhs for eq in observed(sys))
-    for sym in unknowns(sys)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
-    for sym in parameters(sys; initial_parameters = true)
-        ns_map[renamespace(sys, sym)] = sym
-        if iscall(sym) && operation(sym) === getindex
-            ns_map[renamespace(sys, arguments(sym)[1])] = arguments(sym)[1]
-        end
-    end
+    ns_map = get_namespace_map(sys)
     allsyms = as_atomic_array_set(unknowns(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), observables(sys))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), parameters(sys; initial_parameters = true))
     foreach(Base.Fix1(push_as_atomic_array!, allsyms), bound_parameters(sys))
     union!(allsyms, independent_variables(sys))
     dervars = Set{SymbolicT}()
-    dervals = Dict{SymbolicT, SymbolicT}()
     if isscheduled(sys)
         sched::Schedule = get_schedule(sys)
-        for (k, v) in sched.dummy_sub
-            ttk = default_toterm(k)
-            push!(dervars, ttk)
-            dervals[ttk] = v
+        for (k, _) in sched.dummy_sub
+            push!(dervars, default_toterm(k))
         end
     else
         for eq in equations(sys)
             isdiffeq(eq) || continue
-            ttk = default_toterm(eq.lhs)
-            push!(dervars, ttk)
-            dervals[ttk] = eq.rhs
+            x = only(arguments(eq.lhs))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` has no single `toterm` name; the derivatives that can be
+                # requested are those of its elements.
+                dop = operation(eq.lhs)::Union{Differential, Shift}
+                for idx in SU.stable_eachindex(x)
+                    push!(dervars, default_toterm(dop(x[idx])))
+                end
+            else
+                push!(dervars, default_toterm(eq.lhs))
+            end
         end
     end
     pred = CheckInvalidAndTrackNamespaced(
@@ -1259,27 +2079,12 @@ function build_explicit_observed_function(
             SU.query(pred, x)
         end
     end
-    extra_assignments = Assignment[]
-    for var in pred.present_dervars
-        push!(extra_assignments, var ← dervals[var])
-    end
     ts = substitute(ts, namespace_subs)
 
-    obsfilter = if param_only
-        if is_split(sys)
-            let ic = get_index_cache(sys)
-                eq -> !(ContinuousTimeseries() in ic.observed_syms_to_timeseries[eq.lhs])
-            end
-        else
-            Returns(false)
-        end
-    else
-        Returns(true)
-    end
     dvs = if param_only
         ()
     else
-        (unknowns(sys),)
+        (flat_unknowns(sys),)
     end
     if inputs isa Vector{SymbolicT}
         ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
@@ -1293,7 +2098,7 @@ function build_explicit_observed_function(
                 "For `disturbance_argument=false`, use `disturbance_inputs` as before.",
             :build_explicit_observed_function
         )
-        if known_disturbance_inputs !== nothing
+        if known_disturbance_inputs !== ()
             error("Cannot specify both `disturbance_argument=true` and `known_disturbance_inputs`")
         end
         known_disturbance_inputs = disturbance_inputs
@@ -1319,42 +2124,34 @@ function build_explicit_observed_function(
     p_start = length(dvs) + length(inputs) + 1
     p_end = length(dvs) + length(inputs) + length(rps)
     fns = build_function_wrapper(
-        sys, ts, args...; p_start, p_end, filter_observed = obsfilter,
-        output_type, mkarray, try_namespaced = true, expression = Val{true}, cse,
-        wrap_delays, extra_assignments
-    )
-    if fns isa Tuple
-        if expression
-            return return_inplace ? fns : fns[1]
-        end
-        oop, iip = eval_or_rgf.(fns; eval_expression, eval_module)
-        f = GeneratedFunctionWrapper{
-            (
-                p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
-            ),
-        }(
-            oop, iip
+        sys, ts, collect(Any, args), BuildFunctionWrapperOptions(;
+            p_start, p_end,
+            output_type, wrap_delays, codegen_function_options = opts.codegen
         )
-        return return_inplace ? (f, f) : f
-    else
-        if expression
-            return fns
-        end
-        f = eval_or_rgf(fns; eval_expression, eval_module)
-        f = GeneratedFunctionWrapper{
-            (
-                p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
-            ),
-        }(
-            f, nothing
-        )
-        return f
+    )::NTuple{2, Expr}
+    if expression === Val{true}
+        return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? fns : fns[1]
     end
+
+    oop = eval_or_rgf(fns[1]; eval_expression, eval_module, compiler_options)
+    iip = eval_or_rgf(fns[2]; eval_expression, eval_module, compiler_options)
+    f = GeneratedFunctionWrapper{
+        (
+            p_start + wrap_delays, length(args) - length(rps) + 1 + wrap_delays, is_split(sys),
+        ),
+    }(
+        oop, iip
+    )
+    return (return_inplace isa Val{true} || return_inplace isa Bool && return_inplace) ? (f, f) : f
 end
 
 struct CachedLinearAb
-    A::Matrix{SymbolicT}
+    A::SparseMatrixCSC{SymbolicT, Int}
     b::Vector{SymbolicT}
+end
+
+function should_invalidate_mutable_cache_entry(::Type{CachedLinearAb}, patch::NamedTuple)
+    return haskey(patch, :eqs) || haskey(patch, :observed) || haskey(patch, :unknowns)
 end
 
 struct NotAffineError <: Exception
@@ -1383,10 +2180,9 @@ Return matrix `A` and vector `b` such that the system `sys` can be represented a
 - `throw`: whether to throw an error if the system is not affine.
 """
 function calculate_A_b(sys::System; sparse = false, throw = true)
-    cache = getmetadata(sys, MutableCacheKey, nothing)::MutableCacheT
-    cached_ab = get(cache, CachedLinearAb, nothing)
+    cached_ab = check_mutable_cache(sys, CachedLinearAb, Union{CachedLinearAb, NotAffineError}, nothing)
     if cached_ab isa CachedLinearAb
-        return sparse ? SparseArrays.sparse(cached_ab.A) : cached_ab.A, cached_ab.b
+        return sparse ? cached_ab.A : collect(cached_ab.A), cached_ab.b
     elseif cached_ab isa NotAffineError
         throw || return nothing
         Base.throw(cached_ab)
@@ -1401,22 +2197,33 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         # to more comprehensible user API.
         push!(rhss, -eq.rhs)
     end
-    dvs = unknowns(sys)
-    A = Matrix{SymbolicT}(undef, length(rhss), length(dvs))
+    dvs = flat_unknowns(sys)
+    I = Int[]
+    J = Int[]
+    V = SymbolicT[]
     b = Vector{SymbolicT}(undef, length(rhss))
+    query_predicate = in(Set{SymbolicT}(dvs))
+    ir = get_irstructure(sys)
     # `linear_expansion` caches values based on `var`. This loop ordering helps
     # avoid invalidating the cache frequently.
     for (j, var) in enumerate(dvs)
-        lex = Symbolics.LinearExpander(var; strict = true)
+        lex = get_linear_expander_for!(sys, var, true)
         for (i, resid) in enumerate(rhss)
             p, q, islinear = lex(resid)
-            if !islinear
+            # An equation such as `0 ~ 1 + x * y` will return `(x, 1, true)` for `y`.
+            # Check that `p` doesn't contain unknowns to avoid this.
+            SU.populate_ir!(ir, p)
+            if !islinear || SU.query(query_predicate, ir, p)
                 err = NotAffineError(fulleqs[i].rhs, var)
-                cache[CachedLinearAb] = err
+                store_to_mutable_cache!(sys, CachedLinearAb, err)
                 throw || return nothing
                 Base.throw(err)
             end
-            A[i, j] = p
+            if !SU._iszero(p)
+                push!(I, i)
+                push!(J, j)
+                push!(V, p)
+            end
             rhss[i] = q
         end
     end
@@ -1425,12 +2232,11 @@ function calculate_A_b(sys::System; sparse = false, throw = true)
         b[i] = -rhss[i]
     end
 
-    @assert all(Base.Fix1(isassigned, A), eachindex(A))
-    @assert all(Base.Fix1(isassigned, A), eachindex(b))
+    A = SparseArrays.sparse(I, J, V, length(rhss), length(dvs))
 
-    cache[CachedLinearAb] = CachedLinearAb(A, b)
-    if sparse
-        A = SparseArrays.sparse(A)
+    store_to_mutable_cache!(sys, CachedLinearAb, CachedLinearAb(A, b))
+    if !sparse
+        A = collect(A)
     end
     return A, b
 end
@@ -1448,18 +2254,128 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_A(
-        sys::System, A::AbstractMatrix; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+        sys::System, A::AbstractMatrix, opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = size(A, 1)
+    push!(regions, SU.ShapeVecT((1:N, 1:size(A, 2))))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(A, 1), j in axes(A, 2)
+        v = A[i, j]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i, j:j)))
+        push!(values, Symbolics.SConst([v;;]))
+    end
+    A = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
+
     res = build_function_wrapper(
-        sys, A, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(A), kwargs...
+        sys, A, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(A)))
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
+    )
+end
+
+struct DiagonalAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+
+    function DiagonalAMatrixWrapper(f::GeneratedFunctionWrapper{Tuple{P1, P2, P3}}) where {P1, P2, P3}
+        return new{P2, typeof(f)}(f)
+    end
+end
+
+function DiagonalAMatrixWrapper(f::Expr)
+    return Expr(:call, DiagonalAMatrixWrapper, f)
+end
+
+function (f::DiagonalAMatrixWrapper{OOPArgs})(out::Diagonal, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::DiagonalAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return Diagonal(f.f(args...))
+end
+
+function generate_update_A(
+        sys::System, A::Diagonal{SymbolicT, Vector{SymbolicT}},
+        opts::GeneratedFunctionOptions; cachesyms = ()
+    )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    ps = reorder_parameters(sys)
+
+    res = build_function_wrapper(
+        sys, parent(A), [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = setproperties(opts.codegen, (; similarto = Vector{SymbolicT}))
+        )
+    )
+    return DiagonalAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            compiler_options, eval_expression, eval_module
+        )
+    )
+end
+
+struct BandedAMatrixWrapper{O, F <: GeneratedFunctionWrapper}
+    f::F
+    nrows::Int
+    bands::NTuple{2, Int}
+
+    function BandedAMatrixWrapper(f::GeneratedFunctionWrapper{Tuple{P1, P2, P3}}, nr, bands) where {P1, P2, P3}
+        return new{P2, typeof(f)}(f, nr, bands)
+    end
+end
+
+function BandedAMatrixWrapper(f::Expr, nr::Int, bands::NTuple{2, Int})
+    return Expr(:call, BandedAMatrixWrapper, f, nr, bands)
+end
+
+function (f::BandedAMatrixWrapper{OOPArgs})(out::BandedMatrix, args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    f.f(parent(out), args...)
+    return nothing
+end
+function (f::BandedAMatrixWrapper{OOPArgs})(args::Vararg{Any, OOPArgs}) where {OOPArgs}
+    return BandedMatrices._BandedMatrix(f.f(args...), f.nrows, f.bands...)
+end
+
+function generate_update_A(
+        sys::System, A::BandedMatrix{SymbolicT, Matrix{SymbolicT}},
+        opts::GeneratedFunctionOptions; cachesyms = ()
+    )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
+    ps = reorder_parameters(sys)
+
+    parA = parent(A)
+    for i in eachindex(parA)
+        isassigned(parA, i) && continue
+        parA[i] = Symbolics.COMMON_ZERO
+    end
+    res = build_function_wrapper(
+        sys, parA, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = setproperties(opts.codegen, (; similarto = Matrix{SymbolicT}))
+        )
+    )
+    return BandedAMatrixWrapper(
+        maybe_compile_function(
+            expression, wrap_gfw, (1, 1, is_split(sys)), res;
+            compiler_options, eval_expression, eval_module
+        ), size(A, 1), BandedMatrices.bandwidths(A)
     )
 end
 
@@ -1476,17 +2392,118 @@ $GENERATE_X_KWARGS
 All other keyword arguments are forwarded to [`build_function_wrapper`](@ref).
 """
 function generate_update_b(
-        sys::System, b::AbstractVector; expression = Val{true},
-        wrap_gfw = Val{false}, eval_expression = false, eval_module = @__MODULE__, cachesyms = (), kwargs...
+        sys::System, b::AbstractVector, opts::GeneratedFunctionOptions; cachesyms = ()
     )
+    (; eval_expression, eval_module, compiler_options) = opts
+    expression = expression_val(opts)
+    wrap_gfw = wrap_gfw_val(opts)
     ps = reorder_parameters(sys)
 
+    regions = SU.RegionsT()
+    values = Symbolics.SArgsT()
+    N = length(b)
+    push!(regions, SU.ShapeVecT((1:N,)))
+    push!(values, SU.Fill(last(regions))(Symbolics.COMMON_ZERO))
+    for i in axes(b, 1)
+        v = b[i]
+        SU._iszero(v) && continue
+        push!(regions, SU.ShapeVecT((i:i,)))
+        push!(values, Symbolics.SConst([v]))
+    end
+    b = SU.ArrayMaker{VartypeT}(regions, values; shape = first(regions))
+
     res = build_function_wrapper(
-        sys, b, ps..., cachesyms...; p_start = 1, expression = Val{true},
-        similarto = typeof(b), kwargs...
+        sys, b, [Any[]; ps; collect(cachesyms)], BuildFunctionWrapperOptions(;
+            p_start = 1, n_param_buffers = length(ps),
+            codegen_function_options = setproperties(opts.codegen, (; similarto = typeof(b)))
+        )
     )
     return maybe_compile_function(
         expression, wrap_gfw, (1, 1, is_split(sys)), res;
-        eval_expression, eval_module
+        compiler_options, eval_expression, eval_module
     )
+end
+"""
+    generate_custom_function(
+        sys::AbstractSystem, exprs, dvs = flat_unknowns(sys), ps = parameters(sys); kwargs...
+    )
+
+Generate a function to evaluate `exprs`. `exprs` is a symbolic expression or
+array of symbolic expressions involving symbolic variables in `sys`. If `split = true` was
+passed to [`complete`](@ref), [`mtkcompile`](@ref), or [`@mtkcompile`](@ref), `p` is an
+`MTKParameters` object.
+
+# Arguments
+
+- `sys::AbstractSystem`: A completed system that owns the symbolic variables.
+- `exprs`: A symbolic expression or array of expressions to evaluate.
+- `dvs = flat_unknowns(sys)`: State variables supplied as `u`.
+- `ps = parameters(sys)`: Parameters supplied as `p`.
+
+# Keywords
+
+- `expression = Val{true}`: Return generated expression(s) when `Val{true}`, or callable
+  function(s) when `Val{false}`.
+- `eval_expression = false`: Evaluate generated expressions in `eval_module` rather than
+  using `RuntimeGeneratedFunctions`.
+- `eval_module = @__MODULE__`: Module in which expressions are evaluated when
+  `eval_expression = true`.
+- `cachesyms = ()`: Symbols supplied as cache arguments to the generated function.
+- `kwargs...`: Code-generation options forwarded to `Symbolics.CodegenFunctionOptions`.
+
+# Returns
+
+- Generated expression(s) or callable function(s). Time-dependent functions accept
+  `f(u, p, t)` or `f(du, u, p, t)`; time-independent functions omit `t`.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@independent_variables t
+@variables x(t)
+sys = complete(System(Equation[], t, [x], []; name = :sys))
+f = generate_custom_function(sys, x; expression = Val(false))
+f([1.0], MTKParameters(sys, []), 0.0)
+```
+"""
+function generate_custom_function(
+        sys::AbstractSystem, exprs, dvs, ps, opts::GeneratedFunctionOptions;
+        cachesyms::Tuple = ()
+    )
+    (; eval_expression, eval_module) = opts
+    expression = expression_val(opts)
+    if !iscomplete(sys)
+        error("A completed system is required. Call `complete` or `mtkcompile` on the system.")
+    end
+    p = reorder_parameters(sys, unwrap.(ps))
+    isscalar = !(exprs isa AbstractArray)
+    fnexpr = if is_time_dependent(sys)
+        build_function_wrapper(
+            sys, exprs,
+            [Any[dvs]; p; collect(cachesyms); Any[get_iv(sys)]],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = opts.codegen
+            )
+        )
+    else
+        build_function_wrapper(
+            sys, exprs,
+            [Any[dvs]; p],
+            BuildFunctionWrapperOptions(;
+                u_arg = 1,
+                codegen_function_options = opts.codegen
+            )
+        )
+    end
+    if expression == Val{true}
+        return fnexpr
+    end
+    if SU.is_array_shape(SU.shape(unwrap(exprs)))
+        return eval_or_rgf.(fnexpr; eval_expression, eval_module)
+    else
+        return eval_or_rgf(fnexpr[1]; eval_expression, eval_module)
+    end
 end

@@ -26,18 +26,59 @@ end
 ###
 ### Structural and symbolic utilities
 ###
+"""
+    highest_order_variable_mask(ts)
+
+Return a predicate selecting highest-order variables in a tearing state.
+
+# Arguments
+
+- `ts`: tearing state whose derivative graph should be inspected.
+
+# Returns
+
+A predicate `f(v)::Bool` over variable indices.
+"""
 function highest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
         v -> isempty(outneighbors(v2d, v))
     end
 end
 
+"""
+    lowest_order_variable_mask(ts)
+
+Return a predicate selecting lowest-order variables in a tearing state.
+
+# Arguments
+
+- `ts`: tearing state whose derivative graph should be inspected.
+
+# Returns
+
+A predicate `f(v)::Bool` over variable indices.
+"""
 function lowest_order_variable_mask(ts)
     return let v2d = ts.structure.var_to_diff
         v -> isempty(inneighbors(v2d, v))
     end
 end
 
+"""
+    but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
+
+Construct the block upper triangular ordered incidence matrix for `ts`.
+
+# Arguments
+
+- `ts`: tearing state to analyze.
+- `varmask`: predicate selecting which variable indices participate in the ordering.
+
+# Returns
+
+A pair `(matrix, block_boundaries)` containing the ordered incidence matrix and the
+starting row/column boundaries for each block.
+"""
 function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
     graph = complete(ts.structure.graph)
     var_eq_matching = complete(maximal_matching(graph; srcfilter = _ -> true, dstfilter = varmask))

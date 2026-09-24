@@ -3,7 +3,7 @@
 
 `ImperativeAffect` is a helper for writing affect functions that will compute observed values and
 ensure that modified values are correctly written back into the system. The affect function `f` needs to have
-the signature 
+the signature
 
 ```
     f(modified::NamedTuple, observed::NamedTuple, ctx, integrator)::NamedTuple
@@ -15,7 +15,7 @@ so the value of `a + b` will be accessible as `observed.x` in `f`. `modified` cu
 `(; x = y)` or `(; x)` (which aliases `x` as itself) are allowed.
 
 The argument NamedTuples (for instance `(;x=y)`) will be populated with the declared values on function entry; if we require `(;x=y)` in `observed` and `y=2`, for example,
-then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function `f`. 
+then the NamedTuple `(;x=2)` will be passed as `observed` to the affect function `f`.
 
 The NamedTuple returned from `f` includes the values to be written back to the system after `f` returns. For example, if we want to update the value of `x` to be the result of `x + y` we could write
 
@@ -120,12 +120,12 @@ function Base.:(==)(a1::ImperativeAffect, a2::ImperativeAffect)
 end
 
 function Base.hash(a::ImperativeAffect, s::UInt)
-    s = hash(a.f, s)
-    s = hash(a.obs, s)
-    s = hash(a.obs_syms, s)
-    s = hash(a.modified, s)
-    s = hash(a.mod_syms, s)
-    return hash(a.ctx, s)
+    s = hash(a.f, s)::UInt
+    s = hash(a.obs, s)::UInt
+    s = hash(a.obs_syms, s)::UInt
+    s = hash(a.modified, s)::UInt
+    s = hash(a.mod_syms, s)::UInt
+    return hash(a.ctx, s)::UInt
 end
 
 namespace_affects(af::ImperativeAffect, s) = namespace_affect(af, s)
@@ -158,18 +158,33 @@ function invalid_variables(sys, expr)
 end
 
 function unassignable_variables(sys, expr)
-    assignable_syms = reduce(
-        vcat, Symbolics.scalarize.(
-            vcat(
-                unknowns(sys), parameters(sys; initial_parameters = true)
-            )
-        );
-        init = []
-    )
-    written = reduce(vcat, Symbolics.scalarize.(collect(SU.search_variables(expr))); init = [])
-    return filter(
-        x -> !any(isequal(x), assignable_syms), written
-    )
+    assignable_syms = Set{SymbolicT}()
+    union!(assignable_syms, unknowns(sys))
+    for p in parameters(sys; initial_parameters = true)
+        if Symbolics.isarraysymbolic(p)
+            for idx in SU.stable_eachindex(p)
+                push!(assignable_syms, p[idx])
+            end
+        else
+            push!(assignable_syms, p)
+        end
+    end
+    vars = Set{SymbolicT}()
+    SU.search_variables!(vars, expr)
+    unassignable = SymbolicT[]
+    for var in vars
+        if Symbolics.isarraysymbolic(var)
+            for idx in SU.stable_eachindex(var)
+                sym = var[idx]
+                sym in assignable_syms && continue
+                push!(unassignable, sym)
+            end
+        else
+            var in assignable_syms && continue
+            push!(unassignable, var)
+        end
+    end
+    return unassignable
 end
 
 @generated function _generated_writeback(
@@ -204,6 +219,66 @@ function check_assignable(sys, sym)
     end
 end
 
+"""
+    FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+
+Callable struct representing a compiled [`ImperativeAffect`](@ref). On each invocation,
+reads current modified and observed values from the integrator, calls the user function,
+and writes back the returned values. Created by [`compile_functional_affect`](@ref).
+
+# Fields
+- `user_affect`: the user-supplied function with signature `f(modified, observed, ctx, integ)`
+- `ctx`: user-supplied context object passed through to `user_affect`
+- `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after the affect
+- `mod_og_val_fun`: OOP function that reads the current values of all modified variables
+- `obs_fun`: OOP function that reads the observed expressions
+- `mod_names`: `NTuple{N, Symbol}` naming the modified variables (for `NamedTuple` construction)
+- `obs_sym_tuple`: `NTuple{M, Symbol}` naming the observed values
+- `upd_funs`: `NamedTuple` of setter callables mapping each modified variable name to its setter
+"""
+struct FunctionalAffect{UF, CTX, MOF, OF, MN, OST, UPS}
+    user_affect::UF
+    ctx::CTX
+    reset_jumps::Bool
+    mod_og_val_fun::MOF
+    obs_fun::OF
+    mod_names::MN
+    obs_sym_tuple::OST
+    upd_funs::UPS
+end
+
+@inline function (fa::FunctionalAffect)(integ)
+    # Read the current values of the modified variables (pre-affect baseline)
+    modvals = fa.mod_og_val_fun(integ.u, integ.p, integ.t)
+    upd_component_array = NamedTuple{fa.mod_names}(modvals)
+    # Read the observed expressions
+    obs_component_array = NamedTuple{fa.obs_sym_tuple}(
+        fa.obs_fun(integ.u, integ.p, integ.t)
+    )
+    # Call the user-supplied affect function
+    upd_vals = fa.user_affect(upd_component_array, obs_component_array, fa.ctx, integ)
+    # Write back any returned values
+    if !isnothing(upd_vals)
+        _generated_writeback(integ, fa.upd_funs, upd_vals)
+    end
+    return fa.reset_jumps && reset_aggregated_jumps!(integ)
+end
+
+"""
+    compile_functional_affect(affect::ImperativeAffect, sys; reset_jumps, kwargs...)
+
+Compile an `ImperativeAffect` into a [`FunctionalAffect`](@ref) callable struct. Generates
+OOP observed and modified-value reader functions via `build_explicit_observed_function`, and
+setter callables via `setu`. All captures are encoded as typed struct fields for type stability.
+
+# Arguments
+- `affect`: the `ImperativeAffect` specification
+- `sys`: the parent system providing compilation context
+- `reset_jumps`: if `true`, call `reset_aggregated_jumps!` after each invocation
+
+# Returns
+A `FunctionalAffect` struct callable as `f(integrator)`.
+"""
 function compile_functional_affect(
         affect::ImperativeAffect, sys; reset_jumps = false, kwargs...
     )
@@ -224,7 +299,7 @@ function compile_functional_affect(
                 push!(exprs_dedup, exp)
                 push!(seen, sym)
             elseif !affect.skip_checks
-                @warn "Expression $(expr) is aliased as $sym, which has already been used. The first definition will be used."
+                @warn "Expression $(exp) is aliased as $sym, which has already been used. The first definition will be used."
             end
         end
         return (syms_dedup, exprs_dedup)
@@ -238,7 +313,7 @@ function compile_functional_affect(
         for oexpr in obs_exprs
             invalid_vars = invalid_variables(sys, oexpr)
             if length(invalid_vars) > 0
-                error("Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
+                error(lazy"Observed equation $(oexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing).")
             end
         end
     end
@@ -253,7 +328,7 @@ function compile_functional_affect(
             end
             invalid_vars = unassignable_variables(sys, mexpr)
             if length(invalid_vars) > 0
-                error("Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
+                error(lazy"Modified equation $(mexpr) in affect refers to missing variable(s) $(invalid_vars); the variables may not have been added (e.g. if a component is missing) or they may have been reduced away.")
             end
         end
     end
@@ -273,8 +348,9 @@ function compile_functional_affect(
         zeros(sz)
     end
     obs_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(obs_exprs);
-        mkarray = (es, _) -> MakeTuple(es)
+        sys, Symbolics.scalarize.(obs_exprs),
+        GeneratedFunctionOptions(; expression = Val{false});
+        output_type = Tuple
     )
     obs_sym_tuple = (obs_syms...,)
 
@@ -282,36 +358,17 @@ function compile_functional_affect(
     mod_pairs = mod_exprs .=> mod_syms
     mod_names = (mod_syms...,)
     mod_og_val_fun = build_explicit_observed_function(
-        sys, Symbolics.scalarize.(first.(mod_pairs));
-        mkarray = (es, _) -> MakeTuple(es)
+        sys, Symbolics.scalarize.(first.(mod_pairs)),
+        GeneratedFunctionOptions(; expression = Val{false});
+        output_type = Tuple
     )
 
     upd_funs = NamedTuple{mod_names}((setu.((sys,), first.(mod_pairs))...,))
 
-    return let user_affect = func(affect), ctx = context(affect), reset_jumps = reset_jumps
-        @inline function (integ)
-            # update the to-be-mutated values; this ensures that if you do a no-op then nothing happens
-            modvals = mod_og_val_fun(integ.u, integ.p, integ.t)
-            upd_component_array = NamedTuple{mod_names}(modvals)
-
-            # update the observed values
-            obs_component_array = NamedTuple{obs_sym_tuple}(
-                obs_fun(
-                    integ.u, integ.p, integ.t
-                )
-            )
-
-            # let the user do their thing
-            upd_vals = user_affect(upd_component_array, obs_component_array, ctx, integ)
-
-            # write the new values back to the integrator
-            if !isnothing(upd_vals)
-                _generated_writeback(integ, upd_funs, upd_vals)
-            end
-
-            return reset_jumps && reset_aggregated_jumps!(integ)
-        end
-    end
+    return FunctionalAffect(
+        func(affect), context(affect), reset_jumps,
+        mod_og_val_fun, obs_fun, mod_names, obs_sym_tuple, upd_funs
+    )
 end
 
 scalarize_affects(affects::ImperativeAffect) = affects
@@ -319,7 +376,7 @@ scalarize_affects(affects::ImperativeAffect) = affects
 function SU.search_variables!(vars, aff::ImperativeAffect; kwargs...)
     for var in Iterators.flatten((observed(aff), modified(aff)))
         if symbolic_type(var) == NotSymbolic()
-            SU.search_variables!(vars, v; kwargs...)
+            SU.search_variables!(vars, var; kwargs...)
         end
     end
     return

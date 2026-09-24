@@ -61,7 +61,8 @@ asgraph(eqdeps, vtois)
 ```
 
 Convert a collection of equation dependencies, for example as returned by
-`equation_dependencies`, to a [`BipartiteGraph`](@ref).
+`equation_dependencies`, to a
+[`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/).
 
 Notes:
 
@@ -99,8 +100,9 @@ asgraph(sys::AbstractSystem; variables = unknowns(sys),
         variablestoids = Dict(convert(Variable, v) => i for (i, v) in enumerate(variables)))
 ```
 
-Convert an `AbstractSystem` to a [`BipartiteGraph`](@ref) mapping the index of equations
-to the indices of variables they depend on.
+Convert an `AbstractSystem` to a
+[`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/)
+mapping the index of equations to the indices of variables they depend on.
 
 Notes:
 
@@ -132,12 +134,14 @@ variable_dependencies(sys::AbstractSystem; variables = unknowns(sys),
                       variablestoids = nothing)
 ```
 
-For each variable, determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
+For each variable, determine the equations that modify it and return a
+[`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/).
 
 Notes:
 
-  - Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable
-    indices to the indices of equations that modify them.
+  - Dependencies are returned as a
+    [`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/)
+    mapping variable indices to the indices of equations that modify them.
   - `variables` denotes the list of variables to determine dependencies for.
   - `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
 
@@ -179,7 +183,9 @@ asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = unknowns(sys),
           equationsfirst = true)
 ```
 
-Convert a [`BipartiteGraph`](@ref) to a `LightGraph.SimpleDiGraph`.
+Convert a
+[`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/)
+to a `LightGraph.SimpleDiGraph`.
 
 Notes:
 
@@ -189,7 +195,8 @@ Notes:
     collections of vertices, so they must be merged).
   - `variables` gives the variables that `g` are associated with (usually the
     `unknowns` of a system).
-  - `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
+  - `equationsfirst` (default is `true`) gives whether the
+    [`BipartiteGraphs.BipartiteGraph`](https://docs.sciml.ai/BipartiteGraphs/dev/api/)
     gives a mapping from equations to variables they depend on (`true`), as calculated
     by [`asgraph`](@ref), or whether it gives a mapping from variables to the equations
     that modify them, as calculated by [`variable_dependencies`](@ref).

@@ -141,12 +141,16 @@ if @isdefined(ModelingToolkit)
     model_inputs = [torque.tau.u]
     op = Dict(torque.tau.u => 0.0)
     matrices, ssys = linearize(
-        model, model_inputs, model_outputs; op
+        model, model_inputs, model_outputs; op,
+        guesses = [inertia2.flange_a.phi => 0.0, inertia1.flange_b.phi => 0.0]
     )
     @test length(ModelingToolkit.outputs(ssys)) == 4
 
     let # Just to have a local scope for D
-        matrices, ssys = linearize(model, model_inputs, [y]; op)
+        matrices, ssys = linearize(
+            model, model_inputs, [y]; op,
+            guesses = [inertia2.flange_a.phi => 0.0, inertia1.flange_b.phi => 0.0]
+        )
         A, B, C, D = matrices
         obsf = ModelingToolkit.build_explicit_observed_function(
             ssys,
@@ -387,6 +391,44 @@ eqs = [D(x) ~ u]
     @test isequal(ModelingToolkitBase.outputs(ss1), [x[1], x[2], x[3]])
 end
 
+@testset "default_codegen_inputs: declared inputs on compiled hierarchical systems" begin
+    # After mtkcompile flattens a hierarchical model, an effective input appears
+    # in equations together with variables from other namespaces and is therefore
+    # classified as bound, so `unbound_inputs` is empty. Input-aware codegen must
+    # fall back to the inputs declared to `mtkcompile` instead of silently
+    # generating input-free dynamics.
+    function TestActuator(; name)
+        @variables u(t) [input = true] o(t) [output = true]
+        return System([o ~ 2u], t; name)
+    end
+    function TestPlant(; name)
+        @variables y(t) i(t)
+        return System([D(y) ~ -y + i], t; name)
+    end
+    @named act = TestActuator()
+    @named plant = TestPlant()
+    @named hier = System([plant.i ~ act.o], t; systems = [act, plant])
+    hier = complete(hier)
+    ss = mtkcompile(hier; inputs = [hier.act.u])
+
+    @test isempty(unbound_inputs(ss))
+    @test length(ModelingToolkitBase.default_codegen_inputs(ss)) == 1
+    @test isequal(
+        collect(ModelingToolkitBase.default_codegen_inputs(ss)),
+        ModelingToolkitBase.inputs(ss)
+    )
+
+    # The `ODEInputFunction` default must pick up the declared input rather than
+    # generating dynamics with the input bound to its operating-point value.
+    f = ModelingToolkitBase.SciMLBase.ODEInputFunction(ss)
+    p = ModelingToolkitBase.get_p(ss, Dict(hier.act.u => 0.0, hier.plant.y => 1.0))
+    @test f([1.0], [0.0], p, 0.0) == [-1.0]
+    @test f([1.0], [5.0], p, 0.0) == [9.0]
+
+    # The control jacobian wrt the declared inputs is non-empty.
+    @test size(ModelingToolkitBase.calculate_control_jacobian(ss)) == (1, 1)
+end
+
 using ModelingToolkitStandardLibrary.Blocks
 
 if @isdefined(ModelingToolkit)
@@ -485,4 +527,48 @@ end
     @named sys2 = System([D(w) ~ z - w], t)
     cosys = compose(System(Equation[], t; name = :outermost), [csys, sys2])
     @test issetequal(ModelingToolkitBase.inputs(cosys), [csys.sys.y, sys2.z])
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "Issue#4244: Scalarized array inputs" begin
+        gravity = 9.81
+        gain_u1 = 0.89 / 1.4
+        d0 = 70
+        d1 = 17
+        n0 = 55
+
+        @named motor_dynamics = Blocks.FirstOrder(T = 0.001)
+
+        x0 = [0.85, 1, π / 12, π / 2]
+
+        @variables  u(t)[1:2] = zeros(2)
+        @variables y(t) = 0.85 v(t) = 1 ϕ(t) = π / 12 ω(t) = π / 2
+
+        eqs = [
+            D(y) ~ v,
+            D(v) ~ -gravity + gain_u1 * cos(ϕ) * (motor_dynamics.output.u + gravity / gain_u1),
+            D(ϕ) ~ ω,
+            D(ω) ~ -d0 * ϕ - d1 * ω + n0 * u[2],
+            motor_dynamics.input.u ~ u[1],
+        ]
+        @named model = System(eqs, t; systems = [motor_dynamics])
+
+        f, x, p, simplified_system = ModelingToolkit.generate_control_function(model, [u;])
+
+        x0 = ModelingToolkitBase.get_u0(simplified_system, [])
+        p = ModelingToolkitBase.get_p(simplified_system, [])
+
+        @test f[1](x0, zeros(2), p, 0) != f[1](x0, ones(2), p, 0)
+    end
+end
+
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4352: mtkcompile turns inputs to parameters in purely algebraic systems" begin
+        @variables inp(t) out(t)
+        @parameters K
+        sys_alg = System([out ~ K * inp], t, [inp, out], [K]; name = :io)
+        reduced_alg = mtkcompile(sys_alg, inputs = [inp], outputs = [out])
+        @test inp in Set(parameters(reduced_alg))
+        @test out in Set(unknowns(reduced_alg)) || out in Set(observables(reduced_alg))
+    end
 end

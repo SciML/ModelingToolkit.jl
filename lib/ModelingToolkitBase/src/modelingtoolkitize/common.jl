@@ -103,6 +103,19 @@ names, or `nothing` to automatically generate names.
 The returned value has the same structure as `p`, but symbolic variables instead of
 values.
 """
+struct ModelingtoolkitizeParametersNotSupportedError <: Exception
+    type::Type
+end
+
+function Base.showerror(io::IO, err::ModelingtoolkitizeParametersNotSupportedError)
+    return print(
+        io,
+        "`modelingtoolkitize` does not support parameters of type `$(err.type)`. Supported \
+        parameter containers are numbers, arrays, tuples, named tuples, dictionaries and \
+        `MTKParameters`."
+    )
+end
+
 function define_params(p, t, _ = nothing)
     throw(ModelingtoolkitizeParametersNotSupportedError(typeof(p)))
 end
@@ -219,6 +232,9 @@ function define_params(p::MTKParameters, t, names = nothing)
     end
 end
 
+define_params(p::SciMLBase.DespecializedParameters, t, names = nothing) =
+    define_params(SciMLBase.unwrap_parameters(p), t, names)
+
 """
     $(TYPEDSIGNATURES)
 
@@ -232,6 +248,9 @@ end
 function to_paramvec(p::MTKParameters)
     return reduce(vcat, collect(p); init = [])
 end
+
+to_paramvec(p::SciMLBase.DespecializedParameters) =
+    to_paramvec(SciMLBase.unwrap_parameters(p))
 
 """
     $(TYPEDSIGNATURES)
@@ -297,7 +316,7 @@ variables.
 """
 function construct_params(prob, t, p_names = nothing)
     p = parameter_values(prob)
-    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
+    has_p = !(p isa Union{SciMLBase.NullParameters, Nothing})
 
     # Get names of parameters
     if has_p
@@ -384,8 +403,19 @@ Obtain default values for unknowns `vars` and parameters `paramvec`
 given the problem `prob` and symbolic parameter object `paramobj`.
 """
 function defaults_from_u0_p(prob, vars, paramobj, paramvec)
+    return defaults_from_u0_p(prob, vars, paramobj, paramvec, parameter_values(prob))
+end
+
+function defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, p::SciMLBase.DespecializedParameters
+    )
+    return defaults_from_u0_p(
+        prob, vars, paramobj, paramvec, SciMLBase.unwrap_parameters(p)
+    )
+end
+
+function defaults_from_u0_p(prob, vars, paramobj, paramvec, p)
     u0 = state_values(prob)
-    p = parameter_values(prob)
     defaults = Dict{Any, Any}(vec(vars) .=> vec(collect(u0)))
     if !(p isa Union{SciMLBase.NullParameters, Nothing})
         if p isa Union{NamedTuple, AbstractDict}

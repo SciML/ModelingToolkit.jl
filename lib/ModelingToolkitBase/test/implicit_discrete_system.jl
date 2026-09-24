@@ -30,7 +30,8 @@ rng = StableRNG(22525)
     @mtkcompile sys = System([x(k) ~ x(k) * x(k - 1) - 3], t)
     if @isdefined(ModelingToolkit)
         @test_throws ModelingToolkitBase.MissingGuessError prob = ImplicitDiscreteProblem(
-            sys, [], tspan
+            sys, [], tspan,
+            missing_guess_value = MissingGuessValue.Error()
         )
     end
 end
@@ -79,9 +80,11 @@ end
     ]
     @mtkcompile sys = System(eqs, t)
     @test length(unknowns(sys)) == length(equations(sys)) == 3
-    @test occursin(
-        "var\"y(t)\"", string(ImplicitDiscreteFunction(sys; expression = Val{true}))
-    )
+    fn = ImplicitDiscreteFunction(sys)
+    unext = rand(3)
+    u = rand(3)
+    p = MTKParameters(sys, nothing)
+    @test_nowarn fn(unext, u, p, 0)
 
     # Shifted observable that appears in algebraic equation is properly handled.
     eqs = [
@@ -90,8 +93,7 @@ end
         z(k) * x(k) ~ 3,
     ]
     @mtkcompile sys = System(eqs, t)
-    @test occursin(
-        "var\"Shift(t, 1)(z(t))\"",
-        string(ImplicitDiscreteFunction(sys; expression = Val{true}))
-    )
+    fn = ImplicitDiscreteFunction(sys)
+    p = MTKParameters(sys, nothing)
+    @test_nowarn fn(unext, u, p, 0)
 end

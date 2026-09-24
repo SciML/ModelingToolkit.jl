@@ -1,0 +1,894 @@
+using ModelingToolkitBase, SciMLBase, SparseArrays, Test, Optimization, OptimizationMOI,
+    Ipopt, AmplNLWriter, SymbolicIndexingInterface,
+    LinearAlgebra, ADTypes, ForwardDiff, OptimizationBase
+using OptimizationOptimJL: Optim
+using Ipopt: Ipopt_jll
+using Symbolics: Symbolics, value
+
+@testset "basic" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+
+    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
+
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
+    combinedsys = complete(
+        OptimizationSystem(
+            loss2, [z], [β], systems = [sys1, sys2],
+            name = :combinedsys
+        )
+    )
+
+    equations(combinedsys)
+    unknowns(combinedsys)
+    parameters(combinedsys)
+
+    calculate_cost_gradient(combinedsys)
+    calculate_cost_hessian(combinedsys)
+    generate_cost(combinedsys)
+    generate_cost_gradient(combinedsys)
+    generate_cost_hessian(combinedsys)
+    hess_sparsity = ModelingToolkitBase.cost_hessian_sparsity(sys1)
+    sparse_prob = OptimizationProblem(
+        complete(sys1),
+        [x => 1, y => 1, a => 0.0, b => 0.0],
+        grad = true,
+        sparse = true
+    )
+    @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
+    @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
+
+    u0 = [
+        sys1.x => 1.0
+        sys1.y => 2.0
+        sys2.x => 3.0
+        sys2.y => 4.0
+        z => 5.0
+    ]
+    p = [
+        sys1.a => 6.0
+        sys1.b => 7.0
+        sys2.a => 8.0
+        sys2.b => 9.0
+        β => 10.0
+    ]
+
+    prob = OptimizationProblem(
+        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
+        cons_h = true
+    )
+    @test prob.f.sys === combinedsys
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.objective < -1.0e5
+end
+
+@testset "inequality constraint" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    cons = [
+        x^2 + y^2 ≲ 1.0,
+    ]
+    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
+    sys = complete(sys)
+    prob = OptimizationProblem(
+        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
+        grad = true, hess = true, cons_j = true, cons_h = true
+    )
+    @test prob.f.cons_expr isa AbstractVector{Expr}
+    @test prob.f.expr isa Expr
+    @test prob.f.sys === sys
+    sol = solve(prob, Optim.IPNewton())
+    @test sol.objective < 1.0
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.objective < 1.0
+
+    prob = OptimizationProblem(
+        sys, [x => 0.0, y => 0.0, a => 1.0, b => 1.0],
+        grad = false, hess = false, cons_j = false, cons_h = false
+    )
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.objective < 1.0
+end
+
+@testset "equality constraint" begin
+    @variables x y z
+    @parameters a b
+    loss = (a - x)^2 + b * z^2
+    cons = [
+        1.0 ~ x^2 + y^2
+        z ~ y - x^2
+        z^2 + y^2 ≲ 1.0
+    ]
+    @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
+    sys = mtkcompile(sys)
+    prob = OptimizationProblem(
+        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
+        grad = true, hess = true, cons_j = true, cons_h = true
+    )
+    sol = solve(prob, Optim.IPNewton())
+    @test sol.objective < 1.0
+    @test sol[[x, z]] ≈ [0.808, -0.064] atol = 1.0e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.objective < 1.0
+    @test sol[[x, z]] ≈ [0.808, -0.064] atol = 1.0e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+
+    prob = OptimizationProblem(
+        sys, [x => 0.0, y => 0.0, z => 0.0, a => 1.0, b => 1.0],
+        grad = false, hess = false, cons_j = false, cons_h = false
+    )
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.objective < 1.0
+    @test sol[[x, z]] ≈ [0.808, -0.064] atol = 1.0e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+end
+
+@testset "rosenbrock" begin
+    rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+    x0 = zeros(2)
+    p = [1.0, 100.0]
+    f = OptimizationFunction(rosenbrock, Optimization.AutoSymbolics())
+    prob = OptimizationProblem(f, x0, p)
+    sol = solve(prob, Optim.Newton())
+    @test sol.u ≈ [1.0, 1.0]
+end
+
+# issue #819
+@testset "Combined system name collisions" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
+    @test_throws ArgumentError OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2])
+end
+
+@testset "observed variable handling" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @variables OBS
+    @named sys2 = OptimizationSystem(loss, [x, y], [a, b]; observed = [OBS ~ x + y])
+    OBS2 = OBS
+    @test isequal(OBS2, @nonamespace sys2.OBS)
+    @unpack OBS = sys2
+    @test isequal(OBS2, OBS)
+end
+
+# nested constraints
+@testset "nested systems" begin
+    @variables x y
+    @parameters a = 1
+    o1 = (x - a)^2
+    o2 = (y - 1 / 2)^2
+    c1 = [
+        x ~ 1,
+    ]
+    c2 = [
+        y ~ 1,
+    ]
+    sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
+    sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
+    sys = complete(
+        OptimizationSystem(
+            0, [], []; name = :sys, systems = [sys1, sys2],
+            constraints = [sys1.x + sys2.y ~ 2], checks = false
+        )
+    )
+    prob = OptimizationProblem(sys, unknowns(sys) .=> [0.0, 0.0])
+    @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
+    @test isequal(cost(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(unknowns(sys), [sys1.x, sys2.y])
+
+    prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
+
+    prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal((prob_.p...,)[1], [2.0])
+end
+
+@testset "nested systems" begin
+    @variables x1 x2 x3 x4
+    @named sys1 = OptimizationSystem(x1, [x1], [])
+    @named sys2 = OptimizationSystem(x2, [x2], [], systems = [sys1])
+    @named sys3 = OptimizationSystem(x3, [x3], [], systems = [sys2])
+    @named sys4 = OptimizationSystem(x4, [x4], [], systems = [sys3])
+
+    @test isequal(cost(sys4), sys3.sys2.sys1.x1 + sys3.sys2.x2 + sys3.x3 + x4)
+end
+
+@testset "time dependent var" begin
+    @independent_variables t
+    @variables x(t) y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+
+    cons = [
+        x^2 + y^2 ≲ 1.0,
+    ]
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons)
+
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
+    combinedsys = complete(
+        OptimizationSystem(
+            loss2, [z], [β], systems = [sys1, sys2],
+            name = :combinedsys
+        )
+    )
+
+    u0 = [
+        sys1.x => 1.0
+        sys1.y => 2.0
+        sys2.x => 3.0
+        sys2.y => 4.0
+        z => 5.0
+    ]
+    p = [
+        sys1.a => 6.0
+        sys1.b => 7.0
+        sys2.a => 8.0
+        sys2.b => 9.0
+        β => 10.0
+    ]
+
+    prob = OptimizationProblem(
+        combinedsys, [u0; p], grad = true, hess = true, cons_j = true,
+        cons_h = true
+    )
+    @test prob.f.sys === combinedsys
+    @test_broken SciMLBase.successful_retcode(
+        solve(
+            prob,
+            Ipopt.Optimizer();
+            print_level = 0
+        )
+    )
+    #=
+     @test sol.objective < -1e5
+
+     prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
+         grad = true, hess = true, cons_j = true, cons_h = true)
+     @test prob.f.sys === sys2
+     sol = solve(prob, Optim.IPNewton())
+     @test sol.objective < 1.0
+     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+     @test sol.objective < 1.0
+     =#
+end
+
+@testset "non-convex problem with inequalities" begin
+    @variables x[1:2] [bounds = (zeros(2), fill(Inf, 2))]
+    @named sys = OptimizationSystem(
+        x[1] + x[2], [x...], [];
+        constraints = [
+            1.0 ≲ x[1]^2 + x[2]^2,
+            x[1]^2 + x[2]^2 ≲ 2.0,
+        ]
+    )
+
+    prob = OptimizationProblem(
+        complete(sys), [x[1] => 2.0, x[2] => 0.0], grad = true,
+        hess = true, cons_j = true, cons_h = true
+    )
+    sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.u ≈ [1, 0]
+    @test prob.lb == [0.0, 0.0]
+    @test prob.ub == [Inf, Inf]
+end
+
+@testset "parameter bounds" begin
+    @parameters c = 0.0
+    @variables x y [bounds = (c, Inf)]
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
+    prob = OptimizationProblem(complete(sys), [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
+    @test prob.lb == [-Inf, 0.0]
+    @test prob.ub == [Inf, Inf]
+end
+
+@testset "modelingtoolkitize" begin
+    @variables x₁ x₂
+    @parameters α₁ α₂
+    loss = (α₁ - x₁)^2 + α₂ * (x₂ - x₁^2)^2
+    cons = [
+        x₁^2 + x₂^2 ≲ 1.0,
+    ]
+    sys1 = complete(
+        OptimizationSystem(
+            loss,
+            [x₁, x₂],
+            [α₁, α₂],
+            name = :sys1,
+            constraints = cons
+        )
+    )
+
+    prob1 = OptimizationProblem(
+        sys1, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
+        grad = true, hess = true, cons_j = true, cons_h = true
+    )
+
+    sys2 = complete(modelingtoolkitize(prob1))
+    prob2 = OptimizationProblem(
+        sys2, [x₁ => 0.0, x₂ => 0.0, α₁ => 1.0, α₂ => 100.0],
+        grad = true, hess = true, cons_j = true, cons_h = true
+    )
+
+    sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
+    sol2 = Optimization.solve(prob2, Ipopt.Optimizer())
+
+    @test sol1.u ≈ sol2.u
+end
+
+@testset "#2323 keep symbolic expressions and xor condition on constraint bounds" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = [x^2 + y^2 ≲ 0.0])
+    sys = complete(sys)
+
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0])
+    @test prob.f.expr isa Expr
+    @test all(x -> x isa Expr, prob.f.cons_expr)
+end
+
+@testset "Derivatives, iip and oop" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
+    sys = complete(
+        OptimizationSystem(
+            loss, [x, y], [a, b], name = :sys2, constraints = cons2
+        )
+    )
+    prob = OptimizationProblem(
+        sys, [x => 0.0, y => 0.0, a => 1.0, b => 100.0],
+        grad = true, hess = true, cons_j = true, cons_h = true
+    )
+
+    G1 = Array{Float64}(undef, 2)
+    H1 = Array{Float64}(undef, 2, 2)
+    J = Array{Float64}(undef, 2, 2)
+    H3 = [Array{Float64}(undef, 2, 2), Array{Float64}(undef, 2, 2)]
+
+    prob.f.grad(G1, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.grad([1.0, 1.0], [1.0, 100.0]) == G1
+
+    prob.f.hess(H1, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.hess([1.0, 1.0], [1.0, 100.0]) == H1
+
+    prob.f.cons_j(J, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.cons_j([1.0, 1.0], [1.0, 100.0]) == J
+
+    prob.f.cons_h(H3, [1.0, 1.0], [1.0, 100.0])
+    @test prob.f.cons_h([1.0, 1.0], [1.0, 100.0]) == H3
+end
+
+@testset "Passing `nothing` to `u0`" begin
+    @variables x = 1.0
+    @mtkcompile sys = OptimizationSystem((x - 3)^2, [x], [])
+    prob = @test_nowarn OptimizationProblem(sys, nothing)
+    @test_nowarn solve(prob, Optim.NelderMead())
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "Bounded unknowns are irreducible" begin
+        @variables x
+        @variables y [bounds = (-Inf, Inf)]
+        @variables z [bounds = (1.0, 2.0)]
+        obj = x^2 + y^2 + z^2
+        cons = [
+            y ~ 2x
+            z ~ 2y
+        ]
+        @mtkcompile sys = OptimizationSystem(obj, [x, y, z], []; constraints = cons)
+        @test is_variable(sys, z)
+        @test !is_variable(sys, y)
+
+        @variables x[1:3] [bounds = ([-Inf, -1.0, -2.0], [Inf, 1.0, 2.0])]
+        obj = x[1]^2 + x[2]^2 + x[3]^2
+        cons = [x[2] ~ 2x[1] + 3, x[3] ~ x[1] + x[2]]
+        @mtkcompile sys = OptimizationSystem(obj, [x], []; constraints = cons)
+        @test length(unknowns(sys)) == 2
+        @test !is_variable(sys, x[1])
+        @test is_variable(sys, x[2])
+        @test is_variable(sys, x[3])
+    end
+end
+
+@testset "Constraints work with nonnumeric parameters" begin
+    @variables x
+    @parameters p f(::Real)
+    @mtkcompile sys = OptimizationSystem(
+        x^2 + f(x) * p, [x], [f, p]; constraints = [2.0 ≲ f(x) + p]
+    )
+    prob = OptimizationProblem(sys, [x => 1.0, p => 1.0, f => (x -> 2x)])
+    @test abs(prob.f.cons(prob.u0, prob.p)[1]) ≈ 1.0
+end
+
+@testset "Variable discovery" begin
+    @variables x1 x2
+    @parameters p1 p2
+    @named sys1 = OptimizationSystem(x1^2; constraints = [p1 * x1 ≲ 2.0])
+    @named sys2 = OptimizationSystem(x2^2; constraints = [p2 * x2 ≲ 2.0], systems = [sys1])
+    @test isequal(only(unknowns(sys1)), x1)
+    @test isequal(only(parameters(sys1)), p1)
+    @test all(y -> any(x -> isequal(x, y), unknowns(sys2)), [x2, sys1.x1])
+    @test all(y -> any(x -> isequal(x, y), parameters(sys2)), [p2, sys1.p1])
+end
+
+function myeigvals_1(A::AbstractMatrix)
+    return eigvals(A)[1]
+end
+
+@register_symbolic myeigvals_1(A::AbstractMatrix)
+
+@testset "Issue#3473: Registered array function in objective, no irreducible variables" begin
+    p_free = @variables begin
+        p1, [bounds = (0, 1)]
+        p2, [bounds = (0, 1)]
+        p3, [bounds = (0, 1)]
+        p4, [bounds = (0, 1)]
+    end
+
+    m = diagm(p_free)
+
+    obj = myeigvals_1(m)
+    @test_nowarn OptimizationSystem(obj, p_free, []; name = :osys)
+end
+
+@testset "Test sparse hessian" begin
+    rosenbrock(x, p = nothing) = (1 - x[1])^2 + 100 * (x[2] - x[1]^2)^2
+    @variables x[1:2]
+    @named sys = OptimizationSystem(rosenbrock(x))
+    sys = complete(sys)
+    prob = OptimizationProblem(sys, [x => [42.0, 12.37]]; hess = true, sparse = true)
+
+    symbolic_hess = Symbolics.hessian(cost(sys), unknowns(sys))
+    symbolic_hess_value = value.(substitute(symbolic_hess, Dict(x[1] => prob[x[1]], x[2] => prob[x[2]]); fold = Val(true)))
+
+    oop_hess = prob.f.hess(prob.u0, prob.p)
+    @test oop_hess ≈ symbolic_hess_value
+
+    iip_hess = similar(prob.f.hess_prototype)
+    prob.f.hess(iip_hess, prob.u0, prob.p)
+    @test iip_hess ≈ symbolic_hess_value
+end
+
+@testset "Multi-cost `weights`" begin
+    @variables x
+    @parameters w1 w2
+    costs = [(x - 1)^2, (x - 2)^2]
+
+    sys = complete(OptimizationSystem(costs, [x], []; name = :wsys))
+    prob = OptimizationProblem(sys, [x => 0.0]; weights = [1, 3], grad = true)
+    # objective is (x - 1)^2 + 3 * (x - 2)^2, minimized at (1 + 3 * 2) / (1 + 3)
+    @test prob.f.f([1.5], prob.p) ≈ 1.0 * (0.5)^2 + 3 * (0.5)^2
+    sol = solve(prob, Optim.LBFGS())
+    @test sol.u[1] ≈ 1.75 atol = 1.0e-4
+
+    # `weights` is also accepted by `OptimizationFunction` and affects grad/hess
+    f = OptimizationFunction{false}(sys; grad = true, hess = true, weights = [1, 3])
+    @test f.f([1.5], nothing) ≈ 1.0
+    @test f.grad([1.5], nothing) ≈ [2 * (1.5 - 1) + 6 * (1.5 - 2)]
+    @test f.hess([1.5], nothing) ≈ reshape([8.0], 1, 1)
+
+    # default path is unchanged
+    prob_default = OptimizationProblem(sys, [x => 0.0]; grad = true)
+    @test prob_default.f.f([1.5], prob_default.p) ≈ 2 * (0.5)^2
+    sol_default = solve(prob_default, Optim.LBFGS())
+    @test sol_default.u[1] ≈ 1.5 atol = 1.0e-4
+
+    @test_throws ArgumentError OptimizationProblem(sys, [x => 0.0]; weights = [1.0])
+
+    # symbolic weights must be declared parameters, and are updatable via `remake`
+    ssys = complete(OptimizationSystem(costs, [x], [w1, w2]; name = :ssys))
+    @test_throws ArgumentError OptimizationProblem(
+        sys, [x => 0.0]; weights = [w1, w2]
+    )
+    sprob = OptimizationProblem(
+        ssys, [x => 0.0, w1 => 1.0, w2 => 3.0]; weights = [w1, w2], grad = true
+    )
+    @test occursin("w1", string(sprob.f.expr))
+    @test sprob.f.f([1.5], sprob.p) ≈ 1.0
+    sol = solve(sprob, Optim.LBFGS())
+    @test sol.u[1] ≈ 1.75 atol = 1.0e-4
+
+    sprob2 = remake(sprob; p = Dict(w1 => 3.0, w2 => 1.0))
+    @test sprob2.f.f([1.5], sprob2.p) ≈ 3 * (0.5)^2 + (0.5)^2
+    sol2 = solve(sprob2, Optim.LBFGS())
+    @test sol2.u[1] ≈ 1.25 atol = 1.0e-4
+end
+
+@testset "`adtype` passthrough" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys = complete(OptimizationSystem(loss, [x, y], [a, b], name = :sys))
+    op = [x => 0.0, y => 0.0, a => 1.0, b => 100.0]
+
+    f = OptimizationFunction(sys, AutoForwardDiff())
+    @test f.adtype isa AutoForwardDiff
+    f = OptimizationFunction{true}(sys; adtype = AutoEnzyme())
+    @test f.adtype isa AutoEnzyme
+    f = OptimizationFunction(sys, AutoForwardDiff(); grad = true, hess = true)
+    @test f.adtype isa AutoForwardDiff
+    @test f.grad !== nothing && f.hess !== nothing
+    @test OptimizationFunction(sys).adtype isa ModelingToolkitBase.SciMLBase.NoAD
+
+    prob = OptimizationProblem(sys, op; adtype = AutoForwardDiff())
+    @test prob.f.adtype isa AutoForwardDiff
+    @test OptimizationProblem(sys, op).f.adtype isa ModelingToolkitBase.SciMLBase.NoAD
+
+    sol = solve(prob, Optim.BFGS())
+    @test sol.objective < 1.0e-8
+    @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+end
+
+@testset "constraints_to_penalties" begin
+    get_costs = ModelingToolkitBase.get_costs
+
+    # min (x - 2)^2 s.t. x <= 1: penalized argmin is (2 + w) / (1 + w)
+    @variables x
+    @named sys = OptimizationSystem((x - 2)^2, [x], []; constraints = [x ≲ 1.0])
+    sys = complete(sys)
+
+    psys = constraints_to_penalties(sys)
+    @test isempty(constraints(psys))
+    @test length(get_costs(psys)) == length(get_costs(sys)) + 1
+    @test isequal(unknowns(psys), unknowns(sys))
+    prob = OptimizationProblem(psys, [x => 0.0])
+    @test prob.lcons === nothing && prob.ucons === nothing
+    @test prob.f.cons === nothing
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ 1.5 atol = 1.0e-4
+
+    # penalty magnitude scales with the weight
+    psys = constraints_to_penalties(sys; weights = 1.0e4)
+    prob = OptimizationProblem(psys, [x => 0.0])
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ (2.0 + 1.0e4) / (1.0 + 1.0e4) atol = 1.0e-4
+
+    # without the penalty the unconstrained argmin is 2
+    @named usys = OptimizationSystem((x - 2)^2, [x], [])
+    usol = solve(OptimizationProblem(complete(usys), [x => 0.0]), Optim.NelderMead())
+    @test usol.u[1] ≈ 2.0 atol = 1.0e-4
+
+    # equality constraint: min (x - 2)^2 s.t. x ~ 0.5, argmin (2 + 0.5w) / (1 + w)
+    @named esys = OptimizationSystem((x - 2)^2, [x], []; constraints = [x ~ 0.5])
+    esys = complete(esys)
+    epsys = constraints_to_penalties(esys)
+    @test isempty(constraints(epsys))
+    @test length(get_costs(epsys)) == 2
+    sol = solve(OptimizationProblem(epsys, [x => 0.0]), Optim.NelderMead())
+    @test sol.u[1] ≈ 1.25 atol = 1.0e-4
+
+    # per-constraint weights
+    @variables y
+    @named msys = OptimizationSystem(
+        (x - 1)^2 + (y - 1)^2, [x, y], [];
+        constraints = [x + y ~ 0.0, y ≲ 0.25]
+    )
+    msys = complete(msys)
+    mpsys = constraints_to_penalties(msys; weights = [10.0, 2.0])
+    @test isempty(constraints(mpsys))
+    @test length(get_costs(mpsys)) == 3
+    @test_throws ArgumentError constraints_to_penalties(msys; weights = [1.0])
+
+    # symbolic weights are added to the system parameters
+    @parameters w
+    spsys = constraints_to_penalties(sys; weights = w)
+    @test any(isequal(w), parameters(spsys))
+    prob = OptimizationProblem(spsys, [x => 0.0, w => 1.0e4])
+    sol = solve(prob, Optim.NelderMead())
+    @test sol.u[1] ≈ (2.0 + 1.0e4) / (1.0 + 1.0e4) atol = 1.0e-4
+
+    # subsystem constraints are lowered recursively (`complete` flattens the
+    # hierarchy, so keep the system unflattened here)
+    @named sub = OptimizationSystem((y - 3)^2, [y], []; constraints = [y ≲ 1.5])
+    @named tpsys = OptimizationSystem(
+        (x - 2)^2, [x], []; constraints = [x ≲ 1.0], systems = [sub]
+    )
+    tpsys = constraints_to_penalties(tpsys)
+    @test isempty(constraints(tpsys))
+    @test length(get_costs(tpsys)) == 2
+    @test isempty(ModelingToolkitBase.get_constraints(only(ModelingToolkitBase.get_systems(tpsys))))
+    @test length(get_costs(only(ModelingToolkitBase.get_systems(tpsys)))) == 2
+end
+
+@testset "`ProblemTypeCtx` is forwarded to `OptimizationProblem`" begin
+    @variables x
+    @mtkcompile sys = System(
+        Equation[]; costs = [(x - 1)^2], metadata = [ModelingToolkitBase.ProblemTypeCtx => "A"]
+    )
+    prob = OptimizationProblem(sys, [x => 0.0])
+    @test SciMLBase.problem_type(prob) == "A"
+    @mtkcompile sys2 = System(Equation[]; costs = [(x - 1)^2])
+    @test SciMLBase.problem_type(OptimizationProblem(sys2, [x => 0.0])) === nothing
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables x[1:3] y
+    @parameters a[1:3]
+    op = [x => zeros(3), y => 0.0, a => [1.0, 2.0, 3.0]]
+
+    # A lazy array cost: `sum(f, arr)` stays an unexpanded `mapreduce` term, which is the
+    # shape a PINN objective has.
+    @named sys = System(Equation[], [x, y], [a]; costs = [sum(abs2, x .- a) + (y - 1)^2])
+    csys = complete(sys)
+
+    prob = OptimizationProblem(csys, op)
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ zeros(4)
+    @test prob.f(prob.u0, prob.p) ≈ 14 + 1
+
+    @test variable_index(csys, x) == 1:3
+    @test variable_index(csys, y) == 4
+    @test getu(prob, x)(prob) ≈ zeros(3)
+    @test getu(prob, x[2])(prob) ≈ 0.0
+
+    # observed expressions must read array unknowns out of the same flat layout
+    iprob = OptimizationProblem(csys, [x => [1.0, 2.0, 3.0], y => 4.0, a => ones(3)])
+    @test getu(iprob, sum(x) + y)(iprob) ≈ 10.0
+    @test getu(iprob, x[3] * y)(iprob) ≈ 12.0
+
+    adprob = OptimizationProblem(csys, op; adtype = AutoForwardDiff())
+    @test adprob.f.adtype isa AutoForwardDiff
+    sol = solve(adprob, Optim.BFGS())
+    @test sol.objective < 1.0e-8
+    @test sol[x] ≈ [1.0, 2.0, 3.0] atol = 1.0e-6
+    @test sol[y] ≈ 1.0 atol = 1.0e-6
+
+    # `mtkcompile` reaches the same problem by scalarizing the unknowns instead.
+    msys = mtkcompile(sys)
+    mprob = OptimizationProblem(msys, op)
+    @test length(mprob.u0) == length(prob.u0)
+    @test mprob.f(mprob.u0, mprob.p) ≈ prob.f(prob.u0, prob.p)
+
+    @testset "`mapreduce` cost" begin
+        @named sys2 = System(
+            Equation[], [x, y], [a]; costs = [mapreduce(abs2, +, x .- a) + (y - 1)^2]
+        )
+        prob2 = OptimizationProblem(complete(sys2), op)
+        @test prob2.f(prob2.u0, prob2.p) ≈ 14 + 1
+    end
+
+    @testset "symbolic gradient and hessian" begin
+        cst = (x[1] - a[1])^2 + (x[2] - a[2])^2 + (x[3] - a[3])^2 + (y - 1)^2
+        gsys = complete(System(Equation[], [x, y], [a]; costs = [cst], name = :gsys))
+        gprob = OptimizationProblem(gsys, op; grad = true, hess = true)
+        @test gprob.f(gprob.u0, gprob.p) ≈ 15
+        @test gprob.f.grad(gprob.u0, gprob.p) ≈ [-2.0, -4.0, -6.0, -2.0]
+        @test gprob.f.hess(gprob.u0, gprob.p) ≈ 2.0I(4)
+
+        buffer = zeros(4)
+        gprob.f.grad(buffer, gprob.u0, gprob.p)
+        @test buffer ≈ [-2.0, -4.0, -6.0, -2.0]
+
+        gsol = solve(gprob, Optim.BFGS())
+        @test gsol[x] ≈ [1.0, 2.0, 3.0] atol = 1.0e-6
+        @test gsol[y] ≈ 1.0 atol = 1.0e-6
+
+        spprob = OptimizationProblem(gsys, op; hess = true, sparse = true)
+        @test spprob.f.hess(spprob.u0, spprob.p) ≈ 2.0I(4)
+    end
+
+    @testset "constraints" begin
+        @named csys2 = System(
+            Equation[], [x], [a]; costs = [sum(abs2, x .- a)],
+            constraints = [x[1] + x[2] ~ 1.0]
+        )
+        cprob = OptimizationProblem(
+            complete(csys2), [x => zeros(3), a => [1.0, 2.0, 3.0]]; cons_j = true
+        )
+        @test cprob.f.cons(cprob.u0, cprob.p) ≈ [-1.0]
+        @test cprob.f.cons_j(cprob.u0, cprob.p) ≈ [1.0 1.0 0.0]
+    end
+
+    @testset "bounds on array unknowns" begin
+        @variables z[1:2] [bounds = ([0.5, 0.5], [3.0, 3.0])]
+        @named bsys = System(Equation[], [z], []; costs = [sum(abs2, z .- 2.0)])
+        bprob = OptimizationProblem(complete(bsys), [z => [1.0, 1.0]])
+        @test bprob.lb == [0.5, 0.5]
+        @test bprob.ub == [3.0, 3.0]
+    end
+end
+
+@testset "Array-valued constraints" begin
+    @variables x[1:3] y
+    @parameters a[1:3] N[1:1, 1:3]
+    op = [x => [1.0, 2.0, 3.0], y => 0.5, a => [1.0, -1.0, 0.5], N => [1.0 2.0 3.0]]
+    # scalar, 3-vector, scalar and `1 × 3` constraints interleaved, so the rows of each
+    # array constraint must land between the scalar rows in declaration order
+    cstrs = [
+        y ~ 1.0,
+        x .- a ~ zeros(3),
+        y^2 ≲ 4.0,
+        Inequality(x' .* N, ones(1, 3), Symbolics.geq),
+    ]
+    @named sys = System(Equation[], [x, y], [a, N]; costs = [sum(abs2, x) + y^2], constraints = cstrs)
+    sys = complete(sys)
+
+    cons_val = [-0.5, 0.0, 3.0, 2.5, -3.75, 0.0, -3.0, -8.0]
+    cons_jac = [
+        0.0 0.0 0.0 1.0
+        1.0 0.0 0.0 0.0
+        0.0 1.0 0.0 0.0
+        0.0 0.0 1.0 0.0
+        0.0 0.0 0.0 1.0
+        -1.0 0.0 0.0 0.0
+        0.0 -2.0 0.0 0.0
+        0.0 0.0 -3.0 0.0
+    ]
+    cons_hess = [zeros(4, 4) for _ in 1:8]
+    cons_hess[5][4, 4] = 2.0
+
+    prob = OptimizationProblem(sys, op; cons_j = true, cons_h = true)
+    @test prob.lcons == [0.0, 0.0, 0.0, 0.0, -Inf, -Inf, -Inf, -Inf]
+    @test prob.ucons == zeros(8)
+    # `cons_expr` is only scalarized when an expression-graph consumer reads it
+    @test prob.f.cons_expr.exprs === nothing
+    @test length(prob.f.cons_expr) == 8
+    @test prob.f.cons_expr.exprs === nothing
+    @test prob.f.cons_expr[3] == ModelingToolkitBase.Code.toexpr(
+        ModelingToolkitBase.expand(ModelingToolkitBase.canonical_constraints(sys)[3])
+    )
+    @test length(prob.f.cons_expr.exprs) == 8
+    @test prob.f.cons(prob.u0, prob.p) ≈ cons_val
+    res = zeros(8)
+    prob.f.cons(res, prob.u0, prob.p)
+    @test res ≈ cons_val
+    @test prob.f.cons_j(prob.u0, prob.p) ≈ cons_jac
+    @test all(prob.f.cons_h(prob.u0, prob.p) .≈ cons_hess)
+
+    sprob = OptimizationProblem(sys, op; cons_j = true, cons_h = true, cons_sparse = true)
+    @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ cons_jac
+    H = similar.(sprob.f.cons_hess_prototype)
+    sprob.f.cons_h(H, sprob.u0, sprob.p)
+    @test all(H .≈ cons_hess)
+    @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ cons_hess)
+
+    adprob = OptimizationProblem(sys, op; adtype = AutoForwardDiff())
+    adf = OptimizationBase.instantiate_function(
+        adprob.f, adprob.u0, adprob.f.adtype, adprob.p, 8; cons_j = true, cons_h = true
+    )
+    J = zeros(8, 4)
+    adf.cons_j(J, adprob.u0)
+    @test J ≈ cons_jac
+    H = [zeros(4, 4) for _ in 1:8]
+    adf.cons_h(H, adprob.u0)
+    @test all(H .≈ cons_hess)
+
+    @testset "`dims` reductions" begin
+        @parameters M[1:2, 1:3] c
+        Mval = [1.0 0.0 1.0; 1.0 2.0 0.0]
+        rsys = complete(
+            System(
+                Equation[], [x], [M, c]; costs = [sum(abs2, x)], name = :rsys,
+                constraints = [Inequality(sum(abs2, M .* x'; dims = 1), c, Symbolics.leq)]
+            )
+        )
+        rop = [x => [1.0, 2.0, 3.0], M => Mval, c => 2.0]
+        # column `j` of `sum(abs2, M .* x'; dims = 1)` is `(M[1, j]^2 + M[2, j]^2) * x[j]^2`
+        rval = [2.0 * 1.0, 4.0 * 4.0, 1.0 * 9.0] .- 2.0
+        rjac = [4.0 0.0 0.0; 0.0 16.0 0.0; 0.0 0.0 6.0]
+        rprob = OptimizationProblem(rsys, rop; adtype = AutoForwardDiff())
+        @test rprob.lcons == fill(-Inf, 3)
+        @test rprob.ucons == zeros(3)
+        @test rprob.f.cons(rprob.u0, rprob.p) ≈ rval
+        rf = OptimizationBase.instantiate_function(
+            rprob.f, rprob.u0, rprob.f.adtype, rprob.p, 3; cons_j = true
+        )
+        J = zeros(3, 3)
+        rf.cons_j(J, rprob.u0)
+        @test J ≈ rjac
+
+        rhess = [zeros(3, 3) for _ in 1:3]
+        for (j, h) in enumerate([4.0, 8.0, 2.0])
+            rhess[j][j, j] = h
+        end
+        sprob = OptimizationProblem(rsys, rop; cons_j = true, cons_h = true)
+        @test sprob.f.cons(sprob.u0, sprob.p) ≈ rval
+        @test sprob.f.cons_j(sprob.u0, sprob.p) ≈ rjac
+        @test all(sprob.f.cons_h(sprob.u0, sprob.p) .≈ rhess)
+        @test length(sprob.f.cons_expr) == 3
+    end
+
+    @testset "expression graph through AmplNLWriter" begin
+        @variables u v w
+        @parameters M[1:2, 1:3] c
+        cases = [
+            ([[u, v] ~ [1.0, 2.0]], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            ([[u] ~ [1.0], v ~ 2.0], (u - 3.0)^2 + (v - 3.0)^2, [u, v], [1.0, 2.0]),
+            (
+                [Inequality(sum(abs2, M .* [u v w]; dims = 1), c, Symbolics.leq)],
+                (u - 2.0)^2 + (v - 2.0)^2 + (w - 2.0)^2, [u, v, w],
+                [1.0, sqrt(0.5), sqrt(2.0)],
+            ),
+        ]
+        for (cstrs, cost, dvs, uopt) in cases
+            gsys = complete(
+                System(Equation[], dvs, [M, c]; costs = [cost], constraints = cstrs, name = :gsys)
+            )
+            gop = [dvs .=> 0.5; M => [1.0 0.0 1.0; 1.0 2.0 0.0]; c => 2.0]
+            gprob = OptimizationProblem(gsys, gop)
+            @test length(gprob.f.cons_expr) == length(gprob.lcons)
+            gsol = solve(gprob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+            @test gprob.f.cons_expr.exprs !== nothing
+            @test SciMLBase.successful_retcode(gsol)
+            @test gsol.u ≈ uopt atol = 1.0e-6
+        end
+    end
+
+    @testset "Ipopt reaches the analytic optimum" begin
+        @variables z[1:3]
+        @parameters M[1:2, 1:3] c
+        pvals = [a => [1.0, -1.0, 0.5], M => [1.0 0.0 1.0; 1.0 2.0 0.0], c => 2.0]
+        u0 = [x => zeros(3), z => fill(0.5, 3), y => 0.0]
+        cost = sum(abs2, x) + sum(abs2, z .- 2.0) + (y - 3.0)^2
+        # `x = a` from the equality, `y = 1` and `colsq[j] * z[j]^2 = c` active, where
+        # `colsq = [2, 4, 1]` are the column sums of squares of `M`
+        xopt = [1.0, -1.0, 0.5]
+        zopt = [1.0, sqrt(0.5), sqrt(2.0)]
+        yopt = 1.0
+        objopt = sum(abs2, xopt) + sum(abs2, zopt .- 2.0) + (yopt - 3.0)^2
+
+        function check_optimum(sol)
+            @test SciMLBase.successful_retcode(sol)
+            @test sol[x] ≈ xopt atol = 1.0e-6
+            @test sol[z] ≈ zopt atol = 1.0e-6
+            @test sol[y] ≈ yopt atol = 1.0e-6
+            @test sol.objective ≈ objopt atol = 1.0e-6
+        end
+
+        @named isys = System(
+            Equation[], [x, z, y], [a, M, c]; costs = [cost],
+            constraints = [
+                x .- a ~ zeros(3),
+                y ≲ 1.0,
+                Inequality(sum(abs2, M .* z'; dims = 1), c, Symbolics.leq),
+            ]
+        )
+        iprob = OptimizationProblem(complete(isys), [u0; pvals]; adtype = AutoForwardDiff())
+        @test length(iprob.lcons) == 7
+        isol = solve(iprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(isol)
+        # Ipopt only calls the generated functions, so `cons_expr` is never built
+        @test iprob.f.cons_expr.exprs === nothing
+
+        # the same problem with symbolic derivatives instead of AD, which needs a cost
+        # without lazy array operations
+        scost = sum(x[i]^2 + (z[i] - 2.0)^2 for i in 1:3) + (y - 3.0)^2
+        @named ssys = System(
+            Equation[], [x, z, y], [a, M, c]; costs = [scost],
+            constraints = ModelingToolkitBase.get_constraints(isys)
+        )
+        sprob = OptimizationProblem(
+            complete(ssys), [u0; pvals]; grad = true, hess = true, cons_j = true, cons_h = true
+        )
+        ssol = solve(sprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(ssol)
+
+        msys = mtkcompile(isys)
+        mprob = OptimizationProblem(msys, [u0; pvals]; adtype = AutoForwardDiff())
+        msol = solve(mprob, Ipopt.Optimizer(); print_level = 0)
+        check_optimum(msol)
+    end
+end

@@ -6,7 +6,7 @@ This is, for example, useful for finding the steady state of an ODE.
 This steady state is reached when the nonlinear system of differential equations equals zero.
 
 !!! note
-    
+
     The high level `@mtkmodel` macro used in the
     [getting started tutorial](@ref getting_started)
     is not yet compatible with `NonlinearSystem`.
@@ -41,3 +41,11 @@ Jacobian function:
 prob = NonlinearProblem(ns, vcat(guesses, ps), jac = true)
 sol = solve(prob, NewtonRaphson())
 ```
+
+!!! note "Array equations"
+
+    `NonlinearProblem` and `NonlinearLeastSquaresProblem` also accept unscalarized
+    array equations, such as `zeros(n - 2) ~ u[1:(n - 2)] .- 2 .* u[2:(n - 1)] .+ u[3:n]`,
+    from a system that has only been [`complete`](@ref)d: each array equation
+    contributes one residual row per element. Time-dependent systems are converted
+    to steady state.

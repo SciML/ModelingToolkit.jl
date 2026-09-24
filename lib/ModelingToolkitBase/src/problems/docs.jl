@@ -52,6 +52,13 @@ $INITIALIZEPROB_KWARGS
   when it is called on the initialization system.
 """
 
+const TSPAN_DEFAULT_DOCS = """
+`tspan` is optional. When omitted, the timespan stored in `sys` is used - the one given by
+the `tspan` keyword argument of [`System`](@ref) and returned by
+[`ModelingToolkitBase.get_tspan`](@ref). Omitting it for a system that has no timespan throws
+an error.
+"""
+
 const TIME_DEPENDENT_PROBLEM_KWARGS = """
 - `callback`: An extra callback or `CallbackSet` to add to the problem, in addition to the
   ones defined symbolically in the system.
@@ -77,15 +84,17 @@ const PROBLEM_INTERNAL_KWARGS = """
 - `check_length`: Whether to check the number of equations along with number of unknowns and
   length of `u0` vector for consistency. If `false`, do not check with equations. This is
   forwarded to `check_eqs_u0`.
+- `return_operating_point`: Whether to also return the updated operating point.
 $INTERNAL_INITIALIZEPROB_KWARGS
 """
 
-function problem_ctors(prob, istd)
+function problem_ctors(prob, istd, tspan_default = istd)
     return if istd
+        tsp = tspan_default ? "[tspan::NTuple{2}]" : "tspan::NTuple{2}"
         """
-            SciMLBase.$prob(sys::System, op, tspan::NTuple{2}; kwargs...)
-            SciMLBase.$prob{iip}(sys::System, op, tspan::NTuple{2}; kwargs...)
-            SciMLBase.$prob{iip, specialize}(sys::System, op, tspan::NTuple{2}; kwargs...)
+            SciMLBase.$prob(sys::System, op, $tsp; kwargs...)
+            SciMLBase.$prob{iip}(sys::System, op, $tsp; kwargs...)
+            SciMLBase.$prob{iip, specialize}(sys::System, op, $tsp; kwargs...)
         """
     else
         """
@@ -109,13 +118,13 @@ end
 
 function problem_docstring(
         prob, func, istd; init = true, extra_body = "",
-        extra_kwargs = "", extra_kwargs_desc = ""
+        extra_kwargs = "", extra_kwargs_desc = "", tspan_default = istd
     )
     if func isa DataType
         func = "`$func`"
     end
     return """
-    $(problem_ctors(prob, istd))
+    $(problem_ctors(prob, istd, tspan_default))
 
     Build a `$prob` given a system `sys` and operating point `op`
     $(istd ? " and timespan `tspan`" : ""). `iip` is a boolean indicating whether the
@@ -124,6 +133,8 @@ function problem_docstring(
     iterable collection of key-value pairs mapping variables/parameters in the system to the
     (initial) values they should take in `$prob`. Any values not provided will fallback to
     the corresponding default (if present).
+
+    $(tspan_default ? TSPAN_DEFAULT_DOCS : "")
 
     $(init ? istd ? TIME_DEPENDENT_INIT : TIME_INDEPENDENT_INIT : "")
 
@@ -171,7 +182,7 @@ as in `x(0.5) ~ 1`). More general constraints that  should hold over the entire 
 such as `x(t)^2 + y(t)^2`, should be  specified as one of the equations used to build the
 `System`.
 
-If a `System` without `constraints` is specified, it will be treated as an initial value problem. 
+If a `System` without `constraints` is specified, it will be treated as an initial value problem.
 
 ```julia
     @parameters g t_c = 0.5
@@ -190,34 +201,9 @@ If a `System` without `constraints` is specified, it will be treated as an initi
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(pend, u0map, tspan, parammap; guesses, check_length = false)
 ```
 
-If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting 
+If the `System` has algebraic equations, like `x(t)^2 + y(t)^2`, the resulting
 `BVProblem` must be solved using BVDAE solvers, such as Ascher.
 """
-
-for (mod, prob, func, istd, kws) in [
-        (SciMLBase, :ODEProblem, ODEFunction, true, (;)),
-        (SciMLBase, :SteadyStateProblem, ODEFunction, false, (;)),
-        (
-            SciMLBase, :BVProblem, ODEFunction, true,
-            (; init = false, extra_body = BV_EXTRA_BODY),
-        ),
-        (SciMLBase, :DAEProblem, DAEFunction, true, (;)),
-        (SciMLBase, :DDEProblem, DDEFunction, true, (;)),
-        (SciMLBase, :SDEProblem, SDEFunction, true, (;)),
-        (SciMLBase, :SDDEProblem, SDDEFunction, true, (;)),
-        (JumpProcesses, :JumpProblem, "inner SciMLFunction", true, (; init = false)),
-        (SciMLBase, :DiscreteProblem, DiscreteFunction, true, (;)),
-        (SciMLBase, :ImplicitDiscreteProblem, ImplicitDiscreteFunction, true, (;)),
-        (SciMLBase, :NonlinearProblem, NonlinearFunction, false, (;)),
-        (SciMLBase, :NonlinearLeastSquaresProblem, NonlinearFunction, false, (;)),
-        (SciMLBase, :OptimizationProblem, OptimizationFunction, false, (; init = false)),
-    ]
-    kwexpr = Expr(:parameters)
-    for (k, v) in pairs(kws)
-        push!(kwexpr.args, Expr(:kw, k, v))
-    end
-    @eval @doc problem_docstring($kwexpr, $mod.$prob, $func, $istd) $mod.$prob
-end
 
 function function_docstring(
         func, istd, optionals; extra_body = "", extra_kwargs = "", extra_kwargs_desc = ""
@@ -247,7 +233,6 @@ function function_docstring(
     $EVAL_EXPR_MOD_KWARGS
     - `checkbounds`: Whether to enable bounds checking in the generated code.
     - `simplify`: Whether to `simplify` any symbolically computed jacobians/hessians/etc.
-    - `cse`: Whether to enable Common Subexpression Elimination (CSE) on the generated code.
       This typically improves performance of the generated code but reduces readability.
     - `sparse`: Whether to generate jacobian/hessian/etc. functions that return/operate on
       sparse matrices. Also controls whether the mass matrix is sparse, wherever applicable.
@@ -303,9 +288,44 @@ const CONSJ_KWARGS = """
   constraints.
 """
 
+const WEIGHTS_KWARGS = """
+- `weights`: An optional vector of weights for scalarizing a system with multiple costs.
+  If provided, the generated objective is `sum(weights .* get_costs(sys))` plus the
+  recursively consolidated costs of all subsystems, replacing the system's `consolidate`
+  function for this lowering. `weights` must have one entry per top-level cost of `sys`.
+  Entries may be real numbers or symbolic parameters of `sys`; symbolic weights must be
+  declared as `@parameters` of the system so that they are part of the parameter object
+  and can be updated via `remake` between solves.
+"""
+
 const CONSSPARSE_KWARGS = """
 - `cons_sparse`: Identical to the `sparse` keyword, but specifically for jacobian/hessian
   functions of the constraints.
+"""
+
+const ADTYPE_KWARGS = """
+- `adtype`: The choice of AD backend to use for derivatives of the objective and
+  constraints, given as an `ADTypes.AbstractADType` such as `AutoForwardDiff()` or
+  `AutoEnzyme()`. This is stored as the `adtype` field of the resulting function, which
+  `Optimization.jl` dispatches on when instantiating it for a solver. Defaults to
+  `SciMLBase.NoAD()`, which defers the choice of backend to the solver. `adtype` can also
+  be passed as the second positional argument of `OptimizationFunction`, matching the
+  `SciMLBase.OptimizationFunction` constructor. It is independent of `grad`, `hess`,
+  `cons_j` and `cons_h`, which control symbolic generation of derivative functions.
+"""
+
+const MULTIOBJECTIVE_KWARGS = """
+- `multiobjective`: Whether to build a `SciMLBase.MultiObjectiveOptimizationFunction`
+  instead of an `OptimizationFunction`. The generated objective is vector-valued and
+  returns [`costs`](@ref) elementwise - each of the system's own costs followed by the
+  consolidated cost of each subsystem - rather than scalarizing them through the
+  system's `consolidate` function. `weights` cannot be combined with
+  `multiobjective = true`.
+"""
+
+const ADTYPE_PROBLEM_KWARGS = """
+- `adtype`: Forwarded to the `OptimizationFunction` constructor; sets the `adtype` field
+  of the resulting function.
 """
 
 const INPUTFN_KWARGS = """
@@ -320,6 +340,13 @@ const CONTROLJAC_KWARGS = """
   the ODE with respect to the inputs.
 """
 
+const PARAMJAC_KWARGS = """
+- `paramjac`: Whether to symbolically compute and generate code for the jacobian of the
+  ODE right-hand side with respect to the parameters. Column `j` of the result is the
+  derivative with respect to entry `j` of
+  `SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]`.
+"""
+
 const OPTIONAL_FN_KWARGS_DICT = Dict(
     :jac => JAC_KWARGS,
     :tgrad => TGRAD_KWARGS,
@@ -330,8 +357,10 @@ const OPTIONAL_FN_KWARGS_DICT = Dict(
     :cons_h => CONSH_KWARGS,
     :cons_j => CONSJ_KWARGS,
     :cons_sparse => CONSSPARSE_KWARGS,
+    :adtype => ADTYPE_KWARGS,
     :inputfn => INPUTFN_KWARGS,
-    :controljac => CONTROLJAC_KWARGS
+    :controljac => CONTROLJAC_KWARGS,
+    :paramjac => PARAMJAC_KWARGS
 )
 
 const SPARSITY_OPTIONALS = Set([:jac, :hess, :cons_h, :cons_j, :controljac])
@@ -347,104 +376,3 @@ function process_optional_function_kwargs(choices::Vector{Symbol})
     end
     return join(map(Base.Fix1(getindex, OPTIONAL_FN_KWARGS_DICT), choices), "\n")
 end
-
-for (mod, func, istd, optionals, kws) in [
-        (SciMLBase, :ODEFunction, true, [:jac, :tgrad], (;)),
-        (SciMLBase, :ODEInputFunction, true, [:inputfn, :jac, :tgrad, :controljac], (;)),
-        (SciMLBase, :DAEFunction, true, [:jac, :tgrad], (;)),
-        (SciMLBase, :DDEFunction, true, Symbol[], (;)),
-        (SciMLBase, :SDEFunction, true, [:jac, :tgrad], (;)),
-        (SciMLBase, :SDDEFunction, true, Symbol[], (;)),
-        (SciMLBase, :DiscreteFunction, true, Symbol[], (;)),
-        (SciMLBase, :ImplicitDiscreteFunction, true, Symbol[], (;)),
-        (SciMLBase, :NonlinearFunction, false, [:resid_prototype, :jac], (;)),
-        (SciMLBase, :IntervalNonlinearFunction, false, Symbol[], (;)),
-        (SciMLBase, :OptimizationFunction, false, [:jac, :grad, :hess, :cons_h, :cons_j], (;)),
-    ]
-    kwexpr = Expr(:parameters)
-    for (k, v) in pairs(kws)
-        push!(kwexpr.args, Expr(:kw, k, v))
-    end
-    @eval @doc function_docstring($kwexpr, $mod.$func, $istd, $optionals) $mod.$func
-end
-
-@doc """
-    SciMLBase.HomotopyNonlinearFunction(sys::System; kwargs...)
-    SciMLBase.HomotopyNonlinearFunction{iip}(sys::System; kwargs...)
-    SciMLBase.HomotopyNonlinearFunction{iip, specialize}(sys::System; kwargs...)
-
-Create a `HomotopyNonlinearFunction` from the given `sys`. `iip` is a boolean indicating
-whether the function should be in-place. `specialization` is a `SciMLBase.AbstractSpecalize`
-subtype indicating the level of specialization of the $func.
-
-# Keyword arguments
-
-- `u0`: The `u0` vector for the corresponding problem, if available. Can be obtained
-  using [`ModelingToolkitBase.get_u0`](@ref).
-- `p`: The parameter object for the corresponding problem, if available. Can be obtained
-  using [`ModelingToolkitBase.get_p`](@ref).
-$EVAL_EXPR_MOD_KWARGS
-- `checkbounds`: Whether to enable bounds checking in the generated code.
-- `simplify`: Whether to `simplify` any symbolically computed jacobians/hessians/etc.
-- `cse`: Whether to enable Common Subexpression Elimination (CSE) on the generated code.
-  This typically improves performance of the generated code but reduces readability.
-- `fraction_cancel_fn`: The function to use to simplify fractions in the polynomial
-  expression. A more powerful function can increase processing time but be able to
-  eliminate more rational functions, thus improving solve time. Should be a function that
-  takes a symbolic expression containing zero or more fraction expressions and returns the
-  simplified expression. While this defaults to `SymbolicUtils.simplify_fractions`, a viable
-  alternative is `SymbolicUtils.quick_cancel`
-
-All keyword arguments are forwarded to the wrapped `NonlinearFunction` constructor.
-""" SciMLBase.HomotopyNonlinearFunction
-
-@doc """
-    SciMLBase.IntervalNonlinearProblem(sys::System, uspan::NTuple{2}, parammap = SciMLBase.NullParameters(); kwargs...)
-
-Create an `IntervalNonlinearProblem` from the given `sys`. This is only valid for a system
-of nonlinear equations with a single equation and unknown. `uspan` is the interval in which
-the root is to be found, and `parammap` is an iterable collection of key-value pairs
-providing values for the parameters in the system.
-
-$TIME_INDEPENDENT_INIT
-
-# Keyword arguments
-
-$PROBLEM_KWARGS
-$(prob_fun_common_kwargs(IntervalNonlinearProblem, false))
-
-All other keyword arguments are forwarded to the `IntervalNonlinearFunction` constructor.
-
-$PROBLEM_INTERNALS_HEADER
-
-$PROBLEM_INTERNAL_KWARGS
-""" SciMLBase.IntervalNonlinearProblem
-
-@doc """
-    SciMLBase.LinearProblem(sys::System, op; kwargs...)
-    SciMLBase.LinearProblem{iip}(sys::System, op; kwargs...)
-
-Build a `LinearProblem` given a system `sys` and operating point `op`. `iip` is a boolean
-indicating whether the problem should be in-place. The operating point should be an
-iterable collection of key-value pairs mapping variables/parameters in the system to the
-(initial) values they should take in `LinearProblem`. Any values not provided will
-fallback to the corresponding default (if present).
-
-Note that since `u0` is optional for `LinearProblem`, values of unknowns do not need to be
-specified in `op` to create a `LinearProblem`. In such a case, `prob.u0` will be `nothing`
-and attempting to symbolically index the problem with an unknown, observable, or expression
-depending on unknowns/observables will error.
-
-Updating the parameters automatically updates the `A` and `b` arrays.
-
-# Keyword arguments
-
-$PROBLEM_KWARGS
-$(prob_fun_common_kwargs(LinearProblem, false))
-
-All other keyword arguments are forwarded to the $func constructor.
-
-$PROBLEM_INTERNALS_HEADER
-
-$PROBLEM_INTERNAL_KWARGS
-""" SciMLBase.LinearProblem

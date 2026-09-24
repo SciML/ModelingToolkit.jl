@@ -1,5 +1,48 @@
 get_iv(D::Differential) = D.x
 
+const SHOW_API_GUIDANCE = Ref(true)
+
+const EXPERIMENTAL_API_GUIDANCE_NOTE = """
+!!! warning "Experimental"
+
+    This is experimental and unsupported. It may change or be removed in any release,
+    without a breaking version bump. Verbosity across the SciML ecosystem is moving to
+    SciMLLogging.jl, and this setting is expected to be replaced by an option there once
+    ModelingToolkit adopts it.
+"""
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether error messages include guidance phrased in terms of the ModelingToolkit API. See
+[`show_api_guidance!`](@ref).
+
+$EXPERIMENTAL_API_GUIDANCE_NOTE
+"""
+show_api_guidance() = SHOW_API_GUIDANCE[]
+
+"""
+    $(TYPEDSIGNATURES)
+
+Set whether error messages include guidance phrased in terms of the ModelingToolkit API,
+such as which keyword argument of a problem constructor to pass, and return the previous
+setting.
+
+This is meant for front ends which present a modelling language of their own, in which
+advice to call `ODEProblem` or to pass `initialization_eqs` would send users looking for
+something their language does not have. Such a front end can call
+`show_api_guidance!(false)` once when it loads, and add guidance of its own. What went
+wrong is still described in full; only the part of the message which names ModelingToolkit
+functions and keyword arguments is left out.
+
+$EXPERIMENTAL_API_GUIDANCE_NOTE
+"""
+function show_api_guidance!(show::Bool)
+    old = SHOW_API_GUIDANCE[]
+    SHOW_API_GUIDANCE[] = show
+    return old
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -122,7 +165,7 @@ end
 function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
-            throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+            throw(ArgumentError(lazy"Independent variable $iv not allowed in parameters."))
     end
     return
 end
@@ -142,19 +185,58 @@ end
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) &&
-            throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
+            throw(ArgumentError(lazy"Independent variable $iv not allowed in dependent variables."))
         (is_delay_var(iv, dv) || SU.query(isequal(iv), dv)) ||
-            throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+            throw(ArgumentError(lazy"Variable $dv is not a function of independent variable $iv."))
     end
     return
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Whether `eq` is an array equation: its left-hand side is array-valued, so it stands for
+one scalar equation per element.
+"""
+is_array_equation(eq::Equation) = SU.is_array_shape(SU.shape(eq.lhs))
+
+"""
+    $(TYPEDSIGNATURES)
+
+Expand the array equations in `eqs` into one scalar equation per element, so that the
+result has one equation per row of the generated code and of the mass matrix. Returns
+`eqs` itself when it has no array equations.
+"""
+function scalarize_array_equations(eqs::Vector{Equation})
+    any(is_array_equation, eqs) || return eqs
+    new_eqs = Equation[]
+    sizehint!(new_eqs, count_equation_rows(eqs))
+    for eq in eqs
+        if is_array_equation(eq)
+            append!(new_eqs, vec(Symbolics.scalarize(eq)))
+        else
+            push!(new_eqs, eq)
+        end
+    end
+    return new_eqs
 end
 
 function check_lhs(eq::Equation, ::Type{Differential}, dvs::Set)
     v = unwrap(eq.lhs)
     _iszero(v) && return
-    op = operation(v)
-    op isa Differential && isone(op.order) && only(arguments(v)) in dvs && return
-    error("$v is not a valid LHS. Please run mtkcompile before simulation.")
+    if iscall(v)
+        op = operation(v)
+        if op isa Differential && isone(op.order)
+            x = only(arguments(v))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` names the slice; each of its elements must be an unknown.
+                all(idx -> x[idx] in dvs, SU.stable_eachindex(x)) && return
+            elseif x in dvs
+                return
+            end
+        end
+    end
+    error(lazy"$v is not a valid LHS. Please run mtkcompile before simulation.")
 end
 function check_lhs(eqs::Vector{Equation}, ::Type{Differential}, dvs::Set)
     for eq in eqs
@@ -199,7 +281,7 @@ function (icp::IndepvarCheckPredicate)(ex::SymbolicT)
 end
 
 @noinline function throw_multiple_iv(iv, newiv)
-    throw(ArgumentError("Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
+    throw(ArgumentError(lazy"Differential w.r.t. variable ($newiv) other than the independent variable ($iv) are not allowed."))
 end
 
 """
@@ -335,6 +417,33 @@ function check_no_parameter_equations_recurse(ex::SymbolicT)
 end
 
 """
+    $TYPEDSIGNATURES
+
+Return a 2-tuple, where the first element is a list of all parameter-only equations
+in `sys`, and the second is all other equations.
+"""
+function find_all_parameter_equations(sys::AbstractSystem)
+    varsbuf = Set{SymbolicT}()
+    pareqs = Equation[]
+    allowed_vars = as_atomic_array_set(unknowns(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
+    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
+    rest_eqs = Equation[]
+    for eq in equations(sys)
+        empty!(varsbuf)
+        SU.search_variables!(
+            varsbuf, eq; is_atomic = check_bindings_is_atomic,
+            recurse = check_no_parameter_equations_recurse
+        )
+        isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
+        intersect!(varsbuf, allowed_vars)
+        push!(isempty(varsbuf) ? pareqs : rest_eqs, eq)
+    end
+
+    return pareqs, rest_eqs
+end
+
+"""
     $(TYPEDSIGNATURES)
 
 Validate that all equations of the system involve the unknowns/observables.
@@ -343,21 +452,7 @@ function check_no_parameter_equations(sys::AbstractSystem)
     if !isempty(get_systems(sys))
         throw(ArgumentError("Expected flattened system"))
     end
-    varsbuf = Set{SymbolicT}()
-    pareqs = Equation[]
-    allowed_vars = as_atomic_array_set(unknowns(sys))
-    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), observables(sys))
-    foreach(Base.Fix1(push_as_atomic_array!, allowed_vars), get_all_discretes_fast(sys))
-    for eq in equations(sys)
-        empty!(varsbuf)
-        Symbolics.search_variables!(
-            varsbuf, eq; is_atomic = check_bindings_is_atomic,
-            recurse = check_no_parameter_equations_recurse
-        )
-        isempty(varsbuf) && (!SU.isconst(eq.lhs) || !SU.isconst(eq.rhs)) && continue
-        intersect!(varsbuf, allowed_vars)
-        isempty(varsbuf) && push!(pareqs, eq)
-    end
+    pareqs = find_all_parameter_equations(sys)[1]
 
     return if !isempty(pareqs)
         error(
@@ -523,6 +618,20 @@ function collect_guesses!(guesses::SymmapT, vars::Vector{SymbolicT})
     return
 end
 
+"""
+    collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
+
+Populate `vars` with mappings from symbolic variable names to variables.
+
+# Arguments
+
+- `vars`: dictionary updated in place.
+- `xs`: symbolic variables to inspect.
+
+# Returns
+
+`nothing`. Throws `ArgumentError` if two distinct variables have the same name.
+"""
 function collect_var_to_name!(vars::Dict{Symbol, SymbolicT}, xs::Vector{SymbolicT})
     for x in xs
         SU.isconst(x) && continue
@@ -548,9 +657,7 @@ end
 Throw error when difference/derivative operation occurs in the R.H.S.
 """
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
-    if op === Differential
-        optext = "derivative"
-    end
+    optext = op === Differential ? "derivative" : "difference"
     msg = "The $optext variable must be isolated to the left-hand " *
         "side of the equation like `$opvar ~ ...`. You may want to use `mtkcompile` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
@@ -559,13 +666,15 @@ end
 """
 Check if difference/derivative operation occurs in the R.H.S. of an equation
 """
-function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
+function _check_operator_variables(eq, op::T, expr = eq.rhs, visited = Base.IdSet{BasicSymbolic}()) where {T}
     iscall(expr) || return nothing
+    expr in visited && return nothing
+    push!(visited, expr)
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
     return foreach(
-        expr -> _check_operator_variables(eq, op, expr),
+        arg -> _check_operator_variables(eq, op, arg, visited),
         SymbolicUtils.arguments(expr)
     )
 end
@@ -575,8 +684,9 @@ Check if all the LHS are unique
 function check_operator_variables(eqs, ::Type{op}) where {op}
     ops = Set{SymbolicT}()
     tmp = Set{SymbolicT}()
+    visited = Base.IdSet{BasicSymbolic}()
     for eq in eqs
-        _check_operator_variables(eq, op)
+        _check_operator_variables(eq, op, eq.rhs, visited)
         SU.search_variables!(tmp, eq.lhs; is_atomic = OperatorIsAtomic{Differential}())
         if length(tmp) == 1
             x = only(tmp)
@@ -590,13 +700,27 @@ function check_operator_variables(eqs, ::Type{op}) where {op}
             is_tmp_fine = iszero(nd)
         end
         is_tmp_fine ||
-            error("The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
+            error(lazy"The LHS cannot contain nondifferentiated variables. Please run `mtkcompile` or use the DAE form.\nGot $eq")
         for v in tmp
-            v in ops &&
-                error("The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
-            push!(ops, v)
+            # `D(u[2:4])` stands for the derivatives of its elements, which must not be
+            # differentiated again by another equation, as a slice or as a scalar.
+            if isdifferential(v) && SU.is_array_shape(SU.shape(only(arguments(v))))
+                dop = operation(v)::Differential
+                x = only(arguments(v))
+                for idx in SU.stable_eachindex(x)
+                    el = dop(x[idx])
+                    el in ops &&
+                        error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $el appears in LHS more than once.")
+                    push!(ops, el)
+                end
+            else
+                v in ops &&
+                    error(lazy"The LHS operator must be unique. Please run `mtkcompile` or use the DAE form. $v appears in LHS more than once.")
+                push!(ops, v)
+            end
         end
         empty!(tmp)
+        empty!(visited)
     end
     return
 end
@@ -613,6 +737,44 @@ isoperator(::Type{op}) where {op <: SU.Operator} = Base.Fix2(isoperator, op)
 
 isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs) || isoperator(eq.lhs, Shift)
+
+function array_derivative_is_atomic(ex::SymbolicT)
+    return isdifferential(ex) && SU.is_array_shape(SU.shape(ex))
+end
+
+function array_derivative_expansion(term::SymbolicT)
+    op = operation(term)
+    arg = only(arguments(term))
+    sh = SU.shape(arg)::SU.ShapeVecT
+    # Preserve rank for broadcasts against surrounding slices.
+    arrargs = Symbolics.SArgsT()
+    sizehint!(arrargs, prod(length, sh; init = 1) + 1)
+    push!(arrargs, SU.Const{VartypeT}(size(arg)))
+    for idx in SU.stable_eachindex(arg)
+        push!(arrargs, op(arg[idx]))
+    end
+    return Symbolics.STerm(
+        SU.array_literal, arrargs; type = symtype(arg), shape = sh
+    )
+end
+
+function array_derivative_expansion_map(terms)
+    subs = Dict{SymbolicT, SymbolicT}()
+    for term in terms
+        subs[term] = array_derivative_expansion(term)
+    end
+    return subs
+end
+
+function expand_array_derivatives(eqs::Vector{Equation})
+    terms = Set{SymbolicT}()
+    for eq in eqs
+        SU.search_variables!(terms, eq; is_atomic = array_derivative_is_atomic)
+    end
+    isempty(terms) && return eqs
+    subs = array_derivative_expansion_map(terms)
+    return map(eq -> substitute(eq, subs), eqs)
+end
 
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
@@ -640,7 +802,17 @@ function collect_operator_variables(eqs::Vector{Equation}, ::Type{op}) where {op
         SU.search_variables!(vars, eq; is_atomic = OperatorIsAtomic{op}())
         for v in vars
             isoperator(v, op) || continue
-            push!(diffvars, arguments(v)[1])
+            arg = arguments(v)[1]
+            # An operator applied to an array variable or slice, such as `D(u[2:4])`,
+            # names the array rather than its elements. Callers test membership of the
+            # scalar unknowns, so record the elements.
+            if SU.is_array_shape(SU.shape(arg))
+                for idx in SU.stable_eachindex(arg)
+                    push!(diffvars, arg[idx])
+                end
+            else
+                push!(diffvars, arg)
+            end
         end
         empty!(vars)
     end
@@ -795,7 +967,7 @@ can be checked using `check_scope_depth`.
 
 This function should return `nothing`.
 """
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::SymbolicT, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     Moshi.Match.@match expr begin
         BSImpl.Const() => return
         BSImpl.Sym() => return collect_var!(unknowns, parameters, expr, iv; depth)
@@ -804,9 +976,9 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
             # This must be done here since search_variables! returns leaf variables, not the Integral term
             domain = f.domain.domain
             if domain isa AnyInterval{Num}
-                lo, hi = unwrap.(DomainSets.endpoints(domain))
+                lo, hi = unwrap.(IntervalSets.endpoints(domain))
             elseif domain isa AnyInterval{SymbolicT}
-                lo, hi = DomainSets.endpoints(domain)
+                lo, hi = IntervalSets.endpoints(domain)
             elseif domain isa AnyInterval
                 lo = hi = COMMON_NOTHING
             else
@@ -829,6 +1001,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     SU.search_variables!(vars, expr; is_atomic = OperatorIsAtomic{op}())
     for var in vars
         Moshi.Match.@match var begin
+            BSImpl.Const() => nothing
             BSImpl.Term(; f, args) && if f isa op end => begin
                 validate_operator(f, args, iv; context = expr)
                 isempty(args) && continue
@@ -866,7 +1039,7 @@ function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{S
     return nothing
 end
 
-function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0) where {op}
+function collect_vars!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr::AbstractArray, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0) where {op}
     for var in expr
         collect_vars!(unknowns, parameters, var, iv, op; depth)
     end
@@ -885,7 +1058,7 @@ eqtype_supports_collect_vars(eq::Inequality) = true
 eqtype_supports_collect_vars(eq::Pair) = true
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator;
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, eq::Union{Equation, Inequality}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator;
         depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, eq.lhs, iv, op; depth)
@@ -894,13 +1067,13 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, ex::Union{Num, Arr, CallAndWrap}, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return collect_vars!(unknowns, parameters, unwrap(ex), iv, op; depth)
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, p::Pair, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     collect_vars!(unknowns, parameters, p[1], iv, op; depth)
     collect_vars!(unknowns, parameters, p[2], iv, op; depth)
@@ -908,9 +1081,19 @@ function collect_vars!(
 end
 
 function collect_vars!(
-        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = Symbolics.Operator; depth = 0
+        unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{SymbolicT}, expr, iv::Union{SymbolicT, Nothing}, ::Type{op} = SU.Operator; depth = 0
     ) where {op}
     return nothing
+end
+
+# Break the inference cycle between the mutually recursive collectors, which Julia
+# 1.10 can otherwise miscompile after unrelated method additions. Dispatching in the
+# latest world age also means a downstream `collect_vars!` method defined while this
+# call is already running is still found; because the four-argument fallback returns
+# `nothing`, missing it would silently drop parameters rather than error. The explicit
+# keyword preserves metadata recursion's depth-zero semantics.
+function _call_collect_vars!(unknowns, parameters, expr, iv)
+    return @invokelatest collect_vars!(unknowns, parameters, expr, iv; depth = 0)
 end
 
 """
@@ -936,12 +1119,23 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
         )
     end
     arr, isarr = split_indexed_var(var)
+    if isarr && (
+            # `var` is indexed, and it is an array, so it must be a slice. Replace it with `arr`.
+            SU.is_array_shape(SU.shape(var)) ||
+                # `var` is of the form `x[i]` where `i` is also a variable/expression
+                any(!SU.isconst, Iterators.drop(arguments(var), 1))
+        )
+        for arg in Iterators.drop(arguments(var), 1)
+            _call_collect_vars!(unknowns, parameters, arg, iv)
+        end
+        var = arr
+    end
     check_scope_depth(getmetadata(arr, SymScope, LocalScope())::AllScopes, depth) || return nothing
     var = setmetadata(var, SymScope, LocalScope())
     if iscalledparameter(var)
         callable = getcalledparameter(var)
         push!(parameters, callable)
-        collect_vars!(unknowns, parameters, arguments(var), iv)
+        _call_collect_vars!(unknowns, parameters, arguments(var), iv)
     elseif isparameter(var) || (iscall(var) && isparameter(operation(var)))
         push!(parameters, var)
     else
@@ -950,55 +1144,55 @@ function collect_var!(unknowns::OrderedSet{SymbolicT}, parameters::OrderedSet{Sy
     # Add also any parameters that appear only as defaults in the var
     if hasdefault(var) && (def = getdefault(var)) !== missing
         if def isa SymbolicT
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Num
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Num}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Arr{Num, 1}}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap{Arr{Num, 2}}
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa Arr
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         elseif def isa CallAndWrap
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         else
-            collect_vars!(unknowns, parameters, def, iv)
+            _call_collect_vars!(unknowns, parameters, def, iv)
         end
     end
     # Add also any parameters that appear only in the bounds of the var
     if hasbounds(var)
         (lo, hi) = getbounds(var)
         if lo isa SymbolicT
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Num
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         elseif lo isa Arr
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         else
-            collect_vars!(unknowns, parameters, lo, iv)
+            _call_collect_vars!(unknowns, parameters, lo, iv)
         end
         if hi isa SymbolicT
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Num
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr{Num, 1}
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr{Num, 2}
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         elseif hi isa Arr
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         else
-            collect_vars!(unknowns, parameters, hi, iv)
+            _call_collect_vars!(unknowns, parameters, hi, iv)
         end
     end
     return nothing
@@ -1038,7 +1232,7 @@ Get a dictionary mapping variables eliminated from the system during `mtkcompile
 expressions used to calculate them.
 """
 function get_substitutions(sys)
-    obs = observed(unhack_system(sys))
+    obs = observed(sys)
     rules = Dict{SymbolicT, SymbolicT}()
     substituter = SU.Substituter{false}(rules, SU.default_substitute_filter)
     for eq in obs
@@ -1048,7 +1242,7 @@ function get_substitutions(sys)
 end
 
 @noinline function throw_missingvars_in_sys(vars)
-    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
+    throw(ArgumentError(lazy"$vars are either missing from the variable map or missing from the system's unknowns/parameters list."))
 end
 
 function promote_to_concrete(vs; tofloat = true, use_union = true)
@@ -1158,28 +1352,37 @@ function is_numeric_symtype(T::Type)
 end
 
 """
+The concrete type of the graph returned by [`observed_dependency_graph`](@ref).
+"""
+const ObservedDependencyGraphT = DiCMOBiGraph{
+    false, Int, BipartiteGraph{Int, Nothing},
+    Matching{Unassigned, Vector{Union{Unassigned, Int}}},
+}
+
+"""
     $(TYPEDSIGNATURES)
 
 Return the `DiCMOBiGraph` denoting the dependencies between observed equations `eqs`.
 """
-function observed_dependency_graph(eqs::Vector{Equation})
-    for eq in eqs
-        if symbolic_type(eq.lhs) == NotSymbolic()
-            error("All equations must be observed equations of the form `var ~ expr`. Got $eq")
-        end
-    end
-    graph, assigns = observed2graph(eqs, getproperty.(eqs, (:lhs,)))
-    matching = complete(Matching(Vector{Union{Unassigned, Int}}(assigns)))
+function observed_dependency_graph(
+        sys::AbstractSystem, eqs::Vector{Equation}
+    )::ObservedDependencyGraphT
+    graph, assigns = observed2graph(sys, eqs, getproperty.(eqs, (:lhs,)))
+    # The unassigned type parameter is given explicitly instead of letting `Matching`
+    # infer it from the eltype, since that inference is not part of a stable contract
+    # and has differed between `BipartiteGraphs` versions.
+    matching = complete(Matching{Unassigned}(Vector{Union{Unassigned, Int}}(assigns)))
     return DiCMOBiGraph{false}(graph, matching)
 end
 
 abstract type ObservedGraphCacheKey end
 
+function should_invalidate_mutable_cache_entry(::Type{ObservedGraphCacheKey}, patch::NamedTuple)
+    return haskey(patch, :observed)
+end
+
 struct ObservedGraphCache
-    graph::DiCMOBiGraph{
-        false, Int, BipartiteGraph{Int, Nothing},
-        Matching{Unassigned, Vector{Union{Unassigned, Int}}},
-    }
+    graph::ObservedDependencyGraphT
     obsvar_to_idx::Dict{Any, Int}
 end
 
@@ -1207,7 +1410,10 @@ function observed_equations_used_by(
     )
     if involved_vars === nothing
         involved_vars = Set{SymbolicT}()
-        SU.search_variables!(involved_vars, exprs; is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial}}())
+        SU.search_variables!(
+            involved_vars, exprs;
+            is_atomic = OperatorIsAtomic{Union{Shift, Differential, Initial, Hold}}()
+        )
     elseif !(involved_vars isa Set{SymbolicT})
         involved_vars = Set{SymbolicT}(involved_vars)
     end
@@ -1215,22 +1421,23 @@ function observed_equations_used_by(
         available_vars = Set(available_vars)
     end
     if iscomplete(sys) && obs == observed(sys)
-        cache = getmetadata(sys, MutableCacheKey, nothing)
-        obs_graph_cache = get!(cache, ObservedGraphCacheKey) do
+        obs_graph_cache = check_mutable_cache(sys, ObservedGraphCacheKey, ObservedGraphCache, nothing)
+        if obs_graph_cache === nothing
             obsvar_to_idx = Dict{Any, Int}([eq.lhs => i for (i, eq) in enumerate(obs)])
-            graph = observed_dependency_graph(obs)
-            return ObservedGraphCache(graph, obsvar_to_idx)
+            graph = observed_dependency_graph(sys, obs)
+            obs_graph_cache = ObservedGraphCache(graph, obsvar_to_idx)
+            store_to_mutable_cache!(sys, ObservedGraphCacheKey, obs_graph_cache)
         end
         @unpack obsvar_to_idx, graph = obs_graph_cache
     else
         obsvar_to_idx = Dict([eq.lhs => i for (i, eq) in enumerate(obs)])
-        graph = observed_dependency_graph(obs)
+        graph = observed_dependency_graph(sys, obs)
     end
 
     obsidxs = BitSet()
     for sym in involved_vars
         sym in available_vars && continue
-        arrsym = iscall(sym) && operation(sym) === getindex ? arguments(sym)[1] : nothing
+        arrsym = split_indexed_var(sym)[1]
         idx = @something(
             get(obsvar_to_idx, sym, nothing),
             get(obsvar_to_idx, arrsym, nothing),
@@ -1251,79 +1458,113 @@ function observed_equations_used_by(
 end
 
 """
-    $(TYPEDSIGNATURES)
+    $TYPEDSIGNATURES
 
-Given an expression `expr`, return a dictionary mapping subexpressions of `expr` that do
-not involve variables in `vars` to anonymous symbolic variables. Also return the modified
-`expr` with the substitutions indicated by the dictionary. If `expr` is a function
-of only `vars`, then all of the returned subexpressions can be precomputed.
-
-Note that this will only process subexpressions floating point value. Additionally,
-array variables must be passed in both scalarized and non-scalarized forms in `vars`.
+Given a list of expressions `exprs`, find all top-level subexpressions in `exprs`
+that do not involve variables in `banned_vars`. "Top-level" implies that for all
+such subexpressions, any parent of theirs in `exprs` will involve something in
+`banned_vars`. `state` will be populated as a map from the identified subexpressions
+to anonymous symbols they can be replaced by.
 """
-function subexpressions_not_involving_vars(expr, vars)
-    expr = unwrap(expr)
-    vars = map(unwrap, vars)
-    state = Dict()
-    newexpr = subexpressions_not_involving_vars!(expr, vars, state)
-    return state, newexpr
-end
-
-"""
-    $(TYPEDSIGNATURES)
-
-Mutating version of `subexpressions_not_involving_vars` which writes to `state`. Only
-returns the modified `expr`.
-"""
-function subexpressions_not_involving_vars!(expr, vars, state::Dict{Any, Any})
-    expr = unwrap(expr)
-    if symbolic_type(expr) == NotSymbolic()
-        if is_array_of_symbolics(expr)
-            return map(expr) do el
-                subexpressions_not_involving_vars!(el, vars, state)
+function subexpressions_not_involving_vars!(
+        ir::SU.IRStructure{VartypeT}, exprs::AbstractArray{SymbolicT},
+        banned_vars::Set{SymbolicT}, state::Dict{SymbolicT, SymbolicT}
+    )
+    # Populate the IR first to ensure that the `RecursiveDFS` has a correctly sized
+    # `visited` buffer.
+    for x in exprs
+        populate_ir!(ir, x)
+    end
+    for x in banned_vars
+        populate_ir!(ir, x)
+    end
+    # Get the nodes that are reachable from `exprs`. We need to find the topologically
+    # earliest subset of these nodes that do not contain `banned_vars`.
+    reachable_nodes = Set{Int}()
+    # We only want to descent into non-atomic nodes. Otherwise e.g. the index `1` in `x[1]`
+    # will end up being a subexpression not involving `banned_vars`.
+    filtered_nbors = let ir = ir
+        function __filtered_nbors(graph, i)
+            # Use `Iterators.filter` instead of just checking `ir[i]` and returning `()` for
+            # type-stability. The early-exit infers as a `Union`.
+            is_atomic = SU.default_is_atomic(ir[i])
+            # If the operation is symbolic, it is the first `outneighbor`. Symbolic operations
+            # are already parameters, we don't want to cache it.
+            drop = Moshi.Match.@match ir[i] begin
+                BSImpl.Term(; f) && if f isa SymbolicT end => begin
+                    1
+                end
+                _ => 0
             end
+            # We also don't want to descend into constants - those are not worth caching.
+            return Iterators.filter(
+                j -> !is_atomic && !SU.isconst(ir[j]),
+                Iterators.drop(Graphs.outneighbors(graph, i), drop)
+            )
         end
-        return expr
     end
-    any(isequal(expr), vars) && return expr
-    iscall(expr) || return expr
-    symbolic_has_known_size(expr) || return expr
-    haskey(state, expr) && return state[expr]
-    op = operation(expr)
-    args = arguments(expr)
-    # if this is a `getindex` and the getindex-ed value is a `Sym`
-    # or it is not a called parameter
-    # OR
-    # none of `vars` are involved in `expr`
-    if op === getindex && (issym(args[1]) || !iscalledparameter(args[1])) ||
-            (vs = SU.search_variables(expr); intersect!(vs, vars); isempty(vs))
-        sym = gensym(:subexpr)
-        var = similar_variable(expr, sym)
-        state[expr] = var
-        return var
+    rdfs = SU.RecursiveDFS(
+        ir.dependency_graph; neighbors_fn = filtered_nbors,
+        on_exit = Base.Fix1(push!, reachable_nodes)
+    )
+    for x in exprs
+        for idx in ir.weak_definitions[x]
+            rdfs(idx)
+        end
+    end
+    # We want to retain the reachability information for later
+    unbanned_subexprs = copy(reachable_nodes)
+    # Walk through the usages of `banned_vars` that are in `unbanned_subexprs`, and remove
+    # from the candidates any expression we encounter. The remaining vertices are
+    # ones that do not use `banned_vars`.
+    unbanned_nbors_fn = let unbanned_subexprs = unbanned_subexprs, ir = ir
+        function __unbanned_nbors_fn(graph, i)
+            # If an `inneighbor` is atomic, it means `ir[i]` is an array variable and
+            # the neighbor is a scalarized element. We want to cache specific parts of
+            # symbolic arrays that are unbanned, and only ban usages of the full symbolic
+            # array.
+            return Iterators.filter(
+                j -> j in unbanned_subexprs && !SU.default_is_atomic(ir[j]),
+                Graphs.inneighbors(graph, i)
+            )
+        end
+    end
+    rdfs = SU.RecursiveDFS(
+        ir.dependency_graph;
+        neighbors_fn = unbanned_nbors_fn,
+        on_exit = Base.Fix1(delete!, unbanned_subexprs)
+    )
+    for var in banned_vars
+        for idx in ir.weak_definitions[var]
+            rdfs(idx)
+        end
     end
 
-    if (op == (+) || op == (*)) && symbolic_type(expr) !== ArraySymbolic()
-        indep_args = SymbolicT[]
-        dep_args = SymbolicT[]
-        for arg in args
-            _vs = SU.search_variables(arg)
-            intersect!(_vs, vars)
-            if !isempty(_vs)
-                push!(dep_args, subexpressions_not_involving_vars!(arg, vars, state))
-            else
-                push!(indep_args, arg)
-            end
+    # Now, the nodes we actually care about and will populate `state` with are ones
+    # present in `unbanned_subexprs` and are used by a node in
+    # `setdiff(reachable_nodes, unbanned_subexprs)`. All of `setdiff!`, the subsequent
+    # `filter!`, and then populating `state` will iterate over `unbanned_subexprs`. We
+    # might as well combine this into one loop.
+    for node in unbanned_subexprs
+        nbors = Graphs.inneighbors(ir.dependency_graph, node)
+        is_valid_node = false
+        for nbor in nbors
+            nbor in reachable_nodes || continue
+            nbor in unbanned_subexprs && continue
+            is_valid_node = true
+            break
         end
-        indep_term = reduce(op, indep_args; init = Int(op == (*)))
-        indep_term = subexpressions_not_involving_vars!(indep_term, vars, state)
-        dep_term = reduce(op, dep_args; init = Int(op == (*)))
-        return op(indep_term, dep_term)
+        is_valid_node || continue
+
+        expr = ir[node]
+        haskey(state, expr) && continue
+        anon_sym = Symbolics.SSym(
+            Symbol(:__cached_, length(state));
+            type = SU.symtype(expr), shape = SU.shape(expr)
+        )
+        state[expr] = anon_sym
     end
-    newargs = map(args) do arg
-        subexpressions_not_involving_vars!(arg, vars, state)
-    end
-    return maketerm(typeof(expr), op, newargs, metadata(expr))
+    return
 end
 
 """
@@ -1405,8 +1646,8 @@ function flatten_equation(eq::Equation)::Vector{Equation}
     if !SU.is_array_shape(SU.shape(eq.lhs))
         return [eq]
     end
-    lhs = vec(collect(eq.lhs)::Array{SymbolicT})::Vector{SymbolicT}
-    rhs = vec(collect(eq.rhs)::Array{SymbolicT})::Vector{SymbolicT}
+    lhs = vec(collect(collect(eq.lhs)::AbstractArray{SymbolicT}))::Vector{SymbolicT}
+    rhs = vec(collect(collect(eq.rhs)::AbstractArray{SymbolicT}))::Vector{SymbolicT}
     result = Equation[]
     for (l, r) in zip(lhs, rhs)
         push!(result, l ~ r)
@@ -1491,7 +1732,11 @@ const DEFAULT_STABLE_INDEX = SU.StableIndex(Int[])
 Given a symbolic variable `x`, check whether it is an indexed array symbolic. If it is,
 return the array and `true`. Otherwise, return `x, false`.
 """
-function split_indexed_var(x::SymbolicT)
+SU.@cache limit = 500_000 function split_indexed_var(x::SymbolicT)::Tuple{SymbolicT, Bool}
+    return _split_indexed_var(x)
+end
+
+function _split_indexed_var(x::SymbolicT)
     return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f === getindex end => (args[1], true)
         BSImpl.Term(; f, args) && if f isa Operator && length(args) == 1 end => begin
@@ -1514,11 +1759,15 @@ end
 Given a symbolic variable `x`, assume `split_indexed_var(x)[2]` is `true`. Return the
 corresponding `SymbolicUtils.StableIndex`.
 """
-function get_stable_index(x::SymbolicT)
+SU.@cache limit = 500_000 function get_stable_index(x::SymbolicT)::SU.StableIndex{Int}
+    return _get_stable_index(x)
+end
+
+function _get_stable_index(x::SymbolicT)
     return Moshi.Match.@match x begin
         BSImpl.Term(; f, args) && if f === getindex end => return SU.StableIndex{Int}(x)
         BSImpl.Term(; f, args) && if f isa Operator end => return get_stable_index(args[1])
-        _ => throw(ArgumentError("Invalid variable $x for `get_stable_index`."))
+        _ => throw(ArgumentError(lazy"Invalid variable $x for `get_stable_index`."))
     end
 end
 
@@ -1581,4 +1830,43 @@ function left_merge!(a::AtomicArrayDict{SymbolicT}, b::AtomicArrayDict{SymbolicT
         a[k] = BSImpl.Const{VartypeT}(reshape(new_v, size(v_a)))
     end
     return mergewith!(first ∘ tuple, a, b)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Move bindings of variables in `all_dvs` to the list of initial conditions `ics`.
+"""
+function move_variable_bindings_to_ics!(
+        all_dvs::AtomicArraySet, ics::AbstractDict{SymbolicT, SymbolicT},
+        binds::AbstractDict{SymbolicT, SymbolicT}
+    )
+    filterer = let initial_conditions = ics, all_dvs = all_dvs
+        function _filterer(kvp)
+            k = kvp[1]
+            if k in all_dvs
+                initial_conditions[k] = kvp[2]
+                return false
+            end
+            return true
+        end
+    end
+    return filter!(filterer, binds)
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Given a time-dependent `AbstractSystem`, move bindings of variables to initial
+conditions as required to convert `sys` to a time-independent system. Does not
+modify `sys`, and returns the new initial conditions and bindings respectively.
+"""
+function convert_bindings_for_time_independent_system(sys::AbstractSystem)
+    all_dvs = as_atomic_array_set(unknowns(sys))
+    union!(all_dvs, as_atomic_array_set(observables(sys)))
+    ics = copy(initial_conditions(sys))
+    binds = copy(parent(bindings(sys)))
+    move_variable_bindings_to_ics!(all_dvs, ics, binds)
+
+    return ics, binds
 end

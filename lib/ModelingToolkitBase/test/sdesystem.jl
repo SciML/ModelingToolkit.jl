@@ -7,6 +7,7 @@ using Statistics
 # imported as tt because `t` is used extensively below
 using ModelingToolkitBase: t_nounits as tt, D_nounits as D, MTKParameters
 using Symbolics: value
+using SymbolicIndexingInterface: variable_index
 import SymbolicUtils as SU
 import DiffEqNoiseProcess
 
@@ -598,8 +599,14 @@ end
 
     prob = SDEProblem(de, [u0map; parammap], (0.0, 1.0))
 
-    function prob_func(prob, i, repeat)
-        remake(prob, seed = seeds[i])
+    @static if pkgversion(SciMLBase) < v"3"
+        function prob_func(prob, i, repeat)
+            remake(prob, seed = seeds[i])
+        end
+    else
+        function prob_func(prob, ctx)
+            remake(prob, seed = seeds[ctx.sim_id])
+        end
     end
     numtraj = Int(1.0e3)
     seed = 100
@@ -608,7 +615,7 @@ end
 
     ensemble_prob = EnsembleProblem(
         prob;
-        output_func = (sol, i) -> (g(sol.u[end]), false),
+        output_func = (sol, ctx) -> (g(sol.u[end]), false),
         prob_func = prob_func
     )
 
@@ -624,7 +631,7 @@ end
 
     ensemble_probmod = EnsembleProblem(
         probmod;
-        output_func = (sol, i) -> (
+        output_func = (sol, ctx) -> (
             g(sol[x][end]) *
                 sol[demod.weight][end],
             false,
@@ -819,7 +826,7 @@ end
         ρ => 2.33,
     ]
 
-    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0))
+    prob = SDEProblem(de, [u0map; parammap], (0.0, 100.0); seed = 42)
     # SOSRI only works for diagonal and scalar noise
     @test_throws ErrorException solve(prob, SOSRI()).retcode == ReturnCode.Success
     # ImplicitEM does work for non-diagonal noise
@@ -1105,6 +1112,70 @@ end
     @test !(sol3.u[end] ≈ sol4.u[end])
 end
 
+@testset "Pure SDE with symbolic tstops" begin
+    @variables X(tt)
+    @parameters k σ_noise t1 t2
+    @brownians B
+    eqs = [D(X) ~ k + σ_noise * B]
+    ev1 = (tt == t1) => [X ~ Pre(X) + 50.0]
+    ev2 = (tt == t1 * t2) => [X ~ Pre(X) + 100.0]
+    @mtkcompile sys = System(
+        eqs, tt, [X], [k, σ_noise, t1, t2], [B];
+        discrete_events = [ev1, ev2], tstops = [[t1], [t1 * t2]]
+    )
+
+    sprob = SDEProblem(
+        sys,
+        [X => 0.0, k => 1.0, σ_noise => 0.01, t1 => 2.0, t2 => 3.0],
+        (0.0, 10.0)
+    )
+
+    @test haskey(sprob.kwargs, :tstops)
+    @test sprob.kwargs[:tstops] isa ModelingToolkitBase.SymbolicTstops
+    @test Set(sprob.kwargs[:tstops](sprob.p, (0.0, 10.0))) == Set([2.0, 6.0])
+
+    sol = solve(sprob, SOSRI())
+    @test SciMLBase.successful_retcode(sol)
+
+    # Events at t1=2.0 and t1*t2=6.0 should fire
+    @test sol(2.0 + 0.001; idxs = X) - sol(2.0 - 0.001; idxs = X) ≈ 50.0 atol = 2
+    @test sol(6.0 + 0.001; idxs = X) - sol(6.0 - 0.001; idxs = X) ≈ 100.0 atol = 2
+end
+
+# Periodic scalar tstops on pure SDE with a symbolic periodic condition.
+# Verifies that scalar tstops exclude tspan[1] (consistent with PeriodicCallback)
+# and that the event fires at multiple periodic stops.
+@testset "Periodic scalar tstops on pure SDE" begin
+    @variables X(tt)
+    @parameters k σ_noise t1
+    @brownians B
+    eqs = [D(X) ~ k + σ_noise * B]
+    # Single event with symbolic periodic condition: fires at every multiple of t1
+    ev = (mod(tt, t1) == 0) => [X ~ Pre(X) + 50.0]
+    # Scalar tstop t1 → periodic range (tspan[1]+t1):t1:tspan[2]
+    @mtkcompile sys = System(
+        eqs, tt, [X], [k, σ_noise, t1], [B];
+        discrete_events = [ev], tstops = [t1]
+    )
+
+    sprob = SDEProblem(
+        sys,
+        [X => 0.0, k => 1.0, σ_noise => 0.01, t1 => 3.0],
+        (0.0, 10.0)
+    )
+
+    @test haskey(sprob.kwargs, :tstops)
+    @test sprob.kwargs[:tstops] isa ModelingToolkitBase.SymbolicTstops
+    @test Set(sprob.kwargs[:tstops](sprob.p, (0.0, 10.0))) == Set(3.0:3.0:10.0)
+
+    sol = solve(sprob, SOSRI())
+    @test SciMLBase.successful_retcode(sol)
+
+    # Periodic event should fire at t=3.0 and t=6.0 (+50 each time)
+    @test sol(3.0 + 0.001; idxs = X) - sol(3.0 - 0.001; idxs = X) ≈ 50.0 atol = 2
+    @test sol(6.0 + 0.001; idxs = X) - sol(6.0 - 0.001; idxs = X) ≈ 50.0 atol = 2
+end
+
 if !@isdefined(ModelingToolkit)
     @testset "MTKBase `mtkcompile` creates appropriately sized `noise_eqs`" begin
         @variables X(t) A(t)
@@ -1117,4 +1188,69 @@ if !@isdefined(ModelingToolkit)
         @mtkcompile ssys = System(eqs, t; noise_eqs)
         @test isequal(ModelingToolkitBase.get_noise_eqs(ssys), noise_eqs)
     end
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "MTK `mtkcompile` retains `DiffCache` param info" begin
+        @variables X(t) A(t)
+        @parameters p d k
+        eqs = [
+            D(X) ~ p - d * X
+            k + A^3 ~ 3 + 2 * X^2
+        ]
+        noise_eqs = [2p 1; 0 0]
+        @named sys = System(eqs, t; noise_eqs)
+        sys, dcp = ModelingToolkitBase.add_diffcache(sys, 3)
+        ssys = mtkcompile(sys)
+        @test SU.getmetadata(ssys, ModelingToolkitBase.DiffCacheParams, nothing)[dcp] == 3
+    end
+
+    @testset "Issue #4875: deferred scalarization is appropriately handled in SDEs" begin
+        @variables x(t)[1:2]
+        @parameters A[1:2, 1:2] = [-1 0; 0 -2]
+        @brownians Brw1 Brw2
+
+        # array-valued differential equation + brownian term -> fails
+        eqs = [D(x) ~ A * x + [Brw1, Brw2]]
+
+        @named sys = System(eqs, t, [x], [A], [Brw1, Brw2])
+        @test_nowarn mtkcompile(sys)
+    end
+end
+
+@testset "Array unknowns on a `complete`d system" begin
+    @variables x(tt)[1:3] y(tt)
+    @parameters a[1:3] b
+    drift = [
+        D(x[1]) ~ -a[1] * x[1],
+        D(x[2]) ~ -a[2] * x[2],
+        D(x[3]) ~ -a[3] * x[3],
+        D(y) ~ -b * y,
+    ]
+    diffusion = [0.1 * x[1], 0.1 * x[2], 0.1 * x[3], 0.1 * y]
+    @named sys = System(drift, tt, [x, y], [a, b]; noise_eqs = diffusion)
+    csys = complete(sys)
+    op = [x => [1.0, 2.0, 3.0], y => 4.0, a => [1.0, 2.0, 3.0], b => 1.0]
+
+    prob = SDEProblem(csys, op, (0.0, 1.0))
+    @test length(prob.u0) == 4
+    @test prob.u0 ≈ [1.0, 2.0, 3.0, 4.0]
+    @test prob.f(prob.u0, prob.p, 0.0) ≈ [-1.0, -4.0, -9.0, -4.0]
+    @test prob.g(prob.u0, prob.p, 0.0) ≈ [0.1, 0.2, 0.3, 0.4]
+    @test prob[x] ≈ [1.0, 2.0, 3.0]
+
+    # the unknown order after `mtkcompile` is not guaranteed; compare through the indices
+    msys = mtkcompile(sys)
+    mprob = SDEProblem(msys, op, (0.0, 1.0))
+    @test length(mprob.u0) == 4
+    @test mprob[x] ≈ prob[x]
+    @test mprob[y] ≈ prob[y]
+    midx = [variable_index(mprob, x[i]) for i in 1:3]
+    push!(midx, variable_index(mprob, y))
+    @test mprob.f(mprob.u0, mprob.p, 0.0)[midx] ≈ [-1.0, -4.0, -9.0, -4.0]
+    @test mprob.g(mprob.u0, mprob.p, 0.0)[midx] ≈ [0.1, 0.2, 0.3, 0.4]
+
+    sol = solve(prob, SOSRI(); seed = 1, saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol)
+    @test length(sol[x][end]) == 3
 end

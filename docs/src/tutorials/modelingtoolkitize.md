@@ -17,7 +17,7 @@ so, ModelingToolkit analysis passes and transformations can be run as intermedia
 to improve a simulation code before it's passed to the solver.
 
 !!! note
-    
+
     `modelingtoolkitize` does have some limitations, i.e. not all codes that work with the
     numerical solvers will work with `modelingtoolkitize`. Namely, it requires the ability
     to trace the equations with Symbolics.jl `Num` types. Generally, a code which is
@@ -25,7 +25,7 @@ to improve a simulation code before it's passed to the solver.
     `modelingtoolkitize`.
 
 !!! warn
-    
+
     `modelingtoolkitize` expressions cannot keep control flow structures (loops), and thus
     equations with long loops will be translated into large expressions, which can increase
     the compile time of the equations and reduce the SIMD vectorization achieved by LLVM.

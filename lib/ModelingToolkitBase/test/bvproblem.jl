@@ -1,6 +1,7 @@
 ### TODO: update when BoundaryValueDiffEqAscher is updated to use the normal boundary condition conventions
 using OrdinaryDiffEq
 using BoundaryValueDiffEqMIRK, BoundaryValueDiffEqAscher
+using OptimizationIpopt
 using ModelingToolkitBase
 using SciMLBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
@@ -66,25 +67,21 @@ end
     tspan = (0.0, 6.0)
 
     op = ODEProblem(pend, [u0map; parammap], tspan)
-    osol = solve(op, Vern9())
+    osol = solve(op, Vern9(), abstol = 1.0e-10, reltol = 1.0e-10)
 
-    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
-        pend, [u0map; parammap], tspan
-    )
+    bvp = BVProblem(pend, [u0map; parammap], tspan)
     for solver in solvers
-        sol = solve(bvp, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        sol = solve(bvp, solver(), dt = 1.0e-2)
+        @test isapprox(sol.u[end], osol.u[end])
         @test sol.u[1] == [π / 2, π / 2]
     end
 
     # Test out-of-place
-    bvp2 = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
-        pend, [u0map; parammap], tspan
-    )
+    bvp2 = BVProblem{false, SciMLBase.FullSpecialize}(pend, [u0map; parammap], tspan)
 
     for solver in solvers
         sol = solve(bvp2, solver(), dt = 0.01)
-        @test isapprox(sol.u[end], osol.u[end]; atol = 0.01)
+        @test isapprox(sol.u[end], osol.u[end])
         @test sol.u[1] == [π / 2, π / 2]
     end
 end
@@ -148,16 +145,17 @@ end
 end
 
 function test_solvers(
-        solvers, prob, u0map, constraints, equations = []; dt = 0.05, atol = 1.0e-2
+        solvers, prob, u0map, constraints, equations = []; dt = 0.005, atol = 5.0e-6
     )
     for solver in solvers
         println("Solver: $solver")
-        sol = solve(prob, solver(), dt = dt, abstol = atol)
+        sol = solve(prob, solver(), dt = dt)
         @test SciMLBase.successful_retcode(sol.retcode)
         p = prob.p
         t = sol.t
         bc = prob.f.bc
         ns = length(prob.u0)
+
         if isinplace(prob.f)
             resid = zeros(ns)
             bc(resid, sol, p, t)
@@ -186,38 +184,38 @@ end
 # Simple System with BVP constraints.
 @testset "ODE with constraints" begin
     @parameters α = 1.5 β = 1.0 γ = 3.0 δ = 1.0
-    @variables x(..) y(..)
+    @variables x(t) y(t)
 
     eqs = [
-        D(x(t)) ~ α * x(t) - β * x(t) * y(t),
-        D(y(t)) ~ -γ * y(t) + δ * x(t) * y(t),
+        D(x) ~ α * x - β * x * y,
+        D(y) ~ -γ * y + δ * x * y,
     ]
 
     u0map = []
     tspan = (0.0, 1.0)
-    guess = [x(t) => 4.0, y(t) => 2.0]
-    constr = [x(0.6) ~ 3.5, x(0.3) ~ 7.0]
+    guess = [x => 4.0, y => 2.0]
+    constr = [EvalAt(0.6)(x) ~ 3.5, EvalAt(0.3)(x) ~ 7.0]
     @mtkcompile lksys = System(eqs, t; constraints = constr)
 
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
-        lksys, u0map, tspan; guesses = guess
+        lksys, u0map, tspan; guesses = guess, cse = false
     )
-    test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 
     # Testing that more complicated constraints give correct solutions.
-    constr = [y(0.2) + x(0.8) ~ 3.0, y(0.3) ~ 2.0]
+    constr = [EvalAt(0.2)(y) + EvalAt(0.8)(x) ~ 3.0, EvalAt(0.3)(y) ~ 2.0]
     @mtkcompile lksys = System(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{false, SciMLBase.FullSpecialize}(
         lksys, u0map, tspan; guesses = guess
     )
-    test_solvers(solvers, bvp, u0map, constr; dt = 0.05)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 
-    constr = [α * β - x(0.6) ~ 0.0, y(0.2) ~ 3.0]
+    constr = [α * β - EvalAt(0.6)(x) ~ 0.0, EvalAt(0.2)(y) ~ 3.0]
     @mtkcompile lksys = System(eqs, t; constraints = constr)
     bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(
         lksys, u0map, tspan; guesses = guess
     )
-    test_solvers(solvers, bvp, u0map, constr)
+    test_solvers(solvers, bvp, u0map, constr; dt = 1.0e-2)
 end
 
 # Cartesian pendulum from the docs.
@@ -322,7 +320,16 @@ end
         lksys; expression = Val{false}, wrap_gfw = Val{true}
     )
     _t = tspan[2]
-    @test costfn(sol, prob.p, _t) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
+    @test_broken costfn(sol, prob.p, _t) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
+    sol = solve(bvp, MIRK4(), dt = 0.05)
+    @test SciMLBase.successful_retcode(sol)
+
+    costfn = ModelingToolkitBase.generate_bvp_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+    @test costfn(sol, bvp.p) ≈ (sol(0.6; idxs = x(t)) + 3)^2 + sol(0.3; idxs = x(t))^2
 
     ### With a parameter
     @parameters t_c
@@ -336,6 +343,89 @@ end
     costfn = ModelingToolkitBase.generate_cost(
         lksys; expression = Val{false}, wrap_gfw = Val{true}
     )
-    @test costfn(sol, prob.p, _t) ≈
+    @test_broken costfn(sol, prob.p, _t) ≈
         log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
+
+    bvp = SciMLBase.BVProblem{true, SciMLBase.AutoSpecialize}(lksys, [u0map; parammap], tspan)
+    sol = solve(bvp, MIRK4(), dt = 0.05)
+    @test SciMLBase.successful_retcode(sol)
+
+    costfn = ModelingToolkitBase.generate_bvp_cost(
+        lksys; expression = Val{false}, wrap_gfw = Val{true}
+    )
+    @test costfn(sol, bvp.p) ≈ log(sol(0.56; idxs = y(t)) + sol(0.0; idxs = x(t))) - sol(0.4; idxs = x(t))^2
+end
+
+@testset "Parameter estimation" begin
+    @parameters α = 1.5 β = 1.0 [tunable = false] γ = 3.0 δ = 1.0
+    @variables x(t) y(t)
+
+    eqs = [
+        D(x) ~ α * x - β * x * y,
+        D(y) ~ -γ * y + δ * x * y,
+    ]
+
+    @mtkcompile sys0 = System(eqs, t)
+    tspan = (0.0, 1.0)
+    u0map = [x => 4.0, y => 2.0]
+    parammap = [α => 1.8, γ => 6.5]
+
+    oprob = ODEProblem(sys0, [u0map; parammap], tspan)
+    osol = solve(oprob, Tsit5())
+    ts = range(tspan..., length = 51)
+    data = osol(ts, idxs = x).u
+
+    costs = [EvalAt(t)(x) - data[i] for (i, t) in enumerate(ts)]
+    consolidate(u, sub) = sum(abs2.(u))
+
+    @mtkcompile sys = System(eqs, t; costs, consolidate)
+
+    sys′ = subset_tunables(sys, [γ, α])
+
+    bprob = BVProblem(sys′, u0map, tspan; tune_parameters = true)
+    # `dt` here sets the collocation mesh, which drives the size of the Ipopt problem.
+    # 1e-3 gives 1001 mesh points (4004 variables) for no gain in accuracy over 1e-2.
+    bsol = solve(bprob, MIRK4(; optimize = IpoptOptimizer()), dt = 1.0e-2)
+
+    @test bsol.ps[α] ≈ 1.8 rtol = 1.0e-2
+    @test bsol.ps[γ] ≈ 6.5 rtol = 1.0e-2
+end
+
+@testset "Control-aware dynamics on compiled systems" begin
+    # A compiled system with a bound input used to generate control-free dynamics:
+    # `ODEFunction` froze the input at its operating-point value, and
+    # `f_prototype = length(dvs) - n_controls` miscounted the defect rows.
+    @variables x(t) u(t) [input = true, bounds = (-1.0, 1.0)]
+    costs = [ModelingToolkitBase.EvalAt(2.0)(x)^2]
+    cons = [ModelingToolkitBase.EvalAt(0.0)(x) ~ 1.0]
+    @named plant = System([D(x) ~ u], t; costs, constraints = cons)
+    @variables y(t) [output = true] v(t) [input = true, bounds = (-1.0, 1.0)]
+    @named gain = System([y ~ v], t)
+    @named composed = System([connect(gain.y, plant.u)], t; systems = [plant, gain])
+    sys = mtkcompile(composed; inputs = [gain.v])
+
+    prob = BVProblem(sys, [plant.x => 1.0, gain.v => 0.25], (0.0, 2.0))
+
+    nx = length(unknowns(sys))
+    nc = length(ModelingToolkitBase.inputs(sys))
+    @test nc == 1
+    # The controls are appended to the per-node decision vector, seeded from op
+    @test length(prob.u0) == nx + nc
+    @test prob.u0[(nx + 1):end] == [0.25]
+    # Defect rows are sized by the true state count, not states + controls
+    @test length(prob.f.f_prototype) == nx
+
+    # The dynamics respond to the stacked control input; D(x) ~ u exactly here
+    du1 = zeros(nx)
+    du2 = zeros(nx)
+    xu = copy(prob.u0)
+    xu[nx + 1] = 0.7
+    prob.f.f(du1, xu, prob.p, 0.0)
+    xu[nx + 1] = -0.3
+    prob.f.f(du2, xu, prob.p, 0.0)
+    @test du1[1] ≈ 0.7
+    @test du2[1] ≈ -0.3
+
+    # Out-of-place evaluation goes through the same stacked wrapper
+    @test prob.f.f(xu, prob.p, 0.0)[1] ≈ -0.3
 end

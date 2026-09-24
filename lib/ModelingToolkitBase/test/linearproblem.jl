@@ -190,3 +190,19 @@ end
         @test SciMLBase.successful_retcode(sol)
     end
 end
+
+@testset "Product of unknowns in system" begin
+    @variables x y
+    @named sys = System([0 ~ x * y + 1, 0 ~ 2x + 3y - 2])
+    sys = complete(sys)
+    @test_throws ModelingToolkitBase.NotAffineError ModelingToolkitBase.calculate_A_b(sys)
+end
+
+@testset "Unscalarized array observed in `A`" begin
+    @variables x[1:2] y z[1:2]
+    @parameters (f::Any)(..)
+    @mtkcompile sys = System([x[1] ~ 2, x[2] ~ 3, y ~ f(x), [x[1] y; x[2] 5] * z ~ [3, 4]])
+    # `x` and `y` are observed. `full_equations` should then contain `f([2, 3])` instead of
+    # `f(x)`. This is verified by ensuring `calculate_A_b` works as intended.
+    @test ModelingToolkitBase.calculate_A_b(sys; throw = false) !== nothing
+end

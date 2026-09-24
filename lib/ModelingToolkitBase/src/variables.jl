@@ -45,6 +45,12 @@ struct VariableMisc end
 struct VariableUnshifted end
 struct VariableShift end
 struct VariableTimeDomain end
+"""
+    $TYPEDEF
+
+Metadata key used to mark variables introduced by analysis point transformations.
+"""
+struct AnalysisVariable end
 
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
@@ -294,7 +300,7 @@ function shift2term(var::SymbolicT)
                     if metadata === nothing
                         metadata = Base.ImmutableDict{DataType, Any}(VariableUnshifted, unshifted)
                     elseif metadata isa Base.ImmutableDict{DataType, Any}
-                        metadata = Base.ImmutableDict(metadata, VariableUnshifted, unshifted)
+                        metadata = Base.ImmutableDict{DataType, Any}(metadata, VariableUnshifted, unshifted)
                     end
                     return BSImpl.Term{VartypeT}(getindex, newargs; type, shape, metadata)
                 end
@@ -366,7 +372,7 @@ end
 distribute_shift(eq::Equation) = distribute_shift(eq.lhs) ~ distribute_shift(eq.rhs)
 distribute_shift(var::Union{Num, Arr}) = distribute_shift(unwrap(var))
 """
-Distribute a shift applied to a whole expression or equation. 
+Distribute a shift applied to a whole expression or equation.
 Shift(t, 1)(x + y) will become Shift(t, 1)(x) + Shift(t, 1)(y).
 Only shifts variables whose independent variable is the same t that appears in the Shift (i.e. constants, time-independent parameters, etc. do not get shifted).
 """
@@ -444,8 +450,11 @@ function getbounds(x::SymbolicT)
     bounds = getmetadata(arrx, VariableBounds, nothing)::NTuple{2, Any}
     idxs = @views unwrap_const.(arguments(x)[2:end])
     return map(bounds) do b
-        @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
-        return b[idxs...]
+        if SU.is_array_shape(SU.shape(b))
+            @assert !symbolic_has_known_size(arrx) || SU.shape(arrx) == SU.shape(b)
+            return b[idxs...]
+        end
+        return b
     end
 end
 
@@ -463,6 +472,66 @@ end
 function setbounds(x::Num, bounds)
     (lb, ub) = bounds
     return setmetadata(x, VariableBounds, (lb, ub))
+end
+
+## Nominal =====================================================================
+struct VariableNominal end
+Symbolics.option_to_metadata_type(::Val{:nominal}) = VariableNominal
+
+"""
+    getnominal(x)
+
+Get the nominal value associated with symbolic variable `x`. Returns `1.0` if no nominal value is set.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal = 4785.0]
+```
+"""
+getnominal(x::Union{Num, Symbolics.Arr}) = getnominal(unwrap(x))
+function getnominal(x::SymbolicT)
+    s = Symbolics.getmetadata_maybe_indexed(x, VariableNominal, nothing)
+    return s === nothing ? 1.0 : s
+end
+
+"""
+    hasnominal(x)
+
+Determine whether symbolic variable `x` has a nominal value associated with it.
+See also [`getnominal`](@ref).
+"""
+function hasnominal(x)
+    return Symbolics.getmetadata_maybe_indexed(unwrap(x), VariableNominal, nothing) !== nothing
+end
+
+"""
+    setnominal(x, val)
+
+Return `x` with nominal-value metadata set to `val`.
+
+# Arguments
+
+- `x`: symbolic variable to annotate.
+- `val`: nominal value used for scaling and numerical conditioning.
+
+# Returns
+
+A symbolic variable equivalent to `x` with updated `VariableNominal` metadata.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@variables x
+x = setnominal(x, 10.0)
+getnominal(x)
+```
+
+See also [`getnominal`](@ref) and [`hasnominal`](@ref).
+"""
+function setnominal(x::Num, val)
+    return setmetadata(x, VariableNominal, val)
 end
 
 ## Disturbance =================================================================
@@ -608,6 +677,26 @@ function getbounds(p::AbstractVector)
     return (; lb, ub)
 end
 
+"""
+    getnominal(sys::ModelingToolkitBase.AbstractSystem, vars = parameters(sys))
+
+Returns a dict with pairs `var => nominal` mapping variables of `sys` to their nominal values.
+Create variables with a nominal value like this
+
+```
+@variables x [nominal = 40.0]
+```
+
+To obtain unknown variable nominal values, call `getnominal(sys, unknowns(sys))`
+"""
+function getnominal(sys::ModelingToolkitBase.AbstractSystem, p = parameters(sys))
+    return Dict(p .=> getnominal.(p))
+end
+
+function getnominal(p::AbstractVector)
+    return getnominal.(p)
+end
+
 ## Description =================================================================
 """
     $TYPEDEF
@@ -639,9 +728,9 @@ end
 
 ## Brownian
 """
-    tobrownian(s::Sym)
+    tobrownian(s)
 
-Maps the brownianiable to an unknown.
+Maps the variable to a Brownian variable.
 """
 tobrownian(s::SymbolicT) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
 tobrownian(s::Num) = Num(tobrownian(value(s)))
@@ -651,6 +740,14 @@ isbrownian(s) = getvariabletype(s) === BROWNIAN
 $(SIGNATURES)
 
 Define one or more Brownian variables.
+
+# Examples
+
+```julia
+using ModelingToolkitBase
+
+@brownians B
+```
 """
 macro brownians(xs...)
     all(
@@ -664,6 +761,83 @@ macro brownians(xs...)
         xs,
         tobrownian
     )
+end
+
+## Poissonian ==================================================================
+"""
+    topoissonian(s::Sym, rate)
+
+Maps the variable to a poissonian with the given rate expression stored in metadata.
+"""
+function topoissonian(s::SymbolicT, rate)
+    s = setmetadata(s, MTKVariableTypeCtx, POISSONIAN)
+    s = setmetadata(s, PoissonianRateCtx, rate)
+    return s
+end
+topoissonian(s::Num, rate) = Num(topoissonian(value(s), rate))
+ispoissonian(s) = getvariabletype(s) === POISSONIAN
+
+"""
+$(SIGNATURES)
+
+Define one or more Poissonian variables with their rate expressions.
+
+Each poissonian represents the differential of a Poisson counting process with
+the specified rate. Unlike `@brownians`, a rate expression is required for each
+poissonian.
+
+# Examples
+```julia
+@poissonians dN(λ)              # Single declaration with constant rate
+@poissonians dN₁(λ₁) dN₂(λ₂)    # Multiple inline declarations
+@poissonians begin              # Block syntax
+    dN₁(λ₁)
+    dN₂(β*S*I)
+end
+```
+"""
+macro poissonians(exprs...)
+    return esc(_poissonians(exprs...))
+end
+
+function _poissonians(exprs...)
+    # Handle block syntax: @poissonians begin ... end
+    if length(exprs) == 1 && exprs[1] isa Expr && exprs[1].head == :block
+        # Filter out LineNumberNodes and process each expression
+        inner_exprs = filter(x -> !(x isa LineNumberNode), exprs[1].args)
+        return _poissonians(inner_exprs...)
+    end
+
+    assignments = Expr[]
+    names = Symbol[]
+    for expr in exprs
+        # Must be a call expression: dN(rate)
+        if !(expr isa Expr && expr.head == :call)
+            error("@poissonians requires a rate expression: use @poissonians dN(rate)")
+        end
+
+        name = expr.args[1]
+        if length(expr.args) < 2
+            error("@poissonians requires a rate expression: use @poissonians $name(rate)")
+        end
+        rate = expr.args[2]
+
+        if !(name isa Symbol)
+            error("@poissonians variable name must be a symbol, got: $name")
+        end
+
+        push!(names, name)
+        # Create the symbolic variable using Symbolics.variable and set poissonian metadata
+        # Symbolics.variable creates a proper Sym{VartypeT} with VariableSource metadata
+        push!(
+            assignments, quote
+                $name = $topoissonian($(Symbolics.variable)($(QuoteNode(name))), $rate)
+            end
+        )
+    end
+
+    # Return the variables as a Vector, consistent with @variables and @brownians
+    return Expr(:block, assignments..., Expr(:vect, names...))
 end
 
 ## Guess ======================================================================
@@ -726,7 +900,7 @@ getmisc(x::SymbolicT) = Symbolics.getmetadata(x, VariableMisc, nothing)
     hasmisc(x)
 
 Determine whether a symbolic variable `x` has misc
-metadata associated with it. 
+metadata associated with it.
 
 See also [`getmisc(x)`](@ref).
 """
@@ -766,15 +940,15 @@ An operator that evaluates time-dependent variables at a specific absolute time 
 - `t::Union{SymbolicT, Number}`: The absolute time at which to evaluate the variable.
 
 # Description
-`EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly 
-useful in optimization problems where you need to specify constraints or costs at particular moments 
+`EvalAt` is used to evaluate time-dependent variables at a specific time point. This is particularly
+useful in optimization problems where you need to specify constraints or costs at particular moments
 in time, or delay differential equations for setting a delay time.
 
-The operator works by replacing the time argument of time-dependent variables with the specified 
+The operator works by replacing the time argument of time-dependent variables with the specified
 time `t`. For variables that don't depend on time, `EvalAt` returns them unchanged.
 
 # Behavior
-- For time-dependent variables like `x(t)`, `EvalAt(τ)(x)` returns `x(τ)` 
+- For time-dependent variables like `x(t)`, `EvalAt(τ)(x)` returns `x(τ)`
 - For time-independent parameters, `EvalAt` returns them unchanged
 - For derivatives, `EvalAt` evaluates the derivative at the specified time
 - For arrays of variables, `EvalAt` is applied element-wise
@@ -796,21 +970,14 @@ EvalAt(1.0)(p)  # Returns p
 # Works with derivatives
 D = Differential(t)
 EvalAt(1.0)(D(x))  # Returns D(x) evaluated at t=1.0
-
-# Use in optimization constraints
-@optimization_model model begin
-    @constraints begin
-        EvalAt(0.5)(x) ~ 2.0  # x must equal 2.0 at t=0.5
-    end
-end
 ```
 
 # Errors
 - Throws an error when applied to variables with more than one argument (e.g., `z(u, t)`)
 
-See also: [`Differential`](@ref)
+See also: [`Differential`](https://docs.sciml.ai/Symbolics/stable/manual/derivatives/)
 """
-struct EvalAt <: Symbolics.Operator
+struct EvalAt <: SU.Operator
     t::Union{SymbolicT, Number}
 end
 

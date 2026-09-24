@@ -15,6 +15,13 @@ function MTKTearing.input_timedomain(::Hold, args::MTKTearing.IOTimeDomainArgsT 
     return MTKTearing.InputTimeDomainElT[MTKTearing.InferredDiscrete()] # the Hold accepts any discrete
 end
 
+function MTKTearing.input_timedomain(::SampleTime, arg = nothing)
+    return MTKTearing.InputTimeDomainElT[]
+end
+function MTKTearing.output_timedomain(::SampleTime, arg = nothing)
+    return MTKTearing.InferredDiscrete(1)
+end
+
 function MTKTearing.output_timedomain(::Hold, _::MTKTearing.IOTimeDomainArgsT = nothing)
     return ContinuousClock()
 end

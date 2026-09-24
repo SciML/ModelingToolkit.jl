@@ -1,4 +1,5 @@
 using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
+using SciMLBase
 using OrderedCollections
 using ModelingToolkit: ContinuousClock
 using ModelingToolkit: t_nounits as t, D_nounits as D
@@ -183,4 +184,12 @@ SciMLBase.is_discrete_time_domain(::ZeroArgOp) = true
     @test issetequal(ts.fullvars, [D(x), x, y, ZeroArgOp()()])
     ci, clkmap = infer_clocks(sys)
     @test clkmap[ZeroArgOp()()] == clk
+end
+
+@testset "Allow `Hold` on the LHS of observed equations" begin
+    # Typically relevant for initialization systems
+    @variables x(t)
+    @mtkcompile sys = System(Hold(x) ~ 3)
+    prob = NonlinearProblem(sys, nothing)
+    @test prob.ps[Hold(x)] ≈ 3
 end

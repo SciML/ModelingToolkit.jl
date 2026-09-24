@@ -3,9 +3,14 @@
 ## Why are my parameters some obscure object?
 
 In ModelingToolkit.jl version 9, the parameter vector was replaced with a custom
-`MTKParameters` object, whose internals are intentionally undocumented and subject
-to change without a breaking release. This enables us to efficiently store and generate
-code for parameters of multiple types. To obtain parameter values use
+`MTKParameters` object. ModelingToolkit problems use
+[`SciMLBase.AutoDespecialize`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/)
+by default. Supporting solvers expose a
+[`SciMLBase.DespecializedParameters`](https://docs.sciml.ai/SciMLBase/stable/interfaces/Problems/) wrapper
+around the `MTKParameters` object while solving so compiled code can be reused across
+parameter layouts. The internals of `MTKParameters` are intentionally undocumented and
+subject to change without a breaking release. This representation enables us to efficiently
+store and generate code for parameters of multiple types. To obtain parameter values use
 [SymbolicIndexingInterface.jl](https://github.com/SciML/SymbolicIndexingInterface.jl/) or
 [SciMLStructures.jl](https://github.com/SciML/SciMLStructures.jl/). For example:
 
@@ -16,24 +21,25 @@ getβ(sol) # can be used on any object that is based off of the same system
 getβ(prob)
 ```
 
-Indexes into the `MTKParameters` object take the form of `ParameterIndex` objects, which
-are similarly undocumented. Following is the list of behaviors that should be relied on for
-`MTKParameters`:
+Indexes into these parameter objects take the form of `ParameterIndex` objects, which are
+similarly undocumented. The following behaviors can be relied on for both `MTKParameters`
+and `SciMLBase.DespecializedParameters`:
 
   - It implements the SciMLStructures interface.
   - It can be queried for parameters using functions returned from
     `SymbolicIndexingInterface.getp`.
-  - `getindex(::MTKParameters, ::ParameterIndex)` can be used to obtain the value of a
-    parameter with the given index.
-  - `setindex!(::MTKParameters, value, ::ParameterIndex)` can be used to set the value of a
-    parameter with the given index.
+  - `getindex` with a `ParameterIndex` can be used to obtain the value of a parameter with
+    the given index.
+  - `setindex!` with a `ParameterIndex` can be used to set the value of a parameter with the
+    given index.
+  - `SciMLBase.unwrap_parameters` recovers the wrapped `MTKParameters` object from an
+    `SciMLBase.DespecializedParameters` object.
   - `parameter_index(sys, sym)` will return a `ParameterIndex` object if `sys` has been
     `complete`d (through `mtkcompile`, `complete` or `@mtkcompile`).
-  - `copy(::MTKParameters)` is defined and duplicates the parameter object, including the
-    memory used by the underlying buffers.
+  - `copy` duplicates the parameter object, including the memory used by the underlying
+    buffers.
 
-Any other behavior of `MTKParameters` (other `getindex`/`setindex!` methods, etc.) is an
-undocumented internal and should not be relied upon.
+Any other behavior of these types is an undocumented internal and should not be relied upon.
 
 ## How do I use non-numeric/array-valued parameters?
 
@@ -68,10 +74,10 @@ The same principle applies to any parameter type that is not `Float64`.
 
 ## Getting the index for a symbol
 
-Ordering of symbols is not guaranteed after symbolic transformations, and parameters
-are now stored in a custom `MTKParameters` object instead of a vector. Thus, values
-should be referred to by their name. For example `sol[lorenz.x]`. To obtain the index,
-use the following functions from
+Ordering of symbols is not guaranteed after symbolic transformations, and parameters use
+the custom parameter representation described above instead of a vector. Thus, values should
+be referred to by their name. For example `sol[lorenz.x]`. To obtain the index, use the
+following functions from
 [SymbolicIndexingInterface.jl](https://github.com/SciML/SymbolicIndexingInterface.jl/):
 
 ```julia

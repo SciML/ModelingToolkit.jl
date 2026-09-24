@@ -1,5 +1,6 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, get_u0
+using SciMLBase
 using OrdinaryDiffEq
 using DataInterpolations
 using StaticArrays
@@ -133,12 +134,20 @@ end
 end
 
 @testset "Cyclic dependency checking and substitution limits" begin
-    @variables x(t) y(t)
+    # `irreducible` to make sure they are unknowns of the initialization system
+    @variables x(t) [irreducible = true] y(t) [irreducible = true]
     @mtkcompile sys = System(
-        [D(x) ~ x, D(y) ~ y], t; initialization_eqs = [x ~ 2y + 3, y ~ 2x],
-        guesses = [x => 2y, y => 2x]
+        [D(x) ~ x, D(y) ~ y], t
     )
-    @test_warn ["Cycle", "unknowns", "x", "y"] ODEProblem(sys, [], (0.0, 1.0), warn_cyclic_dependency = true)
+    @test_warn ["Cycle", "unknowns", "x", "y"] try
+        # This should error. The default substitution limit (100) hides the error because
+        # `2^100` evaluates to `0`, though the warning still prints.
+        ODEProblem(
+            sys, [x => 2y, y => 2x], (0.0, 1.0);
+            warn_cyclic_dependency = true, build_initializeprob = false, substitution_limit = 4
+        )
+    catch e
+    end
     @test_throws ModelingToolkitBase.MissingVariablesError ODEProblem(
         sys, [x => 2y + 1, y => 2x], (0.0, 1.0); build_initializeprob = false,
         substitution_limit = 10
@@ -201,7 +210,8 @@ end
     pend = complete(pend)
 
     @test_throws ModelingToolkitBase.MissingGuessError ODEProblem(
-        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1]
+        pend, [x => 1, g => 1], (0, 1); guesses = [y => λ, λ => y + 1],
+        missing_guess_value = MissingGuessValue.Error()
     )
     ODEProblem(
         pend, [x => 1, D(y) => 0, g => 1], (0, 1);
@@ -212,8 +222,9 @@ end
     @variables a(t) b(t) c(t) d(t) e(t)
     eqs = [D(a) ~ b, D(b) ~ c, D(c) ~ d, D(d) ~ e, D(e) ~ 1]
     @mtkcompile sys = System(eqs, t)
-    @test_throws ["d(t)", "c(t)"] ODEProblem(
-        sys, [e => 2, a => b, b => a + 1, c => d, d => c + 1], (0, 1)
+    @test_throws ["Cyclic guesses detected"] ODEProblem(
+        sys, [e => 2, a => b, b => a^2 + 1, c => d, d => c^2 + 1], (0, 1); use_scc = false,
+        missing_guess_value = MissingGuessValue.Error()
     )
 end
 
@@ -290,7 +301,11 @@ end
         0 ~ x^2 + y^2 - w2^2,
     ]
 
-    @mtkcompile sys = System(eqs, t)
+    if @isdefined(ModelingToolkit)
+        @mtkcompile sys = System(eqs, t) reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    else
+        @mtkcompile sys = System(eqs, t)
+    end
 
     u0 = [
         D(x) => 2.0,
@@ -362,6 +377,19 @@ end
     @test prob.p.initials isa SVector
     initdata = prob.f.initialization_data
     @test state_values(initdata.initializeprob) isa SVector
+    if @isdefined(ModelingToolkit)
+        @test initdata.initializeprob isa SCCNonlinearProblem
+        for prob in initdata.initializeprob.probs
+            if prob isa NonlinearProblem
+                @test prob.u0 isa SVector
+            elseif prob isa LinearProblem
+                @test prob.A isa SMatrix
+                @test prob.b isa SVector
+            else
+                @test false
+            end
+        end
+    end
     @test parameter_values(initdata.initializeprob).tunable isa SVector
 
     pend = complete(pend; split = false)
@@ -377,7 +405,7 @@ end
 
 @testset "Type promotion of `p` works with non-dual types" begin
     @variables x(t) y(t)
-    @mtkcompile sys = System([D(x) ~ x + y, x^3 + y^3 ~ 5], t; guesses = [y => 1.0])
+    @mtkcompile sys = System([D(x) ~ x + y, y^3 ~ 5t + 3], t; guesses = [y => 1.0])
     prob = ODEProblem(sys, [x => 1.0], (0.0, 1.0))
     prob2 = remake(prob; u0 = BigFloat.(prob.u0))
     @test prob2.p.initials isa Vector{BigFloat}
@@ -428,4 +456,49 @@ end
     sys = complete(sys)
     sim_cond = [Y => 100.0, p => 1.0, d => 0.01, k1 => 3.0, k2 => 4.0]
     @test_nowarn ODEProblem(sys, sim_cond, 1.0; guesses = [:A => 1.0])
+end
+
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4235: Duplicate initial conditions error" begin
+        @variables X(t)
+        @parameters p d
+        eqs = [D(X) ~ p - d * X]
+        @mtkcompile sys = System(eqs, t)
+        sim_cond = [X => 1.0, X => 2.0, p => 1.0, d => 2.0] # `X` provide twice, likely a mistake
+        @test_throws ["duplicate entries", "X(t)"] ODEProblem(sys, sim_cond, (0.0, 10.0))
+    end
+    @testset "Issue#4641" begin
+        @parameters x0[1:2] = [1.0, 2.0]
+        @variables xc(t)[1:2] = x0
+        sys = System([D(xc) ~ -(xc .- x0)], t; name = :sys)
+        sys′ = ModelingToolkitBase.subset_tunables(mtkcompile(sys), [])
+        @test_nowarn ODEProblem(sys′, [], (0.0, 1.0))
+    end
+
+    @testset "`Real` discrete obtained via `Int` in initialization" begin
+        @variables x(t)
+        @parameters a::Int b
+        @discretes d(t)
+        # `d` must be a discrete, it should be bound to an integer, and the
+        # initialization must be non-trivial.
+        @mtkcompile sys = System(
+            [D(x) ~ d + a + b], t;
+            bindings = [d => a, b => missing],
+            continuous_events = ModelingToolkitBase.SymbolicContinuousCallback(
+                [x ~ 3], [d ~ Pre(d) + 1]; discrete_parameters = d
+            ), initialization_eqs = [b^2 ~ 2a]
+        )
+        prob = ODEProblem(sys, [x => 1, a => 1], (0.0, 3.0))
+        # This would build a `BlockedVector{Int, ...}` for the discretes, since `d`
+        # is obtained via `a`. However, `prob.p` contains a `BlockedVector{Float64, ..}`
+        # and this type mismatch causes an error.
+        @test_nowarn solve(prob, Tsit5())
+    end
+
+    @testset "`CopyParamsByTemplate` with single `IndepVarTemplate`" begin
+        @mtkcomplete sys = System(Equation[], t)
+        fn = ModelingToolkitBase.CopyParamsByTemplate(sys, Symbolics.SymbolicT[t])
+        pbuf = ProblemState(; u = Float64[], p = nothing, t = 1.0)
+        @test fn(pbuf) == [1.0]
+    end
 end

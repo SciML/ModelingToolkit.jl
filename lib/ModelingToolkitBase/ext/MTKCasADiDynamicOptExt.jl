@@ -4,8 +4,33 @@ using CasADi
 using DiffEqBase
 using UnPack
 using NaNMath
-using Symbolics: SymbolicT
+using OrderedCollections: OrderedSet
+using Symbolics: SymbolicT, unwrap
 const MTK = ModelingToolkitBase
+
+function __init__()
+    # Workaround for Julia 1.10 compiler bug (Issue #4211)
+    # On Julia 1.10, loading this extension can cause collect_vars! to fail
+    # to properly call collect_var! until collect_var! has been called directly.
+    # This forces correct method compilation before user code runs.
+    if VERSION < v"1.11"
+        _force_collect_var_compilation()
+    end
+    return nothing
+end
+
+# Helper function to force collect_var! compilation on Julia 1.10.
+# This works around a method invalidation bug where the mutual recursion between
+# collect_vars! and collect_var! breaks after this extension loads.
+function _force_collect_var_compilation()
+    @variables _dummy_t
+    @parameters _dummy_p
+    @variables _dummy_x(_dummy_t) = _dummy_p
+    _us = OrderedSet{SymbolicT}()
+    _ps = OrderedSet{SymbolicT}()
+    MTK.collect_var!(_us, _ps, unwrap(_dummy_x), unwrap(_dummy_t); depth = 0)
+    return nothing
+end
 
 for ff in [acos, log1p, acosh, log2, asin, tan, atanh, cos, log, sin, log10, sqrt]
     f = nameof(ff)
@@ -46,11 +71,14 @@ struct CasADiDynamicOptProblem{uType, tType, isinplace, P, F, K} <:
     wrapped_model::CasADiModel
     kwargs::K
 
-    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs...)
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
         return new{
             typeof(u0), typeof(tspan), SciMLBase.isinplace(f, 5),
             typeof(p), typeof(f), typeof(kwargs),
         }(f, u0, tspan, p, model, kwargs)
+    end
+    function CasADiDynamicOptProblem(f, u0, tspan, p, model; kwargs...)
+        return CasADiDynamicOptProblem(f, u0, tspan, p, model, kwargs)
     end
 end
 
@@ -73,11 +101,13 @@ function MTK.CasADiDynamicOptProblem(
         dt = nothing,
         steps = nothing,
         tune_parameters = false,
-        guesses = Dict(), kwargs...
+        guesses = Dict(), initial_trajectory = Dict(),
+        nominal_values = Dict(),
+        bounds = Dict(), kwargs...
     )
     prob,
-        _ = MTK.process_DynamicOptProblem(
-        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, kwargs...
+        _, _ = MTK.process_DynamicOptProblem(
+        CasADiDynamicOptProblem, CasADiModel, sys, op, tspan; dt, steps, tune_parameters, guesses, initial_trajectory, nominal_values, bounds, kwargs...
     )
     return prob
 end
@@ -90,6 +120,14 @@ function MTK.generate_state_variable!(model::Opti, u0, ns, tsteps)
     U = CasADi.variable!(model, ns, nt)
     set_initial!(model, U, DM(repeat(u0, 1, nt)))
     return MXLinearInterpolation(U, tsteps, tsteps[2] - tsteps[1])
+end
+
+function MTK.set_initial_trajectory!(m::Opti, U, idx, traj)
+    # The collocation grid is fixed when the variables are created, so the
+    # trajectory is sampled onto it. This overrides the constant `u0` seed set
+    # in `generate_state_variable!` for the entries of state `idx`.
+    t_samples = traj.(U.t)
+    return set_initial!(m, U[idx], DM(t_samples))
 end
 
 function MTK.generate_input_variable!(model::Opti, c0, nc, tsteps)
@@ -129,6 +167,26 @@ function MTK.add_constraint!(m::CasADiModel, expr)
 end
 
 MTK.set_objective!(m::CasADiModel, expr) = minimize!(m.model, MX(expr))
+
+function MTK.set_variable_bounds!(m::CasADiModel, sys, pmap, tspan, tunable_params, user_bounds = Dict())
+    (; state_bounds, input_bounds, param_bounds, tf_bounds) = MTK.extract_variable_bounds(sys, pmap, tspan, tunable_params, user_bounds)
+    for (i, (lo, hi)) in state_bounds
+        subject_to!(m.model, m.U.u[i, :] >= lo)
+        subject_to!(m.model, m.U.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in input_bounds
+        subject_to!(m.model, m.V.u[i, :] >= lo)
+        subject_to!(m.model, m.V.u[i, :] <= hi)
+    end
+    for (i, (lo, hi)) in param_bounds
+        subject_to!(m.model, m.P[i] >= lo)
+        subject_to!(m.model, m.P[i] <= hi)
+    end
+    return if !isnothing(tf_bounds)
+        subject_to!(m.model, m.tₛ >= tf_bounds[1])
+        subject_to!(m.model, m.tₛ <= tf_bounds[2])
+    end
+end
 
 function MTK.add_initial_constraints!(m::CasADiModel, u0, u0_idxs, args...)
     @unpack model, U = m

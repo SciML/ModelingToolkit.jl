@@ -12,13 +12,18 @@ ModelingToolkit.generate_W
 ModelingToolkit.generate_dae_jacobian
 ModelingToolkit.generate_history
 ModelingToolkit.generate_boundary_conditions
+ModelingToolkitBase.generate_trajectory
 ModelingToolkit.generate_cost
 ModelingToolkit.generate_cost_gradient
 ModelingToolkit.generate_cost_hessian
 ModelingToolkit.generate_cons
 ModelingToolkit.generate_constraint_jacobian
 ModelingToolkit.generate_constraint_hessian
+ModelingToolkit.generate_multiobjective_cost
+ModelingToolkit.generate_multiobjective_jacobian
+ModelingToolkit.generate_multiobjective_hessian
 ModelingToolkit.generate_control_jacobian
+ModelingToolkit.generate_paramjac
 ModelingToolkit.build_explicit_observed_function
 ModelingToolkit.generate_control_function
 ModelingToolkit.generate_update_A
@@ -26,6 +31,8 @@ ModelingToolkit.generate_update_b
 ModelingToolkit.generate_semiquadratic_functions
 ModelingToolkit.generate_semiquadratic_jacobian
 ModelingToolkit.get_semiquadratic_W_sparsity
+ModelingToolkitBase.CompilerOptions
+ModelingToolkitBase.generate_custom_function
 ```
 
 For functions such as jacobian calculation which require symbolic computation, there
@@ -34,10 +41,8 @@ are `calculate_*` equivalents to obtain the symbolic result without building a f
 ```@docs
 ModelingToolkit.calculate_tgrad
 ModelingToolkit.calculate_jacobian
-ModelingToolkit.jacobian_sparsity
 ModelingToolkit.jacobian_dae_sparsity
 ModelingToolkit.calculate_hessian
-ModelingToolkit.hessian_sparsity
 ModelingToolkit.calculate_massmatrix
 ModelingToolkit.W_sparsity
 ModelingToolkit.calculate_W_prototype
@@ -46,8 +51,27 @@ ModelingToolkit.calculate_cost_hessian
 ModelingToolkit.cost_hessian_sparsity
 ModelingToolkit.calculate_constraint_jacobian
 ModelingToolkit.calculate_constraint_hessian
+ModelingToolkit.calculate_multiobjective_jacobian
+ModelingToolkit.calculate_multiobjective_hessian
 ModelingToolkit.calculate_control_jacobian
+ModelingToolkit.calculate_paramjac
 ModelingToolkit.calculate_A_b
+```
+
+The constraint function and its derivatives are built from the residuals of the
+constraints, with one row per element of each array-valued constraint.
+
+```@docs
+ModelingToolkitBase.canonical_constraints
+ModelingToolkitBase.constraint_residual
+```
+
+A system can be marked as unsupported by symbolic automatic differentiation, in which case
+the `calculate_*` functions above throw instead of producing a wrong derivative.
+
+```@docs
+ModelingToolkitBase.SymbolicADDisallowed
+ModelingToolkitBase.check_symbolic_ad_allowed
 ```
 
 All code generation eventually calls `build_function_wrapper`.

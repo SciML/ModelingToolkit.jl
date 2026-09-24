@@ -2,6 +2,7 @@ using ModelingToolkit, ADTypes, Test
 using NonlinearSolve
 using Symbolics: value
 using CommonSolve: solve
+using SymbolicIndexingInterface
 
 # Test reorder_unknowns
 # sys = ssrand(1,1,4);
@@ -122,27 +123,32 @@ connections = [
 
 @named cl = System(connections, t, systems = [f, c, p])
 
-lsys0, ssys = linearize(cl, [f.u], [p.x])
-desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
-lsys1, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
-lsys2 = ModelingToolkit.reorder_unknowns(lsys1, unknowns(ssys), desired_order)
+function compare_matrices(reference, value)
+    @assert size(reference.A) == (2, 2) "This testing function is only valid for `2x2` systems"
+    @test isapprox(reference.C, value.C) || isapprox(reverse(reference.C), value.C)
+    colorder = isapprox(reference.C, value.C) ? [1, 2] : [2, 1]
+    @test isapprox(reference.B, value.B) || isapprox(reference.B[[2, 1], :], value.B)
+    roworder = isapprox(reference.B, value.B) ? [1, 2] : [2, 1]
+    @test isapprox(reference.D, value.D)
+    return @test isapprox(reference.A[roworder, colorder], value.A)
+end
+lsys, ssys = linearize(cl, [f.u], [p.x])
+lsys2, ssys = linearize(cl, [f.u], [p.x]; autodiff = AutoFiniteDiff())
 
-@test lsys.A == lsys2.A == [-2 0; 1 -2]
-@test lsys.B == lsys2.B == reshape([1, 0], 2, 1)
-@test lsys.C == lsys2.C == [0 1]
-@test lsys.D[] == lsys2.D[] == 0
+compare_matrices(lsys, lsys2)
+compare_matrices(lsys, (; A = [-2 0; 1 -2], B = reshape([1, 0], 2, 1), C = [0 1], D = [0;;]))
 
 ## Symbolic linearization
 lsyss_ns, ssys_ns = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x], split = false)
 lsyss, ssys = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 @test isequal(lsyss.A, lsyss_ns.A)
 
-lsyss = ModelingToolkit.reorder_unknowns(lsyss, unknowns(ssys), [f.x, p.x])
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.A, ModelingToolkit.initial_conditions(cl))) == lsys.A
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.B, ModelingToolkit.initial_conditions(cl))) == lsys.B
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.C, ModelingToolkit.initial_conditions(cl))) == lsys.C
-@test value.(ModelingToolkit.fixpoint_sub(lsyss.D, ModelingToolkit.initial_conditions(cl))) == lsys.D
+_substituter(M, sys) = value.(ModelingToolkit.fixpoint_sub(M, ModelingToolkit.initial_conditions_and_guesses(sys); fold = Val(true)))
+lsys_m = (;
+    A = _substituter(lsyss.A, cl), B = _substituter(lsyss.B, cl),
+    C = _substituter(lsyss.C, cl), D = _substituter(lsyss.D, cl),
+)
+compare_matrices(lsys, lsys_m)
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -152,55 +158,31 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys0,
+lsys,
     ssys = linearize(
     pid, [reference.u, measurement.u], [ctr_output.u];
     op = Dict(reference.u => 0.0, measurement.u => 0.0)
 )
 @unpack int, der = pid
-desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_unknowns(lsys0, unknowns(ssys), desired_order)
 
-@test lsys.A == [0 0; 0 -10]
-@test lsys.B == [2 -2; 10 -10]
-@test lsys.C == [400 -4000]
-@test lsys.D == [4400 -4400]
+refmats = (; A = [0 0; 0 -10], B = [2 -2; 10 -10], C = [400 -4000], D = [4400 -4400])
+compare_matrices(refmats, lsys)
 
 lsyss0,
     ssys2 = ModelingToolkit.linearize_symbolic(
     pid, [reference.u, measurement.u],
     [ctr_output.u]
 )
-lsyss = ModelingToolkit.reorder_unknowns(lsyss0, unknowns(ssys2), desired_order)
-
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.A, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.A
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.B, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.B
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.C, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.C
-@test value.(
-    ModelingToolkit.fixpoint_sub(
-        lsyss.D, ModelingToolkit.initial_conditions_and_guesses(pid); fold = Val(true)
-    )
-) == lsys.D
+lsyss = (;
+    A = _substituter(lsyss0.A, pid), B = _substituter(lsyss0.B, pid),
+    C = _substituter(lsyss0.C, pid), D = _substituter(lsyss0.D, pid),
+)
+compare_matrices(lsys, lsyss)
 
 # Test with the reverse desired unknown order as well to verify that similarity transform and reoreder_unknowns really works
-lsys = ModelingToolkit.reorder_unknowns(lsys, desired_order, reverse(desired_order))
+lsys = ModelingToolkit.reorder_unknowns(lsys, unknowns(ssys), reverse(unknowns(ssys)))
 
-@test lsys.A == [-10 0; 0 0]
-@test lsys.B == [10 -10; 2 -2]
-@test lsys.C == [-4000 400]
-@test lsys.D == [4400 -4400]
+compare_matrices(refmats, lsys)
 
 ## Test that there is a warning when input is misspecified
 @test_throws ["inputs provided to `mtkcompile`", "not found"] linearize(
@@ -392,7 +374,8 @@ end
     @named sys = System(eqs, t; initial_conditions = [p => 1.0])
     sys = complete(sys)
     @test_throws ModelingToolkit.MissingGuessError linearize(
-        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true
+        sys, [x], []; op = Dict(x => 1.0), allow_input_derivatives = true,
+        missing_guess_value = MissingGuessValue.Error()
     )
     @test_nowarn linearize(
         sys, [x], []; op = Dict(x => 1.0), guesses = Dict(y => 1.0),
@@ -416,4 +399,51 @@ end
     @test_warn ["empty operating point", "warn_empty_op"] linearize(
         tank_noi, [md_i], [h]; p = [md_i => 1.0, m => m_ss]
     )
+end
+
+@testset "Issue#4694: `setsym` on a variable `x` also updates `Initial(x)`" begin
+    @parameters a = 1.0
+    @variables x(t) = 1.0 u(t) = 0.0 [input = true]
+    @named sys = System([D(x) ~ -a * x^3 + u], t, [x, u], [a])
+    sys = complete(sys)
+    # Reference: a full rebuild at (x=2, a=3) gives A = -3*3*2^2 = -36.
+    Afresh(xv, av) = linearize(sys, [sys.u], [sys.x]; op = Dict(sys.x => xv, sys.a => av))[1].A[1]
+    @test Afresh(2.0, 3.0) ≈ -36.0
+    build() = LinearizationProblem(
+        linearization_function(sys, [sys.u], [sys.x]; op = Dict(sys.x => 1.0, sys.a => 1.0))[1], 0.0
+    )
+    A(lp) = solve(lp)[1].A[1]
+    ix = Initial(sys.x)
+    lp = build(); setsym(lp, [sys.x, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
+    lp = build(); setu(lp, sys.x)(lp, 2.0); setp(lp, sys.a)(lp, 3.0)
+    @test A(lp) ≈ -36.0
+    lp = build(); setsym(lp, [ix, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
+    lp = build(); setp(lp, [ix, sys.a])(lp, [2.0, 3.0])
+    @test A(lp) ≈ -36.0
+end
+
+@testset "Issue#4830: Loop opening variables can be given a `missing` value in `op`" begin
+    @component function FirstOrder(; name, k = 1.0)
+        @variables begin
+            u(t), [input = true]
+            x(t) = 0.0
+            y(t), [output = true]
+        end
+        @parameters k = k
+        System([D(x) ~ -x + k * u, y ~ x], t; name)
+    end
+    @named P = FirstOrder(k = 1.0)
+    @named C = FirstOrder(k = -2.0)
+    eqs = [connect(P.y, :y, C.u), connect(C.y, :u, P.u)]
+    @named sys = System(eqs, t; systems = [P, C])
+    csys = complete(sys) # for operating-point key access only
+
+    m1, _ = ModelingToolkit.linearize(sys, :u, :y; loop_openings = [:y], op = Dict(csys.C.u => 0.0))
+    m2, _ = ModelingToolkit.linearize(sys, :u, :y; loop_openings = [:y], op = Dict(csys.C.u => missing))
+    @test m1.A ≈ m2.A
+    @test m1.B ≈ m2.B
+    @test m1.C ≈ m2.C
+    @test m1.D ≈ m2.D
 end

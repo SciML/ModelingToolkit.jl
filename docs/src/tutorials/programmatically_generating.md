@@ -75,4 +75,4 @@ fol_model = System(eqs, t; name = namesym)
 
 ## Warning About Mutation
 
-Be advsied that it's never a good idea to mutate an `System`, or any `AbstractSystem`.
+Be advised that it's never a good idea to mutate an `System`, or any `AbstractSystem`.

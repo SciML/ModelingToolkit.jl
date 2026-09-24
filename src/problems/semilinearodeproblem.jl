@@ -1,14 +1,40 @@
+"""$(MTKBase.function_docstring(SemilinearODEFunction, true, [:jac]; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS, extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))"""
 @fallback_iip_specialize function SemilinearODEFunction{iip, specialize}(
         sys::System; u0 = nothing, p = nothing, t = nothing,
         semiquadratic_form = nothing,
         stiff_linear = true, stiff_quadratic = false, stiff_nonlinear = false,
         eval_expression = false, eval_module = @__MODULE__,
         expression = Val{false}, sparse = false, check_compatibility = true,
-        jac = false, checkbounds = false, cse = true, initialization_data = nothing,
-        analytic = nothing, kwargs...
+        jac = false, checkbounds = false, initialization_data = nothing,
+        analytic = nothing, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, specialize}
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, sparse, analytic, initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
+    )
+    return SemilinearODEFunction{iip, specialize}(
+        sys, opts; semiquadratic_form, stiff_linear, stiff_quadratic, stiff_nonlinear
+    )
+end
+
+"""
+    SemilinearODEFunction{iip, specialize}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds a `SemilinearODEFunction` directly from a pre-assembled
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above.
+"""
+function SemilinearODEFunction{iip, specialize}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        semiquadratic_form = nothing, stiff_linear::Bool = true, stiff_quadratic::Bool = false,
+        stiff_nonlinear::Bool = false
+    ) where {iip, specialize, E}
     check_complete(sys, SemilinearODEFunction)
-    check_compatibility && check_compatible_system(SemilinearODEFunction, sys)
+    opts.check_compatibility && check_compatible_system(SemilinearODEFunction, sys)
+
+    (; u0, p, jac, sparse, analytic, initialization_data) = opts
+    codegen_opts = opts.codegen
 
     if semiquadratic_form === nothing
         semiquadratic_form = calculate_semiquadratic_form(sys; sparse)
@@ -22,16 +48,15 @@
 
     f1,
         f2 = generate_semiquadratic_functions(
-        sys, A, B, C; stiff_linear, stiff_quadratic,
-        stiff_nonlinear, expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, kwargs...
+        sys, A, B, C, codegen_opts;
+        stiff_linear, stiff_quadratic, stiff_nonlinear
     )
 
     if jac
+        check_symbolic_ad_allowed(sys)
         Cjac = (C === nothing || !stiff_nonlinear) ? nothing : Symbolics.jacobian(C, dvs)
         _jac = generate_semiquadratic_jacobian(
-            sys, A, B, C, Cjac; sparse, expression,
-            wrap_gfw = Val{true}, eval_expression, eval_module, kwargs...
+            sys, A, B, C, Cjac, codegen_opts; sparse
         )
         _W_sparsity = get_semiquadratic_W_sparsity(
             sys, A, B, C, Cjac; stiff_linear, stiff_quadratic, stiff_nonlinear, mm = M
@@ -42,13 +67,11 @@
         W_prototype = nothing
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; expression, steady_state = false, eval_expression, eval_module, checkbounds, cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts)
 
     args = (; f1)
     kwargs = (; jac = _jac, jac_prototype = W_prototype)
-    f1 = maybe_codegen_scimlfn(expression, ODEFunction{iip, specialize}, args; kwargs...)
+    f1 = maybe_codegen_scimlfn(Val{E}, ODEFunction{iip, specialize}, args; kwargs...)
 
     args = (; f1, f2)
     kwargs = (;
@@ -62,10 +85,11 @@
     )
 
     return maybe_codegen_scimlfn(
-        expression, SplitFunction{iip, specialize}, args; kwargs...
+        Val{E}, SplitFunction{iip, specialize}, args; kwargs...
     )
 end
 
+"""$(MTKBase.problem_docstring(SemilinearODEProblem, SemilinearODEFunction, true; extra_body = SEMILINEAR_EXTRA_BODY, extra_kwargs = SEMILINEAR_A_B_C_KWARGS, extra_kwargs_desc = SEMILINEAR_A_B_C_CONSTRAINT))"""
 @fallback_iip_specialize function SemilinearODEProblem{iip, spec}(
         sys::System, op, tspan; check_compatibility = true, u0_eltype = nothing,
         expression = Val{false}, callback = nothing, sparse = false,
@@ -120,14 +144,15 @@ end
             defs[par] = mat
         end
         cachelen = jac ? length(dvs) * length(eqs) : length(dvs)
-        defs[diffcache_par] = DiffCache(zeros(DiffEqBase.value(_u0_eltype), cachelen))
+        defs[diffcache_par] = DiffCache(zeros(SciMLBase.value(_u0_eltype), cachelen))
     end
     @set! sys.guesses = guess
     @set! sys.initial_conditions = defs
 
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        SemilinearODEFunction{iip, spec}, sys, op;
+        SemilinearODEFunction{_iip, spec}, sys, op;
         t = tspan !== nothing ? tspan[1] : tspan, expression, check_compatibility,
         semiquadratic_form, sparse, u0_eltype, stiff_linear, stiff_quadratic, stiff_nonlinear, jac, kwargs...
     )
@@ -135,14 +160,14 @@ end
     kwargs = process_kwargs(sys; expression, callback, kwargs...)
 
     args = (; f, u0, tspan, p)
-    maybe_codegen_scimlproblem(expression, SplitODEProblem{iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(expression, SplitODEProblem{_iip}, args; kwargs...)
 end
 
 """
     $(TYPEDSIGNATURES)
 
 Add the necessary parameters for [`SemilinearODEProblem`](@ref) given the matrices
-`A`, `B`, `C` returned from [`calculate_semiquadratic_form`](@ref).
+`A`, `B`, `C` returned from `calculate_semiquadratic_form`.
 """
 function add_semiquadratic_parameters(sys::System, A, B, C)
     eqs = equations(sys)

@@ -1,0 +1,51 @@
+# Test groups and Julia version matrix for the ModelingToolkit root package.
+# Consumed by SciML/.github grouped-tests.yml (compute_affected_sublibraries.jl
+# --root-matrix). These mirror the per-group matrix that previously lived inline
+# in .github/workflows/Tests.yml.
+
+[InterfaceI]
+versions = ["lts", "1", "pre"]
+
+["InterfaceI 32-bit"]
+group = "InterfaceI"
+versions = ["1"]
+os = ["ubuntu-latest"]
+arch = "x86"
+
+[InterfaceII]
+versions = ["lts", "1", "pre"]
+
+[Initialization]
+versions = ["lts", "1", "pre"]
+# Memory-heavy (OOM-killed on the 4vcpu/8GB self-hosted runners, esp. on `pre`).
+# Route to a GitHub-hosted runner (~16GB). `ubuntu-24.04` forces GitHub-hosted
+# since the self-hosted pool only carries the `ubuntu-latest` label.
+runner = "ubuntu-24.04"
+
+[SymbolicIndexingInterface]
+versions = ["lts", "1", "pre"]
+
+[Extensions]
+versions = ["lts", "1", "pre"]
+
+[Optimization]
+versions = ["lts", "1", "pre"]
+# Slow group (the Pyomo cart-pole solve in dynamic_optimization.jl alone needs ~1900
+# Ipopt iterations, see #5076): 60-70 min on an idle self-hosted runner and past the
+# 120 min timeout whenever the shared pool is busy, but 15-41 min on a dedicated
+# GitHub-hosted runner. `ubuntu-24.04` forces GitHub-hosted since the self-hosted pool
+# only carries the `ubuntu-latest` label.
+runner = "ubuntu-24.04"
+
+[Downstream]
+versions = ["lts", "1", "pre"]
+
+[FMI]
+versions = ["lts", "1", "pre"]
+# Memory-heavy (OOM-killed on the 4vcpu/8GB self-hosted runners, esp. on `pre`).
+# Route to a GitHub-hosted runner (~16GB). `ubuntu-24.04` forces GitHub-hosted
+# since the self-hosted pool only carries the `ubuntu-latest` label.
+runner = "ubuntu-24.04"
+
+[QA]
+versions = ["lts", "1"]

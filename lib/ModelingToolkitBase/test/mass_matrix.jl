@@ -1,4 +1,5 @@
 using OrdinaryDiffEq, ModelingToolkitBase, Test, LinearAlgebra, StaticArrays
+using OrdinaryDiffEqRosenbrock
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, MTKParameters
 
 @variables y(t)[1:3]

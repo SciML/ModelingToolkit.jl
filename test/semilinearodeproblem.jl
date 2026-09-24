@@ -1,8 +1,14 @@
 using ModelingToolkit
 using OrdinaryDiffEq
+using OrdinaryDiffEqSDIRK
+using SciMLBase
 using LinearAlgebra
 using Test
 using ModelingToolkit: t_nounits as t, D_nounits as D
+
+@test SciMLBase.specialization(
+    SemilinearODEFunction{true, SciMLBase.AutoDespecialize}
+) === SciMLBase.AutoDespecialize
 
 # from https://docs.sciml.ai/SciMLBenchmarksOutput/dev/AstroChem/nelson/
 @testset "Astrochem model" begin
@@ -141,7 +147,10 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
     ]   # 14: M
 
     prob = ODEProblem(Nelson!, u0, tspan, params)
-    sys = mtkcompile(modelingtoolkitize(prob))
+    sys = mtkcompile(
+        modelingtoolkitize(prob);
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+    )
     A, B, C = ModelingToolkit.calculate_semiquadratic_form(sys)
     @test A !== nothing
     @test B !== nothing

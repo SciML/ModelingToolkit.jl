@@ -1,4 +1,5 @@
 using ModelingToolkitBase, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
+using OrdinaryDiffEqRosenbrock
 using SciMLStructures: canonicalize, Discrete
 using ModelingToolkitBase: SymbolicContinuousCallback,
     SymbolicDiscreteCallback,
@@ -6,11 +7,14 @@ using ModelingToolkitBase: SymbolicContinuousCallback,
     D_nounits as D,
     affects, affect_negs, system, observed, AffectSystem
 import DiffEqNoiseProcess
+using Symbolics
+using Symbolics: unwrap
 
 using StableRNGs
 import SciMLBase
 using SymbolicIndexingInterface
 using Setfield
+using LinearAlgebra
 rng = StableRNG(12345)
 
 function get_callback(prob)
@@ -22,6 +26,15 @@ end
 eqs = [D(x) ~ 1]
 affect = [x ~ 0]
 affect_neg = [x ~ 1]
+
+@testset "Symbolic event detection" begin
+    @named no_events = System([D(x) ~ 1], t)
+    @test !ModelingToolkitBase._has_symbolic_events(no_events)
+
+    @named child = System([D(x) ~ 1], t; continuous_events = [x ~ 1])
+    @named parent = System(Equation[], t; systems = [child])
+    @test ModelingToolkitBase._has_symbolic_events(parent)
+end
 
 @testset "SymbolicContinuousCallback constructors" begin
     e = SymbolicContinuousCallback(eqs[])
@@ -377,10 +390,10 @@ end
 
     sol = solve(prob, Tsit5())
     sol_nosplit = solve(prob_nosplit, Tsit5())
-    @test 0 <= minimum(sol[x]) <= 1.0e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol[abs(x)]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol[y]) ≈ 1.5  # check wall conditions
-    @test 0 <= minimum(sol_nosplit[x]) <= 1.0e-10 # the ball never went through the floor but got very close
+    @test 0 <= minimum(sol_nosplit[abs(x)]) <= 1.0e-10 # the ball never went through the floor but got very close
     @test minimum(sol_nosplit[y]) ≈ -1.5 # check wall conditions
     @test maximum(sol_nosplit[y]) ≈ 1.5  # check wall conditions
 
@@ -615,6 +628,7 @@ end
         jsys = complete(jsys)
         jprob = JumpProblem(jsys, [u0; p], tspan; aggregator = Direct(), kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)
+        @test SciMLBase.successful_retcode(sol)
         @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
         paramtotest === nothing || (@test sol.ps[paramtotest] == [0.0, 1.0])
         @test sol(40.0)[1] == 0
@@ -625,7 +639,7 @@ end
     @discretes k(t)
     @variables A(t) B(t)
 
-    eqs = [MassActionJump(k, [A => 1], [A => -1])]
+    eqs = [SymbolicMassActionJump(k, [A => 1], [A => -1])]
     cond1 = (t == t1)
     affect1 = [A ~ Pre(A) + 1]
     cb1 = cond1 => affect1
@@ -719,7 +733,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     required_crossings_c1 = [π / 2, 3 * π / 2]
     required_crossings_c2 = [π / 6, π / 2, 5 * π / 6, 7 * π / 6, 3 * π / 2, 11 * π / 6]
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
@@ -838,7 +852,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt1, evt2])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
     @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
     @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
@@ -858,7 +872,7 @@ end
     @named trigsys = System(eqs, t; continuous_events = [evt2, evt1])
     trigsys_ss = mtkcompile(trigsys)
     prob = ODEProblem(trigsys_ss, [], (0.0, 2π))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Tsit5(); dtmax = 0.01)
     @test maximum(abs.(first.(cr1) .- required_crossings_c1)) < 1.0e-4
     @test maximum(abs.(first.(cr2) .- required_crossings_c2)) < 1.0e-4
     @test sign.(cos.(required_crossings_c1 .- 1.0e-6)) == sign.(last.(cr1))
@@ -961,9 +975,9 @@ if @isdefined(ModelingToolkit)
             ]
 
             discrete_events = [
-                [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+                [30] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0, binary_valve_2.S ~ 0.0]
                 [60] => [binary_valve_1.S ~ 1.0, binary_valve_2.Δp ~ 1.0]
-                [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.Δp ~ 0.0]
+                [120] => [binary_valve_1.S ~ 0.0, binary_valve_2.S ~ Pre(binary_valve_2.S)]
             ]
 
             return System(equations, t, vars, pars; name, systems, discrete_events)
@@ -978,9 +992,9 @@ if @isdefined(ModelingToolkit)
         # This is singular at the second event, but the derivatives are zero so it's
         # constant after that point anyway. Just make sure it hits the last event and
         # had the correct `u`.
-        @test_broken SciMLBase.successful_retcode(sol)
         @test sol.t[end] >= 120.0
-        @test sol[end] == [0.0, 0.0, 0.0]
+        @test sol[sys.binary_valve_1.S][end] == 0.0
+        @test sol[sys.binary_valve_2.S][end] == 0.0
     end
 end
 
@@ -1516,6 +1530,49 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, FBDF())
         @test prob.ps[g] == sol.ps[g]
     end
+
+    @testset "Implicit affect solves at the ODE solver's tolerance" begin
+        # Terms of magnitude 1e7 floor the algebraic equation's residual at 1.2e-9 in
+        # Float64: above NonlinearSolve's default `abstol` of 3e-13 and below any
+        # tolerance an ODE solve would be run at. Solving the affect at the nonlinear
+        # default made this perfectly solvable callback throw.
+        @variables x(t) = 1.0 y(t) = 1.0 w(t) = 0.0
+        @discretes g(t) = 0.4785
+        eqs = [D(x) ~ 1.0, D(w) ~ 1.0, 0 ~ 1.0e7 * (y^2 - x) - g]
+        c_evt = SymbolicContinuousCallback(
+            [w ~ 0.5], [g ~ Pre(g) + 0.1, x ~ Pre(x), w ~ Pre(w)];
+            discrete_parameters = [g], iv = t
+        )
+        @mtkcompile sys = System(eqs, t, [x, y, w], [g]; continuous_events = c_evt)
+        prob = ODEProblem(sys, [], (0.0, 1.0); warn_initialize_determined = false)
+
+        sol = solve(prob, FBDF())
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.ps[g] ≈ [0.4785, 0.5785]
+        # The state saved right after the affect is the affect's own solution, so it
+        # satisfies the algebraic equation to the tolerance the ODE is solved at.
+        i = findlast(tᵢ -> abs(tᵢ - 0.5) < 1.0e-9, sol.t)
+        @test abs(1.0e7 * (sol[y][i]^2 - sol[x][i]) - 0.5785) < 1.0e-6
+    end
+
+    @testset "`affect_tolerance` translates the integrator's tolerance values" begin
+        using ModelingToolkitBase: affect_tolerance
+        # `false` is what OrdinaryDiffEqCore stores for a tolerance that was not supplied
+        # under a discrete problem. `Bool <: Number`, so forwarding it would reach the
+        # nonlinear solve as a *zero* tolerance, which nothing can meet.
+        discrete_opts = (; opts = (; abstol = false, reltol = false))
+        @test affect_tolerance(discrete_opts, :abstol) === nothing
+        @test affect_tolerance(discrete_opts, :reltol) === nothing
+        # A scalar is used as given; a per-component array is reduced to its tightest
+        # entry, since the nonlinear solve compares a scalar norm against the tolerance.
+        @test affect_tolerance((; opts = (; abstol = 1.0e-8)), :abstol) == 1.0e-8
+        @test affect_tolerance((; opts = (; abstol = [1.0e-6, 1.0e-9])), :abstol) == 1.0e-9
+        @test affect_tolerance((; opts = (; abstol = Float64[])), :abstol) === nothing
+        # An `SSAIntegrator` has no tolerances at all: its `opts` is `(callback = ...,)`.
+        ssa_opts = (; opts = (; callback = nothing))
+        @test affect_tolerance(ssa_opts, :abstol) === nothing
+        @test affect_tolerance(ssa_opts, :reltol) === nothing
+    end
 end
 
 @testset "Array parameter updates of parent components in ImperativeEffect" begin
@@ -1602,7 +1659,7 @@ end
 if @isdefined(ModelingToolkit)
     @testset "Symbolic affects are compiled in `complete`" begin
         @parameters g
-        @variables x(t) [state_priority = 10.0] y(t) [guess = 1.0]
+        @variables x(t) [state_priority = 10] y(t) [guess = 1.0]
         @variables λ(t) [guess = 1.0]
         eqs = [
             D(D(x)) ~ λ * x
@@ -1804,4 +1861,198 @@ end
     @test sol.ps[model.k[2]][end] == 1.0
     @test sol[model.X[1]][end] ≈ 2.0 atol = 1.0e-8 rtol = 1.0e-8
     @test sol[model.X[2]][end] ≈ 6.0 atol = 1.0e-8 rtol = 1.0e-8
+end
+
+# Let's not duplicate tests unnecessarily
+if !@isdefined(ModelingToolkit)
+    @testset "Issue#4231: bound discretes are not given extra initial values" begin
+        @variables X(t)
+        @parameters p Kᵢ Kₐ
+        @discretes K(t) = Kᵢ
+        discrete_events = [
+            ModelingToolkitBase.SymbolicDiscreteCallback(
+                [0.0] => [K ~ Kₐ];
+                discrete_parameters = [K]
+            ),
+        ]
+        eqs = [
+            D(X) ~ p - K * X,
+        ]
+        @mtkcompile sys = System(eqs, t, [X], [p, Kᵢ, Kₐ, K]; discrete_events)
+        @test_nowarn ODEProblem(sys, [X => 1, p => 1, Kᵢ => 1, Kₐ => 2], (0.0, 1.0))
+    end
+
+    @testset "Issue:4095: `Pre` recurses into expressions" begin
+        @variables x(t)
+        @parameters p (f::Function)(..)
+        @discretes d(t)
+        @test isequal(Pre(2x^2 + 3sin(f(x)) - ifelse(p < 0, d, d + 2) + 2p), 2Pre(x)^2 + 3sin(f(Pre(x))) - ifelse(p < 0, Pre(d), Pre(d) + 2) + 2p)
+    end
+
+    @testset "Issue#4272: Scalarized array params in `AffectSystem`" begin
+        @variables u(t)
+        @variables (x(t))[1:2]
+        @variables y(t)
+
+        @parameters A[1:4]
+        @parameters b[1:2]
+        @parameters c[1:2]
+
+        eqs = [
+            u ~ x[1] + x[2] * sin(t)
+            D(x) ~ reshape(A, 2, 2) * x + b * u;
+            y ~ dot(c, x)
+        ]
+
+        event1 = SymbolicDiscreteCallback([1.0], [x[1] ~ 1.0]; iv = t)
+        @named sys = System(eqs, t, [u, x..., y], [A, b, c]; discrete_events = [event1])
+        @test_nowarn complete(sys)
+    end
+    @testset "Issue#4031, #4239: `AssignmentAffect`" begin
+        @variables x(t) y(t)
+        @discretes d(t)
+
+        aff = AssignmentAffect([y => y + 1, d => d + y + 1])
+        @test aff isa ModelingToolkitBase.SymbolicAffect
+        @test issetequal(aff.affect, [y ~ Pre(y) + 1, d ~ Pre(d) + Pre(y) + 1])
+        @test issetequal(aff.discrete_parameters, [d])
+
+        evt = [x ~ 1.0] => [y => y + 1, d => d + 5, x ~ 3Pre(x)]
+        @mtkcompile sys = System([D(x) ~ 1, D(y) ~ 2 + d], t; continuous_events = [evt])
+        prob = ODEProblem(sys, [x => 0, y => 0, d => 1], (0.0, 2.0))
+        sol = solve(prob, Tsit5())
+        @test sol(1 - eps(); idxs = [x, y, d]) ≈ [1.0, 3.0, 1.0]
+        @test all(sol(1.001; idxs = [x, y, d]) .>= [3.0, 4.0, 6.0])
+    end
+end
+
+if @isdefined(ModelingToolkit)
+    @testset "Issue#4259: Array variables and empty affects" begin
+        @component function MinimalBug(; name)
+            vars = @variables begin
+                s(t), [guess = 1.0]
+                arr(t)[1:2]
+            end
+            eqs = [
+                D(s) ~ 0.1
+                arr[1] ~ s
+                arr[2] ~ 2s
+            ]
+            continuous_events = [
+                [s ~ 0.5] => Symbolics.Equation[],
+            ]
+            System(eqs, t, [s; collect(arr)], []; name, continuous_events)
+        end
+
+        @named sys = MinimalBug()
+        @test_nowarn mtkcompile(sys)
+    end
+end
+
+if !@isdefined(ModelingToolkit)
+    @testset "`initialize_save_discretes` support" begin
+        @variables x(t)
+        @discretes d1(t) d2(t)
+        cevt = SymbolicContinuousCallback(
+            [x ~ 0.5], [d1 ~ Pre(d1) + 0.1]; discrete_parameters = [d1], initialize_save_discretes = false
+        )
+        devt = SymbolicDiscreteCallback(
+            0.1, [d2 ~ Pre(d2) + 0.1]; discrete_parameters = [d2], initialize_save_discretes = false
+        )
+        @mtkcompile sys = System(
+            [D(x) ~ sin(d1 * d2 * t)], t; continuous_events = [cevt], discrete_events = [devt]
+        )
+        prob = ODEProblem(sys, [x => 0.0, d1 => 1.0, d2 => 1.0], (0.0, 10.0))
+        sol = solve(prob, Tsit5())
+        @test sol.discretes[1].t[1] > 0.0
+        @test sol.discretes[2].t[1] > 0.0
+    end
+
+    @testset "`SciMLBase.Clock(dt; phase)` as `SymbolicDiscreteCallback` condition" begin
+        @variables x(t)
+        @discretes d(t)
+
+        @testset "Zero phase" begin
+            devt = SymbolicDiscreteCallback(
+                SciMLBase.Clock(0.1; phase = 0.0), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.0, 1.0))
+            sol = solve(prob, Tsit5())
+            # It shouldn't tick at `tspan[2]`
+            @test sol.discretes[1].t ≈ 0.0:0.1:0.999
+            @test sol[d] ≈ 1:10
+        end
+        @testset "Nonzero phase" begin
+            devt = SymbolicDiscreteCallback(
+                SciMLBase.Clock(0.1; phase = 0.05), [d ~ Pre(d) + 1]; discrete_parameters = [d],
+            )
+            @mtkcompile sys = System([D(x) ~ t], t, [x, d], []; discrete_events = [devt])
+            prob = ODEProblem(sys, [x => 0.0, d => 0.0], (0.0, 1.0))
+            sol = solve(prob, Tsit5())
+            @test sol.discretes[1].t ≈ 0.05:0.1:1.0
+            @test sol[d] ≈ 1:10
+        end
+    end
+
+    vlk(v, i) = v[clamp(round(Int, i), 1, length(v))]
+    @register_symbolic vlk(v::AbstractVector, i::Real)
+
+    @testset "Issue#4870: Negative-edge affects are properly saved" begin
+        # Case 1 of the issue
+        gi = only(@discretes gi(t) = 1.0)
+        ps = @parameters begin
+            (up[1:3] = [1.0, 2.0, 1.0e6])
+            (dn[1:3] = [-1.0e6, 0.5, 1.5])
+        end
+        upv, dnv = ps
+        @variables y(t) = 0.0
+        eqs = [D(y) ~ ifelse(t < 6, 0.5, -0.5)]   # triangle: 0 -> 3 -> 0
+
+        cbu = SymbolicContinuousCallback([y ~ vlk(upv, gi)], [gi => min(gi + 1, 3)]; affect_neg = nothing)
+        cbd = SymbolicContinuousCallback([y ~ vlk(dnv, gi)], nothing; affect_neg = [gi => max(gi - 1, 1)])
+        @named sys = System(eqs, t, [y], [collect(Iterators.flatten(ps)); gi]; continuous_events = [cbu, cbd])
+        s = mtkcompile(sys)
+        sol = solve(ODEProblem(s, [], (0.0, 12.0)), Tsit5())
+        @test sol[gi] ≈ [1, 2, 3, 2, 1]
+    end
+end
+
+@testset "`ImperativeAffect` internals" begin
+    @variables x(t) y(t)
+    @parameters p
+    @named sys = System([D(x) ~ p * x, D(y) ~ x], t)
+    sys = complete(sys)
+
+    @testset "`search_variables!` descends into non-symbolic entries" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m; observed = (; xy = [x, y])
+        )
+        vars = Set{ModelingToolkitBase.SymbolicT}()
+        SymbolicUtils.search_variables!(vars, aff)
+        @test isequal(vars, Set(unwrap.([x, y])))
+    end
+
+    @testset "duplicate observed aliases warn" begin
+        aff = ModelingToolkitBase.ImperativeAffect(
+            (m, o, c, i) -> m, [x, y], [:a, :a], [], Symbol[], nothing, false
+        )
+        @test_logs (:warn, r"is aliased as a") match_mode = :any ModelingToolkitBase.compile_functional_affect(
+            aff, sys
+        )
+    end
+
+    @testset "`Substituter` on an `AffectSystem`" begin
+        @parameters q
+        aff = ModelingToolkitBase.AffectSystem(
+            ModelingToolkitBase.SymbolicAffect([x ~ p]); iv = t, parent_sys = sys
+        )
+        subs = SymbolicUtils.Substituter{false}(
+            Dict(unwrap(p) => unwrap(q)), SymbolicUtils.default_substitute_filter
+        )
+        newaff = subs(aff)
+        @test isequal(only(observed(newaff.system)).rhs, unwrap(q))
+        @test isequal(parameters(newaff.system), [unwrap(q)])
+        @test isequal(newaff.parameters, [unwrap(q)])
+    end
 end

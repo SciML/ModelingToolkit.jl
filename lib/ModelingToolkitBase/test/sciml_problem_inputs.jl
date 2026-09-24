@@ -30,16 +30,16 @@ begin
     ]
     noise_eqs = fill(0.01, 3, 6)
     jumps = [
-        MassActionJump(kp, Pair{Symbolics.SymbolicT, Int64}[], [X => 1]),
-        MassActionJump(kd, [X => 1], [X => -1]),
-        MassActionJump(k1, [X => 1], [X => -1, Y => 1]),
-        MassActionJump(k2, [Y => 1], [X => 1, Y => -1]),
-        MassActionJump(k1, [Y => 1], [Y => -1, Z => 1]),
-        MassActionJump(k2, [Z => 1], [Y => 1, Z => -1]),
+        SymbolicMassActionJump(kp, Pair{Symbolics.SymbolicT, Int64}[], [X => 1]),
+        SymbolicMassActionJump(kd, [X => 1], [X => -1]),
+        SymbolicMassActionJump(k1, [X => 1], [X => -1, Y => 1]),
+        SymbolicMassActionJump(k2, [Y => 1], [X => 1, Y => -1]),
+        SymbolicMassActionJump(k1, [Y => 1], [Y => -1, Z => 1]),
+        SymbolicMassActionJump(k2, [Z => 1], [Y => 1, Z => -1]),
     ]
 
     # Create systems (without mtkcompile, since that might modify systems to affect intended tests).
-    osys = complete(System(diff_eqs, t; name = :osys))
+    osys = complete(System(diff_eqs, t, [X, Y, Z], [kp, kd, k1, k2, Z0]; name = :osys))
     ssys = complete(
         SDESystem(
             diff_eqs, noise_eqs, t, [X, Y, Z], [kp, kd, k1, k2]; name = :ssys
@@ -196,7 +196,9 @@ end
     @testset "$ctor" for (sys, ctor) in [
             (odesys, ODEProblem),
             (odesys, ODEProblem{true}),
-            (odesys, ODEProblem{true, SciMLBase.FullSpecialize}), (odesys, BVProblem),
+            (odesys, ODEProblem{true, SciMLBase.FullSpecialize}),
+            (odesys, ODEProblem{true, SciMLBase.FunctionWrapperSpecialize}),
+            (odesys, BVProblem),
             (odesys, BVProblem{true}),
             (odesys, BVProblem{true, SciMLBase.FullSpecialize}), (sdesys, SDEProblem),
             (sdesys, SDEProblem{true}),

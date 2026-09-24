@@ -153,7 +153,7 @@ function connector_type(sys::AbstractSystem)
     for s in unkvars
         vtype = get_connection_type(s)
         if vtype === Stream
-            isarray(s) && error("Array stream variables are not supported. Got $s.")
+            isarray(s) && error(lazy"Array stream variables are not supported. Got $s.")
             n_stream += 1
         elseif vtype === Flow
             n_flow += 1
@@ -228,10 +228,10 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
     for var in allvars
         vtype = getvariabletype(var)
         vtype === VARIABLE ||
-            throw(ArgumentError("Expected $var to be of kind `$VARIABLE`. Got `$vtype`."))
+            throw(ArgumentError(lazy"Expected $var to be of kind `$VARIABLE`. Got `$vtype`."))
     end
     if !allunique(allvars)
-        throw(ArgumentError("Expected all connection variables to be unique. Got variables $allvars which contains duplicate entries."))
+        throw(ArgumentError(lazy"Expected all connection variables to be unique. Got variables $allvars which contains duplicate entries."))
     end
     sh1 = SU.shape(allvars[1])::SU.ShapeVecT
     sz1 = SU.SmallV{Int}()
@@ -246,7 +246,7 @@ function validate_causal_variables_connection(allvars::Vector{SymbolicT})
             push!(sz2, length(x))
         end
         if !isequal(sz1, sz2)
-            throw(ArgumentError("Expected all connection variables to have the same size. Got variables $(allvars[1]) and $v with sizes $sz1 and $sz2 respectively."))
+            throw(ArgumentError(lazy"Expected all connection variables to have the same size. Got variables $(allvars[1]) and $v with sizes $sz1 and $sz2 respectively."))
 
         end
     end
@@ -388,6 +388,21 @@ struct RotationMatrix
         return new(unwrap_vars(R), unwrap_vars(w))
     end
 
+end
+
+"""
+    $TYPEDSIGNATURES
+
+Compute the angular velocity `w` from the rotation matrix `R` and its derivative
+`DR = Differential(t)(R)`.
+"""
+@inline get_w(R::Arr{Num, 2}, t) = get_w(unwrap(R), t)::Vector{SymbolicT}
+@inline get_w(R::SymbolicT, t::Num) = get_w(R, unwrap(t))::Vector{SymbolicT}
+
+function get_w(R::SymbolicT, t::SymbolicT)
+    R = collect(R)::Matrix{SymbolicT}
+    DR = map(Differential(t), R)
+    return [R[3, :]'DR[2, :], -R[3, :]'DR[1, :], R[2, :]'DR[1, :]]::Vector{SymbolicT}
 end
 
 "Return orientation object of a multibody frame."
@@ -838,6 +853,27 @@ function _flow_equations_from_idxs!(sys::AbstractSystem, eqs::Vector{Equation}, 
     return
 end
 
+struct CausalConnectionSetNoSourceError <: Exception
+    cset::Vector{ConnectionVertex}
+end
+
+function Base.showerror(io::IO, err::CausalConnectionSetNoSourceError)
+    println(
+        io, """
+        Found a causal connection set with no source. For a causal connection set to be valid \
+        it must have one outer input or one inner output. Typically, this happens when a \
+        component incorrectly has two input ports or two output ports instead of one input \
+        and one output port.
+
+        Problematic connection set:
+        """
+    )
+    for cvar in err.cset
+        println(io, "  ", cvar, " ", cvar.type === InputVar ? "(Input)" : "(Output)")
+    end
+    return
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -880,6 +916,13 @@ function generate_connection_equations_and_stream_connections(
                     end
                     inner_output = cvert
                 end
+            end
+            if inner_output !== nothing
+                root_vert = inner_output
+            elseif outer_input !== nothing
+                root_vert = outer_input
+            else
+                throw(CausalConnectionSetNoSourceError(cset))
             end
             root_vert = something(inner_output, outer_input)
             root_var = variable_from_vertex(sys, root_vert)::SymbolicT
@@ -1020,11 +1063,11 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
     sys, (csets, domain_csets) = generate_connection_set(sys)
     # generate equations, and stream equations
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(sys, csets)
-    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol)
+    source_visitor = SourceInformationVisitor()
+    eqs = with_source_info ? equations(sys, source_visitor) : equations(sys)
+    stream_eqs, instream_subs = expand_instream(instream_csets, sys; tol = tol, eqs)
 
     if with_source_info
-        source_visitor = SourceInformationVisitor()
-        eqs = equations(sys, source_visitor)
         N = length(eqs) + length(ceqs) + length(stream_eqs)
         sources = source_visitor.sources
         # Names are in reverse order
@@ -1045,7 +1088,8 @@ function expand_connections(sys::AbstractSystem, ::Val{with_source_info} = Val(f
         end
         source_info = EquationSourceInformation(sources, is_connection_equation)
     else
-        eqs = [equations(sys); ceqs; stream_eqs]
+        source_info = nothing
+        eqs = [eqs; ceqs; stream_eqs]
     end
     if !isempty(instream_subs)
         # substitute `instream(..)` expressions with their new values
@@ -1106,9 +1150,8 @@ variable approaches zero.
 """
 function expand_instream(
         csets::Vector{Vector{ConnectionVertex}}, sys::AbstractSystem;
-        tol = 1.0e-8
+        tol = 1.0e-8, eqs = equations(sys)
     )
-    eqs = equations(sys)
     # collect all `instream` terms in the equations
     instream_exprs = Set{SymbolicT}()
     for eq in eqs
@@ -1201,11 +1244,11 @@ function expand_instream(
 
             for inner_i in eachindex(inner_cverts)
                 svar = inner_streamvars[inner_i]
-                args = SArgsT()
-                push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
-                push!(args, SU.Const{VartypeT}(Val(n_outer)))
                 svar_unscal = SymbolicT[]
                 for svar_idx in SU.stable_eachindex(svar)
+                    args = SArgsT()
+                    push!(args, SU.Const{VartypeT}(Val(n_inner - 1)))
+                    push!(args, SU.Const{VartypeT}(Val(n_outer)))
                     for i in eachindex(inner_cverts)
                         i == inner_i && continue
                         push!(args, inner_flowvars[i])
@@ -1290,6 +1333,13 @@ function instream_rt(
         vars::Vararg{Any, N}
     ) where {inner_n, outer_n, N}
     @assert N == 2 * (inner_n + outer_n)
+    if any(Base.Fix2(isa, SymbolicT), vars)
+        # In case `instream_rt` goes through `scalarize`.
+        return BSImpl.Term{VartypeT}(
+            instream_rt, Symbolics.SArgsT((ins, outs, vars...));
+            type = Real, shape = SU.ShapeVecT()
+        )
+    end
 
     # inner: mj.c.m_flow
     # outer: ck.m_flow

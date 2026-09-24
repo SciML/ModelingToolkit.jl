@@ -76,7 +76,7 @@ event = SymbolicDiscreteCallback(
 This way, we enforce that `y` will remain the same, and `p` will change.
 
 !!! warning
-    
+
     Symbolic affects come with the guarantee that the state after the callback
     will be consistent. However, when using [general functional affects](@ref func_affects)
     or [imperative affects](@ref imp_affects) one must be more careful. In

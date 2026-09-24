@@ -1,8 +1,34 @@
-@deprecate structural_simplify(sys; kwargs...) mtkcompile(sys; kwargs...)
-@deprecate structural_simplify(sys, io; kwargs...) mtkcompile(
-    sys; inputs = io[1], outputs = io[2], kwargs...
-)
+"""
+    structural_simplify(sys; kwargs...)
+    structural_simplify(sys, io; kwargs...)
 
+Deprecated alias for [`mtkcompile`](@ref).
+
+Use `mtkcompile(sys; kwargs...)` in new code.
+"""
+function structural_simplify(sys; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; kwargs...)
+end
+
+function structural_simplify(sys, io; kwargs...)
+    Base.depwarn(
+        "`structural_simplify(sys, io; kwargs...)` is deprecated, use `mtkcompile(sys; kwargs...)` instead.",
+        :structural_simplify,
+    )
+    return mtkcompile(sys; inputs = io[1], outputs = io[2], kwargs...)
+end
+
+"""
+    @mtkbuild expr
+
+Deprecated alias for [`@mtkcompile`](@ref).
+
+Use `@mtkcompile` in new code.
+"""
 macro mtkbuild(exprs...)
     return quote
         Base.depwarn("`@mtkbuild` is deprecated. Use `@mtkcompile` instead.", :mtkbuild)
@@ -15,6 +41,13 @@ macro mtkbuild(exprs...)
     end |> esc
 end
 
+"""
+    ODESystem(args...; kwargs...)
+
+Deprecated alias for [`System`](@ref).
+
+Use `System(args...; kwargs...)` in new code.
+"""
 const ODESystem = IntermediateDeprecationSystem
 
 function IntermediateDeprecationSystem(args...; kwargs...)
@@ -26,8 +59,46 @@ function IntermediateDeprecationSystem(args...; kwargs...)
     return System(args...; kwargs...)
 end
 
-for T in [:NonlinearSystem, :DiscreteSystem, :ImplicitDiscreteSystem]
-    @eval @deprecate $T(args...; kwargs...) System(args...; kwargs...)
+"""
+    NonlinearSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
+"""
+function NonlinearSystem(args...; kwargs...)
+    Base.depwarn(
+        "`NonlinearSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :NonlinearSystem,
+    )
+    return System(args...; kwargs...)
+end
+
+"""
+    DiscreteSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
+"""
+function DiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`DiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :DiscreteSystem,
+    )
+    return System(args...; kwargs...)
+end
+
+"""
+    ImplicitDiscreteSystem(args...; kwargs...)
+
+Deprecated alias constructor for [`System`](@ref). Use `System(args...; kwargs...)` in
+new code.
+"""
+function ImplicitDiscreteSystem(args...; kwargs...)
+    Base.depwarn(
+        "`ImplicitDiscreteSystem(args...; kwargs...)` is deprecated, use `System(args...; kwargs...)` instead.",
+        :ImplicitDiscreteSystem,
+    )
+    return System(args...; kwargs...)
 end
 
 for T in [
@@ -80,6 +151,24 @@ for T in [
             """
             return $T{iip, spec}(sys, merge($uCanonical, $pCanonical), tspan; kw...)
         end
+        if T === :ODEProblem
+            @eval function SciMLBase.ODEProblem{
+                    iip, SciMLBase.FunctionWrapperSpecialize,
+                }(
+                    sys::System, u0::$uType, tspan, p::$pType; kw...
+                ) where {iip}
+                ctor = string(ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize})
+                uCan = string($(QuoteNode(uCanonical)))
+                pCan = string($(QuoteNode(pCanonical)))
+                @warn """
+                `$ctor(sys, u0, tspan, p; kw...)` is deprecated. Use
+                `$ctor(sys, merge($uCan, $pCan), tspan)` instead.
+                """
+                return ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(
+                    sys, merge($uCanonical, $pCanonical), tspan; kw...
+                )
+            end
+        end
     end
 
     for pType in [SciMLBase.NullParameters, Nothing], uType in [Any, Nothing]
@@ -114,6 +203,23 @@ for T in [
             `$ctor(sys, u0, tspan)` instead.
             """
             return $T{iip, spec}(sys, u0, tspan; kw...)
+        end
+        if T === :ODEProblem
+            @eval function SciMLBase.ODEProblem{
+                    iip, SciMLBase.FunctionWrapperSpecialize,
+                }(
+                    sys::System, u0::$uType, tspan, p::$pType; kw...
+                ) where {iip}
+                ctor = string(ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize})
+                pT = string($(QuoteNode(pType)))
+                @warn """
+                `$ctor(sys, u0, tspan, p::$pT; kw...)` is deprecated. Use
+                `$ctor(sys, u0, tspan)` instead.
+                """
+                return ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(
+                    sys, u0, tspan; kw...
+                )
+            end
         end
     end
 end
@@ -202,6 +308,13 @@ for T in [
     end
 end
 
+"""
+    @brownian xs...
+
+Deprecated alias for [`@brownians`](@ref).
+
+Use `@brownians` in new code.
+"""
 macro brownian(xs...)
     return quote
         Base.depwarn(

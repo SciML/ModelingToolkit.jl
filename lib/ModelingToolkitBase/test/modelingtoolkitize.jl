@@ -1,9 +1,10 @@
 using OrdinaryDiffEq, ModelingToolkitBase, DataStructures, Test
-using Optimization, RecursiveArrayTools, OptimizationOptimJL
+using OrdinaryDiffEqRosenbrock
+using Optimization, RecursiveArrayTools, OptimizationOptimJL, OptimizationOptimJL.Optim
 using SymbolicIndexingInterface
 using ModelingToolkitBase: t_nounits as t, D_nounits as D
 using Symbolics: value
-using SciMLBase: parameterless_type
+using SciMLBase: DespecializedParameters, parameterless_type, successful_retcode
 
 N = 32
 const xyd_brusselator = range(0, stop = 1, length = N)
@@ -77,6 +78,7 @@ prob = OptimizationProblem(
     sys, [unknowns(sys) .=> x0; parameters(sys) .=> p], grad = true, hess = true
 )
 sol = solve(prob, NelderMead())
+@test successful_retcode(sol)
 @test sol.objective < 1.0e-8
 
 sol = solve(prob, BFGS())
@@ -274,6 +276,17 @@ end
 params = OrderedDict(:a => 10, :b => 20)
 u0 = [1, 2.0]
 prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
+sys = modelingtoolkitize(prob)
+@test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
+@test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]
+
+function ode_prob_namedtuple(du, u, p, t)
+    du[1] = u[1] + p.a
+    du[2] = u[2] + p.b
+    return nothing
+end
+params = DespecializedParameters((a = 10, b = 20))
+prob = ODEProblem(ode_prob_namedtuple, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in unknowns(sys)] == u0
 @test [value(ModelingToolkitBase.initial_conditions(sys)[s]) for s in parameters(sys)] == [10, 20]
@@ -499,4 +512,10 @@ sys = modelingtoolkitize(prob)
     mtkvals = similar(u0)
     sprob2.f(mtkvals, sprob2.u0, sprob2.p, tspan[1])
     @test mtkvals ≈ truevals
+end
+
+@testset "unsupported parameter containers" begin
+    err = ModelingToolkitBase.ModelingtoolkitizeParametersNotSupportedError
+    @test_throws err ModelingToolkitBase.define_params(:p, t)
+    @test occursin("Symbol", sprint(showerror, err(Symbol)))
 end

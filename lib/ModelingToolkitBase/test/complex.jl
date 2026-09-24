@@ -1,5 +1,7 @@
 using ModelingToolkitBase
 using ModelingToolkitBase: t_nounits as t
+using OrdinaryDiffEq
+using SciMLBase
 using Test
 
 @component function ComplexModel(; name)
@@ -50,4 +52,12 @@ end
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
     @test sol.u[1] isa Vector{ComplexF64}
+end
+
+@testset "::Number for variables" begin
+    @variables x(t)::Number
+    @mtkcompile sys = System([D(x) ~ -conj(x)], t)
+    prob = ODEProblem(sys, [x => 1.0 + 3im], (0.0, 1.0))
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
 end

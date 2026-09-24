@@ -1,11 +1,23 @@
 """
-    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+    generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false, limit_bounds = true)
 
 Generate the NLStep data for implicit ODE solvers. This is a stub that throws an error
 if called without ModelingToolkit loaded. The actual implementation is provided by
 ModelingToolkit when it is loaded.
+
+When `jac = true`, the analytic Jacobian of the teared inner nonlinear system is
+generated symbolically and attached to `nlprob.f.jac`, so NonlinearSolve does not
+have to recompute it via AD/FD on every Newton iteration.
+
+`limit_bounds` delivers the `bounds` metadata of the unknowns to the stage solve as a
+clamping corrector on its iterates — see [`attach_stage_limiters`](@ref). It is on by
+default and exists as an escape hatch: a clamp is a projection, so a model whose stage
+solutions legitimately leave the declared box (an advisory range rather than an invariant)
+solves the box-free stage system with `limit_bounds = false`.
 """
-function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
+function generate_ODENLStepData(
+        sys, u0, p, mm, nlstep_compile, nlstep_scc; jac = false, limit_bounds = true
+    )
     error(
         """
         `nlstep=true` requires ModelingToolkit.jl to be loaded.
@@ -14,28 +26,66 @@ function generate_ODENLStepData(sys, u0, p, mm, nlstep_compile, nlstep_scc)
     )
 end
 
-@fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
-        sys::System; u0 = nothing, p = nothing, tgrad = false, jac = false,
-        t = nothing, eval_expression = false, eval_module = @__MODULE__, sparse = false,
-        steady_state = false, checkbounds = false, sparsity = false, analytic = nothing,
-        simplify = false, cse = true, initialization_data = nothing, expression = Val{false},
-        check_compatibility = true, nlstep = false, nlstep_compile = true, nlstep_scc = false,
-        kwargs...
+"""$(function_docstring(ODEFunction, true, [:jac, :tgrad, :paramjac]))"""
+Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEFunction{iip, spec}(
+        sys::System; @nospecialize(u0 = nothing), @nospecialize(p = nothing), t = nothing,
+        tgrad = false, jac = false, paramjac = false,
+        eval_expression = false, eval_module = @__MODULE__, sparse = false,
+        steady_state = false, checkbounds = false, sparsity = false,
+        @nospecialize(analytic = nothing),
+        simplify = false, @nospecialize(initialization_data = nothing), expression = Val{false},
+        check_compatibility = true, nlstep = false, nlstep_compile = true,
+        nlstep_scc = false, nlstep_limit_bounds = true, optimize = nothing,
+        compiler_options::CompilerOptions = CompilerOptions(), kwargs...
     ) where {iip, spec}
-    check_complete(sys, ODEFunction)
-    check_compatibility && check_compatible_system(ODEFunction, sys)
-
-    f = generate_rhs(
-        sys; expression, wrap_gfw = Val{true},
-        eval_expression, eval_module, checkbounds = checkbounds, cse,
-        kwargs...
+    opts = SciMLFunctionOptions(;
+        u0, p, t, jac, tgrad, paramjac, sparse, sparsity, analytic, simplify,
+        initialization_data,
+        expression, check_compatibility, eval_expression, eval_module, compiler_options,
+        checkbounds, optimize, kwargs...,
     )
+    return ODEFunction{iip, spec}(
+        sys, opts; steady_state, nlstep, nlstep_compile, nlstep_scc, nlstep_limit_bounds
+    )
+end
+
+"""
+    SciMLBase.ODEFunction{iip, spec}(sys::System, opts::SciMLFunctionOptions; kwargs...)
+
+Public entry point that builds an `ODEFunction` directly from a pre-assembled
+`SciMLFunctionOptions`, bypassing the `kwargs...` wrapper above. Useful for callers
+that already hold (or want to share/reuse) an options struct, since — unlike the `kwargs...`
+wrapper — this method does not need to re-validate or re-assemble the option set.
+"""
+function SciMLBase.ODEFunction{iip, spec}(
+        sys::System, opts::SciMLFunctionOptions{E};
+        steady_state::Bool = false, nlstep::Bool = false, nlstep_compile::Bool = true,
+        nlstep_scc::Bool = false, nlstep_limit_bounds::Bool = true
+    ) where {iip, spec, E}
+    check_complete(sys, ODEFunction)
+    if has_any_limited(sys)
+        throw(
+            ArgumentError(
+                "the system contains `limited(...)` nodes that were not stripped; " *
+                    "`limited` requires the system to be compiled with `mtkcompile`."
+            )
+        )
+    end
+    opts.check_compatibility && check_compatible_system(ODEFunction, sys)
+
+    (;
+        u0, p, t, jac, tgrad, paramjac, sparse, sparsity, analytic, simplify,
+        initialization_data,
+    ) = opts
+    codegen_opts = opts.codegen
+
+    f = generate_rhs(sys, codegen_opts)
 
     if spec === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
             error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
         end
-        if expression == Val{true}
+        if E
             f = :($(SciMLBase.wrapfun_iip)($f, ($u0, $u0, $p, $t)))
         else
             f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
@@ -43,44 +93,56 @@ end
     end
 
     if tgrad
-        _tgrad = generate_tgrad(
-            sys; expression, wrap_gfw = Val{true},
-            simplify, cse, eval_expression, eval_module, checkbounds, kwargs...
-        )
+        _tgrad = generate_tgrad(sys, codegen_opts; simplify)
     else
         _tgrad = nothing
     end
 
     if jac
-        _jac = generate_jacobian(
-            sys; expression, wrap_gfw = Val{true},
-            simplify, sparse, cse, eval_expression, eval_module, checkbounds, kwargs...
-        )
+        _jac = generate_jacobian(sys, codegen_opts; simplify, sparse)
     else
         _jac = nothing
+    end
+
+    # `sparse` is deliberately not forwarded: `SciMLBase` has no `paramjac_prototype`, so
+    # no consumer can learn the pattern, and a sparse in-place function writes into the
+    # `nzval` of its output and would reject the dense buffer a caller would hand it.
+    if paramjac
+        _paramjac = generate_paramjac(sys, codegen_opts; simplify)
+    else
+        _paramjac = nothing
     end
 
     M = calculate_massmatrix(sys)
     _M = concrete_massmatrix(M; sparse, u0)
 
     if nlstep
-        ode_nlstep = generate_ODENLStepData(sys, u0, p, M, nlstep_compile, nlstep_scc)
+        ode_nlstep = generate_ODENLStepData(
+            sys, u0, p, M, nlstep_compile, nlstep_scc; jac,
+            limit_bounds = nlstep_limit_bounds
+        )
     else
         ode_nlstep = nothing
     end
 
-    observedfun = ObservedFunctionCache(
-        sys; expression, steady_state, eval_expression, eval_module, checkbounds, cse
-    )
+    observedfun = ObservedFunctionCache(sys, codegen_opts; steady_state)
 
-    _W_sparsity = W_sparsity(sys)
-    W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
+    # The W sparsity pattern is a symbolic computation over every scalar equation; only
+    # pay for it when something consumes it.
+    if sparse || sparsity
+        _W_sparsity = W_sparsity(sys)
+        W_prototype = calculate_W_prototype(_W_sparsity; u0, sparse)
+    else
+        _W_sparsity = nothing
+        W_prototype = nothing
+    end
 
     args = (; f)
     kwargs = (;
         sys = sys,
         jac = _jac,
         tgrad = _tgrad,
+        paramjac = _paramjac,
         mass_matrix = _M,
         jac_prototype = W_prototype,
         observed = observedfun,
@@ -90,34 +152,111 @@ end
         nlstep_data = ode_nlstep,
     )
 
-    maybe_codegen_scimlfn(expression, ODEFunction{iip, spec}, args; kwargs...)
+    odefn = maybe_codegen_scimlfn(Val{E}, ODEFunction{iip, spec}, args; kwargs...)
+    if !E && spec in (SciMLBase.AutoSpecialize, SciMLBase.AutoDespecialize)
+        odefn = SciMLBase.widen_bounded_type_params(odefn)
+    end
+    return odefn
 end
 
-@fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
-        sys::System, op, tspan;
-        callback = nothing, check_length = true, eval_expression = false,
+Base.@nospecializeinfer function _ode_problem(
+        ::Type{ODEProblem{iip, spec}}, sys::System, @nospecialize(op), tspan;
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
         expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
         _skip_events = false, kwargs...
     ) where {iip, spec}
     check_complete(sys, ODEProblem)
     check_compatibility && check_compatible_system(ODEProblem, sys)
 
-    f, u0,
-        p = process_SciMLProblem(
-        ODEFunction{iip, spec}, sys, op;
-        t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
-        eval_module, expression, check_compatibility, kwargs...
-    )
+    _iip = resolve_iip(iip, op)
+    if _iip === true
+        f, u0, p = process_SciMLProblem(
+            ODEFunction{true, spec}, sys, op;
+            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+            eval_module, expression, check_compatibility, kwargs...
+        )
+    else
+        f, u0, p = process_SciMLProblem(
+            ODEFunction{false, spec}, sys, op;
+            t = tspan !== nothing ? tspan[1] : tspan, check_length, eval_expression,
+            eval_module, expression, check_compatibility, kwargs...
+        )
+    end
 
     kwargs = process_kwargs(
-        sys; expression, callback, eval_expression, eval_module, op, _skip_events, kwargs...
+        sys; expression, callback, eval_expression, eval_module, op, _skip_events, tspan, kwargs...
     )
 
     ptype = getmetadata(sys, ProblemTypeCtx, StandardODEProblem())
     args = (; f, u0, tspan, p, ptype)
-    maybe_codegen_scimlproblem(expression, ODEProblem{iip}, args; kwargs...)
+    return maybe_codegen_scimlproblem(expression, ODEProblem{_iip}, args; kwargs...)
 end
 
+"""$(problem_docstring(SciMLBase.ODEProblem, ODEFunction, true))"""
+Base.@nospecializeinfer @fallback_iip_specialize function SciMLBase.ODEProblem{iip, spec}(
+        sys::System, @nospecialize(op), tspan = default_tspan(sys);
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
+        expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
+        _skip_events = false, kwargs...
+    ) where {iip, spec}
+    return _ode_problem(
+        ODEProblem{iip, spec}, sys, op, tspan;
+        callback, check_length, eval_expression, expression, eval_module, check_compatibility,
+        _skip_events, kwargs...
+    )
+end
+
+# SciMLBase also defines this fixed-specialization constructor for arbitrary functions.
+Base.@nospecializeinfer function SciMLBase.ODEProblem{
+        iip, SciMLBase.FunctionWrapperSpecialize,
+    }(
+        sys::System, @nospecialize(op), tspan = default_tspan(sys);
+        @nospecialize(callback = nothing), check_length = true, eval_expression = false,
+        expression = Val{false}, eval_module = @__MODULE__, check_compatibility = true,
+        _skip_events = false, kwargs...
+    ) where {iip}
+    return _ode_problem(
+        ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}, sys, op, tspan;
+        callback, check_length, eval_expression, expression, eval_module, check_compatibility,
+        _skip_events, kwargs...
+    )
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the `lowered_problem` to store on a `SteadyStateProblem` built on `sys`:
+a callable `prob -> problem` producing the problem the steady-state residual
+lowers to (an `SCCNonlinearProblem` when it decomposes into multiple SCCs), or
+`nothing` when no such lowering is available. The callable is evaluated on the
+current problem so that `remake`d `u0`/`p` values are reflected.
+
+This is a stub; the implementation is provided by ModelingToolkit. Retrieving the
+stored value is possible without it via
+`SciMLBase.SCCNonlinearProblem(::SteadyStateProblem)`.
+"""
+steady_state_sccprob(::AbstractSystem, op; kwargs...) = nothing
+
+"""
+    $(TYPEDSIGNATURES)
+
+Return the problem that `prob` lowers to when its steady-state residual is solved
+by SCC decomposition, or `nothing` if the problem does not record such a
+lowering. This is usually an `SCCNonlinearProblem`, but systems whose residual
+reduces to a single SCC lower to a plain `NonlinearProblem`,
+`HomotopyProblem`, or `LinearProblem` instead. Problems constructed through
+ModelingToolkit store a deferred lowering in the `lowered_problem` field; it is
+materialized against the problem's current `u0`/`p` on each access.
+"""
+SciMLBase.SCCNonlinearProblem(::SciMLBase.AbstractSciMLProblem) = nothing
+
+function SciMLBase.SCCNonlinearProblem(prob::SteadyStateProblem)
+    lp = prob.lowered_problem
+    lp === nothing && return nothing
+    return lp isa SciMLBase.AbstractSciMLProblem ? lp : lp(prob)
+end
+
+"""$(problem_docstring(DiffEqBase.SteadyStateProblem, ODEFunction, false))"""
 @fallback_iip_specialize function DiffEqBase.SteadyStateProblem{iip, spec}(
         sys::System, op; check_length = true, check_compatibility = true,
         expression = Val{false}, kwargs...
@@ -125,17 +264,24 @@ end
     check_complete(sys, SteadyStateProblem)
     check_compatibility && check_compatible_system(SteadyStateProblem, sys)
 
+    # `build_scimlproblem_expr` embeds keyword values as literals, so a lowering
+    # closure (which captures the system) cannot ride the codegen path.
+    sccprob = expression === Val{true} ? nothing : steady_state_sccprob(sys, op; kwargs...)
+
+    _iip = resolve_iip(iip, op)
     f, u0,
         p = process_SciMLProblem(
-        ODEFunction{iip}, sys, op;
+        ODEFunction{_iip, spec}, sys, op;
         steady_state = true, check_length, check_compatibility, expression,
         is_steadystateprob = true, kwargs...
     )
 
-    kwargs = process_kwargs(sys; expression, kwargs...)
+    kwargs = process_kwargs(sys; expression, tspan = (0, Inf), kwargs...)
     args = (; f, u0, p)
 
-    maybe_codegen_scimlproblem(expression, SteadyStateProblem{iip}, args; kwargs...)
+    maybe_codegen_scimlproblem(
+        expression, SteadyStateProblem{_iip}, args; lowered_problem = sccprob, kwargs...
+    )
 end
 
 function check_compatible_system(

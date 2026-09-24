@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq
+using SciMLBase
 using Test
 
 t = only(@parameters(t))

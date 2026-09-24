@@ -1,28 +1,40 @@
+# `tspan` has no default here, unlike every other time-dependent problem constructor:
+# `JumpProcesses` already defines `JumpProblem(prob, jumps...)`, so a two-argument method
+# with an untyped `op` is ambiguous with it (Aqua reports 14 ambiguities).
+"""$(problem_docstring(JumpProcesses.JumpProblem, "inner SciMLFunction", true; init = false, tspan_default = false))"""
 @fallback_iip_specialize function JumpProcesses.JumpProblem{iip, spec}(
         sys::System, op, tspan::Union{Tuple, Nothing};
         check_compatibility = true, eval_expression = false, eval_module = @__MODULE__,
-        checkbounds = false, cse = true, aggregator = JumpProcesses.NullAggregator(),
-        callback = nothing, rng = nothing, kwargs...
+        checkbounds = false, aggregator = JumpProcesses.NullAggregator(),
+        callback = nothing, rng = nothing, save_positions = (true, true), kwargs...
     ) where {iip, spec}
     check_complete(sys, JumpProblem)
     check_compatibility && check_compatible_system(JumpProblem, sys)
+    if haskey(kwargs, :tstops)
+        throw(
+            ArgumentError(
+                "Passing `tstops` directly to `JumpProblem(::System, ...)` is not supported. " *
+                    "Define tstops on the `System` via the `tstops` keyword instead."
+            )
+        )
+    end
 
     has_vrjs = any(x -> x isa VariableRateJump, jumps(sys))
     has_eqs = !isempty(equations(sys))
-    has_noise = get_noise_eqs(sys) !== nothing
+    has_noise = get_noise_eqs(sys) !== nothing || !isempty(brownians(sys))
 
     if (has_vrjs || has_eqs)
         if has_eqs && has_noise
             prob = SDEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
-                build_initializeprob = false, checkbounds, cse, check_length = false,
-                _skip_events = true, kwargs...
+                build_initializeprob = false, checkbounds, check_length = false,
+                _skip_events = true, _skip_tstops = true, kwargs...
             )
         elseif has_eqs
             prob = ODEProblem{iip, spec}(
                 sys, op, tspan; check_compatibility = false,
-                build_initializeprob = false, checkbounds, cse, check_length = false,
-                _skip_events = true, kwargs...
+                build_initializeprob = false, checkbounds, check_length = false,
+                _skip_events = true, _skip_tstops = true, kwargs...
             )
         else
             _, u0,
@@ -33,7 +45,7 @@
             )
             observedfun = ObservedFunctionCache(
                 sys; eval_expression, eval_module,
-                checkbounds, cse
+                checkbounds
             )
             f = (du, u, p, t) -> (du .= 0; nothing)
             df = ODEFunction{true, spec}(f; sys, observed = observedfun)
@@ -43,12 +55,12 @@
         _f, u0,
             p = process_SciMLProblem(
             EmptySciMLFunction{iip}, sys, op;
-            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, cse, kwargs...
+            t = tspan === nothing ? nothing : tspan[1], check_length = false, build_initializeprob = false, kwargs...
         )
-        f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
+        f = SciMLBase.DISCRETE_INPLACE_DEFAULT
 
         observedfun = ObservedFunctionCache(
-            sys; eval_expression, eval_module, checkbounds, cse
+            sys; eval_expression, eval_module, checkbounds
         )
 
         df = DiscreteFunction{true, true}(
@@ -58,13 +70,20 @@
         prob = DiscreteProblem(df, u0, tspan, p; kwargs...)
     end
 
-    dvs = unknowns(sys)
+    # Create SymbolicTstops for all paths and forward via JumpProblem kwargs.
+    # Inner problems (SDEProblem/ODEProblem) are created with _skip_tstops = true
+    # to avoid duplication.
+    tstops = SymbolicTstops(
+        sys, GeneratedFunctionOptions(; expression = Val{false}, eval_expression, eval_module)
+    )
+
+    dvs = flat_unknowns(sys)
     unknowntoid = Dict(value(unknown) => i for (i, unknown) in enumerate(dvs))
     js = jumps(sys)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substitution and empty param vecs
-    p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
+    p = (prob.p isa SciMLBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(sys, p; jseqs = js, rateconsttype = invttype)
     _majs = Vector{MassActionJump}(filter(x -> x isa MassActionJump, js))
@@ -98,17 +117,25 @@
     end
 
     # handle events, making sure to reset aggregators in the generated affect functions
+    # preprocess op to convert Symbol keys to Symbolic using main system before passing
+    # to process_events (which may create ImplicitDiscreteProblems for affect subsystems)
+    op_processed = operating_point_preprocess(sys, op)
     cbs = process_events(
-        sys; callback, eval_expression, eval_module, op, reset_jumps = true
+        sys; callback, eval_expression, eval_module, op = op_processed, reset_jumps = true,
+        tspan
     )
 
     if rng !== nothing
         kwargs = (; kwargs..., rng)
     end
+    if tstops !== nothing
+        kwargs = (; kwargs..., tstops)
+    end
+    # MTK requires pre-scaled rate expressions; never ask JumpProcesses to rescale.
     return JumpProblem(
         prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
         jumptovars_map = jtov, scale_rates = false, nocopy = true,
-        callback = cbs, kwargs...
+        callback = cbs, save_positions, kwargs...
     )
 end
 
@@ -117,6 +144,7 @@ function check_compatible_system(T::Union{Type{JumpProblem}}, sys::System)
     check_not_dde(sys)
     check_no_cost(sys, T)
     check_no_constraints(sys, T)
+    check_no_poissonians(sys, T)
     check_has_jumps(sys, T)
     return check_is_continuous(sys, T)
 end
@@ -164,6 +192,13 @@ function updateparams!(
 end
 
 function updateparams!(
+        ratemap::JumpSysMajParamMapper{U, V, W},
+        params::SciMLBase.DespecializedParameters
+    ) where {U <: AbstractArray, V <: AbstractArray, W}
+    return updateparams!(ratemap, SciMLBase.unwrap_parameters(params))
+end
+
+function updateparams!(
         ::JumpSysMajParamMapper{U, V, W},
         params::Nothing
     ) where {U <: AbstractArray, V <: AbstractArray, W}
@@ -173,7 +208,7 @@ end
 # update a maj with parameter vectors
 function (ratemap::JumpSysMajParamMapper{U, V, W})(
         maj::MassActionJump, newparams;
-        scale_rates,
+        scale_rates = false,
         kwargs...
     ) where {
         U <: AbstractArray,
@@ -191,7 +226,8 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(
             )
         )
     end
-    scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
+    # No scalerates! call — MTK requires pre-scaled rate expressions.
+    # The scale_rates kwarg is accepted but ignored for JumpProcesses API compatibility.
     return nothing
 end
 

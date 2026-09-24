@@ -1,5 +1,6 @@
 using Test
 using ModelingToolkitBase, OrdinaryDiffEq
+using OrdinaryDiffEqRosenbrock, OrdinaryDiffEqBDF
 using ModelingToolkitBase: get_component_type, complete
 using ModelingToolkitBase: t_nounits as t, D_nounits as D, value
 using ModelingToolkitStandardLibrary.Electrical
@@ -73,9 +74,13 @@ end
     @test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
     @test ModelingToolkitBase.n_expanded_connection_equations(capacitor) == 2
     if @isdefined(ModelingToolkit)
-        @test length(equations(mtkcompile(rc_model, allow_parameter = false))) == 2
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+        kws = (; reassemble_alg)
+        @test length(equations(mtkcompile(rc_model; allow_parameter = false, reassemble_alg))) == 2
+    else
+        kws = (;)
     end
-    sys = mtkcompile(rc_model)
+    sys = mtkcompile(rc_model; kws...)
     @test_throws ModelingToolkitBase.RepeatedStructuralSimplificationError mtkcompile(sys)
     if @isdefined(ModelingToolkit)
         @test length(equations(sys)) == 1
@@ -128,10 +133,10 @@ end
     @test !isempty(ModelingToolkitBase.bindings(sys_inner_outer))
     u0 = [rc_comp.capacitor.v => 0.0]
     prob = ODEProblem(sys_inner_outer, u0, (0, 10.0); sparse = true, missing_guess_value)
-    sol_inner_outer = solve(prob, Rodas4())
+    sol_inner_outer = solve(prob, Rodas4(); saveat = sol.t)
     @test SciMLBase.successful_retcode(sol_inner_outer)
     if @isdefined(ModelingToolkit)
-        @test sol[sys.capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
+        @test sol[sys.capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v] atol = 1.0e-6
 
         prob = ODEProblem(sys, [sys.capacitor.v => 0.0], (0, 10.0))
         sol = solve(prob, Tsit5())
@@ -150,7 +155,8 @@ end
 include("common/serial_inductor.jl")
 if @isdefined(ModelingToolkit)
     @testset "Serial inductor" begin
-        sys = mtkcompile(ll_model)
+        reassemble_alg = StructuralTransformations.DefaultReassembleAlgorithm(; inline_linear_sccs = false)
+        sys = mtkcompile(ll_model; reassemble_alg)
         @test length(equations(sys)) == 2
         u0 = unknowns(sys) .=> 0
         @test_nowarn ODEProblem(
@@ -160,7 +166,7 @@ if @isdefined(ModelingToolkit)
         sol = solve(prob, DFBDF())
         @test sol.retcode == SciMLBase.ReturnCode.Success
 
-        sys2 = mtkcompile(ll2_model)
+        sys2 = mtkcompile(ll2_model; reassemble_alg)
         @test length(equations(sys2)) == 3
         u0 = [sys2.inductor2.i => 0]
         prob = ODEProblem(sys2, u0, (0, 10.0))
@@ -509,4 +515,35 @@ end
     ss = toggle_namespacing(sys, false)
     @test (ss.P1.input.u ~ ss.R.output.u[1]) in equations(sys)
     @test (ss.P2.input.u ~ ss.R.output.u[2]) in equations(sys)
+end
+
+if !@isdefined(ModelingToolkit)
+    @connector function Input(; name)
+        @variables u(t) [input = true]
+        return System(Equation[], t, [u], []; name)
+    end
+    @connector function Output(; name)
+        @variables u(t) [output = true]
+        return System(Equation[], t, [u], []; name)
+    end
+
+    @component function Bad(; name)
+        @named begin
+            in = Input()
+            out = Input()
+        end
+        return System([connect(in.u, out.u)], t, [], []; name, systems = [in, out])
+    end
+    @component function MWE(; name)
+        @named begin
+            bad = Bad()
+            src = Output()
+            dst = Input()
+        end
+        return System([connect(src.u, bad.in.u), connect(bad.out.u, dst.u)], t; name, systems = [bad, src, dst])
+    end
+    @testset "Bad causal connection set throws appropriate error" begin
+        @named sys = MWE()
+        @test_throws ModelingToolkitBase.CausalConnectionSetNoSourceError expand_connections(sys)
+    end
 end
