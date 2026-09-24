@@ -546,11 +546,15 @@ function _store_evaluated_array!(
     return
 end
 
-function _requested_all_array_elements(keys, values)
+function _requested_all_array_elements(keys, values::AbstractArray)
     length(keys) == length(values) || return false
-    indices = Set(get_stable_index(k) for k in keys)
+    ax = axes(values)
+    indices = Set{Int}()
+    for k in keys
+        push!(indices, SU.as_linear_idx(ax, get_stable_index(k)))
+    end
     length(indices) == length(values) || return false
-    return all(i -> i in indices, eachindex(values))
+    return all(i -> i in indices, 1:length(values))
 end
 
 function _evaluate_varmap_array!(
@@ -558,18 +562,21 @@ function _evaluate_varmap_array!(
     )
     raw = get(varmap.dict, arr, COMMON_NOTHING)
     raw === COMMON_NOTHING && return
+    if !SU.is_array_shape(SU.shape(raw))
+        SU.isconst(raw) && return
+        varmap[arr] = subber(raw)
+        return
+    end
     values = collect(raw)
     has_holes = any(v -> v === varmap.default, values)
 
     if !has_holes && (isempty(keys) || _requested_all_array_elements(keys, values))
-        value = get(varmap, arr, COMMON_NOTHING)
-        value === COMMON_NOTHING && return
-        SU.isconst(value) && return
-        varmap[arr] = subber(value)
+        SU.isconst(raw) && return
+        varmap[arr] = subber(raw)
         return
     end
 
-    requested = isempty(keys) ? unwrap.(collect(arr)) : keys
+    requested = isempty(keys) ? SymbolicT[arr[i] for i in SU.stable_eachindex(arr)] : keys
     changed = false
     for k in requested
         value = get(varmap, k, varmap.default)
@@ -583,14 +590,22 @@ function _evaluate_varmap_array!(
 end
 
 function _evaluate_varmap_entries!(
-        subber, varmap::AtomicArrayDictSubstitutionWrapper, vars
+        subber, varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        all_elements::Bool = false
     )
+    vars isa AbstractVector || (vars = collect(vars))
     array_keys = Dict{SymbolicT, Vector{SymbolicT}}()
-    for k in vars
-        key = unwrap(k)
-        arr, is_indexed = split_indexed_var(key)
-        is_indexed || continue
-        push!(get!(() -> SymbolicT[], array_keys, arr), key)
+    whole_arrays = Set{SymbolicT}()
+    if !all_elements
+        for k in vars
+            key = unwrap(k)
+            arr, is_indexed = split_indexed_var(key)
+            if is_indexed
+                push!(get!(() -> SymbolicT[], array_keys, arr), key)
+            elseif Symbolics.isarraysymbolic(key)
+                push!(whole_arrays, arr)
+            end
+        end
     end
 
     evaluated_arrays = Set{SymbolicT}()
@@ -600,7 +615,12 @@ function _evaluate_varmap_entries!(
         if is_indexed || Symbolics.isarraysymbolic(key)
             arr in evaluated_arrays && continue
             push!(evaluated_arrays, arr)
-            _evaluate_varmap_array!(subber, varmap, arr, get(array_keys, arr, SymbolicT[]))
+            keys = if all_elements || arr in whole_arrays
+                SymbolicT[]
+            else
+                get(array_keys, arr, SymbolicT[])
+            end
+            _evaluate_varmap_array!(subber, varmap, arr, keys)
         else
             value = get(varmap, key, COMMON_NOTHING)
             value === COMMON_NOTHING && continue
@@ -627,6 +647,16 @@ function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limi
         )
     end
     return
+end
+
+function evaluate_varmap!(
+        varmap::AtomicArrayDictSubstitutionWrapper, vars;
+        limit = 100, allow_symbolic = false
+    )
+    subber = v -> fixpoint_sub(
+        v, varmap; maxiters = limit, fold = Val(true), warn_maxiters = !allow_symbolic
+    )
+    return _evaluate_varmap_entries!(subber, varmap, vars; all_elements = true)
 end
 
 function evaluate_varmap!(
