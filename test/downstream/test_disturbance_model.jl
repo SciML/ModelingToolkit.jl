@@ -198,7 +198,11 @@ f, x_sym,
     disturbance_argument = true, split = false
 )
 
-# Test symbol-based API with known_disturbance_inputs keyword
+# Test symbol-based API with known_disturbance_inputs keyword.
+# Model uses dist3 = ss(1 + 10/s), which has feedthrough, so a unit d1 input
+# immediately affects both the disturbance state and inertia1 velocity (same as
+# the disturbance_argument path above with d = [1,0,0] → [0,0,0,1,1]). With
+# w = [1,2] that combines to [0,0,1,1,2].
 f_kd, x_sym_kd, p_sym_kd, io_sys_kd = ModelingToolkit.generate_control_function(
     model_with_disturbance, [:u];
     known_disturbance_inputs = [:d1, :d2], split = false
@@ -211,7 +215,7 @@ u_kd = zeros(1)
 w_kd = zeros(2)
 @test f_kd[1](x0_kd, u_kd, p_kd, 0.0, w_kd) == zeros(length(x0_kd))
 w_kd = [1.0, 2.0]
-@test sort(f_kd[1](x0_kd, u_kd, p_kd, 0.0, w_kd)) == [0, 0, 0, 1, 2]
+@test sort(f_kd[1](x0_kd, u_kd, p_kd, 0.0, w_kd)) == [0, 0, 1, 1, 2]
 
 measurement = ModelingToolkit.build_explicit_observed_function(
     io_sys, outputs, inputs = ModelingToolkit.inputs(io_sys)[1:1]
