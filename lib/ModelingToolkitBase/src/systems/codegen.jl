@@ -1914,29 +1914,17 @@ Base.@nospecializeinfer function build_explicit_observed_function(
         end
     else
         for eq in equations(sys)
-            if isdiffeq(eq)
-                x = only(arguments(eq.lhs))
-                if SU.is_array_shape(SU.shape(x))
-                    # `D(u[2:4])` has no single `toterm` name; the derivatives that can be
-                    # requested are those of its elements.
-                    dop = operation(eq.lhs)::Union{Differential, Shift}
-                    for idx in SU.stable_eachindex(x)
-                        push!(dervars, default_toterm(dop(x[idx])))
-                    end
-                else
-                    push!(dervars, default_toterm(eq.lhs))
+            isdiffeq(eq) || continue
+            x = only(arguments(eq.lhs))
+            if SU.is_array_shape(SU.shape(x))
+                # `D(u[2:4])` has no single `toterm` name; the derivatives that can be
+                # requested are those of its elements.
+                dop = operation(eq.lhs)::Union{Differential, Shift}
+                for idx in SU.stable_eachindex(x)
+                    push!(dervars, default_toterm(dop(x[idx])))
                 end
-                continue
-            end
-            for d in collect_applied_operators(eq, Differential)
-                x = only(arguments(d))
-                if SU.is_array_shape(SU.shape(x))
-                    for idx in SU.stable_eachindex(x)
-                        push!(dervars, default_toterm(operation(d)(x[idx])))
-                    end
-                else
-                    push!(dervars, default_toterm(d))
-                end
+            else
+                push!(dervars, default_toterm(eq.lhs))
             end
         end
     end
