@@ -384,11 +384,7 @@ function varmap_to_vars(
             MissingGuessValue.Constant(val) => begin
                 cval = BSImpl.Const{VartypeT}(val)
                 for var in missing_vars
-                    if Symbolics.isarraysymbolic(var)
-                        varmap[var] = BSImpl.Const{VartypeT}(fill(val, size(var)))
-                    else
-                        write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
-                    end
+                    write_possibly_indexed_array!(varmap, var, cval, COMMON_NOTHING)
                 end
             end
             MissingGuessValue.Random(rng) => begin
@@ -660,13 +656,7 @@ function add_initials!(sys::AbstractSystem, op::SymmapT)
         haskey(op, p) && continue
         Moshi.Match.@match p begin
             BSImpl.Term(; f, args) && if f isa Initial end => begin
-                write_possibly_indexed_array!(
-                    op, p, if Symbolics.isarraysymbolic(p)
-                        BSImpl.Const{VartypeT}(fill(false, size(p)))
-                    else
-                        COMMON_FALSE
-                    end, COMMON_FALSE
-                )
+                write_possibly_indexed_array!(op, p, COMMON_FALSE, COMMON_FALSE)
             end
             _ => nothing
         end
