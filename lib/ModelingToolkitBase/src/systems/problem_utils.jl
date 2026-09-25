@@ -874,14 +874,23 @@ end
     end
 end
 
+# `mapreduce(f, vcat, (t,))` returns `f(t)` itself, so a root template with a single entry
+# that indexes one element of a buffer yields a scalar rather than a vector.
+__as_root_vector(x::AbstractArray) = x
+__as_root_vector(x) = [x]
+
 function (cp::CopyParamsByTemplate{IsRoot})(src) where {IsRoot}
     return if IsRoot
         if cp.fallback_getter === nothing
-            reshape(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template), cp.size)
+            reshape(
+                __as_root_vector(mapreduce(Base.Fix1(__apply_copy_template, src), vcat, cp.template)),
+                cp.size
+            )
         else
             fb = cp.fallback_getter(src)
             reshape(
-                mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template), cp.size
+                __as_root_vector(mapreduce(t -> __apply_root_template(src, t, fb), vcat, cp.template)),
+                cp.size
             )
         end
     else

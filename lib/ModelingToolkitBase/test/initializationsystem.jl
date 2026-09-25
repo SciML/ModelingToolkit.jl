@@ -2542,3 +2542,18 @@ end
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(meta))
     @test ModelingToolkitBase.EnzymeCore.EnzymeRules.inactive_type(typeof(sys))
 end
+
+@testset "A buffer holding a single Bool discrete is copied from the initialization problem" begin
+    # The only Bool in the parameter object: its buffer is copied element by element from the
+    # initialization problem, through a template with a single entry
+    for n in (1, 2)
+        @discretes b(t)[1:n]::Bool
+        @variables x(t) = 0.0
+        ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.1 => [b ~ .!Pre(b)]; discrete_parameters = [b])
+        @named sys = System([D(x) ~ ifelse(b[1], 1.0, -1.0)], t, [x], [b]; discrete_events = [ev])
+        prob = ODEProblem(mtkcompile(sys), [b => fill(true, n)], (0.0, 1.0))
+        @test prob.ps[b] == fill(true, n)
+        sol = solve(prob, Tsit5())
+        @test SciMLBase.successful_retcode(sol)
+    end
+end
