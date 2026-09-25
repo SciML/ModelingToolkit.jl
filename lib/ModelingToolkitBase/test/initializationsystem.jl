@@ -2549,7 +2549,7 @@ end
     for n in (1, 2)
         @discretes b(t)[1:n]::Bool
         @variables x(t) = 0.0
-        ev = SymbolicDiscreteCallback(0.1 => [b ~ .!Pre(b)]; discrete_parameters = [b])
+        ev = ModelingToolkitBase.SymbolicDiscreteCallback(0.1 => [b ~ .!Pre(b)]; discrete_parameters = [b])
         @named sys = System([D(x) ~ ifelse(b[1], 1.0, -1.0)], t, [x], [b]; discrete_events = [ev])
         prob = ODEProblem(mtkcompile(sys), [b => fill(true, n)], (0.0, 1.0))
         @test prob.ps[b] == fill(true, n)
