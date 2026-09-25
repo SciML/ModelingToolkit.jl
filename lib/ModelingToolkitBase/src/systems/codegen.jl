@@ -26,7 +26,7 @@ Takes every residual at once, and works in the system's `ir`, so the search and
 substitution caches are shared and the rewritten residuals are already populated for
 codegen.
 """
-function expand_array_derivatives!(rhss::Vector{SymbolicT}, ir::IRStructure{VartypeT})
+function expand_array_derivatives!(rhss::Union{Vector{SymbolicT}, Vector{Equation}}, ir::IRStructure{VartypeT})
     terms = Set{SymbolicT}()
     buffer = SU.IRStructureSearchBuffer(ir, terms)
     for rhs in rhss
@@ -104,7 +104,11 @@ function similar_for_residual(prototype, extras...)
     for x in extras
         T = promote_type(T, residual_eltype(x))
     end
-    return sz -> similar(prototype, T, sz)
+    return let prototype = prototype, T = T
+        function __similar_for_residual(sz)
+            return similar(prototype, T, sz)
+        end
+    end
 end
 
 function residual_allocator_arg(arg)
@@ -120,7 +124,7 @@ end
 
 function residual_allocator_term(args)
     return STerm(
-        similar_for_residual, SArgsT((map(residual_allocator_arg, args)...,));
+        similar_for_residual, map(residual_allocator_arg, args);
         type = SU.FnType{Tuple, Any, Any},
         shape = SU.ShapeVecT(),
     )
@@ -133,13 +137,7 @@ function inject_similar_for_residual(body, alloc_term)
             body.let_block
         )
     elseif body isa SymbolicT && Code.supports_with_allocator(body)
-        # The public helper would wrap the symbolic allocator in `Const`.
-        return STerm(
-            Code.with_allocator,
-            SArgsT((alloc_term, body));
-            type = SU.symtype(body),
-            shape = SU.shape(body),
-        )
+        return Code.with_allocator(alloc_term, body)
     else
         return body
     end
