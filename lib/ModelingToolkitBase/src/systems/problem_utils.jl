@@ -528,30 +528,15 @@ function check_substitution_cycles(
     end
 end
 
-"""
-    $(TYPEDSIGNATURES)
-
-Performs symbolic substitution on the values in `varmap` for the keys in `vars`, using
-`varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
-in `varmap`, it is ignored.
-"""
-function _store_evaluated_array!(
-        varmap::AtomicArrayDictSubstitutionWrapper, arr::SymbolicT, values::AbstractArray
-    )
-    varmap.dict[arr] = if all(SU.isconst, values)
-        BSImpl.Const{VartypeT}(unwrap_const.(values))
-    else
-        BSImpl.Const{VartypeT}(values)
-    end
-    return
+function _linear_array_index(values::AbstractArray, k)
+    return LinearIndices(values)[get_stable_index(k)]
 end
 
 function _requested_all_array_elements(keys, values::AbstractArray)
     length(keys) == length(values) || return false
-    ax = axes(values)
     indices = Set{Int}()
     for k in keys
-        push!(indices, SU.as_linear_idx(ax, get_stable_index(k)))
+        push!(indices, _linear_array_index(values, k))
     end
     length(indices) == length(values) || return false
     return all(i -> i in indices, 1:length(values))
@@ -567,25 +552,27 @@ function _evaluate_varmap_array!(
         varmap[arr] = subber(raw)
         return
     end
+    # Fully numeric arrays: once-per-parent early return (linear fast path).
+    SU.isconst(raw) && return
+
     values = collect(raw)
     has_holes = any(v -> v === varmap.default, values)
 
-    if !has_holes && (isempty(keys) || _requested_all_array_elements(keys, values))
-        SU.isconst(raw) && return
-        varmap[arr] = subber(raw)
-        return
+    # Symbolic entries use incremental per-element substitution with immediate
+    # write-back so acyclic cross-element dependencies (e.g. x[i] => x[i-1]+1)
+    # resolve. Whole-array substitution is reserved for the numeric early-return
+    # above; a single fixpoint over the parent loses that incremental semantics.
+    requested = if isempty(keys) || (!has_holes && _requested_all_array_elements(keys, values))
+        SymbolicT[arr[i] for i in SU.stable_eachindex(arr)]
+    else
+        keys
     end
-
-    requested = isempty(keys) ? SymbolicT[arr[i] for i in SU.stable_eachindex(arr)] : keys
-    changed = false
     for k in requested
         value = get(varmap, k, varmap.default)
         value === varmap.default && continue
         SU.isconst(value) && continue
-        values[get_stable_index(k)] = subber(value)
-        changed = true
+        varmap[k] = subber(value)
     end
-    changed && _store_evaluated_array!(varmap, arr, values)
     return
 end
 
@@ -631,6 +618,13 @@ function _evaluate_varmap_entries!(
     return
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Performs symbolic substitution on the values in `varmap` for the keys in `vars`, using
+`varmap` itself as the set of substitution rules. If an entry in `vars` is not a key
+in `varmap`, it is ignored.
+"""
 function evaluate_varmap!(varmap::AbstractDict{SymbolicT, SymbolicT}, vars; limit = 100, allow_symbolic = false)
     evaluated = Set{SymbolicT}()
     for k in vars

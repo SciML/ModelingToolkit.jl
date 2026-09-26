@@ -140,6 +140,30 @@ end
     @test twod == [1.5, 0.0, 0.0, 6.0]
 end
 
+@testset "acyclic cross-element array operating points resolve incrementally" begin
+    # Chains longer than `substitution_limit` must still resolve when elements are
+    # visited in index order with immediate write-back (master semantics). A single
+    # whole-array fixpoint wrongly leaves the tail missing / filled with the default.
+    @independent_variables t
+    @variables x(t)[1:110]
+    D = Differential(t)
+    @named chain_sys = System([D(x) ~ -x], t, [x], [])
+    chain_sys = complete(chain_sys)
+    op = Dict(x[i] => x[i - 1] + 1 for i in 2:110)
+    op[x[1]] = 1.0
+    ir = ModelingToolkitBase.get_irstructure(chain_sys)
+    expected = collect(1.0:110.0)
+    for options in ((; ir), (;))
+        values = ModelingToolkitBase.varmap_to_vars(
+            op, Symbolics.unwrap.(collect(x)); options...,
+            missing_values = ModelingToolkitBase.MissingGuessValue.Constant(-999.0)
+        )
+        @test values == expected
+    end
+    prob = ODEProblem(chain_sys, op, (0.0, 1.0); build_initializeprob = false)
+    @test prob.u0 == expected
+end
+
 @testset "array-equation DAE solves to the analytic solution" begin
     n = 21
     sys, u, t, D = heat_array_system(n)
