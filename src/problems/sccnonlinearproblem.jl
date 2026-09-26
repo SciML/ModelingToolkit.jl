@@ -539,6 +539,10 @@ function SciMLBase.SCCNonlinearProblem{iip, specialize}(
         error("The system has been simplified with `split = false`. `SCCNonlinearProblem` is not compatible with this system. Pass `split = true` to `mtkcompile` to use `SCCNonlinearProblem`.")
     end
 
+    if is_time_dependent(sys)
+        sys = mtkcompile(NonlinearSystem(sys))
+    end
+
     ts = get_tearing_state(sys)
     sched = get_schedule(sys)
     if sched === nothing
