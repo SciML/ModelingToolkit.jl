@@ -313,7 +313,8 @@ for traitT in [
                 push!(ts_idxs, ContinuousTimeseries())
             else
                 if has_index_cache(sys) && (ic = get_index_cache(sys)) !== nothing
-                    if (ts = get(ic.observed_syms_to_timeseries, s, nothing)) !== nothing
+                    parent, _ = split_indexed_var(s)
+                    if (ts = get(ic.observed_syms_to_timeseries, s, get(ic.observed_syms_to_timeseries, parent, nothing))) !== nothing
                         union!(ts_idxs, ts)
                     elseif (ts = get(ic.dependent_pars_to_timeseries, s, nothing)) !==
                             nothing
