@@ -246,6 +246,23 @@ end
     @test haskey(dd, bu)
 end
 
+@testset "write_possibly_indexed_array! broadcasts scalars to array-shaped keys" begin
+    t = ModelingToolkitBase.t_nounits
+    @variables a(t)[1:3]
+    au = value(a)
+    dd = ModelingToolkitBase.AtomicArrayDict{ModelingToolkitBase.SymbolicT}()
+    ModelingToolkitBase.write_possibly_indexed_array!(
+        dd, au, ModelingToolkitBase.COMMON_FALSE, ModelingToolkitBase.COMMON_NOTHING
+    )
+    @test haskey(dd, au)
+    @test ModelingToolkitBase.unwrap_const(dd[au]) == [false, false, false]
+    for i in 1:3
+        @test ModelingToolkitBase.get_possibly_indexed(
+            dd, au[SU.StableIndex([i])], ModelingToolkitBase.COMMON_NOTHING
+        ) === ModelingToolkitBase.COMMON_FALSE
+    end
+end
+
 @testset "`shift2term` on an already-shifted array variable" begin
     @independent_variables tt
     @variables arr(tt)[1:2]

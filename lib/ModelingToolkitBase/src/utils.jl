@@ -766,16 +766,6 @@ function array_derivative_expansion_map(terms)
     return subs
 end
 
-function expand_array_derivatives(eqs::Vector{Equation})
-    terms = Set{SymbolicT}()
-    for eq in eqs
-        SU.search_variables!(terms, eq; is_atomic = array_derivative_is_atomic)
-    end
-    isempty(terms) && return eqs
-    subs = array_derivative_expansion_map(terms)
-    return map(eq -> substitute(eq, subs), eqs)
-end
-
 isvariable(x::Num)::Bool = isvariable(value(x))
 function isvariable(x)
     x isa SymbolicT || return false

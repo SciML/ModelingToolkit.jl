@@ -40,20 +40,22 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Guess `guess` for the dummy-derivative variable `ttk`.
-
-Workaround, to be removed: `write_possibly_indexed_array!` stores a scalar under an
-array-shaped key when `ttk` is an array symbolic rather than an indexed expression, which
-`get_possibly_indexed` cannot read back. It should broadcast the scalar to the key's shape
-itself; until it does (https://github.com/SciML/ModelingToolkit.jl/issues/5147), this helper stores the filled array.
+Register the dummy derivative variable `ttk = default_toterm(d)` as an initialization
+unknown: give it a `dd_guess_sym` guess unless `d` or `ttk` is already guessed, add it to
+`init_vars_set`, and record `d => ttk` in `derivative_rules`. Returns `ttk`.
 """
-function write_dd_guess!(guesses::AtomicArrayDict{SymbolicT}, ttk::SymbolicT, guess::SymbolicT)
-    if Symbolics.isarraysymbolic(ttk)
-        guesses[ttk] = BSImpl.Const{VartypeT}(fill(unwrap_const(guess), size(ttk)))
-    else
-        write_possibly_indexed_array!(guesses, ttk, guess, COMMON_NOTHING)
+function register_dd_var!(
+        derivative_rules::AbstractDict{SymbolicT, SymbolicT},
+        init_vars_set::AtomicArraySet{OrderedDict{SymbolicT, Nothing}},
+        guesses::AtomicArrayDict{SymbolicT}, d::SymbolicT, dd_guess_sym::SymbolicT
+    )
+    ttk = default_toterm(d)
+    if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
+        write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
     end
-    return guesses
+    push_as_atomic_array!(init_vars_set, ttk)
+    derivative_rules[d] = ttk
+    return ttk
 end
 
 """
@@ -123,9 +125,12 @@ function generate_initializesystem_timevarying(
         isdifferential(k) || continue
         delete!(guesses, k)
         ttk = default_toterm(k)
-        if Symbolics.isarraysymbolic(ttk) && !SU.is_array_shape(SU.shape(v))
-            write_dd_guess!(guesses, ttk, v)
-        else
+        # `write_possibly_indexed_array!` broadcasts scalars onto array keys
+        # (#5186). Prefer fill-unset so a later whole-array guess does not
+        # clobber elements already present under `ttk`.
+        if Symbolics.isarraysymbolic(ttk)
+            fill_unset_array_entries!(guesses, ttk, v, COMMON_NOTHING)
+        elseif get_possibly_indexed(guesses, ttk, COMMON_NOTHING) === COMMON_NOTHING
             write_possibly_indexed_array!(guesses, ttk, v, COMMON_NOTHING)
         end
     end
@@ -158,7 +163,7 @@ function generate_initializesystem_timevarying(
         for (k, v) in schedule.dummy_sub
             ttk = default_toterm(k)
             if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                write_dd_guess!(guesses, ttk, dd_guess_sym)
+                write_possibly_indexed_array!(guesses, ttk, dd_guess_sym, COMMON_NOTHING)
             end
             # For DDEs, the derivatives can have delayed terms
             if _has_delays(sys, v, banned_derivatives)
@@ -180,12 +185,9 @@ function generate_initializesystem_timevarying(
         end
         if isdiffeq(eq)
             get!(derivative_rules, eq.lhs) do
-                k = eq.lhs
-                ttk = default_toterm(eq.lhs)
-                if !has_possibly_indexed_key(guesses, k) && !has_possibly_indexed_key(guesses, ttk)
-                    write_dd_guess!(guesses, ttk, dd_guess_sym)
-                end
-                push_as_atomic_array!(init_vars_set, ttk)
+                ttk = register_dd_var!(
+                    derivative_rules, init_vars_set, guesses, eq.lhs, dd_guess_sym
+                )
                 isequal(ttk, eq.rhs) || push!(eqs_ics, ttk ~ subber(eq.rhs))
                 ttk
             end
@@ -195,13 +197,10 @@ function generate_initializesystem_timevarying(
                 arr, isarr = split_indexed_var(only(arguments(d)))
                 if isarr
                     array_d = operation(d)(arr)
-                    array_ttk = default_toterm(array_d)
                     if !haskey(derivative_rules, array_d)
-                        derivative_rules[array_d] = array_ttk
-                        if !has_possibly_indexed_key(guesses, array_d) && !has_possibly_indexed_key(guesses, array_ttk)
-                            write_dd_guess!(guesses, array_ttk, dd_guess_sym)
-                        end
-                        push_as_atomic_array!(init_vars_set, array_ttk)
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, array_d, dd_guess_sym
+                        )
                     end
                 end
                 if SU.is_array_shape(SU.shape(d))
@@ -209,21 +208,15 @@ function generate_initializesystem_timevarying(
                     derivative_rules[d] = array_derivative_expansion(d)
                     for i in SU.stable_eachindex(arr)
                         scalar_d = operation(d)(arr[i])
-                        ttk = default_toterm(scalar_d)
-                        if !has_possibly_indexed_key(guesses, scalar_d) && !has_possibly_indexed_key(guesses, ttk)
-                            write_dd_guess!(guesses, ttk, dd_guess_sym)
-                        end
-                        push_as_atomic_array!(init_vars_set, ttk)
-                        derivative_rules[scalar_d] = ttk
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, scalar_d, dd_guess_sym
+                        )
                     end
                 else
                     get!(derivative_rules, d) do
-                        ttk = default_toterm(d)
-                        if !has_possibly_indexed_key(guesses, d) && !has_possibly_indexed_key(guesses, ttk)
-                            write_dd_guess!(guesses, ttk, dd_guess_sym)
-                        end
-                        push_as_atomic_array!(init_vars_set, ttk)
-                        ttk
+                        register_dd_var!(
+                            derivative_rules, init_vars_set, guesses, d, dd_guess_sym
+                        )
                     end
                 end
             end
@@ -245,6 +238,7 @@ function generate_initializesystem_timevarying(
         end
     end
 
+    # Always substitute `der_subber` and `subber` on any equations added to `eqs_ics`
     der_subber = Symbolics.FixpointSubstituter(
         SU.IRSubstituter{false}(
             get_irstructure(sys), derivative_rules

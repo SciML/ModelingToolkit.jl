@@ -4,7 +4,7 @@ using OrdinaryDiffEq
 using OrdinaryDiffEqBDF
 using SteadyStateDiffEq
 using SciMLBase, Symbolics
-using SymbolicIndexingInterface: getu
+using SymbolicIndexingInterface: getu, getp
 using StaticArrays
 using LinearAlgebra, Test
 using SymbolicUtils
@@ -613,6 +613,78 @@ end
     @test SciMLBase.successful_retcode(sol)
     @test sol[x3] ≈ 1.3 atol = 1.0e-8
     @test sol[y3] ≈ 2.2 atol = 1.0e-8
+end
+
+@testset "SteadyStateProblem SCC lowering: connectors, array unknowns and `Initial` values" begin
+    # The lowering compiles `NonlinearSystem` of the unexpanded model, so the outer stream
+    # connectors of `Wrapper` must keep their connector type.
+    @connector function FluidPort(; name)
+        vars = @variables p(t) [guess = 1.0] m_flow(t) [connect = Flow, guess = 1.0] h_outflow(t) [connect = Stream, guess = 1.0]
+        System(Equation[], t, vars, []; name)
+    end
+    function Boundary(; name, p0, h0)
+        @named port = FluidPort()
+        @parameters p0 = p0 h0 = h0
+        System([port.p ~ p0, port.h_outflow ~ h0], t, [], [p0, h0]; systems = [port], name)
+    end
+    function MixingPipe(; name)
+        @named a = FluidPort()
+        @named b = FluidPort()
+        @variables h(t) = 0.0
+        @parameters k = 1.0 tau = 1.0
+        eqs = [
+            a.m_flow ~ k * (a.p - b.p),
+            a.m_flow + b.m_flow ~ 0,
+            tau * D(h) ~ a.m_flow * (instream(a.h_outflow) - h),
+            a.h_outflow ~ h,
+            b.h_outflow ~ h,
+        ]
+        System(eqs, t, [h], [k, tau]; systems = [a, b], name)
+    end
+    function Wrapper(; name)
+        @named pa = FluidPort()
+        @named pb = FluidPort()
+        @named inner = MixingPipe()
+        System([connect(pa, inner.a), connect(inner.b, pb)], t, [], []; systems = [pa, pb, inner], name)
+    end
+    @named src = Boundary(p0 = 2.0, h0 = 10.0)
+    @named wrap = Wrapper()
+    @named snk = Boundary(p0 = 1.0, h0 = 5.0)
+    @named fluid = System(
+        [connect(src.port, wrap.pa), connect(wrap.pb, snk.port)], t; systems = [src, wrap, snk]
+    )
+    sol = solve(SteadyStateProblem(mtkcompile(fluid), []), SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[wrap.inner.h] ≈ 10.0 atol = 1.0e-8
+    @test sol[wrap.inner.a.m_flow] ≈ 1.0 atol = 1.0e-8
+
+    # The dynamic system has `Initial(D(x))` parameters, here the array-valued `Initial(xˍt)`,
+    # which the time-independent residual system does not. They must not reach its
+    # initialization system.
+    @variables x(t)[1:2] = [1.0, 1.0] y(t) [guess = 0.5]
+    @parameters k = 2.0
+    @mtkcompile sys = System([D(x[1]) ~ 1 - k * x[1], D(x[2]) ~ x[1] - x[2], 0 ~ y^3 + y - x[2]], t)
+    prob = SteadyStateProblem(sys, [])
+    sol = solve(prob, SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[x] ≈ [0.5, 0.5] atol = 1.0e-8
+    @test sol[y]^3 + sol[y] ≈ 0.5 atol = 1.0e-8
+
+    # `Initial` values that the residual system does have are transferred: the conserved
+    # total is 3 from the initial values, so the steady state is X1 = 2, X2 = 1.
+    @variables X1(t) = 1.0 X2(t) = 2.0
+    @parameters k1 = 1.0 k2 = 2.0 Γ = Initial(X1) + Initial(X2)
+    @mtkcompile sys = System([D(X1) ~ -k1 * X1 + k2 * X2, 0 ~ X1 + X2 - Γ], t)
+    prob = SteadyStateProblem(sys, [])
+    sccprob = SciMLBase.NonlinearProblem(prob)
+    @test getp(sccprob, Γ)(sccprob) ≈ 3.0
+    sol = solve(prob, SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[X1] ≈ 2.0 atol = 1.0e-8
+    @test sol[X2] ≈ 1.0 atol = 1.0e-8
+    sol = solve(remake(prob; p = [k2 => 4.0]), SSRootfind())
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[X1] ≈ 2.4 atol = 1.0e-8
 end
 
 @testset "Persistent `DiffCache` buffers coexist with SCC cache buffers in `p.caches`" begin

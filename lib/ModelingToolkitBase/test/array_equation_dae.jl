@@ -122,10 +122,12 @@ end
 
     @variables yk(t)[1:3] zk(t)
     @parameters k
-    sysk = complete(System(
-        [zeros(3) ~ D(yk[1:3]) .+ k * zk .* yk[1:3], 0 ~ zk - sum(yk)],
-        t, [collect(yk); zk], [k]; name = :partial_fixed_derivative
-    ))
+    sysk = complete(
+        System(
+            [zeros(3) ~ D(yk[1:3]) .+ k * zk .* yk[1:3], 0 ~ zk - sum(yk)],
+            t, [collect(yk); zk], [k]; name = :partial_fixed_derivative
+        )
+    )
     opk = [[yk[i] => Float64(i) for i in 1:3]; k => 1.0; D(yk[1]) => -6.0]
     probk = DAEProblem(
         sysk, opk, (0.0, 0.1); guesses = [zk => 0.0, D(yk[2]) => 0.5, D(yk[3]) => 0.5]

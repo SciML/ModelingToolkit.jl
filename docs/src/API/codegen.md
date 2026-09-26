@@ -58,6 +58,14 @@ ModelingToolkit.calculate_paramjac
 ModelingToolkit.calculate_A_b
 ```
 
+The constraint function and its derivatives are built from the residuals of the
+constraints, with one row per element of each array-valued constraint.
+
+```@docs
+ModelingToolkitBase.canonical_constraints
+ModelingToolkitBase.constraint_residual
+```
+
 A system can be marked as unsupported by symbolic automatic differentiation, in which case
 the `calculate_*` functions above throw instead of producing a wrong derivative.
 
