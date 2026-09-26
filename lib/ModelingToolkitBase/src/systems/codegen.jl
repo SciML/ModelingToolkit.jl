@@ -1222,12 +1222,15 @@ function scalarized_dims_reduction(ex::SymbolicT)
         SU.is_array_shape(SU.shape(arg)) ? collect(arg)::Array{SymbolicT} : arg
     end
     mapped_axes = axes(first(x for x in xs if x isa Array))
+    nd = length(mapped_axes)
+    # like Julia, `dims > ndims` reduces over a trailing singleton axis
+    reduced_axis = d <= nd ? mapped_axes[d] : Base.OneTo(1)
     elements = Array{SymbolicT}(undef, Tuple(length.(SU.shape(ex)::SU.ShapeVecT)))
     for I in CartesianIndices(elements)
         acc = op.init
-        for j in mapped_axes[d]
+        for j in reduced_axis
             J = CartesianIndex(
-                ntuple(length(mapped_axes)) do i
+                ntuple(nd) do i
                     i == d ? j : first(mapped_axes[i]) + I[i] - 1
                 end
             )
