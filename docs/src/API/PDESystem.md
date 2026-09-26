@@ -90,8 +90,8 @@ way:
 
 [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/solutions/) and
 [NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/) implement this interface; see the
-[PDEBase.jl developer documentation](https://docs.sciml.ai/PDEBase/stable/interface/) for
-what a new discretizer has to define.
+[PDEBase.jl developer documentation](https://github.com/SciML/PDEBase.jl/blob/master/docs/src/interface.md)
+for what a new discretizer has to define.
 
 ## Boundary Conditions (WIP)
 

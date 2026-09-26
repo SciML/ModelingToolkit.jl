@@ -859,6 +859,11 @@ function MTKBase.steady_state_sccprob(sys::System, op; kwargs...)
         op = calculate_op_from_u0_p(
             prob.f.sys, state_values(prob), parameter_values(prob)
         )
+        # `Initial` parameters are generated per system: `prob.f.sys` also has `Initial(D(x))`
+        # for its derivatives, which the time-independent residual system does not. Transfer
+        # only the `Initial` values it has; its initialization system would treat the others
+        # as solvable and add identities `Initial(x) ~ Initial(x)`.
+        filter!(kv -> !MTKBase.isinitial(first(kv)) || is_parameter(ref[], first(kv)), op)
         return SCCNonlinearProblem(ref[], op)
     end
 end

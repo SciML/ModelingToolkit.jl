@@ -1374,17 +1374,20 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
     # are recursively converted below, so their namespaced entries must not be folded
     # into the parent's fields a second time. The rule keyspaces still use the merged
     # accessors since the system's own equations can reference namespaced variables.
-    eqs = get_eqs(sys)
+    eqs = copy(get_eqs(sys))
     obs = get_observed(sys)
     D = Differential(get_iv(sys))
-    subrules = Dict([D(x) => 0.0 for x in unknowns(sys)])
+    subrules = Dict{SymbolicT, SymbolicT}([D(x) => 0.0 for x in unknowns(sys)])
     for var in brownians(sys)
         subrules[var] = 0.0
     end
+    ir = IRStructure{VartypeT}()
+    subber = SU.IRSubstituter{false}(ir, subrules)
     # Derivatives of the unknowns themselves are replaced as they are; a derivative of a
     # slice is not one of them, so expand it and replace its elements.
-    eqs = map(eq -> substitute(eq, subrules), eqs)
-    eqs = map(eq -> substitute(eq, subrules), expand_array_derivatives(eqs))
+    map!(subber, eqs, eqs)
+    expand_array_derivatives!(eqs, ir)
+    map!(subber, eqs, eqs)
     new_ps = collect(get_ps(sys))
     filter!(__no_initial_params_pred, new_ps)
     push!(new_ps, get_iv(sys))
@@ -1412,7 +1415,16 @@ function NonlinearSystem(sys::System; bind_iv::Bool = true)
         initial_conditions = new_ics, guesses = get_guesses(sys),
         initialization_eqs = steady_state_initialization_eqs(sys), name = nameof(sys),
         observed = obs,
-        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys))
+        systems = map(s -> NonlinearSystem(s; bind_iv = false), get_systems(sys)),
+        # Unlike `flatten`, the hierarchy is retained, so connections are expanded after
+        # this conversion; that needs `connector_type` and `ignored_connections`.
+        connector_type = get_connector_type(sys),
+        ignored_connections = _maybe_copy(get_ignored_connections(sys)),
+        assertions = copy(get_assertions(sys)), inputs = copy(get_inputs(sys)),
+        outputs = copy(get_outputs(sys)), state_priorities = copy(get_state_priorities(sys)),
+        irreducibles = copy(get_irreducibles(sys)), maybe_zeros = copy(get_maybe_zeros(sys)),
+        metadata = get_metadata(sys), gui_metadata = get_gui_metadata(sys),
+        description = get_description(sys)
     )
     if iscomplete(sys)
         nsys = complete(nsys; split = is_split(sys))
@@ -1433,15 +1445,15 @@ inside `Initial` - is replaced by `0`.
 function steady_state_initialization_eqs(sys::System)
     # `get_initialization_eqs` rather than `initialization_equations`: subsystems keep
     # their own translated equations through the recursive conversion.
-    initeqs = get_initialization_eqs(sys)
+    initeqs = copy(get_initialization_eqs(sys))
     isempty(initeqs) && return initeqs
     D = Differential(get_iv(sys))
-    subrules = Dict{SymbolicT, Float64}()
+    subrules = Dict{SymbolicT, SymbolicT}()
     for v in Iterators.flatten((unknowns(sys), observables(sys)))
-        subrules[D(v)] = 0.0
+        subrules[D(v)] = Symbolics.COMMON_ZERO
     end
     for var in brownians(sys)
-        subrules[var] = 0.0
+        subrules[var] = Symbolics.COMMON_ZERO
     end
     heads = Set{SymbolicT}()
     foreach(Base.Fix1(push!, heads) ∘ first ∘ split_indexed_var, unknowns(sys))
@@ -1451,30 +1463,34 @@ function steady_state_initialization_eqs(sys::System)
         push!(diff_heads, split_indexed_var(D(v))[1])
         push!(diff_heads, split_indexed_var(default_toterm(D(v)))[1])
     end
-    vs = Set{SymbolicT}()
-    initeqs = map(expand_array_derivatives(initeqs)) do eq
-        eq = substitute(eq, subrules)
+    ir = get_irstructure(sys)
+    expand_array_derivatives!(initeqs, ir)
+    ss_subber = SU.IRSubstituter{false}(ir, subrules)
+    map!(ss_subber, initeqs, initeqs)
+    vs_buffer = Set{SymbolicT}()
+    vs = SU.IRStructureSearchBuffer(ir, vs_buffer)
+    map!(initeqs, initeqs) do eq
         empty!(vs)
         SU.search_variables!(vs, eq; is_atomic = OperatorIsAtomic{Initial}())
-        rules = Dict{SymbolicT, Any}()
+        rules = Dict{SymbolicT, SymbolicT}()
         for v in vs
             if isinitial(v)
                 # `Initial(D(x))` is stored as `Initial(xˍt)`; all derivatives are
                 # zero at steady state.
                 arg = split_indexed_var(only(arguments(split_indexed_var(v)[1])))[1]
                 if arg in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 end
             else
                 head = split_indexed_var(v)[1]
                 if head in diff_heads
-                    rules[v] = 0.0
+                    rules[v] = Symbolics.COMMON_ZERO
                 elseif head in heads
                     rules[v] = Initial(v)
                 end
             end
         end
-        isempty(rules) ? eq : substitute(eq, rules)
+        isempty(rules) ? eq : SU.IRSubstituter{false}(ir, rules)(eq)
     end
     # e.g. `D(x) ~ 0` collapses to a trivially true constant equation
     return filter!(eq -> !_iszero(eq.lhs - eq.rhs), initeqs)
